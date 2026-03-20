@@ -1,23 +1,23 @@
-name: zenchat-backend
+name: twirchat-backend
 
 services:
   postgres:
     image: postgres:18-alpine
-    container_name: zenchat-postgres
+    container_name: twirchat-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: zenchat
-      POSTGRES_PASSWORD: zenchat
-      POSTGRES_DB: zenchat
+      POSTGRES_USER: twirchat
+      POSTGRES_PASSWORD: twirchat
+      POSTGRES_DB: twirchat
     ports:
       - "5432:5432"
     volumes:
-      - zenchat-postgres-data:/var/lib/postgresql/data
+      - twirchat-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zenchat -d zenchat"]
+      test: ["CMD-SHELL", "pg_isready -U twirchat -d twirchat"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  zenchat-postgres-data:
+  twirchat-postgres-data:

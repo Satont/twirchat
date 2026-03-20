@@ -1,6 +1,6 @@
-# @zenchat/backend
+# @twirchat/backend
 
-Backend service for Zenchat — handles platform OAuth, account storage, WebSocket connections to the desktop app, and Kick webhook ingestion.
+Backend service for TwirChat — handles platform OAuth, account storage, WebSocket connections to the desktop app, and Kick webhook ingestion.
 
 ## Prerequisites
 
@@ -82,6 +82,6 @@ The desktop app generates a random secret on first launch and persists it locall
 
 - **`Bun.sql`** — connects to PostgreSQL using `POSTGRES_*` env vars automatically; no extra driver config needed.
 - **Migrations** — run on startup via `runMigrations()` (`src/db/migrations.ts`); creates `desktop_clients`, `platform_accounts`, and `kick_oauth_sessions` tables.
-- **WebSocket** — `GET /ws` upgraded by `Bun.serve`; messages use the shared protocol from `@zenchat/shared/protocol`.
+- **WebSocket** — `GET /ws` upgraded by `Bun.serve`; messages use the shared protocol from `@twirchat/shared/protocol`.
 - **Kick OAuth** — PKCE flow; session stored in DB during the OAuth dance, then exchanged for tokens and saved to `platform_accounts`.
 - **Kick webhooks** — HMAC-verified POST to `/webhook/kick`; normalized events are broadcast to all connected desktop clients over WebSocket.

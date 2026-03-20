@@ -1,15 +1,15 @@
 import type { ElectrobunConfig } from "electrobun/bun";
 
 /**
- * Zenchat Electrobun build configuration.
+ * TwirChat Electrobun build configuration.
  *
  * Views are built with Vite + @vitejs/plugin-vue (SFC support).
  * Electrobun copies the Vite dist output into the views:// protocol.
  */
 const config: ElectrobunConfig = {
   app: {
-    name: "Zenchat",
-    identifier: "dev.zenchat.app",
+    name: "TwirChat",
+    identifier: "dev.twirchat.app",
     version: "0.1.0",
     description: "Multi-platform chat manager for streamers",
   },

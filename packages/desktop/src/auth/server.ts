@@ -1,4 +1,4 @@
-import { AUTH_SERVER_PORT } from "@zenchat/shared/constants";
+import { AUTH_SERVER_PORT } from "@twirchat/shared/constants";
 import { handleTwitchCallback } from "./twitch";
 import { handleYouTubeCallback } from "./youtube";
 import { handleKickCallback } from "./kick";
@@ -61,7 +61,7 @@ export function successPage(platform: string): string {
 <head><title>Authentication Successful</title></head>
 <body style="font-family:sans-serif;padding:2rem;background:#1a1a1a;color:#4caf50;">
   <h1>Successfully connected to ${platform}!</h1>
-  <p>You can close this window and return to Zenchat.</p>
+  <p>You can close this window and return to TwirChat.</p>
   <script>setTimeout(() => window.close(), 2000);</script>
 </body>
 </html>`;

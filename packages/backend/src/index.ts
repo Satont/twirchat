@@ -57,6 +57,6 @@ const server = Bun.serve<WsData>({
 });
 
 console.log(
-  `[Backend] Zenchat backend running on http://localhost:${server.port}`,
+  `[Backend] TwirChat backend running on http://localhost:${server.port}`,
 );
 console.log(`[Backend] WebSocket endpoint: ws://localhost:${server.port}/ws`);

@@ -8,9 +8,9 @@ export const TWITCH_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/twitch/callback`;
 export const YOUTUBE_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/youtube/callback`;
 export const KICK_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/kick/callback`;
 
-export const DB_PATH = `${process.env["HOME"]}/.zenchat/db.sqlite`;
+export const DB_PATH = `${process.env["HOME"]}/.twirchat/db.sqlite`;
 
-export const APP_NAME = "Zenchat";
+export const APP_NAME = "TwirChat";
 
 // Backend service
 export const BACKEND_URL =

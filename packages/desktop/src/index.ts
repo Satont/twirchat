@@ -1,5 +1,5 @@
 /**
- * Zenchat — main process entry point
+ * TwirChat — main process entry point
  *
  * Спринт 2: monorepo, UUID client identity, BackendConnection WS, Kick via backend.
  */
@@ -18,15 +18,15 @@ import {
 // Инициализация
 // ============================================================
 
-console.log("[Zenchat] Starting...");
+console.log("[TwirChat] Starting...");
 
 // 1. База данных — должна быть первой, генерирует/читает секрет
 initDb();
-console.log("[Zenchat] Database ready");
+console.log("[TwirChat] Database ready");
 
 // 2. Читаем/генерируем UUID-секрет
 const clientSecret = getClientSecret();
-console.log(`[Zenchat] Client secret: ${clientSecret.slice(0, 8)}...`);
+console.log(`[TwirChat] Client secret: ${clientSecret.slice(0, 8)}...`);
 
 // 3. Подключаемся к backend
 const backendConn = new BackendConnection(clientSecret);
@@ -127,4 +127,4 @@ async function openBrowser(url: string): Promise<void> {
 
 export { aggregator, backendConn, clientSecret, overlayServer };
 
-console.log("[Zenchat] Ready.");
+console.log("[TwirChat] Ready.");

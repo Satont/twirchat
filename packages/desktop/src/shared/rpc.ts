@@ -1,5 +1,5 @@
 /**
- * Zenchat Electrobun RPC Schema
+ * TwirChat Electrobun RPC Schema
  *
  * Defines the typed RPC contract between the Bun main process and the
  * webview (Vue) side.  Import this type in both src/bun/index.ts and
@@ -20,7 +20,7 @@ import type {
   Account,
   AppSettings,
   Platform,
-} from "@zenchat/shared/types";
+} from "@twirchat/shared/types";
 
 // ----------------------------------------------------------------
 // Bun-side schema (what the webview calls into)
@@ -81,7 +81,7 @@ type WebviewMessages = {
 // Combined schema exported for use on both sides
 // ----------------------------------------------------------------
 
-export type ZenchatRPCSchema = {
+export type TwirChatRPCSchema = {
   bun: RPCSchema<{ requests: BunRequests; messages: BunMessages }>;
   webview: RPCSchema<{ requests: WebviewRequests; messages: WebviewMessages }>;
 };

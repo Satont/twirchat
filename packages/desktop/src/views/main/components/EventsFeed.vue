@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NormalizedEvent } from "@zenchat/shared/types";
+import type { NormalizedEvent } from "@twirchat/shared/types";
 
 const props = defineProps<{
   events: NormalizedEvent[];

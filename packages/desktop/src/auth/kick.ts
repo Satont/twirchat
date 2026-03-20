@@ -2,15 +2,27 @@ import {
   KICK_AUTH_URL,
   KICK_TOKEN_URL,
   KICK_REDIRECT_URI,
-} from "@zenchat/shared/constants";
-import { generateCodeVerifier, generateCodeChallenge, generateState } from "./pkce";
+} from "@twirchat/shared/constants";
+import {
+  generateCodeVerifier,
+  generateCodeChallenge,
+  generateState,
+} from "./pkce";
 import { AccountStore } from "@desktop/store/account-store";
 import { successPage } from "./server";
 
-const KICK_SCOPES = ["user:read", "channel:read", "chat:write", "events:subscribe"];
+const KICK_SCOPES = [
+  "user:read",
+  "channel:read",
+  "chat:write",
+  "events:subscribe",
+];
 
 // В памяти храним pending PKCE-сессии (state → {verifier, expiresAt})
-const pendingSessions = new Map<string, { verifier: string; expiresAt: number }>();
+const pendingSessions = new Map<
+  string,
+  { verifier: string; expiresAt: number }
+>();
 
 export interface KickAuthConfig {
   clientId: string;
@@ -38,7 +50,10 @@ export function buildKickAuthUrl(): { url: string; state: string } {
   const state = generateState();
 
   // TTL: 10 минут
-  pendingSessions.set(state, { verifier, expiresAt: Date.now() + 10 * 60 * 1000 });
+  pendingSessions.set(state, {
+    verifier,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  });
 
   const params = new URLSearchParams({
     client_id: _config.clientId,
@@ -62,7 +77,9 @@ export async function handleKickCallback(url: URL): Promise<Response> {
   const error = url.searchParams.get("error");
 
   if (error) {
-    throw new Error(`Kick OAuth error: ${error} — ${url.searchParams.get("error_description") ?? ""}`);
+    throw new Error(
+      `Kick OAuth error: ${error} — ${url.searchParams.get("error_description") ?? ""}`,
+    );
   }
 
   if (!code || !state) {
@@ -126,7 +143,9 @@ export async function handleKickCallback(url: URL): Promise<Response> {
   const user = userBody.data;
   if (!user) throw new Error("Kick user data missing");
 
-  const expiresAt = tokens.expires_in ? Math.floor(Date.now() / 1000) + tokens.expires_in : undefined;
+  const expiresAt = tokens.expires_in
+    ? Math.floor(Date.now() / 1000) + tokens.expires_in
+    : undefined;
 
   AccountStore.upsert({
     id: `kick:${user.id}`,
@@ -155,7 +174,8 @@ export async function refreshKickToken(accountId: string): Promise<string> {
   if (!_config) throw new Error("Kick auth not configured");
 
   const tokens = AccountStore.getTokens(accountId);
-  if (!tokens?.refreshToken) throw new Error("No refresh token for Kick account");
+  if (!tokens?.refreshToken)
+    throw new Error("No refresh token for Kick account");
 
   const res = await fetch(KICK_TOKEN_URL, {
     method: "POST",
@@ -178,8 +198,15 @@ export async function refreshKickToken(accountId: string): Promise<string> {
     expires_in?: number;
   };
 
-  const expiresAt = data.expires_in ? Math.floor(Date.now() / 1000) + data.expires_in : undefined;
-  AccountStore.updateTokens(accountId, data.access_token, data.refresh_token, expiresAt);
+  const expiresAt = data.expires_in
+    ? Math.floor(Date.now() / 1000) + data.expires_in
+    : undefined;
+  AccountStore.updateTokens(
+    accountId,
+    data.access_token,
+    data.refresh_token,
+    expiresAt,
+  );
 
   return data.access_token;
 }

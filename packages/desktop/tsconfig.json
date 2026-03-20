@@ -20,8 +20,8 @@
     "types": ["bun", "node"],
     "paths": {
       "@desktop/*": ["./src/*"],
-      "@zenchat/shared": ["../shared/index.ts"],
-      "@zenchat/shared/*": ["../shared/*"],
+      "@twirchat/shared": ["../shared/index.ts"],
+      "@twirchat/shared/*": ["../shared/*"],
     },
   },
   "include": ["src/**/*", "index.ts", "electrobun.config.ts"],

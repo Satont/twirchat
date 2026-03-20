@@ -1,5 +1,5 @@
 {
-  "name": "@zenchat/desktop",
+  "name": "@twirchat/desktop",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "build:prod": "vite --config vite.main.config.ts build && electrobun build --env=canary"
   },
   "dependencies": {
-    "@zenchat/shared": "workspace:*",
+    "@twirchat/shared": "workspace:*",
     "@grpc/grpc-js": "1.14.3",
     "@grpc/proto-loader": "0.8.0",
     "@twurple/api": "8.0.3",

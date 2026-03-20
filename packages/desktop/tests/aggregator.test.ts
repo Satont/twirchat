@@ -1,17 +1,28 @@
 import { test, expect, describe } from "bun:test";
 import { ChatAggregator } from "@desktop/chat/aggregator";
 import { BasePlatformAdapter } from "@desktop/platforms/base-adapter";
-import type { NormalizedChatMessage, NormalizedEvent } from "@zenchat/shared/types";
+import type {
+  NormalizedChatMessage,
+  NormalizedEvent,
+} from "@twirchat/shared/types";
 
 class MockAdapter extends BasePlatformAdapter {
   readonly platform = "kick" as const;
 
   async connect(_channelSlug: string): Promise<void> {
-    this.emit("status", { platform: "kick", status: "connected", mode: "anonymous" });
+    this.emit("status", {
+      platform: "kick",
+      status: "connected",
+      mode: "anonymous",
+    });
   }
 
   async disconnect(): Promise<void> {
-    this.emit("status", { platform: "kick", status: "disconnected", mode: "anonymous" });
+    this.emit("status", {
+      platform: "kick",
+      status: "disconnected",
+      mode: "anonymous",
+    });
   }
 
   async sendMessage(_channelId: string, _text: string): Promise<void> {}

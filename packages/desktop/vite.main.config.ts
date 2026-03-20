@@ -14,10 +14,13 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@zenchat/shared/types": resolve(__dirname, "../shared/types.ts"),
-      "@zenchat/shared/constants": resolve(__dirname, "../shared/constants.ts"),
-      "@zenchat/shared/protocol": resolve(__dirname, "../shared/protocol.ts"),
-      "@zenchat/shared": resolve(__dirname, "../shared/index.ts"),
+      "@twirchat/shared/types": resolve(__dirname, "../shared/types.ts"),
+      "@twirchat/shared/constants": resolve(
+        __dirname,
+        "../shared/constants.ts",
+      ),
+      "@twirchat/shared/protocol": resolve(__dirname, "../shared/protocol.ts"),
+      "@twirchat/shared": resolve(__dirname, "../shared/index.ts"),
       "@desktop": resolve(__dirname, "src"),
     },
   },

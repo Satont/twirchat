@@ -1,5 +1,5 @@
 {
-  "name": "@zenchat/backend",
+  "name": "@twirchat/backend",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "build:prod": "bun run typecheck && bun build --compile --minify --sourcemap src/index.ts --outfile=.out/backend"
   },
   "dependencies": {
-    "@zenchat/shared": "workspace:*",
+    "@twirchat/shared": "workspace:*",
     "zod": "4.3.6"
   },
   "devDependencies": {

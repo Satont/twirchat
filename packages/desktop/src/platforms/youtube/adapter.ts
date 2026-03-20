@@ -24,7 +24,7 @@ import type {
   NormalizedChatMessage,
   NormalizedEvent,
   Badge,
-} from "@zenchat/shared/types";
+} from "@twirchat/shared/types";
 import { AccountStore } from "@desktop/store/account-store";
 
 // ============================================================

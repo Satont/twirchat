@@ -1,5 +1,5 @@
 {
-  "name": "zenchat-monorepo",
+  "name": "twirchat-monorepo",
   "private": true,
   "scripts": {
     "dev:desktop": "bun run --cwd packages/desktop dev",

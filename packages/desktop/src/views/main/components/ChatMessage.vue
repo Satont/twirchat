@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NormalizedChatMessage, Emote } from "@zenchat/shared/types";
+import type { NormalizedChatMessage, Emote } from "@twirchat/shared/types";
 
 const props = defineProps<{
   message: NormalizedChatMessage;

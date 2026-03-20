@@ -7,7 +7,7 @@ import type {
   AuthStartResponse,
   AccountsResponse,
   Platform,
-} from "@zenchat/shared";
+} from "@twirchat/shared";
 
 /** Middleware: validate X-Client-Secret header and ensure client exists in DB */
 async function requireClient(

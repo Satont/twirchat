@@ -14,8 +14,12 @@
  */
 
 import { BasePlatformAdapter } from "../base-adapter";
-import type { NormalizedChatMessage, NormalizedEvent, Badge } from "@zenchat/shared/types";
-import { TWITCH_ANON_PREFIX } from "@zenchat/shared/constants";
+import type {
+  NormalizedChatMessage,
+  NormalizedEvent,
+  Badge,
+} from "@twirchat/shared/types";
+import { TWITCH_ANON_PREFIX } from "@twirchat/shared/constants";
 import { AccountStore } from "@desktop/store/account-store";
 
 const TWITCH_IRC_WS = "wss://irc-ws.chat.twitch.tv:443";
@@ -148,7 +152,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   async sendMessage(channelId: string, text: string): Promise<void> {
     if (this.anonymous) {
-      throw new Error("Cannot send messages in anonymous mode. Please log in to Twitch.");
+      throw new Error(
+        "Cannot send messages in anonymous mode. Please log in to Twitch.",
+      );
     }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("Twitch IRC not connected");
@@ -165,10 +171,14 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.ws = ws;
 
     ws.addEventListener("open", () => {
-      console.log(`[Twitch] IRC WebSocket opened (${this.anonymous ? "anonymous" : "authenticated"})`);
+      console.log(
+        `[Twitch] IRC WebSocket opened (${this.anonymous ? "anonymous" : "authenticated"})`,
+      );
 
       // Request tags and commands capabilities
-      ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership");
+      ws.send(
+        "CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership",
+      );
 
       if (this.anonymous) {
         const username = `${TWITCH_ANON_PREFIX}${Math.floor(Math.random() * 900000 + 100000)}`;
@@ -257,7 +267,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
     const tags = msg.tags;
 
     const userId = tags["user-id"] ?? "";
-    const displayName = tags["display-name"] ?? msg.prefix?.split("!")[0] ?? "unknown";
+    const displayName =
+      tags["display-name"] ?? msg.prefix?.split("!")[0] ?? "unknown";
     const color = tags["color"] || undefined;
     const msgId = tags["id"] ?? `${Date.now()}`;
     const tmiSent = tags["tmi-sent-ts"];
@@ -276,7 +287,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
         });
         emotes.push({
           id: emoteId,
-          name: text.slice(positions[0]?.start ?? 0, (positions[0]?.end ?? 0) + 1),
+          name: text.slice(
+            positions[0]?.start ?? 0,
+            (positions[0]?.end ?? 0) + 1,
+          ),
           imageUrl: `https://static-cdn.jtvnw.net/emoticons/v2/${emoteId}/default/dark/1.0`,
           positions,
         });

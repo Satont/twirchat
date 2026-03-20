@@ -106,7 +106,7 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
 
 ---
 
-## Project: Zenchat
+## Project: TwirChat
 
 Мультиплатформенный менеджер чата для стримеров (Twitch, YouTube, Kick).
 Desktop-приложение + backend. Monorepo на Bun + TypeScript.
@@ -124,7 +124,7 @@ Desktop-приложение + backend. Monorepo на Bun + TypeScript.
 
 ```
 src/bun/index.ts          — Electrobun main process (BrowserWindow, RPC, backend WS)
-src/shared/rpc.ts         — ZenchatRPCSchema + WebviewSender (общий тип для обеих сторон)
+src/shared/rpc.ts         — TwirChatRPCSchema + WebviewSender (общий тип для обеих сторон)
 src/views/main/           — Vue app главного окна (собирается Vite → dist/main/)
 src/views/overlay/        — Vue app OBS overlay (собирается Vite → dist/overlay/)
 src/overlay-server.ts     — Bun.serve: раздаёт dist/overlay/ + WebSocket для OBS
@@ -171,7 +171,7 @@ Overlay **не** имеет HMR и **не** запускает отдельны�
 ```typescript
 // src/shared/rpc.ts — схема
 import type { RPCSchema } from "electrobun/bun";
-export type ZenchatRPCSchema = {
+export type TwirChatRPCSchema = {
   bun: RPCSchema<{ requests: BunRequests; messages: BunMessages }>;
   webview: RPCSchema<{ requests: WebviewRequests; messages: WebviewMessages }>;
 };
@@ -179,13 +179,13 @@ export type WebviewSender = { [K in keyof WebviewMessages]: (payload: WebviewMes
 
 // src/bun/index.ts (main process)
 import { BrowserWindow, defineElectrobunRPC } from "electrobun/bun";
-const rpc = defineElectrobunRPC<ZenchatRPCSchema>("bun", { handlers: { requests: {...} } });
+const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", { handlers: { requests: {...} } });
 const sendToView = rpc.send as unknown as WebviewSender; // cast нужен из-за TS inference бага
 const win = new BrowserWindow({ url: windowUrl, rpc });
 
 // src/views/main/main.ts (webview side)
 import { Electroview } from "electrobun/view";
-export const rpc = Electroview.defineRPC<ZenchatRPCSchema>({ handlers: { requests: {}, messages: {} } });
+export const rpc = Electroview.defineRPC<TwirChatRPCSchema>({ handlers: { requests: {}, messages: {} } });
 new Electroview({ rpc });
 createApp(App).mount("#app");
 // В компонентах: rpc.send.getAccounts(), rpc.on.chat_message(handler)
@@ -202,7 +202,7 @@ createApp(App).mount("#app");
 ### Файловая структура
 
 ```
-/home/satont/Projects/zenchat/
+/home/satont/Projects/twirchat/
 ├── AGENTS.md
 ├── package.json                          ← monorepo root
 └── packages/
@@ -226,7 +226,7 @@ createApp(App).mount("#app");
             ├── bun/
             │   └── index.ts              ← Electrobun main process (BrowserWindow + RPC + HMR detection)
             ├── shared/
-            │   └── rpc.ts               ← ZenchatRPCSchema, WebviewSender
+            │   └── rpc.ts               ← TwirChatRPCSchema, WebviewSender
             ├── views/
             │   ├── main/
             │   │   ├── index.html

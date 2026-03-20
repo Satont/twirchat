@@ -1,4 +1,4 @@
-# Zenchat — план разработки
+# TwirChat — план разработки
 
 Мультиплатформенный менеджер чата для стримеров (Twitch, YouTube, Kick).
 Стек: **Bun + TypeScript**, monorepo (bun workspaces).
@@ -8,15 +8,15 @@
 ## Архитектура
 
 ```
-zenchat/                          ← monorepo root
+twirchat/                          ← monorepo root
 ├── package.json                  ← workspaces: ["packages/*"]
 └── packages/
-    ├── shared/                   ← @zenchat/shared — общие типы и протокол
+    ├── shared/                   ← @twirchat/shared — общие типы и протокол
     │   ├── types.ts              ← NormalizedChatMessage, NormalizedEvent, AppSettings, ...
     │   ├── constants.ts          ← порты, URL-константы, BACKEND_WS_URL
     │   ├── protocol.ts           ← BackendToDesktopMessage / DesktopToBackendMessage
     │   └── index.ts
-    ├── backend/                  ← @zenchat/backend — публичный SaaS-сервис
+    ├── backend/                  ← @twirchat/backend — публичный SaaS-сервис
     │   └── src/
     │       ├── index.ts          ← Bun.serve (HTTP + WebSocket)
     │       ├── db/               ← Bun.sql (Postgres)
@@ -31,7 +31,7 @@ zenchat/                          ← monorepo root
     │       │   └── handlers.ts   ← open/close/message handlers
     │       └── routes/
     │           └── index.ts      ← HTTP-маршруты
-    └── desktop/                  ← @zenchat/desktop — desktop-приложение (Bun)
+    └── desktop/                  ← @twirchat/desktop — desktop-приложение (Bun)
         ├── src/
         │   ├── index.ts          ← точка входа, init + wiring
         │   ├── backend-connection.ts ← WS-клиент к backend, автореконнект
@@ -92,8 +92,8 @@ Desktop                        Backend                     Kick/Twitch/YT
 #### Инфраструктура
 
 - [x] Monorepo с bun workspaces (`packages/shared`, `packages/desktop`, `packages/backend`)
-- [x] `@zenchat/shared`: types.ts, constants.ts, protocol.ts — полностью готово
-- [x] tsconfig path aliases во всех пакетах (`@zenchat/shared`, `@desktop/*`, `@backend/*`)
+- [x] `@twirchat/shared`: types.ts, constants.ts, protocol.ts — полностью готово
+- [x] tsconfig path aliases во всех пакетах (`@twirchat/shared`, `@desktop/*`, `@backend/*`)
 - [x] Все тесты desktop проходят (18/18): aggregator, pkce, store
 
 #### Desktop (packages/desktop)
@@ -256,7 +256,7 @@ Desktop                        Backend                     Kick/Twitch/YT
 ```json
 {
   "dependencies": {
-    "@zenchat/shared": "workspace:*"
+    "@twirchat/shared": "workspace:*"
   }
 }
 ```
@@ -268,7 +268,7 @@ Desktop                        Backend                     Kick/Twitch/YT
 ```json
 {
   "dependencies": {
-    "@zenchat/shared": "workspace:*",
+    "@twirchat/shared": "workspace:*",
     "@twurple/auth": "^7",
     "@twurple/chat": "^7",
     "@twurple/eventsub-ws": "^7",

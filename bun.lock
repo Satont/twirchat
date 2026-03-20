@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "zenchat",
+      "name": "twirchat",
       "devDependencies": {
         "@types/bun": "catalog:",
         "@types/node": "catalog:",
@@ -11,10 +11,10 @@
       },
     },
     "packages/backend": {
-      "name": "@zenchat/backend",
+      "name": "@twirchat/backend",
       "version": "0.0.1",
       "dependencies": {
-        "@zenchat/shared": "workspace:*",
+        "@twirchat/shared": "workspace:*",
         "zod": "4.3.6",
       },
       "devDependencies": {
@@ -24,7 +24,7 @@
       },
     },
     "packages/desktop": {
-      "name": "@zenchat/desktop",
+      "name": "@twirchat/desktop",
       "version": "0.0.1",
       "dependencies": {
         "@grpc/grpc-js": "1.14.3",
@@ -32,7 +32,7 @@
         "@twurple/api": "8.0.3",
         "@twurple/auth": "8.0.3",
         "@twurple/chat": "8.0.3",
-        "@zenchat/shared": "workspace:*",
+        "@twirchat/shared": "workspace:*",
         "bun-plugin-vue": "1.0.0",
         "electrobun": "1.16.0",
         "vue": "3.5.30",
@@ -47,7 +47,7 @@
       },
     },
     "packages/shared": {
-      "name": "@zenchat/shared",
+      "name": "@twirchat/shared",
       "version": "0.0.1",
       "devDependencies": {
         "@types/node": "catalog:",
@@ -218,11 +218,11 @@
 
     "@vue/shared": ["@vue/shared@3.5.30", "", {}, "sha512-YXgQ7JjaO18NeK2K9VTbDHaFy62WrObMa6XERNfNOkAhD1F1oDSf3ZJ7K6GqabZ0BvSDHajp8qfS5Sa2I9n8uQ=="],
 
-    "@zenchat/backend": ["@zenchat/backend@workspace:packages/backend"],
+    "@twirchat/backend": ["@twirchat/backend@workspace:packages/backend"],
 
-    "@zenchat/desktop": ["@zenchat/desktop@workspace:packages/desktop"],
+    "@twirchat/desktop": ["@twirchat/desktop@workspace:packages/desktop"],
 
-    "@zenchat/shared": ["@zenchat/shared@workspace:packages/shared"],
+    "@twirchat/shared": ["@twirchat/shared@workspace:packages/shared"],
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 

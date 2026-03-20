@@ -1,8 +1,8 @@
 import type {
   BackendToDesktopMessage,
   DesktopToBackendMessage,
-} from "@zenchat/shared";
-import { BACKEND_WS_URL } from "@zenchat/shared/constants";
+} from "@twirchat/shared";
+import { BACKEND_WS_URL } from "@twirchat/shared/constants";
 
 type MessageHandler = (msg: BackendToDesktopMessage) => void;
 

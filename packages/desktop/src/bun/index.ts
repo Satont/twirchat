@@ -1,5 +1,5 @@
 /**
- * Zenchat — Electrobun main process entry point
+ * TwirChat — Electrobun main process entry point
  *
  * Responsibilities:
  *  - Initialise SQLite DB and client secret
@@ -24,19 +24,19 @@ import {
   pushOverlayEvent,
 } from "../overlay-server";
 
-import type { ZenchatRPCSchema, WebviewSender } from "../shared/rpc";
+import type { TwirChatRPCSchema, WebviewSender } from "../shared/rpc";
 
 // ============================================================
 // 1. Initialisation
 // ============================================================
 
-console.log("[Zenchat] Starting...");
+console.log("[TwirChat] Starting...");
 
 initDb();
-console.log("[Zenchat] Database ready");
+console.log("[TwirChat] Database ready");
 
 const clientSecret = getClientSecret();
-console.log(`[Zenchat] Client secret: ${clientSecret.slice(0, 8)}...`);
+console.log(`[TwirChat] Client secret: ${clientSecret.slice(0, 8)}...`);
 
 const backendConn = new BackendConnection(clientSecret);
 const aggregator = new ChatAggregator(500);
@@ -47,7 +47,7 @@ startOverlayServer();
 // 2. Define Electrobun RPC (bun side)
 // ============================================================
 
-const rpc = defineElectrobunRPC<ZenchatRPCSchema>("bun", {
+const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
   handlers: {
     // --- Requests from the webview ---
     requests: {
@@ -101,7 +101,7 @@ async function resolveWindowUrl(): Promise<string> {
   try {
     const res = await fetch(viteUrl, { signal: AbortSignal.timeout(500) });
     if (res.ok || res.status < 500) {
-      console.log("[Zenchat] Vite dev server detected — using HMR URL");
+      console.log("[TwirChat] Vite dev server detected — using HMR URL");
       return viteUrl;
     }
   } catch {
@@ -113,7 +113,7 @@ async function resolveWindowUrl(): Promise<string> {
 const windowUrl = await resolveWindowUrl();
 
 const win = new BrowserWindow({
-  title: "Zenchat",
+  title: "TwirChat",
   url: windowUrl,
   frame: { x: 0, y: 0, width: 1200, height: 800 },
   rpc,
@@ -196,7 +196,7 @@ aggregator.onStatus((s) => {
   console.log(`[Status] ${s.platform}: ${s.status} (${s.mode})`);
 });
 
-console.log("[Zenchat] Ready.");
+console.log("[TwirChat] Ready.");
 
 // ============================================================
 // Helpers

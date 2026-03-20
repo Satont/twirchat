@@ -1,5 +1,5 @@
 /**
- * Zenchat OBS Overlay Server
+ * TwirChat OBS Overlay Server
  *
  * Serves the overlay page (built by Vite into dist/overlay/) and a WebSocket
  * endpoint that pushes chat messages and events to connected OBS browser
@@ -22,11 +22,11 @@
  *   platforms   — comma-separated filter e.g. "twitch,kick" (default: all)
  */
 
-import { OVERLAY_SERVER_PORT } from "@zenchat/shared/constants";
+import { OVERLAY_SERVER_PORT } from "@twirchat/shared/constants";
 import type {
   NormalizedChatMessage,
   NormalizedEvent,
-} from "@zenchat/shared/types";
+} from "@twirchat/shared/types";
 import { join } from "path";
 
 // ============================================================

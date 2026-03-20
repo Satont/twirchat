@@ -1,6 +1,6 @@
 import { getDb } from "./db";
-import type { AppSettings } from "@zenchat/shared/types";
-import { DEFAULT_SETTINGS } from "@zenchat/shared/types";
+import type { AppSettings } from "@twirchat/shared/types";
+import { DEFAULT_SETTINGS } from "@twirchat/shared/types";
 
 export const SettingsStore = {
   get(): AppSettings {

@@ -2,10 +2,10 @@ import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { initDb, getDb } from "@desktop/store/db";
 import { AccountStore } from "@desktop/store/account-store";
 import { SettingsStore } from "@desktop/store/settings-store";
-import { DEFAULT_SETTINGS } from "@zenchat/shared/types";
+import { DEFAULT_SETTINGS } from "@twirchat/shared/types";
 import { unlinkSync, existsSync } from "node:fs";
 
-const TEST_DB = "/tmp/zenchat-test.sqlite";
+const TEST_DB = "/tmp/twirchat-test.sqlite";
 
 describe("Database", () => {
   beforeEach(() => {

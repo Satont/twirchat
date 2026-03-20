@@ -1,4 +1,4 @@
-import { APP_NAME } from "@zenchat/shared/constants";
+import { APP_NAME } from "@twirchat/shared/constants";
 import { hostname } from "node:os";
 
 /**
@@ -15,14 +15,20 @@ async function deriveKey(salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const rawKey = encoder.encode(`${APP_NAME}:${hostname()}`);
 
-  const baseKey = await crypto.subtle.importKey("raw", rawKey, "PBKDF2", false, ["deriveKey"]);
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    rawKey,
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
 
   return crypto.subtle.deriveKey(
     { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
     baseKey,
     { name: "AES-GCM", length: KEY_LENGTH },
     false,
-    ["encrypt", "decrypt"]
+    ["encrypt", "decrypt"],
   );
 }
 
@@ -30,13 +36,23 @@ async function encryptAsync(plaintext: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(plaintext);
 
-  const salt = crypto.getRandomValues(new Uint8Array(16)) as Uint8Array<ArrayBuffer>;
-  const iv = crypto.getRandomValues(new Uint8Array(12)) as Uint8Array<ArrayBuffer>;
+  const salt = crypto.getRandomValues(
+    new Uint8Array(16),
+  ) as Uint8Array<ArrayBuffer>;
+  const iv = crypto.getRandomValues(
+    new Uint8Array(12),
+  ) as Uint8Array<ArrayBuffer>;
   const key = await deriveKey(salt);
 
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    data,
+  );
 
-  const result = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
+  const result = new Uint8Array(
+    salt.length + iv.length + ciphertext.byteLength,
+  );
   result.set(salt, 0);
   result.set(iv, salt.length);
   result.set(new Uint8Array(ciphertext), salt.length + iv.length);
@@ -52,7 +68,11 @@ async function decryptAsync(encoded: string): Promise<string> {
 
   const key = await deriveKey(salt);
 
-  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext,
+  );
 
   return new TextDecoder().decode(plaintext);
 }
@@ -68,7 +88,9 @@ function xorEncode(text: string): string {
   const key = `${APP_NAME}:${hostname()}`;
   const encoded = text
     .split("")
-    .map((char, i) => char.charCodeAt(0) ^ (key.charCodeAt(i % key.length) ?? 0))
+    .map(
+      (char, i) => char.charCodeAt(0) ^ (key.charCodeAt(i % key.length) ?? 0),
+    )
     .map((code) => String.fromCharCode(code))
     .join("");
   return Buffer.from(encoded, "binary").toString("base64");
@@ -79,7 +101,9 @@ function xorDecode(encoded: string): string {
   const decoded = Buffer.from(encoded, "base64").toString("binary");
   return decoded
     .split("")
-    .map((char, i) => char.charCodeAt(0) ^ (key.charCodeAt(i % key.length) ?? 0))
+    .map(
+      (char, i) => char.charCodeAt(0) ^ (key.charCodeAt(i % key.length) ?? 0),
+    )
     .map((code) => String.fromCharCode(code))
     .join("");
 }

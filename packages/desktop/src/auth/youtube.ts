@@ -2,7 +2,7 @@ import {
   YOUTUBE_AUTH_URL,
   YOUTUBE_TOKEN_URL,
   YOUTUBE_REDIRECT_URI,
-} from "@zenchat/shared/constants";
+} from "@twirchat/shared/constants";
 import { generateState } from "./pkce";
 import { AccountStore } from "@desktop/store/account-store";
 import { successPage } from "./server";

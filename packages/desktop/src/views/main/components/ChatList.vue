@@ -6,7 +6,7 @@ import type {
   AppSettings,
   Account,
   PlatformStatusInfo,
-} from "@zenchat/shared/types";
+} from "@twirchat/shared/types";
 
 const props = defineProps<{
   messages: NormalizedChatMessage[];

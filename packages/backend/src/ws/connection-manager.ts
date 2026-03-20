@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import type { BackendToDesktopMessage } from "@zenchat/shared";
+import type { BackendToDesktopMessage } from "@twirchat/shared";
 
 export interface WsData {
   clientSecret: string;

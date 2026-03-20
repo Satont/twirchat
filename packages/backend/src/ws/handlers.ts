@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import type { DesktopToBackendMessage } from "@zenchat/shared";
+import type { DesktopToBackendMessage } from "@twirchat/shared";
 import { connectionManager, type WsData } from "./connection-manager.ts";
 import { ClientStore } from "../db/index.ts";
 import { startKickOAuth } from "../auth/kick.ts";

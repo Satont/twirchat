@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { DB_PATH } from "@zenchat/shared/constants";
+import { DB_PATH } from "@twirchat/shared/constants";
 
 let _db: Database | null = null;
 

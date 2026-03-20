@@ -4,7 +4,7 @@ import type {
   Account,
   PlatformStatusInfo,
   Platform,
-} from "@zenchat/shared/types";
+} from "@twirchat/shared/types";
 import { rpc } from "../main";
 
 const props = defineProps<{

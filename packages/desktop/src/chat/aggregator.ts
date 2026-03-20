@@ -1,6 +1,10 @@
-import type { NormalizedChatMessage, NormalizedEvent, PlatformStatusInfo } from "@zenchat/shared/types";
+import type {
+  NormalizedChatMessage,
+  NormalizedEvent,
+  PlatformStatusInfo,
+} from "@twirchat/shared/types";
 import type { IPlatformAdapter } from "../platforms/base-adapter";
-import type { Platform } from "@zenchat/shared/types";
+import type { Platform } from "@twirchat/shared/types";
 
 type AggregatorEventHandler<T> = (data: T) => void;
 
@@ -9,9 +13,13 @@ export class ChatAggregator {
   private messageBuffer: NormalizedChatMessage[] = [];
   private readonly bufferSize: number;
 
-  private onMessageHandlers: Set<AggregatorEventHandler<NormalizedChatMessage>> = new Set();
-  private onEventHandlers: Set<AggregatorEventHandler<NormalizedEvent>> = new Set();
-  private onStatusHandlers: Set<AggregatorEventHandler<PlatformStatusInfo>> = new Set();
+  private onMessageHandlers: Set<
+    AggregatorEventHandler<NormalizedChatMessage>
+  > = new Set();
+  private onEventHandlers: Set<AggregatorEventHandler<NormalizedEvent>> =
+    new Set();
+  private onStatusHandlers: Set<AggregatorEventHandler<PlatformStatusInfo>> =
+    new Set();
 
   private seenIds = new Set<string>();
 
@@ -34,19 +42,31 @@ export class ChatAggregator {
       }
 
       for (const handler of this.onMessageHandlers) {
-        try { handler(msg); } catch (e) { console.error("[Aggregator] message handler error:", e); }
+        try {
+          handler(msg);
+        } catch (e) {
+          console.error("[Aggregator] message handler error:", e);
+        }
       }
     });
 
     adapter.on("event", (event) => {
       for (const handler of this.onEventHandlers) {
-        try { handler(event); } catch (e) { console.error("[Aggregator] event handler error:", e); }
+        try {
+          handler(event);
+        } catch (e) {
+          console.error("[Aggregator] event handler error:", e);
+        }
       }
     });
 
     adapter.on("status", (status) => {
       for (const handler of this.onStatusHandlers) {
-        try { handler(status); } catch (e) { console.error("[Aggregator] status handler error:", e); }
+        try {
+          handler(status);
+        } catch (e) {
+          console.error("[Aggregator] status handler error:", e);
+        }
       }
     });
   }
@@ -59,7 +79,9 @@ export class ChatAggregator {
     return [...this.messageBuffer];
   }
 
-  onMessage(handler: AggregatorEventHandler<NormalizedChatMessage>): () => void {
+  onMessage(
+    handler: AggregatorEventHandler<NormalizedChatMessage>,
+  ): () => void {
     this.onMessageHandlers.add(handler);
     return () => this.onMessageHandlers.delete(handler);
   }
@@ -89,7 +111,9 @@ export class ChatAggregator {
 
   async disconnectAll(): Promise<void> {
     const promises = [...this.adapters.values()].map((a) =>
-      a.disconnect().catch((err) => console.error(`[Aggregator] Disconnect error:`, err))
+      a
+        .disconnect()
+        .catch((err) => console.error(`[Aggregator] Disconnect error:`, err)),
     );
     await Promise.all(promises);
   }
@@ -106,21 +130,33 @@ export class ChatAggregator {
     }
 
     for (const handler of this.onMessageHandlers) {
-      try { handler(msg); } catch (e) { console.error("[Aggregator] message handler error:", e); }
+      try {
+        handler(msg);
+      } catch (e) {
+        console.error("[Aggregator] message handler error:", e);
+      }
     }
   }
 
   /** Inject an event directly (e.g. from backend WebSocket) */
   injectEvent(event: NormalizedEvent): void {
     for (const handler of this.onEventHandlers) {
-      try { handler(event); } catch (e) { console.error("[Aggregator] event handler error:", e); }
+      try {
+        handler(event);
+      } catch (e) {
+        console.error("[Aggregator] event handler error:", e);
+      }
     }
   }
 
   /** Inject a status update directly (e.g. from backend WebSocket) */
   injectStatus(status: PlatformStatusInfo): void {
     for (const handler of this.onStatusHandlers) {
-      try { handler(status); } catch (e) { console.error("[Aggregator] status handler error:", e); }
+      try {
+        handler(status);
+      } catch (e) {
+        console.error("[Aggregator] status handler error:", e);
+      }
     }
   }
 }

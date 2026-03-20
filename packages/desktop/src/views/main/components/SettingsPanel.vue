@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
-import type { AppSettings } from "@zenchat/shared/types";
-import { DEFAULT_SETTINGS } from "@zenchat/shared/types";
+import type { AppSettings } from "@twirchat/shared/types";
+import { DEFAULT_SETTINGS } from "@twirchat/shared/types";
 import { rpc } from "../main";
 
 const props = defineProps<{

@@ -1,4 +1,4 @@
-# zenchat
+# twirchat
 
 To install dependencies:
 

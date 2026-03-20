@@ -11,7 +11,7 @@ import type {
   PlatformStatusInfo,
   Account,
   AppSettings,
-} from "@zenchat/shared/types";
+} from "@twirchat/shared/types";
 
 // ----------------------------------------------------------------
 // State

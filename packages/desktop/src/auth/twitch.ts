@@ -2,7 +2,7 @@ import {
   TWITCH_AUTH_URL,
   TWITCH_TOKEN_URL,
   TWITCH_REDIRECT_URI,
-} from "@zenchat/shared/constants";
+} from "@twirchat/shared/constants";
 import { generateCodeVerifier, generateCodeChallenge, generateState } from "./pkce";
 import { AccountStore } from "@desktop/store/account-store";
 import { successPage } from "./server";

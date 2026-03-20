@@ -3,7 +3,7 @@ import type {
   NormalizedChatMessage,
   NormalizedEvent,
   Badge,
-} from "@zenchat/shared";
+} from "@twirchat/shared";
 import { connectionManager } from "../ws/connection-manager.ts";
 import { AccountStore } from "../db/index.ts";
 import { config } from "../config.ts";
