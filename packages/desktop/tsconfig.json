@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "allowJs": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "types": ["bun", "node"],
+    "paths": {
+      "@desktop/*": ["./src/*"],
+      "@chatrix/shared": ["../shared/index.ts"],
+      "@chatrix/shared/*": ["../shared/*"],
+    },
+  },
+  "include": [
+    "src/**/*",
+    "index.ts",
+    "electrobun.config.ts",
+  ],
+  "exclude": [
+    "overlay",
+    "node_modules",
+  ],
+}

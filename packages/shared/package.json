@@ -1,0 +1,14 @@
+{
+  "name": "@chatrix/shared",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./*": "./*.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@chatrix/backend",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test tests/",
+    "build": "bun build --compile --minify --sourcemap src/index.ts --outfile=.out/backend"
+  },
+  "dependencies": {
+    "@chatrix/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@types/node": "catalog:"
+  }
+}

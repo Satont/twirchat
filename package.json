@@ -1,0 +1,27 @@
+{
+  "name": "chatrix-monorepo",
+  "private": true,
+  "scripts": {
+    "dev:desktop": "bun run --cwd packages/desktop dev",
+    "dev:backend": "bun run --cwd packages/backend dev",
+    "dev": "bun run dev:backend & bun run dev:desktop",
+    "test": "bun test --workspaces test",
+    "typecheck": "bun run --workspaces typecheck",
+    "build": "bun run --workspaces build"
+  },
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "@types/bun": "latest",
+      "@types/node": "latest",
+      "@typescript/native-preview": "7.0.0-dev.20260319.1"
+    }
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@types/node": "catalog:"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@chatrix/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run build:views && electrobun dev",
+    "dev:hmr": "concurrently \"bun run hmr:main\" \"bun run start\"",
+    "hmr:main": "vite --config vite.main.config.ts --port 5173",
+    "start": "bun src/bun/index.ts",
+    "build:views": "vite build --config vite.main.config.ts && vite build --config vite.overlay.config.ts",
+    "build": "bun run build:views && electrobun build",
+    "build:canary": "bun run build:views && electrobun build --env=canary",
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test tests/"
+  },
+  "dependencies": {
+    "@chatrix/shared": "workspace:*",
+    "@grpc/grpc-js": "1.14.3",
+    "@grpc/proto-loader": "0.8.0",
+    "@twurple/api": "8.0.3",
+    "@twurple/auth": "8.0.3",
+    "@twurple/chat": "8.0.3",
+    "bun-plugin-vue": "1.0.0",
+    "electrobun": "1.16.0",
+    "vue": "3.5.30"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@vitejs/plugin-vue": "6.0.5",
+    "concurrently": "9.2.1",
+    "vite": "8.0.1"
+  }
+}
