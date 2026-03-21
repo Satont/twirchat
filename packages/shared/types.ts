@@ -134,6 +134,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 // ============================================================
+// Статус трансляции
+// ============================================================
+
+export interface StreamStatus {
+  platform: Platform;
+  channelId: string;
+  isLive: boolean;
+  title: string;
+  categoryId?: string;
+  categoryName?: string;
+  viewerCount?: number;
+}
+
+// ============================================================
 // Статус платформы
 // ============================================================
 
