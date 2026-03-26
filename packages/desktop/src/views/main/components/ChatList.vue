@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 import ChatMessage from "./ChatMessage.vue";
-import ChannelStatusBar from "./ChannelStatusBar.vue";
 import { rpc } from "../main";
 import type {
   NormalizedChatMessage,
   AppSettings,
   Account,
   PlatformStatusInfo,
-  Platform,
 } from "@twirchat/shared/types";
 import type { ChannelStatus, ChannelStatusRequest } from "@twirchat/shared/protocol";
 
@@ -134,19 +132,57 @@ function platformColor(platform: string): string {
     default: return "#a78bfa";
   }
 }
+
+function formatViewers(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
 </script>
 
 <template>
   <div class="chat-wrapper">
-    <!-- Channel status bar -->
-    <ChannelStatusBar :channels="displayedChannels" />
-
-    <!-- Chat header -->
+    <!-- Chat header with inline channel chips -->
     <div class="chat-header">
       <span class="chat-header-title">Live Chat</span>
-      <span class="chat-count" v-if="messages.length > 0"
-        >{{ messages.length }} messages</span
-      >
+
+      <!-- Channel status chips -->
+      <div v-if="displayedChannels.length > 0" class="header-chips">
+        <div
+          v-for="ch in displayedChannels"
+          :key="`${ch.platform}:${ch.channelLogin}`"
+          class="header-chip"
+          :class="{ live: ch.isLive }"
+          :style="{ '--chip-color': platformColor(ch.platform) }"
+        >
+          <span class="chip-dot" :class="{ pulse: ch.isLive }" />
+          <span class="chip-name">{{ ch.channelLogin }}</span>
+          <span v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-viewers">
+            {{ formatViewers(ch.viewerCount) }}
+          </span>
+
+          <!-- Tooltip -->
+          <div class="chip-tooltip">
+            <div class="chip-tooltip-header">
+              <span class="chip-tooltip-platform" :style="{ color: platformColor(ch.platform) }">
+                {{ ch.platform === 'twitch' ? 'Twitch' : 'Kick' }}
+              </span>
+              <span class="chip-tooltip-status" :class="{ live: ch.isLive }">
+                {{ ch.isLive ? 'LIVE' : 'Offline' }}
+              </span>
+            </div>
+            <div v-if="ch.title" class="chip-tooltip-title">{{ ch.title }}</div>
+            <div v-if="ch.categoryName" class="chip-tooltip-row">
+              <span class="chip-tooltip-label">Category</span>{{ ch.categoryName }}
+            </div>
+            <div v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-tooltip-row">
+              <span class="chip-tooltip-label">Viewers</span>{{ ch.viewerCount.toLocaleString() }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <span class="chat-count" v-if="messages.length > 0">{{ messages.length }} messages</span>
     </div>
 
     <!-- Messages -->
@@ -256,10 +292,11 @@ function platformColor(platform: string): string {
 .chat-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--c-border, #2a2a33);
   flex-shrink: 0;
+  min-height: 44px;
 }
 
 .chat-header-title {
@@ -268,11 +305,158 @@ function platformColor(platform: string): string {
   color: var(--c-text-2, #8b8b99);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+/* ---- inline channel chips ---- */
+.header-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.header-chips::-webkit-scrollbar { display: none; }
+
+.header-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: default;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--c-text-2, #aaa);
+  transition: background 0.15s, border-color 0.15s;
+}
+.header-chip.live {
+  background: color-mix(in srgb, var(--chip-color) 12%, transparent);
+  border-color: color-mix(in srgb, var(--chip-color) 35%, transparent);
+  color: var(--c-text, #e8e8f0);
+}
+.header-chip:hover {
+  background: color-mix(in srgb, var(--chip-color) 20%, transparent);
+  border-color: color-mix(in srgb, var(--chip-color) 50%, transparent);
+}
+
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-text-2, #666);
+  flex-shrink: 0;
+}
+.chip-dot.pulse {
+  background: var(--chip-color);
+  animation: chip-pulse 2s infinite;
+}
+@keyframes chip-pulse {
+  0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--chip-color) 60%, transparent); }
+  70%  { box-shadow: 0 0 0 5px transparent; }
+  100% { box-shadow: 0 0 0 0   transparent; }
+}
+
+.chip-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip-viewers {
+  font-size: 11px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- chip tooltip ---- */
+.chip-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 190px;
+  max-width: 270px;
+  background: #1e1e30;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  z-index: 999;
+  pointer-events: none;
+  transition: opacity 0.15s, visibility 0.15s;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.chip-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: #1e1e30;
+  border-left: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.header-chip:hover .chip-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.chip-tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.chip-tooltip-platform {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.chip-tooltip-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #888;
+}
+.chip-tooltip-status.live { color: #4ade80; }
+
+.chip-tooltip-title {
+  font-size: 13px;
+  color: #e8e8f0;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.chip-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #999;
+  margin-top: 3px;
+}
+.chip-tooltip-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  flex-shrink: 0;
 }
 
 .chat-count {
   font-size: 11px;
   color: var(--c-text-2, #8b8b99);
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .chat-list {
