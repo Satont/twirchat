@@ -10,14 +10,27 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   saved: [settings: AppSettings];
+  change: [settings: AppSettings];
 }>();
 
 const local = ref<AppSettings>(
   props.settings ? { ...props.settings, overlay: { ...props.settings.overlay } } : { ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } }
 );
 
+// Flag to avoid feedback loop: when local changes → App updates settings prop → we'd reset local again
+let ignorePropSync = false;
+
 watch(() => props.settings, (s) => {
+  if (ignorePropSync) return;
   if (s) local.value = { ...s, overlay: { ...s.overlay } };
+});
+
+// Emit every local change so App can apply settings live (before Save)
+watch(local, (s) => {
+  ignorePropSync = true;
+  emit("change", { ...s, overlay: { ...s.overlay } });
+  // Reset flag on next tick after Vue has propagated the prop update
+  Promise.resolve().then(() => { ignorePropSync = false; });
 }, { deep: true });
 
 const saving = ref(false);

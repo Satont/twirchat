@@ -9,12 +9,15 @@ export const SettingsStore = {
       .query<{ value: string }, [string]>("SELECT value FROM settings WHERE key = ?")
       .get("app_settings");
 
-    if (!row) return { ...DEFAULT_SETTINGS };
+    if (!row) return { ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } };
 
     try {
-      return JSON.parse(row.value) as AppSettings;
+      const parsed = JSON.parse(row.value) as Partial<AppSettings>;
+      // Deep-merge with defaults so new fields added after the settings were saved
+      // don't come back as undefined.
+      return deepMerge({ ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } }, parsed);
     } catch {
-      return { ...DEFAULT_SETTINGS };
+      return { ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } };
     }
   },
 

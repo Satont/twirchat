@@ -109,6 +109,10 @@ function switchTab(tab: typeof activeTab.value) {
 function onSettingsSaved(s: AppSettings) {
   settings.value = s;
 }
+
+function onSettingsChange(s: AppSettings) {
+  settings.value = s;
+}
 </script>
 
 <template>
@@ -266,6 +270,7 @@ function onSettingsSaved(s: AppSettings) {
         v-show="activeTab === 'settings'"
         :settings="settings"
         @saved="onSettingsSaved"
+        @change="onSettingsChange"
       />
     </main>
   </div>
