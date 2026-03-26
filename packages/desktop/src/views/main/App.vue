@@ -31,11 +31,22 @@ const connectedAccountsCount = computed(() => accounts.value.length);
 // Load initial data
 // ----------------------------------------------------------------
 
-onMounted(async () => {
-  [accounts.value, settings.value] = await Promise.all([
-    rpc.send.getAccounts(),
-    rpc.send.getSettings(),
-  ]);
+async function loadInitialData() {
+  try {
+    const [accs, setts] = await Promise.all([
+      rpc.request.getAccounts(),
+      rpc.request.getSettings(),
+    ]);
+    if (accs !== undefined) accounts.value = accs;
+    if (setts !== undefined) settings.value = setts;
+  } catch (err) {
+    console.warn("[App] Initial data load failed, retrying in 1s...", err);
+    setTimeout(loadInitialData, 1000);
+  }
+}
+
+onMounted(() => {
+  loadInitialData();
 });
 
 // ----------------------------------------------------------------
@@ -45,26 +56,38 @@ onMounted(async () => {
 const unsubscribers: Array<() => void> = [];
 
 onMounted(() => {
+  const onChatMessage = (msg: NormalizedChatMessage) => {
+    messages.value = [msg, ...messages.value].slice(0, 500);
+  };
+  const onChatEvent = (ev: NormalizedEvent) => {
+    events.value = [ev, ...events.value].slice(0, 200);
+    if (activeTab.value !== "events") unreadEvents.value++;
+  };
+  const onPlatformStatus = (s: PlatformStatusInfo) => {
+    statuses.value = new Map(statuses.value).set(s.platform, s);
+  };
+  const onAuthSuccess = ({ platform, displayName }: { platform: string; username: string; displayName: string }) => {
+    console.log(`[Auth] Authenticated as ${displayName} on ${platform}`);
+    rpc.request.getAccounts().then((a) => {
+      accounts.value = a;
+    });
+  };
+  const onAuthError = ({ platform, error }: { platform: string; error: string }) => {
+    console.error(`[Auth] Error on ${platform}: ${error}`);
+  };
+
+  rpc.addMessageListener("chat_message", onChatMessage);
+  rpc.addMessageListener("chat_event", onChatEvent);
+  rpc.addMessageListener("platform_status", onPlatformStatus);
+  rpc.addMessageListener("auth_success", onAuthSuccess);
+  rpc.addMessageListener("auth_error", onAuthError);
+
   unsubscribers.push(
-    rpc.on.chat_message((msg) => {
-      messages.value = [msg, ...messages.value].slice(0, 500);
-    }),
-    rpc.on.chat_event((ev) => {
-      events.value = [ev, ...events.value].slice(0, 200);
-      if (activeTab.value !== "events") unreadEvents.value++;
-    }),
-    rpc.on.platform_status((s) => {
-      statuses.value = new Map(statuses.value).set(s.platform, s);
-    }),
-    rpc.on.auth_success(({ platform, displayName }) => {
-      console.log(`[Auth] Authenticated as ${displayName} on ${platform}`);
-      rpc.send.getAccounts().then((a) => {
-        accounts.value = a;
-      });
-    }),
-    rpc.on.auth_error(({ platform, error }) => {
-      console.error(`[Auth] Error on ${platform}: ${error}`);
-    }),
+    () => rpc.removeMessageListener("chat_message", onChatMessage),
+    () => rpc.removeMessageListener("chat_event", onChatEvent),
+    () => rpc.removeMessageListener("platform_status", onPlatformStatus),
+    () => rpc.removeMessageListener("auth_success", onAuthSuccess),
+    () => rpc.removeMessageListener("auth_error", onAuthError),
   );
 });
 

@@ -62,17 +62,38 @@ function addToast(platform: Platform, type: Toast["type"], message: string) {
 
 const unsubscribers: Array<() => void> = [];
 
-onMounted(() => {
+onMounted(async () => {
+  const onAuthSuccess = async ({ platform, displayName }: { platform: string; username: string; displayName: string }) => {
+    const updated = await rpc.request.getAccounts();
+    emit("accounts-updated", updated);
+    addToast(platform as Platform, "success", `Connected as ${displayName}`);
+  };
+  const onAuthError = ({ platform, error }: { platform: string; error: string }) => {
+    addToast(platform as Platform, "error", error);
+  };
+
+  rpc.addMessageListener("auth_success", onAuthSuccess);
+  rpc.addMessageListener("auth_error", onAuthError);
+
   unsubscribers.push(
-    rpc.on.auth_success(async ({ platform, displayName }) => {
-      const updated = await rpc.send.getAccounts();
-      emit("accounts-updated", updated);
-      addToast(platform as Platform, "success", `Connected as ${displayName}`);
-    }),
-    rpc.on.auth_error(({ platform, error }) => {
-      addToast(platform as Platform, "error", error);
-    }),
+    () => rpc.removeMessageListener("auth_success", onAuthSuccess),
+    () => rpc.removeMessageListener("auth_error", onAuthError),
   );
+
+  // Load persisted channels from the backend
+  try {
+    const saved = await rpc.request.getChannels();
+    if (saved) {
+      for (const platform of ["twitch", "youtube", "kick"] as Platform[]) {
+        const slugs = saved[platform];
+        if (slugs && slugs.length > 0) {
+          joinedChannels.value[platform] = slugs;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[PlatformsPanel] Failed to load persisted channels:", err);
+  }
 });
 
 onUnmounted(() => {
@@ -143,15 +164,15 @@ function avatarInitials(name: string): string {
 async function startAuth(platform: Platform) {
   authLoading.value[platform] = true;
   try {
-    await rpc.send.authStart({ platform });
+    await rpc.request.authStart({ platform });
   } finally {
     authLoading.value[platform] = false;
   }
 }
 
 async function logout(platform: Platform) {
-  await rpc.send.authLogout({ platform });
-  const updated = await rpc.send.getAccounts();
+  await rpc.request.authLogout({ platform });
+  const updated = await rpc.request.getAccounts();
   emit("accounts-updated", updated);
 }
 
@@ -160,18 +181,21 @@ async function joinChannel(platform: Platform) {
   if (!slug) return;
   joiningChannel.value[platform] = true;
   try {
-    await rpc.send.joinChannel({ platform, channelSlug: slug });
+    await rpc.request.joinChannel({ platform, channelSlug: slug });
     if (!joinedChannels.value[platform].includes(slug)) {
       joinedChannels.value[platform] = [...joinedChannels.value[platform], slug];
     }
     channelInputs.value[platform] = "";
+  } catch (err) {
+    console.error(`[PlatformsPanel] joinChannel failed for ${platform}:`, err);
+    addToast(platform, "error", `Failed to join channel: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
     joiningChannel.value[platform] = false;
   }
 }
 
 async function leaveChannel(platform: Platform, slug: string) {
-  await rpc.send.leaveChannel({ platform, channelSlug: slug });
+  await rpc.request.leaveChannel({ platform, channelSlug: slug });
   joinedChannels.value[platform] = joinedChannels.value[platform].filter(
     (c) => c !== slug,
   );

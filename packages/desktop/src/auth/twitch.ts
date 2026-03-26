@@ -21,7 +21,7 @@ import {
   generateCodeChallenge,
   generateState,
 } from "./pkce";
-import { AccountStore } from "@desktop/store/account-store";
+import { AccountStore } from "../store/account-store";
 import { successPage } from "./server";
 import { BACKEND_URL, TWITCH_REDIRECT_URI } from "@twirchat/shared/constants";
 import type {

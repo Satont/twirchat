@@ -1,121 +1,42 @@
 /**
  * YouTube Platform Adapter
  *
- * Connects to YouTube Live Chat using the official gRPC streaming API:
+ * Connects to YouTube Live Chat using the official gRPC streaming API via ConnectRPC:
  *   youtube.googleapis.com:443
  *   Service: V3DataLiveChatMessageService.StreamList
  *
  * Flow:
  *   1. Get the active liveChatId via REST (videos.list?part=liveStreamingDetails)
- *   2. Open a gRPC server-streaming call with the liveChatId + OAuth token
+ *   2. Open a server-streaming call with the liveChatId + OAuth token via ConnectRPC
  *   3. Normalize incoming messages and emit them
  *
  * Auth: OAuth 2.0 access token stored in local AccountStore.
- * Docs: https://developers.google.com/youtube/v3/live/streaming-live-chat
  */
 
-import * as grpc from "@grpc/grpc-js";
-import * as protoLoader from "@grpc/proto-loader";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createClient } from "@connectrpc/connect";
+import { createGrpcTransport } from "@connectrpc/connect-node";
 
-import { BasePlatformAdapter } from "../base-adapter";
-import type {
-  NormalizedChatMessage,
-  NormalizedEvent,
-  Badge,
-} from "@twirchat/shared/types";
-import { AccountStore } from "@desktop/store/account-store";
+import { BasePlatformAdapter } from "../base-adapter.js";
+import type { NormalizedChatMessage, NormalizedEvent, Badge } from "@twirchat/shared/types";
+import { AccountStore } from "../../store/account-store.js";
 
-// ============================================================
-// Proto loading
-// ============================================================
+import {
+  V3DataLiveChatMessageService,
+  LiveChatMessageSnippet_TypeWrapper_Type,
+  type LiveChatMessage,
+} from "./gen/stream_list_pb.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROTO_PATH = join(__dirname, "stream_list.proto");
-
-const packageDef = protoLoader.loadSync(PROTO_PATH, {
-  keepCase: false,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true,
-});
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const protoDescriptor = grpc.loadPackageDefinition(packageDef) as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const YouTubeLiveChatService = protoDescriptor?.youtube?.api?.v3
-  ?.V3DataLiveChatMessageService as any;
-
-const YOUTUBE_GRPC_ENDPOINT = "youtube.googleapis.com:443";
+const YOUTUBE_GRPC_ENDPOINT = "https://youtube.googleapis.com";
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
-
-// ============================================================
-// gRPC response types (loosely typed — proto2 optional fields)
-// ============================================================
-
-interface GrpcAuthorDetails {
-  channelId?: string;
-  displayName?: string;
-  profileImageUrl?: string;
-  isChatOwner?: boolean;
-  isChatSponsor?: boolean;
-  isChatModerator?: boolean;
-}
-
-interface GrpcSnippet {
-  type?: string;
-  publishedAt?: string;
-  hasDisplayContent?: boolean;
-  displayMessage?: string;
-  textMessageDetails?: { messageText?: string };
-  superChatDetails?: {
-    amountMicros?: string;
-    currency?: string;
-    amountDisplayString?: string;
-    userComment?: string;
-    tier?: number;
-  };
-  newSponsorDetails?: { memberLevelName?: string; isUpgrade?: boolean };
-  memberMilestoneChatDetails?: {
-    memberLevelName?: string;
-    memberMonth?: number;
-    userComment?: string;
-  };
-  membershipGiftingDetails?: {
-    giftMembershipsCount?: number;
-    giftMembershipsLevelName?: string;
-  };
-}
-
-interface GrpcMessage {
-  id?: string;
-  snippet?: GrpcSnippet;
-  authorDetails?: GrpcAuthorDetails;
-}
-
-interface GrpcResponse {
-  nextPageToken?: string;
-  offlineAt?: string;
-  items?: GrpcMessage[];
-}
-
-// ============================================================
-// YouTubeAdapter
-// ============================================================
 
 export class YouTubeAdapter extends BasePlatformAdapter {
   readonly platform = "youtube" as const;
 
-  private grpcClient: ReturnType<
-    typeof grpc.makeGenericClientConstructor
-  > | null = null;
-  private activeStream: grpc.ClientReadableStream<GrpcResponse> | null = null;
   private channelId = "";
   private liveChatId: string | null = null;
   private shouldReconnect = true;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private abortController: AbortController | null = null;
 
   private accessToken: string | null = null;
   private accountId: string | null = null;
@@ -173,9 +94,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   async disconnect(): Promise<void> {
     this.shouldReconnect = false;
     this.clearTimers();
-    this.activeStream?.cancel();
-    this.activeStream = null;
-    this.grpcClient = null;
+    this.abortController?.abort();
+    this.abortController = null;
 
     this.emit("status", {
       platform: "youtube",
@@ -185,8 +105,6 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   }
 
   async sendMessage(_channelId: string, _text: string): Promise<void> {
-    // YouTube Live Chat message insertion requires REST API with OAuth.
-    // Not yet implemented.
     throw new Error("YouTubeAdapter.sendMessage: not yet implemented");
   }
 
@@ -194,12 +112,6 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   // Private
   // ============================================================
 
-  /**
-   * Fetch the activeLiveChatId for the given channel or video ID.
-   * Accepts:
-   *   - A YouTube video ID (e.g. "dQw4w9WgXcQ")
-   *   - A channel ID (e.g. "UCxxxxxx") — fetches the active broadcast
-   */
   private async fetchLiveChatId(channelOrVideoId: string): Promise<string> {
     if (!this.accessToken) throw new Error("No access token");
 
@@ -234,114 +146,97 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       items?: Array<{ id?: { videoId?: string } }>;
     };
     const videoId = searchBody.items?.[0]?.id?.videoId;
-    if (!videoId)
-      throw new Error(
-        `No active live broadcast found for "${channelOrVideoId}"`,
-      );
+    if (!videoId) {
+      throw new Error(`No active live broadcast found for "${channelOrVideoId}"`);
+    }
 
     const liveRes = await fetch(
       `${YOUTUBE_API_BASE}/videos?part=liveStreamingDetails&id=${encodeURIComponent(videoId)}`,
       { headers: { Authorization: `Bearer ${this.accessToken}` } },
     );
 
-    if (!liveRes.ok)
+    if (!liveRes.ok) {
       throw new Error(`YouTube videos.list failed: ${liveRes.status}`);
+    }
 
     const liveBody = (await liveRes.json()) as {
       items?: Array<{ liveStreamingDetails?: { activeLiveChatId?: string } }>;
     };
     const chatId = liveBody.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
-    if (!chatId)
+    if (!chatId) {
       throw new Error(`No active live chat found for video "${videoId}"`);
+    }
 
     console.log(`[YouTube] Found liveChatId via channel search: ${chatId}`);
     return chatId;
   }
 
-  private startGrpcStream(): void {
+  private async startGrpcStream(): Promise<void> {
     if (!this.liveChatId || !this.accessToken) return;
 
-    const creds = grpc.credentials.createSsl();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const client = new YouTubeLiveChatService(YOUTUBE_GRPC_ENDPOINT, creds);
-    this.grpcClient = client;
-
-    const metadata = new grpc.Metadata();
-    metadata.set("authorization", `Bearer ${this.accessToken}`);
-
-    const request = {
-      liveChatId: this.liveChatId,
-      part: ["snippet", "authorDetails"],
-      maxResults: 200,
-    };
-
-    console.log(
-      `[YouTube] Starting gRPC stream for liveChatId=${this.liveChatId}`,
-    );
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const stream = (client as any).StreamList(
-      request,
-      metadata,
-    ) as grpc.ClientReadableStream<GrpcResponse>;
-    this.activeStream = stream;
-
-    stream.on("data", (response: GrpcResponse) => {
-      for (const item of response.items ?? []) {
-        this.handleGrpcMessage(item);
-      }
-      // If stream ended (offlineAt is set), close cleanly
-      if (response.offlineAt) {
-        console.log(
-          `[YouTube] Stream ended — channel went offline at ${response.offlineAt}`,
-        );
-        stream.cancel();
-      }
+    const transport = createGrpcTransport({
+      baseUrl: YOUTUBE_GRPC_ENDPOINT,
+      interceptors: [
+        (next) => (req) => {
+          req.header.set("authorization", `Bearer ${this.accessToken}`);
+          return next(req);
+        },
+      ],
     });
 
-    stream.on("error", (err: Error) => {
-      const code = (err as grpc.ServiceError).code;
-      if (code === grpc.status.CANCELLED) {
-        // Manual cancel — do not reconnect
-        return;
-      }
-      console.error("[YouTube] gRPC stream error:", err.message);
-      this.scheduleReconnect();
-    });
+    const client = createClient(V3DataLiveChatMessageService, transport);
 
-    stream.on("end", () => {
-      console.log("[YouTube] gRPC stream ended");
-      this.scheduleReconnect();
-    });
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
-    stream.on("status", (status: grpc.StatusObject) => {
-      if (status.code === grpc.status.OK) {
-        this.emit("status", {
-          platform: "youtube",
-          status: "connected",
-          mode: "authenticated",
-        });
-      }
-    });
+    console.log(`[YouTube] Starting gRPC stream for liveChatId=${this.liveChatId}`);
 
-    // Emit connected immediately (stream open = connected)
     this.emit("status", {
       platform: "youtube",
       status: "connected",
       mode: "authenticated",
     });
+
+    try {
+      const stream = client.streamList(
+        {
+          liveChatId: this.liveChatId,
+          part: ["snippet", "authorDetails"],
+          maxResults: 200,
+        },
+        { signal },
+      );
+
+      for await (const response of stream) {
+        if (response.offlineAt) {
+          console.log(`[YouTube] Stream ended — channel went offline at ${response.offlineAt}`);
+          break;
+        }
+        for (const item of response.items ?? []) {
+          this.handleMessage(item);
+        }
+      }
+
+      // Stream ended cleanly
+      this.scheduleReconnect();
+    } catch (err: unknown) {
+      if (signal.aborted) {
+        // Manual disconnect — do not reconnect
+        return;
+      }
+      console.error("[YouTube] gRPC stream error:", err);
+      this.scheduleReconnect();
+    }
   }
 
-  private handleGrpcMessage(item: GrpcMessage): void {
+  private handleMessage(item: LiveChatMessage): void {
     const snippet = item.snippet;
     const author = item.authorDetails;
     if (!snippet || !author) return;
     if (!snippet.hasDisplayContent) return;
 
-    const type = snippet.type ?? "";
-    const timestamp = snippet.publishedAt
-      ? new Date(snippet.publishedAt)
-      : new Date();
+    const type = snippet.type ?? LiveChatMessageSnippet_TypeWrapper_Type.INVALID_TYPE;
+    const timestamp = snippet.publishedAt ? new Date(snippet.publishedAt) : new Date();
     const authorId = author.channelId ?? "";
     const displayName = author.displayName ?? "unknown";
     const avatarUrl = author.profileImageUrl ?? undefined;
@@ -355,8 +250,14 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       badges.push({ id: "sponsor", type: "subscriber", text: "Member" });
 
     switch (type) {
-      case "TEXT_MESSAGE_EVENT": {
-        const text = snippet.textMessageDetails?.messageText ?? "";
+      case LiveChatMessageSnippet_TypeWrapper_Type.TEXT_MESSAGE_EVENT: {
+        const content = snippet.displayedContent;
+        const text =
+          (content?.case === "textMessageDetails"
+            ? (content.value as { messageText?: string }).messageText
+            : undefined) ??
+          snippet.displayMessage ??
+          "";
         if (!text) return;
 
         const normalized: NormalizedChatMessage = {
@@ -373,15 +274,20 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         break;
       }
 
-      case "SUPER_CHAT_EVENT": {
-        const sc = snippet.superChatDetails;
+      case LiveChatMessageSnippet_TypeWrapper_Type.SUPER_CHAT_EVENT: {
+        const content = snippet.displayedContent;
+        const sc =
+          content?.case === "superChatDetails"
+            ? (content.value as { amountMicros?: bigint; currency?: string; amountDisplayString?: string; userComment?: string; tier?: number })
+            : undefined;
+
         const event: NormalizedEvent = {
           id: item.id ?? `yt:sc:${Date.now()}`,
           platform: "youtube",
           type: "superchat",
           user: { id: authorId, displayName, avatarUrl },
           data: {
-            amountMicros: sc?.amountMicros,
+            amountMicros: sc?.amountMicros?.toString(),
             currency: sc?.currency,
             amountDisplayString: sc?.amountDisplayString,
             comment: sc?.userComment,
@@ -393,52 +299,57 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         break;
       }
 
-      case "NEW_SPONSOR_EVENT": {
-        const ns = snippet.newSponsorDetails;
+      case LiveChatMessageSnippet_TypeWrapper_Type.NEW_SPONSOR_EVENT: {
+        const content = snippet.displayedContent;
+        const ns =
+          content?.case === "newSponsorDetails"
+            ? (content.value as { memberLevelName?: string; isUpgrade?: boolean })
+            : undefined;
+
         const event: NormalizedEvent = {
           id: item.id ?? `yt:member:${Date.now()}`,
           platform: "youtube",
           type: "membership",
           user: { id: authorId, displayName, avatarUrl },
-          data: {
-            levelName: ns?.memberLevelName,
-            isUpgrade: ns?.isUpgrade,
-          },
+          data: { levelName: ns?.memberLevelName, isUpgrade: ns?.isUpgrade },
           timestamp,
         };
         this.emit("event", event);
         break;
       }
 
-      case "MEMBER_MILESTONE_CHAT_EVENT": {
-        const mm = snippet.memberMilestoneChatDetails;
+      case LiveChatMessageSnippet_TypeWrapper_Type.MEMBER_MILESTONE_CHAT_EVENT: {
+        const content = snippet.displayedContent;
+        const mm =
+          content?.case === "memberMilestoneChatDetails"
+            ? (content.value as { memberLevelName?: string; memberMonth?: number; userComment?: string })
+            : undefined;
+
         const event: NormalizedEvent = {
           id: item.id ?? `yt:milestone:${Date.now()}`,
           platform: "youtube",
           type: "membership",
           user: { id: authorId, displayName, avatarUrl },
-          data: {
-            levelName: mm?.memberLevelName,
-            months: mm?.memberMonth,
-            comment: mm?.userComment,
-          },
+          data: { levelName: mm?.memberLevelName, months: mm?.memberMonth, comment: mm?.userComment },
           timestamp,
         };
         this.emit("event", event);
         break;
       }
 
-      case "MEMBERSHIP_GIFTING_EVENT": {
-        const mg = snippet.membershipGiftingDetails;
+      case LiveChatMessageSnippet_TypeWrapper_Type.MEMBERSHIP_GIFTING_EVENT: {
+        const content = snippet.displayedContent;
+        const mg =
+          content?.case === "membershipGiftingDetails"
+            ? (content.value as { giftMembershipsCount?: number; giftMembershipsLevelName?: string })
+            : undefined;
+
         const event: NormalizedEvent = {
           id: item.id ?? `yt:giftmember:${Date.now()}`,
           platform: "youtube",
           type: "gift_sub",
           user: { id: authorId, displayName, avatarUrl },
-          data: {
-            giftCount: mg?.giftMembershipsCount,
-            levelName: mg?.giftMembershipsLevelName,
-          },
+          data: { giftCount: mg?.giftMembershipsCount, levelName: mg?.giftMembershipsLevelName },
           timestamp,
         };
         this.emit("event", event);

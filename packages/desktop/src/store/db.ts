@@ -70,5 +70,13 @@ function runMigrations(db: Database): void {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS channel_connections (
+      platform TEXT NOT NULL,
+      channel_slug TEXT NOT NULL,
+      PRIMARY KEY (platform, channel_slug)
+    )
+  `);
+
   console.log("[DB] Migrations applied");
 }

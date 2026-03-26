@@ -31,6 +31,10 @@ const config: ElectrobunConfig = {
     },
     linux: {
       bundleCEF: false,
+      defaultRenderer: "cef",
+      chromiumFlags: {
+        "remote-debugging-port": "9222",
+      },
     },
     win: {
       bundleCEF: false,

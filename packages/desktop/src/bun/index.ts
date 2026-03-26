@@ -16,7 +16,7 @@ import { BrowserWindow, defineElectrobunRPC, Updater } from "electrobun/bun";
 
 import { initDb } from "../store/db";
 import { getClientSecret } from "../store/client-secret";
-import { AccountStore, SettingsStore } from "../store";
+import { AccountStore, SettingsStore, ChannelStore } from "../store";
 import { BackendConnection } from "../backend-connection";
 import { ChatAggregator } from "../chat/aggregator";
 import {
@@ -69,6 +69,7 @@ startOverlayServer();
 // ============================================================
 
 const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
+  maxRequestTime: 10_000,
   handlers: {
     // --- Requests from the webview ---
     requests: {
@@ -79,6 +80,8 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       saveSettings: (params) => {
         SettingsStore.set(params);
       },
+
+      getChannels: () => ChannelStore.findAll(),
 
       authStart: ({ platform }) => {
         if (platform === "twitch") {
@@ -102,7 +105,11 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
           );
           return;
         }
-        adapter.connect(channelSlug).catch((err) => {
+        ChannelStore.save(platform, channelSlug);
+        console.log(`[joinChannel] Connecting ${platform} to "${channelSlug}"...`);
+        adapter.connect(channelSlug).then(() => {
+          console.log(`[joinChannel] adapter.connect() resolved for ${platform}:"${channelSlug}"`);
+        }).catch((err) => {
           console.error(
             `[joinChannel] Failed to connect ${platform} to "${channelSlug}":`,
             err,
@@ -110,7 +117,7 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
         });
       },
 
-      leaveChannel: ({ platform, channelSlug: _channelSlug }) => {
+      leaveChannel: ({ platform, channelSlug }) => {
         const adapter = aggregator.getAdapter(platform);
         if (!adapter) {
           console.warn(
@@ -118,6 +125,7 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
           );
           return;
         }
+        ChannelStore.remove(platform, channelSlug);
         adapter.disconnect().catch((err) => {
           console.error(
             `[leaveChannel] Failed to disconnect ${platform}:`,
@@ -218,6 +226,8 @@ const win = new BrowserWindow({
   rpc,
 });
 
+win.webview.openDevTools();
+
 // ============================================================
 // 4. Route adapter events → webview + overlay
 // ============================================================
@@ -286,6 +296,27 @@ backendConn.connect();
 setInterval(() => {
   backendConn.send({ type: "ping" });
 }, 30_000);
+
+// ============================================================
+// 7. Auto-connect to persisted channels
+// ============================================================
+
+const savedChannels = ChannelStore.findAll();
+for (const [platform, slugs] of Object.entries(savedChannels)) {
+  for (const slug of slugs ?? []) {
+    const adapter = aggregator.getAdapter(platform as import("@twirchat/shared/types").Platform);
+    if (!adapter) {
+      console.warn(`[AutoConnect] No adapter for platform: ${platform}`);
+      continue;
+    }
+    console.log(`[AutoConnect] Connecting ${platform} to "${slug}"...`);
+    adapter.connect(slug).then(() => {
+      console.log(`[AutoConnect] Connected ${platform}:"${slug}"`);
+    }).catch((err) => {
+      console.error(`[AutoConnect] Failed ${platform}:"${slug}":`, err);
+    });
+  }
+}
 
 console.log("[TwirChat] Ready.");
 

@@ -39,6 +39,8 @@ type BunRequests = {
   getSettings: { params: void; response: AppSettings };
   /** Save app settings */
   saveSettings: { params: AppSettings; response: void };
+  /** Return all persisted joined channels grouped by platform */
+  getChannels: { params: void; response: Partial<Record<Platform, string[]>> };
   /** Start OAuth flow for a platform */
   authStart: { params: { platform: Platform }; response: void };
   /** Log out from a platform */

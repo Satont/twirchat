@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
+    "dev": "bun run --watch --no-clear-screen src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "tsgo --noEmit",
     "test": "bun test tests/",

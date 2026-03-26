@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import type { NormalizedChatMessage, Emote } from "@twirchat/shared/types";
 
 const props = defineProps<{
@@ -76,6 +77,12 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
+const brokenBadges = ref(new Set<string>());
+
+function onBadgeError(id: string): void {
+  brokenBadges.value = new Set([...brokenBadges.value, id]);
+}
+
 function formatTime(ts: Date): string {
   const d = new Date(ts);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -135,9 +142,10 @@ function initials(name: string): string {
             :title="badge.type"
           >
             <img
-              v-if="badge.imageUrl"
+              v-if="badge.imageUrl && !brokenBadges.has(badge.id)"
               :src="badge.imageUrl"
               :alt="badge.text"
+              @error="onBadgeError(badge.id)"
             />
             <span v-else class="badge-text">{{ badge.text }}</span>
           </span>

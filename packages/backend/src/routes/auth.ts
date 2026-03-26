@@ -2,6 +2,7 @@ import { ClientStore } from "../db/index.ts";
 import { startKickOAuth, handleKickCallback } from "../auth/kick.ts";
 import { exchangeTwitchCode, refreshTwitchToken } from "../auth/twitch.ts";
 import { json } from "./utils.ts";
+import { logger } from "../logger.ts";
 import type {
   AuthStartRequest,
   AuthStartResponse,
@@ -11,6 +12,8 @@ import type {
   TwitchRefreshResponse,
   // @ts-ignore — false positive in tsgo for workspace packages
 } from "@twirchat/shared";
+
+const log = logger("auth");
 
 export const authRoutes = {
   "/api/auth/kick/start": {
@@ -24,7 +27,7 @@ export const authRoutes = {
         const url = await startKickOAuth(body.clientSecret);
         return json({ url } satisfies AuthStartResponse);
       } catch (err) {
-        console.error("[auth/kick/start]", err);
+        log.error("kick/start failed", { err: String(err) });
         return json({ error: "Failed to start OAuth" }, 500);
       }
     },
@@ -45,7 +48,7 @@ export const authRoutes = {
           { headers: { "Content-Type": "text/html" } },
         );
       } catch (err) {
-        console.error("[auth/kick/callback]", err);
+        log.error("kick/callback failed", { err: String(err) });
         return new Response(
           `<html><body><h2>OAuth failed: ${String(err)}</h2></body></html>`,
           { status: 500, headers: { "Content-Type": "text/html" } },
@@ -64,7 +67,7 @@ export const authRoutes = {
         const tokens = await exchangeTwitchCode(body.code, body.codeVerifier, body.redirectUri);
         return json(tokens satisfies TwitchExchangeResponse);
       } catch (err) {
-        console.error("[auth/twitch/exchange]", err);
+        log.error("twitch/exchange failed", { err: String(err) });
         return json({ error: String(err) }, 500);
       }
     },
@@ -80,7 +83,7 @@ export const authRoutes = {
         const tokens = await refreshTwitchToken(body.refreshToken);
         return json(tokens satisfies TwitchRefreshResponse);
       } catch (err) {
-        console.error("[auth/twitch/refresh]", err);
+        log.error("twitch/refresh failed", { err: String(err) });
         return json({ error: String(err) }, 500);
       }
     },

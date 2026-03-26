@@ -3,6 +3,9 @@ import { KickOAuthSessionStore, AccountStore } from "../db/index.ts";
 import { connectionManager } from "../ws/connection-manager.ts";
 import { subscribeKickEvents } from "./kick-subscriptions.ts";
 import { config } from "../config.ts";
+import { logger } from "../logger.ts";
+
+const log = logger("kick-auth");
 
 const KICK_AUTH_URL = "https://id.kick.com/oauth/authorize";
 const KICK_TOKEN_URL = "https://id.kick.com/oauth/token";
@@ -110,7 +113,7 @@ export async function handleKickCallback(
   try {
     await subscribeKickEvents(tokens.access_token, config.KICK_CLIENT_ID);
   } catch (err) {
-    console.error("[Kick OAuth] Failed to subscribe to events:", err);
+    log.error("Failed to subscribe to Kick events", { err: String(err) });
     // Non-fatal: auth still succeeded; events subscription can be retried later
   }
 

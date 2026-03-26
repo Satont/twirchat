@@ -57,10 +57,13 @@ export class BackendConnection {
   }
 
   private _connect(): void {
-    const url = `${BACKEND_WS_URL}?clientSecret=${encodeURIComponent(this.clientSecret)}`;
     console.log(`[BackendConnection] Connecting to ${BACKEND_WS_URL}...`);
 
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(BACKEND_WS_URL, {
+      headers: {
+        "X-Client-Secret": this.clientSecret,
+      },
+    } as unknown as string[]);
     ws.addEventListener("open", () => {
       console.log("[BackendConnection] Connected");
       this.reconnectDelay = RECONNECT_DELAY_MS;

@@ -8,7 +8,7 @@ import {
   generateCodeChallenge,
   generateState,
 } from "./pkce";
-import { AccountStore } from "@desktop/store/account-store";
+import { AccountStore } from "../store/account-store";
 import { successPage } from "./server";
 
 const KICK_SCOPES = [

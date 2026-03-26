@@ -57,7 +57,7 @@ function onCategoryInput() {
   searchTimer = setTimeout(async () => {
     searchLoading.value = true;
     try {
-      const res = await rpc.send.searchCategories({
+      const res = await rpc.request.searchCategories({
         platform: props.platform,
         query: categoryQuery.value,
       });
@@ -84,7 +84,7 @@ async function loadStatus() {
   loading.value = true;
   loadError.value = null;
   try {
-    const s = await rpc.send.getStreamStatus({
+    const s = await rpc.request.getStreamStatus({
       platform: props.platform,
       channelId: props.channelId,
     });
@@ -135,7 +135,7 @@ async function save() {
   saving.value = true;
   saveError.value = null;
   try {
-    await rpc.send.updateStream({
+    await rpc.request.updateStream({
       platform: props.platform,
       channelId: props.channelId,
       title: editTitle.value,

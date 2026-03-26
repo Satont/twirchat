@@ -26,7 +26,7 @@ const saved = ref(false);
 async function save() {
   saving.value = true;
   try {
-    await rpc.send.saveSettings(local.value);
+    await rpc.request.saveSettings(local.value);
     emit("saved", { ...local.value, overlay: { ...local.value.overlay } });
     saved.value = true;
     setTimeout(() => { saved.value = false; }, 2000);

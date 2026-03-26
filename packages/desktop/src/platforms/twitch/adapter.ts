@@ -19,13 +19,11 @@ import type {
   NormalizedEvent,
   Badge,
 } from "@twirchat/shared/types";
-import { TWITCH_ANON_PREFIX } from "@twirchat/shared/constants";
-import { AccountStore } from "@desktop/store/account-store";
+import { TWITCH_ANON_PREFIX, BACKEND_URL } from "@twirchat/shared/constants";
+import { AccountStore } from "../../store/account-store";
+import type { TwitchBadgesResponse } from "@twirchat/shared/types";
 
 const TWITCH_IRC_WS = "wss://irc-ws.chat.twitch.tv:443";
-
-// Twitch badge image base URL (Twitch API v5 global badge set)
-const TWITCH_BADGE_BASE = "https://static-cdn.jtvnw.net/badges/v1";
 
 // ============================================================
 // IRC message parser
@@ -100,8 +98,18 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   private ws: WebSocket | null = null;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private badgeRefreshInterval: ReturnType<typeof setInterval> | null = null;
   private channelName = "";
   private shouldReconnect = true;
+  private joined = false;
+
+  /** "setId/version" → imageUrl_1x, populated from backend /api/twitch/badges */
+  private badgeCache = new Map<string, string>();
+  private badgeCacheChannel = ""; // канал для которого загружены channel badges
+
+  constructor() {
+    super();
+  }
 
   private anonymous = true;
   private accessToken: string | null = null;
@@ -111,6 +119,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
   async connect(channelName: string): Promise<void> {
     this.channelName = channelName.toLowerCase();
     this.shouldReconnect = true;
+    this.joined = false;
 
     // Check for stored account
     const account = AccountStore.findByPlatform("twitch");
@@ -133,6 +142,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
       status: "connecting",
       mode: this.anonymous ? "anonymous" : "authenticated",
     });
+
+    // Initial badge fetch + schedule refresh every 5 minutes
+    void this.fetchBadges();
+    this.badgeRefreshInterval = setInterval(() => void this.fetchBadges(), 5 * 60 * 1000);
 
     this.connectWs();
   }
@@ -182,6 +195,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
       if (this.anonymous) {
         const username = `${TWITCH_ANON_PREFIX}${Math.floor(Math.random() * 900000 + 100000)}`;
+        console.log(`[Twitch] Logging in anonymously as ${username}`);
         ws.send(`NICK ${username}`);
       } else {
         ws.send(`PASS oauth:${this.accessToken}`);
@@ -201,6 +215,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     ws.addEventListener("close", (evt) => {
       console.warn(`[Twitch] IRC disconnected: ${evt.code} ${evt.reason}`);
       this.ws = null;
+      this.joined = false;
 
       this.emit("status", {
         platform: "twitch",
@@ -227,8 +242,11 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
       case "001":
       case "376":
-        // Registered — join channel
-        this.ws?.send(`JOIN #${this.channelName}`);
+        // Registered — join channel (guard against duplicate 001+376 both firing)
+        if (!this.joined) {
+          this.joined = true;
+          this.ws?.send(`JOIN #${this.channelName}`);
+        }
         break;
 
       case "JOIN":
@@ -243,6 +261,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         break;
 
       case "PRIVMSG":
+        console.log(`[Twitch] PRIVMSG received in ${msg.params[0]}`);
         this.handlePrivMsg(msg);
         break;
 
@@ -304,11 +323,12 @@ export class TwitchAdapter extends BasePlatformAdapter {
       for (const b of badgesTag.split(",")) {
         const [badgeId, version] = b.split("/");
         if (badgeId) {
+          const cacheKey = `${badgeId}/${version ?? "1"}`;
           badges.push({
-            id: `${badgeId}/${version ?? "1"}`,
+            id: cacheKey,
             type: badgeId,
             text: badgeId,
-            imageUrl: `${TWITCH_BADGE_BASE}/${badgeId}/${version ?? "1"}/image_url_1x`,
+            imageUrl: this.badgeCache.get(cacheKey),
           });
         }
       }
@@ -406,10 +426,35 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
   }
 
+  private async fetchBadges(): Promise<void> {
+    const url = new URL(`${BACKEND_URL}/api/twitch/badges`);
+    if (this.channelName) {
+      url.searchParams.set("broadcasterLogin", this.channelName);
+    }
+
+    try {
+      const res = await fetch(url.toString());
+      if (!res.ok) {
+        console.warn(`[Twitch] Badge fetch failed: ${res.status}`);
+        return;
+      }
+      const data = (await res.json()) as TwitchBadgesResponse;
+      this.badgeCache = new Map(Object.entries(data.badges));
+      this.badgeCacheChannel = this.channelName;
+      console.log(`[Twitch] Badge cache updated: ${this.badgeCache.size} entries`);
+    } catch (err) {
+      console.warn("[Twitch] Badge fetch error:", err);
+    }
+  }
+
   private clearTimers(): void {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
+    }
+    if (this.badgeRefreshInterval) {
+      clearInterval(this.badgeRefreshInterval);
+      this.badgeRefreshInterval = null;
     }
   }
 }

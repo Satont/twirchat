@@ -1,304 +1,264 @@
 # TwirChat — план разработки
 
 Мультиплатформенный менеджер чата для стримеров (Twitch, YouTube, Kick).
-Стек: **Bun + TypeScript**, monorepo (bun workspaces).
+Стек: **Bun + TypeScript + Vue 3**, monorepo (bun workspaces).
 
 ---
 
 ## Архитектура
 
 ```
-twirchat/                          ← monorepo root
-├── package.json                  ← workspaces: ["packages/*"]
+twirchat/
+├── package.json                          ← monorepo root (bun workspaces)
 └── packages/
-    ├── shared/                   ← @twirchat/shared — общие типы и протокол
-    │   ├── types.ts              ← NormalizedChatMessage, NormalizedEvent, AppSettings, ...
-    │   ├── constants.ts          ← порты, URL-константы, BACKEND_WS_URL
-    │   ├── protocol.ts           ← BackendToDesktopMessage / DesktopToBackendMessage
+    ├── shared/                           ← @twirchat/shared
+    │   ├── types.ts                      ← NormalizedChatMessage, NormalizedEvent, Account, AppSettings, ...
+    │   ├── constants.ts                  ← порты, URL-константы, TWITCH_ANON_PREFIX, ...
+    │   ├── protocol.ts                   ← BackendToDesktopMessage / DesktopToBackendMessage
     │   └── index.ts
-    ├── backend/                  ← @twirchat/backend — публичный SaaS-сервис
-    │   └── src/
-    │       ├── index.ts          ← Bun.serve (HTTP + WebSocket)
-    │       ├── db/               ← Bun.sql (Postgres)
-    │       │   ├── migrations.ts ← CREATE TABLE IF NOT EXISTS ...
-    │       │   ├── store.ts      ← ClientStore, AccountStore, KickOAuthSessionStore
-    │       │   └── index.ts
-    │       ├── auth/
-    │       │   ├── kick.ts       ← Kick OAuth 2.1 + PKCE (backend flow)
-    │       │   └── pkce.ts       ← generateCodeVerifier/Challenge/State
-    │       ├── ws/
-    │       │   ├── connection-manager.ts ← Map<clientSecret, ServerWebSocket>
-    │       │   └── handlers.ts   ← open/close/message handlers
-    │       └── routes/
-    │           └── index.ts      ← HTTP-маршруты
-    └── desktop/                  ← @twirchat/desktop — desktop-приложение (Bun)
-        ├── src/
-        │   ├── index.ts          ← точка входа, init + wiring
-        │   ├── backend-connection.ts ← WS-клиент к backend, автореконнект
-        │   ├── store/
-        │   │   ├── db.ts         ← bun:sqlite, миграции
-        │   │   ├── client-secret.ts ← UUID генерация/хранение
-        │   │   ├── account-store.ts ← CRUD аккаунтов (зашифр. токены)
-        │   │   ├── settings-store.ts
-        │   │   └── crypto.ts     ← XOR-шифрование токенов
-        │   ├── chat/
-        │   │   └── aggregator.ts ← ChatAggregator, кольцевой буфер 500 сообщ.
-        │   ├── platforms/
-        │   │   ├── base-adapter.ts
-        │   │   └── kick/adapter.ts ← Kick через Pusher WS (анонимный режим)
-        │   └── auth/             ← локальный OAuth-сервер (Twitch остаётся здесь)
-        └── tests/
-            ├── aggregator.test.ts ✅
-            ├── pkce.test.ts       ✅
-            └── store.test.ts      ✅
+    ├── backend/                          ← @twirchat/backend — SaaS-сервис (OAuth proxy)
+    │   └── src/index.ts                  ← Bun.serve: HTTP + WebSocket, Postgres (Bun.sql)
+    └── desktop/                          ← Electrobun app (Bun main process + Vue 3 webview)
+        ├── electrobun.config.ts
+        ├── vite.main.config.ts           ← Vite для src/views/main → dist/main/
+        ├── vite.overlay.config.ts        ← Vite для src/views/overlay → dist/overlay/
+        └── src/
+            ├── bun/index.ts              ← Electrobun main process
+            ├── shared/rpc.ts             ← TwirChatRPCSchema + WebviewSender
+            ├── backend-connection.ts     ← WS-клиент к backend
+            ├── overlay-server.ts         ← Bun.serve: dist/overlay/ + WS push (порт 45823)
+            ├── store/                    ← SQLite (bun:sqlite): accounts, settings, crypto
+            ├── chat/aggregator.ts        ← ChatAggregator: кольцевой буфер 500 сообщ., дедупл.
+            ├── platforms/
+            │   ├── base-adapter.ts       ← BasePlatformAdapter (EventEmitter pattern)
+            │   ├── twitch/adapter.ts     ← IRC WebSocket, anonymous + authenticated
+            │   ├── kick/adapter.ts       ← Pusher WebSocket (anonymous)
+            │   └── youtube/adapter.ts   ← gRPC (ConnectRPC), authenticated only
+            ├── auth/                     ← PKCE OAuth: Twitch, YouTube, Kick
+            └── views/
+                ├── main/                 ← Vue 3 app главного окна
+                │   ├── main.ts           ← Electroview.defineRPC + waitForSocket + createApp
+                │   ├── App.vue           ← nav-rail + tab routing
+                │   └── components/
+                │       ├── ChatList.vue
+                │       ├── ChatMessage.vue
+                │       ├── PlatformsPanel.vue
+                │       ├── EventsFeed.vue
+                │       ├── SettingsPanel.vue
+                │       └── StreamEditor.vue
+                └── overlay/              ← OBS overlay Vue app (WS client, no Electrobun RPC)
 ```
 
-### Потоки данных
+### Поток данных (текущий)
 
 ```
-Desktop                        Backend                     Kick/Twitch/YT
-  │                               │
-  ├─ initDb() → генерирует UUID   │
-  ├─ BackendConnection.connect()  │
-  │    ws://backend/ws            │
-  │    Header: X-Client-Secret    │
-  │──────────── WS ──────────────▶│
-  │                               │
-  │  POST /api/auth/kick/start    │
-  │──────────── HTTP ────────────▶│
-  │◀─── {url} ──────────────────  │── opens browser
-  │                               │◀── OAuth callback ── Kick
-  │                               │    saves tokens in Postgres
-  │◀─── auth_success (WS) ──────  │
-  │                               │
-  │  (Kick webhook events)        │◀── POST /webhook/kick ── Kick
-  │◀─── chat_message (WS) ──────  │    verify HMAC, normalize
+Desktop (Bun process)                     Backend (SaaS)
+  │
+  ├─ initDb() + getClientSecret()
+  ├─ BackendConnection.connect()  ──WS──▶  проверяет X-Client-Secret header
+  │                                        auth flows: auth_start → auth_url → auth_success
+  ├─ TwitchAdapter.connect(channel)
+  │    IRC WebSocket → wss://irc-ws.chat.twitch.tv:443
+  │    PRIVMSG → NormalizedChatMessage → aggregator → sendToView.chat_message()
+  │
+  ├─ KickAdapter.connect(channel)
+  │    Pusher WebSocket → wss://ws-us2.pusher.com/...
+  │    ChatMessageEvent → NormalizedChatMessage → aggregator → sendToView.chat_message()
+  │
+  └─ YouTubeAdapter.connect(videoId)
+       gRPC streaming → youtube.googleapis.com (ConnectRPC)
+       TEXT_MESSAGE_EVENT → NormalizedChatMessage → aggregator → sendToView.chat_message()
+
+Desktop (Vue webview)
+  ├─ Electroview RPC ←→ Bun process (encrypted WebSocket, AES-GCM)
+  ├─ rpc.send.joinChannel({ platform, channelSlug }) → adapter.connect()
+  └─ rpc.addMessageListener("chat_message", handler) → messages.value.unshift(msg)
 ```
 
-### Принципы
+### Ключевые находки (из разработки)
 
-- **Backend** — Managed SaaS (публичный URL), принимает вебхуки Kick/YouTube, хранит в **Postgres** через `Bun.sql`
-- **Desktop → Backend**: идентификация через UUID-секрет (`X-Client-Secret`), генерируется при первом старте, хранится в SQLite
-- **Backend → Desktop**: WebSocket — backend держит WS-сервер, desktop подключается и получает события
-- **Twitch остаётся в desktop** — EventSub WS transport, не требует публичного URL; **OAuth перенесён на backend**
-- **Анонимное слушание**: Kick → Pusher WebSocket, Twitch → IRC justinfan
+- **CEF обязателен на Linux**: WebKitGTK не даёт `crypto.subtle` для `views://` протокола → Electrobun IPC шифрование падает → белый экран. Фикс: `bundleCEF: true` + `defaultRenderer: "cef"` в `electrobun.config.ts` (linux).
+- **`electrobun/view` API**: нет `rpc.on.*` — только `rpc.addMessageListener(name, handler)` / `rpc.removeMessageListener`.
+- **RPC таймаут**: по умолчанию **1 секунда** (`DEFAULT_MAX_REQUEST_TIME = 1000` в `shared/rpc.ts`). Запросы отправленные до открытия WS-сокета тихо таймаутятся.
+- **`waitForSocket()`**: в `main.ts` нужно ждать открытия `view.bunSocket` перед монтированием Vue, иначе `rpc.send.*` в `onMounted` падают с таймаутом.
+- **BackendConnection**: отправляет `X-Client-Secret` как **заголовок WS** (не query string) — Bun поддерживает, браузер нет.
+- **Dev URL**: при `dev:hmr` нужно проверять `localhost:5173` с таймаутом 500мс, иначе при запуске без Vite — белое окно.
+- **`@grpc/grpc-js` удалён**: заменён на `@connectrpc/connect` + `@connectrpc/connect-node`.
+- **`@desktop/*` aliases удалены**: заменены на относительные импорты.
 
 ---
 
 ## Статус разработки
 
-### ✅ Завершено
+### ✅ Инфраструктура
 
-#### Инфраструктура
+- [x] Monorepo (bun workspaces): shared, desktop, backend
+- [x] `@twirchat/shared`: types.ts, constants.ts, protocol.ts
+- [x] Все тесты desktop: 18/18 (aggregator, pkce, store)
+- [x] Electrobun настроен: CEF на Linux, DevTools, HMR dev-режим
 
-- [x] Monorepo с bun workspaces (`packages/shared`, `packages/desktop`, `packages/backend`)
-- [x] `@twirchat/shared`: types.ts, constants.ts, protocol.ts — полностью готово
-- [x] tsconfig path aliases во всех пакетах (`@twirchat/shared`, `@desktop/*`, `@backend/*`)
-- [x] Все тесты desktop проходят (18/18): aggregator, pkce, store
-
-#### Desktop (packages/desktop)
+### ✅ Desktop — backend-слой
 
 - [x] SQLite БД с миграциями (`bun:sqlite`)
-- [x] `client-secret.ts` — UUID генерация/хранение при первом старте
-- [x] `AccountStore` — CRUD аккаунтов с шифрованием токенов
-- [x] `SettingsStore` — настройки
-- [x] `ChatAggregator` — кольцевой буфер, дедупликация, inject-методы для backend WS
-- [x] `BasePlatformAdapter` + `KickAdapter` (анонимный режим через Pusher WS)
-- [x] `BackendConnection` — WS-клиент к backend с автореконнектом (экспоненциальный backoff)
-- [x] `src/index.ts` — полная инициализация: DB → UUID → WS → роутинг событий
+- [x] `AccountStore`: CRUD аккаунтов, шифрование токенов (XOR)
+- [x] `SettingsStore`: настройки (JSON в SQLite)
+- [x] `client-secret.ts`: UUID генерация/хранение
+- [x] `BackendConnection`: WS-клиент к backend, авто-реконнект (exponential backoff), `X-Client-Secret` header
+- [x] `ChatAggregator`: кольцевой буфер 500, дедупликация, inject-методы
 
-#### Backend (packages/backend)
+### ✅ Desktop — платформы
 
-- [x] `Bun.serve` с HTTP + WebSocket (нет внешних зависимостей для HTTP/WS)
-- [x] `Bun.sql` для Postgres (встроенный клиент, без npm-пакетов)
-- [x] Postgres миграции: `desktop_clients`, `platform_accounts`, `kick_oauth_sessions`
-- [x] `ClientStore`, `AccountStore`, `KickOAuthSessionStore`
-- [x] `ConnectionManager` — реестр активных WS-соединений
+- [x] `BasePlatformAdapter`: EventEmitter pattern (on/off/emit)
+- [x] `TwitchAdapter`: IRC WebSocket
+  - [x] Анонимный режим: `justinfan<random>`
+  - [x] Авторизованный режим: oauth-токен
+  - [x] Полный IRC-парсер с тегами (PRIVMSG, USERNOTICE, PING, JOIN, RECONNECT)
+  - [x] Нормализация: badges, emotes из IRC-тегов
+  - [x] События: sub, resub, subgift, raid
+- [x] `KickAdapter`: Pusher WebSocket (анонимный)
+  - [x] Получение chatroom_id через REST
+  - [x] ChatMessageEvent, FollowersUpdated, SubscriptionEvent
+- [x] `YouTubeAdapter`: gRPC через ConnectRPC (authenticated)
+  - [x] fetchLiveChatId: videoId / поиск активного стрима
+  - [x] TEXT_MESSAGE_EVENT, SUPER_CHAT_EVENT, NEW_SPONSOR_EVENT, MEMBER_MILESTONE_CHAT_EVENT, MEMBERSHIP_GIFTING_EVENT
+
+### ✅ Desktop — auth
+
+- [x] `auth/twitch.ts`: PKCE OAuth, обмен через backend (`/api/auth/twitch/exchange`)
+- [x] `auth/youtube.ts`: OAuth flow
+- [x] `auth/kick.ts`: OAuth flow
+- [x] `auth/server.ts`: локальный HTTP-сервер для OAuth callback (порт 45821)
+
+### ✅ Desktop — overlay
+
+- [x] `overlay-server.ts`: `Bun.serve` на порту 45823, раздаёт `dist/overlay/`, WS push
+- [x] `views/overlay/App.vue`: WS-клиент, TransitionGroup анимации, URL параметры кастомизации
+
+### ✅ Desktop — главное окно (Vue 3)
+
+- [x] `App.vue`: nav-rail (Chat / Events / Platforms / Settings), CSS dark/light тема
+- [x] `ChatList.vue`: auto-scroll, empty-state (нет аккаунтов / нет подключения / нет сообщений), scroll-to-bottom pill
+- [x] `ChatMessage.vue`: отображение сообщений (бейджики, цвет ника, эмоуты)
+- [x] `PlatformsPanel.vue`: connect/disconnect аккаунтов, join/leave каналов, toasts
+- [x] `EventsFeed.vue`: лента событий (follow, sub, raid, ...)
+- [x] `SettingsPanel.vue`: настройки (тема, шрифт, фильтры)
+- [x] `StreamEditor.vue`: редактирование стрима (title, category)
+- [x] `main.ts`: `waitForSocket()` — ждёт открытия RPC WS перед монтированием Vue
+
+### ✅ Backend (packages/backend)
+
+- [x] `Bun.serve`: HTTP + WebSocket
+- [x] `Bun.sql` Postgres: миграции, ClientStore, AccountStore, сессии OAuth
+- [x] ConnectionManager: реестр WS-соединений по client-secret
 - [x] WS-протокол: ping/pong, роутинг сообщений
-- [x] Kick OAuth 2.1 + PKCE: старт flow, callback, обмен токенов, сохранение в Postgres, push `auth_success` в desktop
-- [x] HTTP-маршруты: `POST /api/auth/kick/start`, `GET /auth/kick/callback`, `GET /api/accounts`, `DELETE /api/accounts/:platform`, `GET /health`
-- [x] UUID-аутентификация desktop-клиентов через `X-Client-Secret`
+- [x] Kick OAuth 2.1 + PKCE: старт flow, callback, сохранение, push `auth_success`
+- [x] Twitch OAuth: PKCE, exchange через backend, push `auth_success`
+- [x] YouTube OAuth
+- [x] HTTP: `/api/stream-status`, `/api/update-stream`, `/api/search-categories`
 
 ---
 
-## ✅ Спринт 2 — Kick (завершено)
+## 🔴 Текущие проблемы / в работе
 
-#### Backend — Kick вебхуки
+### Twitch чат не показывается в UI
 
-- [x] `POST /webhook/kick` — принимать вебхуки от Kick
-- [x] Верификация подписи: заголовок `Kick-Event-Signature` (HMAC SHA256)
-- [x] Подписка на события через `kick-subscriptions.ts`
-  - Events: `chat.message.sent`, `channel.followed`, `channel.subscription.new`, `channel.subscription.renewal`, `channel.subscription.gifts`
-- [x] Нормализация Kick-событий → `NormalizedChatMessage` / `NormalizedEvent`
-- [x] Пуш нормализованных событий в desktop через WS
+**Симптом**: канал добавлен в PlatformsPanel, но сообщения не появляются в ChatList.
 
-#### Desktop — Kick
+**Предполагаемые причины**:
+1. `rpc.send.joinChannel()` таймаутит (1с) если сокет ещё не готов → `adapter.connect()` не вызывается. PlatformsPanel не показывает ошибку (try/catch отсутствует).
+2. `sendToView.chat_message(msg)` отправляется через RPC, но webview не получает если CEF не bundled (до фикса `bundleCEF: true`).
+3. В dev-режиме (`http://localhost:5173`) `crypto.subtle` доступен для localhost → RPC работает, но возможно есть другая проблема с message listener.
 
-- [x] `KickAdapter`: получить `chatroom_id` через `GET /public/v1/channels/{slug}`, подключиться к Pusher WS
-- [x] Нормализация `ChatMessageSentEvent` → `NormalizedChatMessage`
-- [x] OAuth через backend WS flow (`auth_start` → `auth_url` → браузер → `auth_success`)
+**Статус**: расследуется, фиксим.
 
----
+### Известные ограничения
 
-## ✅ Фаза 3 — Twitch (завершено)
-
-### Desktop
-
-- [x] `TwitchAdapter`: прямой IRC WebSocket (`wss://irc-ws.chat.twitch.tv`)
-  - [x] Анонимный режим: `justinfan<random>` — только чтение
-  - [x] Авторизованный режим: oauth-токен для отправки сообщений
-- [x] Полный IRC-парсер с тегами
-- [x] `PRIVMSG` → `NormalizedChatMessage` (бейджики, эмоуты из IRC-тегов)
-- [x] `USERNOTICE` → sub/resub/subgift/raid → `NormalizedEvent`
-- [x] Twitch OAuth: перенесён на **backend** (по аналогии с Kick — clientId/secret не хранятся в desktop)
-
-### Backend — Twitch OAuth
-
-- [x] `POST /api/auth/twitch/start` — генерирует PKCE, сохраняет сессию в Postgres, возвращает URL
-- [x] `GET /auth/twitch/callback` — обменивает code на токены, сохраняет аккаунт, пушит `auth_success` в desktop
-- [x] `TwitchOAuthSessionStore` в Postgres (`twitch_oauth_sessions` таблица)
-- [x] `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_REDIRECT_URI` — env vars на backend
-- [x] `auth_start { platform: "twitch" }` обрабатывается в WS handler на backend
+- YouTube адаптер требует авторизации (нет анонимного режима)
+- `sendMessage` в Kick и YouTube не реализован в адаптерах
+- `joinedChannels` в PlatformsPanel — только локальное состояние (сбрасывается при перезапуске)
 
 ---
 
-## ✅ Фаза 4 — YouTube (завершено)
+## 📋 Следующие задачи
 
-### Desktop
+### Приоритет: высокий
 
-- [x] `YouTubeAdapter`: gRPC стрим через `@grpc/grpc-js` + `@grpc/proto-loader`
-  - [x] Авторизованный режим, `fetchLiveChatId` через REST
-  - [x] gRPC endpoint `youtube.googleapis.com:443`, сервис `V3DataLiveChatMessageService.StreamList`
-  - [x] Нормализация: `TEXT_MESSAGE_EVENT`, `SUPER_CHAT_EVENT`, `NEW_SPONSOR_EVENT`, `MEMBER_MILESTONE_CHAT_EVENT`, `MEMBERSHIP_GIFTING_EVENT`
-- [x] YouTube OAuth (`src/auth/youtube.ts`)
+- [ ] **Починить Twitch чат в UI**: убедиться что `adapter.connect()` вызывается и сообщения доходят до webview
+- [ ] **Персистентность каналов**: сохранять joined channels в SQLite, восстанавливать при старте
+- [ ] **Auto-connect при старте**: при запуске приложения автоматически переподключаться к сохранённым каналам
 
----
+### Приоритет: средний
 
-## ✅ Фаза 5 — OBS-оверлей (завершено)
+- [ ] **Рендер эмоутов**: в ChatMessage.vue эмоуты пока не рендерятся как картинки
+- [ ] **SVG иконки платформ**: заменить текстовые placeholder на реальные SVG (Twitch, YouTube, Kick)
+- [ ] **Виртуализированный список**: для больших чатов (vue-virtual-scroller или кастомный)
+- [ ] **Badges**: подтягивать реальные badge-изображения с Twitch API
 
-### Desktop
+### Приоритет: низкий
 
-- [x] `overlay-server.ts` — `Bun.serve` на порту 45823
-- [x] WebSocket endpoint `ws://localhost:45823/ws` — пуш событий чата
-- [x] Overlay фронтенд (`overlay/index.html` + `overlay/frontend.ts`) — подключение к WS, отображение сообщений с эмоутами, бейджиками, аватарками
-- [x] Параметры кастомизации через URL query string (`bg`, `textColor`, `fontSize`, `fontFamily`, `maxMessages`, `timeout`, `showPlatform`, `showAvatar`, `showBadges`, `animation`, `position`, `platforms`)
-- [x] Анимации: `slide` / `fade` / `none`, позиция `top` / `bottom`
-- [x] Авто-реконнект с exponential backoff
-
----
-
-## Текущая фаза: Фаза 6 — UI главного окна
-
-### Desktop
-
-- [ ] Главное окно (HTML/CSS/JS или React)
-- [ ] Виртуализированный список сообщений
-- [ ] Иконки платформ (SVG: Twitch, YouTube, Kick)
-- [ ] Аватарки, бейджики, цвет ника
-- [ ] Рендер эмоутов
-- [ ] Sidebar: статус платформ, кнопки подключить/отключить
-- [ ] Страница настроек (аккаунты, тема, фонт, фильтр)
-- [ ] Лента событий (follow, sub, raid)
-
----
-
-## Фаза 7 — Сборка и дистрибуция
-
-- [ ] Настроить Electrobun или standalone Bun app
-- [ ] Сборка macOS `.app`
-- [ ] Сборка Windows `.exe`
-- [ ] GitHub Actions CI/CD pipeline
+- [ ] **Фаза 7 — Сборка и дистрибуция**:
+  - [ ] Сборка macOS `.app`
+  - [ ] Сборка Windows `.exe`
+  - [ ] GitHub Actions CI/CD
 
 ---
 
 ## Технические детали
 
-### Bun API используется везде
+### Bun API везде
 
-| Нужно            | Bun API                      | Не используем        |
-| ---------------- | ---------------------------- | -------------------- |
-| HTTP + WebSocket | `Bun.serve()`                | express, ws, fastify |
-| Postgres         | `Bun.sql`                    | pg, postgres.js      |
-| SQLite           | `bun:sqlite`                 | better-sqlite3       |
-| Файлы            | `Bun.file()`                 | fs.readFile          |
-| Shell-команды    | `Bun.$`...``                 | execa, child_process |
-| Env vars         | `process.env` (автозагрузка) | dotenv               |
-| Тесты            | `bun test`                   | jest, vitest         |
-
-### WS-протокол (packages/shared/protocol.ts)
-
-- `BackendToDesktopMessage`: `chat_message`, `chat_event`, `platform_status`, `auth_url`, `auth_success`, `auth_error`, `error`, `pong`
-- `DesktopToBackendMessage`: `ping`, `auth_start`, `auth_logout`, `channel_join`, `channel_leave`, `send_message`
+| Нужно       | Bun API           | Не используем          |
+|-------------|-------------------|------------------------|
+| HTTP + WS   | `Bun.serve()`     | express, ws, fastify   |
+| Postgres    | `Bun.sql`         | pg, postgres.js        |
+| SQLite      | `bun:sqlite`      | better-sqlite3         |
+| Файлы       | `Bun.file()`      | fs.readFile            |
+| Shell       | `Bun.$`...``      | execa, child_process   |
+| Тесты       | `bun test`        | jest, vitest           |
 
 ### Анонимное слушание
 
-| Платформа | Анонимный режим          | Что доступно | Что требует OAuth            |
-| --------- | ------------------------ | ------------ | ---------------------------- |
-| Kick      | Pusher WS (неофициально) | Чтение чата  | Follow/sub события, отправка |
-| Twitch    | IRC `justinfan<random>`  | Чтение чата  | Отправка, EventSub follow    |
-| YouTube   | Недоступен               | —            | Всё                          |
+| Платформа | Режим                    | Что доступно | Что требует OAuth              |
+|-----------|--------------------------|--------------|--------------------------------|
+| Twitch    | IRC `justinfan<random>`  | Чтение чата  | Отправка, EventSub events      |
+| Kick      | Pusher WS                | Чтение чата  | Отправка, follow/sub события   |
+| YouTube   | Недоступен               | —            | Всё                            |
 
-### Kick OAuth — backend flow
+### Скрипты packages/desktop
 
-1. Desktop: `POST /api/auth/kick/start` с `{clientSecret}`
-2. Backend: генерирует PKCE, сохраняет сессию, возвращает `{url}`
-3. Desktop: открывает URL в браузере
-4. Kick → браузер → `GET /auth/kick/callback?code=...&state=...` на backend
-5. Backend: обменивает code на токены, сохраняет в Postgres, пушит `auth_success` в desktop через WS
+```json
+"dev"        : "bun run build:views && electrobun dev"
+"dev:hmr"    : "concurrently \"bun run hmr:main\" \"bun run start\""
+"hmr:main"   : "vite --config vite.main.config.ts --port 5173"
+"start"      : "bun src/bun/index.ts"
+"build:views": "vite build --config vite.main.config.ts && vite build --config vite.overlay.config.ts"
+"build"      : "bun run build:views && electrobun build"
+"typecheck"  : "tsgo --noEmit"
+"test"       : "bun test tests/"
+```
 
-### Шифрование токенов (desktop SQLite)
-
-Простое XOR-шифрование на основе `os.homedir() + APP_NAME` — достаточно для защиты от случайного чтения файла БД.
-Токены в backend Postgres хранятся открытым текстом (Postgres сам по себе требует аутентификацию).
-
----
-
-## Зависимости
-
-### packages/shared
-
-Нет зависимостей (только `@types/bun` для разработки).
-
-### packages/backend
+### Зависимости packages/desktop
 
 ```json
 {
-  "dependencies": {
-    "@twirchat/shared": "workspace:*"
-  }
+  "@bufbuild/protobuf": "2.11.0",
+  "@connectrpc/connect": "2.1.1",
+  "@connectrpc/connect-node": "2.1.1",
+  "@twirchat/shared": "workspace:*",
+  "@twurple/api": "8.0.3",      ← установлен, не используется
+  "@twurple/auth": "8.0.3",     ← установлен, не используется
+  "@twurple/chat": "8.0.3",     ← установлен, не используется
+  "electrobun": "1.16.0",
+  "vue": "3.5.30"
 }
 ```
 
-Всё остальное — встроенные Bun API (`Bun.serve`, `Bun.sql`, `WebSocket`).
+### Ресурсы
 
-### packages/desktop
-
-```json
-{
-  "dependencies": {
-    "@twirchat/shared": "workspace:*",
-    "@twurple/auth": "^7",
-    "@twurple/chat": "^7",
-    "@twurple/eventsub-ws": "^7",
-    "@twurple/api": "^7",
-    "@grpc/grpc-js": "^1",
-    "@grpc/proto-loader": "^0.7"
-  }
-}
-```
-
----
-
-## Ресурсы
-
-| Ресурс                 | URL                                                                 |
-| ---------------------- | ------------------------------------------------------------------- |
-| Kick API               | https://docs.kick.com                                               |
-| Kick OAuth             | https://docs.kick.com/getting-started/generating-tokens-oauth2-flow |
-| Kick Events            | https://docs.kick.com/events/introduction                           |
-| Kick Event Types       | https://docs.kick.com/events/event-types                            |
-| Twitch EventSub        | https://dev.twitch.tv/docs/eventsub/                                |
-| Twitch Chat IRC        | https://dev.twitch.tv/docs/irc/                                     |
-| YouTube Live Streaming | https://developers.google.com/youtube/v3/live/getting-started       |
-| Bun SQL docs           | https://bun.sh/docs/api/sql                                         |
-| Bun SQLite docs        | https://bun.sh/docs/api/sqlite                                      |
+| Ресурс              | URL                                             |
+|---------------------|-------------------------------------------------|
+| Twitch IRC          | https://dev.twitch.tv/docs/irc/                 |
+| Kick API            | https://docs.kick.com                           |
+| YouTube Live        | https://developers.google.com/youtube/v3/live/  |
+| Electrobun docs     | https://electrobun.dev/docs                     |
+| ConnectRPC          | https://connectrpc.com/docs/node/                |

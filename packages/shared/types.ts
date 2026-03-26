@@ -160,3 +160,13 @@ export interface PlatformStatusInfo {
   /** anonymous = слушаем без OAuth */
   mode: "anonymous" | "authenticated";
 }
+
+// ============================================================
+// Twitch Badges API
+// ============================================================
+
+/** Ответ от GET /api/twitch/badges?broadcasterLogin=<login> */
+export interface TwitchBadgesResponse {
+  /** "setId/version" → imageUrl, например "subscriber/6" → "https://..." */
+  badges: Record<string, string>;
+}

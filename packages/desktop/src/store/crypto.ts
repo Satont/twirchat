@@ -8,6 +8,8 @@ import { hostname } from "node:os";
  * Формат зашифрованной строки: base64(salt[16] + iv[12] + ciphertext)
  */
 
+console.log(crypto, crypto?.subtle);
+
 const PBKDF2_ITERATIONS = 100_000;
 const KEY_LENGTH = 256;
 

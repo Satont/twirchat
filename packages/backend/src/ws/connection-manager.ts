@@ -1,5 +1,8 @@
 import type { ServerWebSocket } from "bun";
 import type { BackendToDesktopMessage } from "@twirchat/shared";
+import { logger } from "../logger.ts";
+
+const log = logger("ws");
 
 export interface WsData {
   clientSecret: string;
@@ -11,16 +14,12 @@ class ConnectionManager {
 
   register(ws: ServerWebSocket<WsData>): void {
     this.connections.set(ws.data.clientSecret, ws);
-    console.log(
-      `[WS] Client connected: ${ws.data.clientSecret.slice(0, 8)}...`,
-    );
+    log.info("Client connected", { client: ws.data.clientSecret.slice(0, 8) });
   }
 
   remove(ws: ServerWebSocket<WsData>): void {
     this.connections.delete(ws.data.clientSecret);
-    console.log(
-      `[WS] Client disconnected: ${ws.data.clientSecret.slice(0, 8)}...`,
-    );
+    log.info("Client disconnected", { client: ws.data.clientSecret.slice(0, 8) });
   }
 
   send(clientSecret: string, message: BackendToDesktopMessage): boolean {

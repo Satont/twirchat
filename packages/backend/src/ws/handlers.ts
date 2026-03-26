@@ -5,6 +5,9 @@ import { ClientStore } from "../db/index.ts";
 import { startKickOAuth } from "../auth/kick.ts";
 import { buildTwitchAuthUrl } from "../auth/twitch.ts";
 import { AccountStore } from "../db/index.ts";
+import { logger } from "../logger.ts";
+
+const log = logger("ws");
 
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   connectionManager.register(ws);
@@ -79,9 +82,7 @@ export async function handleWsMessage(
     case "auth_logout": {
       try {
         await AccountStore.delete(ws.data.clientSecret, msg.platform);
-        console.log(
-          `[WS] Logout ${msg.platform} for client ${ws.data.clientSecret.slice(0, 8)}...`,
-        );
+        log.info("Logout", { platform: msg.platform, client: ws.data.clientSecret.slice(0, 8) });
       } catch (err) {
         ws.send(
           JSON.stringify({

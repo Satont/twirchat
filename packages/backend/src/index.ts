@@ -8,8 +8,19 @@ import { webhookRoutes } from "./routes/webhooks.ts";
 import { json } from "./routes/utils.ts";
 import type { WsData } from "./ws/connection-manager.ts";
 import { config } from "./config.ts";
+import { logger } from "./logger.ts";
+import { handleTwitchBadges } from "./api/twitch-badges.ts";
+
+const log = logger("backend");
 
 await runMigrations();
+
+// Prefetch global Twitch badges at startup so the first request is instant
+try {
+  await handleTwitchBadges(new URL("http://localhost/api/twitch/badges"));
+} catch (err) {
+  log.warn("Failed to prefetch global Twitch badges", { err: String(err) });
+}
 
 const server = Bun.serve<WsData>({
   port: config.PORT,
@@ -54,5 +65,5 @@ const server = Bun.serve<WsData>({
   },
 });
 
-console.log(`[Backend] TwirChat backend running on http://localhost:${server.port}`);
-console.log(`[Backend] WebSocket endpoint: ws://localhost:${server.port}/ws`);
+log.info("TwirChat backend running", { url: `http://localhost:${server.port}` });
+log.info("WebSocket endpoint", { url: `ws://localhost:${server.port}/ws` });
