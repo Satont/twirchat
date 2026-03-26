@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 import ChatMessage from "./ChatMessage.vue";
+import ChatInput from "./ChatInput.vue";
+import Tooltip from "./ui/Tooltip.vue";
 import { rpc } from "../main";
 import type {
   NormalizedChatMessage,
@@ -138,6 +140,15 @@ function formatViewers(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
+
+async function onSend(targets: Array<{ platform: string; channelLogin: string; text: string }>) {
+  await Promise.allSettled(
+    targets.map((t) =>
+      rpc.request.sendMessage({ platform: t.platform as import("@twirchat/shared/types").Platform, channelId: t.channelLogin, text: t.text })
+        .catch((err) => console.warn(`[ChatInput] send failed on ${t.platform}:`, err))
+    )
+  );
+}
 </script>
 
 <template>
@@ -148,21 +159,27 @@ function formatViewers(n: number): string {
 
       <!-- Channel status chips -->
       <div v-if="displayedChannels.length > 0" class="header-chips">
-        <div
+        <Tooltip
           v-for="ch in displayedChannels"
           :key="`${ch.platform}:${ch.channelLogin}`"
-          class="header-chip"
-          :class="{ live: ch.isLive }"
-          :style="{ '--chip-color': platformColor(ch.platform) }"
+          side="bottom"
+          :side-offset="8"
         >
-          <span class="chip-dot" :class="{ pulse: ch.isLive }" />
-          <span class="chip-name">{{ ch.channelLogin }}</span>
-          <span v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-viewers">
-            {{ formatViewers(ch.viewerCount) }}
-          </span>
+          <!-- Trigger: the chip itself -->
+          <div
+            class="header-chip"
+            :class="{ live: ch.isLive }"
+            :style="{ '--chip-color': platformColor(ch.platform) }"
+          >
+            <span class="chip-dot" :class="{ pulse: ch.isLive }" />
+            <span class="chip-name">{{ ch.channelLogin }}</span>
+            <span v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-viewers">
+              {{ formatViewers(ch.viewerCount) }}
+            </span>
+          </div>
 
-          <!-- Tooltip -->
-          <div class="chip-tooltip">
+          <!-- Tooltip content -->
+          <template #content>
             <div class="chip-tooltip-header">
               <span class="chip-tooltip-platform" :style="{ color: platformColor(ch.platform) }">
                 {{ ch.platform === 'twitch' ? 'Twitch' : 'Kick' }}
@@ -178,14 +195,15 @@ function formatViewers(n: number): string {
             <div v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-tooltip-row">
               <span class="chip-tooltip-label">Viewers</span>{{ ch.viewerCount.toLocaleString() }}
             </div>
-          </div>
-        </div>
+          </template>
+        </Tooltip>
       </div>
 
       <span class="chat-count" v-if="messages.length > 0">{{ messages.length }} messages</span>
     </div>
 
-    <!-- Messages -->
+    <!-- Messages + scroll pill wrapper -->
+    <div class="chat-list-wrapper">
     <div ref="listEl" class="chat-list" @scroll="onScroll">
       <template v-if="messages.length > 0">
         <ChatMessage
@@ -253,7 +271,7 @@ function formatViewers(n: number): string {
           <p class="empty-hint">Chat messages will appear here in real time.</p>
         </template>
       </div>
-    </div>
+    </div><!-- /.chat-list -->
 
     <!-- Scroll-to-bottom pill -->
     <Transition name="fade">
@@ -277,6 +295,10 @@ function formatViewers(n: number): string {
         Scroll to latest
       </button>
     </Transition>
+    </div><!-- /.chat-list-wrapper -->
+
+    <!-- Chat input -->
+    <ChatInput :statuses="statuses" @send="onSend" />
   </div>
 </template>
 
@@ -286,7 +308,14 @@ function formatViewers(n: number): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.chat-list-wrapper {
+  flex: 1;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -374,83 +403,7 @@ function formatViewers(n: number): string {
 }
 
 /* ---- chip tooltip ---- */
-.chip-tooltip {
-  visibility: hidden;
-  opacity: 0;
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 190px;
-  max-width: 270px;
-  background: #1e1e30;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px;
-  padding: 10px 12px;
-  z-index: 999;
-  pointer-events: none;
-  transition: opacity 0.15s, visibility 0.15s;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-.chip-tooltip::before {
-  content: "";
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%) rotate(45deg);
-  width: 8px;
-  height: 8px;
-  background: #1e1e30;
-  border-left: 1px solid rgba(255,255,255,0.1);
-  border-top: 1px solid rgba(255,255,255,0.1);
-}
-.header-chip:hover .chip-tooltip {
-  visibility: visible;
-  opacity: 1;
-}
-
-.chip-tooltip-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-.chip-tooltip-platform {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.chip-tooltip-status {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #888;
-}
-.chip-tooltip-status.live { color: #4ade80; }
-
-.chip-tooltip-title {
-  font-size: 13px;
-  color: #e8e8f0;
-  line-height: 1.4;
-  margin-bottom: 4px;
-  word-break: break-word;
-}
-.chip-tooltip-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #999;
-  margin-top: 3px;
-}
-.chip-tooltip-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.6;
-  flex-shrink: 0;
-}
+/* tooltip content styles live in ui/Tooltip.vue (global block) */
 
 .chat-count {
   font-size: 11px;
