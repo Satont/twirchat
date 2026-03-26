@@ -26,6 +26,8 @@ import type {
   UpdateStreamRequest,
   UpdateStreamResponse,
   SearchCategoriesResponse,
+  ChannelStatusRequest,
+  ChannelsStatusResponse,
 } from "@twirchat/shared/protocol";
 
 // ----------------------------------------------------------------
@@ -74,6 +76,16 @@ type BunRequests = {
   searchCategories: {
     params: { platform: "twitch" | "kick"; query: string };
     response: SearchCategoriesResponse;
+  };
+  /** Bulk stream status for all active channels (parallel fetch via backend) */
+  getChannelsStatus: {
+    params: { channels: ChannelStatusRequest[] };
+    response: ChannelsStatusResponse;
+  };
+  /** Return current connection status for all platform adapters */
+  getStatuses: {
+    params: void;
+    response: PlatformStatusInfo[];
   };
 };
 

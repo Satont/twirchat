@@ -141,6 +141,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       platform: "twitch",
       status: "connecting",
       mode: this.anonymous ? "anonymous" : "authenticated",
+      channelLogin: this.channelName,
     });
 
     // Initial badge fetch + schedule refresh every 5 minutes
@@ -160,6 +161,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       platform: "twitch",
       status: "disconnected",
       mode: this.anonymous ? "anonymous" : "authenticated",
+      channelLogin: this.channelName,
     });
   }
 
@@ -221,6 +223,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         platform: "twitch",
         status: "disconnected",
         mode: this.anonymous ? "anonymous" : "authenticated",
+        channelLogin: this.channelName,
       });
 
       if (this.shouldReconnect) {
@@ -256,6 +259,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
             platform: "twitch",
             status: "connected",
             mode: this.anonymous ? "anonymous" : "authenticated",
+            channelLogin: this.channelName,
           });
         }
         break;

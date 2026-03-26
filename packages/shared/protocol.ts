@@ -105,6 +105,34 @@ export interface StreamStatusResponse {
   viewerCount?: number;
 }
 
+/**
+ * GET /api/channels-status
+ * Bulk stream status for all active channels, fetched in parallel.
+ *
+ * Request body (JSON): { channels: ChannelStatusRequest[] }
+ * Optionally pass userAccessToken per-channel to use authenticated Helix calls.
+ */
+export interface ChannelStatusRequest {
+  platform: "twitch" | "kick";
+  /** For Twitch: the channel login (e.g. "ninja"). For Kick: the channel slug. */
+  channelLogin: string;
+  /** Optional user access token — if provided, backend uses it instead of app token */
+  userAccessToken?: string;
+}
+
+export interface ChannelStatus {
+  platform: "twitch" | "kick";
+  channelLogin: string;
+  isLive: boolean;
+  title: string;
+  categoryName?: string;
+  viewerCount?: number;
+}
+
+export interface ChannelsStatusResponse {
+  channels: ChannelStatus[];
+}
+
 /** POST /api/update-stream */
 export interface UpdateStreamRequest {
   platform: "twitch" | "kick";

@@ -2,6 +2,7 @@ import { handleStreamStatus } from "../api/stream-status.ts";
 import { handleUpdateStream } from "../api/update-stream.ts";
 import { handleSearchCategories } from "../api/search-categories.ts";
 import { handleTwitchBadges } from "../api/twitch-badges.ts";
+import { handleChannelsStatus } from "../api/channels-status.ts";
 import { requireClient, json } from "./utils.ts";
 import { logger } from "../logger.ts";
 
@@ -57,6 +58,20 @@ export const streamRoutes = {
         return json(result);
       } catch (err) {
         log.error("twitch/badges failed", { err: String(err) });
+        return json({ error: String(err) }, 500);
+      }
+    },
+  },
+
+  "/api/channels-status": {
+    async POST(req: Request) {
+      const auth = await requireClient(req);
+      if (auth instanceof Response) return auth;
+      try {
+        const result = await handleChannelsStatus(req);
+        return json(result);
+      } catch (err) {
+        log.error("channels-status failed", { err: String(err) });
         return json({ error: String(err) }, 500);
       }
     },

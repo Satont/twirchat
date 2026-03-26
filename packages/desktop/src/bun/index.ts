@@ -37,6 +37,7 @@ import type {
   UpdateStreamResponse,
   SearchCategoriesResponse,
 } from "@twirchat/shared/protocol";
+import type { PlatformStatusInfo } from "@twirchat/shared/types";
 
 // ============================================================
 // 1. Initialisation
@@ -63,6 +64,12 @@ aggregator.registerAdapter(kickAdapter);
 aggregator.registerAdapter(youtubeAdapter);
 
 startOverlayServer();
+
+// ============================================================
+// 1b. Track latest adapter status per platform
+// ============================================================
+
+const currentStatuses = new Map<string, PlatformStatusInfo>();
 
 // ============================================================
 // 2. Define Electrobun RPC (bun side)
@@ -188,6 +195,33 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
         if (!res.ok) throw new Error(`search-categories: ${res.status}`);
         return (await res.json()) as SearchCategoriesResponse;
       },
+
+      getChannelsStatus: async ({ channels }) => {
+        // Attach user access tokens for platforms where the user is authenticated
+        const enriched = channels.map((ch) => {
+          const account = AccountStore.findByPlatform(ch.platform as import("@twirchat/shared/types").Platform);
+          if (account) {
+            const tokens = AccountStore.getTokens(account.id);
+            if (tokens?.accessToken) {
+              return { ...ch, userAccessToken: tokens.accessToken };
+            }
+          }
+          return ch;
+        });
+
+        const res = await fetch(`${BACKEND_URL}/api/channels-status`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Client-Secret": clientSecret,
+          },
+          body: JSON.stringify({ channels: enriched }),
+        });
+        if (!res.ok) throw new Error(`channels-status: ${res.status}`);
+        return (await res.json()) as import("@twirchat/shared/protocol").ChannelsStatusResponse;
+      },
+
+      getStatuses: () => [...currentStatuses.values()],
     },
   },
 });
@@ -247,8 +281,9 @@ aggregator.onEvent((ev) => {
 });
 
 aggregator.onStatus((s) => {
+  currentStatuses.set(s.platform, s);
   sendToView.platform_status(s);
-  console.log(`[Status] ${s.platform}: ${s.status} (${s.mode})`);
+  console.log(`[Status] ${s.platform}: ${s.status} (${s.mode})${s.channelLogin ? ` channel=${s.channelLogin}` : ""}`);
 });
 
 // ============================================================

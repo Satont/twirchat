@@ -33,12 +33,18 @@ const connectedAccountsCount = computed(() => accounts.value.length);
 
 async function loadInitialData() {
   try {
-    const [accs, setts] = await Promise.all([
+    const [accs, setts, statList] = await Promise.all([
       rpc.request.getAccounts(),
       rpc.request.getSettings(),
+      rpc.request.getStatuses(),
     ]);
     if (accs !== undefined) accounts.value = accs;
     if (setts !== undefined) settings.value = setts;
+    if (statList !== undefined) {
+      const map = new Map<string, PlatformStatusInfo>();
+      for (const s of statList) map.set(s.platform, s);
+      statuses.value = map;
+    }
   } catch (err) {
     console.warn("[App] Initial data load failed, retrying in 1s...", err);
     setTimeout(loadInitialData, 1000);

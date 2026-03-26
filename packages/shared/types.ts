@@ -159,6 +159,8 @@ export interface PlatformStatusInfo {
   error?: string;
   /** anonymous = слушаем без OAuth */
   mode: "anonymous" | "authenticated";
+  /** The channel login name this adapter is connected to (lowercase) */
+  channelLogin?: string;
 }
 
 // ============================================================

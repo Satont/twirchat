@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from "vue";
+import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 import ChatMessage from "./ChatMessage.vue";
+import ChannelStatusBar from "./ChannelStatusBar.vue";
+import { rpc } from "../main";
 import type {
   NormalizedChatMessage,
   AppSettings,
   Account,
   PlatformStatusInfo,
+  Platform,
 } from "@twirchat/shared/types";
+import type { ChannelStatus, ChannelStatusRequest } from "@twirchat/shared/protocol";
 
 const props = defineProps<{
   messages: NormalizedChatMessage[];
@@ -22,6 +26,73 @@ const emit = defineEmits<{
 const listEl = ref<HTMLElement | null>(null);
 const isAtBottom = ref(true);
 
+// ---- Channel status bar ----
+const channelStatuses = ref<ChannelStatus[]>([]);
+
+// Connected channels: derived from statuses map — any platform-connected entry
+const connectedChannels = computed<ChannelStatusRequest[]>(() => {
+  const result: ChannelStatusRequest[] = [];
+  for (const [, info] of props.statuses) {
+    if (
+      (info.status === "connected" || info.status === "connecting") &&
+      (info.platform === "twitch" || info.platform === "kick") &&
+      info.channelLogin
+    ) {
+      result.push({ platform: info.platform, channelLogin: info.channelLogin });
+    }
+  }
+  return result;
+});
+
+// Channels shown in the bar: merge connectedChannels with backend-fetched statuses.
+// This ensures the bar is visible immediately when a channel is joined, even if
+// the backend fetch hasn't returned yet (or fails).
+const displayedChannels = computed<ChannelStatus[]>(() => {
+  const backendMap = new Map(
+    channelStatuses.value.map((s) => [`${s.platform}:${s.channelLogin}`, s]),
+  );
+  return connectedChannels.value.map((ch) => {
+    const key = `${ch.platform}:${ch.channelLogin}`;
+    return (
+      backendMap.get(key) ?? {
+        platform: ch.platform,
+        channelLogin: ch.channelLogin,
+        isLive: false,
+        title: "",
+      }
+    );
+  });
+});
+
+async function fetchChannelStatuses() {
+  const channels = connectedChannels.value;
+  if (channels.length === 0) {
+    channelStatuses.value = [];
+    return;
+  }
+  try {
+    const res = await rpc.request.getChannelsStatus({ channels });
+    channelStatuses.value = res.channels;
+  } catch (err) {
+    console.warn("[ChannelStatusBar] fetch failed:", err);
+  }
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+onMounted(() => {
+  fetchChannelStatuses();
+  pollTimer = setInterval(fetchChannelStatuses, 10_000);
+});
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer);
+});
+
+// Re-fetch immediately when connected channels change
+watch(connectedChannels, () => fetchChannelStatuses(), { deep: true });
+
+// ---- Scroll ----
 const hasAnyConnection = computed(() =>
   ["twitch", "youtube", "kick"].some(
     (p) => props.statuses.get(p)?.status === "connected",
@@ -67,6 +138,9 @@ function platformColor(platform: string): string {
 
 <template>
   <div class="chat-wrapper">
+    <!-- Channel status bar -->
+    <ChannelStatusBar :channels="displayedChannels" />
+
     <!-- Chat header -->
     <div class="chat-header">
       <span class="chat-header-title">Live Chat</span>
