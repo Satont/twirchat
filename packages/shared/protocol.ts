@@ -79,6 +79,20 @@ export interface TwitchExchangeResponse {
 }
 
 /**
+ * POST /api/auth/kick/refresh
+ * Desktop просит backend обновить Kick токен
+ */
+export interface KickRefreshRequest {
+  refreshToken: string;
+}
+
+export interface KickRefreshResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+}
+
+/**
  * POST /api/auth/twitch/refresh
  * Desktop просит backend обновить токен
  */
