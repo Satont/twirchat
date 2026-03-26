@@ -107,24 +107,6 @@ function copyOverlayUrl() {
             >Light</button>
           </div>
         </div>
-
-        <div class="form-row">
-          <div class="form-label">
-            <span>Font size</span>
-            <span class="form-hint">Chat message text size</span>
-          </div>
-          <div class="slider-row">
-            <input
-              v-model.number="local.fontSize"
-              type="range"
-              min="11"
-              max="22"
-              step="1"
-              class="slider"
-            />
-            <span class="slider-val">{{ local.fontSize }}px</span>
-          </div>
-        </div>
       </section>
 
       <!-- Chat display -->

@@ -3,6 +3,7 @@ import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 import ChatMessage from "./ChatMessage.vue";
 import ChatInput from "./ChatInput.vue";
 import Tooltip from "./ui/Tooltip.vue";
+import ChatAppearancePopover from "./ui/ChatAppearancePopover.vue";
 import { rpc } from "../main";
 import type {
   NormalizedChatMessage,
@@ -21,6 +22,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "go-to-platforms": [];
+  "settings-change": [settings: import("@twirchat/shared/types").AppSettings];
 }>();
 
 const listEl = ref<HTMLElement | null>(null);
@@ -149,6 +151,11 @@ async function onSend(targets: Array<{ platform: string; channelLogin: string; t
     )
   );
 }
+
+function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
+  emit("settings-change", s);
+  rpc.request.saveSettings(s).catch((err) => console.warn("[ChatList] saveSettings failed:", err));
+}
 </script>
 
 <template>
@@ -200,6 +207,13 @@ async function onSend(targets: Array<{ platform: string; channelLogin: string; t
       </div>
 
       <span class="chat-count" v-if="messages.length > 0">{{ messages.length }} messages</span>
+
+      <!-- Appearance popup button -->
+      <ChatAppearancePopover
+        v-if="settings"
+        :settings="settings"
+        @change="onAppearanceChange"
+      />
     </div>
 
     <!-- Messages + scroll pill wrapper -->
@@ -214,6 +228,7 @@ async function onSend(targets: Array<{ platform: string; channelLogin: string; t
           :show-avatar="settings?.showAvatars"
           :show-badges="settings?.showBadges"
           :font-size="settings?.fontSize"
+          :chat-theme="settings?.chatTheme"
         />
       </template>
 

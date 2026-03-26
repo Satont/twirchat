@@ -8,6 +8,7 @@ const props = defineProps<{
   showAvatar?: boolean;
   showBadges?: boolean;
   fontSize?: number;
+  chatTheme?: "modern" | "compact";
 }>();
 
 function platformColor(platform: string): string {
@@ -94,7 +95,56 @@ function initials(name: string): string {
 </script>
 
 <template>
+  <!-- ── COMPACT (single-line) ─────────────────────────────── -->
   <div
+    v-if="props.chatTheme === 'compact'"
+    class="msg msg-compact"
+    :class="`platform-${message.platform}`"
+    :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
+  >
+    <span
+      v-if="props.showPlatformIcon !== false"
+      class="platform-stripe"
+      :style="{ background: platformColor(message.platform) }"
+    />
+
+    <!-- Badges inline -->
+    <span
+      v-if="props.showBadges !== false && message.author.badges.length"
+      class="badges"
+    >
+      <span
+        v-for="badge in message.author.badges"
+        :key="badge.id"
+        class="badge"
+        :title="badge.type"
+      >
+        <img
+          v-if="badge.imageUrl && !brokenBadges.has(badge.id)"
+          :src="badge.imageUrl"
+          :alt="badge.text"
+          @error="onBadgeError(badge.id)"
+        />
+        <span v-else class="badge-text">{{ badge.text }}</span>
+      </span>
+    </span>
+
+    <span
+      class="author"
+      :style="message.author.color ? { color: message.author.color } : {}"
+    >{{ message.author.displayName }}</span>
+    <span class="compact-sep">:</span>
+    <!-- eslint-disable-next-line vue/no-v-html -->
+    <span
+      class="msg-text"
+      :class="{ italic: message.type === 'action' }"
+      v-html="renderText(message)"
+    />
+  </div>
+
+  <!-- ── MODERN (two-row) ──────────────────────────────────── -->
+  <div
+    v-else
     class="msg"
     :class="[
       `platform-${message.platform}`,
@@ -284,5 +334,49 @@ function initials(name: string): string {
   height: 24px;
   vertical-align: middle;
   display: inline-block;
+}
+
+/* ── Compact (single-line) ──────────────────────────────── */
+.msg-compact {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 14px;
+  font-size: var(--font-size, 14px);
+  line-height: 1.5;
+  word-break: break-word;
+  flex-wrap: wrap;
+}
+.msg-compact:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+.msg-compact .platform-stripe {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 2px;
+  opacity: 0.7;
+}
+.msg-compact .author {
+  font-weight: 700;
+  font-size: 0.9em;
+  flex-shrink: 0;
+}
+.compact-sep {
+  color: var(--c-text-2, #8b8b99);
+  flex-shrink: 0;
+  margin-right: 1px;
+}
+.msg-compact .msg-text {
+  flex: 1;
+  min-width: 0;
+}
+.msg-compact .badges {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
 }
 </style>

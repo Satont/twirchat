@@ -87,6 +87,7 @@ export interface Account {
 
 export interface AppSettings {
   theme: "light" | "dark";
+  chatTheme: "modern" | "compact";
   fontSize: number;
   showPlatformIcon: boolean;
   showAvatars: boolean;
@@ -112,6 +113,7 @@ export interface OverlayConfig {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
+  chatTheme: "modern",
   fontSize: 14,
   showPlatformIcon: true,
   showAvatars: true,

@@ -255,6 +255,7 @@ function onSettingsChange(s: AppSettings) {
         :accounts="accounts"
         :statuses="statuses"
         @go-to-platforms="switchTab('platforms')"
+        @settings-change="onSettingsChange"
       />
 
       <EventsFeed v-show="activeTab === 'events'" :events="events" />
