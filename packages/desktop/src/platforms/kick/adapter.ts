@@ -10,6 +10,7 @@ import {
   BACKEND_URL,
 } from "@twirchat/shared/constants";
 import { AccountStore } from "../../store/account-store";
+import { refreshKickToken } from "../../auth/kick";
 import { getKickBadgeSvg } from "./badges";
 import { logger } from "@twirchat/shared/logger";
 
@@ -105,6 +106,18 @@ export class KickAdapter extends BasePlatformAdapter {
         this.accessToken = tokens.accessToken;
         this.accountId = account.id;
         this.platformUserId = account.platformUserId;
+
+        // Check if token needs refresh
+        const now = Math.floor(Date.now() / 1000);
+        if (tokens.expiresAt && tokens.expiresAt < now + 300) {
+          log.info("[Kick] Token expired or expiring soon, refreshing...");
+          try {
+            this.accessToken = await refreshKickToken(account.id);
+            log.info("[Kick] Token refreshed successfully");
+          } catch (err) {
+            log.error("[Kick] Failed to refresh token:", err);
+          }
+        }
       }
     }
 
@@ -151,6 +164,9 @@ export class KickAdapter extends BasePlatformAdapter {
       throw new Error("Kick account ID not available");
     }
 
+    // Check if token needs refresh before sending
+    await this.refreshTokenIfNeeded();
+
     const body = {
       broadcaster_user_id: Number(this.platformUserId),
       content: text,
@@ -158,7 +174,7 @@ export class KickAdapter extends BasePlatformAdapter {
     };
 
     const url = `${KICK_API_BASE}/chat`;
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -167,12 +183,49 @@ export class KickAdapter extends BasePlatformAdapter {
       body: JSON.stringify(body),
     });
 
+    // If 401, try to refresh token and retry once
+    if (res.status === 401) {
+      log.info("[Kick] Got 401, attempting token refresh...");
+      const refreshed = await this.refreshTokenIfNeeded();
+      if (refreshed) {
+        res = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+      }
+    }
+
     if (!res.ok) {
       const responseBody = await res.text().catch(() => "");
       throw new Error(
         `Failed to send Kick message ${JSON.stringify(body)}: ${res.status} ${responseBody}`,
       );
     }
+  }
+
+  private async refreshTokenIfNeeded(): Promise<boolean> {
+    if (!this.accountId) return false;
+
+    const tokens = AccountStore.getTokens(this.accountId);
+    if (!tokens?.refreshToken) return false;
+
+    const now = Math.floor(Date.now() / 1000);
+    if (tokens.expiresAt && tokens.expiresAt < now + 300) {
+      log.info("[Kick] Token expired or expiring soon, refreshing...");
+      try {
+        this.accessToken = await refreshKickToken(this.accountId);
+        log.info("[Kick] Token refreshed successfully");
+        return true;
+      } catch (err) {
+        log.error("[Kick] Failed to refresh token:", err);
+        return false;
+      }
+    }
+    return false;
   }
 
   // ============================================================

@@ -36,7 +36,22 @@ export function startAuthServer(): void {
 
       try {
         if (url.pathname === "/auth/twitch/callback") {
-          return await handleTwitchCallback(url);
+          const result = await handleTwitchCallback(url);
+
+          // Save the channel to automatically join it
+          ChannelStore.save("twitch", result.channelSlug);
+
+          // Notify the webview of successful authentication
+          if (sendToView) {
+            sendToView.auth_success(result.user);
+          }
+
+          // Trigger reconnection and auto-join the channel
+          if (onAuthSuccessCallback) {
+            onAuthSuccessCallback("twitch", result.channelSlug);
+          }
+
+          return result.response;
         }
         if (url.pathname === "/auth/youtube/callback") {
           const result = await handleYouTubeCallback(url);

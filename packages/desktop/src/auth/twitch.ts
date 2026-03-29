@@ -113,7 +113,11 @@ export async function getTwitchAuthUrl(
  * Validates state, exchanges code for tokens via the backend, fetches
  * user info from Twitch, and persists the account in SQLite.
  */
-export async function handleTwitchCallback(url: URL): Promise<Response> {
+export async function handleTwitchCallback(url: URL): Promise<{
+  response: Response;
+  user: { platform: "twitch"; username: string; displayName: string };
+  channelSlug: string;
+}> {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const error = url.searchParams.get("error");
@@ -192,9 +196,17 @@ export async function handleTwitchCallback(url: URL): Promise<Response> {
 
   log.info(`Logged in as @${validateData.login}`);
 
-  return new Response(successPage("Twitch"), {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
+  return {
+    response: new Response(successPage("Twitch"), {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }),
+    user: {
+      platform: "twitch" as const,
+      username: validateData.login,
+      displayName: validateData.login,
+    },
+    channelSlug: validateData.login,
+  };
 }
 
 /**

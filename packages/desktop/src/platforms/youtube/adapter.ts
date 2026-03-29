@@ -22,6 +22,7 @@ import type {
   Badge,
 } from "@twirchat/shared/types";
 import { AccountStore } from "../../store/account-store.js";
+import { refreshYouTubeToken } from "../../auth/youtube.js";
 import { logger } from "@twirchat/shared/logger";
 
 import {
@@ -83,6 +84,25 @@ export class YouTubeAdapter extends BasePlatformAdapter {
 
     this.accountId = account.id;
     this.accessToken = tokens.accessToken;
+
+    // Check if token needs refresh (expires in less than 5 minutes or already expired)
+    const now = Math.floor(Date.now() / 1000);
+    if (tokens.expiresAt && tokens.expiresAt < now + 300) {
+      log.info("[YouTube] Token expired or expiring soon, refreshing...");
+      try {
+        this.accessToken = await refreshYouTubeToken(account.id);
+        log.info("[YouTube] Token refreshed successfully");
+      } catch (err) {
+        log.error("[YouTube] Failed to refresh token:", err);
+        this.emit("status", {
+          platform: "youtube",
+          status: "error",
+          mode: "authenticated",
+          error: "Failed to refresh access token. Please re-authenticate.",
+        });
+        return;
+      }
+    }
 
     this.emit("status", {
       platform: "youtube",
@@ -151,10 +171,9 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       throw new Error("YouTubeAdapter.sendMessage: no active live chat");
     }
 
-    const res = await fetch(`${YOUTUBE_API_BASE}/liveChat/messages`, {
+    const res = await this.fetchWithAuth(`${YOUTUBE_API_BASE}/liveChat/messages?part=snippet`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -180,6 +199,57 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   // Private
   // ============================================================
 
+  private async refreshTokenIfNeeded(): Promise<boolean> {
+    if (!this.accountId) return false;
+
+    const tokens = AccountStore.getTokens(this.accountId);
+    if (!tokens?.refreshToken) return false;
+
+    const now = Math.floor(Date.now() / 1000);
+    if (tokens.expiresAt && tokens.expiresAt < now + 300) {
+      log.info("[YouTube] Token expired or expiring soon, refreshing...");
+      try {
+        this.accessToken = await refreshYouTubeToken(this.accountId);
+        log.info("[YouTube] Token refreshed successfully");
+        return true;
+      } catch (err) {
+        log.error("[YouTube] Failed to refresh token:", err);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+    if (!this.accessToken) throw new Error("No access token");
+
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+    });
+
+    // If 401, try to refresh token and retry once
+    if (res.status === 401 && this.accountId) {
+      log.info("[YouTube] Got 401, attempting token refresh...");
+      const refreshed = await this.refreshTokenIfNeeded();
+      if (refreshed) {
+        // Retry the request with new token
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+        });
+      }
+    }
+
+    return res;
+  }
+
   private async fetchLiveChatId(channelOrVideoId: string): Promise<string> {
     if (!this.accessToken) throw new Error("No access token");
 
@@ -192,9 +262,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     // Try as a video ID first (starts with characters other than UC)
     if (!cleanInput.startsWith("UC")) {
       log.info(`[YouTube] Trying as video ID: ${cleanInput}`);
-      const videoRes = await fetch(
+      const videoRes = await this.fetchWithAuth(
         `${YOUTUBE_API_BASE}/videos?part=liveStreamingDetails&id=${encodeURIComponent(cleanInput)}`,
-        { headers: { Authorization: `Bearer ${this.accessToken}` } },
       );
 
       if (videoRes.ok) {
@@ -219,9 +288,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     if (!cleanInput.startsWith("UC")) {
       log.info(`[YouTube] Resolving handle/username: ${cleanInput}`);
       // Try as a handle (custom URL) - search for the channel
-      const searchRes = await fetch(
+      const searchRes = await this.fetchWithAuth(
         `${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(cleanInput)}&type=channel&maxResults=1`,
-        { headers: { Authorization: `Bearer ${this.accessToken}` } },
       );
 
       if (!searchRes.ok) {
@@ -253,9 +321,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     log.info(
       `[YouTube] Searching for live broadcast on channel: ${channelId}`,
     );
-    const searchRes = await fetch(
+    const searchRes = await this.fetchWithAuth(
       `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${encodeURIComponent(channelId)}&eventType=live&type=video`,
-      { headers: { Authorization: `Bearer ${this.accessToken}` } },
     );
 
     if (!searchRes.ok) {
@@ -279,9 +346,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
 
     log.info(`[YouTube] Found live video: ${videoId} (${videoTitle})`);
 
-    const liveRes = await fetch(
+    const liveRes = await this.fetchWithAuth(
       `${YOUTUBE_API_BASE}/videos?part=liveStreamingDetails&id=${encodeURIComponent(videoId)}`,
-      { headers: { Authorization: `Bearer ${this.accessToken}` } },
     );
 
     if (!liveRes.ok) {

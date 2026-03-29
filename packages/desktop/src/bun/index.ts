@@ -47,7 +47,11 @@ import type {
   SearchCategoriesResponse,
 } from "@twirchat/shared/protocol";
 import type { PlatformStatusInfo } from "@twirchat/shared/types";
-import { startAuthServer, setAuthServerRpcSender, setOnAuthSuccessCallback } from "../auth";
+import {
+  startAuthServer,
+  setAuthServerRpcSender,
+  setOnAuthSuccessCallback,
+} from "../auth";
 
 // ============================================================
 // 1. Initialisation
@@ -76,10 +80,59 @@ aggregator.registerAdapter(kickAdapter);
 aggregator.registerAdapter(youtubeAdapter);
 
 startOverlayServer();
+
+// ============================================================
+// 1c. Set up auth success callback BEFORE starting auth server
+// ============================================================
+
+setOnAuthSuccessCallback(async (platform, channelSlug) => {
+  log.info("Authentication successful, reconnecting adapter", {
+    platform,
+    action: "auth",
+  });
+
+  const adapter = aggregator.getAdapter(platform);
+  if (!adapter) {
+    log.warn("No adapter found for platform", { platform, action: "auth" });
+    return;
+  }
+
+  // Use provided channelSlug or get from saved channels
+  const targetChannel = channelSlug || ChannelStore.findByPlatform(platform)[0];
+  if (!targetChannel) {
+    log.info("No channel specified, skipping reconnection", {
+      platform,
+      action: "auth",
+    });
+    return;
+  }
+
+  // Disconnect and reconnect to switch to authenticated mode
+  try {
+    await adapter.disconnect();
+    log.info("Adapter disconnected", { platform, action: "auth" });
+
+    // Reconnect to the channel
+    await adapter.connect(targetChannel);
+    log.info("Adapter reconnected in authenticated mode", {
+      platform,
+      channel: targetChannel,
+      action: "auth",
+    });
+  } catch (err) {
+    log.error("Failed to reconnect adapter", {
+      platform,
+      error: String(err),
+      action: "auth",
+    });
+  }
+});
+
+// Start auth server AFTER setting up the callback
 startAuthServer();
 
 // ============================================================
-// 1b. Track latest adapter status per platform
+// 2. Define Electrobun RPC (bun side)
 // ============================================================
 
 const currentStatuses = new Map<string, PlatformStatusInfo>();
@@ -129,41 +182,71 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       joinChannel: ({ platform, channelSlug }) => {
         const adapter = aggregator.getAdapter(platform);
         if (!adapter) {
-          log.warn("No adapter registered for platform", { platform, action: "joinChannel" });
+          log.warn("No adapter registered for platform", {
+            platform,
+            action: "joinChannel",
+          });
           return;
         }
         ChannelStore.save(platform, channelSlug);
-        log.info("Connecting to channel", { platform, channelSlug, action: "joinChannel" });
+        log.info("Connecting to channel", {
+          platform,
+          channelSlug,
+          action: "joinChannel",
+        });
         adapter
           .connect(channelSlug)
           .then(() => {
-            log.info("adapter.connect() resolved", { platform, channelSlug, action: "joinChannel" });
+            log.info("adapter.connect() resolved", {
+              platform,
+              channelSlug,
+              action: "joinChannel",
+            });
           })
           .catch((err) => {
-            log.error("Failed to connect", { platform, channelSlug, error: String(err), action: "joinChannel" });
+            log.error("Failed to connect", {
+              platform,
+              channelSlug,
+              error: String(err),
+              action: "joinChannel",
+            });
           });
       },
 
       leaveChannel: ({ platform, channelSlug }) => {
         const adapter = aggregator.getAdapter(platform);
         if (!adapter) {
-          log.warn("No adapter registered for platform", { platform, action: "leaveChannel" });
+          log.warn("No adapter registered for platform", {
+            platform,
+            action: "leaveChannel",
+          });
           return;
         }
         ChannelStore.remove(platform, channelSlug);
         adapter.disconnect().catch((err) => {
-          log.error("Failed to disconnect", { platform, error: String(err), action: "leaveChannel" });
+          log.error("Failed to disconnect", {
+            platform,
+            error: String(err),
+            action: "leaveChannel",
+          });
         });
       },
 
       sendMessage: ({ platform, channelId, text }) => {
         const adapter = aggregator.getAdapter(platform);
         if (!adapter) {
-          log.warn("No adapter registered for platform", { platform, action: "sendMessage" });
+          log.warn("No adapter registered for platform", {
+            platform,
+            action: "sendMessage",
+          });
           return;
         }
         adapter.sendMessage(channelId, text).catch((err) => {
-          log.error("Failed to send message", { platform, error: String(err), action: "sendMessage" });
+          log.error("Failed to send message", {
+            platform,
+            error: String(err),
+            action: "sendMessage",
+          });
         });
       },
 
@@ -257,36 +340,6 @@ const sendToView = rpc.send as unknown as WebviewSender;
 // Pass the RPC sender to the auth server so it can notify the webview of auth events
 setAuthServerRpcSender(sendToView);
 
-// Set up auth success callback to reconnect adapters when auth completes
-setOnAuthSuccessCallback(async (platform, channelSlug) => {
-  log.info("Authentication successful, reconnecting adapter", { platform, action: "auth" });
-
-  const adapter = aggregator.getAdapter(platform);
-  if (!adapter) {
-    log.warn("No adapter found for platform", { platform, action: "auth" });
-    return;
-  }
-
-  // Use provided channelSlug or get from saved channels
-  const targetChannel = channelSlug || ChannelStore.findByPlatform(platform)[0];
-  if (!targetChannel) {
-    log.info("No channel specified, skipping reconnection", { platform, action: "auth" });
-    return;
-  }
-
-  // Disconnect and reconnect to switch to authenticated mode
-  try {
-    await adapter.disconnect();
-    log.info("Adapter disconnected", { platform, action: "auth" });
-
-    // Reconnect to the channel
-    await adapter.connect(targetChannel);
-    log.info("Adapter reconnected in authenticated mode", { platform, channel: targetChannel, action: "auth" });
-  } catch (err) {
-    log.error("Failed to reconnect adapter", { platform, error: String(err), action: "auth" });
-  }
-});
-
 // ============================================================
 // 3. Main window
 // ============================================================
@@ -326,19 +379,32 @@ aggregator.onMessage((msg) => {
   UsernameColorCache.addMessage(msg);
   pushOverlayMessage(msg);
   sendToView.chat_message(msg);
-  log.info("Chat message", { platform: msg.platform, author: msg.author.displayName, text: msg.text });
+  log.info("Chat message", {
+    platform: msg.platform,
+    author: msg.author.displayName,
+    text: msg.text,
+  });
 });
 
 aggregator.onEvent((ev) => {
   pushOverlayEvent(ev);
   sendToView.chat_event(ev);
-  log.info("Event", { platform: ev.platform, type: ev.type, user: ev.user.displayName });
+  log.info("Event", {
+    platform: ev.platform,
+    type: ev.type,
+    user: ev.user.displayName,
+  });
 });
 
 aggregator.onStatus((s) => {
   currentStatuses.set(s.platform, s);
   sendToView.platform_status(s);
-  log.info("Status", { platform: s.platform, status: s.status, mode: s.mode, channel: s.channelLogin });
+  log.info("Status", {
+    platform: s.platform,
+    status: s.status,
+    mode: s.mode,
+    channel: s.channelLogin,
+  });
 });
 
 // ============================================================
@@ -388,10 +454,13 @@ setInterval(() => {
 }, 30_000);
 
 // ============================================================
-// 7. Auto-connect to persisted channels
+// 7. Auto-connect to persisted channels and authenticated accounts
 // ============================================================
 
 const savedChannels = ChannelStore.findAll();
+const connectedPlatforms = new Set<string>();
+
+// First, connect to explicitly saved channels
 for (const [platform, slugs] of Object.entries(savedChannels)) {
   for (const slug of slugs ?? []) {
     const adapter = aggregator.getAdapter(
@@ -401,14 +470,73 @@ for (const [platform, slugs] of Object.entries(savedChannels)) {
       log.warn("No adapter for platform", { platform, action: "AutoConnect" });
       continue;
     }
-    log.info("Connecting to channel", { platform, slug, action: "AutoConnect" });
+    connectedPlatforms.add(platform);
+    log.info("Connecting to channel", {
+      platform,
+      slug,
+      action: "AutoConnect",
+    });
     adapter
       .connect(slug)
       .then(() => {
         log.info("Connected", { platform, slug, action: "AutoConnect" });
       })
       .catch((err) => {
-        log.error("Failed to connect", { platform, slug, error: String(err), action: "AutoConnect" });
+        log.error("Failed to connect", {
+          platform,
+          slug,
+          error: String(err),
+          action: "AutoConnect",
+        });
+      });
+  }
+}
+
+// For YouTube and Kick, auto-connect to user's own channel if authenticated but not yet connected
+const accounts = AccountStore.findAll();
+for (const account of accounts) {
+  if (account.platform === "youtube" || account.platform === "kick") {
+    // Skip if already connected via saved channels
+    if (connectedPlatforms.has(account.platform)) {
+      continue;
+    }
+
+    const adapter = aggregator.getAdapter(account.platform);
+    if (!adapter) {
+      log.warn("No adapter for platform", {
+        platform: account.platform,
+        action: "AutoConnectAccount",
+      });
+      continue;
+    }
+
+    // Auto-connect to user's own channel
+    const channelSlug = account.username;
+    log.info("Auto-connecting to user's channel", {
+      platform: account.platform,
+      channel: channelSlug,
+      action: "AutoConnectAccount",
+    });
+
+    // Save the channel for persistence
+    ChannelStore.save(account.platform, channelSlug);
+
+    adapter
+      .connect(channelSlug)
+      .then(() => {
+        log.info("Connected to user's channel", {
+          platform: account.platform,
+          channel: channelSlug,
+          action: "AutoConnectAccount",
+        });
+      })
+      .catch((err) => {
+        log.error("Failed to connect to user's channel", {
+          platform: account.platform,
+          channel: channelSlug,
+          error: String(err),
+          action: "AutoConnectAccount",
+        });
       });
   }
 }

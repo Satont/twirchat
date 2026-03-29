@@ -37,7 +37,6 @@ const connectedChannels = computed<ChannelStatusRequest[]>(() => {
   for (const [, info] of props.statuses) {
     if (
       (info.status === "connected" || info.status === "connecting") &&
-      (info.platform === "twitch" || info.platform === "kick") &&
       info.channelLogin
     ) {
       result.push({ platform: info.platform, channelLogin: info.channelLogin });
@@ -46,14 +45,37 @@ const connectedChannels = computed<ChannelStatusRequest[]>(() => {
   return result;
 });
 
-// Channels shown in the bar: merge connectedChannels with backend-fetched statuses.
+// Auto-connected channels for YouTube/Kick: when user is authenticated, their own channel is auto-connected
+const autoConnectedChannels = computed<ChannelStatusRequest[]>(() => {
+  const result: ChannelStatusRequest[] = [];
+  for (const account of props.accounts) {
+    // For YouTube and Kick, when authenticated, auto-connect to user's own channel
+    if (account.platform === "youtube" || account.platform === "kick") {
+      // Check if this channel is not already in connectedChannels (case-insensitive)
+      const alreadyConnected = connectedChannels.value.some(
+        ch => ch.platform === account.platform && ch.channelLogin.toLowerCase() === account.username.toLowerCase()
+      );
+      if (!alreadyConnected) {
+        result.push({ platform: account.platform, channelLogin: account.username });
+      }
+    }
+  }
+  return result;
+});
+
+// All channels to display: connected + auto-connected
+const allChannels = computed<ChannelStatusRequest[]>(() => {
+  return [...connectedChannels.value, ...autoConnectedChannels.value];
+});
+
+// Channels shown in the bar: merge allChannels with backend-fetched statuses.
 // This ensures the bar is visible immediately when a channel is joined, even if
 // the backend fetch hasn't returned yet (or fails).
 const displayedChannels = computed<ChannelStatus[]>(() => {
   const backendMap = new Map(
     channelStatuses.value.map((s) => [`${s.platform}:${s.channelLogin}`, s]),
   );
-  return connectedChannels.value.map((ch) => {
+  return allChannels.value.map((ch) => {
     const key = `${ch.platform}:${ch.channelLogin}`;
     return (
       backendMap.get(key) ?? {
@@ -67,7 +89,7 @@ const displayedChannels = computed<ChannelStatus[]>(() => {
 });
 
 async function fetchChannelStatuses() {
-  const channels = connectedChannels.value;
+  const channels = allChannels.value;
   if (channels.length === 0) {
     channelStatuses.value = [];
     return;
@@ -91,8 +113,8 @@ onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer);
 });
 
-// Re-fetch immediately when connected channels change
-watch(connectedChannels, () => fetchChannelStatuses(), { deep: true });
+// Re-fetch immediately when channels change
+watch(allChannels, () => fetchChannelStatuses(), { deep: true });
 
 // ---- Scroll ----
 const hasAnyConnection = computed(() =>
@@ -134,6 +156,15 @@ function platformColor(platform: string): string {
     case "youtube": return "#ff0000";
     case "kick": return "#53fc18";
     default: return "#a78bfa";
+  }
+}
+
+function platformName(platform: string): string {
+  switch (platform) {
+    case "twitch": return "Twitch";
+    case "youtube": return "YouTube";
+    case "kick": return "Kick";
+    default: return platform;
   }
 }
 
@@ -189,7 +220,7 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
           <template #content>
             <div class="chip-tooltip-header">
               <span class="chip-tooltip-platform" :style="{ color: platformColor(ch.platform) }">
-                {{ ch.platform === 'twitch' ? 'Twitch' : 'Kick' }}
+                {{ platformName(ch.platform) }}
               </span>
               <span class="chip-tooltip-status" :class="{ live: ch.isLive }">
                 {{ ch.isLive ? 'LIVE' : 'Offline' }}

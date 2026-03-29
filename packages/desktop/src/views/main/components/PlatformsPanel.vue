@@ -293,7 +293,8 @@ function onInputKeydown(e: KeyboardEvent, platform: Platform) {
 
         <!-- Channel join section -->
         <div class="card-channels">
-          <div class="channel-input-row">
+          <!-- Show input only for Twitch or when not authenticated for YouTube/Kick -->
+          <div v-if="platform === 'twitch' || !account(platform)" class="channel-input-row">
             <div class="input-wrapper">
               <span class="input-prefix">#</span>
               <input
@@ -312,15 +313,9 @@ function onInputKeydown(e: KeyboardEvent, platform: Platform) {
             </button>
           </div>
 
-          <div v-if="joinedChannels[platform].length > 0" class="joined-channels">
-            <div v-for="ch in joinedChannels[platform]" :key="ch" class="channel-chip">
-              <span class="chip-hash">#</span>{{ ch }}
-              <button class="chip-remove" title="Leave channel" @click="leaveChannel(platform, ch)">
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                  <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
+          <!-- Show auto-connected message for YouTube/Kick when authenticated -->
+          <div v-else-if="account(platform) && (platform === 'youtube' || platform === 'kick')" class="auto-connected-info">
+            <span class="auto-connected-text">Connected to your channel</span>
           </div>
         </div>
 
@@ -668,6 +663,44 @@ function onInputKeydown(e: KeyboardEvent, platform: Platform) {
   padding: 8px 18px;
 }
 .btn-join:not(:disabled):hover { background: rgba(167, 139, 250, 0.25); }
+
+/* Auto-connected info */
+.auto-connected-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.auto-connected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px 4px 10px;
+}
+
+.auto-connected-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  padding: 1px 5px;
+  border-radius: 10px;
+  margin-left: 2px;
+}
+
+.auto-connected-text {
+  font-size: 13px;
+  color: var(--c-text-2, #8b8b99);
+}
 
 /* Spinner */
 .spinner {
