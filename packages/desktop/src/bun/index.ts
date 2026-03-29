@@ -32,6 +32,7 @@ import {
 } from "../overlay-server";
 import { prepareTwitchAuth, getTwitchAuthUrl } from "../auth/twitch";
 import { prepareKickAuth, getKickAuthUrl } from "../auth/kick";
+import { prepareYouTubeAuth, getYouTubeAuthUrl } from "../auth/youtube";
 import { TwitchAdapter } from "../platforms/twitch/adapter";
 import { KickAdapter } from "../platforms/kick/adapter";
 import { YouTubeAdapter } from "../platforms/youtube/adapter";
@@ -107,6 +108,10 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
         } else if (platform === "kick") {
           const { codeChallenge, state } = prepareKickAuth();
           const url = await getKickAuthUrl(codeChallenge, state);
+          void openBrowser(url);
+        } else if (platform === "youtube") {
+          const { codeChallenge, state } = prepareYouTubeAuth();
+          const url = await getYouTubeAuthUrl(codeChallenge, state);
           void openBrowser(url);
         } else {
           backendConn.send({ type: "auth_start", platform });
@@ -266,7 +271,7 @@ const sendToView = rpc.send as unknown as WebviewSender;
 setAuthServerRpcSender(sendToView);
 
 // Set up auth success callback to reconnect adapters when auth completes
-setOnAuthSuccessCallback(async (platform) => {
+setOnAuthSuccessCallback(async (platform, channelSlug) => {
   console.log(`[Auth] ${platform} authentication successful, reconnecting adapter...`);
 
   const adapter = aggregator.getAdapter(platform);
@@ -275,10 +280,10 @@ setOnAuthSuccessCallback(async (platform) => {
     return;
   }
 
-  // Get saved channels for this platform
-  const savedChannels = ChannelStore.findByPlatform(platform);
-  if (savedChannels.length === 0) {
-    console.log(`[Auth] No saved channels for ${platform}, skipping reconnection`);
+  // Use provided channelSlug or get from saved channels
+  const targetChannel = channelSlug || ChannelStore.findByPlatform(platform)[0];
+  if (!targetChannel) {
+    console.log(`[Auth] No channel specified for ${platform}, skipping reconnection`);
     return;
   }
 
@@ -287,10 +292,9 @@ setOnAuthSuccessCallback(async (platform) => {
     await adapter.disconnect();
     console.log(`[Auth] ${platform} adapter disconnected`);
 
-    // Reconnect to the first saved channel
-    const channelSlug = savedChannels[0]!;
-    await adapter.connect(channelSlug);
-    console.log(`[Auth] ${platform} adapter reconnected to ${channelSlug} in authenticated mode`);
+    // Reconnect to the channel
+    await adapter.connect(targetChannel);
+    console.log(`[Auth] ${platform} adapter reconnected to ${targetChannel} in authenticated mode`);
   } catch (err) {
     console.error(`[Auth] Failed to reconnect ${platform} adapter:`, err);
   }

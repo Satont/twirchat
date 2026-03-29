@@ -1,6 +1,7 @@
 import { ClientStore } from "../db/index.ts";
 import { startKickOAuth, handleKickCallback, refreshKickToken, buildKickAuthUrl, exchangeKickCode } from "../auth/kick.ts";
 import { exchangeTwitchCode, refreshTwitchToken, buildTwitchAuthUrl } from "../auth/twitch.ts";
+import { buildYouTubeAuthUrl, exchangeYouTubeCode, refreshYouTubeToken } from "../auth/youtube.ts";
 import { json } from "./utils.ts";
 import { logger } from "../logger.ts";
 import type {
@@ -18,6 +19,12 @@ import type {
   TwitchExchangeResponse,
   TwitchRefreshRequest,
   TwitchRefreshResponse,
+  YouTubeBuildUrlRequest,
+  YouTubeBuildUrlResponse,
+  YouTubeExchangeRequest,
+  YouTubeExchangeResponse,
+  YouTubeRefreshRequest,
+  YouTubeRefreshResponse,
   // @ts-ignore — false positive in tsgo for workspace packages
 } from "@twirchat/shared";
 
@@ -168,6 +175,58 @@ export const authRoutes = {
         return json(tokens satisfies TwitchRefreshResponse);
       } catch (err) {
         log.error("twitch/refresh failed", { err: String(err) });
+        return json({ error: String(err) }, 500);
+      }
+    },
+  },
+
+  // ============================================================
+  // YouTube OAuth — HTTP-based flow
+  // ============================================================
+
+  "/api/auth/youtube/start": {
+    async POST(req: Request) {
+      const body = (await req.json()) as YouTubeBuildUrlRequest;
+      if (!body.codeChallenge || !body.state || !body.redirectUri) {
+        return json({ error: "codeChallenge, state, and redirectUri are required" }, 400);
+      }
+      try {
+        const { url } = buildYouTubeAuthUrl(body.codeChallenge, body.state, body.redirectUri);
+        return json({ url } satisfies YouTubeBuildUrlResponse);
+      } catch (err) {
+        log.error("youtube/start failed", { err: String(err) });
+        return json({ error: "Failed to build auth URL" }, 500);
+      }
+    },
+  },
+
+  "/api/auth/youtube/exchange": {
+    async POST(req: Request) {
+      const body = (await req.json()) as YouTubeExchangeRequest;
+      if (!body.code || !body.codeVerifier || !body.redirectUri) {
+        return json({ error: "code, codeVerifier, and redirectUri are required" }, 400);
+      }
+      try {
+        const tokens = await exchangeYouTubeCode(body.code, body.codeVerifier, body.redirectUri);
+        return json(tokens satisfies YouTubeExchangeResponse);
+      } catch (err) {
+        log.error("youtube/exchange failed", { err: String(err) });
+        return json({ error: String(err) }, 500);
+      }
+    },
+  },
+
+  "/api/auth/youtube/refresh": {
+    async POST(req: Request) {
+      const body = (await req.json()) as YouTubeRefreshRequest;
+      if (!body.refreshToken) {
+        return json({ error: "refreshToken is required" }, 400);
+      }
+      try {
+        const tokens = await refreshYouTubeToken(body.refreshToken);
+        return json(tokens satisfies YouTubeRefreshResponse);
+      } catch (err) {
+        log.error("youtube/refresh failed", { err: String(err) });
         return json({ error: String(err) }, 500);
       }
     },

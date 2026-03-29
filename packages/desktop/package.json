@@ -26,6 +26,7 @@
     "vue": "3.5.30"
   },
   "devDependencies": {
+    "@bufbuild/buf": "1.66.1",
     "@bufbuild/protoc-gen-es": "2.11.0",
     "@connectrpc/protoc-gen-connect-es": "1.7.0",
     "@types/bun": "catalog:",

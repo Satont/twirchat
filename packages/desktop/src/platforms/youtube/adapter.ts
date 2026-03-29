@@ -17,7 +17,11 @@ import { createClient } from "@connectrpc/connect";
 import { createGrpcTransport } from "@connectrpc/connect-node";
 
 import { BasePlatformAdapter } from "../base-adapter.js";
-import type { NormalizedChatMessage, NormalizedEvent, Badge } from "@twirchat/shared/types";
+import type {
+  NormalizedChatMessage,
+  NormalizedEvent,
+  Badge,
+} from "@twirchat/shared/types";
 import { AccountStore } from "../../store/account-store.js";
 
 import {
@@ -74,16 +78,20 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       platform: "youtube",
       status: "connecting",
       mode: "authenticated",
+      channelLogin: this.channelId,
     });
 
     try {
       this.liveChatId = await this.fetchLiveChatId(channelIdOrHandle);
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`[YouTube] Failed to get live chat ID:`, err);
       this.emit("status", {
         platform: "youtube",
         status: "error",
         mode: "authenticated",
-        error: `Failed to get live chat ID: ${String(err)}`,
+        error: `Failed to get live chat ID: ${errorMessage}`,
+        channelLogin: this.channelId,
       });
       return;
     }
@@ -104,8 +112,37 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     });
   }
 
-  async sendMessage(_channelId: string, _text: string): Promise<void> {
-    throw new Error("YouTubeAdapter.sendMessage: not yet implemented");
+  async sendMessage(_channelId: string, text: string): Promise<void> {
+    if (!this.accessToken) {
+      throw new Error("YouTubeAdapter.sendMessage: not authenticated");
+    }
+    if (!this.liveChatId) {
+      throw new Error("YouTubeAdapter.sendMessage: no active live chat");
+    }
+
+    const res = await fetch(`${YOUTUBE_API_BASE}/liveChat/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        snippet: {
+          liveChatId: this.liveChatId,
+          type: "textMessageEvent",
+          textMessageDetails: {
+            messageText: text,
+          },
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`YouTube sendMessage failed: ${res.status} ${body}`);
+    }
+
+    console.log(`[YouTube] Message sent: ${text.slice(0, 50)}...`);
   }
 
   // ============================================================
@@ -115,40 +152,101 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   private async fetchLiveChatId(channelOrVideoId: string): Promise<string> {
     if (!this.accessToken) throw new Error("No access token");
 
-    // Try as a video ID first
-    const videoRes = await fetch(
-      `${YOUTUBE_API_BASE}/videos?part=liveStreamingDetails&id=${encodeURIComponent(channelOrVideoId)}`,
-      { headers: { Authorization: `Bearer ${this.accessToken}` } },
+    // Clean up the input - remove @ prefix if present
+    const cleanInput = channelOrVideoId.replace(/^@/, "");
+    console.log(
+      `[YouTube] Looking for live chat, input="${channelOrVideoId}", clean="${cleanInput}"`,
     );
 
-    if (videoRes.ok) {
-      const body = (await videoRes.json()) as {
-        items?: Array<{ liveStreamingDetails?: { activeLiveChatId?: string } }>;
-      };
-      const chatId = body.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
-      if (chatId) {
-        console.log(`[YouTube] Found liveChatId via video ID: ${chatId}`);
-        return chatId;
+    // Try as a video ID first (starts with characters other than UC)
+    if (!cleanInput.startsWith("UC")) {
+      console.log(`[YouTube] Trying as video ID: ${cleanInput}`);
+      const videoRes = await fetch(
+        `${YOUTUBE_API_BASE}/videos?part=liveStreamingDetails&id=${encodeURIComponent(cleanInput)}`,
+        { headers: { Authorization: `Bearer ${this.accessToken}` } },
+      );
+
+      if (videoRes.ok) {
+        const body = (await videoRes.json()) as {
+          items?: Array<{
+            liveStreamingDetails?: { activeLiveChatId?: string };
+          }>;
+        };
+        const chatId = body.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
+        if (chatId) {
+          console.log(`[YouTube] Found liveChatId via video ID: ${chatId}`);
+          return chatId;
+        }
+        console.log(`[YouTube] Video found but no active live chat`);
+      } else {
+        console.log(`[YouTube] Video lookup failed: ${videoRes.status}`);
       }
     }
 
-    // Fallback: search for active live broadcast on the channel
+    // Try to resolve handle/username to channel ID
+    let channelId = cleanInput;
+    if (!cleanInput.startsWith("UC")) {
+      console.log(`[YouTube] Resolving handle/username: ${cleanInput}`);
+      // Try as a handle (custom URL) - search for the channel
+      const searchRes = await fetch(
+        `${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(cleanInput)}&type=channel&maxResults=1`,
+        { headers: { Authorization: `Bearer ${this.accessToken}` } },
+      );
+
+      if (!searchRes.ok) {
+        console.log(`[YouTube] Channel search failed: ${searchRes.status}`);
+        throw new Error(`YouTube channel search failed: ${searchRes.status}`);
+      }
+
+      const searchBody = (await searchRes.json()) as {
+        items?: Array<{
+          id?: { channelId?: string };
+          snippet?: { title?: string };
+        }>;
+      };
+
+      const foundChannelId = searchBody.items?.[0]?.id?.channelId;
+      const channelTitle = searchBody.items?.[0]?.snippet?.title;
+
+      if (!foundChannelId) {
+        throw new Error(`No channel found for "${cleanInput}"`);
+      }
+
+      channelId = foundChannelId;
+      console.log(
+        `[YouTube] Resolved to channel: ${channelId} (${channelTitle})`,
+      );
+    }
+
+    // Search for active live broadcast on the channel
+    console.log(
+      `[YouTube] Searching for live broadcast on channel: ${channelId}`,
+    );
     const searchRes = await fetch(
-      `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${encodeURIComponent(channelOrVideoId)}&eventType=live&type=video`,
+      `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${encodeURIComponent(channelId)}&eventType=live&type=video`,
       { headers: { Authorization: `Bearer ${this.accessToken}` } },
     );
 
     if (!searchRes.ok) {
-      throw new Error(`YouTube search failed: ${searchRes.status}`);
+      throw new Error(`YouTube live search failed: ${searchRes.status}`);
     }
 
     const searchBody = (await searchRes.json()) as {
-      items?: Array<{ id?: { videoId?: string } }>;
+      items?: Array<{
+        id?: { videoId?: string };
+        snippet?: { title?: string };
+      }>;
     };
     const videoId = searchBody.items?.[0]?.id?.videoId;
+    const videoTitle = searchBody.items?.[0]?.snippet?.title;
+
     if (!videoId) {
-      throw new Error(`No active live broadcast found for "${channelOrVideoId}"`);
+      throw new Error(
+        `No active live broadcast found for channel "${channelId}". Make sure you're currently streaming.`,
+      );
     }
+
+    console.log(`[YouTube] Found live video: ${videoId} (${videoTitle})`);
 
     const liveRes = await fetch(
       `${YOUTUBE_API_BASE}/videos?part=liveStreamingDetails&id=${encodeURIComponent(videoId)}`,
@@ -167,7 +265,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       throw new Error(`No active live chat found for video "${videoId}"`);
     }
 
-    console.log(`[YouTube] Found liveChatId via channel search: ${chatId}`);
+    console.log(`[YouTube] Found liveChatId: ${chatId}`);
     return chatId;
   }
 
@@ -179,9 +277,11 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       interceptors: [
         (next) => (req) => {
           req.header.set("authorization", `Bearer ${this.accessToken}`);
+          req.header.set("x-goog-api-client", "twirchat/1.0.0");
           return next(req);
         },
       ],
+      httpVersion: "2",
     });
 
     const client = createClient(V3DataLiveChatMessageService, transport);
@@ -189,12 +289,15 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
 
-    console.log(`[YouTube] Starting gRPC stream for liveChatId=${this.liveChatId}`);
+    console.log(
+      `[YouTube] Starting gRPC stream for liveChatId=${this.liveChatId}`,
+    );
 
     this.emit("status", {
       platform: "youtube",
       status: "connected",
       mode: "authenticated",
+      channelLogin: this.channelId,
     });
 
     try {
@@ -209,7 +312,9 @@ export class YouTubeAdapter extends BasePlatformAdapter {
 
       for await (const response of stream) {
         if (response.offlineAt) {
-          console.log(`[YouTube] Stream ended — channel went offline at ${response.offlineAt}`);
+          console.log(
+            `[YouTube] Stream ended — channel went offline at ${response.offlineAt}`,
+          );
           break;
         }
         for (const item of response.items ?? []) {
@@ -225,6 +330,10 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         return;
       }
       console.error("[YouTube] gRPC stream error:", err);
+      if (err instanceof Error) {
+        console.error("[YouTube] Error details:", err.message);
+        console.error("[YouTube] Error stack:", err.stack);
+      }
       this.scheduleReconnect();
     }
   }
@@ -235,8 +344,11 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     if (!snippet || !author) return;
     if (!snippet.hasDisplayContent) return;
 
-    const type = snippet.type ?? LiveChatMessageSnippet_TypeWrapper_Type.INVALID_TYPE;
-    const timestamp = snippet.publishedAt ? new Date(snippet.publishedAt) : new Date();
+    const type =
+      snippet.type ?? LiveChatMessageSnippet_TypeWrapper_Type.INVALID_TYPE;
+    const timestamp = snippet.publishedAt
+      ? new Date(snippet.publishedAt)
+      : new Date();
     const authorId = author.channelId ?? "";
     const displayName = author.displayName ?? "unknown";
     const avatarUrl = author.profileImageUrl ?? undefined;
@@ -278,7 +390,13 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         const content = snippet.displayedContent;
         const sc =
           content?.case === "superChatDetails"
-            ? (content.value as { amountMicros?: bigint; currency?: string; amountDisplayString?: string; userComment?: string; tier?: number })
+            ? (content.value as {
+                amountMicros?: bigint;
+                currency?: string;
+                amountDisplayString?: string;
+                userComment?: string;
+                tier?: number;
+              })
             : undefined;
 
         const event: NormalizedEvent = {
@@ -303,7 +421,10 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         const content = snippet.displayedContent;
         const ns =
           content?.case === "newSponsorDetails"
-            ? (content.value as { memberLevelName?: string; isUpgrade?: boolean })
+            ? (content.value as {
+                memberLevelName?: string;
+                isUpgrade?: boolean;
+              })
             : undefined;
 
         const event: NormalizedEvent = {
@@ -322,7 +443,11 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         const content = snippet.displayedContent;
         const mm =
           content?.case === "memberMilestoneChatDetails"
-            ? (content.value as { memberLevelName?: string; memberMonth?: number; userComment?: string })
+            ? (content.value as {
+                memberLevelName?: string;
+                memberMonth?: number;
+                userComment?: string;
+              })
             : undefined;
 
         const event: NormalizedEvent = {
@@ -330,7 +455,11 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           platform: "youtube",
           type: "membership",
           user: { id: authorId, displayName, avatarUrl },
-          data: { levelName: mm?.memberLevelName, months: mm?.memberMonth, comment: mm?.userComment },
+          data: {
+            levelName: mm?.memberLevelName,
+            months: mm?.memberMonth,
+            comment: mm?.userComment,
+          },
           timestamp,
         };
         this.emit("event", event);
@@ -341,7 +470,10 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         const content = snippet.displayedContent;
         const mg =
           content?.case === "membershipGiftingDetails"
-            ? (content.value as { giftMembershipsCount?: number; giftMembershipsLevelName?: string })
+            ? (content.value as {
+                giftMembershipsCount?: number;
+                giftMembershipsLevelName?: string;
+              })
             : undefined;
 
         const event: NormalizedEvent = {
@@ -349,7 +481,10 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           platform: "youtube",
           type: "gift_sub",
           user: { id: authorId, displayName, avatarUrl },
-          data: { giftCount: mg?.giftMembershipsCount, levelName: mg?.giftMembershipsLevelName },
+          data: {
+            giftCount: mg?.giftMembershipsCount,
+            levelName: mg?.giftMembershipsLevelName,
+          },
           timestamp,
         };
         this.emit("event", event);
@@ -369,6 +504,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       platform: "youtube",
       status: "disconnected",
       mode: "authenticated",
+      channelLogin: this.channelId,
     });
 
     console.log("[YouTube] Reconnecting in 10s...");

@@ -138,6 +138,51 @@ export interface TwitchRefreshResponse {
   expiresIn?: number;
 }
 
+/**
+ * POST /api/auth/youtube/start
+ * Desktop отправляет PKCE codeChallenge + state, backend формирует authUrl
+ */
+export interface YouTubeBuildUrlRequest {
+  codeChallenge: string;
+  state: string;
+  redirectUri: string;
+}
+
+export interface YouTubeBuildUrlResponse {
+  url: string;
+}
+
+/**
+ * POST /api/auth/youtube/exchange
+ * Desktop получил code из callback, просит backend обменять на токены
+ */
+export interface YouTubeExchangeRequest {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}
+
+export interface YouTubeExchangeResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  scope?: string[];
+}
+
+/**
+ * POST /api/auth/youtube/refresh
+ * Desktop просит backend обновить YouTube токен
+ */
+export interface YouTubeRefreshRequest {
+  refreshToken: string;
+}
+
+export interface YouTubeRefreshResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+}
+
 // ============================================================
 // HTTP API — stream status, update stream, search categories
 // ============================================================

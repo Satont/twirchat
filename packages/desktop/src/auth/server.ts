@@ -2,19 +2,25 @@ import { AUTH_SERVER_PORT } from "@twirchat/shared/constants";
 import { handleYouTubeCallback } from "./youtube";
 import { handleTwitchCallback } from "./twitch";
 import { handleKickCallback } from "./kick";
+import { ChannelStore } from "../store/channel-store";
 import type { WebviewSender } from "../shared/rpc";
 import type { Platform } from "@twirchat/shared/types";
 
 let server: ReturnType<typeof Bun.serve> | null = null;
 let sendToView: WebviewSender | null = null;
-let onAuthSuccessCallback: ((platform: Platform) => void) | null = null;
+let onAuthSuccessCallback: ((platform: Platform, channelSlug?: string) => void) | null = null;
+let onAutoJoinChannelCallback: ((platform: Platform, channelSlug: string) => void) | null = null;
 
 export function setAuthServerRpcSender(sender: WebviewSender): void {
   sendToView = sender;
 }
 
-export function setOnAuthSuccessCallback(callback: (platform: Platform) => void): void {
+export function setOnAuthSuccessCallback(callback: (platform: Platform, channelSlug?: string) => void): void {
   onAuthSuccessCallback = callback;
+}
+
+export function setOnAutoJoinChannelCallback(callback: (platform: Platform, channelSlug: string) => void): void {
+  onAutoJoinChannelCallback = callback;
 }
 
 export function startAuthServer(): void {
@@ -30,19 +36,37 @@ export function startAuthServer(): void {
           return await handleTwitchCallback(url);
         }
         if (url.pathname === "/auth/youtube/callback") {
-          return await handleYouTubeCallback(url);
-        }
-        if (url.pathname === "/auth/kick/callback") {
-          const result = await handleKickCallback(url);
+          const result = await handleYouTubeCallback(url);
+
+          // Save the channel to automatically join it
+          ChannelStore.save("youtube", result.channelSlug);
 
           // Notify the webview of successful authentication
           if (sendToView) {
             sendToView.auth_success(result.user);
           }
 
-          // Trigger reconnection to switch from anonymous to authenticated mode
+          // Trigger reconnection and auto-join the channel
           if (onAuthSuccessCallback) {
-            onAuthSuccessCallback("kick");
+            onAuthSuccessCallback("youtube", result.channelSlug);
+          }
+
+          return result.response;
+        }
+        if (url.pathname === "/auth/kick/callback") {
+          const result = await handleKickCallback(url);
+
+          // Save the channel to automatically join it
+          ChannelStore.save("kick", result.channelSlug);
+
+          // Notify the webview of successful authentication
+          if (sendToView) {
+            sendToView.auth_success(result.user);
+          }
+
+          // Trigger reconnection and auto-join the channel
+          if (onAuthSuccessCallback) {
+            onAuthSuccessCallback("kick", result.channelSlug);
           }
 
           return result.response;

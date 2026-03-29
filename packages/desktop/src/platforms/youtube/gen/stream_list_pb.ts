@@ -40,26 +40,29 @@ export type LiveChatMessageListRequest = Message<"youtube.api.v3.LiveChatMessage
   profileImageSize: number;
 
   /**
-   * The maxResults parameter specifies the maximum number of items that should
-   * be returned in the result set. Not used in the streaming RPC.
+   * The <code><strong>maxResults</strong></code> parameter specifies the
+   * maximum number of items that should be returned in the result set.
+   * Not used in the streaming RPC.
    *
    * @generated from field: optional uint32 max_results = 98;
    */
   maxResults: number;
 
   /**
-   * The pageToken parameter identifies a specific page in the result set that
-   * should be returned. In an API response, the nextPageToken property
-   * identifies other pages that could be retrieved.
+   * The <code><strong>pageToken</strong></code> parameter identifies a specific
+   * page in the result set that should be returned. In an API response, the
+   * <code>nextPageToken</code> property identify other pages that could be
+   * retrieved.
    *
    * @generated from field: optional string page_token = 99;
    */
   pageToken: string;
 
   /**
-   * The part parameter specifies the liveChatComment resource parts that the
-   * API response will include. Supported values are id, snippet, and
-   * authorDetails.
+   * The <code><strong>part</strong></code> parameter specifies the
+   * <code>liveChatComment</code> resource parts that the API response will
+   * include. Supported values are <code>id</code>, <code>snippet</code>, and
+   * <code>authorDetails</code>.
    *
    * @generated from field: repeated string part = 100;
    */
@@ -78,8 +81,8 @@ export const LiveChatMessageListRequestSchema: GenMessage<LiveChatMessageListReq
  */
 export type LiveChatMessageListResponse = Message<"youtube.api.v3.LiveChatMessageListResponse"> & {
   /**
-   * Identifies what kind of resource this is.
-   * Value: the fixed string "youtube#liveChatMessageListResponse".
+   * Identifies what kind of resource this is. Value: the fixed string
+   * <code>"youtube#liveChatMessageListResponse"</code>.
    *
    * @generated from field: optional string kind = 200;
    */
@@ -93,7 +96,9 @@ export type LiveChatMessageListResponse = Message<"youtube.api.v3.LiveChatMessag
   etag: string;
 
   /**
-   * The date and time when the underlying stream went offline.
+   * The date and time when the underlying stream went offline. The value is
+   * specified in <a href="//www.w3.org/TR/NOTE-datetime">ISO 8601</a>
+   * format.
    *
    * @generated from field: optional string offline_at = 2;
    */
@@ -136,7 +141,8 @@ export const LiveChatMessageListResponseSchema: GenMessage<LiveChatMessageListRe
  */
 export type LiveChatMessage = Message<"youtube.api.v3.LiveChatMessage"> & {
   /**
-   * Identifies what kind of resource this is.
+   * Identifies what kind of resource this is. Value: the fixed string
+   * <code>"youtube#liveChatMessage"</code>.
    *
    * @generated from field: optional string kind = 200;
    */
@@ -157,15 +163,15 @@ export type LiveChatMessage = Message<"youtube.api.v3.LiveChatMessage"> & {
   id: string;
 
   /**
-   * The snippet object contains basic details about the message.
+   * The <code>snippet</code> object contains basic details about the message.
    *
    * @generated from field: optional youtube.api.v3.LiveChatMessageSnippet snippet = 2;
    */
   snippet?: LiveChatMessageSnippet;
 
   /**
-   * The authorDetails object contains basic details about the user that posted
-   * this message.
+   * The <code>authorDetails</code> object contains basic details about the
+   * user that posted this message.
    *
    * @generated from field: optional youtube.api.v3.LiveChatMessageAuthorDetails author_details = 3;
    */
@@ -205,7 +211,7 @@ export type LiveChatMessageAuthorDetails = Message<"youtube.api.v3.LiveChatMessa
   displayName: string;
 
   /**
-   * The channel's avatar URL.
+   * The channels's avatar URL.
    *
    * @generated from field: optional string profile_image_url = 104;
    */
@@ -252,7 +258,8 @@ export const LiveChatMessageAuthorDetailsSchema: GenMessage<LiveChatMessageAutho
  */
 export type LiveChatMessageSnippet = Message<"youtube.api.v3.LiveChatMessageSnippet"> & {
   /**
-   * The type of message.
+   * The type of message, this will always be present, it determines the
+   * contents of the message as well as which fields will be present.
    *
    * @generated from field: optional youtube.api.v3.LiveChatMessageSnippet.TypeWrapper.Type type = 1;
    */
@@ -264,14 +271,29 @@ export type LiveChatMessageSnippet = Message<"youtube.api.v3.LiveChatMessageSnip
   liveChatId: string;
 
   /**
-   * The ID of the user that authored this message.
+   * The ID of the user that authored this message, this field is not always
+   * filled.
+   * textMessageEvent - the user that wrote the message
+   * fanFundingEvent - the user that funded the broadcast
+   * newSponsorEvent - the user that just became a sponsor
+   * memberMilestoneChatEvent - the member that sent the message
+   * membershipGiftingEvent - the user that made the purchase
+   * giftMembershipReceivedEvent - the user that received the gift membership
+   * messageDeletedEvent - the moderator that took the action
+   * messageRetractedEvent - the author that retracted their message
+   * userBannedEvent - the moderator that took the action
+   * superChatEvent - the user that made the purchase
+   * superStickerEvent - the user that made the purchase
+   * pollEvent - the user that created the poll
    *
    * @generated from field: optional string author_channel_id = 301;
    */
   authorChannelId: string;
 
   /**
-   * The date and time when the message was originally published (ISO 8601).
+   * The date and time when the message was orignally published. The value is
+   * specified in <a href="//www.w3.org/TR/NOTE-datetime">ISO 8601</a>
+   * format.
    *
    * @generated from field: optional string published_at = 4;
    */
@@ -286,6 +308,8 @@ export type LiveChatMessageSnippet = Message<"youtube.api.v3.LiveChatMessageSnip
 
   /**
    * Contains a string that can be displayed to the user.
+   * If this field is not present the message is silent, at the moment only
+   * messages of type TOMBSTONE and CHAT_ENDED_EVENT are silent.
    *
    * @generated from field: optional string display_message = 16;
    */
@@ -296,6 +320,9 @@ export type LiveChatMessageSnippet = Message<"youtube.api.v3.LiveChatMessageSnip
    */
   displayedContent: {
     /**
+     * Details about the text message, this is only set if the type is
+     * 'textMessageEvent'.
+     *
      * @generated from field: youtube.api.v3.LiveChatTextMessageDetails text_message_details = 19;
      */
     value: LiveChatTextMessageDetails;
@@ -320,42 +347,64 @@ export type LiveChatMessageSnippet = Message<"youtube.api.v3.LiveChatMessageSnip
     case: "userBannedDetails";
   } | {
     /**
+     * Details about the Super Chat event, this is only set if the type is
+     * 'superChatEvent'.
+     *
      * @generated from field: youtube.api.v3.LiveChatSuperChatDetails super_chat_details = 27;
      */
     value: LiveChatSuperChatDetails;
     case: "superChatDetails";
   } | {
     /**
+     * Details about the Super Sticker event, this is only set if the type is
+     * 'superStickerEvent'.
+     *
      * @generated from field: youtube.api.v3.LiveChatSuperStickerDetails super_sticker_details = 28;
      */
     value: LiveChatSuperStickerDetails;
     case: "superStickerDetails";
   } | {
     /**
+     * Details about the New Member Announcement event, this is only set if
+     * the type is 'newSponsorEvent'. Note that "member" is the new term for
+     * "sponsor".
+     *
      * @generated from field: youtube.api.v3.LiveChatNewSponsorDetails new_sponsor_details = 29;
      */
     value: LiveChatNewSponsorDetails;
     case: "newSponsorDetails";
   } | {
     /**
+     * Details about the Member Milestone Chat event, this is only set if
+     * the type is 'memberMilestoneChatEvent'.
+     *
      * @generated from field: youtube.api.v3.LiveChatMemberMilestoneChatDetails member_milestone_chat_details = 30;
      */
     value: LiveChatMemberMilestoneChatDetails;
     case: "memberMilestoneChatDetails";
   } | {
     /**
+     * Details about the Membership Gifting event, this is only set if the type
+     * is 'membershipGiftingEvent'.
+     *
      * @generated from field: youtube.api.v3.LiveChatMembershipGiftingDetails membership_gifting_details = 31;
      */
     value: LiveChatMembershipGiftingDetails;
     case: "membershipGiftingDetails";
   } | {
     /**
+     * Details about the Gift Membership Received event, this is only set if the
+     * type is 'giftMembershipReceivedEvent'.
+     *
      * @generated from field: youtube.api.v3.LiveChatGiftMembershipReceivedDetails gift_membership_received_details = 32;
      */
     value: LiveChatGiftMembershipReceivedDetails;
     case: "giftMembershipReceivedDetails";
   } | {
     /**
+     * Details about the poll event, this is only set if the type is
+     * 'pollEvent'.
+     *
      * @generated from field: youtube.api.v3.LiveChatPollDetails poll_details = 33;
      */
     value: LiveChatPollDetails;
@@ -484,6 +533,8 @@ export const LiveChatMessageSnippet_TypeWrapper_TypeSchema: GenEnum<LiveChatMess
  */
 export type LiveChatTextMessageDetails = Message<"youtube.api.v3.LiveChatTextMessageDetails"> & {
   /**
+   * The user's message.
+   *
    * @generated from field: optional string message_text = 1;
    */
   messageText: string;
@@ -535,16 +586,23 @@ export const LiveChatMessageRetractedDetailsSchema: GenMessage<LiveChatMessageRe
  */
 export type LiveChatUserBannedMessageDetails = Message<"youtube.api.v3.LiveChatUserBannedMessageDetails"> & {
   /**
+   * The details of the user that was banned.
+   *
    * @generated from field: optional youtube.api.v3.ChannelProfileDetails banned_user_details = 1;
    */
   bannedUserDetails?: ChannelProfileDetails;
 
   /**
+   * The type of ban.
+   *
    * @generated from field: optional youtube.api.v3.LiveChatUserBannedMessageDetails.BanTypeWrapper.BanType ban_type = 2;
    */
   banType: LiveChatUserBannedMessageDetails_BanTypeWrapper_BanType;
 
   /**
+   * The duration of the ban. This property is only present if the
+   * <code>banType</code> is <code>temporary</code>.
+   *
    * @generated from field: optional uint64 ban_duration_seconds = 4;
    */
   banDurationSeconds: bigint;
@@ -596,26 +654,37 @@ export const LiveChatUserBannedMessageDetails_BanTypeWrapper_BanTypeSchema: GenE
  */
 export type LiveChatSuperChatDetails = Message<"youtube.api.v3.LiveChatSuperChatDetails"> & {
   /**
+   * The amount purchased by the user, in micros (1,750,000 micros = 1.75).
+   *
    * @generated from field: optional uint64 amount_micros = 1;
    */
   amountMicros: bigint;
 
   /**
+   * The currency in which the purchase was made.
+   *
    * @generated from field: optional string currency = 2;
    */
   currency: string;
 
   /**
+   * A rendered string that displays the fund amount and currency to the user.
+   *
    * @generated from field: optional string amount_display_string = 3;
    */
   amountDisplayString: string;
 
   /**
+   * The comment added by the user to this Super Chat event.
+   *
    * @generated from field: optional string user_comment = 4;
    */
   userComment: string;
 
   /**
+   * The tier in which the amount belongs. Lower amounts belong to lower
+   * tiers. The lowest tier is <code>1</code>.
+   *
    * @generated from field: optional uint32 tier = 5;
    */
   tier: number;
@@ -633,26 +702,37 @@ export const LiveChatSuperChatDetailsSchema: GenMessage<LiveChatSuperChatDetails
  */
 export type LiveChatSuperStickerDetails = Message<"youtube.api.v3.LiveChatSuperStickerDetails"> & {
   /**
+   * The amount purchased by the user, in micros (1,750,000 micros = 1.75).
+   *
    * @generated from field: optional uint64 amount_micros = 1;
    */
   amountMicros: bigint;
 
   /**
+   * The currency in which the purchase was made.
+   *
    * @generated from field: optional string currency = 2;
    */
   currency: string;
 
   /**
+   * A rendered string that displays the fund amount and currency to the user.
+   *
    * @generated from field: optional string amount_display_string = 3;
    */
   amountDisplayString: string;
 
   /**
+   * The tier in which the amount belongs. Lower amounts belong to lower
+   * tiers. The lowest tier is <code>1</code>.
+   *
    * @generated from field: optional uint32 tier = 4;
    */
   tier: number;
 
   /**
+   * Information about the Super Sticker.
+   *
    * @generated from field: optional youtube.api.v3.SuperStickerMetadata super_sticker_metadata = 5;
    */
   superStickerMetadata?: SuperStickerMetadata;
@@ -670,21 +750,29 @@ export const LiveChatSuperStickerDetailsSchema: GenMessage<LiveChatSuperStickerD
  */
 export type LiveChatFanFundingEventDetails = Message<"youtube.api.v3.LiveChatFanFundingEventDetails"> & {
   /**
+   * The amount of the fund.
+   *
    * @generated from field: optional uint64 amount_micros = 1;
    */
   amountMicros: bigint;
 
   /**
+   * The currency in which the fund was made.
+   *
    * @generated from field: optional string currency = 2;
    */
   currency: string;
 
   /**
+   * A rendered string that displays the fund amount and currency to the user.
+   *
    * @generated from field: optional string amount_display_string = 3;
    */
   amountDisplayString: string;
 
   /**
+   * The comment added by the user to this fan funding event.
+   *
    * @generated from field: optional string user_comment = 4;
    */
   userComment: string;
@@ -702,11 +790,19 @@ export const LiveChatFanFundingEventDetailsSchema: GenMessage<LiveChatFanFunding
  */
 export type LiveChatNewSponsorDetails = Message<"youtube.api.v3.LiveChatNewSponsorDetails"> & {
   /**
+   * The name of the Level that the viewer just had joined. The Level names
+   * are defined by the YouTube channel offering the Membership.
+   *
+   * In some situations this field isn't filled.
+   *
    * @generated from field: optional string member_level_name = 1;
    */
   memberLevelName: string;
 
   /**
+   * If the viewer just had upgraded from a lower level. For viewers that
+   * were not members at the time of purchase, this field is false.
+   *
    * @generated from field: optional bool is_upgrade = 2;
    */
   isUpgrade: boolean;
@@ -724,16 +820,29 @@ export const LiveChatNewSponsorDetailsSchema: GenMessage<LiveChatNewSponsorDetai
  */
 export type LiveChatMemberMilestoneChatDetails = Message<"youtube.api.v3.LiveChatMemberMilestoneChatDetails"> & {
   /**
+   * The name of the Level at which the viever is a member. The Level names
+   * are defined by the YouTube channel offering the Membership.
+   *
+   * In some situations this field isn't filled.
+   *
    * @generated from field: optional string member_level_name = 1;
    */
   memberLevelName: string;
 
   /**
+   * The total amount of months (rounded up) the viewer has been a member
+   * that granted them this Member Milestone Chat. This is the same
+   * number of months as is being displayed to YouTube users.
+   *
    * @generated from field: optional uint32 member_month = 2;
    */
   memberMonth: number;
 
   /**
+   * The comment added by the member to this Member Milestone Chat.
+   *
+   * This field is empty for messages without a comment from the member.
+   *
    * @generated from field: optional string user_comment = 3;
    */
   userComment: string;
@@ -751,11 +860,18 @@ export const LiveChatMemberMilestoneChatDetailsSchema: GenMessage<LiveChatMember
  */
 export type LiveChatMembershipGiftingDetails = Message<"youtube.api.v3.LiveChatMembershipGiftingDetails"> & {
   /**
+   * The number of gift memberships purchased by the user.
+   *
    * @generated from field: optional int32 gift_memberships_count = 1;
    */
   giftMembershipsCount: number;
 
   /**
+   * The name of the level of the gift memberships purchased by the user. The
+   * Level names are defined by the YouTube channel offering the Membership.
+   *
+   * In some situations this field isn't filled.
+   *
    * @generated from field: optional string gift_memberships_level_name = 2;
    */
   giftMembershipsLevelName: string;
@@ -773,16 +889,30 @@ export const LiveChatMembershipGiftingDetailsSchema: GenMessage<LiveChatMembersh
  */
 export type LiveChatGiftMembershipReceivedDetails = Message<"youtube.api.v3.LiveChatGiftMembershipReceivedDetails"> & {
   /**
+   * The name of the Level at which the viewer is a member. This matches the
+   * `snippet.membershipGiftingDetails.giftMembershipsLevelName` of the
+   * associated membership gifting message. The Level names are defined by the
+   * YouTube channel offering the Membership.
+   *
+   * In some situations this field isn't filled.
+   *
    * @generated from field: optional string member_level_name = 1;
    */
   memberLevelName: string;
 
   /**
+   * The ID of the user that made the membership gifting purchase. This matches
+   * the `snippet.authorChannelId` of the associated membership gifting message.
+   *
    * @generated from field: optional string gifter_channel_id = 2;
    */
   gifterChannelId: string;
 
   /**
+   * The ID of the membership gifting message that is related to this gift
+   * membership. This ID will always refer to a message whose type is
+   * 'membershipGiftingEvent'.
+   *
    * @generated from field: optional string associated_membership_gifting_message_id = 3;
    */
   associatedMembershipGiftingMessageId: string;
@@ -827,6 +957,8 @@ export type LiveChatPollDetails_PollMetadata = Message<"youtube.api.v3.LiveChatP
   questionText: string;
 
   /**
+   * The options will be returned in the order that is displayed in 1P
+   *
    * @generated from field: repeated youtube.api.v3.LiveChatPollDetails.PollMetadata.PollOption options = 2;
    */
   options: LiveChatPollDetails_PollMetadata_PollOption[];
@@ -862,6 +994,8 @@ export const LiveChatPollDetails_PollMetadata_PollOptionSchema: GenMessage<LiveC
   messageDesc(file_stream_list, 16, 0, 0);
 
 /**
+ * Current point in the polls lifecycle.
+ *
  * @generated from message youtube.api.v3.LiveChatPollDetails.PollStatusWrapper
  */
 export type LiveChatPollDetails_PollStatusWrapper = Message<"youtube.api.v3.LiveChatPollDetails.PollStatusWrapper"> & {
@@ -905,51 +1039,77 @@ export const LiveChatPollDetails_PollStatusWrapper_PollStatusSchema: GenEnum<Liv
  */
 export type SuperChatEventSnippet = Message<"youtube.api.v3.SuperChatEventSnippet"> & {
   /**
+   * Channel ID where the event occurred.
+   *
    * @generated from field: optional string channel_id = 101;
    */
   channelId: string;
 
   /**
+   * Details about the supporter.
+   *
    * @generated from field: optional youtube.api.v3.ChannelProfileDetails supporter_details = 2;
    */
   supporterDetails?: ChannelProfileDetails;
 
   /**
+   * The text contents of the comment left by the user.
+   *
    * @generated from field: optional string comment_text = 3;
    */
   commentText: string;
 
   /**
+   * The date and time when the event occurred. The value is
+   * specified in <a href="//www.w3.org/TR/NOTE-datetime">ISO 8601</a>
+   * format.
+   *
    * @generated from field: optional string created_at = 4;
    */
   createdAt: string;
 
   /**
+   * The purchase amount, in micros of the purchase currency.  For example, 1 is
+   * represented as 1000000.
+   *
    * @generated from field: optional uint64 amount_micros = 5;
    */
   amountMicros: bigint;
 
   /**
+   * The currency in which the purchase was made.  ISO 4217.
+   *
    * @generated from field: optional string currency = 6;
    */
   currency: string;
 
   /**
+   * A rendered string that displays the purchase amount and currency
+   * (e.g., "$1.00").  The string is rendered for the given language.
+   *
    * @generated from field: optional string display_string = 7;
    */
   displayString: string;
 
   /**
+   * The tier for the paid message, which is based on the amount of money spent
+   * to purchase the message.
+   *
    * @generated from field: optional uint32 message_type = 8;
    */
   messageType: number;
 
   /**
+   * True if this event is a Super Sticker event.
+   *
    * @generated from field: optional bool is_super_sticker_event = 11;
    */
   isSuperStickerEvent: boolean;
 
   /**
+   * If this event is a Super Sticker event, this field will contain metadata
+   * about the Super Sticker.
+   *
    * @generated from field: optional youtube.api.v3.SuperStickerMetadata super_sticker_metadata = 12;
    */
   superStickerMetadata?: SuperStickerMetadata;
@@ -967,16 +1127,25 @@ export const SuperChatEventSnippetSchema: GenMessage<SuperChatEventSnippet> = /*
  */
 export type SuperStickerMetadata = Message<"youtube.api.v3.SuperStickerMetadata"> & {
   /**
+   * Unique identifier of the Super Sticker. This is a shorter form of the
+   * alt_text that includes pack name and a recognizable characteristic of the
+   * sticker.
+   *
    * @generated from field: optional string sticker_id = 1;
    */
   stickerId: string;
 
   /**
+   * Internationalized alt text that describes the sticker image and any
+   * animation associated with it.
+   *
    * @generated from field: optional string alt_text = 2;
    */
   altText: string;
 
   /**
+   * Specifies the localization language in which the alt text is returned.
+   *
    * @generated from field: optional string alt_text_language = 3;
    */
   altTextLanguage: string;
@@ -994,21 +1163,29 @@ export const SuperStickerMetadataSchema: GenMessage<SuperStickerMetadata> = /*@_
  */
 export type ChannelProfileDetails = Message<"youtube.api.v3.ChannelProfileDetails"> & {
   /**
+   * The YouTube channel ID.
+   *
    * @generated from field: optional string channel_id = 101;
    */
   channelId: string;
 
   /**
+   * The channel's URL.
+   *
    * @generated from field: optional string channel_url = 2;
    */
   channelUrl: string;
 
   /**
+   * The channel's display name.
+   *
    * @generated from field: optional string display_name = 3;
    */
   displayName: string;
 
   /**
+   * The channels's avatar URL.
+   *
    * @generated from field: optional string profile_image_url = 4;
    */
   profileImageUrl: string;
@@ -1022,15 +1199,22 @@ export const ChannelProfileDetailsSchema: GenMessage<ChannelProfileDetails> = /*
   messageDesc(file_stream_list, 19);
 
 /**
+ * Paging details for lists of resources, including total number of items
+ * available and number of resources returned in a single page.
+ *
  * @generated from message youtube.api.v3.PageInfo
  */
 export type PageInfo = Message<"youtube.api.v3.PageInfo"> & {
   /**
+   * The total number of results in the result set.
+   *
    * @generated from field: optional int32 total_results = 1;
    */
   totalResults: number;
 
   /**
+   * The number of results included in the API response.
+   *
    * @generated from field: optional int32 results_per_page = 2;
    */
   resultsPerPage: number;

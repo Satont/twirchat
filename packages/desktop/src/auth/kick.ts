@@ -113,6 +113,7 @@ export async function getKickAuthUrl(
 export async function handleKickCallback(url: URL): Promise<{
   response: Response;
   user: { platform: "kick"; username: string; displayName: string };
+  channelSlug: string;
 }> {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -209,6 +210,7 @@ export async function handleKickCallback(url: URL): Promise<{
       username: user.name,
       displayName: user.name,
     },
+    channelSlug: user.name,
   };
 }
 
