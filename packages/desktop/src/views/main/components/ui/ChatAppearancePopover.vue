@@ -71,6 +71,13 @@ const fontSize = computed({
         <div class="ap-label"><span>Display</span></div>
         <div class="ap-toggles">
           <label class="ap-toggle-row">
+            <span class="ap-toggle-name">Color stripe</span>
+            <span class="ap-switch">
+              <input type="checkbox" :checked="settings.showPlatformColorStripe" @change="patch({ showPlatformColorStripe: ($event.target as HTMLInputElement).checked })" />
+              <span class="ap-switch-thumb" />
+            </span>
+          </label>
+          <label class="ap-toggle-row">
             <span class="ap-toggle-name">Platform icon</span>
             <span class="ap-switch">
               <input type="checkbox" :checked="settings.showPlatformIcon" @change="patch({ showPlatformIcon: ($event.target as HTMLInputElement).checked })" />
@@ -88,6 +95,13 @@ const fontSize = computed({
             <span class="ap-toggle-name">Badges</span>
             <span class="ap-switch">
               <input type="checkbox" :checked="settings.showBadges" @change="patch({ showBadges: ($event.target as HTMLInputElement).checked })" />
+              <span class="ap-switch-thumb" />
+            </span>
+          </label>
+          <label class="ap-toggle-row">
+            <span class="ap-toggle-name">Timestamp</span>
+            <span class="ap-switch">
+              <input type="checkbox" :checked="settings.showTimestamp" @change="patch({ showTimestamp: ($event.target as HTMLInputElement).checked })" />
               <span class="ap-switch-thumb" />
             </span>
           </label>

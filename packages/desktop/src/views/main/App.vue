@@ -48,6 +48,18 @@ async function loadInitialData() {
   } catch (err) {
     console.warn("[App] Initial data load failed, retrying in 1s...", err);
     setTimeout(loadInitialData, 1000);
+    return;
+  }
+
+  // Load recent messages separately so a failure here doesn't block the rest
+  try {
+    const recentMsgs = await rpc.request.getRecentMessages({});
+    if (recentMsgs !== undefined && recentMsgs.length > 0) {
+      // getRecentMessages returns oldest-first; messages array is newest-first
+      messages.value = [...recentMsgs].reverse();
+    }
+  } catch (err) {
+    console.warn("[App] Failed to load recent messages:", err);
   }
 }
 

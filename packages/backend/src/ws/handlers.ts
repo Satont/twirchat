@@ -10,6 +10,7 @@ import { logger } from "../logger.ts";
 const log = logger("ws");
 
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
+  log.info("WebSocket opened", { client: ws.data.clientSecret.slice(0, 8) });
   connectionManager.register(ws);
   await ClientStore.touch(ws.data.clientSecret);
 }
@@ -82,7 +83,10 @@ export async function handleWsMessage(
     case "auth_logout": {
       try {
         await AccountStore.delete(ws.data.clientSecret, msg.platform);
-        log.info("Logout", { platform: msg.platform, client: ws.data.clientSecret.slice(0, 8) });
+        log.info("Logout", {
+          platform: msg.platform,
+          client: ws.data.clientSecret.slice(0, 8),
+        });
       } catch (err) {
         ws.send(
           JSON.stringify({

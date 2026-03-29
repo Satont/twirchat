@@ -1,15 +1,42 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted, reactive, computed } from "vue";
+import { rpc } from "../main";
 import type { NormalizedChatMessage, Emote } from "@twirchat/shared/types";
 
 const props = defineProps<{
   message: NormalizedChatMessage;
+  showPlatformColorStripe?: boolean;
   showPlatformIcon?: boolean;
+  showTimestamp?: boolean;
   showAvatar?: boolean;
   showBadges?: boolean;
   fontSize?: number;
   chatTheme?: "modern" | "compact";
 }>();
+
+// In-memory cache for platform:username -> color (shared across all message instances via module scope)
+// Key format: "platform:lowercase_username"
+const mentionColorCache = reactive(new Map<string, string | null>());
+
+function makeMentionKey(platform: string, username: string): string {
+  return `${platform}:${username.toLowerCase()}`;
+}
+
+async function fetchMentionColor(platform: string, username: string): Promise<void> {
+  const key = makeMentionKey(platform, username);
+  if (mentionColorCache.has(key)) return;
+  
+  try {
+    const color = await rpc.request.getUsernameColor({ 
+      platform: platform as import("@twirchat/shared/types").Platform, 
+      username 
+    });
+    mentionColorCache.set(key, color);
+  } catch (e) {
+    console.warn("[ChatMessage] Failed to fetch color for:", platform, username, e);
+    mentionColorCache.set(key, null);
+  }
+}
 
 function platformColor(platform: string): string {
   switch (platform) {
@@ -24,22 +51,67 @@ function platformColor(platform: string): string {
   }
 }
 
-function platformLabel(platform: string): string {
+function platformIconSvg(platform: string): string {
   switch (platform) {
     case "twitch":
-      return "T";
+      // Twitch glitch logo
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+        <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
+      </svg>`;
     case "youtube":
-      return "Y";
+      // YouTube play button logo
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+      </svg>`;
     case "kick":
-      return "K";
+      // Kick "K" wordmark simplified
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+        <path d="M3 2h4v8l6-8h5l-7 9 7 11h-5l-6-9v9H3Z"/>
+      </svg>`;
     default:
-      return "?";
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+        <circle cx="12" cy="12" r="10"/>
+      </svg>`;
   }
 }
 
-/** Replace emote positions with <img> tags */
-function renderText(msg: NormalizedChatMessage): string {
-  if (!msg.emotes.length) return escapeHtml(msg.text);
+const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
+const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g;
+
+/** Linkify plain-text segment (already HTML-escaped) */
+function linkifyText(escaped: string): string {
+  return escaped.replace(URL_REGEX, (url) => {
+    const safeUrl = url.replace(/"/g, "&quot;");
+    return `<a class="msg-link" href="#" data-href="${safeUrl}" title="${safeUrl}">${url}</a>`;
+  });
+}
+
+/** Highlight @mentions with colors from cache (platform-specific) */
+function highlightMentions(escaped: string, platform: string): string {
+  return escaped.replace(MENTION_REGEX, (match, username) => {
+    const key = makeMentionKey(platform, username);
+    const color = mentionColorCache.get(key);
+    if (color) {
+      return `<span class="mention" style="color: ${color}; font-weight: 600;">${match}</span>`;
+    }
+    // Fetch color for next time (platform-specific)
+    void fetchMentionColor(platform, username);
+    return match;
+  });
+}
+
+/** Compute rendered HTML with emotes, links, and highlighted mentions */
+const renderedText = computed(() => {
+  const msg = props.message;
+  const platform = msg.platform;
+  
+  // Access the cache to create a dependency for reactivity
+  // This ensures the computed property re-evaluates when cache updates
+  mentionColorCache.size;
+  
+  if (!msg.emotes.length) {
+    return highlightMentions(linkifyText(escapeHtml(msg.text)), platform);
+  }
 
   const chars = [...msg.text];
   const result: string[] = [];
@@ -55,7 +127,8 @@ function renderText(msg: NormalizedChatMessage): string {
 
   for (const range of ranges) {
     if (i < range.start) {
-      result.push(escapeHtml(chars.slice(i, range.start).join("")));
+      // Process plain text between emotes: escape -> linkify -> highlight mentions
+      result.push(highlightMentions(linkifyText(escapeHtml(chars.slice(i, range.start).join(""))), platform));
     }
     result.push(
       `<img class="emote" src="${escapeHtml(range.emote.imageUrl)}" alt="${escapeHtml(range.emote.name)}" title="${escapeHtml(range.emote.name)}" />`,
@@ -64,10 +137,16 @@ function renderText(msg: NormalizedChatMessage): string {
   }
 
   if (i < chars.length) {
-    result.push(escapeHtml(chars.slice(i).join("")));
+    result.push(highlightMentions(linkifyText(escapeHtml(chars.slice(i).join(""))), platform));
   }
 
   return result.join("");
+});
+
+/** Legacy function for template compatibility */
+function renderText(msg: NormalizedChatMessage): string {
+  // Just return the computed value - msg parameter kept for API compatibility
+  return renderedText.value;
 }
 
 function escapeHtml(str: string): string {
@@ -85,13 +164,36 @@ function onBadgeError(id: string): void {
 }
 
 function formatTime(ts: Date): string {
-  const d = new Date(ts);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function initials(name: string): string {
   return name.slice(0, 1).toUpperCase();
 }
+
+function onMsgClick(e: MouseEvent): void {
+  const target = e.target as HTMLElement;
+  const anchor = target.closest<HTMLAnchorElement>("a.msg-link");
+  if (!anchor) return;
+  e.preventDefault();
+  const url = anchor.dataset.href;
+  if (url) window.open(url, "_blank");
+}
+
+// Pre-fetch colors for any @mentions in this message (platform-specific)
+onMounted(() => {
+  const platform = props.message.platform;
+  const mentions = props.message.text.match(MENTION_REGEX);
+  if (mentions) {
+    const uniqueUsers = new Set(mentions.map(m => m.slice(1)));
+    for (const username of uniqueUsers) {
+      void fetchMentionColor(platform, username);
+    }
+  }
+});
 </script>
 
 <template>
@@ -101,11 +203,21 @@ function initials(name: string): string {
     class="msg msg-compact"
     :class="`platform-${message.platform}`"
     :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
+    @click="onMsgClick"
   >
     <span
-      v-if="props.showPlatformIcon !== false"
+      v-if="props.showPlatformColorStripe !== false"
       class="platform-stripe"
       :style="{ background: platformColor(message.platform) }"
+    />
+
+    <!-- Platform icon -->
+    <span
+      v-if="props.showPlatformIcon"
+      class="platform-icon"
+      :style="{ color: platformColor(message.platform) }"
+      :title="message.platform"
+      v-html="platformIconSvg(message.platform)"
     />
 
     <!-- Badges inline -->
@@ -119,8 +231,13 @@ function initials(name: string): string {
         class="badge"
         :title="badge.type"
       >
+        <span
+          v-if="badge.imageUrl && badge.imageUrl.startsWith('<svg')"
+          class="badge-svg"
+          v-html="badge.imageUrl"
+        />
         <img
-          v-if="badge.imageUrl && !brokenBadges.has(badge.id)"
+          v-else-if="badge.imageUrl && !brokenBadges.has(badge.id)"
           :src="badge.imageUrl"
           :alt="badge.text"
           @error="onBadgeError(badge.id)"
@@ -132,14 +249,17 @@ function initials(name: string): string {
     <span
       class="author"
       :style="message.author.color ? { color: message.author.color } : {}"
-    >{{ message.author.displayName }}</span>
+      >{{ message.author.displayName }}</span
+    >
     <span class="compact-sep">:</span>
-    <!-- eslint-disable-next-line vue/no-v-html -->
     <span
       class="msg-text"
       :class="{ italic: message.type === 'action' }"
       v-html="renderText(message)"
     />
+    <span v-if="props.showTimestamp" class="timestamp compact-time">{{
+      formatTime(message.timestamp)
+    }}</span>
   </div>
 
   <!-- ── MODERN (two-row) ──────────────────────────────────── -->
@@ -151,13 +271,23 @@ function initials(name: string): string {
       message.type === 'action' ? 'is-action' : '',
     ]"
     :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
+    @click="onMsgClick"
   >
-    <!-- Platform stripe -->
+    <!-- Platform colour stripe -->
     <span
-      v-if="props.showPlatformIcon !== false"
+      v-if="props.showPlatformColorStripe !== false"
       class="platform-stripe"
       :style="{ background: platformColor(message.platform) }"
       :title="message.platform"
+    />
+
+    <!-- Platform icon -->
+    <span
+      v-if="props.showPlatformIcon"
+      class="platform-icon"
+      :style="{ color: platformColor(message.platform) }"
+      :title="message.platform"
+      v-html="platformIconSvg(message.platform)"
     />
 
     <!-- Avatar -->
@@ -191,8 +321,13 @@ function initials(name: string): string {
             class="badge"
             :title="badge.type"
           >
+            <span
+              v-if="badge.imageUrl && badge.imageUrl.startsWith('<svg')"
+              class="badge-svg"
+              v-html="badge.imageUrl"
+            />
             <img
-              v-if="badge.imageUrl && !brokenBadges.has(badge.id)"
+              v-else-if="badge.imageUrl && !brokenBadges.has(badge.id)"
               :src="badge.imageUrl"
               :alt="badge.text"
               @error="onBadgeError(badge.id)"
@@ -208,11 +343,12 @@ function initials(name: string): string {
           >{{ message.author.displayName }}</span
         >
 
-        <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
+        <span v-if="props.showTimestamp" class="timestamp">{{
+          formatTime(message.timestamp)
+        }}</span>
       </div>
 
       <!-- Message text -->
-      <!-- eslint-disable-next-line vue/no-v-html -->
       <span
         class="msg-text"
         :class="{ italic: message.type === 'action' }"
@@ -248,6 +384,30 @@ function initials(name: string): string {
   width: 2px;
   border-radius: 2px;
   opacity: 0.7;
+}
+
+/* Platform icon (inline SVG, coloured) */
+.platform-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+  line-height: 1;
+}
+
+.msg-compact .platform-icon {
+  margin-right: 1px;
+  align-self: center;
+}
+
+.msg:not(.msg-compact) .platform-icon {
+  margin-top: 6px;
+}
+
+.compact-time {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .avatar-wrap {
@@ -300,6 +460,19 @@ function initials(name: string): string {
   display: block;
 }
 
+.badge-svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.badge-svg :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+
 .badge-text {
   font-size: 10px;
   padding: 1px 4px;
@@ -324,6 +497,18 @@ function initials(name: string): string {
   color: var(--c-text, #e2e2e8);
 }
 
+:deep(.msg-link) {
+  color: #a78bfa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+:deep(.msg-link:hover) {
+  color: #c4b5fd;
+}
+
 .msg-text.italic {
   font-style: italic;
   opacity: 0.85;
@@ -334,6 +519,15 @@ function initials(name: string): string {
   height: 24px;
   vertical-align: middle;
   display: inline-block;
+}
+
+:deep(.mention) {
+  cursor: pointer;
+}
+
+:deep(.mention:hover) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* ── Compact (single-line) ──────────────────────────────── */

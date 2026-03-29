@@ -14,9 +14,9 @@ export const APP_NAME = "TwirChat";
 
 // Backend service
 export const BACKEND_URL =
-  process.env["CHATRIX_BACKEND_URL"] ?? "http://localhost:3000";
+  process.env["CHATRIX_BACKEND_URL"] ?? "http://127.0.0.1:3000";
 export const BACKEND_WS_URL =
-  process.env["CHATRIX_BACKEND_WS_URL"] ?? "ws://localhost:3000/ws";
+  process.env["CHATRIX_BACKEND_WS_URL"] ?? "ws://127.0.0.1:3000/ws";
 
 // Twitch IRC anonymous credentials
 export const TWITCH_ANON_PREFIX = "justinfan";

@@ -23,6 +23,7 @@ try {
 }
 
 const server = Bun.serve<WsData>({
+  hostname: "0.0.0.0",
   port: config.PORT,
 
   routes: {
@@ -65,5 +66,7 @@ const server = Bun.serve<WsData>({
   },
 });
 
-log.info("TwirChat backend running", { url: `http://localhost:${server.port}` });
+log.info("TwirChat backend running", {
+  url: `http://localhost:${server.port}`,
+});
 log.info("WebSocket endpoint", { url: `ws://localhost:${server.port}/ws` });

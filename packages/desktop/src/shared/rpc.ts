@@ -82,10 +82,20 @@ type BunRequests = {
     params: { channels: ChannelStatusRequest[] };
     response: ChannelsStatusResponse;
   };
+  /** Return last N persisted chat messages (default 100) */
+  getRecentMessages: {
+    params: { limit?: number } | void;
+    response: NormalizedChatMessage[];
+  };
   /** Return current connection status for all platform adapters */
   getStatuses: {
     params: void;
     response: PlatformStatusInfo[];
+  };
+  /** Get username color for mention highlighting (platform-specific) */
+  getUsernameColor: {
+    params: { platform: Platform; username: string };
+    response: string | null;
   };
 };
 

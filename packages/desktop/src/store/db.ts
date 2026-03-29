@@ -66,9 +66,17 @@ function runMigrations(db: Database): void {
       author_name TEXT NOT NULL,
       text TEXT NOT NULL,
       type TEXT NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      data TEXT
     )
   `);
+
+  // Migration: add data column to existing installations
+  try {
+    db.run(`ALTER TABLE chat_messages ADD COLUMN data TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS channel_connections (

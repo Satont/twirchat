@@ -36,6 +36,7 @@ export interface NormalizedChatMessage {
   channelId: string;
   author: {
     id: string;
+    username?: string;
     displayName: string;
     color?: string;
     avatarUrl?: string;
@@ -89,7 +90,9 @@ export interface AppSettings {
   theme: "light" | "dark";
   chatTheme: "modern" | "compact";
   fontSize: number;
+  showPlatformColorStripe: boolean;
   showPlatformIcon: boolean;
+  showTimestamp: boolean;
   showAvatars: boolean;
   showBadges: boolean;
   platformFilter: Platform[] | "all";
@@ -115,7 +118,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   chatTheme: "modern",
   fontSize: 14,
+  showPlatformColorStripe: true,
   showPlatformIcon: true,
+  showTimestamp: true,
   showAvatars: true,
   showBadges: true,
   platformFilter: "all",

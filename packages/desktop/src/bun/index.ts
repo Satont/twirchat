@@ -16,7 +16,7 @@ import { BrowserWindow, defineElectrobunRPC, Updater } from "electrobun/bun";
 
 import { initDb } from "../store/db";
 import { getClientSecret } from "../store/client-secret";
-import { AccountStore, SettingsStore, ChannelStore } from "../store";
+import { AccountStore, SettingsStore, ChannelStore, MessageStore, UsernameColorCache } from "../store";
 import { BackendConnection } from "../backend-connection";
 import { ChatAggregator } from "../chat/aggregator";
 import {
@@ -222,6 +222,15 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       },
 
       getStatuses: () => [...currentStatuses.values()],
+
+      getRecentMessages: (params) => {
+        const limit = (params as { limit?: number } | null)?.limit ?? 100;
+        return MessageStore.getRecent(limit);
+      },
+
+      getUsernameColor: ({ platform, username }) => {
+        return UsernameColorCache.get(platform, username) ?? null;
+      },
     },
   },
 });
@@ -267,6 +276,8 @@ win.webview.openDevTools();
 // ============================================================
 
 aggregator.onMessage((msg) => {
+  MessageStore.save(msg);
+  UsernameColorCache.addMessage(msg);
   pushOverlayMessage(msg);
   sendToView.chat_message(msg);
   console.log(

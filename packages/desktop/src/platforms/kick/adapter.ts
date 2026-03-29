@@ -5,6 +5,7 @@ import type {
   Badge,
 } from "@twirchat/shared/types";
 import { KICK_PUSHER_WS, BACKEND_URL } from "@twirchat/shared/constants";
+import { getKickBadgeSvg } from "./badges";
 
 // ============================================================
 // Типы Kick Pusher events
@@ -195,6 +196,7 @@ export class KickAdapter extends BasePlatformAdapter {
   }
 
   private handlePusherEvent(event: PusherEvent): void {
+    console.log(event);
     switch (event.event) {
       case "pusher:connection_established": {
         this.subscribeToChatroom();
@@ -273,6 +275,7 @@ export class KickAdapter extends BasePlatformAdapter {
       id: b.type,
       type: b.type,
       text: b.text,
+      imageUrl: getKickBadgeSvg(b.type) || undefined,
     }));
 
     const normalized: NormalizedChatMessage = {
@@ -281,6 +284,7 @@ export class KickAdapter extends BasePlatformAdapter {
       channelId: String(msg.chatroom_id),
       author: {
         id: String(msg.sender.id),
+        username: msg.sender.username,
         displayName: msg.sender.username,
         color: msg.sender.identity.color || undefined,
         avatarUrl: msg.sender.profile_picture ?? undefined,

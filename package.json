@@ -4,7 +4,7 @@
   "scripts": {
     "dev:desktop": "bun run --cwd packages/desktop dev",
     "dev:backend": "bun run --cwd packages/backend dev",
-    "dev": "bun run dev:backend & bun run dev:desktop",
+    "dev": "bun run --workspaces dev",
     "test": "bun test --workspaces test",
     "typecheck": "bun run --workspaces typecheck",
     "build": "bun run --workspaces build"

@@ -224,7 +224,9 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
           v-for="msg in [...messages].reverse()"
           :key="msg.id"
           :message="msg"
+          :show-platform-color-stripe="settings?.showPlatformColorStripe"
           :show-platform-icon="settings?.showPlatformIcon"
+          :show-timestamp="settings?.showTimestamp"
           :show-avatar="settings?.showAvatars"
           :show-badges="settings?.showBadges"
           :font-size="settings?.fontSize"
@@ -253,7 +255,7 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
         </div>
 
         <!-- No accounts at all -->
-        <template v-if="accounts.length === 0">
+        <template v-if="accounts.length === 0 && !hasAnyConnection">
           <p class="empty-title">No accounts connected</p>
           <p class="empty-hint">Connect your streaming accounts to start reading chat.</p>
           <button class="empty-action" @click="emit('go-to-platforms')">
@@ -282,7 +284,7 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
 
         <!-- Connected, just no messages yet -->
         <template v-else>
-          <p class="empty-title">Waiting for messages…</p>
+          <p class="empty-title">No messages yet</p>
           <p class="empty-hint">Chat messages will appear here in real time.</p>
         </template>
       </div>
