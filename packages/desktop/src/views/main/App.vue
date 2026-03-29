@@ -128,7 +128,7 @@ function onSettingsChange(s: AppSettings) {
 </script>
 
 <template>
-  <div class="app" :class="settings?.theme ?? 'dark'">
+  <div class="app" :class="[settings?.theme ?? 'dark', settings?.fontFamily ? `font-${settings.fontFamily}` : 'font-inter']">
     <!-- Left icon navigation -->
     <nav class="nav-rail">
       <div class="nav-logo">
@@ -299,8 +299,7 @@ function onSettingsChange(s: AppSettings) {
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-family, "Inter"), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: #0f0f11;
   color: #e2e2e8;
   height: 100vh;
@@ -345,6 +344,18 @@ body {
   --c-nav-active: #1c1b22;
   background: var(--c-bg);
   color: var(--c-text);
+}
+
+.app.font-inter {
+  --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.app.font-manrope {
+  --font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.app.font-system {
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .app.light .nav-rail {

@@ -54,7 +54,6 @@ const overlayUrl = computed(() => {
     bg: p.background,
     color: p.textColor,
     fontSize: String(p.fontSize),
-    fontFamily: p.fontFamily,
     maxMessages: String(p.maxMessages),
     animation: p.animation,
     position: p.position,
@@ -105,6 +104,29 @@ function copyOverlayUrl() {
               :class="{ active: local.theme === 'light' }"
               @click="local.theme = 'light'"
             >Light</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-label">
+            <span>Font</span>
+          </div>
+          <div class="toggle-group">
+            <button
+              class="toggle-btn"
+              :class="{ active: local.fontFamily === 'inter' }"
+              @click="local.fontFamily = 'inter'"
+            >Inter</button>
+            <button
+              class="toggle-btn"
+              :class="{ active: local.fontFamily === 'manrope' }"
+              @click="local.fontFamily = 'manrope'"
+            >Manrope</button>
+            <button
+              class="toggle-btn"
+              :class="{ active: local.fontFamily === 'system' }"
+              @click="local.fontFamily = 'system'"
+            >System</button>
           </div>
         </div>
       </section>

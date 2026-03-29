@@ -89,6 +89,7 @@ export interface Account {
 export interface AppSettings {
   theme: "light" | "dark";
   chatTheme: "modern" | "compact";
+  fontFamily: "inter" | "manrope" | "system";
   fontSize: number;
   showPlatformColorStripe: boolean;
   showPlatformIcon: boolean;
@@ -117,6 +118,7 @@ export interface OverlayConfig {
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   chatTheme: "modern",
+  fontFamily: "inter",
   fontSize: 14,
   showPlatformColorStripe: true,
   showPlatformIcon: true,
@@ -128,7 +130,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     background: "transparent",
     textColor: "#ffffff",
     fontSize: 14,
-    fontFamily: "sans-serif",
+    fontFamily: "inter",
     maxMessages: 20,
     messageTimeout: 0,
     showPlatformIcon: true,

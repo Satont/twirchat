@@ -77,14 +77,31 @@ const displayedChannels = computed<ChannelStatus[]>(() => {
   );
   return allChannels.value.map((ch) => {
     const key = `${ch.platform}:${ch.channelLogin}`;
-    return (
-      backendMap.get(key) ?? {
-        platform: ch.platform,
-        channelLogin: ch.channelLogin,
-        isLive: false,
-        title: "",
+    const backendStatus = backendMap.get(key);
+
+    if (backendStatus) {
+      return backendStatus;
+    }
+
+    // For YouTube, check if adapter is connected (which means live chat is active)
+    if (ch.platform === "youtube") {
+      const youtubeStatus = props.statuses.get("youtube");
+      if (youtubeStatus?.status === "connected") {
+        return {
+          platform: ch.platform,
+          channelLogin: ch.channelLogin,
+          isLive: true,
+          title: "Live",
+        };
       }
-    );
+    }
+
+    return {
+      platform: ch.platform,
+      channelLogin: ch.channelLogin,
+      isLive: false,
+      title: "",
+    };
   });
 });
 

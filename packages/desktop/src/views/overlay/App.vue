@@ -14,7 +14,6 @@ const cfg = {
   bg: qp("bg", "transparent"),
   textColor: qp("textColor", "#ffffff"),
   fontSize: Number(qp("fontSize", "14")),
-  fontFamily: qp("fontFamily", "sans-serif"),
   maxMessages: Number(qp("maxMessages", "20")),
   timeout: Number(qp("timeout", "0")), // seconds, 0 = never
   showPlatform: qp("showPlatform", "1") !== "0",
@@ -146,7 +145,7 @@ const cssVars = computed(() => ({
   "--bg": cfg.bg === "transparent" ? "transparent" : cfg.bg,
   "--text-color": cfg.textColor,
   "--font-size": `${cfg.fontSize}px`,
-  "--font-family": cfg.fontFamily,
+  "--font-family": '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
 }));
 </script>
 
