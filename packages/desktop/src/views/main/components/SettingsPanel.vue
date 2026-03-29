@@ -131,6 +131,24 @@ function copyOverlayUrl() {
         </div>
       </section>
 
+      <!-- 7TV Emotes -->
+      <section class="settings-section">
+        <h3 class="section-title">7TV Emotes</h3>
+        <p class="section-desc">Connect your 7TV account to display custom emotes in chat</p>
+
+        <div class="form-row">
+          <div class="form-label">
+            <span>7TV User ID</span>
+            <span class="form-hint">Find it in your 7TV profile URL</span>
+          </div>
+          <input
+            v-model="local.seventvUserId"
+            class="input-sm"
+            placeholder="01JDJXEGCV1FFGDXAR0Z9E86NY"
+          />
+        </div>
+      </section>
+
       <!-- OBS Overlay -->
       <section class="settings-section">
         <h3 class="section-title">OBS Overlay</h3>

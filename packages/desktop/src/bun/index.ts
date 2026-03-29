@@ -36,6 +36,7 @@ import { prepareYouTubeAuth, getYouTubeAuthUrl } from "../auth/youtube";
 import { TwitchAdapter } from "../platforms/twitch/adapter";
 import { KickAdapter } from "../platforms/kick/adapter";
 import { YouTubeAdapter } from "../platforms/youtube/adapter";
+import { sevenTVEventClient } from "../platforms/7tv/event-client";
 import { BACKEND_URL } from "@twirchat/shared/constants";
 import { logger } from "@twirchat/shared/logger";
 
@@ -151,7 +152,32 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       getSettings: () => SettingsStore.get(),
 
       saveSettings: (params) => {
+        const oldSettings = SettingsStore.get();
         SettingsStore.set(params);
+
+        // Handle 7TV User ID changes
+        const oldUserId = oldSettings?.seventvUserId;
+        const newUserId = params.seventvUserId;
+
+        if (oldUserId !== newUserId) {
+          if (newUserId) {
+            log.info("7TV User ID changed, reconnecting...", {
+              oldUserId,
+              newUserId,
+              action: "7tv",
+            });
+            sevenTVEventClient.disconnect();
+            sevenTVEventClient.connect(newUserId).catch((err) => {
+              log.error("Failed to connect to 7TV", {
+                error: String(err),
+                action: "7tv",
+              });
+            });
+          } else {
+            log.info("7TV User ID removed, disconnecting...", { action: "7tv" });
+            sevenTVEventClient.disconnect();
+          }
+        }
       },
 
       getChannels: () => ChannelStore.findAll(),
@@ -539,6 +565,29 @@ for (const account of accounts) {
         });
       });
   }
+}
+
+// ============================================================
+// 8. Connect to 7TV if User ID is configured
+// ============================================================
+
+const settings = SettingsStore.get();
+if (settings?.seventvUserId) {
+  log.info("Connecting to 7TV...", {
+    userId: settings.seventvUserId,
+    action: "7tv",
+  });
+  sevenTVEventClient
+    .connect(settings.seventvUserId)
+    .then(() => {
+      log.info("Connected to 7TV", { action: "7tv" });
+    })
+    .catch((err) => {
+      log.error("Failed to connect to 7TV", {
+        error: String(err),
+        action: "7tv",
+      });
+    });
 }
 
 log.info("Ready");

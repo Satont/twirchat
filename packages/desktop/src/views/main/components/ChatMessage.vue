@@ -515,10 +515,12 @@ onMounted(() => {
 }
 
 :deep(.emote) {
-  width: 24px;
   height: 24px;
+  width: auto;
+  max-width: 72px;
   vertical-align: middle;
   display: inline-block;
+  object-fit: contain;
 }
 
 :deep(.mention) {

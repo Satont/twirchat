@@ -2,9 +2,11 @@ import type {
   NormalizedChatMessage,
   NormalizedEvent,
   PlatformStatusInfo,
+  Emote,
 } from "@twirchat/shared/types";
 import type { IPlatformAdapter } from "../platforms/base-adapter";
 import type { Platform } from "@twirchat/shared/types";
+import { parseMessageWithEmotes } from "../platforms/7tv/emote-parser";
 
 type AggregatorEventHandler<T> = (data: T) => void;
 
@@ -34,8 +36,33 @@ export class ChatAggregator {
       if (this.seenIds.has(msg.id)) return;
       this.seenIds.add(msg.id);
 
+      // Parse 7TV emotes and merge with platform emotes
+      const parsed = parseMessageWithEmotes(msg.text);
+      const sevenTVEmotes: Emote[] = parsed.emotes.map((e) => ({
+        id: e.id,
+        name: e.name,
+        imageUrl: e.imageUrl,
+        positions: [{ start: e.start, end: e.end }],
+        aspectRatio: e.aspectRatio,
+      }));
+
+      // Merge emotes, avoiding duplicates
+      const existingIds = new Set(msg.emotes.map((e) => e.id));
+      const mergedEmotes = [...msg.emotes];
+      for (const emote of sevenTVEmotes) {
+        if (!existingIds.has(emote.id)) {
+          mergedEmotes.push(emote);
+          existingIds.add(emote.id);
+        }
+      }
+
+      const enrichedMsg: NormalizedChatMessage = {
+        ...msg,
+        emotes: mergedEmotes,
+      };
+
       // Кольцевой буфер
-      this.messageBuffer.push(msg);
+      this.messageBuffer.push(enrichedMsg);
       if (this.messageBuffer.length > this.bufferSize) {
         const removed = this.messageBuffer.shift();
         if (removed) this.seenIds.delete(removed.id);
@@ -43,7 +70,7 @@ export class ChatAggregator {
 
       for (const handler of this.onMessageHandlers) {
         try {
-          handler(msg);
+          handler(enrichedMsg);
         } catch (e) {
           console.error("[Aggregator] message handler error:", e);
         }
@@ -123,7 +150,32 @@ export class ChatAggregator {
     if (this.seenIds.has(msg.id)) return;
     this.seenIds.add(msg.id);
 
-    this.messageBuffer.push(msg);
+    // Parse 7TV emotes and merge with platform emotes
+    const parsed = parseMessageWithEmotes(msg.text);
+    const sevenTVEmotes: Emote[] = parsed.emotes.map((e) => ({
+      id: e.id,
+      name: e.name,
+      imageUrl: e.imageUrl,
+      positions: [{ start: e.start, end: e.end }],
+      aspectRatio: e.aspectRatio,
+    }));
+
+    // Merge emotes, avoiding duplicates
+    const existingIds = new Set(msg.emotes.map((e) => e.id));
+    const mergedEmotes = [...msg.emotes];
+    for (const emote of sevenTVEmotes) {
+      if (!existingIds.has(emote.id)) {
+        mergedEmotes.push(emote);
+        existingIds.add(emote.id);
+      }
+    }
+
+    const enrichedMsg: NormalizedChatMessage = {
+      ...msg,
+      emotes: mergedEmotes,
+    };
+
+    this.messageBuffer.push(enrichedMsg);
     if (this.messageBuffer.length > this.bufferSize) {
       const removed = this.messageBuffer.shift();
       if (removed) this.seenIds.delete(removed.id);
@@ -131,7 +183,7 @@ export class ChatAggregator {
 
     for (const handler of this.onMessageHandlers) {
       try {
-        handler(msg);
+        handler(enrichedMsg);
       } catch (e) {
         console.error("[Aggregator] message handler error:", e);
       }
