@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { DB_PATH } from "@twirchat/shared/constants";
+import { getDbPath } from "../runtime-config";
 import { logger } from "@twirchat/shared/logger";
 
 const log = logger("db");
@@ -15,7 +15,7 @@ export function getDb(): Database {
   return _db;
 }
 
-export function initDb(path: string = DB_PATH): Database {
+export function initDb(path: string = getDbPath()): Database {
   mkdirSync(dirname(path), { recursive: true });
 
   const db = new Database(path, { create: true });

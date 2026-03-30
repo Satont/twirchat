@@ -5,13 +5,13 @@ const isDev = process.env["NODE_ENV"] !== "production";
 
 // Ports - can be overridden via env vars
 export const AUTH_SERVER_PORT = parseInt(
-  process.env["AUTH_SERVER_PORT"] ?? "45821"
+  process.env["AUTH_SERVER_PORT"] ?? "45821",
 );
 export const OVERLAY_SERVER_PORT = parseInt(
-  process.env["OVERLAY_SERVER_PORT"] ?? "45823"
+  process.env["OVERLAY_SERVER_PORT"] ?? "45823",
 );
 export const KICK_WEBHOOK_PORT = parseInt(
-  process.env["KICK_WEBHOOK_PORT"] ?? "45822"
+  process.env["KICK_WEBHOOK_PORT"] ?? "45822",
 );
 
 // Auth callbacks
@@ -20,18 +20,8 @@ export const TWITCH_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/twitch/callback`;
 export const YOUTUBE_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/youtube/callback`;
 export const KICK_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/kick/callback`;
 
-// Database path
-export const DB_PATH =
-  process.env["DB_PATH"] ?? `${homedir()}/.twirchat/db.sqlite`;
-
 // App info
 export const APP_NAME = process.env["APP_NAME"] ?? "TwirChat";
-
-// Backend service URLs - injected at build time via define
-// @ts-ignore - these are injected by Bun bundler define option
-export const BACKEND_URL = (typeof process !== "undefined" && process.env?.["CHATRIX_BACKEND_URL"]) || "http://127.0.0.1:3000";
-// @ts-ignore
-export const BACKEND_WS_URL = (typeof process !== "undefined" && process.env?.["CHATRIX_BACKEND_WS_URL"]) || "ws://127.0.0.1:3000/ws";
 
 // Platform-specific constants (not secrets, just API endpoints)
 export const TWITCH_ANON_PREFIX = "justinfan";

@@ -49,7 +49,7 @@ const config: ElectrobunConfig = {
     backendUrl: process.env["CHATRIX_BACKEND_URL"] || "http://127.0.0.1:3000",
     backendWsUrl:
       process.env["CHATRIX_BACKEND_WS_URL"] || "ws://127.0.0.1:3000/ws",
-    nodeEnv: "production",
+    nodeEnv: process.env.NODE_ENV,
   },
 };
 
