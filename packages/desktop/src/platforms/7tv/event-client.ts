@@ -28,7 +28,7 @@ interface EmoteSetUpdateEvent {
     id: string;
     display_name: string;
   };
-  pushed?: Array<{
+    pushed?: Array<{
     key: string;
     index: number;
     type: "emote";
@@ -41,6 +41,7 @@ interface EmoteSetUpdateEvent {
         flags: {
           animated: boolean;
         };
+        aspectRatio: number;
         images: Array<{
           url: string;
           mime: string;

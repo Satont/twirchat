@@ -11,7 +11,7 @@
     "gen": "cd src/platforms/youtube && bunx @bufbuild/buf generate",
     "typecheck": "tsgo --noEmit",
     "test": "bun test tests/",
-    "build:prod": "bun run build:views && electrobun build --env=canary"
+    "build:prod": "bun run build:views && electrobun build --env=stable"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.11.0",

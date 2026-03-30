@@ -8,6 +8,8 @@ export interface EmoteCacheEntry {
   zeroWidth: boolean;
   aspectRatio: number;
   imageUrl: string;
+  ownerId?: string;
+  ownerName?: string;
 }
 
 export class EmoteStore {

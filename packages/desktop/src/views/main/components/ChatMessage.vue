@@ -2,6 +2,8 @@
 import { ref, onMounted, reactive, computed } from "vue";
 import { rpc } from "../main";
 import type { NormalizedChatMessage, Emote } from "@twirchat/shared/types";
+import { emoteStore } from "../../../platforms/7tv/emote-store";
+import EmoteTooltip from "./EmoteTooltip.vue";
 
 const props = defineProps<{
   message: NormalizedChatMessage;
@@ -78,6 +80,63 @@ function platformIconSvg(platform: string): string {
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g;
 
+interface MessagePart {
+  type: "text" | "emote";
+  content?: string;
+  emote?: Emote;
+  isSevenTV?: boolean;
+}
+
+/** Parse message into parts (text and emotes) */
+const messageParts = computed((): MessagePart[] => {
+  const msg = props.message;
+  const parts: MessagePart[] = [];
+  
+  if (!msg.emotes.length) {
+    return [{ type: "text", content: msg.text }];
+  }
+
+  const chars = [...msg.text];
+  let i = 0;
+
+  const ranges: Array<{ start: number; end: number; emote: Emote; isSevenTV: boolean }> = [];
+  for (const emote of msg.emotes) {
+    for (const pos of emote.positions) {
+      // Check if it's a 7TV emote by looking it up in the store
+      const emoteText = msg.text.slice(pos.start, pos.end + 1);
+      const sevenTVEmote = emoteStore.getEmoteByAlias(emoteText);
+      ranges.push({ ...pos, emote, isSevenTV: !!sevenTVEmote });
+    }
+  }
+  ranges.sort((a, b) => a.start - b.start);
+
+  for (const range of ranges) {
+    if (i < range.start) {
+      parts.push({ type: "text", content: chars.slice(i, range.start).join("") });
+    }
+    parts.push({ 
+      type: "emote", 
+      emote: range.emote,
+      isSevenTV: range.isSevenTV 
+    });
+    i = range.end + 1;
+  }
+
+  if (i < chars.length) {
+    parts.push({ type: "text", content: chars.slice(i).join("") });
+  }
+
+  return parts;
+});
+
+/** Process text to highlight mentions and linkify URLs */
+function processText(text: string): string {
+  let result = escapeHtml(text);
+  result = linkifyText(result);
+  result = highlightMentions(result, props.message.platform);
+  return result;
+}
+
 /** Linkify plain-text segment (already HTML-escaped) */
 function linkifyText(escaped: string): string {
   return escaped.replace(URL_REGEX, (url) => {
@@ -98,55 +157,6 @@ function highlightMentions(escaped: string, platform: string): string {
     void fetchMentionColor(platform, username);
     return match;
   });
-}
-
-/** Compute rendered HTML with emotes, links, and highlighted mentions */
-const renderedText = computed(() => {
-  const msg = props.message;
-  const platform = msg.platform;
-  
-  // Access the cache to create a dependency for reactivity
-  // This ensures the computed property re-evaluates when cache updates
-  mentionColorCache.size;
-  
-  if (!msg.emotes.length) {
-    return highlightMentions(linkifyText(escapeHtml(msg.text)), platform);
-  }
-
-  const chars = [...msg.text];
-  const result: string[] = [];
-  let i = 0;
-
-  const ranges: Array<{ start: number; end: number; emote: Emote }> = [];
-  for (const emote of msg.emotes) {
-    for (const pos of emote.positions) {
-      ranges.push({ ...pos, emote });
-    }
-  }
-  ranges.sort((a, b) => a.start - b.start);
-
-  for (const range of ranges) {
-    if (i < range.start) {
-      // Process plain text between emotes: escape -> linkify -> highlight mentions
-      result.push(highlightMentions(linkifyText(escapeHtml(chars.slice(i, range.start).join(""))), platform));
-    }
-    result.push(
-      `<img class="emote" src="${escapeHtml(range.emote.imageUrl)}" alt="${escapeHtml(range.emote.name)}" title="${escapeHtml(range.emote.name)}" />`,
-    );
-    i = range.end + 1;
-  }
-
-  if (i < chars.length) {
-    result.push(highlightMentions(linkifyText(escapeHtml(chars.slice(i).join(""))), platform));
-  }
-
-  return result.join("");
-});
-
-/** Legacy function for template compatibility */
-function renderText(msg: NormalizedChatMessage): string {
-  // Just return the computed value - msg parameter kept for API compatibility
-  return renderedText.value;
 }
 
 function escapeHtml(str: string): string {
@@ -183,6 +193,19 @@ function onMsgClick(e: MouseEvent): void {
   if (url) window.open(url, "_blank");
 }
 
+// Copy functionality
+const showCopyButton = ref(false);
+const copySuccess = ref(false);
+
+function copyMessage(): void {
+  navigator.clipboard.writeText(props.message.text).then(() => {
+    copySuccess.value = true;
+    setTimeout(() => {
+      copySuccess.value = false;
+    }, 1500);
+  });
+}
+
 // Pre-fetch colors for any @mentions in this message (platform-specific)
 onMounted(() => {
   const platform = props.message.platform;
@@ -204,6 +227,8 @@ onMounted(() => {
     :class="`platform-${message.platform}`"
     :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
     @click="onMsgClick"
+    @mouseenter="showCopyButton = true"
+    @mouseleave="showCopyButton = false"
   >
     <span
       v-if="props.showPlatformColorStripe !== false"
@@ -255,11 +280,52 @@ onMounted(() => {
     <span
       class="msg-text"
       :class="{ italic: message.type === 'action' }"
-      v-html="renderText(message)"
-    />
+    >
+      <template v-for="(part, index) in messageParts" :key="index">
+        <EmoteTooltip
+          v-if="part.type === 'emote' && part.emote && part.isSevenTV"
+          :emote="part.emote"
+        >
+          <img
+            class="emote"
+            :src="part.emote.imageUrl"
+            :alt="part.emote.name"
+            :title="part.emote.name"
+          />
+        </EmoteTooltip>
+        <img
+          v-else-if="part.type === 'emote' && part.emote"
+          class="emote"
+          :src="part.emote.imageUrl"
+          :alt="part.emote.name"
+          :title="part.emote.name"
+        />
+        <span
+          v-else-if="part.type === 'text' && part.content"
+          v-html="processText(part.content)"
+        />
+      </template>
+    </span>
     <span v-if="props.showTimestamp" class="timestamp compact-time">{{
       formatTime(message.timestamp)
     }}</span>
+
+    <!-- Copy button -->
+    <button
+      v-if="showCopyButton"
+      class="copy-btn"
+      :class="{ success: copySuccess }"
+      @click.stop="copyMessage"
+      title="Copy message"
+    >
+      <svg v-if="!copySuccess" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </button>
   </div>
 
   <!-- ── MODERN (two-row) ──────────────────────────────────── -->
@@ -272,6 +338,8 @@ onMounted(() => {
     ]"
     :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
     @click="onMsgClick"
+    @mouseenter="showCopyButton = true"
+    @mouseleave="showCopyButton = false"
   >
     <!-- Platform colour stripe -->
     <span
@@ -352,9 +420,50 @@ onMounted(() => {
       <span
         class="msg-text"
         :class="{ italic: message.type === 'action' }"
-        v-html="renderText(message)"
-      />
+      >
+        <template v-for="(part, index) in messageParts" :key="index">
+          <EmoteTooltip
+            v-if="part.type === 'emote' && part.emote && part.isSevenTV"
+            :emote="part.emote"
+          >
+            <img
+              class="emote"
+              :src="part.emote.imageUrl"
+              :alt="part.emote.name"
+              :title="part.emote.name"
+            />
+          </EmoteTooltip>
+          <img
+            v-else-if="part.type === 'emote' && part.emote"
+            class="emote"
+            :src="part.emote.imageUrl"
+            :alt="part.emote.name"
+            :title="part.emote.name"
+          />
+          <span
+            v-else-if="part.type === 'text' && part.content"
+            v-html="processText(part.content)"
+          />
+        </template>
+      </span>
     </div>
+
+    <!-- Copy button -->
+    <button
+      v-if="showCopyButton"
+      class="copy-btn"
+      :class="{ success: copySuccess }"
+      @click.stop="copyMessage"
+      title="Copy message"
+    >
+      <svg v-if="!copySuccess" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </button>
   </div>
 </template>
 
@@ -514,13 +623,14 @@ onMounted(() => {
   opacity: 0.85;
 }
 
-:deep(.emote) {
+.emote {
   height: 24px;
   width: auto;
   max-width: 72px;
   vertical-align: middle;
   display: inline-block;
   object-fit: contain;
+  cursor: pointer;
 }
 
 :deep(.mention) {
@@ -530,6 +640,40 @@ onMounted(() => {
 :deep(.mention:hover) {
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* Copy button */
+.copy-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: var(--c-text-2, #8b8b99);
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.msg:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--c-text, #e2e2e8);
+}
+
+.copy-btn.success {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  opacity: 1;
 }
 
 /* ── Compact (single-line) ──────────────────────────────── */
@@ -573,6 +717,13 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 3px;
+  flex-shrink: 0;
+}
+
+.msg-compact .copy-btn {
+  position: static;
+  transform: none;
+  margin-left: auto;
   flex-shrink: 0;
 }
 </style>

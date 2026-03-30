@@ -24,6 +24,8 @@ export interface Emote {
   imageUrl: string;
   /** начальная и конечная позиции в тексте */
   positions: Array<{ start: number; end: number }>;
+  /** соотношение сторон для широких смайлов (например 3 для privet) */
+  aspectRatio?: number;
 }
 
 // ============================================================
@@ -98,6 +100,7 @@ export interface AppSettings {
   showBadges: boolean;
   platformFilter: Platform[] | "all";
   overlay: OverlayConfig;
+  seventvUserId?: string;
 }
 
 export interface OverlayConfig {
