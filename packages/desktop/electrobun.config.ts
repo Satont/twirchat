@@ -40,7 +40,7 @@ const config: ElectrobunConfig = {
   },
 
   release: {
-    baseUrl: "https://github.com/Satont/twirchat/releases/download/",
+    baseUrl: "https://github.com/Satont/twirchat/releases/latest/download/",
   },
 
   runtime: {
