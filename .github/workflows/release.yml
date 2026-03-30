@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'push' && github.ref || 'main' }}
 
       - name: Get version
         id: version
@@ -49,6 +50,7 @@ jobs:
           skip-commit: true
           skip-tag: true
           create-summary: true
+          git-branch: ${{ github.event_name == 'push' && github.ref_name || 'main' }}
 
   build-desktop:
     name: Build Desktop (${{ matrix.os }})
