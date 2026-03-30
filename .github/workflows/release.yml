@@ -72,10 +72,6 @@ jobs:
             target: macos-arm64
             artifact_name: TwirChat-macos-arm64
             asset_name: TwirChat-macos-arm64
-          - os: macos-13
-            target: macos-x64
-            artifact_name: TwirChat-macos-x64
-            asset_name: TwirChat-macos-x64
           - os: windows-latest
             target: win-x64
             artifact_name: TwirChat-win-x64
@@ -120,7 +116,7 @@ jobs:
           # Install appimagetool
           sudo apt-get update
           sudo apt-get install -y wget desktop-file-utils
-          
+
           # Download appimagetool
           wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O /tmp/appimagetool
           chmod +x /tmp/appimagetool
