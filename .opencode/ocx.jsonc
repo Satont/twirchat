@@ -3,8 +3,4 @@
   "registries": {},
   "lockRegistries": false,
   "skipCompatCheck": false,
-  "sync": {
-    "copyFiles": [".env", ".env.local"],
-    "symlinkDirs": ["node_modules"]
-  },
 }
