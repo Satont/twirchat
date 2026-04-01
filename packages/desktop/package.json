@@ -9,7 +9,7 @@
     "hmr": "vite --config vite.main.config.ts --port 5173",
     "build:views": "vite build --config vite.main.config.ts && vite build --config vite.overlay.config.ts",
     "gen": "cd src/platforms/youtube && bunx @bufbuild/buf generate",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "vue-tsc --noEmit",
     "test": "bun test tests/",
     "build:prod": "bun run build:views && electrobun build --env=stable",
     "build:prod:ci": "bun run build:views && CHATRIX_BACKEND_URL=$CHATRIX_BACKEND_URL CHATRIX_BACKEND_WS_URL=$CHATRIX_BACKEND_WS_URL electrobun build --env=stable"
@@ -32,6 +32,8 @@
     "@typescript/native-preview": "catalog:",
     "@vitejs/plugin-vue": "6.0.5",
     "ts-proto": "2.11.6",
-    "vite": "8.0.1"
+    "typescript": "^5.8.0",
+    "vite": "8.0.1",
+    "vue-tsc": "^2.2.0"
   }
 }

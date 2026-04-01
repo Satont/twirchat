@@ -116,11 +116,17 @@ Desktop-приложение + backend. Monorepo на Bun + TypeScript.
 - **Runtime**: Bun
 - **Monorepo**: bun workspaces — `packages/desktop`, `packages/backend`, `packages/shared`
 - **Desktop**: Electrobun v1.16.0 (`electrobun/bun` main process, `electrobun/view` browser side)
-- **Frontend**: Vue 3 SFC через Vite + `@vitejs/plugin-vue`
-- **Проверка типов**: `tsgo --noEmit` (`@typescript/native-preview`)
+  - **Frontend**: Vue 3 SFC через Vite + `@vitejs/plugin-vue`
+  - Desktop приложение — это Electrobun wrapper вокруг Vue-приложения
+- **Backend**: Bun (REST API + WebSocket + gRPC клиенты)
+- **Проверка типов**:
+  - **Backend**: `tsgo --noEmit` (`@typescript/native-preview`)
+  - **Frontend**: `vue-tsc --noEmit` (обычный TypeScript + Vue Language Tools)
 - **НЕ использовать** HTTP polling для YouTube — только gRPC
 
 ### Архитектура `packages/desktop`
+
+Desktop — это Electrobun приложение с Vue 3 фронтендом:
 
 ```
 src/bun/index.ts          — Electrobun main process (BrowserWindow, RPC, backend WS)
@@ -136,6 +142,42 @@ src/backend-connection.ts — WS клиент к backend-сервису
 electrobun.config.ts      — app meta + build.bun entrypoint + build.copy (dist/ → views://)
 vite.main.config.ts       — Vite конфиг для src/views/main/ → dist/main/
 vite.overlay.config.ts    — Vite конфиг для src/views/overlay/ → dist/overlay/
+```
+
+### Архитектура `packages/backend`
+
+Backend — Bun HTTP/WebSocket сервер:
+
+```
+src/index.ts              — Bun.serve: HTTP routes + WebSocket upgrade
+src/config.ts             — Environment config (PORT, DATABASE_URL, etc.)
+src/db/                   — SQLite database layer
+  ├── index.ts            — Database connection
+  ├── store.ts            — Data access layer
+  └── migrations.ts       — Schema migrations
+src/auth/                 — OAuth + platform auth
+  ├── pkce.ts             — PKCE flow helpers
+  ├── twitch.ts           — Twitch OAuth
+  ├── youtube.ts          — YouTube OAuth
+  ├── kick.ts             — Kick OAuth
+  ├── kick-webhook.ts     — Kick webhook handlers
+  └── kick-subscriptions.ts — Kick EventSub subscriptions
+src/api/                  — External API clients
+  ├── channels-status.ts  — Check channel live status
+  ├── kick-chatroom.ts    — Kick chatroom integration
+  ├── search-categories.ts — Twitch category search
+  ├── stream-status.ts    — Stream status aggregation
+  ├── twitch-badges.ts    — Twitch badge fetching
+  └── update-stream.ts    — Stream metadata updates
+src/routes/               — HTTP route handlers
+  ├── accounts.ts         — Account management
+  ├── auth.ts             — OAuth callbacks
+  ├── stream.ts           — Stream endpoints
+  ├── webhooks.ts         — Platform webhooks
+  └── utils.ts            — Route utilities
+src/ws/                   — WebSocket handling
+  ├── connection-manager.ts — WS connection lifecycle
+  └── handlers.ts         — WS message handlers
 ```
 
 ### Delivery overlay
@@ -162,6 +204,15 @@ Overlay **не** имеет HMR и **не** запускает отдельны�
 "start"       : "bun src/bun/index.ts"
 "build:views" : "vite build --config vite.main.config.ts && vite build --config vite.overlay.config.ts"
 "build"       : "bun run build:views && electrobun build"
+"typecheck"   : "vue-tsc --noEmit"  // для frontend
+"test"        : "bun test tests/"
+```
+
+### Скрипты `packages/backend`
+
+```json
+"dev"         : "bun --hot src/index.ts"
+"start"       : "bun src/index.ts"
 "typecheck"   : "tsgo --noEmit"
 "test"        : "bun test tests/"
 ```
@@ -198,6 +249,7 @@ createApp(App).mount("#app");
 - `rpc.send` на bun-стороне не резолвится через TS proxy → cast через `WebviewSender`
 - `skipLibCheck` не работает в `tsgo` для transitive deps (electrobun тащит `three` без типов — upstream баг)
 - `import.meta.dir` в `overlay-server.ts` указывает на `src/` → `dist/overlay/` находится через `join(import.meta.dir, "..", "dist", "overlay")`
+- **Frontend type checking**: используй `vue-tsc` (обычный TypeScript), НЕ `tsgo` — Vue SFC требуют Vue Language Tools
 
 ### Файловая структура
 
@@ -205,12 +257,47 @@ createApp(App).mount("#app");
 /home/satont/Projects/twirchat/
 ├── AGENTS.md
 ├── package.json                          ← monorepo root
+├── .zed/
+│   └── settings.json                     ← Zed editor LSP config
 └── packages/
     ├── shared/
     │   ├── types.ts                      ← NormalizedChatMessage, NormalizedEvent, Account, AppSettings, Platform, ...
     │   ├── constants.ts                  ← OVERLAY_SERVER_PORT=45823
     │   ├── protocol.ts                   ← BackendToDesktopMessage / DesktopToBackendMessage
     │   └── index.ts
+    ├── backend/
+    │   ├── package.json
+    │   ├── tsconfig.json
+    │   └── src/
+    │       ├── index.ts                  ← Bun.serve entry point
+    │       ├── config.ts                 ← Environment configuration
+    │       ├── db/
+    │       │   ├── index.ts              — Database connection
+    │       │   ├── store.ts              — Data access layer
+    │       │   └── migrations.ts         — Schema migrations
+    │       ├── auth/
+    │       │   ├── pkce.ts               — PKCE helpers
+    │       │   ├── twitch.ts             — Twitch OAuth
+    │       │   ├── youtube.ts            — YouTube OAuth
+    │       │   ├── kick.ts               — Kick OAuth
+    │       │   ├── kick-webhook.ts       — Kick webhook handlers
+    │       │   └── kick-subscriptions.ts — Kick EventSub
+    │       ├── api/
+    │       │   ├── channels-status.ts    — Channel status checks
+    │       │   ├── kick-chatroom.ts      — Kick chatroom
+    │       │   ├── search-categories.ts  — Twitch categories
+    │       │   ├── stream-status.ts      — Stream aggregation
+    │       │   ├── twitch-badges.ts      — Twitch badges
+    │       │   └── update-stream.ts      — Stream updates
+    │       ├── routes/
+    │       │   ├── accounts.ts           — Account endpoints
+    │       │   ├── auth.ts               — OAuth callbacks
+    │       │   ├── stream.ts             — Stream endpoints
+    │       │   ├── webhooks.ts           — Platform webhooks
+    │       │   └── utils.ts              — Route utilities
+    │       └── ws/
+    │           ├── connection-manager.ts — WS lifecycle
+    │           └── handlers.ts           — WS handlers
     └── desktop/
         ├── package.json
         ├── tsconfig.json

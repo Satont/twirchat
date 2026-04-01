@@ -1,7 +1,27 @@
 {
   "languages": {
     "TypeScript": {
-      "language_servers": ["tsgo", "vtsls"],
+      "language_servers": ["tsgo", "vtsls"]
     },
+    "Vue": {
+      "language_servers": ["vue-language-server", "vtsls"]
+    }
   },
+  "lsp": {
+    "vue-language-server": {
+      "settings": {
+        "typescript": {
+          "tsdk": "node_modules/typescript/lib"
+        }
+      }
+    },
+    "tsgo": {
+      "binary": {
+        "path": "node_modules/.bin/tsgo"
+      }
+    }
+  },
+  "file_types": {
+    "Vue": ["vue"]
+  }
 }
