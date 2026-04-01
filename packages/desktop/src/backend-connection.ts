@@ -82,7 +82,7 @@ export class BackendConnection {
           handler(msg);
         }
       } catch (err) {
-        log.error("Failed to parse message", err);
+        log.error("Failed to parse message", { error: String(err) });
       }
     });
 
@@ -103,7 +103,7 @@ export class BackendConnection {
     });
 
     ws.addEventListener("error", (evt) => {
-      log.error("WebSocket error", evt);
+      log.error("WebSocket error", { event: String(evt) });
     });
 
     this.ws = ws;

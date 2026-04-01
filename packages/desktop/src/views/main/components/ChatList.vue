@@ -10,6 +10,7 @@ import type {
   AppSettings,
   Account,
   PlatformStatusInfo,
+  WatchedChannel,
 } from "@twirchat/shared/types";
 import type { ChannelStatus, ChannelStatusRequest } from "@twirchat/shared/protocol";
 
@@ -18,11 +19,16 @@ const props = defineProps<{
   settings: AppSettings | null;
   accounts: Account[];
   statuses: Map<string, PlatformStatusInfo>;
+  /** Set when a watched channel tab is active */
+  watchedChannel?: WatchedChannel | null;
+  watchedChannelStatus?: PlatformStatusInfo | null;
+  watchedMessages?: NormalizedChatMessage[];
 }>();
 
 const emit = defineEmits<{
   "go-to-platforms": [];
   "settings-change": [settings: import("@twirchat/shared/types").AppSettings];
+  "send-watched": [text: string];
 }>();
 
 const listEl = ref<HTMLElement | null>(null);
@@ -31,32 +37,39 @@ const isAtBottom = ref(true);
 // ---- Channel status bar ----
 const channelStatuses = ref<ChannelStatus[]>([]);
 
-// Connected channels: derived from statuses map — any platform-connected entry
+// ---- Active messages (home vs watched) ----
+const activeMessages = computed<NormalizedChatMessage[]>(() => {
+  if (props.watchedChannel) return props.watchedMessages ?? [];
+  return props.messages;
+});
+
+// Connected channels: derived from statuses map — twitch/kick only (backend channels-status API)
 const connectedChannels = computed<ChannelStatusRequest[]>(() => {
   const result: ChannelStatusRequest[] = [];
   for (const [, info] of props.statuses) {
     if (
       (info.status === "connected" || info.status === "connecting") &&
-      info.channelLogin
+      info.channelLogin &&
+      (info.platform === "twitch" || info.platform === "kick")
     ) {
-      result.push({ platform: info.platform, channelLogin: info.channelLogin });
+      result.push({ platform: info.platform as "twitch" | "kick", channelLogin: info.channelLogin });
     }
   }
   return result;
 });
 
-// Auto-connected channels for YouTube/Kick: when user is authenticated, their own channel is auto-connected
+// Auto-connected channels for Kick: when user is authenticated, their own channel is auto-connected
 const autoConnectedChannels = computed<ChannelStatusRequest[]>(() => {
   const result: ChannelStatusRequest[] = [];
   for (const account of props.accounts) {
-    // For YouTube and Kick, when authenticated, auto-connect to user's own channel
-    if (account.platform === "youtube" || account.platform === "kick") {
+    // For Kick, when authenticated, auto-connect to user's own channel
+    if (account.platform === "kick") {
       // Check if this channel is not already in connectedChannels (case-insensitive)
       const alreadyConnected = connectedChannels.value.some(
         ch => ch.platform === account.platform && ch.channelLogin.toLowerCase() === account.username.toLowerCase()
       );
       if (!alreadyConnected) {
-        result.push({ platform: account.platform, channelLogin: account.username });
+        result.push({ platform: account.platform as "twitch" | "kick", channelLogin: account.username });
       }
     }
   }
@@ -81,19 +94,6 @@ const displayedChannels = computed<ChannelStatus[]>(() => {
 
     if (backendStatus) {
       return backendStatus;
-    }
-
-    // For YouTube, check if adapter is connected (which means live chat is active)
-    if (ch.platform === "youtube") {
-      const youtubeStatus = props.statuses.get("youtube");
-      if (youtubeStatus?.status === "connected") {
-        return {
-          platform: ch.platform,
-          channelLogin: ch.channelLogin,
-          isLive: true,
-          title: "Live",
-        };
-      }
     }
 
     return {
@@ -147,7 +147,7 @@ function onScroll() {
 }
 
 watch(
-  () => props.messages.length,
+  () => activeMessages.value.length,
   async () => {
     if (isAtBottom.value) {
       await nextTick();
@@ -200,6 +200,10 @@ async function onSend(targets: Array<{ platform: string; channelLogin: string; t
   );
 }
 
+function onSendWatched(text: string) {
+  emit("send-watched", text);
+}
+
 function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
   emit("settings-change", s);
   rpc.request.saveSettings(s).catch((err) => console.warn("[ChatList] saveSettings failed:", err));
@@ -208,57 +212,76 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
 
 <template>
   <div class="chat-wrapper">
-    <!-- Chat header with inline channel chips -->
+    <!-- Chat header -->
     <div class="chat-header">
-      <span class="chat-header-title">Live Chat</span>
+      <!-- Watched channel header -->
+      <template v-if="watchedChannel">
+        <span
+          class="watched-dot"
+          :class="{
+            connected: watchedChannelStatus?.status === 'connected',
+            connecting: watchedChannelStatus?.status === 'connecting',
+          }"
+        />
+        <span class="chat-header-title">{{ watchedChannel.displayName }}</span>
+        <span class="watched-platform" :style="{ color: platformColor(watchedChannel.platform) }">
+          {{ watchedChannel.platform }}
+        </span>
+        <span v-if="watchedChannelStatus" class="watched-mode" :class="{ anon: watchedChannelStatus.mode !== 'authenticated' }">
+          {{ watchedChannelStatus.mode === 'authenticated' ? 'authenticated' : 'read-only' }}
+        </span>
+      </template>
 
-      <!-- Channel status chips -->
-      <div v-if="displayedChannels.length > 0" class="header-chips">
-        <Tooltip
-          v-for="ch in displayedChannels"
-          :key="`${ch.platform}:${ch.channelLogin}`"
-          side="bottom"
-          :side-offset="8"
-        >
-          <!-- Trigger: the chip itself -->
-          <div
-            class="header-chip"
-            :class="{ live: ch.isLive }"
-            :style="{ '--chip-color': platformColor(ch.platform) }"
+      <!-- Home header -->
+      <template v-else>
+        <span class="chat-header-title">Live Chat</span>
+
+        <!-- Channel status chips -->
+        <div v-if="displayedChannels.length > 0" class="header-chips">
+          <Tooltip
+            v-for="ch in displayedChannels"
+            :key="`${ch.platform}:${ch.channelLogin}`"
+            side="bottom"
+            :side-offset="8"
           >
-            <span class="chip-dot" :class="{ pulse: ch.isLive }" />
-            <span class="chip-name">{{ ch.channelLogin }}</span>
-            <span v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-viewers">
-              {{ formatViewers(ch.viewerCount) }}
-            </span>
-          </div>
-
-          <!-- Tooltip content -->
-          <template #content>
-            <div class="chip-tooltip-header">
-              <span class="chip-tooltip-platform" :style="{ color: platformColor(ch.platform) }">
-                {{ platformName(ch.platform) }}
-              </span>
-              <span class="chip-tooltip-status" :class="{ live: ch.isLive }">
-                {{ ch.isLive ? 'LIVE' : 'Offline' }}
+            <div
+              class="header-chip"
+              :class="{ live: ch.isLive }"
+              :style="{ '--chip-color': platformColor(ch.platform) }"
+            >
+              <span class="chip-dot" :class="{ pulse: ch.isLive }" />
+              <span class="chip-name">{{ ch.channelLogin }}</span>
+              <span v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-viewers">
+                {{ formatViewers(ch.viewerCount) }}
               </span>
             </div>
-            <div v-if="ch.title" class="chip-tooltip-title">{{ ch.title }}</div>
-            <div v-if="ch.categoryName" class="chip-tooltip-row">
-              <span class="chip-tooltip-label">Category</span>{{ ch.categoryName }}
-            </div>
-            <div v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-tooltip-row">
-              <span class="chip-tooltip-label">Viewers</span>{{ ch.viewerCount.toLocaleString() }}
-            </div>
-          </template>
-        </Tooltip>
-      </div>
 
-      <span class="chat-count" v-if="messages.length > 0">{{ messages.length }} messages</span>
+            <template #content>
+              <div class="chip-tooltip-header">
+                <span class="chip-tooltip-platform" :style="{ color: platformColor(ch.platform) }">
+                  {{ platformName(ch.platform) }}
+                </span>
+                <span class="chip-tooltip-status" :class="{ live: ch.isLive }">
+                  {{ ch.isLive ? 'LIVE' : 'Offline' }}
+                </span>
+              </div>
+              <div v-if="ch.title" class="chip-tooltip-title">{{ ch.title }}</div>
+              <div v-if="ch.categoryName" class="chip-tooltip-row">
+                <span class="chip-tooltip-label">Category</span>{{ ch.categoryName }}
+              </div>
+              <div v-if="ch.isLive && ch.viewerCount !== undefined" class="chip-tooltip-row">
+                <span class="chip-tooltip-label">Viewers</span>{{ ch.viewerCount.toLocaleString() }}
+              </div>
+            </template>
+          </Tooltip>
+        </div>
+      </template>
 
-      <!-- Appearance popup button -->
+      <span class="chat-count" v-if="activeMessages.length > 0">{{ activeMessages.length }} messages</span>
+
+      <!-- Appearance popup button — only in home tab -->
       <ChatAppearancePopover
-        v-if="settings"
+        v-if="settings && !watchedChannel"
         :settings="settings"
         @change="onAppearanceChange"
       />
@@ -267,9 +290,9 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
     <!-- Messages + scroll pill wrapper -->
     <div class="chat-list-wrapper">
     <div ref="listEl" class="chat-list" @scroll="onScroll">
-      <template v-if="messages.length > 0">
+      <template v-if="activeMessages.length > 0">
         <ChatMessage
-          v-for="msg in [...messages].reverse()"
+          v-for="msg in [...activeMessages].reverse()"
           :key="msg.id"
           :message="msg"
           :show-platform-color-stripe="settings?.showPlatformColorStripe"
@@ -302,8 +325,24 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
           </svg>
         </div>
 
+        <!-- Watched channel: just waiting -->
+        <template v-if="watchedChannel">
+          <p class="empty-title">
+            {{
+              watchedChannelStatus?.status === 'connecting'
+                ? 'Connecting…'
+                : watchedChannelStatus?.status === 'connected'
+                  ? 'No messages yet'
+                  : 'Connecting…'
+            }}
+          </p>
+          <p class="empty-hint">
+            Messages from <strong>{{ watchedChannel.displayName }}</strong> will appear here.
+          </p>
+        </template>
+
         <!-- No accounts at all -->
-        <template v-if="accounts.length === 0 && !hasAnyConnection">
+        <template v-else-if="accounts.length === 0 && !hasAnyConnection">
           <p class="empty-title">No accounts connected</p>
           <p class="empty-hint">Connect your streaming accounts to start reading chat.</p>
           <button class="empty-action" @click="emit('go-to-platforms')">
@@ -341,7 +380,7 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
     <!-- Scroll-to-bottom pill -->
     <Transition name="fade">
       <button
-        v-if="!isAtBottom && messages.length > 0"
+        v-if="!isAtBottom && activeMessages.length > 0"
         class="scroll-pill"
         @click="scrollToBottom"
       >
@@ -363,7 +402,13 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
     </div><!-- /.chat-list-wrapper -->
 
     <!-- Chat input -->
-    <ChatInput :statuses="statuses" @send="onSend" />
+    <ChatInput
+      :statuses="statuses"
+      :watched-channel="watchedChannel"
+      :watched-channel-status="watchedChannelStatus"
+      @send="onSend"
+      @send-watched="onSendWatched"
+    />
   </div>
 </template>
 
@@ -391,6 +436,41 @@ function onAppearanceChange(s: import("@twirchat/shared/types").AppSettings) {
   border-bottom: 1px solid var(--c-border, #2a2a33);
   flex-shrink: 0;
   min-height: 44px;
+}
+
+.watched-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-text-2, #666);
+  flex-shrink: 0;
+}
+.watched-dot.connected {
+  background: #22c55e;
+}
+.watched-dot.connecting {
+  background: #f59e0b;
+}
+
+.watched-platform {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  opacity: 0.8;
+}
+
+.watched-mode {
+  font-size: 11px;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 10px;
+  padding: 2px 7px;
+}
+.watched-mode.anon {
+  color: var(--c-text-2, #8b8b99);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.1);
 }
 
 .chat-header-title {

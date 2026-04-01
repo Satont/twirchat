@@ -179,6 +179,18 @@ export interface PlatformStatusInfo {
 }
 
 // ============================================================
+// Watched Channels
+// ============================================================
+
+export interface WatchedChannel {
+  id: string;
+  platform: "twitch" | "kick";
+  channelSlug: string;
+  displayName: string;
+  createdAt: number;
+}
+
+// ============================================================
 // Twitch Badges API
 // ============================================================
 

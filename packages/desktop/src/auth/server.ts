@@ -90,7 +90,7 @@ export function startAuthServer(): void {
           return result.response;
         }
       } catch (err) {
-        log.error("Callback error:", err);
+        log.error("Callback error", { error: String(err) });
         return new Response(errorPage(String(err)), {
           status: 500,
           headers: { "Content-Type": "text/html; charset=utf-8" },

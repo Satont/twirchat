@@ -89,5 +89,16 @@ function runMigrations(db: Database): void {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS watched_channels (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL,
+      channel_slug TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      UNIQUE (platform, channel_slug)
+    )
+  `);
+
   log.info("Migrations applied");
 }

@@ -42,6 +42,7 @@ import { TwitchAdapter } from "../platforms/twitch/adapter";
 import { KickAdapter } from "../platforms/kick/adapter";
 import { YouTubeAdapter } from "../platforms/youtube/adapter";
 import { sevenTVEventClient } from "../platforms/7tv/event-client";
+import { WatchedChannelManager } from "../watched-channels/manager";
 import { logger } from "@twirchat/shared/logger";
 
 import type { TwirChatRPCSchema, WebviewSender } from "../shared/rpc";
@@ -116,6 +117,8 @@ aggregator.registerAdapter(kickAdapter);
 aggregator.registerAdapter(youtubeAdapter);
 
 startOverlayServer();
+
+const watchedChannelManager = new WatchedChannelManager();
 
 // ============================================================
 // 1c. Set up auth success callback BEFORE starting auth server
@@ -421,6 +424,26 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       applyUpdate: async () => {
         await Updater.applyUpdate();
       },
+
+      // ---- Watched Channels ----
+
+      getWatchedChannels: () => watchedChannelManager.getAll(),
+
+      addWatchedChannel: async ({ platform, channelSlug }: { platform: "twitch" | "kick"; channelSlug: string }) => {
+        return await watchedChannelManager.addChannel(platform, channelSlug);
+      },
+
+      removeWatchedChannel: async ({ id }: { id: string }) => {
+        await watchedChannelManager.removeChannel(id);
+      },
+
+      getWatchedChannelMessages: ({ id }: { id: string }) => {
+        return watchedChannelManager.getMessages(id);
+      },
+
+      sendWatchedChannelMessage: async ({ id, text }: { id: string; text: string }) => {
+        await watchedChannelManager.sendMessage(id, text);
+      },
     },
   },
 });
@@ -530,6 +553,26 @@ aggregator.onStatus((s) => {
     status: s.status,
     mode: s.mode,
     channel: s.channelLogin,
+  });
+});
+
+// ---- Watched channel events → webview ----
+
+watchedChannelManager.onMessage((channelId, message) => {
+  sendToView.watched_channel_message({ channelId, message });
+  log.info("Watched message", {
+    channelId,
+    platform: message.platform,
+    author: message.author.displayName,
+  });
+});
+
+watchedChannelManager.onStatus((channelId, status) => {
+  sendToView.watched_channel_status({ channelId, status });
+  log.info("Watched status", {
+    channelId,
+    platform: status.platform,
+    status: status.status,
   });
 });
 
@@ -688,6 +731,14 @@ if (settings?.seventvUserId) {
       });
     });
 }
+
+// ============================================================
+// 9. Auto-connect watched channels
+// ============================================================
+
+watchedChannelManager.autoConnect().catch((err) => {
+  log.error("Failed to auto-connect watched channels", { error: String(err) });
+});
 
 log.info("Ready");
 

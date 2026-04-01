@@ -14,6 +14,7 @@ import {
   pushOverlayEvent,
 } from "./overlay-server";
 import { logger } from "@twirchat/shared/logger";
+import type { NormalizedChatMessage, NormalizedEvent } from "@twirchat/shared/types";
 
 const log = logger("main");
 
@@ -45,17 +46,17 @@ const overlayServer = startOverlayServer();
 backendConn.onMessage((msg) => {
   switch (msg.type) {
     case "chat_message":
-      aggregator.injectMessage(msg.data);
-      pushOverlayMessage(msg.data);
+      aggregator.injectMessage(msg.data as NormalizedChatMessage);
+      pushOverlayMessage(msg.data as NormalizedChatMessage);
       break;
 
     case "chat_event":
-      aggregator.injectEvent(msg.data);
-      pushOverlayEvent(msg.data);
+      aggregator.injectEvent(msg.data as NormalizedEvent);
+      pushOverlayEvent(msg.data as NormalizedEvent);
       break;
 
     case "platform_status":
-      aggregator.injectStatus(msg.data);
+      aggregator.injectStatus({ platform: msg.platform, status: msg.status, mode: "anonymous" });
       break;
 
     case "auth_url":

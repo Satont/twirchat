@@ -17,7 +17,7 @@ export const UsernameColorCache = {
    */
   extractUsername(mention: string): string | null {
     const match = mention.match(/^@(.+)$/);
-    return match ? match[1] : null;
+    return match ? (match[1] ?? null) : null;
   },
 
   /**
@@ -30,10 +30,10 @@ export const UsernameColorCache = {
     const color = msg.author.color;
 
     if (username) {
-      this.set(platform, username, color);
+      this.set(platform, username, color ?? null);
     }
     if (displayName && displayName.toLowerCase() !== username?.toLowerCase()) {
-      this.set(platform, displayName, color);
+      this.set(platform, displayName, color ?? null);
     }
   },
 

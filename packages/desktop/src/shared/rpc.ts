@@ -20,6 +20,7 @@ import type {
   Account,
   AppSettings,
   Platform,
+  WatchedChannel,
 } from "@twirchat/shared/types";
 import type {
   StreamStatusResponse,
@@ -69,7 +70,7 @@ type BunRequests = {
   };
   /** Update stream title and/or category */
   updateStream: {
-    params: Omit<UpdateStreamRequest, never>;
+    params: Omit<UpdateStreamRequest, 'userAccessToken'>;
     response: UpdateStreamResponse;
   };
   /** Search for game/category suggestions */
@@ -103,6 +104,27 @@ type BunRequests = {
   downloadUpdate: { params: void; response: { success: boolean; error?: string } };
   /** Apply downloaded update and restart */
   applyUpdate: { params: void; response: void };
+
+  // ---- Watched Channels ----
+  /** Return all persisted watched channels */
+  getWatchedChannels: { params: void; response: WatchedChannel[] };
+  /** Add a new watched channel (persists + auto-connects) */
+  addWatchedChannel: {
+    params: { platform: "twitch" | "kick"; channelSlug: string };
+    response: WatchedChannel;
+  };
+  /** Remove a watched channel */
+  removeWatchedChannel: { params: { id: string }; response: void };
+  /** Get buffered messages for a watched channel */
+  getWatchedChannelMessages: {
+    params: { id: string };
+    response: NormalizedChatMessage[];
+  };
+  /** Send a message via a watched channel */
+  sendWatchedChannelMessage: {
+    params: { id: string; text: string };
+    response: void;
+  };
 };
 
 type BunMessages = Record<never, unknown>;
@@ -128,6 +150,10 @@ type WebviewMessages = {
   auth_error: { platform: Platform; error: string };
   /** Update status changed */
   update_status: { status: string; message: string; progress?: number };
+  /** A new message arrived on a watched channel */
+  watched_channel_message: { channelId: string; message: NormalizedChatMessage };
+  /** Status changed for a watched channel */
+  watched_channel_status: { channelId: string; status: PlatformStatusInfo };
 };
 
 // ----------------------------------------------------------------
