@@ -5,6 +5,7 @@ import { authRoutes } from "./routes/auth.ts";
 import { accountRoutes } from "./routes/accounts.ts";
 import { streamRoutes } from "./routes/stream.ts";
 import { webhookRoutes } from "./routes/webhooks.ts";
+import { youtubeRoutes } from "./routes/youtube.ts";
 import { json } from "./routes/utils.ts";
 import type { WsData } from "./ws/connection-manager.ts";
 import { config } from "./config.ts";
@@ -32,6 +33,7 @@ const server = Bun.serve<WsData>({
     ...accountRoutes,
     ...streamRoutes,
     ...webhookRoutes,
+    ...youtubeRoutes,
     "/health": () => json({ ok: true }),
   },
 

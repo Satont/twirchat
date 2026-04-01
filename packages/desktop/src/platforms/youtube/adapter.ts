@@ -24,6 +24,7 @@ import type {
 import { AccountStore } from "../../store/account-store.js";
 import { refreshYouTubeToken } from "../../auth/youtube.js";
 import { logger } from "@twirchat/shared/logger";
+import { getBackendUrl } from "../../runtime-config.js";
 
 import {
   V3DataLiveChatMessageServiceClient,
@@ -327,14 +328,14 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       `[YouTube] Looking for live chat, input="${channelOrVideoId}", clean="${cleanInput}"`,
     );
 
-    // If it already looks like a UC channel ID (case-insensitive), skip straight to live search
+    // If it already looks like a UC channel ID, go straight to live search
     if (/^UC/i.test(cleanInput)) {
       log.info(`[YouTube] Input looks like a channel ID: ${cleanInput}`);
       this.resolvedChannelId = cleanInput;
       return this.fetchLiveChatForChannel(cleanInput);
     }
 
-    // Try as a video ID (11-char base64 string — liveChatId can be fetched directly)
+    // Try as a video ID — liveChatId can be fetched directly, costs 1 quota unit
     log.info(`[YouTube] Trying as video ID: ${cleanInput}`);
     const videoRes = await this.fetchWithAuth(
       `${YOUTUBE_API_BASE}/videos?part=liveStreamingDetails&id=${encodeURIComponent(cleanInput)}`,
@@ -355,47 +356,42 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       log.info(`[YouTube] Video lookup failed: ${videoRes.status}`);
     }
 
-    // Resolve handle → channel ID using channels?forHandle= (1 quota unit vs 100 for search)
-    log.info(`[YouTube] Resolving as YouTube handle: @${cleanInput}`);
-    const handleRes = await this.fetchWithAuth(
-      `${YOUTUBE_API_BASE}/channels?part=id,snippet&forHandle=${encodeURIComponent(cleanInput)}`,
-    );
-    if (handleRes.ok) {
-      const body = (await handleRes.json()) as {
-        items?: Array<{ id: string; snippet?: { title?: string } }>;
-      };
-      const channelId = body.items?.[0]?.id;
-      if (channelId) {
-        log.info(`[YouTube] Resolved handle to channel: ${channelId} (${body.items?.[0]?.snippet?.title})`);
-        this.resolvedChannelId = channelId;
-        return this.fetchLiveChatForChannel(channelId);
-      }
-    } else {
-      const errBody = await handleRes.text();
-      log.warn(`[YouTube] Handle resolution failed: ${handleRes.status}`, { body: errBody });
-    }
-
-    // Fall back to legacy forUsername (old custom URLs without @)
-    log.info(`[YouTube] Trying as legacy username: ${cleanInput}`);
-    const userRes = await this.fetchWithAuth(
-      `${YOUTUBE_API_BASE}/channels?part=id,snippet&forUsername=${encodeURIComponent(cleanInput)}`,
-    );
-    if (userRes.ok) {
-      const body = (await userRes.json()) as {
-        items?: Array<{ id: string; snippet?: { title?: string } }>;
-      };
-      const channelId = body.items?.[0]?.id;
-      if (channelId) {
-        log.info(`[YouTube] Resolved username to channel: ${channelId} (${body.items?.[0]?.snippet?.title})`);
-        this.resolvedChannelId = channelId;
-        return this.fetchLiveChatForChannel(channelId);
-      }
-    } else {
-      const errBody = await userRes.text();
-      log.warn(`[YouTube] Username resolution failed: ${userRes.status}`, { body: errBody });
+    // Resolve handle → channel ID via backend (cached in DB, uses API key, no OAuth quota)
+    log.info(`[YouTube] Resolving handle via backend: ${cleanInput}`);
+    const channelId = await this.resolveChannelIdViaBackend(cleanInput);
+    if (channelId) {
+      this.resolvedChannelId = channelId;
+      return this.fetchLiveChatForChannel(channelId);
     }
 
     throw new Error(`Could not resolve "${cleanInput}" to a YouTube channel or live video`);
+  }
+
+  /**
+   * Calls the backend /api/youtube/resolve endpoint to get a stable channel ID.
+   * The backend caches results in Postgres for 30 days and uses a server-side
+   * API key, so this does NOT consume the user's OAuth quota.
+   */
+  private async resolveChannelIdViaBackend(handle: string): Promise<string | null> {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/youtube/resolve?handle=${encodeURIComponent(handle)}`,
+      );
+      if (res.ok) {
+        const body = (await res.json()) as { channelId?: string; error?: string };
+        if (body.channelId) {
+          log.info(`[YouTube] Backend resolved handle to channel: ${body.channelId}`);
+          return body.channelId;
+        }
+        log.warn(`[YouTube] Backend resolve returned no channelId`, { body });
+      } else {
+        const body = await res.text();
+        log.warn(`[YouTube] Backend resolve failed: ${res.status}`, { body: body.slice(0, 300) });
+      }
+    } catch (err) {
+      log.warn(`[YouTube] Backend resolve request failed`, { error: String(err) });
+    }
+    return null;
   }
 
   /** Given a confirmed channel ID, find its active live chat ID. */

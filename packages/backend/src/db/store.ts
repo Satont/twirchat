@@ -189,3 +189,30 @@ export const KickOAuthSessionStore = {
     return { clientSecret: row.client_secret, codeVerifier: row.code_verifier };
   },
 };
+
+// ---------------------------------------------------------------------------
+// YouTube channel handle → channel ID cache (30-day TTL)
+// ---------------------------------------------------------------------------
+
+export const YoutubeChannelCacheStore = {
+  /** Returns a cached channelId if the entry exists and has not expired. */
+  async get(handle: string): Promise<string | null> {
+    const rows = await sql<{ channel_id: string }[]>`
+      SELECT channel_id FROM youtube_channel_cache
+      WHERE handle = ${handle} AND available_until > NOW()
+    `;
+    return rows[0]?.channel_id ?? null;
+  },
+
+  /** Inserts or refreshes a handle → channelId mapping with a 30-day TTL.
+   *  If the entry exists but is expired it gets overwritten via ON CONFLICT. */
+  async upsert(handle: string, channelId: string): Promise<void> {
+    await sql`
+      INSERT INTO youtube_channel_cache (handle, channel_id, available_until)
+      VALUES (${handle}, ${channelId}, NOW() + INTERVAL '30 days')
+      ON CONFLICT (handle) DO UPDATE SET
+        channel_id      = EXCLUDED.channel_id,
+        available_until = EXCLUDED.available_until
+    `;
+  },
+};

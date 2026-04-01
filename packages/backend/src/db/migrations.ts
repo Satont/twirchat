@@ -37,5 +37,13 @@ export async function runMigrations(): Promise<void> {
     )
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS youtube_channel_cache (
+      handle          TEXT PRIMARY KEY,
+      channel_id      TEXT NOT NULL,
+      available_until TIMESTAMPTZ NOT NULL
+    )
+  `;
+
   console.log("[DB] Migrations applied");
 }
