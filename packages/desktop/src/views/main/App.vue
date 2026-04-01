@@ -165,14 +165,31 @@ const updateState = ref<{
   status: string;
   message: string;
   progress?: number;
-  updateAvailable: boolean;
 }>({
   show: false,
   status: "",
   message: "",
   progress: undefined,
-  updateAvailable: false,
 });
+
+// All Electrobun statuses that indicate a download is actively in progress
+const DOWNLOAD_IN_PROGRESS_STATUSES = new Set([
+  "download-starting",
+  "checking-local-tar",
+  "local-tar-found",
+  "local-tar-missing",
+  "fetching-patch",
+  "patch-found",
+  "patch-not-found",
+  "downloading-patch",
+  "applying-patch",
+  "patch-applied",
+  "extracting-version",
+  "patch-chain-complete",
+  "downloading-full-bundle",
+  "download-progress",
+  "decompressing",
+]);
 
 onMounted(() => {
   const onChatMessage = (msg: NormalizedChatMessage) => {
@@ -199,13 +216,37 @@ onMounted(() => {
     updateState.value.status = status.status;
     updateState.value.message = status.message;
     updateState.value.progress = status.progress;
-    if (status.status === "checking" || status.status === "downloading") {
+
+    if (
+      status.status === "checking" ||
+      status.status === "update-available" ||
+      status.status === "download-complete" ||
+      DOWNLOAD_IN_PROGRESS_STATUSES.has(status.status)
+    ) {
+      // Active update flow — keep toast visible
       updateState.value.show = true;
-    }
-    if (status.status === "complete" || status.status === "error") {
+    } else if (status.status === "no-update") {
+      // No update available (includes dev channel) — show briefly then hide
+      updateState.value.show = true;
       setTimeout(() => {
         updateState.value.show = false;
-      }, 3000);
+      }, 2000);
+    } else if (status.status === "error") {
+      updateState.value.show = true;
+      setTimeout(() => {
+        updateState.value.show = false;
+      }, 4000);
+    }
+    // "applying", "extracting", "replacing-app", "launching-new-version", "complete"
+    // are terminal states where the app is about to restart — keep toast visible
+    else if (
+      status.status === "applying" ||
+      status.status === "extracting" ||
+      status.status === "replacing-app" ||
+      status.status === "launching-new-version" ||
+      status.status === "complete"
+    ) {
+      updateState.value.show = true;
     }
   };
 
@@ -248,7 +289,6 @@ async function checkForUpdates() {
   try {
     const result = await rpc.request.checkForUpdate();
     if (result.updateAvailable) {
-      updateState.value.updateAvailable = true;
       await rpc.request.downloadUpdate();
     }
   } catch (err) {
@@ -535,7 +575,7 @@ async function onSendWatched(text: string) {
             <span class="progress-text">{{ updateState.progress }}%</span>
           </div>
         </div>
-        <button v-if="updateState.updateAvailable && !updateState.progress" class="update-btn" @click="applyUpdate">
+        <button v-if="updateState.status === 'download-complete'" class="update-btn" @click="applyUpdate">
           Restart
         </button>
         <button class="update-close" @click="dismissUpdate">
