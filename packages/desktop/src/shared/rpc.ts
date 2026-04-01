@@ -125,6 +125,11 @@ type BunRequests = {
     params: { id: string; text: string };
     response: void;
   };
+  /** Get current connection statuses for all watched channels */
+  getWatchedChannelStatuses: {
+    params: void;
+    response: Array<{ channelId: string; status: PlatformStatusInfo }>;
+  };
 };
 
 type BunMessages = Record<never, unknown>;

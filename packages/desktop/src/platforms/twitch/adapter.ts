@@ -185,9 +185,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
               log.error(`[Twurple] ${message}`);
             } else if (level === LogLevel.WARNING) {
               log.warn(`[Twurple] ${message}`);
-            } else {
-              log.info(`[Twurple] ${message}`);
             }
+            // INFO and DEBUG suppressed — avoids raw IRC message spam
           },
         },
       });

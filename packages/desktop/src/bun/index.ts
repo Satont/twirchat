@@ -165,6 +165,15 @@ setOnAuthSuccessCallback(async (platform, channelSlug) => {
       action: "auth",
     });
   }
+
+  // Also reconnect any watched channel adapters for this platform
+  // so they switch from anonymous → authenticated mode immediately
+  await watchedChannelManager.reconnectByPlatform(platform).catch((err) => {
+    log.error("Failed to reconnect watched channels after auth", {
+      platform,
+      error: String(err),
+    });
+  });
 });
 
 // Start auth server AFTER setting up the callback
@@ -243,6 +252,13 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       authLogout: ({ platform }) => {
         backendConn.send({ type: "auth_logout", platform });
         AccountStore.deleteByPlatform(platform);
+        // Reconnect watched channels so they drop back to anonymous mode
+        void watchedChannelManager.reconnectByPlatform(platform).catch((err) => {
+          log.error("Failed to reconnect watched channels after logout", {
+            platform,
+            error: String(err),
+          });
+        });
       },
 
       joinChannel: ({ platform, channelSlug }) => {
@@ -443,6 +459,10 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
 
       sendWatchedChannelMessage: async ({ id, text }: { id: string; text: string }) => {
         await watchedChannelManager.sendMessage(id, text);
+      },
+
+      getWatchedChannelStatuses: () => {
+        return watchedChannelManager.getAllStatuses();
       },
     },
   },

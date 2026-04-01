@@ -75,6 +75,18 @@ async function loadInitialData() {
       statuses.value = map;
     }
     if (watched !== undefined) watchedChannels.value = watched;
+
+    // Load current watched channel statuses (emitted before webview was ready)
+    try {
+      const watchedStats = await rpc.request.getWatchedChannelStatuses();
+      if (watchedStats !== undefined && watchedStats.length > 0) {
+        const map = new Map<string, PlatformStatusInfo>(watchedStatuses.value);
+        for (const { channelId, status } of watchedStats) map.set(channelId, status);
+        watchedStatuses.value = map;
+      }
+    } catch {
+      // Not fatal
+    }
   } catch (err) {
     console.warn("[App] Initial data load failed, retrying in 1s...", err);
     setTimeout(loadInitialData, 1000);
@@ -417,6 +429,7 @@ async function onSendWatched(text: string) {
         v-if="activeTab === 'chat'"
         :watched-channels="watchedChannels"
         :active-tab-id="activeChatTab"
+        :watched-statuses="watchedStatuses"
         @select-tab="activeChatTab = $event"
         @add-channel="showAddModal = true"
         @remove-channel="onRemoveChannel"

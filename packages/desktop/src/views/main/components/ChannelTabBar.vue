@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { WatchedChannel } from "@twirchat/shared/types";
+import type { WatchedChannel, PlatformStatusInfo } from "@twirchat/shared/types";
 
 const props = defineProps<{
   watchedChannels: WatchedChannel[];
   activeTabId: string; // "home" or a WatchedChannel.id
+  watchedStatuses: Map<string, PlatformStatusInfo>;
 }>();
 
 const emit = defineEmits<{
@@ -18,6 +19,10 @@ function platformColor(platform: string): string {
     case "kick": return "#53fc18";
     default: return "#a78bfa";
   }
+}
+
+function isLive(id: string): boolean {
+  return props.watchedStatuses.get(id)?.status === "connected";
 }
 </script>
 
@@ -50,6 +55,13 @@ function platformColor(platform: string): string {
         @click="emit('select-tab', ch.id)"
         :title="`${ch.platform}: ${ch.displayName}`"
       >
+        <!-- Live dot -->
+        <span
+          class="live-dot"
+          :class="{ live: isLive(ch.id) }"
+          :style="isLive(ch.id) ? { '--dot-color': platformColor(ch.platform) } : {}"
+        />
+
         <!-- Platform icon -->
         <svg v-if="ch.platform === 'twitch'" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
@@ -75,7 +87,7 @@ function platformColor(platform: string): string {
 
     <!-- Add button -->
     <button class="tab tab-add" @click="emit('add-channel')" title="Add channel">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecep="round">
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
@@ -144,6 +156,27 @@ function platformColor(platform: string): string {
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Live indicator dot */
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-text-2, #555);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.live-dot.live {
+  background: var(--dot-color, #22c55e);
+  animation: dot-pulse 2s infinite;
+}
+
+@keyframes dot-pulse {
+  0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--dot-color, #22c55e) 60%, transparent); }
+  70%  { box-shadow: 0 0 0 4px transparent; }
+  100% { box-shadow: 0 0 0 0   transparent; }
 }
 
 .tab-close {

@@ -100,6 +100,48 @@ export class WatchedChannelManager {
     return this.entries.get(id)?.status ?? null;
   }
 
+  /** Get current statuses for all watched channels */
+  getAllStatuses(): Array<{ channelId: string; status: PlatformStatusInfo }> {
+    const result: Array<{ channelId: string; status: PlatformStatusInfo }> = [];
+    for (const [id, entry] of this.entries) {
+      if (entry.status) {
+        result.push({ channelId: id, status: entry.status });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Reconnect all watched channels for a given platform.
+   * Called after login/logout so adapters pick up the new auth state.
+   */
+  async reconnectByPlatform(platform: string): Promise<void> {
+    const matching = [...this.entries.values()].filter(
+      (e) => e.watchedChannel.platform === platform,
+    );
+
+    await Promise.all(
+      matching.map(async (entry) => {
+        log.info("Reconnecting watched channel after auth change", {
+          id: entry.watchedChannel.id,
+          platform,
+          slug: entry.watchedChannel.channelSlug,
+        });
+        try {
+          this.unbindAdapter(entry);
+          await entry.adapter.disconnect();
+          this.bindAdapter(entry);
+          await entry.adapter.connect(entry.watchedChannel.channelSlug);
+        } catch (err) {
+          log.error("Failed to reconnect watched channel", {
+            id: entry.watchedChannel.id,
+            error: String(err),
+          });
+        }
+      }),
+    );
+  }
+
   /** Send a message via the watched channel's adapter */
   async sendMessage(id: string, text: string): Promise<void> {
     const entry = this.entries.get(id);
