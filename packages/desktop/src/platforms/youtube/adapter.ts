@@ -93,7 +93,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         this.accessToken = await refreshYouTubeToken(account.id);
         log.info("[YouTube] Token refreshed successfully");
       } catch (err) {
-        log.error("[YouTube] Failed to refresh token:", err);
+        log.error("[YouTube] Failed to refresh token", { error: String(err) });
         this.emit("status", {
           platform: "youtube",
           status: "error",
@@ -272,7 +272,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         log.info("[YouTube] Token refreshed successfully");
         return true;
       } catch (err) {
-        log.error("[YouTube] Failed to refresh token:", err);
+        log.error("[YouTube] Failed to refresh token", { error: String(err) });
         return false;
       }
     }

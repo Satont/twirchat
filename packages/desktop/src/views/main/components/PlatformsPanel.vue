@@ -177,13 +177,13 @@ async function logout(platform: Platform) {
 }
 
 async function joinChannel(platform: Platform) {
-  const slug = channelInputs.value[platform].trim();
+  const slug = (channelInputs.value[platform] ?? "").trim();
   if (!slug) return;
   joiningChannel.value[platform] = true;
   try {
     await rpc.request.joinChannel({ platform, channelSlug: slug });
-    if (!joinedChannels.value[platform].includes(slug)) {
-      joinedChannels.value[platform] = [...joinedChannels.value[platform], slug];
+    if (!(joinedChannels.value[platform] ?? []).includes(slug)) {
+      joinedChannels.value[platform] = [...(joinedChannels.value[platform] ?? []), slug];
     }
     channelInputs.value[platform] = "";
   } catch (err) {
@@ -196,7 +196,7 @@ async function joinChannel(platform: Platform) {
 
 async function leaveChannel(platform: Platform, slug: string) {
   await rpc.request.leaveChannel({ platform, channelSlug: slug });
-  joinedChannels.value[platform] = joinedChannels.value[platform].filter(
+  joinedChannels.value[platform] = (joinedChannels.value[platform] ?? []).filter(
     (c) => c !== slug,
   );
 }
@@ -306,7 +306,7 @@ function onInputKeydown(e: KeyboardEvent, platform: Platform) {
             </div>
             <button
               class="btn btn-join"
-              :disabled="!channelInputs[platform].trim() || joiningChannel[platform]"
+              :disabled="!(channelInputs[platform] ?? '').trim() || joiningChannel[platform]"
               @click="joinChannel(platform)"
             >
               {{ joiningChannel[platform] ? "…" : "Join" }}

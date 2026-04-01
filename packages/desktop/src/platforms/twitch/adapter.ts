@@ -18,7 +18,8 @@ import type {
 } from "@twirchat/shared/types";
 import { StaticAuthProvider } from "@twurple/auth";
 import { ChatClient } from "@twurple/chat";
-import type { PrivateMessage, UserNotice } from "@twurple/chat";
+import type { ChatMessage, UserNotice } from "@twurple/chat";
+import { LogLevel } from "@twurple/chat";
 import { getBackendUrl } from "../../runtime-config";
 import { AccountStore } from "../../store/account-store";
 import { refreshTwitchToken } from "../../auth/twitch";
@@ -74,7 +75,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
             this.accessToken = await refreshTwitchToken(account.id);
             log.info("[Twitch] Token refreshed successfully");
           } catch (err) {
-            log.error("[Twitch] Failed to refresh token:", err);
+            log.error("[Twitch] Failed to refresh token", { error: String(err) });
             // Continue with existing token, will retry on 401
           }
         }
@@ -180,13 +181,12 @@ export class TwitchAdapter extends BasePlatformAdapter {
         isAlwaysMod: false,
         logger: {
           custom: (level, message) => {
-            if (level === "error") {
+            if (level === LogLevel.ERROR) {
               log.error(`[Twurple] ${message}`);
-            } else if (level === "warn") {
+            } else if (level === LogLevel.WARNING) {
               log.warn(`[Twurple] ${message}`);
-            } else {
-              log.info(`[Twurple] ${message}`);
             }
+            // INFO and DEBUG suppressed — avoids raw IRC message spam
           },
         },
       });
@@ -195,7 +195,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
       await this.chatClient.connect();
     } catch (err) {
-      log.error("[Twitch] Failed to connect:", err);
+      log.error("[Twitch] Failed to connect", { error: String(err) });
       this.handleDisconnect();
     }
   }
@@ -210,7 +210,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     // Joined channel
     this.chatClient.onJoin((channel, user) => {
-      if (user === this.chatClient?.currentNick) {
+      if (user === this.login) {
         log.info(`[Twitch] Joined ${channel}`);
         this.isConnected = true;
         this.emit("status", {
@@ -239,9 +239,12 @@ export class TwitchAdapter extends BasePlatformAdapter {
       }
     });
 
-    // Messages
+    // Messages (also handles bits/cheers — msg.bits > 0 means a cheer)
     this.chatClient.onMessage((channel, user, text, msg) => {
       this.handleChatMessage(msg);
+      if (msg.bits > 0) {
+        this.handleCheerEvent(msg);
+      }
     });
 
     // Actions (/me)
@@ -261,17 +264,12 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     // Sub gifts
     this.chatClient.onSubGift((channel, user, subInfo, msg) => {
-      this.handleSubGiftEvent(msg, subInfo);
+      this.handleSubGiftEvent(msg, user, subInfo);
     });
 
     // Raids
     this.chatClient.onRaid((channel, user, raidInfo, msg) => {
       this.handleRaidEvent(msg, raidInfo);
-    });
-
-    // Bits/cheers
-    this.chatClient.onCheer((channel, user, message, msg) => {
-      this.handleCheerEvent(msg);
     });
 
     // Ban/timeout events (optional, for moderation features)
@@ -311,7 +309,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       log.info("[Twitch] Token refreshed, reconnecting...");
       await this.reconnectWithNewToken();
     } catch (err) {
-      log.error("[Twitch] Token refresh failed:", err);
+      log.error("[Twitch] Token refresh failed", { error: String(err) });
     }
   }
 
@@ -342,7 +340,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         log.info("[Twitch] Token refreshed successfully");
         return true;
       } catch (err) {
-        log.error("[Twitch] Failed to refresh token:", err);
+        log.error("[Twitch] Failed to refresh token", { error: String(err) });
         return false;
       }
     }
@@ -361,13 +359,13 @@ export class TwitchAdapter extends BasePlatformAdapter {
     return false;
   }
 
-  private handleChatMessage(msg: PrivateMessage, isAction = false): void {
-    const channel = msg.target.value;
+  private handleChatMessage(msg: ChatMessage, isAction = false): void {
+    const channel = msg.target;
     const text = msg.text;
     const tags = msg.tags;
 
     const userId = tags.get("user-id") ?? "";
-    const displayName = tags.get("display-name") ?? msg.userName;
+    const displayName = tags.get("display-name") ?? msg.userInfo.userName;
     const color = tags.get("color") || undefined;
     const msgId = tags.get("id") ?? `${Date.now()}`;
     const timestamp = msg.date;
@@ -376,14 +374,14 @@ export class TwitchAdapter extends BasePlatformAdapter {
     const emotes: NormalizedChatMessage["emotes"] = [];
     if (msg.emoteOffsets) {
       for (const [emoteId, offsets] of msg.emoteOffsets) {
-        const positions = offsets.map(offset => {
+        const positions = offsets.map((offset: string) => {
           const [start, end] = offset.split("-").map(Number);
-          return { start, end };
+          return { start: start ?? 0, end: end ?? 0 };
         });
 
         // Get emote name from first position
         const firstPos = positions[0];
-        const emoteName = firstPos ? text.slice(firstPos.start, firstPos.end + 1) : "";
+        const emoteName = firstPos ? text.slice(firstPos.start, (firstPos.end ?? 0) + 1) : "";
 
         emotes.push({
           id: emoteId,
@@ -418,7 +416,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       channelId: channel.replace("#", ""),
       author: {
         id: userId,
-        username: msg.userName,
+        username: msg.userInfo.userName,
         displayName,
         color,
         badges,
@@ -458,7 +456,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.emit("event", event);
   }
 
-  private handleSubGiftEvent(msg: UserNotice, subInfo: { recipient: string; months: number; plan?: string }): void {
+  private handleSubGiftEvent(msg: UserNotice, recipient: string, subInfo: { months: number; plan?: string }): void {
     const tags = msg.tags;
     const userId = tags.get("user-id") ?? "";
     const displayName = tags.get("display-name") ?? "unknown";
@@ -475,7 +473,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       data: {
         channelId,
         recipientId: tags.get("msg-param-recipient-id"),
-        recipientDisplayName: subInfo.recipient,
+        recipientDisplayName: recipient,
         subPlan: tags.get("msg-param-sub-plan"),
         months: subInfo.months,
         systemMsg: tags.get("system-msg")?.replace(/\\s/g, " "),
@@ -511,10 +509,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.emit("event", event);
   }
 
-  private handleCheerEvent(msg: PrivateMessage): void {
+  private handleCheerEvent(msg: ChatMessage): void {
     const tags = msg.tags;
     const userId = tags.get("user-id") ?? "";
-    const displayName = tags.get("display-name") ?? msg.userName;
+    const displayName = tags.get("display-name") ?? msg.userInfo.userName;
     const bits = parseInt(tags.get("bits") ?? "0", 10);
 
     const event: NormalizedEvent = {
@@ -552,7 +550,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       this.badgeCache = new Map(Object.entries(data.badges));
       log.info(`[Twitch] Badge cache updated: ${this.badgeCache.size} entries`);
     } catch (err) {
-      log.warn("[Twitch] Badge fetch error:", err);
+      log.warn("[Twitch] Badge fetch error", { error: String(err) });
     }
   }
 

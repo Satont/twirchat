@@ -78,8 +78,8 @@ export abstract class BasePlatformAdapter implements IPlatformAdapter {
         (handler as PlatformEventHandler<K>)(data);
       } catch (err) {
         log.error(
-          `[${this.platform}] Event handler error (${event}):`,
-          err,
+          `[${this.platform}] Event handler error (${event})`,
+          { error: String(err) },
         );
       }
     }

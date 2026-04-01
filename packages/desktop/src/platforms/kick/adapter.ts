@@ -115,7 +115,7 @@ export class KickAdapter extends BasePlatformAdapter {
             this.accessToken = await refreshKickToken(account.id);
             log.info("[Kick] Token refreshed successfully");
           } catch (err) {
-            log.error("[Kick] Failed to refresh token:", err);
+            log.error("[Kick] Failed to refresh token", { error: String(err) });
           }
         }
       }
@@ -221,7 +221,7 @@ export class KickAdapter extends BasePlatformAdapter {
         log.info("[Kick] Token refreshed successfully");
         return true;
       } catch (err) {
-        log.error("[Kick] Failed to refresh token:", err);
+        log.error("[Kick] Failed to refresh token", { error: String(err) });
         return false;
       }
     }
@@ -276,7 +276,7 @@ export class KickAdapter extends BasePlatformAdapter {
         const msg = JSON.parse(event.data as string) as PusherEvent;
         this.handlePusherEvent(msg);
       } catch (err) {
-        log.error("[Kick] Failed to parse Pusher event:", err);
+        log.error("[Kick] Failed to parse Pusher event", { error: String(err) });
       }
     });
 
@@ -302,7 +302,7 @@ export class KickAdapter extends BasePlatformAdapter {
     });
 
     ws.addEventListener("error", (err) => {
-      log.error("[Kick] Pusher WebSocket error:", err);
+      log.error("[Kick] Pusher WebSocket error", { error: String(err) });
     });
   }
 
@@ -398,6 +398,7 @@ export class KickAdapter extends BasePlatformAdapter {
 
     while ((match = emoteRegex.exec(msg.content)) !== null) {
       const [fullMatch, emoteId, emoteName] = match;
+      if (!emoteId || !emoteName) continue;
       const originalStart = match.index;
       const originalEnd = originalStart + fullMatch.length - 1;
 

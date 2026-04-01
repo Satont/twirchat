@@ -4,6 +4,8 @@ import PlatformsPanel from "./components/PlatformsPanel.vue";
 import ChatList from "./components/ChatList.vue";
 import EventsFeed from "./components/EventsFeed.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
+import ChannelTabBar from "./components/ChannelTabBar.vue";
+import AddChannelModal from "./components/AddChannelModal.vue";
 import { rpc } from "./main";
 import type {
   NormalizedChatMessage,
@@ -11,6 +13,7 @@ import type {
   PlatformStatusInfo,
   Account,
   AppSettings,
+  WatchedChannel,
 } from "@twirchat/shared/types";
 
 // ----------------------------------------------------------------
@@ -25,6 +28,31 @@ const settings = ref<AppSettings | null>(null);
 const activeTab = ref<"chat" | "events" | "platforms" | "settings">("chat");
 const unreadEvents = ref(0);
 
+// ---- Watched channels ----
+const watchedChannels = ref<WatchedChannel[]>([]);
+/** "home" | WatchedChannel.id */
+const activeChatTab = ref<string>("home");
+/** channelId → messages buffer */
+const watchedMessages = ref<Map<string, NormalizedChatMessage[]>>(new Map());
+/** channelId → PlatformStatusInfo */
+const watchedStatuses = ref<Map<string, PlatformStatusInfo>>(new Map());
+const showAddModal = ref(false);
+
+const activeWatchedChannel = computed<WatchedChannel | null>(() => {
+  if (activeChatTab.value === "home") return null;
+  return watchedChannels.value.find((c: WatchedChannel) => c.id === activeChatTab.value) ?? null;
+});
+
+const activeWatchedStatus = computed<PlatformStatusInfo | null>(() => {
+  if (!activeWatchedChannel.value) return null;
+  return watchedStatuses.value.get(activeWatchedChannel.value.id) ?? null;
+});
+
+const activeWatchedMessages = computed<NormalizedChatMessage[]>(() => {
+  if (!activeWatchedChannel.value) return [];
+  return watchedMessages.value.get(activeWatchedChannel.value.id) ?? [];
+});
+
 const connectedAccountsCount = computed(() => accounts.value.length);
 
 // ----------------------------------------------------------------
@@ -33,10 +61,11 @@ const connectedAccountsCount = computed(() => accounts.value.length);
 
 async function loadInitialData() {
   try {
-    const [accs, setts, statList] = await Promise.all([
+    const [accs, setts, statList, watched] = await Promise.all([
       rpc.request.getAccounts(),
       rpc.request.getSettings(),
       rpc.request.getStatuses(),
+      rpc.request.getWatchedChannels(),
     ]);
     if (accs !== undefined) accounts.value = accs;
     if (setts !== undefined) settings.value = setts;
@@ -44,6 +73,19 @@ async function loadInitialData() {
       const map = new Map<string, PlatformStatusInfo>();
       for (const s of statList) map.set(s.platform, s);
       statuses.value = map;
+    }
+    if (watched !== undefined) watchedChannels.value = watched;
+
+    // Load current watched channel statuses (emitted before webview was ready)
+    try {
+      const watchedStats = await rpc.request.getWatchedChannelStatuses();
+      if (watchedStats !== undefined && watchedStats.length > 0) {
+        const map = new Map<string, PlatformStatusInfo>(watchedStatuses.value);
+        for (const { channelId, status } of watchedStats) map.set(channelId, status);
+        watchedStatuses.value = map;
+      }
+    } catch {
+      // Not fatal
     }
   } catch (err) {
     console.warn("[App] Initial data load failed, retrying in 1s...", err);
@@ -55,11 +97,22 @@ async function loadInitialData() {
   try {
     const recentMsgs = await rpc.request.getRecentMessages({});
     if (recentMsgs !== undefined && recentMsgs.length > 0) {
-      // getRecentMessages returns oldest-first; messages array is newest-first
       messages.value = [...recentMsgs].reverse();
     }
   } catch (err) {
     console.warn("[App] Failed to load recent messages:", err);
+  }
+
+  // Load buffered messages for all persisted watched channels
+  for (const ch of watchedChannels.value) {
+    try {
+      const msgs = await rpc.request.getWatchedChannelMessages({ id: ch.id });
+      if (msgs && msgs.length > 0) {
+        watchedMessages.value = new Map(watchedMessages.value).set(ch.id, msgs);
+      }
+    } catch {
+      // Not fatal
+    }
   }
 }
 
@@ -73,7 +126,6 @@ onMounted(() => {
 
 const unsubscribers: Array<() => void> = [];
 
-// Update state
 const updateState = ref<{
   show: boolean;
   status: string;
@@ -123,12 +175,26 @@ onMounted(() => {
     }
   };
 
+  const onWatchedMessage = ({ channelId, message }: { channelId: string; message: NormalizedChatMessage }) => {
+    const prev = watchedMessages.value.get(channelId) ?? [];
+    watchedMessages.value = new Map(watchedMessages.value).set(
+      channelId,
+      [message, ...prev].slice(0, 200),
+    );
+  };
+
+  const onWatchedStatus = ({ channelId, status }: { channelId: string; status: PlatformStatusInfo }) => {
+    watchedStatuses.value = new Map(watchedStatuses.value).set(channelId, status);
+  };
+
   rpc.addMessageListener("chat_message", onChatMessage);
   rpc.addMessageListener("chat_event", onChatEvent);
   rpc.addMessageListener("platform_status", onPlatformStatus);
   rpc.addMessageListener("auth_success", onAuthSuccess);
   rpc.addMessageListener("auth_error", onAuthError);
   rpc.addMessageListener("update_status", onUpdateStatus);
+  rpc.addMessageListener("watched_channel_message", onWatchedMessage);
+  rpc.addMessageListener("watched_channel_status", onWatchedStatus);
 
   unsubscribers.push(
     () => rpc.removeMessageListener("chat_message", onChatMessage),
@@ -137,9 +203,10 @@ onMounted(() => {
     () => rpc.removeMessageListener("auth_success", onAuthSuccess),
     () => rpc.removeMessageListener("auth_error", onAuthError),
     () => rpc.removeMessageListener("update_status", onUpdateStatus),
+    () => rpc.removeMessageListener("watched_channel_message", onWatchedMessage),
+    () => rpc.removeMessageListener("watched_channel_status", onWatchedStatus),
   );
 
-  // Check for updates on startup (if enabled)
   checkForUpdates();
 });
 
@@ -148,7 +215,6 @@ async function checkForUpdates() {
     const result = await rpc.request.checkForUpdate();
     if (result.updateAvailable) {
       updateState.value.updateAvailable = true;
-      // Auto-download update
       await rpc.request.downloadUpdate();
     }
   } catch (err) {
@@ -181,9 +247,47 @@ function onSettingsChange(s: AppSettings) {
   settings.value = s;
 }
 
-// Update notification dismissed
 function dismissUpdate() {
   updateState.value.show = false;
+}
+
+// ----------------------------------------------------------------
+// Watched channel actions
+// ----------------------------------------------------------------
+
+async function onAddChannel(platform: "twitch" | "kick", channelSlug: string) {
+  showAddModal.value = false;
+  try {
+    const ch = await rpc.request.addWatchedChannel({ platform, channelSlug });
+    // Add to list if not already present
+    if (!watchedChannels.value.find((c: WatchedChannel) => c.id === ch.id)) {
+      watchedChannels.value = [...watchedChannels.value, ch];
+    }
+    activeChatTab.value = ch.id;
+  } catch (err) {
+    console.error("[App] addWatchedChannel failed:", err);
+  }
+}
+
+async function onRemoveChannel(id: string) {
+  try {
+    await rpc.request.removeWatchedChannel({ id });
+    watchedChannels.value = watchedChannels.value.filter((c: WatchedChannel) => c.id !== id);
+    watchedMessages.value = new Map([...watchedMessages.value].filter(([k]) => k !== id));
+    watchedStatuses.value = new Map([...watchedStatuses.value].filter(([k]) => k !== id));
+    if (activeChatTab.value === id) activeChatTab.value = "home";
+  } catch (err) {
+    console.error("[App] removeWatchedChannel failed:", err);
+  }
+}
+
+async function onSendWatched(text: string) {
+  if (!activeWatchedChannel.value) return;
+  try {
+    await rpc.request.sendWatchedChannelMessage({ id: activeWatchedChannel.value.id, text });
+  } catch (err) {
+    console.error("[App] sendWatchedChannelMessage failed:", err);
+  }
 }
 </script>
 
@@ -320,14 +424,29 @@ function dismissUpdate() {
 
     <!-- Main content area -->
     <main class="content">
+      <!-- Channel tab bar: only visible in chat view -->
+      <ChannelTabBar
+        v-if="activeTab === 'chat'"
+        :watched-channels="watchedChannels"
+        :active-tab-id="activeChatTab"
+        :watched-statuses="watchedStatuses"
+        @select-tab="activeChatTab = $event"
+        @add-channel="showAddModal = true"
+        @remove-channel="onRemoveChannel"
+      />
+
       <ChatList
         v-show="activeTab === 'chat'"
         :messages="messages"
         :settings="settings"
         :accounts="accounts"
         :statuses="statuses"
+        :watched-channel="activeWatchedChannel"
+        :watched-channel-status="activeWatchedStatus"
+        :watched-messages="activeWatchedMessages"
         @go-to-platforms="switchTab('platforms')"
         @settings-change="onSettingsChange"
+        @send-watched="onSendWatched"
       />
 
       <EventsFeed v-show="activeTab === 'events'" :events="events" />
@@ -346,6 +465,13 @@ function dismissUpdate() {
         @change="onSettingsChange"
       />
     </main>
+
+    <!-- Add channel modal -->
+    <AddChannelModal
+      v-if="showAddModal"
+      @confirm="onAddChannel"
+      @cancel="showAddModal = false"
+    />
 
     <!-- Update notification toast -->
     <div v-if="updateState.show" class="update-toast">

@@ -4,3 +4,4 @@ export { SettingsStore } from "./settings-store";
 export { ChannelStore } from "./channel-store";
 export { MessageStore } from "./message-store";
 export { UsernameColorCache } from "./username-color-cache";
+export { WatchedChannelStore } from "./watched-channels-store";
