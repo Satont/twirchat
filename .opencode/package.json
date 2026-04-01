@@ -1,0 +1,12 @@
+{
+  "name": "opencode-plugins",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@opencode-ai/plugin": "1.3.13"
+  },
+  "devDependencies": {
+    "jsonc-parser": "3.3.1",
+    "zod": "4.3.5"
+  }
+}
