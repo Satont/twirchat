@@ -16,11 +16,12 @@ const log = logger("backend");
 await runMigrations();
 
 // Prefetch global Twitch badges at startup so the first request is instant
-try {
-  await handleTwitchBadges(new URL("http://localhost/api/twitch/badges"));
-} catch (err) {
-  log.warn("Failed to prefetch global Twitch badges", { err: String(err) });
-}
+
+handleTwitchBadges(new URL("http://localhost/api/twitch/badges")).catch(
+  (err) => {
+    log.warn("Failed to prefetch global Twitch badges", { err: String(err) });
+  },
+);
 
 const server = Bun.serve<WsData>({
   hostname: "0.0.0.0",
