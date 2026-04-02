@@ -11,6 +11,7 @@ export interface RuntimeConfig {
   backendWsUrl: string;
   nodeEnv: string;
   dbPath: string;
+  clientSecret: string;
 }
 
 function getDefaultDbPath(nodeEnv: string): string {
@@ -25,6 +26,7 @@ const defaultConfig: RuntimeConfig = {
   backendWsUrl: "ws://127.0.0.1:3000/ws",
   nodeEnv: "production",
   dbPath: getDefaultDbPath("production"),
+  clientSecret: "",
 };
 
 let runtimeConfig: RuntimeConfig = { ...defaultConfig };
@@ -58,4 +60,20 @@ export function getBackendWsUrl(): string {
 
 export function getDbPath(): string {
   return runtimeConfig.dbPath;
+}
+
+/**
+ * Authenticated fetch to the backend.
+ * Automatically prepends the backend base URL and injects X-Client-Secret.
+ * Use this for every HTTP call to the backend instead of bare fetch().
+ */
+export function backendFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const { backendUrl, clientSecret } = runtimeConfig;
+  return fetch(`${backendUrl}${path}`, {
+    ...options,
+    headers: {
+      ...(options.headers as Record<string, string> | undefined),
+      ...(clientSecret ? { "X-Client-Secret": clientSecret } : {}),
+    },
+  });
 }

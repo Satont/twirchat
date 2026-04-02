@@ -58,7 +58,7 @@ import {
   setAuthServerRpcSender,
   setOnAuthSuccessCallback,
 } from "../auth";
-import { setRuntimeConfig, getRuntimeConfig, getBackendUrl } from "../runtime-config";
+import { setRuntimeConfig, getRuntimeConfig, backendFetch } from "../runtime-config";
 
 // ============================================================
 // 1. Load runtime config from build.json
@@ -103,6 +103,9 @@ log.info("Database ready");
 
 const clientSecret = getClientSecret();
 log.info("Client secret", { secret: `${clientSecret.slice(0, 8)}...` });
+
+// Make the secret available to backendFetch() used throughout the process
+setRuntimeConfig({ clientSecret });
 
 const backendConn = new BackendConnection(clientSecret);
 const aggregator = new ChatAggregator(500);
@@ -333,9 +336,8 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       },
 
       getStreamStatus: async ({ platform, channelId }) => {
-        const res = await fetch(
-          `${getBackendUrl()}/api/stream-status?platform=${platform}&channelId=${encodeURIComponent(channelId)}`,
-          { headers: { "X-Client-Secret": clientSecret } },
+        const res = await backendFetch(
+          `/api/stream-status?platform=${platform}&channelId=${encodeURIComponent(channelId)}`,
         );
         if (!res.ok) throw new Error(`stream-status: ${res.status}`);
         return (await res.json()) as StreamStatusResponse;
@@ -353,14 +355,11 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
           userAccessToken: tokens.accessToken,
         };
 
-        const res = await fetch(
-          `${getBackendUrl()}/api/update-stream`,
+        const res = await backendFetch(
+          `/api/update-stream`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Client-Secret": clientSecret,
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           },
         );
@@ -369,9 +368,8 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       },
 
       searchCategories: async ({ platform, query }) => {
-        const res = await fetch(
-          `${getBackendUrl()}/api/search-categories?platform=${platform}&query=${encodeURIComponent(query)}`,
-          { headers: { "X-Client-Secret": clientSecret } },
+        const res = await backendFetch(
+          `/api/search-categories?platform=${platform}&query=${encodeURIComponent(query)}`,
         );
         if (!res.ok) throw new Error(`search-categories: ${res.status}`);
         return (await res.json()) as SearchCategoriesResponse;
@@ -392,14 +390,11 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
           return ch;
         });
 
-        const res = await fetch(
-          `${getBackendUrl()}/api/channels-status`,
+        const res = await backendFetch(
+          `/api/channels-status`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Client-Secret": clientSecret,
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ channels: enriched }),
           },
         );
