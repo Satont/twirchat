@@ -16,6 +16,26 @@ export interface SevenTVHello {
   subscription_limit: number;
 }
 
+export interface UserUpdateEventNestedField {
+  key: string;
+  value: unknown;
+  old_value?: unknown;
+}
+
+export interface UserUpdateEvent {
+  id: string;
+  updated?: Array<{
+    key: string;
+    index?: number | null;
+    nested?: boolean;
+    type?: string;
+    // When nested === true, value is an array of UserUpdateEventNestedField.
+    // Otherwise, value can be any scalar/object (string, null, object, etc.)
+    value?: unknown;
+    old_value?: unknown;
+  }>;
+}
+
 export interface EmoteSetUpdateEvent {
   id: string;
   actor?: {
@@ -91,7 +111,7 @@ export interface EmoteSetUpdateEvent {
 
 export type SevenTVEventHandler = (event: {
   type: string;
-  body: EmoteSetUpdateEvent;
+  body: EmoteSetUpdateEvent | UserUpdateEvent;
 }) => void;
 
 export class SevenTVEventClient {
@@ -200,7 +220,7 @@ export class SevenTVEventClient {
           break;
         case 0: // Dispatch
           if (message.d) {
-            const dispatch = message.d as { type: string; body: EmoteSetUpdateEvent };
+            const dispatch = message.d as { type: string; body: EmoteSetUpdateEvent | UserUpdateEvent };
             log.info("DISPATCH EVENT RECEIVED", { type: dispatch.type, bodyId: dispatch.body?.id });
             this.onEvent?.(dispatch);
           }

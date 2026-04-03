@@ -141,3 +141,77 @@ export async function getUserByConnection(
     platformId,
   });
 }
+
+const GET_EMOTE_SET_BY_ID_QUERY = `
+query GetEmoteSetById($id: Id!) {
+  emoteSets {
+    emoteSet(id: $id) {
+      id
+      name
+      emotes(perPage: 1000) {
+        items {
+          id
+          alias
+          flags {
+            zeroWidth
+          }
+          emote {
+            id
+            defaultName
+            flags {
+              animated
+            }
+            aspectRatio
+            images {
+              url
+              mime
+              size
+              scale
+              width
+              height
+              frameCount
+            }
+          }
+        }
+      }
+    }
+  }
+}
+`;
+
+export async function getEmoteSetById(id: string): Promise<{
+  emoteSets: {
+    emoteSet?: {
+      id: string;
+      name: string;
+      emotes: {
+        items: Array<{
+          id: string;
+          alias: string;
+          flags: {
+            zeroWidth: boolean;
+          };
+          emote: {
+            id: string;
+            defaultName: string;
+            aspectRatio: number;
+            flags: {
+              animated: boolean;
+            };
+            images: Array<{
+              url: string;
+              mime: string;
+              size: number;
+              scale: number;
+              width: number;
+              height: number;
+              frameCount: number;
+            }>;
+          };
+        }>;
+      };
+    };
+  };
+}> {
+  return executeGraphQL(GET_EMOTE_SET_BY_ID_QUERY, { id });
+}

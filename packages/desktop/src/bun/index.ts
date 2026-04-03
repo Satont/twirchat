@@ -671,6 +671,27 @@ backendConn.onMessage((msg) => {
 });
 
 backendConn.onSystemMessage((msg) => {
+  if (msg.action === "set_changed") {
+    const systemMsg: NormalizedChatMessage = {
+      id: `7tv-system-${Date.now()}-${Math.random()}`,
+      platform: msg.platform,
+      channelId: msg.channelId,
+      author: {
+        id: "7tv-system",
+        username: "7TV",
+        displayName: "7TV",
+        color: "#6441a5",
+        badges: [],
+      },
+      text: `Active emote set changed to «${msg.setName}»`,
+      emotes: [],
+      timestamp: new Date(),
+      type: "system",
+    };
+    aggregator.injectMessage(systemMsg);
+    return;
+  }
+
   const actionText =
     msg.action === "added"
       ? "added to"

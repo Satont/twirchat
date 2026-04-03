@@ -43,7 +43,8 @@ export type BackendToDesktopMessage =
   | { type: "seventv_emote_removed"; platform: Platform; channelId: string; emoteId: string }
   | { type: "seventv_emote_updated"; platform: Platform; channelId: string; emoteId: string; alias: string }
   // 7TV system notification
-  | { type: "seventv_system_message"; platform: Platform; channelId: string; action: "added" | "removed" | "updated"; emote: SevenTVEmote; oldAlias?: string };
+  | { type: "seventv_system_message"; platform: Platform; channelId: string; action: "added" | "removed" | "updated"; emote: SevenTVEmote; oldAlias?: string }
+  | { type: "seventv_system_message"; platform: Platform; channelId: string; action: "set_changed"; setName: string };
 
 // ============================================================
 // Desktop → Backend

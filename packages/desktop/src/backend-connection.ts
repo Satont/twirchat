@@ -1,8 +1,6 @@
 import type {
   BackendToDesktopMessage,
   DesktopToBackendMessage,
-  Platform,
-  SevenTVEmote,
 } from "@twirchat/shared";
 import { getBackendWsUrl } from "./runtime-config";
 import { logger } from "@twirchat/shared/logger";
@@ -11,13 +9,7 @@ import { sevenTVService } from "./seventv";
 const log = logger("backend-connection");
 
 type MessageHandler = (msg: BackendToDesktopMessage) => void;
-type SystemMessageHandler = (msg: {
-  platform: Platform;
-  channelId: string;
-  action: "added" | "removed" | "updated";
-  emote: SevenTVEmote;
-  oldAlias?: string;
-}) => void;
+type SystemMessageHandler = (msg: Extract<BackendToDesktopMessage, { type: "seventv_system_message" }>) => void;
 
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
@@ -154,7 +146,7 @@ export class BackendConnection {
               platform: msg.platform,
               channelId: msg.channelId,
               action: msg.action,
-              emoteAlias: msg.emote.alias,
+              emoteAlias: msg.action !== "set_changed" ? msg.emote.alias : undefined,
               handlerCount: this.systemMessageHandlers.length,
             });
             for (const handler of this.systemMessageHandlers) {
