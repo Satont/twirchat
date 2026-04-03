@@ -1,0 +1,46 @@
+query GetUserByConnection($platform: Platform!, $platformId: String!) {
+  users {
+    userByConnection(platform: $platform, platformId: $platformId) {
+      id
+      mainConnection {
+        platform
+        platformId
+        platformUsername
+        platformDisplayName
+      }
+      style {
+        activeEmoteSetId
+        activeEmoteSet {
+          id
+          name
+          emotes(perPage: 1000) {
+            items {
+              id
+              alias
+              flags {
+                zeroWidth
+              }
+              emote {
+                id
+                defaultName
+                flags {
+                  animated
+                }
+                aspectRatio
+                images {
+                  url
+                  mime
+                  size
+                  scale
+                  width
+                  height
+                  frameCount
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -14,6 +14,16 @@ import type { Platform } from "./types";
  * channel_join / channel_leave / send_message are handled locally by adapters.
  */
 
+export interface SevenTVEmote {
+  id: string;
+  alias: string;
+  name: string;
+  animated: boolean;
+  zeroWidth: boolean;
+  aspectRatio: number;
+  imageUrl: string;
+}
+
 // ============================================================
 // Backend → Desktop
 // ============================================================
@@ -26,7 +36,14 @@ export type BackendToDesktopMessage =
   | { type: "pong" }
   | { type: "chat_message"; data: unknown }
   | { type: "chat_event"; data: unknown }
-  | { type: "platform_status"; platform: Platform; status: "connected" | "disconnected" | "error"; error?: string };
+  | { type: "platform_status"; platform: Platform; status: "connected" | "disconnected" | "error"; error?: string }
+  // 7TV events
+  | { type: "seventv_emote_set"; platform: Platform; channelId: string; emotes: SevenTVEmote[] }
+  | { type: "seventv_emote_added"; platform: Platform; channelId: string; emote: SevenTVEmote }
+  | { type: "seventv_emote_removed"; platform: Platform; channelId: string; emoteId: string }
+  | { type: "seventv_emote_updated"; platform: Platform; channelId: string; emoteId: string; alias: string }
+  // 7TV system notification
+  | { type: "seventv_system_message"; platform: Platform; channelId: string; action: "added" | "removed" | "updated"; emote: SevenTVEmote; oldAlias?: string };
 
 // ============================================================
 // Desktop → Backend
@@ -39,7 +56,12 @@ export type DesktopToBackendMessage =
   | { type: "auth_logout"; platform: Platform }
   | { type: "send_message"; platform: Platform; channel: string; message: string }
   | { type: "channel_join"; platform: Platform; channel: string }
-  | { type: "channel_leave"; platform: Platform; channel: string };
+  | { type: "channel_leave"; platform: Platform; channel: string }
+  // 7TV commands
+  | { type: "seventv_subscribe"; platform: Platform; channelId: string }
+  | { type: "seventv_unsubscribe"; platform: Platform; channelId: string }
+  // Client reconnect - send list of subscribed channels
+  | { type: "seventv_resubscribe"; subscriptions: Array<{ platform: Platform; channelId: string }> };
 
 // ============================================================
 // HTTP API — запросы от desktop к backend

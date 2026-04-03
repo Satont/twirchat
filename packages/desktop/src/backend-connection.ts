@@ -1,13 +1,23 @@
 import type {
   BackendToDesktopMessage,
   DesktopToBackendMessage,
+  Platform,
+  SevenTVEmote,
 } from "@twirchat/shared";
 import { getBackendWsUrl } from "./runtime-config";
 import { logger } from "@twirchat/shared/logger";
+import { sevenTVService } from "./seventv";
 
 const log = logger("backend-connection");
 
 type MessageHandler = (msg: BackendToDesktopMessage) => void;
+type SystemMessageHandler = (msg: {
+  platform: Platform;
+  channelId: string;
+  action: "added" | "removed" | "updated";
+  emote: SevenTVEmote;
+  oldAlias?: string;
+}) => void;
 
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
@@ -19,6 +29,7 @@ const MAX_RECONNECT_DELAY_MS = 30_000;
 export class BackendConnection {
   private ws: WebSocket | null = null;
   private handlers: MessageHandler[] = [];
+  private systemMessageHandlers: SystemMessageHandler[] = [];
   private reconnectDelay = RECONNECT_DELAY_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
@@ -55,6 +66,15 @@ export class BackendConnection {
     };
   }
 
+  onSystemMessage(handler: SystemMessageHandler): () => void {
+    this.systemMessageHandlers.push(handler);
+    return () => {
+      this.systemMessageHandlers = this.systemMessageHandlers.filter(
+        (h) => h !== handler
+      );
+    };
+  }
+
   get isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
@@ -71,13 +91,82 @@ export class BackendConnection {
     ws.addEventListener("open", () => {
       log.info("Connected");
       this.reconnectDelay = RECONNECT_DELAY_MS;
-      // Send client secret as first message (some implementations prefer headers, but
-      // browsers don't support custom WS headers — we'll upgrade when running in Bun)
+
+      const channels = sevenTVService.getSubscribedChannels();
+      if (channels.length > 0) {
+        log.info(`Resubscribing to ${channels.length} 7TV channels`);
+        for (const { platform, channelId } of channels) {
+          sevenTVService.subscribeToChannel(platform, channelId).catch((err) => {
+            log.error("Failed to resubscribe to 7TV", {
+              platform,
+              channelId,
+              error: String(err),
+            });
+          });
+        }
+      }
     });
 
     ws.addEventListener("message", (evt) => {
       try {
         const msg = JSON.parse(evt.data as string) as BackendToDesktopMessage;
+        
+        if (msg.type.startsWith("seventv")) {
+          log.info("Received WebSocket message", { 
+            type: msg.type,
+            platform: (msg as any).platform,
+            channelId: (msg as any).channelId,
+          });
+        }
+
+        switch (msg.type) {
+          case "seventv_emote_set":
+            sevenTVService.handleEmoteSet(
+              msg.platform,
+              msg.channelId,
+              msg.emotes
+            );
+            break;
+          case "seventv_emote_added":
+            sevenTVService.handleEmoteAdded(
+              msg.platform,
+              msg.channelId,
+              msg.emote
+            );
+            break;
+          case "seventv_emote_removed":
+            sevenTVService.handleEmoteRemoved(
+              msg.platform,
+              msg.channelId,
+              msg.emoteId
+            );
+            break;
+          case "seventv_emote_updated":
+            sevenTVService.handleEmoteUpdated(
+              msg.platform,
+              msg.channelId,
+              msg.emoteId,
+              msg.alias
+            );
+            break;
+          case "seventv_system_message":
+            log.info("7TV system message received - HANDLING", {
+              platform: msg.platform,
+              channelId: msg.channelId,
+              action: msg.action,
+              emoteAlias: msg.emote.alias,
+              handlerCount: this.systemMessageHandlers.length,
+            });
+            for (const handler of this.systemMessageHandlers) {
+              try {
+                handler(msg);
+              } catch (err) {
+                log.error("Error in system message handler", { error: String(err) });
+              }
+            }
+            break;
+        }
+
         for (const handler of this.handlers) {
           handler(msg);
         }
@@ -89,13 +178,11 @@ export class BackendConnection {
     ws.addEventListener("close", () => {
       this.ws = null;
       if (!this.stopped) {
-        log.info(
-          `Disconnected. Reconnecting in ${this.reconnectDelay}ms...`,
-        );
+        log.info(`Disconnected. Reconnecting in ${this.reconnectDelay}ms...`);
         this.reconnectTimer = setTimeout(() => {
           this.reconnectDelay = Math.min(
             this.reconnectDelay * 2,
-            MAX_RECONNECT_DELAY_MS,
+            MAX_RECONNECT_DELAY_MS
           );
           this._connect();
         }, this.reconnectDelay);
@@ -103,7 +190,7 @@ export class BackendConnection {
     });
 
     ws.addEventListener("error", (evt) => {
-      log.error("WebSocket error", { event: String(evt) });
+      log.error("WebSocket error", { event: JSON.stringify(evt) });
     });
 
     this.ws = ws;

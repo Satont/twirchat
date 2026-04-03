@@ -11,6 +11,7 @@ import type { WsData } from "./ws/connection-manager.ts";
 import { config } from "./config.ts";
 import { logger } from "@twirchat/shared/logger";
 import { handleTwitchBadges } from "./api/twitch-badges.ts";
+import { handleSevenTVImageProxy } from "./seventv/index.ts";
 
 const log = logger("backend");
 
@@ -38,7 +39,15 @@ const server = Bun.serve<WsData>({
   },
 
   async fetch(req, server) {
+    // disable bun 10 seconds timeout
+    server.timeout(req, 0);
+
     const url = new URL(req.url);
+
+    // Handle 7TV image proxy
+    if (url.pathname.startsWith("/proxy/7tv/")) {
+      return handleSevenTVImageProxy(req);
+    }
 
     if (url.pathname === "/ws") {
       const secret = req.headers.get("X-Client-Secret");

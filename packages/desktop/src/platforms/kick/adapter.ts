@@ -139,6 +139,10 @@ export class KickAdapter extends BasePlatformAdapter {
     await this.connectPusher();
   }
 
+  getBroadcasterUserId(): number | null {
+    return this.broadcasterUserId;
+  }
+
   async disconnect(): Promise<void> {
     this.shouldReconnect = false;
     this.clearTimers();
@@ -431,7 +435,7 @@ export class KickAdapter extends BasePlatformAdapter {
     const normalized: NormalizedChatMessage = {
       id: msg.id,
       platform: "kick",
-      channelId: String(msg.chatroom_id),
+      channelId: String(this.broadcasterUserId ?? msg.chatroom_id),
       author: {
         id: String(msg.sender.id),
         username: msg.sender.username,

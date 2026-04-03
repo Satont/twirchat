@@ -8,15 +8,10 @@ import {
   TooltipProvider,
 } from "reka-ui";
 import type { Emote } from "@twirchat/shared/types";
-import { emoteStore } from "../../../platforms/7tv/emote-store";
 
 const props = defineProps<{
   emote: Emote;
 }>();
-
-const sevenTVEmote = computed(() => {
-  return emoteStore.getEmoteById(props.emote.id);
-});
 
 const emoteUrl = computed(() => {
   return `https://7tv.app/emotes/${props.emote.id}`;
@@ -49,9 +44,6 @@ function openEmotePage(): void {
           
           <div class="emote-info">
             <div class="emote-name">{{ emote.name }}</div>
-            <div v-if="sevenTVEmote?.ownerName" class="emote-author">
-              by <span class="author-name">{{ sevenTVEmote.ownerName }}</span>
-            </div>
             
             <a 
               :href="emoteUrl" 
@@ -75,7 +67,7 @@ function openEmotePage(): void {
   </TooltipProvider>
 </template>
 
-<style scoped>
+<style>
 .emote-tooltip {
   background: #1e1e30;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -147,16 +139,6 @@ function openEmotePage(): void {
   font-weight: 600;
   color: #e8e8f0;
   text-align: center;
-}
-
-.emote-author {
-  font-size: 12px;
-  color: #999;
-}
-
-.author-name {
-  color: #a78bfa;
-  font-weight: 500;
 }
 
 .emote-link {

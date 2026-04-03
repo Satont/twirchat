@@ -37,7 +37,7 @@ export class ChatAggregator {
       this.seenIds.add(msg.id);
 
       // Parse 7TV emotes and merge with platform emotes
-      const parsed = parseMessageWithEmotes(msg.text);
+      const parsed = parseMessageWithEmotes(msg.text, msg.platform, msg.channelId);
       const sevenTVEmotes: Emote[] = parsed.emotes.map((e) => ({
         id: e.id,
         name: e.name,
@@ -151,7 +151,7 @@ export class ChatAggregator {
     this.seenIds.add(msg.id);
 
     // Parse 7TV emotes and merge with platform emotes
-    const parsed = parseMessageWithEmotes(msg.text);
+    const parsed = parseMessageWithEmotes(msg.text, msg.platform, msg.channelId);
     const sevenTVEmotes: Emote[] = parsed.emotes.map((e) => ({
       id: e.id,
       name: e.name,

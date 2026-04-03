@@ -1,0 +1,34 @@
+query GetEmoteSet($id: Id!) {
+  emoteSets {
+    emoteSet(id: $id) {
+      id
+      name
+      emotes(perPage: 1000) {
+        items {
+          id
+          alias
+          flags {
+            zeroWidth
+          }
+          emote {
+            id
+            defaultName
+            flags {
+              animated
+            }
+            aspectRatio
+            images {
+              url
+              mime
+              size
+              scale
+              width
+              height
+              frameCount
+            }
+          }
+        }
+      }
+    }
+  }
+}

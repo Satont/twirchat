@@ -7,8 +7,15 @@ import { buildTwitchAuthUrl } from "../auth/twitch.ts";
 import { AccountStore } from "../db/index.ts";
 import { logger } from "@twirchat/shared/logger";
 import { config } from "../config.ts";
+import { sevenTVManager } from "../seventv/index.ts";
+import type { BackendToDesktopMessage } from "@twirchat/shared";
 
 const log = logger("ws");
+
+// Setup 7TV manager to send messages to clients
+sevenTVManager.sendToClient = (clientSecret: string, message: unknown) => {
+  connectionManager.send(clientSecret, message as BackendToDesktopMessage);
+};
 
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   log.info("WebSocket opened", { client: ws.data.clientSecret.slice(0, 8) });
@@ -18,6 +25,8 @@ export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
 
 export function handleWsClose(ws: ServerWebSocket<WsData>): void {
   connectionManager.remove(ws);
+  // Cleanup 7TV subscriptions for this client
+  sevenTVManager.cleanupClient(ws.data.clientSecret);
 }
 
 export async function handleWsMessage(
@@ -115,6 +124,54 @@ export async function handleWsMessage(
     case "channel_leave":
       // Channel tracking — no-op for now, will be used for backend-managed subscriptions
       break;
+
+    case "seventv_subscribe": {
+      try {
+        await sevenTVManager.subscribeClient(
+          ws.data.clientSecret,
+          msg.platform,
+          msg.channelId,
+        );
+      } catch (err) {
+        log.error("7TV subscribe error", { error: String(err) });
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: `7TV subscribe failed: ${String(err)}`,
+          }),
+        );
+      }
+      break;
+    }
+
+    case "seventv_unsubscribe": {
+      try {
+        sevenTVManager.unsubscribeClient(
+          ws.data.clientSecret,
+          msg.platform,
+          msg.channelId,
+        );
+      } catch (err) {
+        log.error("7TV unsubscribe error", { error: String(err) });
+      }
+      break;
+    }
+
+    case "seventv_resubscribe": {
+      // Handle reconnect - client sends list of channels to resubscribe
+      try {
+        for (const sub of msg.subscriptions) {
+          await sevenTVManager.subscribeClient(
+            ws.data.clientSecret,
+            sub.platform,
+            sub.channelId,
+          );
+        }
+      } catch (err) {
+        log.error("7TV resubscribe error", { error: String(err) });
+      }
+      break;
+    }
 
     default:
       ws.send(

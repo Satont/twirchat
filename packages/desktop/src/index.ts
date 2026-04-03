@@ -15,6 +15,7 @@ import {
 } from "./overlay-server";
 import { logger } from "@twirchat/shared/logger";
 import type { NormalizedChatMessage, NormalizedEvent } from "@twirchat/shared/types";
+import { sevenTVService } from "./seventv";
 
 const log = logger("main");
 
@@ -35,6 +36,11 @@ log.info(`Client secret: ${clientSecret.slice(0, 8)}...`);
 // 3. Подключаемся к backend
 const backendConn = new BackendConnection(clientSecret);
 backendConn.connect();
+
+// Link 7TV service to backend connection
+sevenTVService.sendToBackend = (message) => {
+  backendConn.send(message as import("@twirchat/shared").DesktopToBackendMessage);
+};
 
 // 4. Агрегатор чата
 const aggregator = new ChatAggregator(500);
@@ -79,6 +85,22 @@ backendConn.onMessage((msg) => {
 
     case "pong":
       // heartbeat OK
+      break;
+
+    case "seventv_emote_set":
+      sevenTVService.handleEmoteSet(msg.platform, msg.channelId, msg.emotes);
+      break;
+
+    case "seventv_emote_added":
+      sevenTVService.handleEmoteAdded(msg.platform, msg.channelId, msg.emote);
+      break;
+
+    case "seventv_emote_removed":
+      sevenTVService.handleEmoteRemoved(msg.platform, msg.channelId, msg.emoteId);
+      break;
+
+    case "seventv_emote_updated":
+      sevenTVService.handleEmoteUpdated(msg.platform, msg.channelId, msg.emoteId, msg.alias);
       break;
 
     default:

@@ -2,7 +2,6 @@
 import { ref, onMounted, reactive, computed } from "vue";
 import { rpc } from "../main";
 import type { NormalizedChatMessage, Emote } from "@twirchat/shared/types";
-import { emoteStore } from "../../../platforms/7tv/emote-store";
 import EmoteTooltip from "./EmoteTooltip.vue";
 
 const props = defineProps<{
@@ -15,6 +14,15 @@ const props = defineProps<{
   fontSize?: number;
   chatTheme?: "modern" | "compact";
 }>();
+
+const isSystemMessage = computed(() => props.message.type === "system");
+
+const systemAction = computed<"added" | "removed" | "renamed">(() => {
+  const t = props.message.text;
+  if (t.includes(" added ")) return "added";
+  if (t.includes(" removed ")) return "removed";
+  return "renamed";
+});
 
 // In-memory cache for platform:username -> color (shared across all message instances via module scope)
 // Key format: "platform:lowercase_username"
@@ -84,7 +92,6 @@ interface MessagePart {
   type: "text" | "emote";
   content?: string;
   emote?: Emote;
-  isSevenTV?: boolean;
 }
 
 /** Parse message into parts (text and emotes) */
@@ -99,13 +106,10 @@ const messageParts = computed((): MessagePart[] => {
   const chars = [...msg.text];
   let i = 0;
 
-  const ranges: Array<{ start: number; end: number; emote: Emote; isSevenTV: boolean }> = [];
+  const ranges: Array<{ start: number; end: number; emote: Emote }> = [];
   for (const emote of msg.emotes) {
     for (const pos of emote.positions) {
-      // Check if it's a 7TV emote by looking it up in the store
-      const emoteText = msg.text.slice(pos.start, pos.end + 1);
-      const sevenTVEmote = emoteStore.getEmoteByAlias(emoteText);
-      ranges.push({ ...pos, emote, isSevenTV: !!sevenTVEmote });
+      ranges.push({ ...pos, emote });
     }
   }
   ranges.sort((a, b) => a.start - b.start);
@@ -116,8 +120,7 @@ const messageParts = computed((): MessagePart[] => {
     }
     parts.push({ 
       type: "emote", 
-      emote: range.emote,
-      isSevenTV: range.isSevenTV 
+      emote: range.emote
     });
     i = range.end + 1;
   }
@@ -220,9 +223,49 @@ onMounted(() => {
 </script>
 
 <template>
+  <!-- ── SYSTEM MESSAGE ────────────────────────────────────── -->
+  <!-- NOTE: System message check MUST come before compact theme check.
+       System message authors have no `badges` field, so the compact
+       branch would crash with "badges.length of undefined". -->
+  <div
+    v-if="isSystemMessage"
+    class="msg msg-system"
+    :class="[`platform-${message.platform}`, `action-${systemAction}`]"
+    :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
+  >
+    <!-- Action icon: +/−/~ colored pill -->
+    <div class="system-action-icon" :class="`action-icon-${systemAction}`">
+      {{ systemAction === 'added' ? '+' : systemAction === 'removed' ? '−' : '~' }}
+    </div>
+
+    <span class="msg-text system-text">
+      <template v-for="(part, index) in messageParts" :key="index">
+        <EmoteTooltip
+          v-if="part.type === 'emote' && part.emote"
+          :emote="part.emote"
+        >
+          <img
+            class="emote system-emote"
+            :src="part.emote.imageUrl"
+            :alt="part.emote.name"
+            :title="part.emote.name"
+          />
+        </EmoteTooltip>
+        <span
+          v-else-if="part.type === 'text' && part.content"
+          v-html="processText(part.content)"
+        />
+      </template>
+    </span>
+
+    <span v-if="props.showTimestamp" class="timestamp system-timestamp">{{
+      formatTime(message.timestamp)
+    }}</span>
+  </div>
+
   <!-- ── COMPACT (single-line) ─────────────────────────────── -->
   <div
-    v-if="props.chatTheme === 'compact'"
+    v-else-if="props.chatTheme === 'compact'"
     class="msg msg-compact"
     :class="`platform-${message.platform}`"
     :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
@@ -275,15 +318,13 @@ onMounted(() => {
       class="author"
       :style="message.author.color ? { color: message.author.color } : {}"
       >{{ message.author.displayName }}</span
-    >
-    <span class="compact-sep">:</span>
-    <span
+    ><span class="compact-sep">:</span><span
       class="msg-text"
       :class="{ italic: message.type === 'action' }"
     >
       <template v-for="(part, index) in messageParts" :key="index">
         <EmoteTooltip
-          v-if="part.type === 'emote' && part.emote && part.isSevenTV"
+          v-if="part.type === 'emote' && part.emote"
           :emote="part.emote"
         >
           <img
@@ -328,7 +369,6 @@ onMounted(() => {
     </button>
   </div>
 
-  <!-- ── MODERN (two-row) ──────────────────────────────────── -->
   <div
     v-else
     class="msg"
@@ -423,7 +463,7 @@ onMounted(() => {
       >
         <template v-for="(part, index) in messageParts" :key="index">
           <EmoteTooltip
-            v-if="part.type === 'emote' && part.emote && part.isSevenTV"
+            v-if="part.type === 'emote' && part.emote"
             :emote="part.emote"
           >
             <img
@@ -433,13 +473,6 @@ onMounted(() => {
               :title="part.emote.name"
             />
           </EmoteTooltip>
-          <img
-            v-else-if="part.type === 'emote' && part.emote"
-            class="emote"
-            :src="part.emote.imageUrl"
-            :alt="part.emote.name"
-            :title="part.emote.name"
-          />
           <span
             v-else-if="part.type === 'text' && part.content"
             v-html="processText(part.content)"
@@ -567,7 +600,7 @@ onMounted(() => {
   width: 14px;
   height: 14px;
   vertical-align: middle;
-  display: block;
+  display: inline-block;
 }
 
 .badge-svg {
@@ -680,7 +713,7 @@ onMounted(() => {
 /* ── Compact (single-line) ──────────────────────────────── */
 .msg-compact {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 5px;
   padding: 3px 14px;
   padding-right: 40px;
@@ -715,12 +748,15 @@ onMounted(() => {
 .msg-compact .msg-text {
   flex: 1;
   min-width: 0;
+  margin-left: 4px;
 }
 .msg-compact .badges {
   display: flex;
   align-items: center;
   gap: 3px;
   flex-shrink: 0;
+  align-self: center;
+  line-height: 1;
 }
 
 .msg-compact .copy-btn {
@@ -728,5 +764,89 @@ onMounted(() => {
   top: 50%;
   transform: translateY(-50%);
   margin-left: 0;
+}
+
+/* ── System Messages ────────────────────────────────────── */
+.msg-system {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 14px;
+  font-size: var(--font-size, 14px);
+  line-height: 1.45;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+
+/* Action-based colour theming */
+.msg-system.action-added {
+  background: rgba(83, 252, 24, 0.04);
+  border-left-color: #53fc18;
+}
+.msg-system.action-added:hover {
+  background: rgba(83, 252, 24, 0.07);
+}
+
+.msg-system.action-removed {
+  background: rgba(255, 80, 80, 0.05);
+  border-left-color: #ff5050;
+}
+.msg-system.action-removed:hover {
+  background: rgba(255, 80, 80, 0.09);
+}
+
+.msg-system.action-renamed {
+  background: rgba(100, 65, 165, 0.06);
+  border-left-color: #6441a5;
+}
+.msg-system.action-renamed:hover {
+  background: rgba(100, 65, 165, 0.10);
+}
+
+/* Action icon: small coloured circle with +/−/~ */
+.system-action-icon {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+}
+.action-icon-added {
+  background: rgba(83, 252, 24, 0.15);
+  color: #53fc18;
+}
+.action-icon-removed {
+  background: rgba(255, 80, 80, 0.18);
+  color: #ff6060;
+}
+.action-icon-renamed {
+  background: rgba(167, 139, 250, 0.18);
+  color: #a78bfa;
+}
+
+.system-text {
+  color: var(--c-text-2, #8b8b99);
+  font-size: 0.88em;
+  flex: 1;
+  min-width: 0;
+}
+
+.system-emote {
+  height: 20px;
+  vertical-align: middle;
+}
+
+.system-timestamp {
+  font-size: 10px;
+  color: var(--c-text-2, #8b8b99);
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.7;
 }
 </style>

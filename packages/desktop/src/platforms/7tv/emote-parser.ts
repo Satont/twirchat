@@ -1,4 +1,5 @@
-import { emoteStore, type EmoteCacheEntry } from "./emote-store";
+import { sevenTVService } from "../../seventv";
+import type { Platform } from "@twirchat/shared";
 
 export interface ParsedEmote {
   id: string;
@@ -17,7 +18,11 @@ export interface ParsedMessage {
   emotes: ParsedEmote[];
 }
 
-export function parseMessageWithEmotes(messageText: string): ParsedMessage {
+export function parseMessageWithEmotes(
+  messageText: string,
+  platform: Platform,
+  channelId: string,
+): ParsedMessage {
   const parts: ParsedMessage["parts"] = [];
   const emotes: ParsedEmote[] = [];
 
@@ -31,12 +36,12 @@ export function parseMessageWithEmotes(messageText: string): ParsedMessage {
       continue;
     }
 
-    const emote = emoteStore.getEmoteByAlias(token);
+    const emote = sevenTVService.getEmote(platform, channelId, token);
     if (emote) {
       const parsedEmote: ParsedEmote = {
         id: emote.id,
         name: emote.name,
-        imageUrl: emote.imageUrl,
+        imageUrl: sevenTVService.getImageUrl(emote.id),
         animated: emote.animated,
         zeroWidth: emote.zeroWidth,
         aspectRatio: emote.aspectRatio,
@@ -60,17 +65,21 @@ export function parseMessageWithEmotes(messageText: string): ParsedMessage {
   };
 }
 
-export function hasEmotes(messageText: string): boolean {
+export function hasEmotes(messageText: string, platform: Platform, channelId: string): boolean {
   const tokens = messageText.split(/\s+/);
   for (const token of tokens) {
-    if (emoteStore.getEmoteByAlias(token)) {
+    if (sevenTVService.getEmote(platform, channelId, token)) {
       return true;
     }
   }
   return false;
 }
 
-export function getEmotesInMessage(messageText: string): ParsedEmote[] {
+export function getEmotesInMessage(
+  messageText: string,
+  platform: Platform,
+  channelId: string,
+): ParsedEmote[] {
   const emotes: ParsedEmote[] = [];
   const tokens = messageText.split(/(\s+)/);
   let currentPosition = 0;
@@ -81,12 +90,12 @@ export function getEmotesInMessage(messageText: string): ParsedEmote[] {
       continue;
     }
 
-    const emote = emoteStore.getEmoteByAlias(token);
+    const emote = sevenTVService.getEmote(platform, channelId, token);
     if (emote) {
       emotes.push({
         id: emote.id,
         name: emote.name,
-        imageUrl: emote.imageUrl,
+        imageUrl: sevenTVService.getImageUrl(emote.id),
         animated: emote.animated,
         zeroWidth: emote.zeroWidth,
         aspectRatio: emote.aspectRatio,

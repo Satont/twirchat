@@ -15,6 +15,7 @@ import { YouTubeAdapter } from "../platforms/youtube/adapter";
 import type { NormalizedChatMessage, PlatformStatusInfo, WatchedChannel } from "@twirchat/shared/types";
 import { WatchedChannelStore } from "../store/watched-channels-store";
 import { logger } from "@twirchat/shared/logger";
+import { sevenTVService } from "../seventv";
 
 const log = logger("watched-channels");
 
@@ -78,6 +79,16 @@ export class WatchedChannelManager {
     const entry = this.entries.get(id);
     if (entry) {
       this.unbindAdapter(entry);
+      // Unsubscribe from 7TV emotes for this channel
+      sevenTVService.unsubscribeFromChannel(entry.watchedChannel.platform, entry.watchedChannel.channelSlug).catch((err) => {
+        log.error("Failed to unsubscribe from 7TV for watched channel", {
+          id,
+          platform: entry.watchedChannel.platform,
+          channelSlug: entry.watchedChannel.channelSlug,
+          error: String(err),
+          action: "7tv",
+        });
+      });
       await entry.adapter.disconnect().catch((err) => {
         log.error("Error disconnecting watched channel", { id, error: String(err) });
       });
@@ -191,6 +202,26 @@ export class WatchedChannelManager {
       log.error("Failed to start watched channel adapter", {
         id: ch.id,
         error: String(err),
+      });
+    });
+
+    // Subscribe to 7TV emotes for this channel
+    // For Kick, use broadcasterUserId instead of slug
+    let sevenTvChannelId = ch.channelSlug;
+    if (ch.platform === "kick") {
+      const kickAdapter = adapter as import("../platforms/kick/adapter").KickAdapter;
+      const broadcasterUserId = kickAdapter.getBroadcasterUserId();
+      if (broadcasterUserId) {
+        sevenTvChannelId = String(broadcasterUserId);
+      }
+    }
+    sevenTVService.subscribeToChannel(ch.platform, sevenTvChannelId).catch((err) => {
+      log.error("Failed to subscribe to 7TV for watched channel", {
+        id: ch.id,
+        platform: ch.platform,
+        channelSlug: sevenTvChannelId,
+        error: String(err),
+        action: "7tv",
       });
     });
   }

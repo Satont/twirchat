@@ -47,7 +47,7 @@ export interface NormalizedChatMessage {
   text: string;
   emotes: Emote[];
   timestamp: Date;
-  type: "message" | "action";
+  type: "message" | "action" | "system";
 }
 
 export interface NormalizedEvent {
@@ -100,7 +100,6 @@ export interface AppSettings {
   showBadges: boolean;
   platformFilter: Platform[] | "all";
   overlay: OverlayConfig;
-  seventvUserId?: string;
   /** Auto-check for updates on startup */
   autoCheckUpdates?: boolean;
 }

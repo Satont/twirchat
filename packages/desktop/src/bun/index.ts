@@ -41,9 +41,11 @@ import { prepareYouTubeAuth, getYouTubeAuthUrl } from "../auth/youtube";
 import { TwitchAdapter } from "../platforms/twitch/adapter";
 import { KickAdapter } from "../platforms/kick/adapter";
 import { YouTubeAdapter } from "../platforms/youtube/adapter";
-import { sevenTVEventClient } from "../platforms/7tv/event-client";
+import { sevenTVService } from "../seventv";
 import { WatchedChannelManager } from "../watched-channels/manager";
 import { logger } from "@twirchat/shared/logger";
+import type { DesktopToBackendMessage } from "@twirchat/shared";
+import type { NormalizedChatMessage } from "@twirchat/shared/types";
 
 // Set process title to show "TwirChat" instead of "bun" in process managers
 process.title = "TwirChat";
@@ -61,7 +63,11 @@ import {
   setAuthServerRpcSender,
   setOnAuthSuccessCallback,
 } from "../auth";
-import { setRuntimeConfig, getRuntimeConfig, backendFetch } from "../runtime-config";
+import {
+  setRuntimeConfig,
+  getRuntimeConfig,
+  backendFetch,
+} from "../runtime-config";
 
 // ============================================================
 // 1. Load runtime config from build.json
@@ -112,6 +118,11 @@ setRuntimeConfig({ clientSecret });
 
 const backendConn = new BackendConnection(clientSecret);
 const aggregator = new ChatAggregator(500);
+
+// Link 7TV service to backend connection
+sevenTVService.sendToBackend = (message) => {
+  backendConn.send(message as DesktopToBackendMessage);
+};
 
 // Register platform adapters — these run entirely in the Bun process.
 // YouTube uses gRPC (cannot run in webview/browser context).
@@ -164,6 +175,24 @@ setOnAuthSuccessCallback(async (platform, channelSlug) => {
       channel: targetChannel,
       action: "auth",
     });
+    // Subscribe to 7TV emotes for this channel
+    // For Kick, use broadcasterUserId instead of slug
+    let sevenTvChannelId = targetChannel;
+    if (platform === "kick") {
+      const kickAdapter = adapter as import("../platforms/kick/adapter").KickAdapter;
+      const broadcasterUserId = kickAdapter.getBroadcasterUserId();
+      if (broadcasterUserId) {
+        sevenTvChannelId = String(broadcasterUserId);
+      }
+    }
+    sevenTVService.subscribeToChannel(platform, sevenTvChannelId).catch((err) => {
+      log.error("Failed to subscribe to 7TV", {
+        platform,
+        channelSlug: sevenTvChannelId,
+        error: String(err),
+        action: "7tv",
+      });
+    });
   } catch (err) {
     log.error("Failed to reconnect adapter", {
       platform,
@@ -205,34 +234,7 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       getSettings: () => SettingsStore.get(),
 
       saveSettings: (params) => {
-        const oldSettings = SettingsStore.get();
         SettingsStore.set(params);
-
-        // Handle 7TV User ID changes
-        const oldUserId = oldSettings?.seventvUserId;
-        const newUserId = params.seventvUserId;
-
-        if (oldUserId !== newUserId) {
-          if (newUserId) {
-            log.info("7TV User ID changed, reconnecting...", {
-              oldUserId,
-              newUserId,
-              action: "7tv",
-            });
-            sevenTVEventClient.disconnect();
-            sevenTVEventClient.connect(newUserId).catch((err) => {
-              log.error("Failed to connect to 7TV", {
-                error: String(err),
-                action: "7tv",
-              });
-            });
-          } else {
-            log.info("7TV User ID removed, disconnecting...", {
-              action: "7tv",
-            });
-            sevenTVEventClient.disconnect();
-          }
-        }
       },
 
       getChannels: () => ChannelStore.findAll(),
@@ -259,12 +261,14 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
         backendConn.send({ type: "auth_logout", platform });
         AccountStore.deleteByPlatform(platform);
         // Reconnect watched channels so they drop back to anonymous mode
-        void watchedChannelManager.reconnectByPlatform(platform).catch((err) => {
-          log.error("Failed to reconnect watched channels after logout", {
-            platform,
-            error: String(err),
+        void watchedChannelManager
+          .reconnectByPlatform(platform)
+          .catch((err) => {
+            log.error("Failed to reconnect watched channels after logout", {
+              platform,
+              error: String(err),
+            });
           });
-        });
       },
 
       joinChannel: ({ platform, channelSlug }) => {
@@ -290,6 +294,24 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
               channelSlug,
               action: "joinChannel",
             });
+            // Subscribe to 7TV emotes for this channel
+            // For Kick, use broadcasterUserId instead of slug
+            let sevenTvChannelId = channelSlug;
+            if (platform === "kick") {
+              const kickAdapter = adapter as import("../platforms/kick/adapter").KickAdapter;
+              const broadcasterUserId = kickAdapter.getBroadcasterUserId();
+              if (broadcasterUserId) {
+                sevenTvChannelId = String(broadcasterUserId);
+              }
+            }
+            sevenTVService.subscribeToChannel(platform, sevenTvChannelId).catch((err) => {
+              log.error("Failed to subscribe to 7TV", {
+                platform,
+                channelSlug: sevenTvChannelId,
+                error: String(err),
+                action: "7tv",
+              });
+            });
           })
           .catch((err) => {
             log.error("Failed to connect", {
@@ -311,6 +333,15 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
           return;
         }
         ChannelStore.remove(platform, channelSlug);
+        // Unsubscribe from 7TV emotes for this channel
+        sevenTVService.unsubscribeFromChannel(platform, channelSlug).catch((err) => {
+          log.error("Failed to unsubscribe from 7TV", {
+            platform,
+            channelSlug,
+            error: String(err),
+            action: "7tv",
+          });
+        });
         adapter.disconnect().catch((err) => {
           log.error("Failed to disconnect", {
             platform,
@@ -358,14 +389,11 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
           userAccessToken: tokens.accessToken,
         };
 
-        const res = await backendFetch(
-          `/api/update-stream`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          },
-        );
+        const res = await backendFetch(`/api/update-stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
         if (!res.ok) throw new Error(`update-stream: ${res.status}`);
         return (await res.json()) as UpdateStreamResponse;
       },
@@ -393,14 +421,11 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
           return ch;
         });
 
-        const res = await backendFetch(
-          `/api/channels-status`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ channels: enriched }),
-          },
-        );
+        const res = await backendFetch(`/api/channels-status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channels: enriched }),
+        });
         if (!res.ok) throw new Error(`channels-status: ${res.status}`);
         return (await res.json()) as import("@twirchat/shared/protocol").ChannelsStatusResponse;
       },
@@ -443,7 +468,13 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
 
       getWatchedChannels: () => watchedChannelManager.getAll(),
 
-      addWatchedChannel: async ({ platform, channelSlug }: { platform: "twitch" | "kick" | "youtube"; channelSlug: string }) => {
+      addWatchedChannel: async ({
+        platform,
+        channelSlug,
+      }: {
+        platform: "twitch" | "kick" | "youtube";
+        channelSlug: string;
+      }) => {
         return await watchedChannelManager.addChannel(platform, channelSlug);
       },
 
@@ -455,7 +486,13 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
         return watchedChannelManager.getMessages(id);
       },
 
-      sendWatchedChannelMessage: async ({ id, text }: { id: string; text: string }) => {
+      sendWatchedChannelMessage: async ({
+        id,
+        text,
+      }: {
+        id: string;
+        text: string;
+      }) => {
         await watchedChannelManager.sendMessage(id, text);
       },
 
@@ -633,6 +670,55 @@ backendConn.onMessage((msg) => {
   }
 });
 
+backendConn.onSystemMessage((msg) => {
+  const actionText =
+    msg.action === "added"
+      ? "added to"
+      : msg.action === "removed"
+        ? "removed from"
+        : "renamed in";
+  const oldAliasText = msg.oldAlias ? ` (was ${msg.oldAlias})` : "";
+
+  log.info("7TV system message", {
+    platform: msg.platform,
+    channelId: msg.channelId,
+    action: msg.action,
+    emoteAlias: msg.emote.alias,
+  });
+
+  const emoteWithColons = `:${msg.emote.alias}:`;
+  const textBeforeEmote = "Emote ";
+  const startPos = textBeforeEmote.length;
+  const endPos = startPos + emoteWithColons.length - 1;
+
+  const systemMsg: NormalizedChatMessage = {
+    id: `7tv-system-${Date.now()}-${Math.random()}`,
+    platform: msg.platform,
+    channelId: msg.channelId,
+    author: {
+      id: "7tv-system",
+      username: "7TV",
+      displayName: "7TV",
+      color: "#6441a5",
+      badges: [],
+    },
+    text: `${textBeforeEmote}${emoteWithColons}${oldAliasText} ${actionText} the channel`,
+    emotes: [
+      {
+        id: msg.emote.id,
+        name: msg.emote.alias,
+        imageUrl: sevenTVService.getImageUrl(msg.emote.id),
+        positions: [{ start: startPos, end: endPos }],
+        aspectRatio: msg.emote.aspectRatio,
+      },
+    ],
+    timestamp: new Date(),
+    type: "system",
+  };
+
+  aggregator.injectMessage(systemMsg);
+});
+
 // ============================================================
 // 6. Backend connection
 // ============================================================
@@ -671,6 +757,24 @@ for (const [platform, slugs] of Object.entries(savedChannels)) {
       .connect(slug)
       .then(() => {
         log.info("Connected", { platform, slug, action: "AutoConnect" });
+        // Subscribe to 7TV emotes for this channel
+        // For Kick, use broadcasterUserId instead of slug
+        let sevenTvChannelId = slug;
+        if (platform === "kick") {
+          const kickAdapter = adapter as import("../platforms/kick/adapter").KickAdapter;
+          const broadcasterUserId = kickAdapter.getBroadcasterUserId();
+          if (broadcasterUserId) {
+            sevenTvChannelId = String(broadcasterUserId);
+          }
+        }
+        sevenTVService.subscribeToChannel(platform as import("@twirchat/shared/types").Platform, sevenTvChannelId).catch((err) => {
+          log.error("Failed to subscribe to 7TV", {
+            platform,
+            channelSlug: sevenTvChannelId,
+            error: String(err),
+            action: "7tv",
+          });
+        });
       })
       .catch((err) => {
         log.error("Failed to connect", {
@@ -720,6 +824,24 @@ for (const account of accounts) {
           channel: channelSlug,
           action: "AutoConnectAccount",
         });
+        // Subscribe to 7TV emotes for this channel
+        // For Kick, use broadcasterUserId instead of slug
+        let sevenTvChannelId = channelSlug;
+        if (account.platform === "kick") {
+          const kickAdapter = adapter as import("../platforms/kick/adapter").KickAdapter;
+          const broadcasterUserId = kickAdapter.getBroadcasterUserId();
+          if (broadcasterUserId) {
+            sevenTvChannelId = String(broadcasterUserId);
+          }
+        }
+        sevenTVService.subscribeToChannel(account.platform, sevenTvChannelId).catch((err) => {
+          log.error("Failed to subscribe to 7TV", {
+            platform: account.platform,
+            channelSlug: sevenTvChannelId,
+            error: String(err),
+            action: "7tv",
+          });
+        });
       })
       .catch((err) => {
         log.error("Failed to connect to user's channel", {
@@ -733,29 +855,7 @@ for (const account of accounts) {
 }
 
 // ============================================================
-// 8. Connect to 7TV if User ID is configured
-// ============================================================
-
-if (settings?.seventvUserId) {
-  log.info("Connecting to 7TV...", {
-    userId: settings.seventvUserId,
-    action: "7tv",
-  });
-  sevenTVEventClient
-    .connect(settings.seventvUserId)
-    .then(() => {
-      log.info("Connected to 7TV", { action: "7tv" });
-    })
-    .catch((err) => {
-      log.error("Failed to connect to 7TV", {
-        error: String(err),
-        action: "7tv",
-      });
-    });
-}
-
-// ============================================================
-// 9. Auto-connect watched channels
+// 8. Auto-connect watched channels
 // ============================================================
 
 watchedChannelManager.autoConnect().catch((err) => {
