@@ -462,6 +462,10 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", {
       getWatchedChannelStatuses: () => {
         return watchedChannelManager.getAllStatuses();
       },
+
+      openExternalUrl: ({ url }) => {
+        void openBrowser(url);
+      },
     },
   },
 });

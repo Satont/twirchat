@@ -190,7 +190,7 @@ function onMsgClick(e: MouseEvent): void {
   if (!anchor) return;
   e.preventDefault();
   const url = anchor.dataset.href;
-  if (url) window.open(url, "_blank");
+  if (url) void rpc.request.openExternalUrl({ url });
 }
 
 // Copy functionality

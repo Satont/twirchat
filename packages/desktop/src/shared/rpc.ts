@@ -130,6 +130,8 @@ type BunRequests = {
     params: void;
     response: Array<{ channelId: string; status: PlatformStatusInfo }>;
   };
+  /** Open external URL in system browser */
+  openExternalUrl: { params: { url: string }; response: void };
 };
 
 type BunMessages = Record<never, unknown>;
