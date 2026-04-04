@@ -12,7 +12,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [payload: { platform: string; channelLogin: string; text: string }[]]
-  'send-watched': [text: string]
+  'send-watched': [payload: { text: string; channelId: string }]
 }>()
 
 const text = ref('')
@@ -98,7 +98,7 @@ function send() {
   }
 
   if (props.watchedChannel) {
-    emit('send-watched', trimmed)
+    emit('send-watched', { text: trimmed, channelId: props.watchedChannel.id })
   } else {
     const targets = sendablePlatforms.value
       .filter((p) => isEnabled(p.platform))

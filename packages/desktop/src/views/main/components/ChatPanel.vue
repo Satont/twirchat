@@ -28,6 +28,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   maximize: []
+  'send-watched': [payload: { text: string; channelId: string }]
+  'go-to-platforms': []
+  'settings-change': [settings: import('@twirchat/shared/types').AppSettings]
 }>()
 
 const filteredMessages = computed<NormalizedChatMessage[]>(() => {
@@ -152,6 +155,9 @@ function platformColor(p: string): string {
         :watched-messages="
           watchedChannel ? (watchedMessages?.get(watchedChannel.id) ?? []) : undefined
         "
+        @send-watched="emit('send-watched', $event)"
+        @go-to-platforms="emit('go-to-platforms')"
+        @settings-change="emit('settings-change', $event)"
       />
     </div>
   </div>

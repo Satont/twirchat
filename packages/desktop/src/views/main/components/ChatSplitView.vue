@@ -23,6 +23,7 @@ const props = defineProps<{
   settings: AppSettings
   accounts: Account[]
   statuses: Map<string, PlatformStatusInfo>
+  maximizedPanelId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +31,9 @@ const emit = defineEmits<{
   'close-panel': [splitId: string]
   'maximize-panel': [splitId: string]
   resize: [sizes: number[]]
+  'send-watched': [payload: { text: string; channelId: string }]
+  'go-to-platforms': []
+  'settings-change': [settings: import('@twirchat/shared/types').AppSettings]
 }>()
 
 // ---- Helpers ----
@@ -70,10 +74,38 @@ function onResized(paneInfos: PaneInfo[]) {
 }
 
 const splits = computed(() => props.layout.splits)
+
+const maximizedSplit = computed(() =>
+  props.maximizedPanelId ? splits.value.find((s) => s.id === props.maximizedPanelId) : undefined,
+)
 </script>
 
 <template>
-  <Splitpanes class="split-view" @resized="onResized">
+  <!-- Maximized: render only the focused panel at full size -->
+  <div v-if="maximizedSplit" class="split-view">
+    <ChatPanel
+      :panel-id="maximizedSplit.id"
+      :type="maximizedSplit.type"
+      :channel-id="maximizedSplit.channelId"
+      :channel-name="channelNameForSplit(maximizedSplit)"
+      :platform="platformForSplit(maximizedSplit)"
+      :messages="messages"
+      :watched-messages="watchedMessages"
+      :watched-channel="watchedChannelForSplit(maximizedSplit)"
+      :watched-status="watchedStatusForSplit(maximizedSplit)"
+      :settings="settings"
+      :accounts="accounts"
+      :statuses="statuses"
+      @close="emit('close-panel', maximizedSplit.id)"
+      @maximize="emit('maximize-panel', maximizedSplit.id)"
+      @send-watched="emit('send-watched', $event)"
+      @go-to-platforms="emit('go-to-platforms')"
+      @settings-change="emit('settings-change', $event)"
+    />
+  </div>
+
+  <!-- Normal split view -->
+  <Splitpanes v-else class="split-view" @resized="onResized">
     <Pane v-for="split in splits" :key="split.id" :size="split.size" class="split-pane">
       <ChatPanel
         :panel-id="split.id"
@@ -90,6 +122,9 @@ const splits = computed(() => props.layout.splits)
         :statuses="statuses"
         @close="emit('close-panel', split.id)"
         @maximize="emit('maximize-panel', split.id)"
+        @send-watched="emit('send-watched', $event)"
+        @go-to-platforms="emit('go-to-platforms')"
+        @settings-change="emit('settings-change', $event)"
       />
     </Pane>
   </Splitpanes>

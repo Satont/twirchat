@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { getDbPath } from '../runtime-config'
-import { logger } from '@twirchat/shared/logger'
+import { logger } from '@twirchat/shared'
 
 const log = logger('db')
 

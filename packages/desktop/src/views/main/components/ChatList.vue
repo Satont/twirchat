@@ -28,7 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'go-to-platforms': []
   'settings-change': [settings: import('@twirchat/shared/types').AppSettings]
-  'send-watched': [text: string]
+  'send-watched': [payload: { text: string; channelId: string }]
 }>()
 
 const listEl = ref<HTMLElement | null>(null)
@@ -235,8 +235,8 @@ async function onSend(targets: { platform: string; channelLogin: string; text: s
   )
 }
 
-function onSendWatched(text: string) {
-  emit('send-watched', text)
+function onSendWatched(payload: { text: string; channelId: string }) {
+  emit('send-watched', payload)
 }
 
 function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {

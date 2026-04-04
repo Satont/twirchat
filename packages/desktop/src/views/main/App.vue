@@ -9,7 +9,6 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import ChannelTabBar from './components/ChannelTabBar.vue'
 import AddChannelModal from './components/AddChannelModal.vue'
 import { rpc } from './main'
-import { ChatLayoutStore } from '../../store/chat-layout-store'
 import type {
   Account,
   AppSettings,
@@ -104,8 +103,15 @@ const activeWatchedMessages = computed<NormalizedChatMessage[]>(() => {
 const connectedAccountsCount = computed(() => accounts.value.length)
 const youtubeAuthenticated = computed(() => accounts.value.some((a) => a.platform === 'youtube'))
 
+const DEFAULT_LAYOUT: ChatLayout = {
+  version: 1,
+  mode: 'combined',
+  splits: [{ id: 'default', type: 'combined', size: 100 }],
+}
+
 // ---- Chat layout (split / combined) ----
-const chatLayout = ref<ChatLayout>(ChatLayoutStore.get())
+// Start with default layout, load persisted one after DB init in loadInitialData
+const chatLayout = ref<ChatLayout>({ ...DEFAULT_LAYOUT, splits: [...DEFAULT_LAYOUT.splits] })
 const isSplitMode = computed(() => chatLayout.value.mode === 'split')
 const maximizedPanelId = ref<string | null>(null)
 
@@ -142,11 +148,17 @@ function removePanel(panelId?: string) {
   const newSize = 100 / remaining.length
   const updatedSplits = remaining.map((s) => ({ ...s, size: newSize }))
   chatLayout.value = { ...chatLayout.value, splits: updatedSplits }
+
+  // Clear maximized state if the removed panel was maximized
+  if (maximizedPanelId.value === targetId) {
+    maximizedPanelId.value = null
+  }
 }
 
 function updateLayout(newLayout: ChatLayout) {
   chatLayout.value = newLayout
-  ChatLayoutStore.set(newLayout)
+  // Note: Layout persistence disabled - requires RPC methods
+  // to avoid importing Bun modules into browser context
 }
 
 function onMaximizePanel(splitId: string) {
@@ -157,14 +169,8 @@ function onRestorePanel() {
   maximizedPanelId.value = null
 }
 
-// Persist layout changes to SQLite
-watch(
-  chatLayout,
-  (layout) => {
-    ChatLayoutStore.set(layout)
-  },
-  { deep: true },
-)
+// Note: Layout persistence disabled - requires RPC methods
+// to avoid importing Bun modules into browser context
 
 // Auto-add new watched channels as split panels when in split mode
 watch(watchedChannels, (channels, prev) => {
@@ -261,6 +267,9 @@ async function loadInitialData() {
   // Fetch stream live status for watched channels immediately, then poll every 60s
   void refreshWatchedLiveStatuses()
   watchedLiveStatusInterval = setInterval(() => void refreshWatchedLiveStatuses(), 60_000)
+
+  // Note: Chat layout is not persisted - using default. 
+  // To add persistence, create RPC methods for getChatLayout/setChatLayout.
 }
 
 onMounted(() => {
@@ -501,7 +510,7 @@ async function onRemoveChannel(id: string) {
       const rebalanced =
         cleanedSplits.length > 0
           ? cleanedSplits.map((s) => Object.assign({}, s, { size: 100 / cleanedSplits.length }))
-          : currentSplits.map((s) => Object.assign({}, s, { channelId: undefined }))
+          : [{ id: crypto.randomUUID(), type: 'combined' as const, size: 100 }]
       updateLayout({ ...chatLayout.value, splits: rebalanced })
     }
     // Clear maximized state if the maximized panel was for this channel
@@ -516,12 +525,15 @@ async function onRemoveChannel(id: string) {
   }
 }
 
-async function onSendWatched(text: string) {
-  if (!activeWatchedChannel.value) {
+async function onSendWatched({ text, channelId }: { text: string; channelId?: string }) {
+  // In split mode the payload carries the specific panel's channelId.
+  // In combined mode fall back to the currently active watched channel.
+  const targetId = channelId ?? activeWatchedChannel.value?.id
+  if (!targetId) {
     return
   }
   try {
-    await rpc.request.sendWatchedChannelMessage({ id: activeWatchedChannel.value.id, text })
+    await rpc.request.sendWatchedChannelMessage({ id: targetId, text })
   } catch (error) {
     console.error('[App] sendWatchedChannelMessage failed:', error)
   }
@@ -704,9 +716,13 @@ async function onSendWatched(text: string) {
         :settings="settings"
         :accounts="accounts"
         :statuses="statuses"
+        :maximized-panel-id="maximizedPanelId"
         @update:layout="updateLayout"
         @close-panel="removePanel"
         @maximize-panel="onMaximizePanel"
+        @send-watched="onSendWatched"
+        @go-to-platforms="switchTab('platforms')"
+        @settings-change="onSettingsChange"
       />
 
       <EventsFeed v-show="activeTab === 'events'" :events="events" />

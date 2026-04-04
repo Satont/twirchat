@@ -46,10 +46,19 @@ function waitForSocket(): Promise<void> {
   })
 }
 
+console.log('[main.ts] Waiting for socket...')
 await waitForSocket()
+console.log('[main.ts] Socket ready, creating app...')
 
 // ----------------------------------------------------------------
 // Mount Vue app
 // ----------------------------------------------------------------
 
-createApp(App).mount('#app')
+try {
+  const app = createApp(App)
+  console.log('[main.ts] App created, mounting...')
+  app.mount('#app')
+  console.log('[main.ts] App mounted successfully')
+} catch (error) {
+  console.error('[main.ts] Failed to mount app:', error)
+}
