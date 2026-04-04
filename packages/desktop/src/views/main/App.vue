@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import PlatformsPanel from './components/PlatformsPanel.vue'
 import ChatList from './components/ChatList.vue'
+import ChatSplitView from './components/ChatSplitView.vue'
+import SplitViewToolbar from './components/SplitViewToolbar.vue'
 import EventsFeed from './components/EventsFeed.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ChannelTabBar from './components/ChannelTabBar.vue'
 import AddChannelModal from './components/AddChannelModal.vue'
 import { rpc } from './main'
+import { ChatLayoutStore } from '../../store/chat-layout-store'
 import type {
   Account,
   AppSettings,
+  ChatLayout,
   NormalizedChatMessage,
   NormalizedEvent,
   PlatformStatusInfo,
@@ -99,6 +103,90 @@ const activeWatchedMessages = computed<NormalizedChatMessage[]>(() => {
 
 const connectedAccountsCount = computed(() => accounts.value.length)
 const youtubeAuthenticated = computed(() => accounts.value.some((a) => a.platform === 'youtube'))
+
+// ---- Chat layout (split / combined) ----
+const chatLayout = ref<ChatLayout>(ChatLayoutStore.get())
+const isSplitMode = computed(() => chatLayout.value.mode === 'split')
+const maximizedPanelId = ref<string | null>(null)
+
+function toggleMode() {
+  chatLayout.value = {
+    ...chatLayout.value,
+    mode: chatLayout.value.mode === 'combined' ? 'split' : 'combined',
+  }
+}
+
+function addPanel() {
+  const splits = chatLayout.value.splits
+  // Find a watched channel not yet shown in a panel
+  const usedIds = new Set(splits.map((s) => s.channelId).filter(Boolean))
+  const nextChannel = watchedChannels.value.find((ch) => !usedIds.has(ch.id))
+
+  const newSize = 100 / (splits.length + 1)
+  const updatedSplits = splits.map((s) => ({ ...s, size: newSize }))
+  updatedSplits.push({
+    id: crypto.randomUUID(),
+    type: nextChannel ? 'channel' : 'combined',
+    channelId: nextChannel?.id,
+    size: newSize,
+  })
+  chatLayout.value = { ...chatLayout.value, splits: updatedSplits }
+}
+
+function removePanel(panelId?: string) {
+  const splits = chatLayout.value.splits
+  if (splits.length <= 1) return
+
+  const targetId = panelId ?? splits[splits.length - 1].id
+  const remaining = splits.filter((s) => s.id !== targetId)
+  const newSize = 100 / remaining.length
+  const updatedSplits = remaining.map((s) => ({ ...s, size: newSize }))
+  chatLayout.value = { ...chatLayout.value, splits: updatedSplits }
+}
+
+function updateLayout(newLayout: ChatLayout) {
+  chatLayout.value = newLayout
+  ChatLayoutStore.set(newLayout)
+}
+
+function onMaximizePanel(splitId: string) {
+  maximizedPanelId.value = splitId
+}
+
+function onRestorePanel() {
+  maximizedPanelId.value = null
+}
+
+// Persist layout changes to SQLite
+watch(
+  chatLayout,
+  (layout) => {
+    ChatLayoutStore.set(layout)
+  },
+  { deep: true },
+)
+
+// Auto-add new watched channels as split panels when in split mode
+watch(watchedChannels, (channels, prev) => {
+  if (!isSplitMode.value) return
+  const prevIds = new Set((prev ?? []).map((c) => c.id))
+  const newChannels = channels.filter((ch) => !prevIds.has(ch.id))
+  for (const ch of newChannels) {
+    const alreadyInSplit = chatLayout.value.splits.some((s) => s.channelId === ch.id)
+    if (!alreadyInSplit) {
+      const splits = chatLayout.value.splits
+      const newSize = 100 / (splits.length + 1)
+      const updatedSplits = splits.map((s) => ({ ...s, size: newSize }))
+      updatedSplits.push({
+        id: crypto.randomUUID(),
+        type: 'channel',
+        channelId: ch.id,
+        size: newSize,
+      })
+      chatLayout.value = { ...chatLayout.value, splits: updatedSplits }
+    }
+  }
+})
 
 // ----------------------------------------------------------------
 // Load initial data
@@ -406,6 +494,23 @@ async function onRemoveChannel(id: string) {
     if (activeChatTab.value === id) {
       activeChatTab.value = 'home'
     }
+    // Remove orphaned split panels referencing the removed channel
+    const currentSplits = chatLayout.value.splits
+    const cleanedSplits = currentSplits.filter((s) => s.channelId !== id)
+    if (cleanedSplits.length !== currentSplits.length) {
+      const rebalanced =
+        cleanedSplits.length > 0
+          ? cleanedSplits.map((s) => Object.assign({}, s, { size: 100 / cleanedSplits.length }))
+          : currentSplits.map((s) => Object.assign({}, s, { channelId: undefined }))
+      updateLayout({ ...chatLayout.value, splits: rebalanced })
+    }
+    // Clear maximized state if the maximized panel was for this channel
+    if (maximizedPanelId.value !== null) {
+      const stillExists = chatLayout.value.splits.some((s) => s.id === maximizedPanelId.value)
+      if (!stillExists) {
+        maximizedPanelId.value = null
+      }
+    }
   } catch (error) {
     console.error('[App] removeWatchedChannel failed:', error)
   }
@@ -552,7 +657,7 @@ async function onSendWatched(text: string) {
 
     <!-- Main content area -->
     <main class="content">
-      <!-- Channel tab bar: only visible in chat view -->
+      <!-- Channel tab bar: visible in chat view for both combined and split modes -->
       <ChannelTabBar
         v-if="activeTab === 'chat'"
         :watched-channels="watchedChannels"
@@ -564,8 +669,19 @@ async function onSendWatched(text: string) {
         @remove-channel="onRemoveChannel"
       />
 
+      <!-- Split view toolbar: only visible in chat view -->
+      <SplitViewToolbar
+        v-if="activeTab === 'chat'"
+        :mode="chatLayout.mode"
+        :can-add-panel="isSplitMode && chatLayout.splits.length < 4"
+        :can-remove-panel="isSplitMode && chatLayout.splits.length > 1"
+        @toggle-mode="toggleMode"
+        @add-panel="addPanel"
+        @remove-panel="removePanel()"
+      />
+
       <ChatList
-        v-show="activeTab === 'chat'"
+        v-show="activeTab === 'chat' && !isSplitMode"
         :messages="messages"
         :settings="settings"
         :accounts="accounts"
@@ -576,6 +692,21 @@ async function onSendWatched(text: string) {
         @go-to-platforms="switchTab('platforms')"
         @settings-change="onSettingsChange"
         @send-watched="onSendWatched"
+      />
+
+      <ChatSplitView
+        v-if="activeTab === 'chat' && isSplitMode && settings"
+        :layout="chatLayout"
+        :messages="messages"
+        :watched-messages="watchedMessages"
+        :watched-channels="watchedChannels"
+        :watched-statuses="watchedStatuses"
+        :settings="settings"
+        :accounts="accounts"
+        :statuses="statuses"
+        @update:layout="updateLayout"
+        @close-panel="removePanel"
+        @maximize-panel="onMaximizePanel"
       />
 
       <EventsFeed v-show="activeTab === 'events'" :events="events" />
@@ -602,6 +733,12 @@ async function onSendWatched(text: string) {
       @confirm="onAddChannel"
       @cancel="showAddModal = false"
     />
+
+    <!-- Maximized panel restore button -->
+    <div v-if="maximizedPanelId !== null" class="maximize-restore-bar">
+      <span class="maximize-restore-label">Panel maximized</span>
+      <button class="maximize-restore-btn" @click="onRestorePanel">Restore</button>
+    </div>
 
     <!-- Update notification toast -->
     <div v-if="updateState.show" class="update-toast">
@@ -977,5 +1114,43 @@ body {
 .update-close:hover {
   background: rgba(255, 255, 255, 0.1);
   color: var(--c-text, #e2e2e8);
+}
+
+/* ---- Maximize restore bar ---- */
+.maximize-restore-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--c-surface, #18181b);
+  border: 1px solid var(--c-border, #2a2a33);
+  border-radius: 24px;
+  padding: 8px 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.maximize-restore-label {
+  font-size: 13px;
+  color: var(--c-text-2, #8b8b99);
+}
+
+.maximize-restore-btn {
+  background: #a78bfa;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.maximize-restore-btn:hover {
+  opacity: 0.9;
 }
 </style>

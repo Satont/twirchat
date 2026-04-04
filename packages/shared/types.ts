@@ -81,6 +81,24 @@ export interface Account {
   updatedAt: number
 }
 
+// ============================================================
+// Chat layout (combined / split)
+// ============================================================
+
+export interface SplitConfig {
+  id: string
+  type: 'combined' | 'channel'
+  channelId?: string
+  size: number
+}
+
+export interface ChatLayout {
+  /** literal 1 for migration safety */
+  version: 1
+  mode: 'combined' | 'split'
+  splits: SplitConfig[]
+}
+
 export interface AppSettings {
   theme: 'light' | 'dark'
   chatTheme: 'modern' | 'compact'
@@ -95,6 +113,8 @@ export interface AppSettings {
   overlay: OverlayConfig
   /** Auto-check for updates on startup */
   autoCheckUpdates?: boolean
+  /** Chat layout configuration (combined / split) */
+  chatLayout?: ChatLayout
 }
 
 export interface OverlayConfig {
@@ -138,6 +158,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showPlatformIcon: true,
   showTimestamp: true,
   theme: 'dark',
+  chatLayout: {
+    version: 1,
+    mode: 'combined',
+    splits: [{ id: 'default', type: 'combined', size: 100 }],
+  },
 }
 
 // ============================================================
