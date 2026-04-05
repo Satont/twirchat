@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import PlatformsPanel from './components/PlatformsPanel.vue'
+import WatchedChannelsView from './components/WatchedChannelsView.vue'
 import ChatList from './components/ChatList.vue'
-import ChatSplitView from './components/ChatSplitView.vue'
-import SplitViewToolbar from './components/SplitViewToolbar.vue'
 import EventsFeed from './components/EventsFeed.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ChannelTabBar from './components/ChannelTabBar.vue'
 import AddChannelModal from './components/AddChannelModal.vue'
 import { rpc } from './main'
+import { attemptMigration } from './services/migration'
 import type {
   Account,
   AppSettings,
-  ChatLayout,
   NormalizedChatMessage,
   NormalizedEvent,
   PlatformStatusInfo,
@@ -33,14 +32,15 @@ const unreadEvents = ref(0)
 
 // ---- Watched channels ----
 const watchedChannels = ref<WatchedChannel[]>([])
-/** "home" | WatchedChannel.id */
-const activeChatTab = ref<string>('home')
+/** Active watched channel tab ('home' or WatchedChannel.id) */
+const activeWatchedTab = ref<string>('home')
 /** ChannelId → messages buffer */
 const watchedMessages = ref<Map<string, NormalizedChatMessage[]>>(new Map())
 /** ChannelId → PlatformStatusInfo */
 const watchedStatuses = ref<Map<string, PlatformStatusInfo>>(new Map())
 /** ChannelId → stream is live */
 const watchedLiveStatuses = ref<Map<string, boolean>>(new Map())
+const tabChannelNames = ref<Map<string, string[]>>(new Map())
 const showAddModal = ref(false)
 
 let watchedLiveStatusInterval: ReturnType<typeof setInterval> | null = null
@@ -79,120 +79,8 @@ async function refreshWatchedLiveStatuses() {
   }
 }
 
-const activeWatchedChannel = computed<WatchedChannel | null>(() => {
-  if (activeChatTab.value === 'home') {
-    return null
-  }
-  return watchedChannels.value.find((c: WatchedChannel) => c.id === activeChatTab.value) ?? null
-})
-
-const activeWatchedStatus = computed<PlatformStatusInfo | null>(() => {
-  if (!activeWatchedChannel.value) {
-    return null
-  }
-  return watchedStatuses.value.get(activeWatchedChannel.value.id) ?? null
-})
-
-const activeWatchedMessages = computed<NormalizedChatMessage[]>(() => {
-  if (!activeWatchedChannel.value) {
-    return []
-  }
-  return watchedMessages.value.get(activeWatchedChannel.value.id) ?? []
-})
-
 const connectedAccountsCount = computed(() => accounts.value.length)
 const youtubeAuthenticated = computed(() => accounts.value.some((a) => a.platform === 'youtube'))
-
-const DEFAULT_LAYOUT: ChatLayout = {
-  version: 1,
-  mode: 'combined',
-  splits: [{ id: 'default', type: 'combined', size: 100 }],
-}
-
-// ---- Chat layout (split / combined) ----
-// Start with default layout, load persisted one after DB init in loadInitialData
-const chatLayout = ref<ChatLayout>({ ...DEFAULT_LAYOUT, splits: [...DEFAULT_LAYOUT.splits] })
-const isSplitMode = computed(() => chatLayout.value.mode === 'split')
-const maximizedPanelId = ref<string | null>(null)
-
-function toggleMode() {
-  chatLayout.value = {
-    ...chatLayout.value,
-    mode: chatLayout.value.mode === 'combined' ? 'split' : 'combined',
-  }
-}
-
-function addPanel() {
-  const splits = chatLayout.value.splits
-  // Find a watched channel not yet shown in a panel
-  const usedIds = new Set(splits.map((s) => s.channelId).filter(Boolean))
-  const nextChannel = watchedChannels.value.find((ch) => !usedIds.has(ch.id))
-
-  const newSize = 100 / (splits.length + 1)
-  const updatedSplits = splits.map((s) => ({ ...s, size: newSize }))
-  updatedSplits.push({
-    id: crypto.randomUUID(),
-    type: nextChannel ? 'channel' : 'combined',
-    channelId: nextChannel?.id,
-    size: newSize,
-  })
-  chatLayout.value = { ...chatLayout.value, splits: updatedSplits }
-}
-
-function removePanel(panelId?: string) {
-  const splits = chatLayout.value.splits
-  if (splits.length <= 1) return
-
-  const targetId = panelId ?? splits[splits.length - 1].id
-  const remaining = splits.filter((s) => s.id !== targetId)
-  const newSize = 100 / remaining.length
-  const updatedSplits = remaining.map((s) => ({ ...s, size: newSize }))
-  chatLayout.value = { ...chatLayout.value, splits: updatedSplits }
-
-  // Clear maximized state if the removed panel was maximized
-  if (maximizedPanelId.value === targetId) {
-    maximizedPanelId.value = null
-  }
-}
-
-function updateLayout(newLayout: ChatLayout) {
-  chatLayout.value = newLayout
-  // Note: Layout persistence disabled - requires RPC methods
-  // to avoid importing Bun modules into browser context
-}
-
-function onMaximizePanel(splitId: string) {
-  maximizedPanelId.value = splitId
-}
-
-function onRestorePanel() {
-  maximizedPanelId.value = null
-}
-
-// Note: Layout persistence disabled - requires RPC methods
-// to avoid importing Bun modules into browser context
-
-// Auto-add new watched channels as split panels when in split mode
-watch(watchedChannels, (channels, prev) => {
-  if (!isSplitMode.value) return
-  const prevIds = new Set((prev ?? []).map((c) => c.id))
-  const newChannels = channels.filter((ch) => !prevIds.has(ch.id))
-  for (const ch of newChannels) {
-    const alreadyInSplit = chatLayout.value.splits.some((s) => s.channelId === ch.id)
-    if (!alreadyInSplit) {
-      const splits = chatLayout.value.splits
-      const newSize = 100 / (splits.length + 1)
-      const updatedSplits = splits.map((s) => ({ ...s, size: newSize }))
-      updatedSplits.push({
-        id: crypto.randomUUID(),
-        type: 'channel',
-        channelId: ch.id,
-        size: newSize,
-      })
-      chatLayout.value = { ...chatLayout.value, splits: updatedSplits }
-    }
-  }
-})
 
 // ----------------------------------------------------------------
 // Load initial data
@@ -268,8 +156,8 @@ async function loadInitialData() {
   void refreshWatchedLiveStatuses()
   watchedLiveStatusInterval = setInterval(() => void refreshWatchedLiveStatuses(), 60_000)
 
-  // Note: Chat layout is not persisted - using default. 
-  // To add persistence, create RPC methods for getChatLayout/setChatLayout.
+  // Attempt migration from legacy layout format
+  await attemptMigration()
 }
 
 onMounted(() => {
@@ -474,6 +362,10 @@ function dismissUpdate() {
   updateState.value.show = false
 }
 
+function onTabChannelsUpdated({ tabId, channelNames }: { tabId: string; channelNames: string[] }) {
+  tabChannelNames.value = new Map(tabChannelNames.value).set(tabId, channelNames)
+}
+
 // ----------------------------------------------------------------
 // Watched channel actions
 // ----------------------------------------------------------------
@@ -486,7 +378,6 @@ async function onAddChannel(platform: 'twitch' | 'kick' | 'youtube', channelSlug
     if (!watchedChannels.value.find((c: WatchedChannel) => c.id === ch.id)) {
       watchedChannels.value = [...watchedChannels.value, ch]
     }
-    activeChatTab.value = ch.id
     void refreshWatchedLiveStatuses()
   } catch (error) {
     console.error('[App] addWatchedChannel failed:', error)
@@ -500,40 +391,19 @@ async function onRemoveChannel(id: string) {
     watchedMessages.value = new Map([...watchedMessages.value].filter(([k]) => k !== id))
     watchedStatuses.value = new Map([...watchedStatuses.value].filter(([k]) => k !== id))
     watchedLiveStatuses.value = new Map([...watchedLiveStatuses.value].filter(([k]) => k !== id))
-    if (activeChatTab.value === id) {
-      activeChatTab.value = 'home'
-    }
-    // Remove orphaned split panels referencing the removed channel
-    const currentSplits = chatLayout.value.splits
-    const cleanedSplits = currentSplits.filter((s) => s.channelId !== id)
-    if (cleanedSplits.length !== currentSplits.length) {
-      const rebalanced =
-        cleanedSplits.length > 0
-          ? cleanedSplits.map((s) => Object.assign({}, s, { size: 100 / cleanedSplits.length }))
-          : [{ id: crypto.randomUUID(), type: 'combined' as const, size: 100 }]
-      updateLayout({ ...chatLayout.value, splits: rebalanced })
-    }
-    // Clear maximized state if the maximized panel was for this channel
-    if (maximizedPanelId.value !== null) {
-      const stillExists = chatLayout.value.splits.some((s) => s.id === maximizedPanelId.value)
-      if (!stillExists) {
-        maximizedPanelId.value = null
-      }
-    }
+    // Layout cleanup is handled by RPC
   } catch (error) {
     console.error('[App] removeWatchedChannel failed:', error)
   }
 }
 
 async function onSendWatched({ text, channelId }: { text: string; channelId?: string }) {
-  // In split mode the payload carries the specific panel's channelId.
-  // In combined mode fall back to the currently active watched channel.
-  const targetId = channelId ?? activeWatchedChannel.value?.id
-  if (!targetId) {
+  // channelId is required in the new layout system
+  if (!channelId) {
     return
   }
   try {
-    await rpc.request.sendWatchedChannelMessage({ id: targetId, text })
+    await rpc.request.sendWatchedChannelMessage({ id: channelId, text })
   } catch (error) {
     console.error('[App] sendWatchedChannelMessage failed:', error)
   }
@@ -669,60 +539,43 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
 
     <!-- Main content area -->
     <main class="content">
-      <!-- Channel tab bar: visible in chat view for both combined and split modes -->
+      <!-- Channel tab bar for watched channels -->
       <ChannelTabBar
         v-if="activeTab === 'chat'"
         :watched-channels="watchedChannels"
-        :active-tab-id="activeChatTab"
+        :active-tab-id="activeWatchedTab"
         :watched-statuses="watchedStatuses"
         :watched-live-statuses="watchedLiveStatuses"
-        @select-tab="activeChatTab = $event"
+        :tab-channel-names="tabChannelNames"
+        @select-tab="activeWatchedTab = $event"
         @add-channel="showAddModal = true"
         @remove-channel="onRemoveChannel"
       />
 
-      <!-- Split view toolbar: only visible in chat view -->
-      <SplitViewToolbar
-        v-if="activeTab === 'chat'"
-        :mode="chatLayout.mode"
-        :can-add-panel="isSplitMode && chatLayout.splits.length < 4"
-        :can-remove-panel="isSplitMode && chatLayout.splits.length > 1"
-        @toggle-mode="toggleMode"
-        @add-panel="addPanel"
-        @remove-panel="removePanel()"
-      />
-
+      <!-- Home tab: combined chat across all own channels -->
       <ChatList
-        v-show="activeTab === 'chat' && !isSplitMode"
+        v-if="activeTab === 'chat' && activeWatchedTab === 'home' && settings"
         :messages="messages"
         :settings="settings"
         :accounts="accounts"
         :statuses="statuses"
-        :watched-channel="activeWatchedChannel"
-        :watched-channel-status="activeWatchedStatus"
-        :watched-messages="activeWatchedMessages"
-        @go-to-platforms="switchTab('platforms')"
         @settings-change="onSettingsChange"
-        @send-watched="onSendWatched"
       />
 
-      <ChatSplitView
-        v-if="activeTab === 'chat' && isSplitMode && settings"
-        :layout="chatLayout"
+      <!-- Watched channel tab: per-tab independent layout -->
+      <WatchedChannelsView
+        v-if="activeTab === 'chat' && activeWatchedTab !== 'home' && settings"
+        :tab-id="activeWatchedTab"
         :messages="messages"
-        :watched-messages="watchedMessages"
-        :watched-channels="watchedChannels"
-        :watched-statuses="watchedStatuses"
         :settings="settings"
         :accounts="accounts"
         :statuses="statuses"
-        :maximized-panel-id="maximizedPanelId"
-        @update:layout="updateLayout"
-        @close-panel="removePanel"
-        @maximize-panel="onMaximizePanel"
-        @send-watched="onSendWatched"
-        @go-to-platforms="switchTab('platforms')"
+        :watched-messages="watchedMessages"
+        :watched-statuses="watchedStatuses"
+        :watched-channels="watchedChannels"
+        @tab-channels-updated="onTabChannelsUpdated"
         @settings-change="onSettingsChange"
+        @send-watched="onSendWatched"
       />
 
       <EventsFeed v-show="activeTab === 'events'" :events="events" />
@@ -749,12 +602,6 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
       @confirm="onAddChannel"
       @cancel="showAddModal = false"
     />
-
-    <!-- Maximized panel restore button -->
-    <div v-if="maximizedPanelId !== null" class="maximize-restore-bar">
-      <span class="maximize-restore-label">Panel maximized</span>
-      <button class="maximize-restore-btn" @click="onRestorePanel">Restore</button>
-    </div>
 
     <!-- Update notification toast -->
     <div v-if="updateState.show" class="update-toast">
