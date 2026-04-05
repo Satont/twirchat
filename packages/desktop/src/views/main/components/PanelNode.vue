@@ -103,6 +103,26 @@ const handleSendWatched = (payload: { text: string; channelId: string }) => {
   emit('send-watched', payload)
 }
 
+function toggleChannelSelector() {
+  showChannelSelector.value = !showChannelSelector.value
+  showMenu.value = false
+}
+
+function splitHorizontalAndClose() {
+  handleSplitHorizontal()
+  showMenu.value = false
+}
+
+function splitVerticalAndClose() {
+  handleSplitVertical()
+  showMenu.value = false
+}
+
+function removeAndClose() {
+  handleRemove()
+  showMenu.value = false
+}
+
 const handleDragStart = (e: DragEvent) => {
   if (!props.isDraggable) {
     e.preventDefault()
@@ -196,43 +216,13 @@ const handleKeydown = (e: KeyboardEvent) => {
       <div class="panel-header-side panel-header-right">
         <button class="panel-menu-btn" @click.stop="showMenu = !showMenu">⋮</button>
         <div v-if="showMenu" class="panel-menu-dropdown">
-          <button
-            v-if="isWatched || isEmpty"
-            class="menu-item"
-            @click="
-              showChannelSelector = !showChannelSelector
-              showMenu = false
-            "
-          >
+          <button v-if="isWatched || isEmpty" class="menu-item" @click="toggleChannelSelector">
             📺 Change channel
           </button>
-          <button
-            class="menu-item"
-            @click="
-              handleSplitHorizontal()
-              showMenu = false
-            "
-          >
-            ⬌ Split horizontal
-          </button>
-          <button
-            class="menu-item"
-            @click="
-              handleSplitVertical()
-              showMenu = false
-            "
-          >
-            ⬍ Split vertical
-          </button>
+          <button class="menu-item" @click="splitHorizontalAndClose">⬌ Split horizontal</button>
+          <button class="menu-item" @click="splitVerticalAndClose">⬍ Split vertical</button>
           <div v-if="!isMain" class="menu-divider" />
-          <button
-            v-if="!isMain"
-            class="menu-item menu-item-danger"
-            @click="
-              handleRemove()
-              showMenu = false
-            "
-          >
+          <button v-if="!isMain" class="menu-item menu-item-danger" @click="removeAndClose">
             ✕ Close panel
           </button>
         </div>
