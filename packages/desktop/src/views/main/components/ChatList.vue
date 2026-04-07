@@ -334,12 +334,8 @@ function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
         >{{ activeMessages.length }} messages</span
       >
 
-      <!-- Appearance popup button — only in home tab -->
-      <ChatAppearancePopover
-        v-if="settings && !watchedChannel"
-        :settings="settings"
-        @change="onAppearanceChange"
-      />
+      <!-- Appearance popup button -->
+      <ChatAppearancePopover v-if="settings" :settings="settings" @change="onAppearanceChange" />
     </div>
 
     <!-- Messages + scroll pill wrapper -->
