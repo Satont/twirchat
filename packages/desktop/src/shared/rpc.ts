@@ -139,6 +139,18 @@ type BunRequests = {
   /** Open external URL in system browser */
   openExternalUrl: { params: { url: string }; response: void }
 
+  // ---- Window controls (custom titlebar, Windows only) ----
+  /** Get current OS platform identifier */
+  getPlatform: { params: void; response: 'win32' | 'darwin' | 'linux' }
+  /** Minimize the main window */
+  windowMinimize: { params: void; response: void }
+  /** Toggle maximize / restore on the main window */
+  windowMaximize: { params: void; response: void }
+  /** Close the main window */
+  windowClose: { params: void; response: void }
+  /** Returns true when the main window is currently maximized */
+  windowIsMaximized: { params: void; response: boolean }
+
   // ---- Watched Channels Layout (per-tab) ----
   /** Get the list of watched channel IDs that have standalone tabs */
   getTabChannelIds: { params: void; response: string[] | null }
@@ -192,6 +204,8 @@ type WebviewMessages = {
   watched_channel_message: { channelId: string; message: NormalizedChatMessage }
   /** Status changed for a watched channel */
   watched_channel_status: { channelId: string; status: PlatformStatusInfo }
+  /** Window maximize state changed (Windows custom titlebar) */
+  window_maximized_change: boolean
 }
 
 // ----------------------------------------------------------------
