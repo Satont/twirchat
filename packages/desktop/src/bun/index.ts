@@ -12,6 +12,25 @@
  *  - Handle RPC requests coming from the webview (accounts, settings, auth…)
  */
 
+process.on("uncaughtException", (err) => {
+  log.error("UNCAUGHT EXCEPTION — process will crash", {
+    error: String(err),
+    stack: err?.stack ?? "no stack",
+    name: err?.name ?? "unknown",
+  });
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  log.error("UNHANDLED REJECTION — promise rejected without .catch()", {
+    error: String(err),
+    stack: err?.stack ?? "no stack",
+    name: err?.name ?? "unknown",
+  });
+  console.error("UNHANDLED REJECTION:", reason);
+});
+
 import { BrowserWindow, BuildConfig, Updater, defineElectrobunRPC } from 'electrobun/bun'
 
 import { getDb, initDb } from '../store/db'
