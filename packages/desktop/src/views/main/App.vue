@@ -50,6 +50,15 @@ const watchedLiveStatuses = ref<Map<string, boolean>>(new Map())
 const tabChannelNames = ref<Map<string, string[]>>(new Map())
 const showAddModal = ref(false)
 
+// ---- Sidebar collapse ----
+const SIDEBAR_COLLAPSE_KEY = 'twirchat:sidebar-collapsed'
+const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === 'true')
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(sidebarCollapsed.value))
+}
+
 let watchedLiveStatusInterval: ReturnType<typeof setInterval> | null = null
 
 async function refreshWatchedLiveStatuses() {
@@ -479,7 +488,7 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
     ]"
   >
     <!-- Left icon navigation -->
-    <nav class="nav-rail">
+    <nav class="nav-rail" :class="{ collapsed: sidebarCollapsed }">
       <div class="nav-logo">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
           <rect x="2" y="3" width="20" height="14" rx="3" fill="currentColor" opacity=".9" />
@@ -595,6 +604,27 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
           <span class="nav-label">Settings</span>
         </button>
       </div>
+
+      <!-- Collapse toggle button -->
+      <button
+        class="nav-collapse-btn"
+        :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+        @click="toggleSidebar"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          :class="{ 'icon-flipped': sidebarCollapsed }"
+        >
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
     </nav>
 
     <!-- Main content area -->
@@ -835,6 +865,12 @@ body {
   padding: 12px 0 16px;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   gap: 4px;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.nav-rail.collapsed {
+  width: 44px;
 }
 
 .nav-logo {
@@ -895,6 +931,53 @@ body {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.01em;
+  transition:
+    opacity 0.15s ease,
+    max-height 0.15s ease;
+}
+
+.nav-rail.collapsed .nav-label {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ---- Collapse toggle button ---- */
+.nav-collapse-btn {
+  background: none;
+  border: none;
+  color: var(--c-nav-text, rgba(255, 255, 255, 0.35));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+.nav-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.nav-collapse-btn .icon-flipped {
+  transform: rotate(180deg);
+}
+
+.app.light .nav-collapse-btn {
+  color: var(--c-nav-text, rgba(28, 27, 34, 0.4));
+}
+
+.app.light .nav-collapse-btn:hover {
+  background: rgba(28, 27, 34, 0.07);
+  color: rgba(28, 27, 34, 0.7);
 }
 
 .badge {
