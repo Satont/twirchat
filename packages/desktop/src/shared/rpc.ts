@@ -140,6 +140,10 @@ type BunRequests = {
   openExternalUrl: { params: { url: string }; response: void }
 
   // ---- Watched Channels Layout (per-tab) ----
+  /** Get the list of watched channel IDs that have standalone tabs */
+  getTabChannelIds: { params: void; response: string[] | null }
+  /** Persist the list of watched channel IDs that have standalone tabs */
+  setTabChannelIds: { params: { ids: string[] }; response: void }
   /** Get the layout tree for a specific watched channel tab */
   getWatchedChannelsLayout: { params: { tabId: string }; response: WatchedChannelsLayout | null }
   /** Persist a full layout tree for a specific watched channel tab */

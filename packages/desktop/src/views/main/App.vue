@@ -115,7 +115,16 @@ async function loadInitialData() {
     }
     if (watched !== undefined) {
       watchedChannels.value = watched
-      tabChannelIds.value = new Set(watched.map((ch) => ch.id))
+      const persistedTabIds = await rpc.request.getTabChannelIds?.()
+      if (persistedTabIds !== null && persistedTabIds !== undefined && persistedTabIds.length > 0) {
+        tabChannelIds.value = new Set(
+          persistedTabIds.filter((id) => watched.some((ch) => ch.id === id)),
+        )
+      } else {
+        // Backward compat: first run or migration — use all watched channels
+        tabChannelIds.value = new Set(watched.map((ch) => ch.id))
+        await rpc.request.setTabChannelIds?.({ ids: watched.map((ch) => ch.id) })
+      }
     }
 
     // Load current watched channel statuses (emitted before webview was ready)
@@ -394,6 +403,7 @@ async function onAddChannel(platform: 'twitch' | 'kick' | 'youtube', channelSlug
   try {
     const ch = await doAddWatchedChannel(platform, channelSlug)
     tabChannelIds.value = new Set([...tabChannelIds.value, ch.id])
+    await rpc.request.setTabChannelIds?.({ ids: [...tabChannelIds.value] })
   } catch (error) {
     console.error('[App] addWatchedChannel failed:', error)
   }
@@ -404,6 +414,7 @@ async function onRemoveChannel(id: string) {
     await rpc.request.removeWatchedChannel({ id })
     watchedChannels.value = watchedChannels.value.filter((c: WatchedChannel) => c.id !== id)
     tabChannelIds.value = new Set([...tabChannelIds.value].filter((i) => i !== id))
+    await rpc.request.setTabChannelIds?.({ ids: [...tabChannelIds.value] })
     watchedMessages.value = new Map([...watchedMessages.value].filter(([k]) => k !== id))
     watchedStatuses.value = new Map([...watchedStatuses.value].filter(([k]) => k !== id))
     watchedLiveStatuses.value = new Map([...watchedLiveStatuses.value].filter(([k]) => k !== id))

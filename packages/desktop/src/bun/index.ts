@@ -14,7 +14,7 @@
 
 import { BrowserWindow, BuildConfig, Updater, defineElectrobunRPC } from 'electrobun/bun'
 
-import { initDb } from '../store/db'
+import { getDb, initDb } from '../store/db'
 import { getClientSecret } from '../store/client-secret'
 import {
   AccountStore,
@@ -486,6 +486,27 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
       },
 
       // ---- Watched Channels Layout ----
+
+      getTabChannelIds: () => {
+        const db = getDb()
+        const row = db
+          .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
+          .get('tab_channel_ids')
+        if (!row) return null
+        try {
+          return JSON.parse(row.value) as string[]
+        } catch {
+          return null
+        }
+      },
+
+      setTabChannelIds: ({ ids }: { ids: string[] }) => {
+        const db = getDb()
+        db.run(
+          'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+          ['tab_channel_ids', JSON.stringify(ids)],
+        )
+      },
 
       getWatchedChannelsLayout: ({ tabId }: { tabId: string }) => {
         return WatchedChannelsLayoutStore.get(tabId)
