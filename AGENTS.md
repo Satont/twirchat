@@ -1,5 +1,3 @@
-- use worktree_create(branch, baseBranch?) and worktree_delete(reason) tools when working on features.
-
 ## Code Formatting and Linting
 
 This project uses **oxlint** (linter) and **oxfmt** (formatter) from the Oxc toolchain.

@@ -129,9 +129,11 @@ async function fetchChannelStatuses() {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-onMounted(() => {
+onMounted(async () => {
   fetchChannelStatuses()
   pollTimer = setInterval(fetchChannelStatuses, 10_000)
+  await nextTick()
+  listEl.value?.scrollTo({ top: listEl.value.scrollHeight })
 })
 
 onUnmounted(() => {
