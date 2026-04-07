@@ -138,7 +138,11 @@ onMounted(async () => {
   fetchChannelStatuses()
   pollTimer = setInterval(fetchChannelStatuses, 10_000)
   await nextTick()
-  listEl.value?.scrollTo({ top: listEl.value.scrollHeight })
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      listEl.value?.scrollTo({ top: listEl.value!.scrollHeight })
+    })
+  })
 })
 
 onUnmounted(() => {
@@ -166,22 +170,33 @@ function onScroll() {
 watch(
   () => activeMessages.value.length,
   async () => {
-    if (isAtBottom.value) {
-      await nextTick()
-      listEl.value?.scrollTo({
-        behavior: 'smooth',
-        top: listEl.value.scrollHeight,
+    if (!isAtBottom.value || !listEl.value) return
+    await nextTick()
+    // Double rAF: fixes Windows Chromium timing bug where scrollHeight is stale
+    // after nextTick() in nested flex containers (Chromium issue #41228006).
+    // First rAF processes DOM mutations; second rAF reads the recalculated layout.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        listEl.value?.scrollTo({
+          behavior: 'smooth',
+          top: listEl.value!.scrollHeight,
+        })
       })
-    }
+    })
   },
 )
 
 function scrollToBottom() {
-  listEl.value?.scrollTo({
-    behavior: 'smooth',
-    top: listEl.value.scrollHeight,
-  })
+  if (!listEl.value) return
   isAtBottom.value = true
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      listEl.value?.scrollTo({
+        behavior: 'smooth',
+        top: listEl.value!.scrollHeight,
+      })
+    })
+  })
 }
 
 function platformColor(platform: string): string {
