@@ -12,6 +12,7 @@ import { attemptMigration } from './services/migration'
 import type {
   Account,
   AppSettings,
+  LayoutNode,
   NormalizedChatMessage,
   NormalizedEvent,
   PlatformStatusInfo,
@@ -125,6 +126,38 @@ async function loadInitialData() {
         tabChannelIds.value = new Set(watched.map((ch) => ch.id))
         await rpc.request.setTabChannelIds?.({ ids: watched.map((ch) => ch.id) })
       }
+    }
+
+    // Eagerly pre-populate tab channel names from persisted layouts
+    {
+      const collectNames = (node: LayoutNode, channels: WatchedChannel[]): string[] => {
+        if (node.type === 'panel' && node.content.type === 'watched') {
+          const ch = channels.find(
+            (c) => c.id === (node.content as { type: 'watched'; channelId: string }).channelId,
+          )
+          return ch ? [ch.displayName] : []
+        }
+        if (node.type === 'split') {
+          return node.children.flatMap((child) => collectNames(child, channels))
+        }
+        return []
+      }
+
+      const nameMap = new Map<string, string[]>(tabChannelNames.value)
+      for (const tabId of tabChannelIds.value) {
+        try {
+          const layout = await rpc.request.getWatchedChannelsLayout?.({ tabId })
+          if (layout) {
+            const names = collectNames(layout.root, watchedChannels.value)
+            if (names.length > 0) {
+              nameMap.set(tabId, names)
+            }
+          }
+        } catch {
+          // not fatal — tab will show single-channel name as fallback
+        }
+      }
+      tabChannelNames.value = nameMap
     }
 
     // Load current watched channel statuses (emitted before webview was ready)
