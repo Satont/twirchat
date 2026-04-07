@@ -236,16 +236,23 @@ const dropPanel = (
   }
 
   const targetParent = findParentOfNode(layout.value.root, targetId)
-  if (!targetParent) {
-    void loadLayout(currentTabId.value)
-    return false
-  }
 
   const splitDirection: SplitDirection =
     direction === 'left' || direction === 'right' ? 'vertical' : 'horizontal'
   const isAfter = direction === 'right' || direction === 'bottom'
 
-  if (targetParent.node.type === 'split' && targetParent.node.direction === splitDirection) {
+  if (!targetParent) {
+    // targetPanel is now the root (collapsed split) — create new root split
+    targetPanel.flex = 50
+    sourcePanel.flex = 50
+    layout.value.root = {
+      type: 'split',
+      id: crypto.randomUUID(),
+      direction: splitDirection,
+      flex: 100,
+      children: isAfter ? [targetPanel, sourcePanel] : [sourcePanel, targetPanel],
+    }
+  } else if (targetParent.node.type === 'split' && targetParent.node.direction === splitDirection) {
     const targetIndex = targetParent.children.findIndex((c) => c.id === targetId)
     if (targetIndex !== -1) {
       const insertIndex = isAfter ? targetIndex + 1 : targetIndex
