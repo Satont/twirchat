@@ -66,16 +66,19 @@ const watchedChannelMessages = computed(() => {
 })
 
 const showMenu = ref(false)
-const showChannelSelector = ref(false)
+const showAddForm = ref(false)
 const newChannelPlatform = ref<'twitch' | 'kick' | 'youtube'>('twitch')
 const newChannelSlug = ref('')
+const slugInputEl = ref<HTMLInputElement | null>(null)
+
+const showForm = computed(() => isEmpty.value || showAddForm.value)
 
 const handleAddAndAssign = () => {
   const slug = newChannelSlug.value.trim().toLowerCase()
   if (!slug) return
   emit('add-and-assign', props.panel.id, newChannelPlatform.value, slug)
   newChannelSlug.value = ''
-  showChannelSelector.value = false
+  showAddForm.value = false
 }
 
 const handleSplitHorizontal = () => {
@@ -99,15 +102,19 @@ const handleSendWatched = (payload: { text: string; channelId: string }) => {
   emit('send-watched', payload)
 }
 
-function toggleChannelSelector() {
-  showChannelSelector.value = !showChannelSelector.value
+function toggleAddForm() {
+  showAddForm.value = !showAddForm.value
   newChannelSlug.value = ''
   showMenu.value = false
 }
 
-function splitHorizontalAndClose() {
+function handleCancelForm() {
+  showAddForm.value = false
+  newChannelSlug.value = ''
+}
+
+function handleSplitAndClose() {
   handleSplitHorizontal()
-  showMenu.value = false
 }
 
 function splitVerticalAndClose() {
@@ -182,41 +189,58 @@ const handleKeydown = (e: KeyboardEvent) => {
     :class="{
       'is-dragging': isDragging,
       'is-drop-target': isDropTarget,
-      'is-draggable': isDraggable,
     }"
     tabindex="0"
-    :draggable="isDraggable"
     @keydown="handleKeydown"
-    @dragstart="handleDragStart"
-    @dragend="handleDragEnd"
     @dragover="handleDragOver"
     @dragleave="handleDragLeave"
     @drop="handleDrop"
   >
-    <div class="panel-header">
-      <!-- Transparent overlay to close menu on outside-click -->
+    <div
+      class="panel-header"
+      :class="{ 'is-drag-handle': isDraggable }"
+      :draggable="isDraggable"
+      @dragstart="handleDragStart"
+      @dragend="handleDragEnd"
+    >
       <div v-if="showMenu" class="menu-overlay" @click="showMenu = false" />
-
-      <!-- Left spacer (empty, for symmetry) -->
       <div class="panel-header-side" />
-
-      <!-- Center: channel name -->
       <div class="panel-header-center">
-        <span v-if="watchedChannel" class="panel-channel-name">{{
+        <span v-if="watchedChannel && !showAddForm" class="panel-channel-name">{{
           watchedChannel.displayName
         }}</span>
         <span v-else-if="isMain" class="panel-channel-name">Combined Chat</span>
-        <span v-else class="panel-channel-name muted">Empty</span>
+        <span v-else class="panel-channel-name muted">{{
+          showAddForm ? 'Add Channel' : 'Empty'
+        }}</span>
       </div>
-
-      <!-- Right: ⋮ menu button -->
       <div class="panel-header-side panel-header-right">
+        <!-- + split button (non-main panels only) -->
+        <button
+          v-if="!isMain"
+          class="panel-add-btn"
+          title="Split right"
+          @click.stop="handleSplitAndClose"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+        <!-- ⋮ menu button -->
         <button class="panel-menu-btn" @click.stop="showMenu = !showMenu">⋮</button>
         <div v-if="showMenu" class="panel-menu-dropdown">
-          <button v-if="isWatched || isEmpty" class="menu-item" @click="toggleChannelSelector">
+          <button v-if="isWatched" class="menu-item" @click="toggleAddForm">
             📺 Change channel
           </button>
-          <button class="menu-item" @click="splitHorizontalAndClose">⬌ Split horizontal</button>
           <button class="menu-item" @click="splitVerticalAndClose">⬍ Split vertical</button>
           <div v-if="!isMain" class="menu-divider" />
           <button v-if="!isMain" class="menu-item menu-item-danger" @click="removeAndClose">
@@ -226,52 +250,63 @@ const handleKeydown = (e: KeyboardEvent) => {
       </div>
     </div>
 
-    <div v-if="showChannelSelector && (isEmpty || isWatched)" class="channel-selector">
-      <div class="channel-selector-header">
-        <span>Add Channel</span>
-        <button class="close-btn" @click="showChannelSelector = false">×</button>
-      </div>
-      <div class="platform-row">
-        <button
-          class="platform-btn"
-          :class="{ active: newChannelPlatform === 'twitch' }"
-          style="--p-color: #9146ff"
-          @click="newChannelPlatform = 'twitch'"
-        >
-          Twitch
-        </button>
-        <button
-          class="platform-btn"
-          :class="{ active: newChannelPlatform === 'kick' }"
-          style="--p-color: #53fc18"
-          @click="newChannelPlatform = 'kick'"
-        >
-          Kick
-        </button>
-        <button
-          class="platform-btn"
-          :class="{ active: newChannelPlatform === 'youtube' }"
-          style="--p-color: #ff0000"
-          @click="newChannelPlatform = 'youtube'"
-        >
-          YouTube
-        </button>
-      </div>
-      <input
-        v-model="newChannelSlug"
-        class="channel-input"
-        placeholder="Channel name"
-        @keydown.enter="handleAddAndAssign"
-        @keydown.escape="showChannelSelector = false"
-      />
-      <button class="btn-add" :disabled="!newChannelSlug.trim()" @click="handleAddAndAssign">
-        Add
-      </button>
-    </div>
-
     <div class="panel-content">
+      <!-- Add-channel form: shown when empty OR user toggled change channel -->
+      <div v-if="showForm" class="add-channel-form">
+        <div class="add-channel-title">Add channel</div>
+        <div class="add-channel-platform-row">
+          <button
+            class="platform-chip"
+            :class="{ active: newChannelPlatform === 'twitch' }"
+            style="--p-color: #9146ff"
+            @click="newChannelPlatform = 'twitch'"
+          >
+            Twitch
+          </button>
+          <button
+            class="platform-chip"
+            :class="{ active: newChannelPlatform === 'kick' }"
+            style="--p-color: #53fc18"
+            @click="newChannelPlatform = 'kick'"
+          >
+            Kick
+          </button>
+          <button
+            class="platform-chip"
+            :class="{ active: newChannelPlatform === 'youtube' }"
+            style="--p-color: #ff0000"
+            @click="newChannelPlatform = 'youtube'"
+          >
+            YouTube
+          </button>
+        </div>
+        <input
+          ref="slugInputEl"
+          v-model="newChannelSlug"
+          class="add-channel-input"
+          :placeholder="newChannelPlatform === 'youtube' ? 'Channel handle or ID' : 'Channel name'"
+          autocomplete="off"
+          spellcheck="false"
+          @keydown.enter="handleAddAndAssign"
+          @keydown.escape="handleCancelForm"
+        />
+        <div class="add-channel-actions">
+          <button v-if="isWatched && showAddForm" class="btn-cancel-form" @click="handleCancelForm">
+            Cancel
+          </button>
+          <button
+            class="btn-confirm-form"
+            :disabled="!newChannelSlug.trim()"
+            @click="handleAddAndAssign"
+          >
+            Watch
+          </button>
+        </div>
+      </div>
+
+      <!-- Main chat (combined) -->
       <ChatList
-        v-if="isMain"
+        v-else-if="isMain"
         :messages="messages ?? []"
         :settings="settings ?? null"
         :accounts="accounts ?? []"
@@ -279,6 +314,7 @@ const handleKeydown = (e: KeyboardEvent) => {
         @settings-change="handleSettingsChange"
       />
 
+      <!-- Watched channel chat -->
       <ChatList
         v-else-if="isWatched && watchedChannel"
         :messages="watchedChannelMessages"
@@ -291,25 +327,6 @@ const handleKeydown = (e: KeyboardEvent) => {
         @settings-change="handleSettingsChange"
         @send-watched="handleSendWatched"
       />
-
-      <div v-else class="content-placeholder empty">
-        <div class="empty-icon">
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <line x1="12" y1="8" x2="12" y2="16" />
-            <line x1="8" y1="12" x2="16" y2="12" />
-          </svg>
-        </div>
-        <p>Empty panel</p>
-        <p class="empty-hint">Click ⋮ to assign a channel or split this panel</p>
-      </div>
     </div>
   </div>
 </template>
@@ -336,6 +353,15 @@ const handleKeydown = (e: KeyboardEvent) => {
   min-height: 40px;
   flex-shrink: 0;
   position: relative;
+}
+
+/* Drag handle styles */
+.panel-header.is-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+.panel-header.is-drag-handle:active {
+  cursor: grabbing;
 }
 
 .panel-header-side {
@@ -368,6 +394,29 @@ const handleKeydown = (e: KeyboardEvent) => {
   align-items: center;
   justify-content: flex-end;
   position: relative;
+  /* Override the fixed width to fit both buttons */
+  width: auto;
+  min-width: 32px;
+}
+
+/* + split button */
+.panel-add-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--c-text-2, #8b8b99);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  margin-right: 2px;
+}
+.panel-add-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--c-text, #e2e2e8);
 }
 
 .panel-menu-btn {
@@ -444,117 +493,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   margin: 4px 0;
 }
 
-.channel-selector {
-  position: absolute;
-  top: 48px;
-  right: 12px;
-  background: var(--c-surface, #18181b);
-  border: 1px solid var(--c-border, #2a2a33);
-  border-radius: 8px;
-  padding: 8px;
-  min-width: 200px;
-  z-index: 100;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.channel-selector-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 4px 8px;
-  border-bottom: 1px solid var(--c-border, #2a2a33);
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--c-text-2, #8b8b99);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--c-text-2, #8b8b99);
-  cursor: pointer;
-  font-size: 16px;
-  padding: 0 4px;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: var(--c-text, #e2e2e8);
-}
-
-.platform-row {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.platform-btn {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--c-border, #2a2a33);
-  color: var(--c-text-2, #8b8b99);
-  padding: 4px 0;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.platform-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--c-text, #e2e2e8);
-}
-
-.platform-btn.active {
-  background: var(--p-color);
-  border-color: var(--p-color);
-  color: #fff;
-}
-
-.platform-btn.active[style*='53fc18'] {
-  color: #000;
-}
-
-.channel-input {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--c-border, #2a2a33);
-  color: var(--c-text, #e2e2e8);
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 13px;
-  margin-bottom: 8px;
-  outline: none;
-}
-
-.channel-input:focus {
-  border-color: #a78bfa;
-}
-
-.btn-add {
-  width: 100%;
-  background: #a78bfa;
-  color: #fff;
-  border: none;
-  padding: 6px 0;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-add:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.btn-add:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .panel-content {
   flex: 1;
   overflow: hidden;
@@ -563,35 +501,124 @@ const handleKeydown = (e: KeyboardEvent) => {
   min-height: 0;
 }
 
-.content-placeholder {
+/* Add channel form — fullscreen in panel content */
+.add-channel-form {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  font-size: 14px;
+  padding: 24px 20px;
+}
+.add-channel-title {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--c-text-2, #8b8b99);
-  text-align: center;
-  padding: 20px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
-
-.empty-icon {
+.add-channel-platform-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  max-width: 260px;
+}
+.platform-chip {
+  flex: 1;
+  padding: 6px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--c-border, #2a2a33);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--c-text-2, #8b8b99);
-  opacity: 0.5;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
 }
-
-.empty-hint {
-  font-size: 12px;
-  opacity: 0.7;
+.platform-chip:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--c-text, #e2e2e8);
 }
-
-.panel-node.is-draggable {
-  cursor: grab;
+.platform-chip.active {
+  background: color-mix(in srgb, var(--p-color) 18%, transparent);
+  border-color: color-mix(in srgb, var(--p-color) 50%, transparent);
+  color: var(--p-color);
+}
+/* Kick active: green on black — ensure contrast */
+.platform-chip.active[style*='53fc18'] {
+  color: #53fc18;
+}
+.add-channel-input {
+  width: 100%;
+  max-width: 260px;
+  background: var(--c-surface-2, #1f1f24);
+  border: 1px solid var(--c-border, #2a2a33);
+  border-radius: 8px;
+  color: var(--c-text, #e2e2e8);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.add-channel-input:focus {
+  border-color: rgba(167, 139, 250, 0.5);
+}
+.add-channel-input::placeholder {
+  color: var(--c-text-2, #8b8b99);
+  opacity: 0.6;
+}
+.add-channel-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 260px;
+  justify-content: flex-end;
+}
+.btn-cancel-form {
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  color: var(--c-text-2, #8b8b99);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.btn-cancel-form:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--c-text, #e2e2e8);
+}
+.btn-confirm-form {
+  flex: 1;
+  padding: 7px 16px;
+  border-radius: 7px;
+  border: none;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+}
+.btn-confirm-form:hover:not(:disabled) {
+  background: #6d28d9;
+}
+.btn-confirm-form:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .panel-node.is-dragging {
-  cursor: grabbing;
   opacity: 0.5;
 }
 
