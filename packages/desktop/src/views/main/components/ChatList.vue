@@ -23,17 +23,27 @@ const props = defineProps<{
   watchedChannel?: WatchedChannel | null
   watchedChannelStatus?: PlatformStatusInfo | null
   watchedMessages?: NormalizedChatMessage[]
+  /** Whether this is the main (combined) panel — hides split/close actions */
+  isMain?: boolean
+  /** Whether the chat header acts as a drag handle */
+  isDraggable?: boolean
 }>()
 
 const emit = defineEmits<{
   'go-to-platforms': []
   'settings-change': [settings: import('@twirchat/shared/types').AppSettings]
   'send-watched': [payload: { text: string; channelId: string; replyToMessageId?: string }]
+  'split-right': []
+  'change-channel': []
+  'close-panel': []
+  'header-dragstart': [e: DragEvent]
+  'header-dragend': []
 }>()
 
 const listEl = ref<HTMLElement | null>(null)
 const isAtBottom = ref(true)
 const replyTarget = ref<NormalizedChatMessage | null>(null)
+const showMenu = ref(false)
 
 function onReply(msg: NormalizedChatMessage) {
   replyTarget.value = msg
@@ -277,7 +287,13 @@ function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
 <template>
   <div class="chat-wrapper">
     <!-- Chat header -->
-    <div class="chat-header">
+    <div
+      class="chat-header"
+      :class="{ 'is-drag-handle': isDraggable }"
+      :draggable="isDraggable"
+      @dragstart="(e) => emit('header-dragstart', e)"
+      @dragend="emit('header-dragend')"
+    >
       <!-- Watched channel header -->
       <template v-if="watchedChannel">
         <span
@@ -345,12 +361,49 @@ function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
         </div>
       </template>
 
-      <span class="chat-count" v-if="activeMessages.length > 0"
-        >{{ activeMessages.length }} messages</span
-      >
+      <div class="chat-header-right">
+        <span class="chat-count" v-if="activeMessages.length > 0"
+          >{{ activeMessages.length }} messages</span
+        >
 
-      <!-- Appearance popup button -->
-      <ChatAppearancePopover v-if="settings" :settings="settings" @change="onAppearanceChange" />
+        <!-- Appearance popup button -->
+        <ChatAppearancePopover v-if="settings" :settings="settings" @change="onAppearanceChange" />
+
+        <!-- Panel action buttons (non-main panels only) -->
+        <template v-if="!isMain">
+          <div v-if="showMenu" class="menu-overlay" @click="showMenu = false" />
+          <div class="panel-actions">
+            <!-- + split button -->
+            <button class="panel-action-btn" title="Split right" @click.stop="emit('split-right')">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <!-- ⋮ menu button -->
+            <button class="panel-action-btn panel-menu-btn" @click.stop="showMenu = !showMenu">
+              ⋮
+            </button>
+            <div v-if="showMenu" class="panel-menu-dropdown">
+              <button v-if="watchedChannel" class="menu-item" @click="emit('change-channel')">
+                📺 Change channel
+              </button>
+              <div v-if="watchedChannel" class="menu-divider" />
+              <button class="menu-item menu-item-danger" @click="emit('close-panel')">
+                ✕ Close panel
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- Messages + scroll pill wrapper -->
@@ -510,6 +563,14 @@ function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
   min-height: 44px;
 }
 
+.chat-header.is-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+.chat-header.is-drag-handle:active {
+  cursor: grabbing;
+}
+
 .watched-dot {
   width: 7px;
   height: 7px;
@@ -636,7 +697,102 @@ function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
   font-size: 11px;
   color: var(--c-text-2, #8b8b99);
   flex-shrink: 0;
+}
+
+.chat-header-right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Panel action buttons */
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.panel-action-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--c-text-2, #8b8b99);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.panel-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--c-text, #e2e2e8);
+}
+
+.panel-menu-btn {
+  font-size: 18px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+}
+
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+}
+
+.panel-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--c-surface, #18181b);
+  border: 1px solid var(--c-border, #2a2a33);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 180px;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--c-text, #e2e2e8);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-item-danger {
+  color: #ef4444;
+}
+.menu-item-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--c-border, #2a2a33);
+  margin: 4px 0;
 }
 
 .chat-list {

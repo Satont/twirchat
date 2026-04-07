@@ -70,7 +70,6 @@ const youtubeAuthenticated = computed(
   () => props.accounts?.some((a) => a.platform === 'youtube') ?? false,
 )
 
-const showMenu = ref(false)
 const showAddForm = ref(false)
 const dropZone = ref<'left' | 'right' | 'top' | 'bottom' | null>(null)
 
@@ -79,10 +78,6 @@ const showForm = computed(() => isEmpty.value || showAddForm.value)
 function handleFormConfirm(platform: 'twitch' | 'kick' | 'youtube', slug: string) {
   emit('add-and-assign', props.panel.id, platform, slug)
   showAddForm.value = false
-}
-
-const handleSplitHorizontal = () => {
-  emit('split', props.panel.id, 'horizontal')
 }
 
 const handleRemove = () => {
@@ -98,9 +93,8 @@ const handleSendWatched = (payload: { text: string; channelId: string }) => {
   emit('send-watched', payload)
 }
 
-function toggleAddForm() {
-  showAddForm.value = !showAddForm.value
-  showMenu.value = false
+function handleChangeChannel() {
+  showAddForm.value = true
 }
 
 function handleCancelForm() {
@@ -109,11 +103,6 @@ function handleCancelForm() {
 
 function handleSplitAndClose() {
   emit('split', props.panel.id, 'vertical')
-}
-
-function removeAndClose() {
-  handleRemove()
-  showMenu.value = false
 }
 
 const handleDragStart = (e: DragEvent) => {
@@ -130,6 +119,10 @@ const handleDragStart = (e: DragEvent) => {
 
 const handleDragEnd = () => {
   emit('dragend')
+}
+
+const handleSplitHorizontal = () => {
+  emit('split', props.panel.id, 'horizontal')
 }
 
 const handleDragOver = (e: DragEvent) => {
@@ -181,8 +174,7 @@ const handleKeydown = (e: KeyboardEvent) => {
       }
       break
   }
-}
-</script>
+}</script>
 
 <template>
   <div
@@ -202,62 +194,18 @@ const handleKeydown = (e: KeyboardEvent) => {
       class="drop-zone-overlay"
       :class="`drop-zone-${dropZone}`"
     />
-    <div
-      class="panel-header"
-      :class="{ 'is-drag-handle': isDraggable }"
-      :draggable="isDraggable"
-      @dragstart="handleDragStart"
-      @dragend="handleDragEnd"
-    >
-      <div v-if="showMenu" class="menu-overlay" @click="showMenu = false" />
-      <div class="panel-header-side" />
-      <div class="panel-header-center">
-        <span v-if="watchedChannel && !showAddForm" class="panel-channel-name">{{
-          watchedChannel.displayName
-        }}</span>
-        <span v-else-if="isMain" class="panel-channel-name">Combined Chat</span>
-        <span v-else class="panel-channel-name muted">{{
-          showAddForm ? 'Add Channel' : 'Empty'
-        }}</span>
-      </div>
-      <div class="panel-header-side panel-header-right">
-        <!-- + split button (non-main panels only) -->
-        <button
-          v-if="!isMain"
-          class="panel-add-btn"
-          title="Split right"
-          @click.stop="handleSplitAndClose"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
-        <!-- ⋮ menu button -->
-        <button class="panel-menu-btn" @click.stop="showMenu = !showMenu">⋮</button>
-        <div v-if="showMenu" class="panel-menu-dropdown">
-          <button v-if="isWatched" class="menu-item" @click="toggleAddForm">
-            📺 Change channel
-          </button>
-          <div v-if="!isMain" class="menu-divider" />
-          <button v-if="!isMain" class="menu-item menu-item-danger" @click="removeAndClose">
-            ✕ Close panel
-          </button>
-        </div>
-      </div>
-    </div>
 
     <div class="panel-content">
       <!-- Add-channel form: shown when empty OR user toggled change channel -->
       <div v-if="showForm" class="add-channel-form-wrapper">
+        <!-- Thin drag handle strip for panels in form state -->
+        <div
+          v-if="isDraggable"
+          class="form-drag-handle"
+          draggable="true"
+          @dragstart="handleDragStart"
+          @dragend="handleDragEnd"
+        />
         <AddChannelForm
           :youtube-authenticated="youtubeAuthenticated"
           :cancelable="isWatched && showAddForm"
@@ -273,7 +221,11 @@ const handleKeydown = (e: KeyboardEvent) => {
         :settings="settings ?? null"
         :accounts="accounts ?? []"
         :statuses="statuses ?? new Map()"
+        :is-main="true"
+        :is-draggable="isDraggable"
         @settings-change="handleSettingsChange"
+        @header-dragstart="handleDragStart"
+        @header-dragend="handleDragEnd"
       />
 
       <!-- Watched channel chat -->
@@ -286,8 +238,15 @@ const handleKeydown = (e: KeyboardEvent) => {
         :watched-channel="watchedChannel"
         :watched-channel-status="watchedChannelStatus"
         :watched-messages="watchedChannelMessages"
+        :is-main="false"
+        :is-draggable="isDraggable"
         @settings-change="handleSettingsChange"
         @send-watched="handleSendWatched"
+        @split-right="handleSplitAndClose"
+        @change-channel="handleChangeChannel"
+        @close-panel="handleRemove"
+        @header-dragstart="handleDragStart"
+        @header-dragend="handleDragEnd"
       />
     </div>
   </div>
@@ -300,159 +259,8 @@ const handleKeydown = (e: KeyboardEvent) => {
   height: 100%;
   background: var(--c-bg, #0f0f11);
   border: 1px solid var(--c-border, #2a2a33);
-  border-radius: 8px;
   overflow: hidden;
   position: relative;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px;
-  background: var(--c-surface, #18181b);
-  border-bottom: 1px solid var(--c-border, #2a2a33);
-  min-height: 40px;
-  flex-shrink: 0;
-  position: relative;
-}
-
-/* Drag handle styles */
-.panel-header.is-drag-handle {
-  cursor: grab;
-  user-select: none;
-}
-.panel-header.is-drag-handle:active {
-  cursor: grabbing;
-}
-
-.panel-header-side {
-  width: 32px;
-  flex-shrink: 0;
-}
-
-.panel-header-center {
-  flex: 1;
-  text-align: center;
-  overflow: hidden;
-}
-
-.panel-channel-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--c-text, #e2e2e8);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.panel-channel-name.muted {
-  color: var(--c-text-2, #8b8b99);
-  font-weight: 400;
-}
-
-.panel-header-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  position: relative;
-  /* Override the fixed width to fit both buttons */
-  width: auto;
-  min-width: 32px;
-}
-
-/* + split button */
-.panel-add-btn {
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--c-text-2, #8b8b99);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-  margin-right: 2px;
-}
-.panel-add-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--c-text, #e2e2e8);
-}
-
-.panel-menu-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--c-text-2, #8b8b99);
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-
-.panel-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--c-text, #e2e2e8);
-}
-
-.panel-menu-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  background: var(--c-surface, #18181b);
-  border: 1px solid var(--c-border, #2a2a33);
-  border-radius: 8px;
-  padding: 4px;
-  min-width: 180px;
-  z-index: 200;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.menu-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 199;
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--c-text, #e2e2e8);
-  cursor: pointer;
-  font-size: 13px;
-  text-align: left;
-  transition: background 0.15s;
-}
-
-.menu-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.menu-item-danger {
-  color: #ef4444;
-}
-
-.menu-item-danger:hover {
-  background: rgba(239, 68, 68, 0.15);
-}
-
-.menu-divider {
-  height: 1px;
-  background: var(--c-border, #2a2a33);
-  margin: 4px 0;
 }
 
 .panel-content {
@@ -472,8 +280,22 @@ const handleKeydown = (e: KeyboardEvent) => {
   justify-content: center;
   padding: 24px 20px;
 }
-.add-channel-form-wrapper > * {
+.add-channel-form-wrapper > *:not(.form-drag-handle) {
   max-width: 260px;
+}
+
+/* Thin drag handle for panels in form/empty state */
+.form-drag-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  cursor: grab;
+  user-select: none;
+}
+.form-drag-handle:active {
+  cursor: grabbing;
 }
 
 .panel-node.is-dragging {
