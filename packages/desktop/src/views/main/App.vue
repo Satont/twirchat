@@ -7,6 +7,7 @@ import EventsFeed from './components/EventsFeed.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ChannelTabBar from './components/ChannelTabBar.vue'
 import AddChannelModal from './components/AddChannelModal.vue'
+import TitleBar from './components/TitleBar.vue'
 import { rpc } from './main'
 import { attemptMigration } from './services/migration'
 import type {
@@ -487,204 +488,207 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
       settings?.fontFamily ? `font-${settings.fontFamily}` : 'font-inter',
     ]"
   >
-    <!-- Left icon navigation -->
-    <nav class="nav-rail" :class="{ collapsed: sidebarCollapsed }">
-      <div class="nav-logo">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <rect x="2" y="3" width="20" height="14" rx="3" fill="currentColor" opacity=".9" />
-          <path
-            d="M7 21h10M12 17v4"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-        </svg>
-      </div>
-
-      <div class="nav-items">
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'chat' }"
-          title="Chat"
-          @click="switchTab('chat')"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          <span class="nav-label">Chat</span>
-        </button>
-
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'events' }"
-          title="Events"
-          @click="switchTab('events')"
-        >
-          <div class="nav-item-inner">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <span v-if="unreadEvents > 0" class="badge">{{
-              unreadEvents > 99 ? '99+' : unreadEvents
-            }}</span>
-          </div>
-          <span class="nav-label">Events</span>
-        </button>
-
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'platforms' }"
-          title="Platforms"
-          @click="switchTab('platforms')"
-        >
-          <div class="nav-item-inner">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path
-                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
-              />
-            </svg>
-            <span v-if="connectedAccountsCount > 0" class="badge badge-green">
-              {{ connectedAccountsCount }}
-            </span>
-          </div>
-          <span class="nav-label">Platforms</span>
-        </button>
-
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'settings' }"
-          title="Settings"
-          @click="switchTab('settings')"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="12" cy="12" r="3" />
+    <TitleBar />
+    <div class="app-body">
+      <!-- Left icon navigation -->
+      <nav class="nav-rail" :class="{ collapsed: sidebarCollapsed }">
+        <div class="nav-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="3" width="20" height="14" rx="3" fill="currentColor" opacity=".9" />
             <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              d="M7 21h10M12 17v4"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
             />
           </svg>
-          <span class="nav-label">Settings</span>
-        </button>
-      </div>
+        </div>
 
-      <!-- Collapse toggle button -->
-      <button
-        class="nav-collapse-btn"
-        :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-        @click="toggleSidebar"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          :class="{ 'icon-flipped': sidebarCollapsed }"
+        <div class="nav-items">
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'chat' }"
+            title="Chat"
+            @click="switchTab('chat')"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span class="nav-label">Chat</span>
+          </button>
+
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'events' }"
+            title="Events"
+            @click="switchTab('events')"
+          >
+            <div class="nav-item-inner">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span v-if="unreadEvents > 0" class="badge">{{
+                unreadEvents > 99 ? '99+' : unreadEvents
+              }}</span>
+            </div>
+            <span class="nav-label">Events</span>
+          </button>
+
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'platforms' }"
+            title="Platforms"
+            @click="switchTab('platforms')"
+          >
+            <div class="nav-item-inner">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path
+                  d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                />
+              </svg>
+              <span v-if="connectedAccountsCount > 0" class="badge badge-green">
+                {{ connectedAccountsCount }}
+              </span>
+            </div>
+            <span class="nav-label">Platforms</span>
+          </button>
+
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'settings' }"
+            title="Settings"
+            @click="switchTab('settings')"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              />
+            </svg>
+            <span class="nav-label">Settings</span>
+          </button>
+        </div>
+
+        <!-- Collapse toggle button -->
+        <button
+          class="nav-collapse-btn"
+          :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          @click="toggleSidebar"
         >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-      </button>
-    </nav>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :class="{ 'icon-flipped': sidebarCollapsed }"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+      </nav>
 
-    <!-- Main content area -->
-    <main class="content">
-      <!-- Channel tab bar for watched channels -->
-      <ChannelTabBar
-        v-if="activeTab === 'chat'"
-        :watched-channels="tabWatchedChannels"
-        :active-tab-id="activeWatchedTab"
-        :watched-statuses="watchedStatuses"
-        :watched-live-statuses="watchedLiveStatuses"
-        :tab-channel-names="tabChannelNames"
-        @select-tab="activeWatchedTab = $event"
-        @add-channel="showAddModal = true"
-        @remove-channel="onRemoveChannel"
-      />
+      <!-- Main content area -->
+      <main class="content">
+        <!-- Channel tab bar for watched channels -->
+        <ChannelTabBar
+          v-if="activeTab === 'chat'"
+          :watched-channels="tabWatchedChannels"
+          :active-tab-id="activeWatchedTab"
+          :watched-statuses="watchedStatuses"
+          :watched-live-statuses="watchedLiveStatuses"
+          :tab-channel-names="tabChannelNames"
+          @select-tab="activeWatchedTab = $event"
+          @add-channel="showAddModal = true"
+          @remove-channel="onRemoveChannel"
+        />
 
-      <!-- Home tab: combined chat across all own channels -->
-      <ChatList
-        v-if="activeTab === 'chat' && activeWatchedTab === 'home' && settings"
-        :messages="messages"
-        :settings="settings"
-        :accounts="accounts"
-        :statuses="statuses"
-        @settings-change="onSettingsChange"
-      />
+        <!-- Home tab: combined chat across all own channels -->
+        <ChatList
+          v-if="activeTab === 'chat' && activeWatchedTab === 'home' && settings"
+          :messages="messages"
+          :settings="settings"
+          :accounts="accounts"
+          :statuses="statuses"
+          @settings-change="onSettingsChange"
+        />
 
-      <!-- Watched channel tab: per-tab independent layout -->
-      <WatchedChannelsView
-        v-if="activeTab === 'chat' && activeWatchedTab !== 'home' && settings"
-        :tab-id="activeWatchedTab"
-        :messages="messages"
-        :settings="settings"
-        :accounts="accounts"
-        :statuses="statuses"
-        :watched-messages="watchedMessages"
-        :watched-statuses="watchedStatuses"
-        :watched-channels="watchedChannels"
-        :on-add-watched-channel="doAddWatchedChannel"
-        @tab-channels-updated="onTabChannelsUpdated"
-        @settings-change="onSettingsChange"
-        @send-watched="onSendWatched"
-      />
+        <!-- Watched channel tab: per-tab independent layout -->
+        <WatchedChannelsView
+          v-if="activeTab === 'chat' && activeWatchedTab !== 'home' && settings"
+          :tab-id="activeWatchedTab"
+          :messages="messages"
+          :settings="settings"
+          :accounts="accounts"
+          :statuses="statuses"
+          :watched-messages="watchedMessages"
+          :watched-statuses="watchedStatuses"
+          :watched-channels="watchedChannels"
+          :on-add-watched-channel="doAddWatchedChannel"
+          @tab-channels-updated="onTabChannelsUpdated"
+          @settings-change="onSettingsChange"
+          @send-watched="onSendWatched"
+        />
 
-      <EventsFeed v-show="activeTab === 'events'" :events="events" />
+        <EventsFeed v-show="activeTab === 'events'" :events="events" />
 
-      <PlatformsPanel
-        v-show="activeTab === 'platforms'"
-        :accounts="accounts"
-        :statuses="statuses"
-        @accounts-updated="accounts = $event"
-      />
+        <PlatformsPanel
+          v-show="activeTab === 'platforms'"
+          :accounts="accounts"
+          :statuses="statuses"
+          @accounts-updated="accounts = $event"
+        />
 
-      <SettingsPanel
-        v-show="activeTab === 'settings'"
-        :settings="settings"
-        @saved="onSettingsSaved"
-        @change="onSettingsChange"
-      />
-    </main>
+        <SettingsPanel
+          v-show="activeTab === 'settings'"
+          :settings="settings"
+          @saved="onSettingsSaved"
+          @change="onSettingsChange"
+        />
+      </main>
+    </div>
 
     <!-- Add channel modal -->
     <AddChannelModal
@@ -788,10 +792,18 @@ body {
 <style scoped>
 .app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
   background: #0f0f11;
   color: #e2e2e8;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* Light theme overrides */
