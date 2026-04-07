@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { rpc } from '../main'
-import type { Emote, NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Account, Emote, NormalizedChatMessage } from '@twirchat/shared/types'
 import EmoteTooltip from './EmoteTooltip.vue'
 
 const props = defineProps<{
@@ -13,6 +13,9 @@ const props = defineProps<{
   showBadges?: boolean
   fontSize?: number
   chatTheme?: 'modern' | 'compact'
+  accounts?: Account[]
+  selfPingEnabled?: boolean
+  selfPingColor?: string
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +27,20 @@ function onReply() {
 }
 
 const isSystemMessage = computed(() => props.message.type === 'system')
+
+const isSelfPing = computed((): boolean => {
+  if (!props.selfPingEnabled || !props.accounts?.length) return false
+  const myAccount = props.accounts.find((a) => a.platform === props.message.platform)
+  if (!myAccount) return false
+  const lower = props.message.text.toLowerCase()
+  const username = myAccount.username.toLowerCase()
+  const displayName = myAccount.displayName.toLowerCase()
+  return lower.includes(`@${username}`) || lower.includes(`@${displayName}`)
+})
+
+const selfPingStyle = computed(() =>
+  isSelfPing.value && props.selfPingColor ? { background: props.selfPingColor } : {},
+)
 
 const systemAction = computed<'added' | 'removed' | 'renamed'>(() => {
   const t = props.message.text
@@ -287,8 +304,8 @@ onMounted(() => {
   <div
     v-else-if="props.chatTheme === 'compact'"
     class="msg msg-compact"
-    :class="`platform-${message.platform}`"
-    :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
+    :class="[`platform-${message.platform}`, { 'self-ping': isSelfPing }]"
+    :style="{ '--font-size': `${props.fontSize ?? 14}px`, ...selfPingStyle }"
     @click="onMsgClick"
     @mouseenter="showCopyButton = true"
     @mouseleave="showCopyButton = false"
@@ -432,8 +449,12 @@ onMounted(() => {
   <div
     v-else
     class="msg"
-    :class="[`platform-${message.platform}`, message.type === 'action' ? 'is-action' : '']"
-    :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
+    :class="[
+      `platform-${message.platform}`,
+      message.type === 'action' ? 'is-action' : '',
+      { 'self-ping': isSelfPing },
+    ]"
+    :style="{ '--font-size': `${props.fontSize ?? 14}px`, ...selfPingStyle }"
     @click="onMsgClick"
     @mouseenter="showCopyButton = true"
     @mouseleave="showCopyButton = false"
@@ -614,6 +635,10 @@ onMounted(() => {
 
 .msg:hover {
   background: rgba(255, 255, 255, 0.025);
+}
+
+.msg.self-ping:hover {
+  filter: brightness(1.08);
 }
 
 /* Platform stripe on left edge */

@@ -357,6 +357,9 @@ function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
             :show-badges="settings?.showBadges"
             :font-size="settings?.fontSize"
             :chat-theme="settings?.chatTheme"
+            :accounts="accounts"
+            :self-ping-enabled="settings?.selfPing?.enabled"
+            :self-ping-color="settings?.selfPing?.color"
             @reply="onReply"
           />
         </template>

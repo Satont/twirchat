@@ -13,11 +13,15 @@ const emit = defineEmits<{
   change: [settings: AppSettings]
 }>()
 
-const local = ref<AppSettings>(
-  props.settings
-    ? { ...props.settings, overlay: { ...props.settings.overlay } }
-    : { ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } },
-)
+function makeLocal(s: AppSettings): AppSettings {
+  return {
+    ...s,
+    overlay: { ...s.overlay },
+    selfPing: { ...(s.selfPing ?? DEFAULT_SETTINGS.selfPing!) },
+  }
+}
+
+const local = ref<AppSettings>(makeLocal(props.settings ?? DEFAULT_SETTINGS))
 
 // Flag to avoid feedback loop: when local changes → App updates settings prop → we'd reset local again
 let ignorePropSync = false
@@ -29,7 +33,7 @@ watch(
       return
     }
     if (s) {
-      local.value = { ...s, overlay: { ...s.overlay } }
+      local.value = makeLocal(s)
     }
   },
 )
@@ -39,7 +43,7 @@ watch(
   local,
   (s) => {
     ignorePropSync = true
-    emit('change', { ...s, overlay: { ...s.overlay } })
+    emit('change', makeLocal(s))
     // Reset flag on next tick after Vue has propagated the prop update
     Promise.resolve().then(() => {
       ignorePropSync = false
@@ -55,7 +59,7 @@ async function save() {
   saving.value = true
   try {
     await rpc.request.saveSettings!(local.value)
-    emit('saved', { ...local.value, overlay: { ...local.value.overlay } })
+    emit('saved', makeLocal(local.value))
     saved.value = true
     setTimeout(() => {
       saved.value = false
@@ -166,7 +170,53 @@ function copyOverlayUrl() {
         </div>
       </section>
 
-      <!-- 7TV Emotes -->
+      <!-- Self-Ping Highlight -->
+      <section class="settings-section">
+        <h3 class="section-title">Self-Ping Highlight</h3>
+        <p class="section-desc">Highlight messages that mention your own nickname</p>
+
+        <div class="form-row">
+          <div class="form-label">
+            <span>Enable highlights</span>
+            <span class="form-hint">Highlight messages mentioning you</span>
+          </div>
+          <label class="switch">
+            <input v-model="local.selfPing!.enabled" type="checkbox" />
+            <span class="switch-thumb" />
+          </label>
+        </div>
+
+        <div class="form-row">
+          <div class="form-label">
+            <span>Highlight color</span>
+          </div>
+          <div class="color-row">
+            <input
+              v-model="local.selfPing!.color"
+              class="input-sm"
+              placeholder="rgba(167, 139, 250, 0.15)"
+            />
+            <input v-model="local.selfPing!.color" type="color" class="color-swatch" />
+          </div>
+        </div>
+
+        <div class="form-row form-row-preview">
+          <div class="form-label">
+            <span>Preview</span>
+            <span class="form-hint">How a pinged message looks</span>
+          </div>
+          <div
+            class="ping-preview"
+            :style="local.selfPing!.enabled ? { background: local.selfPing!.color } : {}"
+          >
+            <span class="ping-preview-author">StreamerName:</span>
+            <span class="ping-preview-text">
+              Hey <span class="ping-preview-mention">@YourName</span> what do you think?
+            </span>
+          </div>
+        </div>
+      </section>
+
       <!-- Updates -->
       <section class="settings-section">
         <h3 class="section-title">Updates</h3>
@@ -633,5 +683,37 @@ function copyOverlayUrl() {
 }
 .btn-copy:hover {
   background: rgba(167, 139, 250, 0.22);
+}
+
+.form-row-preview {
+  align-items: flex-start;
+  padding-top: 12px;
+}
+
+.ping-preview {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid var(--c-border, #2a2a33);
+  min-width: 200px;
+  transition: background 0.2s;
+}
+
+.ping-preview-author {
+  font-weight: 700;
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.ping-preview-text {
+  color: var(--c-text, #e2e2e8);
+}
+
+.ping-preview-mention {
+  color: #a78bfa;
+  font-weight: 600;
 }
 </style>

@@ -108,6 +108,13 @@ export interface ChatLayout {
   splits: SplitConfig[]
 }
 
+export interface SelfPingConfig {
+  /** Highlight messages that mention the user's own platform nickname */
+  enabled: boolean
+  /** Background color applied to self-ping messages (CSS color string) */
+  color: string
+}
+
 export interface AppSettings {
   theme: 'light' | 'dark'
   chatTheme: 'modern' | 'compact'
@@ -124,6 +131,8 @@ export interface AppSettings {
   autoCheckUpdates?: boolean
   /** Chat layout configuration (combined / split) */
   chatLayout?: ChatLayout
+  /** Self-ping highlight settings */
+  selfPing?: SelfPingConfig
 }
 
 export interface OverlayConfig {
@@ -171,6 +180,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
     version: 1,
     mode: 'combined',
     splits: [{ id: 'default', type: 'combined', size: 100 }],
+  },
+  selfPing: {
+    enabled: true,
+    color: 'rgba(167, 139, 250, 0.15)',
   },
 }
 
