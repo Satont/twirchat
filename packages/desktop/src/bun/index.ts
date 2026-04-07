@@ -210,6 +210,8 @@ startAuthServer()
 
 const currentStatuses = new Map<string, PlatformStatusInfo>()
 
+let win!: InstanceType<typeof BrowserWindow>
+
 // ============================================================
 // 2. Define Electrobun RPC (bun side)
 // ============================================================
@@ -493,6 +495,26 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
         void openBrowser(url)
       },
 
+      getPlatform: () => process.platform as 'win32' | 'darwin' | 'linux',
+
+      windowMinimize: () => {
+        win.minimize()
+      },
+
+      windowMaximize: () => {
+        if (win.isMaximized()) {
+          win.unmaximize()
+        } else {
+          win.maximize()
+        }
+      },
+
+      windowClose: () => {
+        win.close()
+      },
+
+      windowIsMaximized: () => win.isMaximized(),
+
       // ---- Watched Channels Layout ----
 
       getTabChannelIds: () => {
@@ -751,15 +773,27 @@ async function resolveWindowUrl(): Promise<string> {
 
 const windowUrl = await resolveWindowUrl()
 
-const win = new BrowserWindow({
+win = new BrowserWindow({
   frame: { height: 800, width: 1200, x: 0, y: 0 },
   rpc,
   title: 'TwirChat',
   url: windowUrl,
+  ...(process.platform === 'win32' ? { titleBarStyle: 'hidden' as const } : {}),
 })
 
 if (channel === 'dev') {
   win.webview.openDevTools()
+}
+
+if (process.platform === 'win32') {
+  let lastMaximized = win.isMaximized()
+  win.on('resize', () => {
+    const nowMaximized = win.isMaximized()
+    if (nowMaximized !== lastMaximized) {
+      lastMaximized = nowMaximized
+      sendToView.window_maximized_change(nowMaximized)
+    }
+  })
 }
 
 // ============================================================
