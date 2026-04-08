@@ -12,6 +12,7 @@ import type {
   Account,
   AppSettings,
   NormalizedChatMessage,
+  Platform,
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
@@ -34,7 +35,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'go-to-platforms': []
-  'settings-change': [settings: import('@twirchat/shared/types').AppSettings]
+  'settings-change': [settings: AppSettings]
   'send-watched': [payload: { text: string; channelId: string; replyToMessageId?: string }]
   'split-right': []
   'change-channel': []
@@ -202,7 +203,7 @@ async function onSend(
       rpc.request
         .sendMessage({
           channelId: t.channelLogin,
-          platform: t.platform as import('@twirchat/shared/types').Platform,
+          platform: t.platform as Platform,
           text: t.text,
           replyToMessageId: t.replyToMessageId,
         })
@@ -217,7 +218,7 @@ function onSendWatched(payload: { text: string; channelId: string; replyToMessag
   replyTarget.value = null
 }
 
-function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
+function onAppearanceChange(s: AppSettings) {
   emit('settings-change', s)
   rpc.request
     .saveSettings(s)

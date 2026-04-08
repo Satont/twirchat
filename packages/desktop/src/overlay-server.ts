@@ -24,6 +24,7 @@
 
 import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
+import type { ServerWebSocket } from 'bun'
 import { join } from 'path'
 import { logger } from '@twirchat/shared/logger'
 
@@ -42,7 +43,7 @@ export type OverlayMessage =
 // Connected OBS browser-source WebSocket clients
 // ============================================================
 
-const clients = new Set<import('bun').ServerWebSocket<unknown>>()
+const clients = new Set<ServerWebSocket<unknown>>()
 
 // ============================================================
 // Public API — called from src/bun/index.ts
