@@ -8,7 +8,7 @@ import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
 import { rpc } from '../main'
 import { platformColor } from '../../shared/utils/platform'
-import { usePolling } from '../composables/usePolling'
+import { useStreamStatusStore } from '../stores/streamStatus'
 import type {
   Account,
   AppSettings,
@@ -67,8 +67,7 @@ function onReply(msg: NormalizedChatMessage) {
   replyTarget.value = msg
 }
 
-// ---- Channel status bar ----
-const channelStatuses = ref<ChannelStatus[]>([])
+const streamStatusStore = useStreamStatusStore()
 
 // ---- Active messages (home vs watched) ----
 const activeMessages = computed<NormalizedChatMessage[]>(() => {
@@ -122,48 +121,18 @@ const allChannels = computed<ChannelStatusRequest[]>(() => [
   ...autoConnectedChannels.value,
 ])
 
-// Channels shown in the bar: merge allChannels with backend-fetched statuses.
+// Channels shown in the bar: merge allChannels with store-fetched statuses.
 // This ensures the bar is visible immediately when a channel is joined, even if
-// The backend fetch hasn't returned yet (or fails).
-const displayedChannels = computed<ChannelStatus[]>(() => {
-  const backendMap = new Map(
-    channelStatuses.value.map((s) => [`${s.platform}:${s.channelLogin}`, s]),
-  )
-  return allChannels.value.map((ch) => {
-    const key = `${ch.platform}:${ch.channelLogin}`
-    const backendStatus = backendMap.get(key)
-
-    if (backendStatus) {
-      return backendStatus
-    }
-
-    return {
-      channelLogin: ch.channelLogin,
-      isLive: false,
-      platform: ch.platform,
-      title: '',
-    }
-  })
-})
-
-async function fetchChannelStatuses() {
-  const channels = allChannels.value
-  if (channels.length === 0) {
-    channelStatuses.value = []
-    return
-  }
-  try {
-    const res = await rpc.request.getChannelsStatus({ channels })
-    channelStatuses.value = res.channels
-  } catch (error) {
-    console.warn('[ChannelStatusBar] fetch failed:', error)
-  }
-}
-
-const { start: startPolling } = usePolling(fetchChannelStatuses, 10_000)
+// The store hasn't fetched yet (or fails).
+const displayedChannels = computed<ChannelStatus[]>(() =>
+  allChannels.value.map((ch) => {
+    const stored = streamStatusStore.getStatus(ch.platform, ch.channelLogin)
+    if (stored) return stored
+    return { channelLogin: ch.channelLogin, isLive: false, platform: ch.platform, title: '' }
+  }),
+)
 
 onMounted(() => {
-  startPolling()
   scrollToBottom()
 })
 
@@ -183,9 +152,6 @@ watch(
   },
   { flush: 'post' },
 )
-
-// Re-fetch immediately when channels change
-watch(allChannels, () => fetchChannelStatuses(), { deep: true })
 
 // ---- Scroll ----
 const hasAnyConnection = computed(() =>

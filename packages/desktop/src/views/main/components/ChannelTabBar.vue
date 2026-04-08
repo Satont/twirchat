@@ -5,12 +5,17 @@ import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 
+export type WatchedLiveStatus = {
+  isLive: boolean
+  viewerCount?: number
+}
+
 const props = defineProps<{
   watchedChannels: WatchedChannel[]
   activeTabId: string // "home" or a WatchedChannel.id
   watchedStatuses: Map<string, PlatformStatusInfo>
-  /** ChannelId → stream is live (from channels-status API) */
-  watchedLiveStatuses: Map<string, boolean>
+  /** ChannelId → live status info (from shared stream status store) */
+  watchedLiveStatuses: Map<string, WatchedLiveStatus>
   tabChannelNames?: Map<string, string[]>
 }>()
 
@@ -21,7 +26,18 @@ const emit = defineEmits<{
 }>()
 
 function isLive(id: string): boolean {
-  return props.watchedLiveStatuses.get(id) === true
+  return props.watchedLiveStatuses.get(id)?.isLive === true
+}
+
+function viewerCount(id: string): number | undefined {
+  const s = props.watchedLiveStatuses.get(id)
+  return s?.isLive ? s.viewerCount : undefined
+}
+
+function formatViewers(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
 }
 </script>
 
@@ -81,6 +97,9 @@ function isLive(id: string): boolean {
               ? props.tabChannelNames!.get(ch.id)!.join(', ')
               : ch.displayName
           }}
+        </span>
+        <span v-if="viewerCount(ch.id) !== undefined" class="tab-viewers">
+          {{ formatViewers(viewerCount(ch.id)!) }}
         </span>
       </button>
 
@@ -196,6 +215,13 @@ function isLive(id: string): boolean {
   height: 6px;
   border-radius: 50%;
   background: var(--dot-color, #22c55e);
+  flex-shrink: 0;
+}
+
+.tab-viewers {
+  font-size: 10px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 

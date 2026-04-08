@@ -65,26 +65,36 @@ async function fetchTwitchChannelsStatus(
     'Client-Id': config.TWITCH_CLIENT_ID,
   }
 
-  // Step 1: resolve logins → broadcaster_ids via /helix/users
-  const userParams = logins.map((l) => `login=${encodeURIComponent(l)}`).join('&')
-  const usersRes = await fetch(`https://api.twitch.tv/helix/users?${userParams}`, { headers })
-  if (!usersRes.ok) {
-    const body = await usersRes.text()
-    log.warn('Twitch /helix/users failed', { body, status: usersRes.status })
-    return logins.map((login) => ({
-      channelLogin: login,
-      isLive: false,
-      platform: 'twitch' as const,
-      title: '',
-    }))
-  }
-  const usersBody = (await usersRes.json()) as { data: HelixUser[] }
-  const userMap = new Map<string, string>() // Login → broadcaster_id
-  for (const u of usersBody.data) {
-    userMap.set(u.login.toLowerCase(), u.id)
+  const loginToId = new Map<string, string>()
+  for (const ch of channels) {
+    if (ch.channelId) {
+      loginToId.set(ch.channelLogin.toLowerCase(), ch.channelId)
+    }
   }
 
-  const broadcasterIds = logins.map((l) => userMap.get(l)).filter(Boolean) as string[]
+  const loginsNeedingResolution = logins.filter((l) => !loginToId.has(l))
+  if (loginsNeedingResolution.length > 0) {
+    const userParams = loginsNeedingResolution
+      .map((l) => `login=${encodeURIComponent(l)}`)
+      .join('&')
+    const usersRes = await fetch(`https://api.twitch.tv/helix/users?${userParams}`, { headers })
+    if (!usersRes.ok) {
+      const body = await usersRes.text()
+      log.warn('Twitch /helix/users failed', { body, status: usersRes.status })
+      return logins.map((login) => ({
+        channelLogin: login,
+        isLive: false,
+        platform: 'twitch' as const,
+        title: '',
+      }))
+    }
+    const usersBody = (await usersRes.json()) as { data: HelixUser[] }
+    for (const u of usersBody.data) {
+      loginToId.set(u.login.toLowerCase(), u.id)
+    }
+  }
+
+  const broadcasterIds = logins.map((l) => loginToId.get(l)).filter(Boolean) as string[]
   if (broadcasterIds.length === 0) {
     return logins.map((login) => ({
       channelLogin: login,
@@ -94,7 +104,6 @@ async function fetchTwitchChannelsStatus(
     }))
   }
 
-  // Step 2: fetch live streams + channel info in parallel using broadcaster_id
   const loginParams = logins.map((l) => `user_login=${encodeURIComponent(l)}`).join('&')
   const idParams = broadcasterIds.map((id) => `broadcaster_id=${encodeURIComponent(id)}`).join('&')
 
@@ -103,8 +112,8 @@ async function fetchTwitchChannelsStatus(
     fetch(`https://api.twitch.tv/helix/channels?${idParams}`, { headers }),
   ])
 
-  const liveMap = new Map<string, HelixStream>() // Login → stream
-  const offlineMap = new Map<string, HelixChannel>() // Login → channel info
+  const liveMap = new Map<string, HelixStream>()
+  const offlineMap = new Map<string, HelixChannel>()
 
   if (streamsRes.ok) {
     const body = (await streamsRes.json()) as { data: HelixStream[] }

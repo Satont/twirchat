@@ -275,6 +275,12 @@ export interface ChannelStatusRequest {
   platform: 'twitch' | 'kick'
   /** For Twitch: the channel login (e.g. "ninja"). For Kick: the channel slug. */
   channelLogin: string
+  /**
+   * Platform user ID (broadcaster_id for Twitch).
+   * When provided for Twitch, the /helix/users login→id resolution step is skipped,
+   * saving one API round-trip.
+   */
+  channelId?: string
   /** Optional user access token — if provided, backend uses it instead of app token */
   userAccessToken?: string
 }
