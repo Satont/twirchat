@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, triggerRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePolling } from './composables/usePolling'
 import { useRpcListener } from './composables/useRpcListener'
@@ -209,7 +209,8 @@ async function loadInitialData() {
     try {
       const msgs = await rpc.request.getWatchedChannelMessages({ id: ch.id })
       if (msgs && msgs.length > 0) {
-        watchedMessages.value = new Map(watchedMessages.value).set(ch.id, msgs)
+        watchedMessages.value.set(ch.id, msgs)
+        triggerRef(watchedMessages)
       }
     } catch {
       // Not fatal
@@ -264,11 +265,13 @@ const DOWNLOAD_IN_PROGRESS_STATUSES = new Set([
 ])
 
 useRpcListener('chat_message', (msg: NormalizedChatMessage) => {
-  messages.value = [msg, ...messages.value].slice(0, 500)
+  messages.value.unshift(msg)
+  if (messages.value.length > 500) messages.value.length = 500
 })
 
 useRpcListener('chat_event', (ev: NormalizedEvent) => {
-  events.value = [ev, ...events.value].slice(0, 200)
+  events.value.unshift(ev)
+  if (events.value.length > 200) events.value.length = 200
   if (activeTab.value !== 'events') {
     unreadEvents.value++
   }
@@ -333,10 +336,10 @@ useRpcListener(
   'watched_channel_message',
   ({ channelId, message }: { channelId: string; message: NormalizedChatMessage }) => {
     const prev = watchedMessages.value.get(channelId) ?? []
-    watchedMessages.value = new Map(watchedMessages.value).set(
-      channelId,
-      [message, ...prev].slice(0, 200),
-    )
+    prev.unshift(message)
+    if (prev.length > 200) prev.length = 200
+    watchedMessages.value.set(channelId, prev)
+    triggerRef(watchedMessages)
   },
 )
 
