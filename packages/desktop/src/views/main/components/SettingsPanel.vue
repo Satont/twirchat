@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { AppSettings } from '@twirchat/shared/types'
+import type { AppSettings, HotkeySettings } from '@twirchat/shared/types'
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 import { rpc } from '../main'
+import { pause, resume } from '../composables/useHotkeys'
 
 const props = defineProps<{
   settings: AppSettings | null
@@ -18,6 +19,7 @@ function makeLocal(s: AppSettings): AppSettings {
     ...s,
     overlay: { ...s.overlay },
     selfPing: { ...(s.selfPing ?? DEFAULT_SETTINGS.selfPing!) },
+    hotkeys: { ...(s.hotkeys ?? DEFAULT_SETTINGS.hotkeys) },
   }
 }
 
@@ -84,6 +86,66 @@ const overlayUrl = computed(() => {
 
 function copyOverlayUrl() {
   navigator.clipboard.writeText(overlayUrl.value)
+}
+
+// -- Keyboard shortcuts recording --
+const recordingAction = ref<keyof HotkeySettings | null>(null)
+
+function formatKeyCombo(combo: string): string {
+  return combo
+    .split('+')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('+')
+}
+
+const hotkeysConfig: Record<keyof HotkeySettings, { label: string; description: string }> = {
+  newTab: { label: 'Open new tab', description: 'Add a watched channel tab' },
+  nextTab: { label: 'Next tab', description: 'Cycle to the next tab' },
+  prevTab: { label: 'Previous tab', description: 'Cycle to the previous tab' },
+  tabSelector: {
+    label: 'Tab selector',
+    description: 'Open fuzzy tab search (Ctrl+K always works)',
+  },
+}
+
+function onRecordKeydown(e: KeyboardEvent): void {
+  e.preventDefault()
+  e.stopImmediatePropagation()
+
+  if (!recordingAction.value) return
+
+  if (e.key === 'Escape') {
+    stopRecording()
+    return
+  }
+
+  // Build key combo string
+  const parts: string[] = []
+  if (e.ctrlKey) parts.push('ctrl')
+  if (e.shiftKey) parts.push('shift')
+  if (e.altKey) parts.push('alt')
+
+  const mainKey = e.key.toLowerCase()
+  // Skip modifier-only keypresses
+  if (['control', 'shift', 'alt', 'meta'].includes(mainKey)) return
+
+  parts.push(mainKey)
+  const combo = parts.join('+')
+
+  local.value.hotkeys[recordingAction.value] = combo
+  stopRecording()
+}
+
+function startRecording(action: keyof HotkeySettings): void {
+  recordingAction.value = action
+  pause()
+  window.addEventListener('keydown', onRecordKeydown, { capture: true })
+}
+
+function stopRecording(): void {
+  recordingAction.value = null
+  resume()
+  window.removeEventListener('keydown', onRecordKeydown, { capture: true })
 }
 </script>
 
@@ -384,6 +446,27 @@ function copyOverlayUrl() {
             <input v-model="local.overlay.showAvatar" type="checkbox" />
             <span class="switch-thumb" />
           </label>
+        </div>
+      </section>
+
+      <!-- Keyboard Shortcuts -->
+      <section class="settings-section">
+        <h3 class="section-title">Keyboard Shortcuts</h3>
+        <div v-for="(config, key) in hotkeysConfig" :key="key" class="form-row">
+          <div class="form-label">
+            <span>{{ config.label }}</span>
+            <span class="form-hint">{{ config.description }}</span>
+          </div>
+          <button
+            class="hotkey-badge"
+            :class="{ recording: recordingAction === key }"
+            @click="startRecording(key as keyof HotkeySettings)"
+          >
+            <template v-if="recordingAction === key">Press a key…</template>
+            <template v-else>
+              <kbd>{{ formatKeyCombo(local.hotkeys[key as keyof HotkeySettings]) }}</kbd>
+            </template>
+          </button>
         </div>
       </section>
     </div>
@@ -715,5 +798,37 @@ function copyOverlayUrl() {
 .ping-preview-mention {
   color: #a78bfa;
   font-weight: 600;
+}
+
+/* Hotkey Badge */
+.hotkey-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100px;
+  padding: 4px 10px;
+  background: var(--c-surface, #1a1a23);
+  border: 1px solid var(--c-border, #2a2a33);
+  border-radius: 6px;
+  color: var(--c-text, #e2e2e8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.hotkey-badge:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hotkey-badge.recording {
+  border-color: #a78bfa;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+}
+
+kbd {
+  font-family: monospace;
+  font-size: 12px;
 }
 </style>
