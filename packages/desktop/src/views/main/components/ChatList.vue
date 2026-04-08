@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { VList } from 'virtua/vue'
+import type { VListHandle } from 'virtua/vue'
 import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 import Tooltip from './ui/Tooltip.vue'
@@ -7,7 +9,6 @@ import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
 import { rpc } from '../main'
 import { platformColor } from '../../shared/utils/platform'
 import { usePolling } from '../composables/usePolling'
-import { useChatScroll } from '../composables/useChatScroll'
 import type {
   Account,
   AppSettings,
@@ -44,8 +45,17 @@ const emit = defineEmits<{
   'header-dragend': []
 }>()
 
-const listEl = ref<HTMLElement | null>(null)
-const { isAtBottom, onScroll, scrollToBottom, scrollToBottomOnNewMessage } = useChatScroll(listEl)
+const vlistRef = ref<VListHandle | null>(null)
+const isAtBottom = ref(true)
+
+function onVListScroll(offset: number) {
+  // With :reverse="true", offset near 0 means at the bottom (latest messages)
+  isAtBottom.value = offset < 40
+}
+
+function scrollToBottom() {
+  vlistRef.value?.scrollToIndex(0)
+}
 
 const replyTarget = ref<NormalizedChatMessage | null>(null)
 const showMenu = ref(false)
@@ -149,10 +159,8 @@ async function fetchChannelStatuses() {
 
 const { start: startPolling } = usePolling(fetchChannelStatuses, 10_000)
 
-onMounted(async () => {
+onMounted(() => {
   startPolling()
-  await nextTick()
-  scrollToBottom(false)
 })
 
 // Re-fetch immediately when channels change
@@ -161,11 +169,6 @@ watch(allChannels, () => fetchChannelStatuses(), { deep: true })
 // ---- Scroll ----
 const hasAnyConnection = computed(() =>
   ['twitch', 'youtube', 'kick'].some((p) => props.statuses.get(p)?.status === 'connected'),
-)
-
-watch(
-  () => activeMessages.value.length,
-  () => void scrollToBottomOnNewMessage(),
 )
 
 function platformName(platform: string): string {
@@ -350,12 +353,18 @@ function onAppearanceChange(s: AppSettings) {
 
     <!-- Messages + scroll pill wrapper -->
     <div class="chat-list-wrapper">
-      <div ref="listEl" class="chat-list" @scroll="onScroll">
-        <template v-if="activeMessages.length > 0">
+      <VList
+        v-if="activeMessages.length > 0"
+        ref="vlistRef"
+        class="chat-list"
+        :data="activeMessages"
+        :reverse="true"
+        @scroll="onVListScroll"
+      >
+        <template #default="{ item }">
           <ChatMessage
-            v-for="msg in [...activeMessages].reverse()"
-            :key="msg.id"
-            :message="msg"
+            :key="item.id"
+            :message="item"
             :show-platform-color-stripe="settings?.showPlatformColorStripe"
             :show-platform-icon="settings?.showPlatformIcon"
             :show-timestamp="settings?.showTimestamp"
@@ -369,77 +378,77 @@ function onAppearanceChange(s: AppSettings) {
             @reply="onReply"
           />
         </template>
+      </VList>
 
-        <!-- Empty state -->
-        <div v-else class="empty-state">
-          <div class="empty-icon">
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              opacity=".35"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </div>
-
-          <!-- Watched channel: just waiting -->
-          <template v-if="watchedChannel">
-            <p class="empty-title">
-              {{
-                watchedChannelStatus?.status === 'connecting'
-                  ? 'Connecting…'
-                  : watchedChannelStatus?.status === 'connected'
-                    ? 'No messages yet'
-                    : 'Connecting…'
-              }}
-            </p>
-            <p class="empty-hint">
-              Messages from <strong>{{ watchedChannel.displayName }}</strong> will appear here.
-            </p>
-          </template>
-
-          <!-- No accounts at all -->
-          <template v-else-if="accounts.length === 0 && !hasAnyConnection">
-            <p class="empty-title">No accounts connected</p>
-            <p class="empty-hint">Connect your streaming accounts to start reading chat.</p>
-            <button class="empty-action" @click="emit('go-to-platforms')">Go to Platforms →</button>
-          </template>
-
-          <!-- Accounts exist, but no active connection yet -->
-          <template v-else-if="!hasAnyConnection">
-            <p class="empty-title">Waiting for connection…</p>
-            <div class="empty-accounts">
-              <div
-                v-for="acc in accounts"
-                :key="acc.id"
-                class="empty-account-chip"
-                :style="{ '--chip-color': platformColor(acc.platform) }"
-              >
-                <img v-if="acc.avatarUrl" :src="acc.avatarUrl" class="chip-avatar" />
-                <span v-else class="chip-avatar-fallback">{{
-                  acc.displayName.charAt(0).toUpperCase()
-                }}</span>
-                <span class="chip-name">{{ acc.displayName }}</span>
-                <span class="chip-platform">{{ acc.platform }}</span>
-              </div>
-            </div>
-            <p class="empty-hint">Join a channel in <strong>Platforms</strong> to see chat.</p>
-          </template>
-
-          <!-- Connected, just no messages yet -->
-          <template v-else>
-            <p class="empty-title">No messages yet</p>
-            <p class="empty-hint">Chat messages will appear here in real time.</p>
-          </template>
+      <!-- Empty state -->
+      <div v-else class="empty-state chat-list">
+        <div class="empty-icon">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            opacity=".35"
+          >
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
         </div>
+
+        <!-- Watched channel: just waiting -->
+        <template v-if="watchedChannel">
+          <p class="empty-title">
+            {{
+              watchedChannelStatus?.status === 'connecting'
+                ? 'Connecting…'
+                : watchedChannelStatus?.status === 'connected'
+                  ? 'No messages yet'
+                  : 'Connecting…'
+            }}
+          </p>
+          <p class="empty-hint">
+            Messages from <strong>{{ watchedChannel.displayName }}</strong> will appear here.
+          </p>
+        </template>
+
+        <!-- No accounts at all -->
+        <template v-else-if="accounts.length === 0 && !hasAnyConnection">
+          <p class="empty-title">No accounts connected</p>
+          <p class="empty-hint">Connect your streaming accounts to start reading chat.</p>
+          <button class="empty-action" @click="emit('go-to-platforms')">Go to Platforms →</button>
+        </template>
+
+        <!-- Accounts exist, but no active connection yet -->
+        <template v-else-if="!hasAnyConnection">
+          <p class="empty-title">Waiting for connection…</p>
+          <div class="empty-accounts">
+            <div
+              v-for="acc in accounts"
+              :key="acc.id"
+              class="empty-account-chip"
+              :style="{ '--chip-color': platformColor(acc.platform) }"
+            >
+              <img v-if="acc.avatarUrl" :src="acc.avatarUrl" class="chip-avatar" />
+              <span v-else class="chip-avatar-fallback">{{
+                acc.displayName.charAt(0).toUpperCase()
+              }}</span>
+              <span class="chip-name">{{ acc.displayName }}</span>
+              <span class="chip-platform">{{ acc.platform }}</span>
+            </div>
+          </div>
+          <p class="empty-hint">Join a channel in <strong>Platforms</strong> to see chat.</p>
+        </template>
+
+        <!-- Connected, just no messages yet -->
+        <template v-else>
+          <p class="empty-title">No messages yet</p>
+          <p class="empty-hint">Chat messages will appear here in real time.</p>
+        </template>
       </div>
-      <!-- /.chat-list -->
+      <!-- /empty-state -->
 
       <!-- Scroll-to-bottom pill -->
       <Transition name="fade">
@@ -739,10 +748,7 @@ function onAppearanceChange(s: AppSettings) {
 
 .chat-list {
   flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  padding: 4px 0;
+  overflow: hidden;
 }
 
 /* Empty state */

@@ -12,24 +12,24 @@
  *  - Handle RPC requests coming from the webview (accounts, settings, auth…)
  */
 
-process.on("uncaughtException", (err) => {
-  log.error("UNCAUGHT EXCEPTION — process will crash", {
+process.on('uncaughtException', (err) => {
+  log.error('UNCAUGHT EXCEPTION — process will crash', {
     error: String(err),
-    stack: err?.stack ?? "no stack",
-    name: err?.name ?? "unknown",
-  });
-  console.error("UNCAUGHT EXCEPTION:", err);
-});
+    stack: err?.stack ?? 'no stack',
+    name: err?.name ?? 'unknown',
+  })
+  console.error('UNCAUGHT EXCEPTION:', err)
+})
 
-process.on("unhandledRejection", (reason) => {
-  const err = reason instanceof Error ? reason : new Error(String(reason));
-  log.error("UNHANDLED REJECTION — promise rejected without .catch()", {
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason))
+  log.error('UNHANDLED REJECTION — promise rejected without .catch()', {
     error: String(err),
-    stack: err?.stack ?? "no stack",
-    name: err?.name ?? "unknown",
-  });
-  console.error("UNHANDLED REJECTION:", reason);
-});
+    stack: err?.stack ?? 'no stack',
+    name: err?.name ?? 'unknown',
+  })
+  console.error('UNHANDLED REJECTION:', reason)
+})
 
 import { BrowserWindow, BuildConfig, Updater, defineElectrobunRPC } from 'electrobun/bun'
 
@@ -748,6 +748,23 @@ const sendToView = rpc.send as unknown as WebviewSender
 
 // Pass the RPC sender to the auth server so it can notify the webview of auth events
 setAuthServerRpcSender(sendToView)
+
+// DEV-ONLY: HTTP endpoint for test message injection
+if (process.env.NODE_ENV !== 'production') {
+  Bun.serve({
+    port: 45824,
+    async fetch(req) {
+      const url = new URL(req.url)
+      if (url.pathname === '/dev/inject-chat' && req.method === 'POST') {
+        const body = (await req.json()) as NormalizedChatMessage
+        sendToView.chat_message(body)
+        return new Response('ok')
+      }
+      return new Response('not found', { status: 404 })
+    },
+  })
+  log.info('[Dev] Test injection endpoint listening on port 45824')
+}
 
 // ============================================================
 // 3. Main window
