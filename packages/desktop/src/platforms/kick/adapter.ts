@@ -289,6 +289,11 @@ export class KickAdapter extends BasePlatformAdapter {
       throw new Error('chatroomId not set')
     }
 
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+
     const wsUrl = `${KICK_PUSHER_WS}?protocol=7&client=js&version=8.4.0&flash=false`
     const ws = new WebSocket(wsUrl)
     this.ws = ws
