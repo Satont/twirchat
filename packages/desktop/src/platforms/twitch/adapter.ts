@@ -163,6 +163,15 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   private async connectChatClient(): Promise<void> {
     try {
+      if (this.chatClient) {
+        try {
+          await this.chatClient.quit()
+        } catch {
+          // ignore errors from already-closed client
+        }
+        this.chatClient = null
+      }
+
       let authProvider: StaticAuthProvider | undefined
 
       if (!this.anonymous && this.accessToken) {

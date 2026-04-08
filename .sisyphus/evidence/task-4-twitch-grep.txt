@@ -1,0 +1,7 @@
+106:      await this.chatClient.quit()
+107:      this.chatClient = null
+168:          await this.chatClient.quit()
+172:        this.chatClient = null
+188:      this.chatClient = new ChatClient({
+337:      await this.chatClient.quit()
+338:      this.chatClient = null
