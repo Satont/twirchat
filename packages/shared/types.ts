@@ -170,7 +170,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hotkeys: {
     newTab: 'ctrl+t',
     nextTab: 'ctrl+tab',
-    prevTab: 'ctrl+shift+tab',
+    prevTab: 'alt+arrowleft',
     tabSelector: 'ctrl+l',
   },
   overlay: {

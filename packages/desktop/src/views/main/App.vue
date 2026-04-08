@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, triggerRef } from 'vue'
+import { computed, onMounted, ref, triggerRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePolling } from './composables/usePolling'
 import { useRpcListener } from './composables/useRpcListener'
@@ -41,6 +41,18 @@ const channelStatusStore = useChannelStatusStore()
 const { accounts } = storeToRefs(accountsStore)
 const { settings } = storeToRefs(settingsStore)
 const { statuses } = storeToRefs(channelStatusStore)
+
+// Sync theme class to body for Teleported components
+watch(
+  () => settings.value?.theme,
+  (theme) => {
+    const activeTheme = theme ?? 'dark'
+    document.body.classList.remove('dark', 'light')
+    document.body.classList.add(activeTheme)
+  },
+  { immediate: true },
+)
+
 const activeTab = ref<'chat' | 'events' | 'platforms' | 'settings'>('chat')
 const unreadEvents = ref(0)
 
@@ -784,7 +796,29 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
   padding: 0;
 }
 
+body.light {
+  --c-bg: #f0eff4;
+  --c-surface: #faf9fc;
+  --c-surface-2: #e8e7ed;
+  --c-border: #d8d6e0;
+  --c-text: #1c1b22;
+  --c-text-2: #6b6878;
+  --c-nav-bg: #faf9fc;
+  --c-nav-text: rgba(28, 27, 34, 0.45);
+  --c-nav-active: #1c1b22;
+}
+
 body {
+  --c-bg: #0f0f11;
+  --c-surface: #18181b;
+  --c-surface-2: #1f1f24;
+  --c-border: #2a2a33;
+  --c-text: #e2e2e8;
+  --c-text-2: #8b8b99;
+  --c-nav-bg: #111114;
+  --c-nav-text: rgba(255, 255, 255, 0.45);
+  --c-nav-active: #fff;
+
   font-family:
     var(--font-family, 'Inter'),
     -apple-system,
