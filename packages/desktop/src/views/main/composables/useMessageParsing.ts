@@ -1,4 +1,4 @@
-import { computed, onMounted, reactive, type ComputedRef } from 'vue'
+import { computed, onMounted, type ComputedRef } from 'vue'
 
 import type { Emote, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
@@ -7,7 +7,7 @@ import { rpc } from '../main'
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
 
-const mentionColorCache = reactive(new Map<string, string | null>())
+const mentionColorCache = new Map<string, string | null>()
 
 export interface MessagePart {
   type: 'text' | 'emote'
@@ -30,9 +30,15 @@ async function fetchMentionColor(platform: string, username: string): Promise<vo
       platform: platform as Platform,
       username,
     })
+    if (mentionColorCache.size > 2000) {
+      mentionColorCache.clear()
+    }
     mentionColorCache.set(key, color)
   } catch (error) {
     console.warn('[useMessageParsing] Failed to fetch color for:', platform, username, error)
+    if (mentionColorCache.size > 2000) {
+      mentionColorCache.clear()
+    }
     mentionColorCache.set(key, null)
   }
 }

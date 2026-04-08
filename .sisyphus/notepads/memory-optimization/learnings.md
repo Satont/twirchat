@@ -52,3 +52,8 @@ USS: 0.363281 MB
 ## [2026-04-08 22:22:00] Task 4: Twitch fix applied
 
 - connectChatClient guard added with async quit + try/catch
+
+## [2026-04-08 22:35:00] Task 5: mentionColorCache fix
+
+- reactive() removed, plain Map
+- size cap added before set()
