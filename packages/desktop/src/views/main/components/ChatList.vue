@@ -49,12 +49,15 @@ const vlistRef = ref<VListHandle | null>(null)
 const isAtBottom = ref(true)
 
 function onVListScroll(offset: number) {
-  // With :reverse="true", offset near 0 means at the bottom (latest messages)
-  isAtBottom.value = offset < 40
+  // offset = scrollTop from top. At bottom when scrollTop + viewportSize ≈ scrollSize.
+  const handle = vlistRef.value
+  if (!handle) return
+  isAtBottom.value = handle.scrollSize - offset - handle.viewportSize < 40
 }
 
 function scrollToBottom() {
-  vlistRef.value?.scrollToIndex(0)
+  const len = activeMessages.value.length
+  if (len > 0) vlistRef.value?.scrollToIndex(len - 1)
 }
 
 const replyTarget = ref<NormalizedChatMessage | null>(null)
@@ -162,6 +165,16 @@ const { start: startPolling } = usePolling(fetchChannelStatuses, 10_000)
 onMounted(() => {
   startPolling()
 })
+
+// Auto-scroll to bottom when new messages arrive and user is already at bottom
+watch(
+  () => activeMessages.value.length,
+  () => {
+    if (isAtBottom.value) {
+      scrollToBottom()
+    }
+  },
+)
 
 // Re-fetch immediately when channels change
 watch(allChannels, () => fetchChannelStatuses(), { deep: true })
@@ -358,7 +371,6 @@ function onAppearanceChange(s: AppSettings) {
         ref="vlistRef"
         class="chat-list"
         :data="activeMessages"
-        :reverse="true"
         @scroll="onVListScroll"
       >
         <template #default="{ item }">

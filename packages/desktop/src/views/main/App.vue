@@ -265,13 +265,13 @@ const DOWNLOAD_IN_PROGRESS_STATUSES = new Set([
 ])
 
 useRpcListener('chat_message', (msg: NormalizedChatMessage) => {
-  messages.value.unshift(msg)
-  if (messages.value.length > 500) messages.value.length = 500
+  messages.value.push(msg)
+  if (messages.value.length > 500) messages.value.splice(0, messages.value.length - 500)
 })
 
 useRpcListener('chat_event', (ev: NormalizedEvent) => {
-  events.value.unshift(ev)
-  if (events.value.length > 200) events.value.length = 200
+  events.value.push(ev)
+  if (events.value.length > 200) events.value.splice(0, events.value.length - 200)
   if (activeTab.value !== 'events') {
     unreadEvents.value++
   }
@@ -336,8 +336,8 @@ useRpcListener(
   'watched_channel_message',
   ({ channelId, message }: { channelId: string; message: NormalizedChatMessage }) => {
     const prev = watchedMessages.value.get(channelId) ?? []
-    prev.unshift(message)
-    if (prev.length > 200) prev.length = 200
+    prev.push(message)
+    if (prev.length > 200) prev.splice(0, prev.length - 200)
     watchedMessages.value.set(channelId, prev)
     triggerRef(watchedMessages)
   },
