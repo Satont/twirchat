@@ -53,6 +53,11 @@ USS: 0.363281 MB
 
 - connectChatClient guard added with async quit + try/catch
 
+## [2026-04-08] Task 6: App.vue O(n) fix
+
+- 3 spread patterns replaced with unshift+length
+- triggerRef added for watchedMessages Map
+
 ## [2026-04-08 22:35:00] Task 5: mentionColorCache fix
 
 - reactive() removed, plain Map
