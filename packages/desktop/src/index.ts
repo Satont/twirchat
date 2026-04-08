@@ -9,6 +9,7 @@ import { getClientSecret } from './store/client-secret'
 import { BackendConnection } from './backend-connection'
 import { ChatAggregator } from './chat/aggregator'
 import { pushOverlayEvent, pushOverlayMessage, startOverlayServer } from './overlay-server'
+import type { DesktopToBackendMessage } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
 import { sevenTVService } from './seventv'
@@ -35,7 +36,7 @@ backendConn.connect()
 
 // Link 7TV service to backend connection
 sevenTVService.sendToBackend = (message) => {
-  backendConn.send(message as import('@twirchat/shared').DesktopToBackendMessage)
+  backendConn.send(message as DesktopToBackendMessage)
 }
 
 // 4. Агрегатор чата

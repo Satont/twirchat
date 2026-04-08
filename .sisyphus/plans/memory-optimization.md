@@ -845,7 +845,10 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   <!-- packages/desktop/src/views/main/test-harness.html -->
   <!doctype html>
   <html>
-    <head><meta charset="UTF-8" /><title>Test Harness</title></head>
+    <head>
+      <meta charset="UTF-8" />
+      <title>Test Harness</title>
+    </head>
     <body style="margin:0;height:100vh;display:flex;flex-direction:column">
       <div id="harness" style="flex:1;overflow:hidden"></div>
       <script type="module" src="./test-harness.ts"></script>
@@ -876,7 +879,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
       emotes: [],
       color: '#ff6b6b',
       // Add any other required fields from NormalizedChatMessage
-    }))
+    })),
   )
 
   const HarnessApp = defineComponent({
@@ -1152,12 +1155,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
       Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | VERDICT`
 
 - [ ] F3. **Real Manual QA** — `unspecified-high`
-      Use the dev HTTP endpoint and `seed-chat.ts` fixture from Task 8 for message injection:
-      1. Start app: `bun run --cwd packages/desktop dev` (starts Vite + bun/index.ts in parallel)
-      2. Wait 20 seconds for both processes to be ready
-      3. Run seed: `bun packages/desktop/tests/fixtures/seed-chat.ts`
-      4. Assert: seed exits 0 with "Injected 150 messages"
-      5. Verify dev endpoint responds: `curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:45824/dev/inject-chat -H "Content-Type: application/json" -d '{"id":"f3-test",...}'` → Assert 200
+      Use the dev HTTP endpoint and `seed-chat.ts` fixture from Task 8 for message injection: 1. Start app: `bun run --cwd packages/desktop dev` (starts Vite + bun/index.ts in parallel) 2. Wait 20 seconds for both processes to be ready 3. Run seed: `bun packages/desktop/tests/fixtures/seed-chat.ts` 4. Assert: seed exits 0 with "Injected 150 messages" 5. Verify dev endpoint responds: `curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:45824/dev/inject-chat -H "Content-Type: application/json" -d '{"id":"f3-test",...}'` → Assert 200
 
       Verify all code-based QA scenarios from Tasks 5–8 via grep:
       - grep for no .reverse() in ChatList

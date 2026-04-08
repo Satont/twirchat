@@ -1,5 +1,9 @@
 import type { LayoutNode, SplitNode, PanelNode } from '@twirchat/shared/types'
 
+const MIN_FLEX = 0
+const MAX_FLEX = 100
+const TOTAL_FLEX = 100
+
 export function findNodeById(root: LayoutNode, id: string): LayoutNode | null {
   if ('id' in root && root.id === id) return root
   if (root.type === 'split' && root.children) {
@@ -120,7 +124,7 @@ export function validateTree(root: LayoutNode): { valid: boolean; error?: string
   }
 
   const checkFlex = (node: LayoutNode): boolean => {
-    if (node.flex <= 0 || node.flex > 100) return false
+    if (node.flex <= MIN_FLEX || node.flex > MAX_FLEX) return false
     if (node.type === 'split' && node.children) {
       for (const child of node.children) {
         if (!checkFlex(child)) return false
@@ -145,10 +149,10 @@ export function normalizeFlex(node: SplitNode): void {
   if (!node.children || node.children.length === 0) return
   const total = getTotalFlex(node)
   if (total === 0) {
-    const equalFlex = 100 / node.children.length
+    const equalFlex = TOTAL_FLEX / node.children.length
     node.children.forEach((child) => (child.flex = equalFlex))
   } else {
-    const factor = 100 / total
+    const factor = TOTAL_FLEX / total
     node.children.forEach((child) => (child.flex *= factor))
   }
 }

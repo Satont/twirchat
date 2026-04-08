@@ -1,5 +1,6 @@
 import { getDb } from './db'
 import type { ChatLayout } from '../../../shared/types.ts'
+import { deepMerge } from './utils'
 
 const DEFAULT_LAYOUT: ChatLayout = {
   version: 1,
@@ -44,23 +45,4 @@ export const ChatLayoutStore = {
     )
     return updated
   },
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
-  const result = { ...target }
-  for (const key of Object.keys(source) as (keyof T)[]) {
-    const val = source[key]
-    if (val !== undefined && val !== null) {
-      if (typeof val === 'object' && !Array.isArray(val)) {
-        result[key] = deepMerge(
-          target[key] as Record<string, unknown>,
-          val as Record<string, unknown>,
-        ) as T[keyof T]
-      } else {
-        result[key] = val as T[keyof T]
-      }
-    }
-  }
-  return result
 }

@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
 import { rpc } from '../main'
+import { platformColor } from '../../shared/utils/platform'
+import { usePolling } from '../composables/usePolling'
+import { useChatScroll } from '../composables/useChatScroll'
 import type {
   Account,
   AppSettings,
   NormalizedChatMessage,
+  Platform,
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
@@ -31,7 +35,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'go-to-platforms': []
-  'settings-change': [settings: import('@twirchat/shared/types').AppSettings]
+  'settings-change': [settings: AppSettings]
   'send-watched': [payload: { text: string; channelId: string; replyToMessageId?: string }]
   'split-right': []
   'change-channel': []
@@ -41,7 +45,8 @@ const emit = defineEmits<{
 }>()
 
 const listEl = ref<HTMLElement | null>(null)
-const isAtBottom = ref(true)
+const { isAtBottom, onScroll, scrollToBottom, scrollToBottomOnNewMessage } = useChatScroll(listEl)
+
 const replyTarget = ref<NormalizedChatMessage | null>(null)
 const showMenu = ref(false)
 
@@ -142,23 +147,12 @@ async function fetchChannelStatuses() {
   }
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
+const { start: startPolling } = usePolling(fetchChannelStatuses, 10_000)
 
 onMounted(async () => {
-  fetchChannelStatuses()
-  pollTimer = setInterval(fetchChannelStatuses, 10_000)
+  startPolling()
   await nextTick()
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      listEl.value?.scrollTo({ top: listEl.value!.scrollHeight })
-    })
-  })
-})
-
-onUnmounted(() => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-  }
+  scrollToBottom(false)
 })
 
 // Re-fetch immediately when channels change
@@ -169,62 +163,10 @@ const hasAnyConnection = computed(() =>
   ['twitch', 'youtube', 'kick'].some((p) => props.statuses.get(p)?.status === 'connected'),
 )
 
-function onScroll() {
-  if (!listEl.value) {
-    return
-  }
-  const { scrollTop, scrollHeight, clientHeight } = listEl.value
-  isAtBottom.value = scrollHeight - scrollTop - clientHeight < 40
-}
-
 watch(
   () => activeMessages.value.length,
-  async () => {
-    if (!isAtBottom.value || !listEl.value) return
-    await nextTick()
-    // Double rAF: fixes Windows Chromium timing bug where scrollHeight is stale
-    // after nextTick() in nested flex containers (Chromium issue #41228006).
-    // First rAF processes DOM mutations; second rAF reads the recalculated layout.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        listEl.value?.scrollTo({
-          behavior: 'smooth',
-          top: listEl.value!.scrollHeight,
-        })
-      })
-    })
-  },
+  () => void scrollToBottomOnNewMessage(),
 )
-
-function scrollToBottom() {
-  if (!listEl.value) return
-  isAtBottom.value = true
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      listEl.value?.scrollTo({
-        behavior: 'smooth',
-        top: listEl.value!.scrollHeight,
-      })
-    })
-  })
-}
-
-function platformColor(platform: string): string {
-  switch (platform) {
-    case 'twitch': {
-      return '#9146ff'
-    }
-    case 'youtube': {
-      return '#ff0000'
-    }
-    case 'kick': {
-      return '#53fc18'
-    }
-    default: {
-      return '#a78bfa'
-    }
-  }
-}
 
 function platformName(platform: string): string {
   switch (platform) {
@@ -261,7 +203,7 @@ async function onSend(
       rpc.request
         .sendMessage({
           channelId: t.channelLogin,
-          platform: t.platform as import('@twirchat/shared/types').Platform,
+          platform: t.platform as Platform,
           text: t.text,
           replyToMessageId: t.replyToMessageId,
         })
@@ -276,7 +218,7 @@ function onSendWatched(payload: { text: string; channelId: string; replyToMessag
   replyTarget.value = null
 }
 
-function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
+function onAppearanceChange(s: AppSettings) {
   emit('settings-change', s)
   rpc.request
     .saveSettings(s)
@@ -504,7 +446,7 @@ function onAppearanceChange(s: import('@twirchat/shared/types').AppSettings) {
         <button
           v-if="!isAtBottom && activeMessages.length > 0"
           class="scroll-pill"
-          @click="scrollToBottom"
+          @click="() => scrollToBottom()"
         >
           <svg
             width="14"

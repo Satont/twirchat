@@ -60,6 +60,8 @@ import type {
   NormalizedChatMessage,
   LayoutNode,
   PanelNode,
+  Platform,
+  PlatformStatusInfo,
   SplitDirection,
   WatchedChannelsLayout,
 } from '@twirchat/shared/types'
@@ -69,12 +71,12 @@ process.title = 'TwirChat'
 
 import type { TwirChatRPCSchema, WebviewSender } from '../shared/rpc'
 import type {
+  ChannelsStatusResponse,
   StreamStatusResponse,
   UpdateStreamRequest,
   UpdateStreamResponse,
   SearchCategoriesResponse,
 } from '@twirchat/shared/protocol'
-import type { PlatformStatusInfo } from '@twirchat/shared/types'
 import { startAuthServer, setAuthServerRpcSender, setOnAuthSuccessCallback } from '../auth'
 import { setRuntimeConfig, getRuntimeConfig, backendFetch } from '../runtime-config'
 
@@ -188,7 +190,7 @@ setOnAuthSuccessCallback(async (platform, channelSlug) => {
     // For Kick, use broadcasterUserId instead of slug
     let sevenTvChannelId = targetChannel
     if (platform === 'kick') {
-      const kickAdapterCast = adapter as import('../platforms/kick/adapter').KickAdapter
+      const kickAdapterCast = adapter as KickAdapter
       const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
       if (broadcasterUserId) {
         sevenTvChannelId = String(broadcasterUserId)
@@ -304,7 +306,7 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
             // For Kick, use broadcasterUserId instead of slug
             let sevenTvChannelId = channelSlug
             if (platform === 'kick') {
-              const kickAdapterCast = adapter as import('../platforms/kick/adapter').KickAdapter
+              const kickAdapterCast = adapter as KickAdapter
               const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
               if (broadcasterUserId) {
                 sevenTvChannelId = String(broadcasterUserId)
@@ -414,9 +416,7 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
       getChannelsStatus: async ({ channels }) => {
         // Attach user access tokens for platforms where the user is authenticated
         const enriched = channels.map((ch) => {
-          const account = AccountStore.findByPlatform(
-            ch.platform as import('@twirchat/shared/types').Platform,
-          )
+          const account = AccountStore.findByPlatform(ch.platform as Platform)
           if (account) {
             const tokens = AccountStore.getTokens(account.id)
             if (tokens?.accessToken) {
@@ -432,7 +432,7 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
           body: JSON.stringify({ channels: enriched }),
         })
         if (!res.ok) throw new Error(`channels-status: ${res.status}`)
-        return (await res.json()) as import('@twirchat/shared/protocol').ChannelsStatusResponse
+        return (await res.json()) as ChannelsStatusResponse
       },
 
       getStatuses: () => [...currentStatuses.values()],
@@ -1040,7 +1040,7 @@ const connectedPlatforms = new Set<string>()
 // First, connect to explicitly saved channels
 for (const [platform, slugs] of Object.entries(savedChannels)) {
   for (const slug of slugs ?? []) {
-    const adapter = aggregator.getAdapter(platform as import('@twirchat/shared/types').Platform)
+    const adapter = aggregator.getAdapter(platform as Platform)
     if (!adapter) {
       log.warn('No adapter for platform', { action: 'AutoConnect', platform })
       continue
@@ -1059,25 +1059,20 @@ for (const [platform, slugs] of Object.entries(savedChannels)) {
         // For Kick, use broadcasterUserId instead of slug
         let sevenTvChannelId = slug
         if (platform === 'kick') {
-          const kickAdapterCast = adapter as import('../platforms/kick/adapter').KickAdapter
+          const kickAdapterCast = adapter as KickAdapter
           const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
           if (broadcasterUserId) {
             sevenTvChannelId = String(broadcasterUserId)
           }
         }
-        sevenTVService
-          .subscribeToChannel(
-            platform as import('@twirchat/shared/types').Platform,
-            sevenTvChannelId,
-          )
-          .catch((error) => {
-            log.error('Failed to subscribe to 7TV', {
-              platform,
-              channelSlug: sevenTvChannelId,
-              error: String(error),
-              action: '7tv',
-            })
+        sevenTVService.subscribeToChannel(platform as Platform, sevenTvChannelId).catch((error) => {
+          log.error('Failed to subscribe to 7TV', {
+            platform,
+            channelSlug: sevenTvChannelId,
+            error: String(error),
+            action: '7tv',
           })
+        })
       })
       .catch((error) => {
         log.error('Failed to connect', {
@@ -1131,7 +1126,7 @@ for (const account of accounts) {
         // For Kick, use broadcasterUserId instead of slug
         let sevenTvChannelId = channelSlug
         if (account.platform === 'kick') {
-          const kickAdapterCast = adapter as import('../platforms/kick/adapter').KickAdapter
+          const kickAdapterCast = adapter as KickAdapter
           const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
           if (broadcasterUserId) {
             sevenTvChannelId = String(broadcasterUserId)

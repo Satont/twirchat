@@ -174,7 +174,8 @@ const handleKeydown = (e: KeyboardEvent) => {
       }
       break
   }
-}</script>
+}
+</script>
 
 <template>
   <div

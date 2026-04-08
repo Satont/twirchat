@@ -1,5 +1,5 @@
 import { BasePlatformAdapter } from '../base-adapter'
-import type { Badge, NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
+import type { Badge, Emote, NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
 import { KICK_API_BASE, KICK_PUSHER_WS } from '@twirchat/shared/constants'
 import { getBackendUrl } from '../../runtime-config'
 import { AccountStore } from '../../store/account-store'
@@ -415,7 +415,7 @@ export class KickAdapter extends BasePlatformAdapter {
 
     // Parse Kick emotes from content
     // Format: [emote:37232:PeepoClap]
-    const emotes: import('@twirchat/shared/types').Emote[] = []
+    const emotes: Emote[] = []
     const emoteRegex = /\[emote:(\d+):([^\]]+)\]/g
     let match
     let cleanText = msg.content

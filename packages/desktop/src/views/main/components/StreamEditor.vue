@@ -15,6 +15,7 @@ import type {
   SearchCategoriesResponse,
   StreamStatusResponse,
 } from '@twirchat/shared/protocol'
+import { usePolling } from '../composables/usePolling'
 import { rpc } from '../main'
 
 const props = defineProps<{
@@ -107,17 +108,13 @@ async function loadStatus() {
 }
 
 // Poll every 60 seconds
-let pollTimer: ReturnType<typeof setInterval> | null = null
+const { start: startStatusPolling } = usePolling(loadStatus, 60_000)
 
 onMounted(() => {
-  void loadStatus()
-  pollTimer = setInterval(() => void loadStatus(), 60_000)
+  startStatusPolling()
 })
 
 onUnmounted(() => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-  }
   if (searchTimer) {
     clearTimeout(searchTimer)
   }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import SplitNode from './SplitNode.vue'
 import { useLayoutStore } from '../stores/layout'
 import type {
@@ -35,9 +36,11 @@ const emit = defineEmits<{
 }>()
 
 const layoutStore = useLayoutStore()
+const { layout, rootNode, isLoading, error, draggedPanelId, dropTargetId, allPanels } =
+  storeToRefs(layoutStore)
 
 function emitTabChannels() {
-  const names = layoutStore.allPanels.value
+  const names = allPanels.value
     .filter((p) => p.content.type === 'watched')
     .map((p) => {
       const ch = props.watchedChannels?.find(
@@ -50,7 +53,7 @@ function emitTabChannels() {
   emit('tab-channels-updated', { tabId: props.tabId, channelNames: names })
 }
 
-watch([() => layoutStore.allPanels.value, () => props.watchedChannels], () => emitTabChannels(), {
+watch([allPanels, () => props.watchedChannels], () => emitTabChannels(), {
   deep: true,
 })
 
@@ -99,7 +102,7 @@ const handleAddAndAssign = async (
 }
 
 const handleResize = (splitNodeId: string, sizes: number[]) => {
-  if (!layoutStore.layout.value || sizes.length === 0) return
+  if (!layout.value || sizes.length === 0) return
 
   const findAndUpdateSplit = (node: LayoutNode): boolean => {
     if (node.type === 'split' && node.id === splitNodeId) {
@@ -118,7 +121,7 @@ const handleResize = (splitNodeId: string, sizes: number[]) => {
     return false
   }
 
-  const updated = findAndUpdateSplit(layoutStore.layout.value.root)
+  const updated = findAndUpdateSplit(layout.value.root)
   if (updated) {
     layoutStore.saveLayout()
   }
@@ -149,7 +152,7 @@ const handleDragLeave = () => {
 }
 
 const handleDrop = (targetId: string, direction: 'left' | 'right' | 'top' | 'bottom') => {
-  const draggedId = layoutStore.draggedPanelId.value
+  const draggedId = draggedPanelId.value
   if (draggedId && draggedId !== targetId) {
     layoutStore.dropPanel(draggedId, targetId, direction)
   }
@@ -159,14 +162,12 @@ const handleDrop = (targetId: string, direction: 'left' | 'right' | 'top' | 'bot
 
 <template>
   <div class="watched-channels-view">
-    <div v-if="layoutStore.isLoading.value" class="loading">Loading layout...</div>
-    <div v-else-if="layoutStore.error.value" class="error">
-      Error: {{ layoutStore.error.value }}
-    </div>
+    <div v-if="isLoading" class="loading">Loading layout...</div>
+    <div v-else-if="error" class="error">Error: {{ error }}</div>
     <SplitNode
-      v-else-if="layoutStore.rootNode.value"
+      v-else-if="rootNode"
       style="height: 100%"
-      :node="layoutStore.rootNode.value"
+      :node="rootNode"
       :messages="messages"
       :settings="settings"
       :accounts="accounts"
@@ -174,8 +175,8 @@ const handleDrop = (targetId: string, direction: 'left' | 'right' | 'top' | 'bot
       :watched-messages="watchedMessages"
       :watched-statuses="watchedStatuses"
       :watched-channels="watchedChannels"
-      :dragged-panel-id="layoutStore.draggedPanelId.value"
-      :drop-target-id="layoutStore.dropTargetId.value"
+      :dragged-panel-id="draggedPanelId"
+      :drop-target-id="dropTargetId"
       @split="handleSplit"
       @remove="handleRemove"
       @assign="handleAssign"

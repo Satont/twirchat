@@ -6,6 +6,7 @@ import { sevenTVService } from './seventv'
 const log = logger('backend-connection')
 
 type MessageHandler = (msg: BackendToDesktopMessage) => void
+type SevenTVBackendMessage = Extract<BackendToDesktopMessage, { channelId: string }>
 type SystemMessageHandler = (
   msg: Extract<BackendToDesktopMessage, { type: 'seventv_system_message' }>,
 ) => void
@@ -76,6 +77,7 @@ export class BackendConnection {
       headers: {
         'X-Client-Secret': this.clientSecret,
       },
+      // Bun WebSocket constructor accepts { headers } but TS types expect string[] — cast required
     } as unknown as string[])
     ws.addEventListener('open', () => {
       log.info('Connected')
@@ -101,9 +103,10 @@ export class BackendConnection {
         const msg = JSON.parse(evt.data as string) as BackendToDesktopMessage
 
         if (msg.type.startsWith('seventv')) {
+          const sevenTVMessage = msg as SevenTVBackendMessage
           log.info('Received WebSocket message', {
-            channelId: (msg as any).channelId,
-            platform: (msg as any).platform,
+            channelId: sevenTVMessage.channelId,
+            platform: sevenTVMessage.platform,
             type: msg.type,
           })
         }

@@ -216,7 +216,7 @@ export class WatchedChannelManager {
     // For Kick, use broadcasterUserId instead of slug
     let sevenTvChannelId = ch.channelSlug
     if (ch.platform === 'kick') {
-      const kickAdapter = adapter as import('../platforms/kick/adapter').KickAdapter
+      const kickAdapter = adapter as KickAdapter
       const broadcasterUserId = kickAdapter.getBroadcasterUserId()
       if (broadcasterUserId) {
         sevenTvChannelId = String(broadcasterUserId)
