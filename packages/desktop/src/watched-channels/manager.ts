@@ -13,6 +13,7 @@ import { TwitchAdapter } from '../platforms/twitch/adapter'
 import { KickAdapter } from '../platforms/kick/adapter'
 import { YouTubeAdapter } from '../platforms/youtube/adapter'
 import type {
+  Emote,
   NormalizedChatMessage,
   PlatformStatusInfo,
   WatchedChannel,
@@ -21,6 +22,7 @@ import { WatchedChannelStore } from '../store/watched-channels-store'
 import { WatchedChannelsLayoutStore } from '../store/watched-channels-layout-store'
 import { logger } from '@twirchat/shared/logger'
 import { sevenTVService } from '../seventv'
+import { parseMessageWithEmotes } from '../platforms/7tv/emote-parser'
 
 const log = logger('watched-channels')
 
@@ -35,6 +37,7 @@ interface WatchedEntry {
   adapter: TwitchAdapter | KickAdapter | YouTubeAdapter
   messages: NormalizedChatMessage[]
   status: PlatformStatusInfo | null
+  sevenTvChannelId: string
 }
 
 export class WatchedChannelManager {
@@ -192,6 +195,7 @@ export class WatchedChannelManager {
     const entry: WatchedEntry = {
       adapter,
       messages: [],
+      sevenTvChannelId: ch.channelSlug,
       status: null,
       watchedChannel: ch,
     }
@@ -212,21 +216,19 @@ export class WatchedChannelManager {
       })
     })
 
-    // Subscribe to 7TV emotes for this channel
-    // For Kick, use broadcasterUserId instead of slug
-    let sevenTvChannelId = ch.channelSlug
     if (ch.platform === 'kick') {
       const kickAdapter = adapter as KickAdapter
       const broadcasterUserId = kickAdapter.getBroadcasterUserId()
       if (broadcasterUserId) {
-        sevenTvChannelId = String(broadcasterUserId)
+        entry.sevenTvChannelId = String(broadcasterUserId)
       }
     }
-    sevenTVService.subscribeToChannel(ch.platform, sevenTvChannelId).catch((error) => {
+
+    sevenTVService.subscribeToChannel(ch.platform, entry.sevenTvChannelId).catch((error) => {
       log.error('Failed to subscribe to 7TV for watched channel', {
         id: ch.id,
         platform: ch.platform,
-        channelSlug: sevenTvChannelId,
+        channelSlug: entry.sevenTvChannelId,
         error: String(error),
         action: '7tv',
       })
@@ -237,9 +239,38 @@ export class WatchedChannelManager {
     const { adapter, watchedChannel } = entry
 
     const onMessage = (msg: NormalizedChatMessage) => {
-      entry.messages = [msg, ...entry.messages].slice(0, MAX_BUFFER)
+      const parsed = parseMessageWithEmotes(msg.text, msg.platform, entry.sevenTvChannelId)
+      const sevenTVEmoteMap = new Map<string, Emote>()
+      for (const e of parsed.emotes) {
+        const emote: Emote = {
+          aspectRatio: e.aspectRatio,
+          id: e.id,
+          imageUrl: e.imageUrl,
+          name: e.name,
+          positions: [{ end: e.end, start: e.start }],
+        }
+        const existing = sevenTVEmoteMap.get(emote.id)
+        if (existing) {
+          existing.positions.push(...emote.positions)
+        } else {
+          sevenTVEmoteMap.set(emote.id, emote)
+        }
+      }
+
+      const existingIds = new Set(msg.emotes.map((e) => e.id))
+      const mergedEmotes = [...msg.emotes]
+      for (const emote of sevenTVEmoteMap.values()) {
+        if (!existingIds.has(emote.id)) {
+          mergedEmotes.push(emote)
+          existingIds.add(emote.id)
+        }
+      }
+
+      const enrichedMsg: NormalizedChatMessage = { ...msg, emotes: mergedEmotes }
+
+      entry.messages = [enrichedMsg, ...entry.messages].slice(0, MAX_BUFFER)
       for (const h of this.messageHandlers) {
-        h(watchedChannel.id, msg)
+        h(watchedChannel.id, enrichedMsg)
       }
     }
 
