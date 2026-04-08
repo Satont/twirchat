@@ -1,2 +1,0 @@
-52:  // With :reverse="true", offset near 0 means at the bottom (latest messages)
-361:        :reverse="true"
