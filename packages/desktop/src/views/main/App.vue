@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { usePolling } from './composables/usePolling'
+import { useRpcListener } from './composables/useRpcListener'
+import { useAccountsStore } from './stores/accounts'
+import { useSettingsStore } from './stores/settings'
+import { useChannelStatusStore } from './stores/channelStatus'
 import PlatformsPanel from './components/PlatformsPanel.vue'
 import WatchedChannelsView from './components/WatchedChannelsView.vue'
 import ChatList from './components/ChatList.vue'
@@ -25,9 +31,13 @@ import type {
 
 const messages = ref<NormalizedChatMessage[]>([])
 const events = ref<NormalizedEvent[]>([])
-const statuses = ref<Map<string, PlatformStatusInfo>>(new Map())
-const accounts = ref<Account[]>([])
-const settings = ref<AppSettings | null>(null)
+const accountsStore = useAccountsStore()
+const settingsStore = useSettingsStore()
+const channelStatusStore = useChannelStatusStore()
+
+const { accounts } = storeToRefs(accountsStore)
+const { settings } = storeToRefs(settingsStore)
+const { statuses } = storeToRefs(channelStatusStore)
 const activeTab = ref<'chat' | 'events' | 'platforms' | 'settings'>('chat')
 const unreadEvents = ref(0)
 
@@ -59,7 +69,7 @@ function toggleSidebar() {
   localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(sidebarCollapsed.value))
 }
 
-let watchedLiveStatusInterval: ReturnType<typeof setInterval> | null = null
+const { start: startLiveStatusPolling } = usePolling(refreshWatchedLiveStatuses, 60_000)
 
 async function refreshWatchedLiveStatuses() {
   const channels = watchedChannels.value
@@ -111,17 +121,13 @@ async function loadInitialData() {
       rpc.request.getWatchedChannels(),
     ])
     if (accs !== undefined) {
-      accounts.value = accs
+      accountsStore.setAccounts(accs)
     }
     if (setts !== undefined) {
-      settings.value = setts
+      settingsStore.settings.value = setts
     }
     if (statList !== undefined) {
-      const map = new Map<string, PlatformStatusInfo>()
-      for (const s of statList) {
-        map.set(s.platform, s)
-      }
-      statuses.value = map
+      channelStatusStore.setStatuses(statList)
     }
     if (watched !== undefined) {
       watchedChannels.value = watched
@@ -212,7 +218,7 @@ async function loadInitialData() {
 
   // Fetch stream live status for watched channels immediately, then poll every 60s
   void refreshWatchedLiveStatuses()
-  watchedLiveStatusInterval = setInterval(() => void refreshWatchedLiveStatuses(), 60_000)
+  startLiveStatusPolling()
 
   // Attempt migration from legacy layout format
   await attemptMigration()
@@ -225,8 +231,6 @@ onMounted(() => {
 // ----------------------------------------------------------------
 // RPC listeners
 // ----------------------------------------------------------------
-
-const unsubscribers: (() => void)[] = []
 
 const updateState = ref<{
   show: boolean
@@ -259,36 +263,38 @@ const DOWNLOAD_IN_PROGRESS_STATUSES = new Set([
   'decompressing',
 ])
 
-onMounted(() => {
-  const onChatMessage = (msg: NormalizedChatMessage) => {
-    messages.value = [msg, ...messages.value].slice(0, 500)
+useRpcListener('chat_message', (msg: NormalizedChatMessage) => {
+  messages.value = [msg, ...messages.value].slice(0, 500)
+})
+
+useRpcListener('chat_event', (ev: NormalizedEvent) => {
+  events.value = [ev, ...events.value].slice(0, 200)
+  if (activeTab.value !== 'events') {
+    unreadEvents.value++
   }
-  const onChatEvent = (ev: NormalizedEvent) => {
-    events.value = [ev, ...events.value].slice(0, 200)
-    if (activeTab.value !== 'events') {
-      unreadEvents.value++
-    }
-  }
-  const onPlatformStatus = (s: PlatformStatusInfo) => {
-    statuses.value = new Map(statuses.value).set(s.platform, s)
-  }
-  const onAuthSuccess = ({
-    platform,
-    displayName,
-  }: {
-    platform: string
-    username: string
-    displayName: string
-  }) => {
+})
+
+useRpcListener('platform_status', (s: PlatformStatusInfo) => {
+  channelStatusStore.setStatus(s.platform, s)
+})
+
+useRpcListener(
+  'auth_success',
+  ({ platform, displayName }: { platform: string; username: string; displayName: string }) => {
     console.log(`[Auth] Authenticated as ${displayName} on ${platform}`)
     rpc.request.getAccounts().then((a) => {
-      accounts.value = a
+      if (a !== undefined) accountsStore.setAccounts(a)
     })
-  }
-  const onAuthError = ({ platform, error }: { platform: string; error: string }) => {
-    console.error(`[Auth] Error on ${platform}: ${error}`)
-  }
-  const onUpdateStatus = (status: { status: string; message: string; progress?: number }) => {
+  },
+)
+
+useRpcListener('auth_error', ({ platform, error }: { platform: string; error: string }) => {
+  console.error(`[Auth] Error on ${platform}: ${error}`)
+})
+
+useRpcListener(
+  'update_status',
+  (status: { status: string; message: string; progress?: number }) => {
     console.log(`[Update] ${status.status}: ${status.message}`)
     updateState.value.status = status.status
     updateState.value.message = status.message
@@ -300,10 +306,8 @@ onMounted(() => {
       status.status === 'download-complete' ||
       DOWNLOAD_IN_PROGRESS_STATUSES.has(status.status)
     ) {
-      // Active update flow — keep toast visible
       updateState.value.show = true
     } else if (status.status === 'no-update') {
-      // No update available (includes dev channel) — show briefly then hide
       updateState.value.show = true
       setTimeout(() => {
         updateState.value.show = false
@@ -313,10 +317,7 @@ onMounted(() => {
       setTimeout(() => {
         updateState.value.show = false
       }, 4000)
-    }
-    // "applying", "extracting", "replacing-app", "launching-new-version", "complete"
-    // Are terminal states where the app is about to restart — keep toast visible
-    else if (
+    } else if (
       status.status === 'applying' ||
       status.status === 'extracting' ||
       status.status === 'replacing-app' ||
@@ -325,52 +326,28 @@ onMounted(() => {
     ) {
       updateState.value.show = true
     }
-  }
+  },
+)
 
-  const onWatchedMessage = ({
-    channelId,
-    message,
-  }: {
-    channelId: string
-    message: NormalizedChatMessage
-  }) => {
+useRpcListener(
+  'watched_channel_message',
+  ({ channelId, message }: { channelId: string; message: NormalizedChatMessage }) => {
     const prev = watchedMessages.value.get(channelId) ?? []
     watchedMessages.value = new Map(watchedMessages.value).set(
       channelId,
       [message, ...prev].slice(0, 200),
     )
-  }
+  },
+)
 
-  const onWatchedStatus = ({
-    channelId,
-    status,
-  }: {
-    channelId: string
-    status: PlatformStatusInfo
-  }) => {
+useRpcListener(
+  'watched_channel_status',
+  ({ channelId, status }: { channelId: string; status: PlatformStatusInfo }) => {
     watchedStatuses.value = new Map(watchedStatuses.value).set(channelId, status)
-  }
+  },
+)
 
-  rpc.addMessageListener('chat_message', onChatMessage)
-  rpc.addMessageListener('chat_event', onChatEvent)
-  rpc.addMessageListener('platform_status', onPlatformStatus)
-  rpc.addMessageListener('auth_success', onAuthSuccess)
-  rpc.addMessageListener('auth_error', onAuthError)
-  rpc.addMessageListener('update_status', onUpdateStatus)
-  rpc.addMessageListener('watched_channel_message', onWatchedMessage)
-  rpc.addMessageListener('watched_channel_status', onWatchedStatus)
-
-  unsubscribers.push(
-    () => rpc.removeMessageListener('chat_message', onChatMessage),
-    () => rpc.removeMessageListener('chat_event', onChatEvent),
-    () => rpc.removeMessageListener('platform_status', onPlatformStatus),
-    () => rpc.removeMessageListener('auth_success', onAuthSuccess),
-    () => rpc.removeMessageListener('auth_error', onAuthError),
-    () => rpc.removeMessageListener('update_status', onUpdateStatus),
-    () => rpc.removeMessageListener('watched_channel_message', onWatchedMessage),
-    () => rpc.removeMessageListener('watched_channel_status', onWatchedStatus),
-  )
-
+onMounted(() => {
   checkForUpdates()
 })
 
@@ -393,14 +370,6 @@ async function applyUpdate() {
   }
 }
 
-onUnmounted(() => {
-  unsubscribers.forEach((unsub) => unsub())
-  if (watchedLiveStatusInterval !== null) {
-    clearInterval(watchedLiveStatusInterval)
-    watchedLiveStatusInterval = null
-  }
-})
-
 function switchTab(tab: typeof activeTab.value) {
   activeTab.value = tab
   if (tab === 'events') {
@@ -409,11 +378,11 @@ function switchTab(tab: typeof activeTab.value) {
 }
 
 function onSettingsSaved(s: AppSettings) {
-  settings.value = s
+  settingsStore.settings.value = s
 }
 
 function onSettingsChange(s: AppSettings) {
-  settings.value = s
+  settingsStore.settings.value = s
 }
 
 function dismissUpdate() {
@@ -675,7 +644,7 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
         v-show="activeTab === 'platforms'"
         :accounts="accounts"
         :statuses="statuses"
-        @accounts-updated="accounts = $event"
+        @accounts-updated="accountsStore.setAccounts($event)"
       />
 
       <SettingsPanel

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import ChatList from './ChatList.vue'
+import { platformColor } from '../../shared/utils/platform'
 import type {
   Account,
   AppSettings,
@@ -52,23 +53,6 @@ const panelTitle = computed<string>(() => {
   }
   return 'Combined'
 })
-
-function platformColor(p: string): string {
-  switch (p) {
-    case 'twitch': {
-      return '#9146ff'
-    }
-    case 'youtube': {
-      return '#ff0000'
-    }
-    case 'kick': {
-      return '#53fc18'
-    }
-    default: {
-      return '#a78bfa'
-    }
-  }
-}
 </script>
 
 <template>

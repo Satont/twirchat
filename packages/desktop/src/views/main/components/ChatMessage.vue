@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { rpc } from '../main'
-import type { Account, Emote, NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 import EmoteTooltip from './EmoteTooltip.vue'
+import { platformColor } from '../../shared/utils/platform'
+import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
+import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
+import KickIcon from '../../../assets/icons/platforms/kick.svg'
+import { useMessageParsing } from '../composables/useMessageParsing'
+import type { MessagePart } from '../composables/useMessageParsing'
 
 const props = defineProps<{
   message: NormalizedChatMessage
@@ -21,6 +27,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   reply: [message: NormalizedChatMessage]
 }>()
+
+const { messageParts, processText } = useMessageParsing(props.message)
 
 function onReply() {
   emit('reply', props.message)
@@ -52,162 +60,6 @@ const systemAction = computed<'added' | 'removed' | 'renamed'>(() => {
   }
   return 'renamed'
 })
-
-// In-memory cache for platform:username -> color (shared across all message instances via module scope)
-// Key format: "platform:lowercase_username"
-const mentionColorCache = reactive(new Map<string, string | null>())
-
-function makeMentionKey(platform: string, username: string): string {
-  return `${platform}:${username.toLowerCase()}`
-}
-
-async function fetchMentionColor(platform: string, username: string): Promise<void> {
-  const key = makeMentionKey(platform, username)
-  if (mentionColorCache.has(key)) {
-    return
-  }
-
-  try {
-    const color = await rpc.request.getUsernameColor({
-      platform: platform as import('@twirchat/shared/types').Platform,
-      username,
-    })
-    mentionColorCache.set(key, color)
-  } catch (error) {
-    console.warn('[ChatMessage] Failed to fetch color for:', platform, username, error)
-    mentionColorCache.set(key, null)
-  }
-}
-
-function platformColor(platform: string): string {
-  switch (platform) {
-    case 'twitch': {
-      return '#9146ff'
-    }
-    case 'youtube': {
-      return '#ff0000'
-    }
-    case 'kick': {
-      return '#53fc18'
-    }
-    default: {
-      return '#888'
-    }
-  }
-}
-
-function platformIconSvg(platform: string): string {
-  switch (platform) {
-    case 'twitch': {
-      // Twitch glitch logo
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-        <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
-      </svg>`
-    }
-    case 'youtube': {
-      // YouTube play button logo
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-      </svg>`
-    }
-    case 'kick': {
-      // Kick "K" wordmark simplified
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-        <path d="M3 2h4v8l6-8h5l-7 9 7 11h-5l-6-9v9H3Z"/>
-      </svg>`
-    }
-    default: {
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-        <circle cx="12" cy="12" r="10"/>
-      </svg>`
-    }
-  }
-}
-
-const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
-const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
-
-interface MessagePart {
-  type: 'text' | 'emote'
-  content?: string
-  emote?: Emote
-}
-
-/** Parse message into parts (text and emotes) */
-const messageParts = computed((): MessagePart[] => {
-  const msg = props.message
-  const parts: MessagePart[] = []
-
-  if (!msg.emotes.length) {
-    return [{ content: msg.text, type: 'text' }]
-  }
-
-  const chars = [...msg.text]
-  let i = 0
-
-  const ranges: { start: number; end: number; emote: Emote }[] = []
-  for (const emote of msg.emotes) {
-    for (const pos of emote.positions) {
-      ranges.push({ ...pos, emote })
-    }
-  }
-  ranges.sort((a, b) => a.start - b.start)
-
-  for (const range of ranges) {
-    if (i < range.start) {
-      parts.push({ content: chars.slice(i, range.start).join(''), type: 'text' })
-    }
-    parts.push({
-      emote: range.emote,
-      type: 'emote',
-    })
-    i = range.end + 1
-  }
-
-  if (i < chars.length) {
-    parts.push({ content: chars.slice(i).join(''), type: 'text' })
-  }
-
-  return parts
-})
-
-/** Process text to highlight mentions and linkify URLs */
-function processText(text: string): string {
-  let result = escapeHtml(text)
-  result = linkifyText(result)
-  result = highlightMentions(result, props.message.platform)
-  return result
-}
-
-/** Linkify plain-text segment (already HTML-escaped) */
-function linkifyText(escaped: string): string {
-  return escaped.replace(URL_REGEX, (url) => {
-    const safeUrl = url.replace(/"/g, '&quot;')
-    return `<a class="msg-link" href="#" data-href="${safeUrl}" title="${safeUrl}">${url}</a>`
-  })
-}
-
-/** Highlight @mentions with colors from cache (platform-specific) */
-function highlightMentions(escaped: string, platform: string): string {
-  return escaped.replace(MENTION_REGEX, (match, username) => {
-    const key = makeMentionKey(platform, username)
-    const color = mentionColorCache.get(key)
-    if (color) {
-      return `<span class="mention" style="color: ${color}; font-weight: 600;">${match}</span>`
-    }
-    // Fetch color for next time (platform-specific)
-    void fetchMentionColor(platform, username)
-    return match
-  })
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 const brokenBadges = ref(new Set<string>())
 
@@ -251,18 +103,6 @@ function copyMessage(): void {
     }, 1500)
   })
 }
-
-// Pre-fetch colors for any @mentions in this message (platform-specific)
-onMounted(() => {
-  const { platform } = props.message
-  const mentions = props.message.text.match(MENTION_REGEX)
-  if (mentions) {
-    const uniqueUsers = new Set(mentions.map((m) => m.slice(1)))
-    for (const username of uniqueUsers) {
-      void fetchMentionColor(platform, username)
-    }
-  }
-})
 </script>
 
 <template>
@@ -329,13 +169,20 @@ onMounted(() => {
     </div>
 
     <!-- Platform icon -->
-    <span
-      v-if="props.showPlatformIcon"
-      class="platform-icon"
-      :style="{ color: platformColor(message.platform) }"
-      :title="message.platform"
-      v-html="platformIconSvg(message.platform)"
-    />
+    <span v-if="props.showPlatformIcon" class="platform-icon" :title="message.platform">
+      <component
+        :is="
+          message.platform === 'twitch'
+            ? TwitchIcon
+            : message.platform === 'youtube'
+              ? YoutubeIcon
+              : KickIcon
+        "
+        :style="{ color: platformColor(message.platform) }"
+        width="12"
+        height="12"
+      />
+    </span>
 
     <!-- Badges inline -->
     <span v-if="props.showBadges !== false && message.author.badges.length" class="badges">
@@ -468,13 +315,20 @@ onMounted(() => {
     />
 
     <!-- Platform icon -->
-    <span
-      v-if="props.showPlatformIcon"
-      class="platform-icon"
-      :style="{ color: platformColor(message.platform) }"
-      :title="message.platform"
-      v-html="platformIconSvg(message.platform)"
-    />
+    <span v-if="props.showPlatformIcon" class="platform-icon" :title="message.platform">
+      <component
+        :is="
+          message.platform === 'twitch'
+            ? TwitchIcon
+            : message.platform === 'youtube'
+              ? YoutubeIcon
+              : KickIcon
+        "
+        :style="{ color: platformColor(message.platform) }"
+        width="12"
+        height="12"
+      />
+    </span>
 
     <!-- Avatar -->
     <div v-if="props.showAvatar !== false" class="avatar-wrap">
@@ -978,11 +832,11 @@ onMounted(() => {
 
 /* Action-based colour theming */
 .msg-system.action-added {
-  background: rgba(83, 252, 24, 0.04);
-  border-left-color: #53fc18;
+  background: rgba(74, 222, 128, 0.04);
+  border-left-color: #4ade80;
 }
 .msg-system.action-added:hover {
-  background: rgba(83, 252, 24, 0.07);
+  background: rgba(74, 222, 128, 0.07);
 }
 
 .msg-system.action-removed {
@@ -994,11 +848,11 @@ onMounted(() => {
 }
 
 .msg-system.action-renamed {
-  background: rgba(100, 65, 165, 0.06);
-  border-left-color: #6441a5;
+  background: rgba(129, 140, 248, 0.06);
+  border-left-color: #818cf8;
 }
 .msg-system.action-renamed:hover {
-  background: rgba(100, 65, 165, 0.1);
+  background: rgba(129, 140, 248, 0.1);
 }
 
 /* Action icon: small coloured circle with +/−/~ */
@@ -1016,16 +870,16 @@ onMounted(() => {
   user-select: none;
 }
 .action-icon-added {
-  background: rgba(83, 252, 24, 0.15);
-  color: #53fc18;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
 }
 .action-icon-removed {
   background: rgba(255, 80, 80, 0.18);
   color: #ff6060;
 }
 .action-icon-renamed {
-  background: rgba(167, 139, 250, 0.18);
-  color: #a78bfa;
+  background: rgba(129, 140, 248, 0.18);
+  color: #818cf8;
 }
 
 .system-text {

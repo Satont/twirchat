@@ -5,6 +5,10 @@ import type {
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
+import { platformColor } from '../../shared/utils/platform'
+import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
+import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
+import KickIcon from '../../../assets/icons/platforms/kick.svg'
 
 const props = defineProps<{
   statuses: Map<string, PlatformStatusInfo>
@@ -141,23 +145,6 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-function platformColor(platform: string): string {
-  switch (platform) {
-    case 'twitch': {
-      return '#9146ff'
-    }
-    case 'kick': {
-      return '#53fc18'
-    }
-    case 'youtube': {
-      return '#ff0000'
-    }
-    default: {
-      return '#a78bfa'
-    }
-  }
-}
-
 function placeholderText(): string {
   if (props.watchedChannel) {
     if (props.watchedChannelStatus?.mode !== 'authenticated') {
@@ -212,37 +199,18 @@ function placeholderText(): string {
         }"
         :style="{ '--p-color': platformColor(watchedChannel.platform) }"
       >
-        <svg
-          v-if="watchedChannel.platform === 'twitch'"
+        <component
+          :is="
+            watchedChannel.platform === 'twitch'
+              ? TwitchIcon
+              : watchedChannel.platform === 'kick'
+                ? KickIcon
+                : YoutubeIcon
+          "
           width="13"
           height="13"
-          viewBox="0 0 24 24"
           fill="currentColor"
-        >
-          <path
-            d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"
-          />
-        </svg>
-        <svg
-          v-else-if="watchedChannel.platform === 'kick'"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M3 2h4v7.5l5-7.5h5l-6 9 6 11h-5l-5-8V22H3z" />
-        </svg>
-        <svg
-          v-else-if="watchedChannel.platform === 'youtube'"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path
-            d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
-          />
-        </svg>
+        />
         <span class="target-name">{{ watchedChannel.displayName }}</span>
         <svg
           v-if="watchedChannelStatus?.mode !== 'authenticated'"
@@ -282,37 +250,15 @@ function placeholderText(): string {
         "
         @click="toggle(p.platform)"
       >
-        <svg
-          v-if="p.platform === 'twitch'"
+        <component
+          v-if="p.platform === 'twitch' || p.platform === 'kick' || p.platform === 'youtube'"
+          :is="
+            p.platform === 'twitch' ? TwitchIcon : p.platform === 'kick' ? KickIcon : YoutubeIcon
+          "
           width="13"
           height="13"
-          viewBox="0 0 24 24"
           fill="currentColor"
-        >
-          <path
-            d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"
-          />
-        </svg>
-        <svg
-          v-else-if="p.platform === 'kick'"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M3 2h4v7.5l5-7.5h5l-6 9 6 11h-5l-5-8V22H3z" />
-        </svg>
-        <svg
-          v-else-if="p.platform === 'youtube'"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path
-            d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
-          />
-        </svg>
+        />
         <span v-else class="target-letter">{{
           (p.platform as string).charAt(0).toUpperCase()
         }}</span>

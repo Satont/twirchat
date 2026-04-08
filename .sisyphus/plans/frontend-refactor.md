@@ -1191,6 +1191,7 @@ Wave FINAL (4 parallel reviewers — after ALL tasks):
   - Message: `refactor(desktop): migrate components to composables, Pinia, and SVG components`
   - Files: `src/views/main/components/ChatPanel.vue`, `ChatInput.vue`, `ChannelTabBar.vue`, `EventsFeed.vue` (+ T8/T9/T10/T11/T12 files)
   - Pre-commit: `vue-tsc --noEmit`
+
   ```
 
   **Evidence to Capture**:
@@ -1200,6 +1201,8 @@ Wave FINAL (4 parallel reviewers — after ALL tasks):
   - Message: `refactor(desktop): migrate components to composables, Pinia, and SVG components`
   - Files: `src/views/main/components/*.vue`, `src/views/main/components/ui/*.vue`
   - Pre-commit: `vue-tsc --noEmit`
+
+  ```
 
 - [ ] 14. Migrate `useLayoutStore` to Pinia (all consumers atomically)
 

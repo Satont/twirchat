@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
+import { platformColor } from '../../shared/utils/platform'
 
 // ----------------------------------------------------------------
 // Config from URL query params
@@ -127,27 +128,6 @@ onUnmounted(() => {
   }
   ws?.close()
 })
-
-// ----------------------------------------------------------------
-// Platform colors
-// ----------------------------------------------------------------
-
-function platformColor(platform: string): string {
-  switch (platform) {
-    case 'twitch': {
-      return '#9146ff'
-    }
-    case 'youtube': {
-      return '#ff0000'
-    }
-    case 'kick': {
-      return '#53fc18'
-    }
-    default: {
-      return '#888'
-    }
-  }
-}
 
 // ----------------------------------------------------------------
 // CSS vars

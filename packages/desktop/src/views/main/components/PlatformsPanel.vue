@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import type { Account, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
 import { rpc } from '../main'
 import StreamEditor from './StreamEditor.vue'
+import { useRpcListener } from '../composables/useRpcListener'
+import { platformColor } from '../../shared/utils/platform'
+import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
+import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
+import KickIcon from '../../../assets/icons/platforms/kick.svg'
 
 const props = defineProps<{
   accounts: Account[]
@@ -56,33 +61,16 @@ function addToast(platform: Platform, type: Toast['type'], message: string) {
 // RPC listeners
 // ----------------------------------------------------------------
 
-const unsubscribers: (() => void)[] = []
+useRpcListener('auth_success', async ({ platform, displayName }) => {
+  const updated = (await rpc.request.getAccounts!()) as Account[]
+  emit('accounts-updated', updated)
+  addToast(platform as Platform, 'success', `Connected as ${displayName}`)
+})
+useRpcListener('auth_error', ({ platform, error }) => {
+  addToast(platform as Platform, 'error', error)
+})
 
 onMounted(async () => {
-  const onAuthSuccess = async ({
-    platform,
-    displayName,
-  }: {
-    platform: string
-    username: string
-    displayName: string
-  }) => {
-    const updated = (await rpc.request.getAccounts!()) as Account[]
-    emit('accounts-updated', updated)
-    addToast(platform as Platform, 'success', `Connected as ${displayName}`)
-  }
-  const onAuthError = ({ platform, error }: { platform: string; error: string }) => {
-    addToast(platform as Platform, 'error', error)
-  }
-
-  rpc.addMessageListener('auth_success', onAuthSuccess)
-  rpc.addMessageListener('auth_error', onAuthError)
-
-  unsubscribers.push(
-    () => rpc.removeMessageListener('auth_success', onAuthSuccess),
-    () => rpc.removeMessageListener('auth_error', onAuthError),
-  )
-
   // Load persisted channels from the backend
   try {
     const saved = (await rpc.request.getChannels!()) as Partial<Record<Platform, string[]>>
@@ -99,10 +87,6 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => {
-  unsubscribers.forEach((u) => u())
-})
-
 // ----------------------------------------------------------------
 // Platform metadata
 // ----------------------------------------------------------------
@@ -115,20 +99,6 @@ function account(platform: Platform): Account | undefined {
 
 function status(platform: Platform): PlatformStatusInfo | undefined {
   return props.statuses.get(platform)
-}
-
-function platformMeta(platform: Platform) {
-  switch (platform) {
-    case 'twitch': {
-      return { label: 'Twitch', color: '#9146ff', textColor: '#fff' }
-    }
-    case 'youtube': {
-      return { label: 'YouTube', color: '#ff0000', textColor: '#fff' }
-    }
-    case 'kick': {
-      return { label: 'Kick', color: '#53fc18', textColor: '#000' }
-    }
-  }
 }
 
 function statusLabel(s?: PlatformStatusInfo): string {
@@ -241,45 +211,21 @@ function onInputKeydown(e: KeyboardEvent, platform: Platform) {
       <div v-for="platform in platforms" :key="platform" class="platform-card">
         <!-- Card header -->
         <div class="card-header">
-          <div class="platform-logo" :style="{ background: platformMeta(platform).color }">
-            <!-- Twitch -->
-            <svg
-              v-if="platform === 'twitch'"
+          <div class="platform-logo" :style="{ background: platformColor(platform) }">
+            <component
+              :is="
+                platform === 'twitch' ? TwitchIcon : platform === 'youtube' ? YoutubeIcon : KickIcon
+              "
               width="20"
               height="20"
-              viewBox="0 0 24 24"
-              fill="white"
-            >
-              <path
-                d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"
-              />
-            </svg>
-            <!-- YouTube -->
-            <svg
-              v-else-if="platform === 'youtube'"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="white"
-            >
-              <path
-                d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
-              />
-            </svg>
-            <!-- Kick -->
-            <svg
-              v-else-if="platform === 'kick'"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="black"
-            >
-              <path d="M2 2h4v8l6-8h5l-7 9 7 11h-5l-6-9v9H2z" />
-            </svg>
+              :fill="platform === 'kick' ? 'black' : 'white'"
+            />
           </div>
 
           <div class="card-title-area">
-            <div class="card-platform-name">{{ platformMeta(platform).label }}</div>
+            <div class="card-platform-name">
+              {{ platform === 'twitch' ? 'Twitch' : platform === 'youtube' ? 'YouTube' : 'Kick' }}
+            </div>
             <div class="card-status">
               <span class="status-dot" :class="statusClass(status(platform))" />
               <span class="status-text">{{ statusLabel(status(platform)) }}</span>
@@ -292,7 +238,7 @@ function onInputKeydown(e: KeyboardEvent, platform: Platform) {
               <div v-if="account(platform)" class="account-info">
                 <div
                   class="account-avatar"
-                  :style="{ '--platform-color': platformMeta(platform).color }"
+                  :style="{ '--platform-color': platformColor(platform) }"
                 >
                   <img
                     v-if="account(platform)?.avatarUrl"
@@ -315,8 +261,8 @@ function onInputKeydown(e: KeyboardEvent, platform: Platform) {
                 v-else
                 class="btn btn-primary btn-sm"
                 :style="{
-                  '--btn-color': platformMeta(platform).color,
-                  '--btn-text': platformMeta(platform).textColor,
+                  '--btn-color': platformColor(platform),
+                  '--btn-text': platform === 'kick' ? '#000' : '#fff',
                 }"
                 :disabled="authLoading[platform]"
                 @click="startAuth(platform)"

@@ -5,6 +5,7 @@
 > **Quick Summary**: Implement a full keyboard-shortcut system for TwirChat's watched-channel tab navigation, with user-configurable bindings stored in AppSettings.
 >
 > **Deliverables**:
+>
 > - `packages/shared/types.ts` — `HotkeySettings` type + `hotkeys` field in `AppSettings` + defaults
 > - `packages/desktop/src/views/main/composables/useHotkeys.ts` — module-singleton global keydown composable with pause/resume API
 > - `packages/desktop/src/views/main/utils/fuzzyFilter.ts` — pure fuzzy filter utility (extracted for testability)
@@ -21,14 +22,18 @@
 ## Context
 
 ### Original Request
+
 Implement GitHub issues #19, #20, #21, #22, #24 (Hotkeys system and all sub-issues):
+
 - #21: Ctrl+T opens new tab modal
 - #20: Ctrl+Tab / Ctrl+Shift+Tab cycles through watched-channel tabs
 - #19: Ctrl+L / Ctrl+K opens fuzzy tab-selector modal
 - #22: All hotkeys customizable in Settings panel
 
 ### Interview Summary
+
 **Key Discussions**:
+
 - No existing global hotkey infrastructure — pure greenfield in webview
 - Tab system has two layers: main section tabs (chat/events/platforms/settings) and watched-channel tabs (home + WatchedChannel.id values)
 - `activeWatchedTab` ref lives in `App.vue` — that's the correct owner for hotkey dispatch
@@ -36,12 +41,15 @@ Implement GitHub issues #19, #20, #21, #22, #24 (Hotkeys system and all sub-issu
 - `tabChannelIds` is a `Set<string>` with V8 insertion-order guarantees — safe for cycling
 
 **Research Findings**:
+
 - Existing local panel shortcuts (Ctrl+H/W in PanelNode.vue) are NOT global — component-scoped `@keydown` handlers
 - `composables/` directory exists and is empty — ready for new composable
 - `AddChannelModal.vue` establishes the Teleport+backdrop modal pattern to follow
 
 ### Metis Review
+
 **Identified Gaps** (addressed):
+
 - Ctrl+Tab may not be interceptable in Electrobun BrowserWindow → **Task 1 must verify this first**
 - Input-guard missing — global listener must skip actions when focus is in input/textarea → **added as MUST in Task 3**
 - SettingsPanel recording mode must pause() global hotkeys → **pause/resume API added to useHotkeys**
@@ -55,9 +63,11 @@ Implement GitHub issues #19, #20, #21, #22, #24 (Hotkeys system and all sub-issu
 ## Work Objectives
 
 ### Core Objective
+
 Add a keyboard shortcut system so users can navigate watched-channel tabs via keyboard and customize all bindings in settings.
 
 ### Concrete Deliverables
+
 - `packages/shared/types.ts` — `HotkeySettings` interface, `hotkeys` in `AppSettings`, `DEFAULT_SETTINGS.hotkeys`
 - `packages/desktop/src/views/main/composables/useHotkeys.ts` — global keydown composable
 - `packages/desktop/src/views/main/utils/fuzzyFilter.ts` — extracted pure filter function
@@ -66,6 +76,7 @@ Add a keyboard shortcut system so users can navigate watched-channel tabs via ke
 - Updated `SettingsPanel.vue` — Keyboard Shortcuts section with click-to-rebind
 
 ### Definition of Done
+
 - [ ] `bun run typecheck` passes in packages/desktop
 - [ ] `bun run check` (lint + format) passes
 - [ ] Ctrl+T opens AddChannelModal (verified: modal visible in DOM)
@@ -75,6 +86,7 @@ Add a keyboard shortcut system so users can navigate watched-channel tabs via ke
 - [ ] All shortcuts no-op when focus is in a text input
 
 ### Must Have
+
 - Input-guard: no hotkeys fire when `document.activeElement` is input/textarea/select/contentEditable
 - `useHotkeys.ts` is the ONLY place with `window.addEventListener('keydown')`
 - `pause()` / `resume()` API on useHotkeys, called during settings recording mode
@@ -84,6 +96,7 @@ Add a keyboard shortcut system so users can navigate watched-channel tabs via ke
 - `hotkeys: { ...props.settings.hotkeys }` deep-copy in SettingsPanel `local` ref init
 
 ### Must NOT Have (Guardrails)
+
 - NO `window.addEventListener('keydown')` outside `useHotkeys.ts`
 - NO new RPC calls for hotkeys (uses existing `getSettings`/`saveSettings`)
 - NO hotkeys for panel split/close (PanelNode.vue local shortcuts stay local)
@@ -100,12 +113,14 @@ Add a keyboard shortcut system so users can navigate watched-channel tabs via ke
 > **ZERO HUMAN INTERVENTION** — ALL verification is agent-executed. No exceptions.
 
 ### Test Decision
+
 - **Infrastructure exists**: YES (bun test, tests/ directory exists)
 - **Automated tests**: YES (Tests for pure logic; QA scenarios via Playwright for UI)
 - **Framework**: bun test
 - **TDD scope**: `useHotkeys.ts` composable logic + `fuzzyFilter.ts` pure function
 
 ### QA Policy
+
 Every task MUST include agent-executed QA scenarios.
 Evidence saved to `.sisyphus/evidence/task-{N}-{scenario-slug}.{ext}`.
 
@@ -146,6 +161,7 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
 ```
 
 ### Dependency Matrix
+
 - **1**: none → unblocks 2, 3
 - **2**: 1 → unblocks 3, 4, 5, 6, 7
 - **3**: 2 → unblocks 6
@@ -157,6 +173,7 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
 - **FINAL**: 8
 
 ### Agent Dispatch Summary
+
 - **Wave 1**: T1 → `quick`, T2 → `quick` (2 parallel)
 - **Wave 2**: T3 → `deep`, T4 → `quick`, T5 → `visual-engineering` (3 parallel)
 - **Wave 3**: T6 → `unspecified-high`, T7 → `visual-engineering` (2 parallel)
@@ -358,6 +375,7 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
   - `Ctrl+K` alias always fires tabSelector action regardless of `settings.hotkeys.tabSelector`
 
   **Implementation**:
+
   ```typescript
   // Module-level singleton (not per-call closure):
   type HotkeyAction = 'newTab' | 'nextTab' | 'prevTab' | 'tabSelector'
@@ -486,15 +504,13 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
   - **Write tests first** in `packages/desktop/tests/fuzzyFilter.test.ts`
 
   **Implementation**:
+
   ```typescript
   /**
    * Returns items whose label contains all characters of query in order (case-insensitive).
    * Items are sorted by how early the match starts (lower index = higher rank).
    */
-  export function fuzzyFilter<T extends { label: string }>(
-    items: T[],
-    query: string,
-  ): T[] {
+  export function fuzzyFilter<T extends { label: string }>(items: T[], query: string): T[] {
     if (!query) return items
     const q = query.toLowerCase()
     return items
@@ -574,11 +590,12 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
   - Follow the `AddChannelModal.vue` modal pattern: Teleport to body + backdrop click to close
 
   **Props**:
+
   ```typescript
   interface TabItem {
-    id: string          // 'home' or WatchedChannel.id
-    label: string       // Display name
-    platform?: 'twitch' | 'kick' | 'youtube'  // undefined for home
+    id: string // 'home' or WatchedChannel.id
+    label: string // Display name
+    platform?: 'twitch' | 'kick' | 'youtube' // undefined for home
     isLive?: boolean
   }
 
@@ -588,8 +605,8 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
   }>()
 
   defineEmits<{
-    'select': [id: string]
-    'close': []
+    select: [id: string]
+    close: []
   }>()
   ```
 
@@ -606,6 +623,7 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
   - On `query` change: reset `selectedIdx` to 0
 
   **Template structure**:
+
   ```html
   <Teleport to="body">
     <div class="modal-backdrop" data-testid="tab-selector-modal" @click.self="emit('close')">
@@ -870,9 +888,13 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
         ? {
             ...props.settings,
             overlay: { ...props.settings.overlay },
-            hotkeys: { ...props.settings.hotkeys },  // ADD THIS
+            hotkeys: { ...props.settings.hotkeys }, // ADD THIS
           }
-        : { ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay }, hotkeys: { ...DEFAULT_SETTINGS.hotkeys } },
+        : {
+            ...DEFAULT_SETTINGS,
+            overlay: { ...DEFAULT_SETTINGS.overlay },
+            hotkeys: { ...DEFAULT_SETTINGS.hotkeys },
+          },
     )
     ```
   - Do the same in the `watch(props.settings)` handler:
@@ -918,7 +940,10 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
       newTab: { label: 'Open new tab', description: 'Add a watched channel tab' },
       nextTab: { label: 'Next tab', description: 'Cycle to the next tab' },
       prevTab: { label: 'Previous tab', description: 'Cycle to the previous tab' },
-      tabSelector: { label: 'Tab selector', description: 'Open fuzzy tab search (Ctrl+K always works)' },
+      tabSelector: {
+        label: 'Tab selector',
+        description: 'Open fuzzy tab search (Ctrl+K always works)',
+      },
     }
     ```
   - `formatKeyCombo(combo: string)`: capitalize first letters, `'ctrl+t'` → `'Ctrl+T'`, `'ctrl+shift+tab'` → `'Ctrl+Shift+Tab'`
@@ -1086,20 +1111,20 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6 → Task 8 → F1-F4
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 
 - [ ] F1. **Plan Compliance Audit** — `oracle`
-  Read the plan end-to-end. For each "Must Have": verify implementation exists (read file, check types, bun eval). For each "Must NOT Have": search codebase for forbidden patterns (grep for `window.addEventListener('keydown')` outside useHotkeys.ts, grep for new RPC calls, grep for `hotkeys?:` optionality). Check `.sisyphus/evidence/` files exist. Compare deliverables against plan.
-  Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
+      Read the plan end-to-end. For each "Must Have": verify implementation exists (read file, check types, bun eval). For each "Must NOT Have": search codebase for forbidden patterns (grep for `window.addEventListener('keydown')` outside useHotkeys.ts, grep for new RPC calls, grep for `hotkeys?:` optionality). Check `.sisyphus/evidence/` files exist. Compare deliverables against plan.
+      Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
 - [ ] F2. **Code Quality Review** — `unspecified-high`
-  Run `cd packages/desktop && bun run typecheck` and `bun run check`. Review all changed files for: `as any`/`@ts-ignore`, empty catches, console.log in production, commented-out code, unused imports. Check for AI slop: excessive comments, over-abstraction, generic variable names like `data`/`result`. Check `useHotkeys.ts` for module-singleton correctness.
-  Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
+      Run `cd packages/desktop && bun run typecheck` and `bun run check`. Review all changed files for: `as any`/`@ts-ignore`, empty catches, console.log in production, commented-out code, unused imports. Check for AI slop: excessive comments, over-abstraction, generic variable names like `data`/`result`. Check `useHotkeys.ts` for module-singleton correctness.
+      Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
 
 - [ ] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
-  Start app in dev mode. Execute ALL QA scenarios from Tasks 5, 6, 7 — follow exact steps. Test: (a) Ctrl+T in textarea stays closed, (b) Ctrl+Tab cycles correctly with 3+ tabs, (c) Ctrl+K opens modal with fuzzy search working, (d) rebind to Ctrl+P → press Ctrl+P → tab selector opens, (e) rebind Escape cancelled, binding unchanged. Save all evidence screenshots.
-  Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
+      Start app in dev mode. Execute ALL QA scenarios from Tasks 5, 6, 7 — follow exact steps. Test: (a) Ctrl+T in textarea stays closed, (b) Ctrl+Tab cycles correctly with 3+ tabs, (c) Ctrl+K opens modal with fuzzy search working, (d) rebind to Ctrl+P → press Ctrl+P → tab selector opens, (e) rebind Escape cancelled, binding unchanged. Save all evidence screenshots.
+      Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
 - [ ] F4. **Scope Fidelity Check** — `deep`
-  For each task (1-8): read "What to do", compare to actual diff. Verify 1:1 — nothing missing, nothing extra. Check that `PanelNode.vue` local shortcuts were NOT touched, that no new RPC entries were added to `rpc.ts`, that `TabSelectorModal` does NOT contain main-section tab navigation. Flag any unaccounted changes.
-  Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
+      For each task (1-8): read "What to do", compare to actual diff. Verify 1:1 — nothing missing, nothing extra. Check that `PanelNode.vue` local shortcuts were NOT touched, that no new RPC entries were added to `rpc.ts`, that `TabSelectorModal` does NOT contain main-section tab navigation. Flag any unaccounted changes.
+      Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
 
 ---
 
@@ -1135,6 +1160,7 @@ commit 7 (Task 8): fix: format and lint all hotkeys system files
 ## Success Criteria
 
 ### Verification Commands
+
 ```bash
 # Type check
 cd packages/desktop && bun run typecheck   # Expected: no errors
@@ -1151,6 +1177,7 @@ bun eval "import { DEFAULT_SETTINGS } from './packages/shared/types.ts'; console
 ```
 
 ### Final Checklist
+
 - [ ] `HotkeySettings` type exported from `packages/shared/types.ts`, all 4 keys required
 - [ ] `DEFAULT_SETTINGS.hotkeys` has all 4 defaults
 - [ ] `useHotkeys.ts` is the ONLY file with `window.addEventListener('keydown')`

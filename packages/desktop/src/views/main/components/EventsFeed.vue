@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NormalizedEvent } from '@twirchat/shared/types'
+import { platformColor } from '../../shared/utils/platform'
 
 const props = defineProps<{
   events: NormalizedEvent[]
@@ -106,23 +107,6 @@ function eventColor(type: NormalizedEvent['type']): string {
     }
     default: {
       return '#8b8b99'
-    }
-  }
-}
-
-function platformColor(platform: string): string {
-  switch (platform) {
-    case 'twitch': {
-      return '#9146ff'
-    }
-    case 'youtube': {
-      return '#ff0000'
-    }
-    case 'kick': {
-      return '#53fc18'
-    }
-    default: {
-      return '#888'
     }
   }
 }

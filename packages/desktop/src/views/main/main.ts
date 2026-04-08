@@ -1,4 +1,5 @@
 import { Electroview } from 'electrobun/view'
+import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
 import type { TwirChatRPCSchema } from '../../shared/rpc'
@@ -63,6 +64,7 @@ console.log('[main.ts] Socket ready, creating app...')
 
 try {
   const app = createApp(App)
+  app.use(createPinia())
   console.log('[main.ts] App created, mounting...')
   app.mount('#app')
   console.log('[main.ts] App mounted successfully')
