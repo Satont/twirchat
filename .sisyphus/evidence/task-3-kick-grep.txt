@@ -1,0 +1,4 @@
+153:    this.ws = null
+293:      this.ws.close()
+294:      this.ws = null
+298:    const ws = new WebSocket(wsUrl)
