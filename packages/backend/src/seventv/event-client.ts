@@ -121,6 +121,10 @@ export class SevenTVEventClient {
   private heartbeatTimer: Timer | null = null
   private reconnectTimer: Timer | null = null
   private sessionId: string | null = null
+  // Saved before cleanup so reconnect can attempt session resume (op 34)
+  private previousSessionId: string | null = null
+  // Set while waiting for server to ack a resume attempt; cleared on Ack/RESUME or Error
+  private resumePending = false
   private subscriptionLimit = 0
   private heartbeatInterval = 0
   private lastHeartbeat = 0
@@ -148,6 +152,7 @@ export class SevenTVEventClient {
       this.ws = new WebSocket(SEVENTV_EVENT_API_URL)
 
       this.ws.onopen = () => {
+        this.isConnecting = false
         log.info('WebSocket connected')
       }
 
@@ -182,10 +187,17 @@ export class SevenTVEventClient {
 
   private cleanup(): void {
     this.isConnecting = false
+    this.resumePending = false
 
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
       this.heartbeatTimer = null
+    }
+
+    // Cancel any pending reconnect so disconnect() is truly final
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
     }
 
     if (this.ws) {
@@ -235,24 +247,36 @@ export class SevenTVEventClient {
           break
         }
         case 2: {
-          // Heartbeat
+          // Heartbeat — server-sent keep-alive; reset our watchdog timer
           this.lastHeartbeat = Date.now()
           break
         }
         case 4: {
-          // Reconnect
+          // Reconnect — server wants us to reconnect (possibly resume)
           log.info('Server requested reconnect')
           this.reconnect()
           break
         }
         case 5: {
-          // Ack
-          // Acknowledgment, can be logged for debugging
+          // Ack — server acknowledged our last command
+          const ack = message.d as { command: string; data?: unknown }
+          log.info('Server ack', { command: ack.command })
+          if (ack.command === 'RESUME') {
+            log.info('Session resumed successfully — server will replay missed events')
+            this.resumePending = false
+          }
           break
         }
         case 6: {
           // Error
           log.error('Server error', { data: message.d })
+          if (this.resumePending) {
+            log.warn('Resume rejected by server, falling back to full resubscribe')
+            this.resumePending = false
+            for (const [, sub] of this.subscriptions) {
+              this.sendSubscribe(sub.type, sub.condition)
+            }
+          }
           break
         }
         case 7: {
@@ -282,12 +306,18 @@ export class SevenTVEventClient {
     this.heartbeatInterval = hello.heartbeat_interval
     this.lastHeartbeat = Date.now()
 
-    // Start heartbeat
+    // Start heartbeat watchdog
     this.startHeartbeat()
 
-    // Resubscribe to all previous subscriptions
-    for (const [, sub] of this.subscriptions) {
-      this.sendSubscribe(sub.type, sub.condition)
+    // Attempt session resume if we have a previous session id;
+    // otherwise resubscribe to all tracked subscriptions from scratch.
+    if (this.previousSessionId) {
+      this.sendResume(this.previousSessionId)
+      this.previousSessionId = null
+    } else {
+      for (const [, sub] of this.subscriptions) {
+        this.sendSubscribe(sub.type, sub.condition)
+      }
     }
 
     this.reconnectAttempts = 0
@@ -369,6 +399,12 @@ export class SevenTVEventClient {
     this.send(payload)
   }
 
+  private sendResume(sessionId: string): void {
+    log.info('Attempting session resume', { sessionId })
+    this.resumePending = true
+    this.send({ op: 34, d: { session_id: sessionId } })
+  }
+
   private send(message: SevenTVEventMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
@@ -376,11 +412,19 @@ export class SevenTVEventClient {
   }
 
   private reconnect(): void {
+    // Save current session so handleHello can attempt resume
+    this.previousSessionId = this.sessionId
     this.cleanup()
     this.connect()
   }
 
   private scheduleReconnect(closeCode?: number): void {
+    // Clear any existing timer to avoid duplicate reconnects (e.g. onerror + onclose both firing)
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
     if (!this.shouldReconnect) {
       return
     }
@@ -391,10 +435,16 @@ export class SevenTVEventClient {
       return
     }
 
-    const delay = Math.min(
-      this.baseReconnectDelay * 2 ** this.reconnectAttempts,
-      this.maxReconnectDelay,
-    )
+    // Preserve session for resume attempt — scheduleReconnect is called after cleanup()
+    // which has already nulled this.sessionId, so guard against double-save
+    if (!this.previousSessionId) {
+      this.previousSessionId = this.sessionId
+    }
+
+    // Add ±50% jitter to spread reconnect storms
+    const delay =
+      Math.min(this.baseReconnectDelay * 2 ** this.reconnectAttempts, this.maxReconnectDelay) *
+      (0.5 + Math.random() * 0.5)
 
     this.reconnectAttempts++
 
