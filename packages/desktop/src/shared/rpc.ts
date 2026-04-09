@@ -116,6 +116,8 @@ type BunRequests = {
   downloadUpdate: { params: void; response: { success: boolean; error?: string } }
   /** Apply downloaded update and restart */
   applyUpdate: { params: void; response: void }
+  /** Skip a specific update version so periodic checks no longer prompt for it */
+  skipUpdate: { params: { hash: string }; response: void }
 
   // ---- Watched Channels ----
   /** Return all persisted watched channels */
@@ -193,7 +195,7 @@ type WebviewMessages = {
   /** OAuth failed */
   auth_error: { platform: Platform; error: string }
   /** Update status changed */
-  update_status: { status: string; message: string; progress?: number }
+  update_status: { status: string; message: string; progress?: number; hash?: string }
   /** A new message arrived on a watched channel */
   watched_channel_message: { channelId: string; message: NormalizedChatMessage }
   /** Status changed for a watched channel */

@@ -477,6 +477,11 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
         await Updater.applyUpdate()
       },
 
+      skipUpdate: ({ hash }: { hash: string }) => {
+        skippedHash = hash
+        log.info('[Updater] Skipped update hash', { hash })
+      },
+
       // ---- Watched Channels ----
 
       getWatchedChannels: () => watchedChannelManager.getAll(),
@@ -851,7 +856,7 @@ if (process.platform === 'linux') {
             if (child) clearSizeRequest(child as Ptr)
           }
           gtk.symbols.g_list_free(children)
-        } catch { }
+        } catch {}
       }
 
       clearSizeRequest(win.ptr)
@@ -876,6 +881,7 @@ Updater.onStatusChange((entry) => {
     message: entry.message,
     progress: entry.details?.progress,
     status: entry.status,
+    hash: entry.details?.latestHash,
   })
 })
 
@@ -884,10 +890,16 @@ const settings = SettingsStore.get()
 
 const UPDATE_CHECK_INTERVAL_MS = 1 * 60 * 1000 // 1 minute
 
+let skippedHash: string | null = null
+
 function runUpdateCheck() {
   Updater.checkForUpdate()
     .then((updateInfo) => {
       if (updateInfo.updateAvailable) {
+        if (skippedHash && updateInfo.hash === skippedHash) {
+          log.info('Update skipped by user', { hash: updateInfo.hash })
+          return
+        }
         log.info(`Update available: ${updateInfo.version}`)
         Updater.downloadUpdate().catch((error) => {
           log.error('Failed to download update', { error: String(error) })

@@ -257,11 +257,13 @@ const updateState = ref<{
   status: string
   message: string
   progress?: number
+  hash?: string
 }>({
   message: '',
   progress: undefined,
   show: false,
   status: '',
+  hash: undefined,
 })
 
 // All Electrobun statuses that indicate a download is actively in progress
@@ -316,11 +318,14 @@ useRpcListener('auth_error', ({ platform, error }: { platform: string; error: st
 
 useRpcListener(
   'update_status',
-  (status: { status: string; message: string; progress?: number }) => {
+  (status: { status: string; message: string; progress?: number; hash?: string }) => {
     console.log(`[Update] ${status.status}: ${status.message}`)
     updateState.value.status = status.status
     updateState.value.message = status.message
     updateState.value.progress = status.progress
+    if (status.hash !== undefined) {
+      updateState.value.hash = status.hash
+    }
 
     if (
       status.status === 'checking' ||
@@ -419,6 +424,17 @@ function onSettingsChange(s: AppSettings) {
 }
 
 function dismissUpdate() {
+  updateState.value.show = false
+}
+
+async function skipUpdate() {
+  const hash = updateState.value.hash
+  if (!hash) return
+  try {
+    await rpc.request.skipUpdate({ hash })
+  } catch (error) {
+    console.error('[Update] Failed to skip update:', error)
+  }
   updateState.value.show = false
 }
 
@@ -745,6 +761,13 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
           @click="applyUpdate"
         >
           Restart
+        </button>
+        <button
+          v-if="updateState.status === 'update-available' && updateState.hash"
+          class="update-btn update-btn-skip"
+          @click="skipUpdate"
+        >
+          Skip
         </button>
         <button class="update-close" @click="dismissUpdate">
           <svg
@@ -1136,6 +1159,17 @@ body {
   cursor: pointer;
   transition: opacity 0.15s;
   flex-shrink: 0;
+}
+
+.update-btn-skip {
+  background: transparent;
+  color: var(--c-text-2, #8b8b99);
+  border: 1px solid var(--c-border, #2a2a33);
+}
+
+.update-btn-skip:hover {
+  color: var(--c-text, #e2e2e8);
+  border-color: var(--c-text-2, #8b8b99);
 }
 
 .update-btn:hover {
