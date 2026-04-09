@@ -4,6 +4,7 @@
  * Спринт 2: monorepo, UUID client identity, BackendConnection WS, Kick via backend.
  */
 
+import { Utils } from 'electrobun/bun'
 import { initDb } from './store/db'
 import { getClientSecret } from './store/client-secret'
 import { BackendConnection } from './backend-connection'
@@ -68,7 +69,7 @@ backendConn.onMessage((msg) => {
     case 'auth_url': {
       // Open the OAuth URL in the system browser
       log.info(`[Auth] Opening ${msg.platform} OAuth URL...`)
-      void openBrowser(msg.url)
+      openBrowser(msg.url)
       break
     }
 
@@ -140,19 +141,10 @@ setInterval(() => {
  * Open a URL in the system default browser.
  * Works cross-platform (Linux/macOS/Windows).
  */
-async function openBrowser(url: string): Promise<void> {
-  try {
-    const { platform } = process
-    if (platform === 'darwin') {
-      await Bun.$`open ${url}`
-    } else if (platform === 'win32') {
-      await Bun.$`start ${url}`
-    } else {
-      // Linux / other
-      await Bun.$`xdg-open ${url}`
-    }
-  } catch (error) {
-    log.error(`[Auth] Failed to open browser: ${error}`)
+function openBrowser(url: string): void {
+  const success = Utils.openExternal(url)
+  if (!success) {
+    log.error(`[Auth] Failed to open browser: ${url}`)
     log.info(`[Auth] Please open manually: ${url}`)
   }
 }

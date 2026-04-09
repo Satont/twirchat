@@ -31,7 +31,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('UNHANDLED REJECTION:', reason)
 })
 
-import { BrowserWindow, BuildConfig, Updater, defineElectrobunRPC } from 'electrobun/bun'
+import { BrowserWindow, BuildConfig, Updater, Utils, defineElectrobunRPC } from 'electrobun/bun'
 
 import { getDb, initDb } from '../store/db'
 import { getClientSecret } from '../store/client-secret'
@@ -253,15 +253,15 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
         if (platform === 'twitch') {
           const { codeChallenge, state } = prepareTwitchAuth()
           const url = await getTwitchAuthUrl(codeChallenge, state)
-          void openBrowser(url)
+          openBrowser(url)
         } else if (platform === 'kick') {
           const { codeChallenge, state } = prepareKickAuth()
           const url = await getKickAuthUrl(codeChallenge, state)
-          void openBrowser(url)
+          openBrowser(url)
         } else if (platform === 'youtube') {
           const { codeChallenge, state } = prepareYouTubeAuth()
           const url = await getYouTubeAuthUrl(codeChallenge, state)
-          void openBrowser(url)
+          openBrowser(url)
         } else {
           backendConn.send({ type: 'auth_start', platform })
         }
@@ -509,7 +509,7 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
       },
 
       openExternalUrl: ({ url }) => {
-        void openBrowser(url)
+        openBrowser(url)
       },
 
       // ---- Watched Channels Layout ----
@@ -895,7 +895,7 @@ backendConn.onMessage((msg) => {
   switch (msg.type) {
     case 'auth_url': {
       sendToView.auth_url({ platform: msg.platform, url: msg.url })
-      void openBrowser(msg.url)
+      openBrowser(msg.url)
       break
     }
 
@@ -1183,17 +1183,10 @@ log.info('Ready')
 // Helpers
 // ============================================================
 
-async function openBrowser(url: string): Promise<void> {
-  try {
-    if (process.platform === 'darwin') {
-      await Bun.$`open ${url}`
-    } else if (process.platform === 'win32') {
-      await Bun.$`start ${url}`
-    } else {
-      await Bun.$`xdg-open ${url}`
-    }
-  } catch (error) {
-    log.error('Failed to open browser', { error: String(error), action: 'auth' })
+function openBrowser(url: string): void {
+  const success = Utils.openExternal(url)
+  if (!success) {
+    log.error('Failed to open browser', { action: 'auth', url })
     log.info('Please open manually', { action: 'auth', url })
   }
 }
