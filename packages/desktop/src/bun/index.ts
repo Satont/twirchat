@@ -876,7 +876,7 @@ if (process.platform === 'linux') {
 
 // Subscribe to update status changes and forward to webview
 Updater.onStatusChange((entry) => {
-  if (silentCheck && entry.status === 'no-update') return
+  if (silentCheck && (entry.status === 'no-update' || entry.status === 'checking')) return
   log.info(`[Updater] ${entry.status}: ${entry.message}`)
   sendToView.update_status({
     message: entry.message,
