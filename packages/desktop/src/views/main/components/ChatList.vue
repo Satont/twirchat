@@ -499,6 +499,7 @@ function onAppearanceChange(s: AppSettings) {
       :watched-channel="watchedChannel"
       :watched-channel-status="watchedChannelStatus"
       :reply-target="replyTarget"
+      :messages="watchedChannel ? (watchedMessages ?? []) : messages"
       @cancel-reply="replyTarget = null"
       @send="onSend"
       @send-watched="onSendWatched"

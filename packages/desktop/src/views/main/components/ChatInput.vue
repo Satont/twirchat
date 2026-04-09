@@ -9,6 +9,8 @@ import { platformColor } from '../../shared/utils/platform'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
+import { useAutocomplete } from '../composables/useAutocomplete'
+import AutocompletePopup from './AutocompletePopup.vue'
 
 const props = defineProps<{
   statuses: Map<string, PlatformStatusInfo>
@@ -17,6 +19,7 @@ const props = defineProps<{
   /** Connection status for the watched channel */
   watchedChannelStatus?: PlatformStatusInfo | null
   replyTarget?: NormalizedChatMessage | null
+  messages?: NormalizedChatMessage[]
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +32,14 @@ const emit = defineEmits<{
 
 const text = ref('')
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
+
+const { suggestions, isOpen, selectedIndex, mode, selectSuggestion, moveUp, moveDown, close } =
+  useAutocomplete({
+    text,
+    messages: computed(() => props.messages ?? []),
+    watchedChannel: computed(() => props.watchedChannel ?? null),
+    statuses: computed(() => props.statuses),
+  })
 
 function resizeTextarea() {
   const el = textareaEl.value
@@ -139,6 +150,28 @@ function send() {
 }
 
 function onKeydown(e: KeyboardEvent) {
+  if (isOpen.value) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      moveUp()
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      moveDown()
+      return
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      selectSuggestion(selectedIndex.value)
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      close()
+      return
+    }
+  }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     send()
@@ -284,6 +317,13 @@ function placeholderText(): string {
     </div>
 
     <!-- Textarea + send -->
+    <AutocompletePopup
+      v-if="isOpen"
+      :suggestions="suggestions"
+      :selected-index="selectedIndex"
+      :mode="mode"
+      @select="selectSuggestion"
+    />
     <div class="input-row">
       <textarea
         ref="textareaEl"
@@ -315,6 +355,7 @@ function placeholderText(): string {
 
 <style scoped>
 .chat-input-bar {
+  position: relative;
   flex-shrink: 0;
   border-top: 1px solid var(--c-border, #2a2a33);
   padding: 8px 12px 10px;

@@ -29,6 +29,7 @@ import type {
   ChannelStatusRequest,
   ChannelsStatusResponse,
   SearchCategoriesResponse,
+  SevenTVEmote,
   StreamStatusResponse,
   UpdateStreamRequest,
   UpdateStreamResponse,
@@ -100,6 +101,11 @@ type BunRequests = {
   getUsernameColor: {
     params: { platform: Platform; username: string }
     response: string | null
+  }
+  /** Get all 7TV emotes for a channel */
+  getChannelEmotes: {
+    params: { platform: Platform; channelId: string }
+    response: SevenTVEmote[]
   }
   /** Check for app updates */
   checkForUpdate: {
@@ -192,6 +198,19 @@ type WebviewMessages = {
   watched_channel_message: { channelId: string; message: NormalizedChatMessage }
   /** Status changed for a watched channel */
   watched_channel_status: { channelId: string; status: PlatformStatusInfo }
+  /** Full emote set received for a channel */
+  channel_emotes_set: { platform: Platform; channelId: string; emotes: SevenTVEmote[] }
+  /** An emote was added to a channel */
+  channel_emote_added: { platform: Platform; channelId: string; emote: SevenTVEmote }
+  /** An emote was removed from a channel (by ID) */
+  channel_emote_removed: { platform: Platform; channelId: string; emoteId: string }
+  /** An emote alias was updated */
+  channel_emote_updated: {
+    platform: Platform
+    channelId: string
+    emoteId: string
+    newAlias: string
+  }
 }
 
 // ----------------------------------------------------------------

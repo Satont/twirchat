@@ -446,6 +446,10 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
         return UsernameColorCache.get(platform, username) ?? null
       },
 
+      getChannelEmotes: ({ platform, channelId }) => {
+        return sevenTVService.getEmotes(platform, channelId)
+      },
+
       checkForUpdate: async () => {
         const updateInfo = await Updater.checkForUpdate()
         const currentVersion = await Updater.localInfo.version()
@@ -919,6 +923,43 @@ backendConn.onMessage((msg) => {
 
     case 'error': {
       log.error('Backend error', { message: msg.message })
+      break
+    }
+
+    case 'seventv_emote_set': {
+      sendToView.channel_emotes_set({
+        platform: msg.platform,
+        channelId: msg.channelId,
+        emotes: msg.emotes,
+      })
+      break
+    }
+
+    case 'seventv_emote_added': {
+      sendToView.channel_emote_added({
+        platform: msg.platform,
+        channelId: msg.channelId,
+        emote: msg.emote,
+      })
+      break
+    }
+
+    case 'seventv_emote_removed': {
+      sendToView.channel_emote_removed({
+        platform: msg.platform,
+        channelId: msg.channelId,
+        emoteId: msg.emoteId,
+      })
+      break
+    }
+
+    case 'seventv_emote_updated': {
+      sendToView.channel_emote_updated({
+        platform: msg.platform,
+        channelId: msg.channelId,
+        emoteId: msg.emoteId,
+        newAlias: msg.alias,
+      })
       break
     }
 

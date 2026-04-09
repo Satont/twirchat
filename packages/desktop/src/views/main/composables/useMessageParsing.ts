@@ -7,7 +7,7 @@ import { rpc } from '../main'
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
 
-const mentionColorCache = new Map<string, string | null>()
+export const mentionColorCache = new Map<string, string | null>()
 
 export interface MessagePart {
   type: 'text' | 'emote'
