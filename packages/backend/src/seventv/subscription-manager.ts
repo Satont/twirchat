@@ -174,7 +174,7 @@ export class SevenTVSubscriptionManager {
       return
     }
 
-    for (const sub of clientSubs) {
+    for (const sub of Array.from(clientSubs)) {
       this.unsubscribeClient(clientSecret, sub.platform, sub.channelId)
     }
   }
