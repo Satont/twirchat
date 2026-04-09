@@ -9,8 +9,10 @@ import { platformColor } from '../../shared/utils/platform'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
-import { useAutocomplete } from '../composables/useAutocomplete'
+import { parseToken, replaceToken, useAutocomplete } from '../composables/useAutocomplete'
 import AutocompletePopup from './AutocompletePopup.vue'
+import { PopoverContent, PopoverRoot, PopoverTrigger } from 'reka-ui'
+import EmotePicker from './EmotePicker.vue'
 
 const props = defineProps<{
   statuses: Map<string, PlatformStatusInfo>
@@ -33,6 +35,9 @@ const emit = defineEmits<{
 const text = ref('')
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
 
+const showEmotePicker = ref(false)
+const emotePickerRef = ref<InstanceType<typeof EmotePicker> | null>(null)
+
 const { suggestions, isOpen, selectedIndex, mode, selectSuggestion, moveUp, moveDown, close } =
   useAutocomplete({
     text,
@@ -40,6 +45,57 @@ const { suggestions, isOpen, selectedIndex, mode, selectSuggestion, moveUp, move
     watchedChannel: computed(() => props.watchedChannel ?? null),
     statuses: computed(() => props.statuses),
   })
+
+const currentChannelInfo = computed((): { platform: string; channelId: string } | null => {
+  if (props.watchedChannel) {
+    return { platform: props.watchedChannel.platform, channelId: props.watchedChannel.channelSlug }
+  }
+  for (const info of props.statuses.values()) {
+    if (info.channelLogin && info.status === 'connected') {
+      return { platform: info.platform, channelId: info.channelLogin }
+    }
+  }
+  return null
+})
+
+async function onEmoteButtonClick(): Promise<void> {
+  showEmotePicker.value = !showEmotePicker.value
+  if (showEmotePicker.value) {
+    await nextTick()
+    emotePickerRef.value?.focus()
+  }
+}
+
+function onEmoteSelect(alias: string): void {
+  // Branch 1: active :token at end of text → use replaceToken
+  const token = parseToken(text.value)
+  if (token.mode === 'emote') {
+    text.value = replaceToken(text.value, {
+      type: 'emote',
+      label: alias,
+      imageUrl: '',
+      animated: false,
+    })
+  } else {
+    // Branch 2: no active :token → insert at cursor position (or append)
+    const el = textareaEl.value
+    const pos = el?.selectionStart ?? text.value.length
+    const insertion = alias + ' '
+    text.value = text.value.slice(0, pos) + insertion + text.value.slice(pos)
+    // Restore cursor after insertion
+    void nextTick(() => {
+      if (el) {
+        const newPos = pos + insertion.length
+        el.focus()
+        el.setSelectionRange(newPos, newPos)
+      }
+    })
+  }
+  // Close picker after selection
+  showEmotePicker.value = false
+  // Refocus textarea
+  void nextTick(() => textareaEl.value?.focus())
+}
 
 function resizeTextarea() {
   const el = textareaEl.value
@@ -334,6 +390,48 @@ function placeholderText(): string {
         rows="1"
         @keydown="onKeydown"
       />
+      <PopoverRoot v-model:open="showEmotePicker">
+        <PopoverTrigger as-child>
+          <button
+            class="emote-btn"
+            :class="{ 'is-open': showEmotePicker }"
+            title="Emotes"
+            :disabled="isDisabled"
+            @click="onEmoteButtonClick"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M8 13s1.5 2 4 2 4-2 4-2" />
+              <line x1="9" y1="9" x2="9.01" y2="9" />
+              <line x1="15" y1="9" x2="15.01" y2="9" />
+            </svg>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="top"
+          :side-offset="8"
+          align="end"
+          :avoid-collisions="true"
+          class="emote-picker-popover"
+        >
+          <EmotePicker
+            v-if="currentChannelInfo"
+            ref="emotePickerRef"
+            :platform="currentChannelInfo.platform"
+            :channel-id="currentChannelInfo.channelId"
+            @select="onEmoteSelect"
+          />
+        </PopoverContent>
+      </PopoverRoot>
       <button class="send-btn" :disabled="!canSend" @click="send" title="Send">
         <svg
           width="16"
@@ -531,5 +629,47 @@ function placeholderText(): string {
 .send-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+.emote-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--c-text-2, #8b8b99);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.emote-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--c-text, #e2e2e8);
+}
+.emote-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.emote-btn.is-open {
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
+}
+</style>
+
+<style>
+/* Global styles — PopoverContent is portalled outside the component tree */
+.emote-picker-popover {
+  background: var(--c-surface-2, #1f1f24);
+  border: 1px solid var(--c-border, #2a2a33);
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  overflow: hidden;
 }
 </style>
