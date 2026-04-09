@@ -58,13 +58,12 @@ const currentChannelInfo = computed((): { platform: string; channelId: string } 
   return null
 })
 
-async function onEmoteButtonClick(): Promise<void> {
-  showEmotePicker.value = !showEmotePicker.value
-  if (showEmotePicker.value) {
+watch(showEmotePicker, async (isPickerOpen) => {
+  if (isPickerOpen) {
     await nextTick()
     emotePickerRef.value?.focus()
   }
-}
+})
 
 function onEmoteSelect(alias: string): void {
   // Branch 1: active :token at end of text → use replaceToken
@@ -397,7 +396,6 @@ function placeholderText(): string {
             :class="{ 'is-open': showEmotePicker }"
             title="Emotes"
             :disabled="isDisabled"
-            @click="onEmoteButtonClick"
           >
             <svg
               width="16"
