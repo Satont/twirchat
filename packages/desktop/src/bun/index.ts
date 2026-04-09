@@ -806,6 +806,65 @@ if (channel === 'dev') {
   win.webview.openDevTools()
 }
 
+// On Linux, WebKitWebViewImpl::resize calls gtk_widget_set_size_request(webview, w, h) on
+// every resize event, locking the minimum window size to the initial dimensions. We walk
+// the full GTK widget tree and reset size requests to (-1,-1) — "no minimum" — after a
+// short delay to let Electrobun finish its initial WebKit layout pass.
+if (process.platform === 'linux') {
+  void (async () => {
+    await Bun.sleep(300)
+    const { dlopen, FFIType, ptr: ffiPtr } = await import('bun:ffi')
+    try {
+      const gtk = dlopen('libgtk-3.so.0', {
+        gtk_widget_set_size_request: {
+          args: [FFIType.ptr, FFIType.i32, FFIType.i32],
+          returns: FFIType.void,
+        },
+        gtk_container_get_children: {
+          args: [FFIType.ptr],
+          returns: FFIType.ptr,
+        },
+        g_list_nth_data: {
+          args: [FFIType.ptr, FFIType.u32],
+          returns: FFIType.ptr,
+        },
+        g_list_length: {
+          args: [FFIType.ptr],
+          returns: FFIType.u32,
+        },
+        g_list_free: {
+          args: [FFIType.ptr],
+          returns: FFIType.void,
+        },
+      })
+
+      type Ptr = NonNullable<ReturnType<typeof ffiPtr>>
+
+      const clearSizeRequest = (widgetPtr: Ptr) => {
+        gtk.symbols.gtk_widget_set_size_request(widgetPtr, -1, -1)
+        try {
+          const children = gtk.symbols.gtk_container_get_children(widgetPtr)
+          if (!children) return
+          const len = gtk.symbols.g_list_length(children) as number
+          for (let i = 0; i < len; i++) {
+            const child = gtk.symbols.g_list_nth_data(children, i)
+            if (child) clearSizeRequest(child as Ptr)
+          }
+          gtk.symbols.g_list_free(children)
+        } catch {}
+      }
+
+      clearSizeRequest(win.ptr)
+
+      win.on('resize', () => {
+        setTimeout(() => clearSizeRequest(win.ptr), 0)
+      })
+    } catch (err) {
+      log.warn('[linux] failed to clear gtk size constraints', { error: String(err) })
+    }
+  })()
+}
+
 // ============================================================
 // 3b. Auto-update setup
 // ============================================================
