@@ -851,7 +851,7 @@ if (process.platform === 'linux') {
             if (child) clearSizeRequest(child as Ptr)
           }
           gtk.symbols.g_list_free(children)
-        } catch {}
+        } catch { }
       }
 
       clearSizeRequest(win.ptr)
@@ -879,15 +879,19 @@ Updater.onStatusChange((entry) => {
   })
 })
 
-// Auto-check for updates on startup (if enabled in settings)
+// Auto-check for updates on startup and periodically (if enabled in settings)
 const settings = SettingsStore.get()
-if (settings?.autoCheckUpdates !== false && channel !== 'dev') {
-  log.info('Checking for updates...')
+
+const UPDATE_CHECK_INTERVAL_MS = 1 * 60 * 1000 // 1 minute
+
+function runUpdateCheck() {
   Updater.checkForUpdate()
     .then((updateInfo) => {
       if (updateInfo.updateAvailable) {
         log.info(`Update available: ${updateInfo.version}`)
-        // Optionally auto-download: Updater.downloadUpdate()
+        Updater.downloadUpdate().catch((error) => {
+          log.error('Failed to download update', { error: String(error) })
+        })
       } else {
         log.info('No updates available')
       }
@@ -895,6 +899,12 @@ if (settings?.autoCheckUpdates !== false && channel !== 'dev') {
     .catch((error) => {
       log.error('Failed to check for updates', { error: String(error) })
     })
+}
+
+if (settings?.autoCheckUpdates !== false && channel !== 'dev') {
+  log.info('Checking for updates...')
+  runUpdateCheck()
+  setInterval(runUpdateCheck, UPDATE_CHECK_INTERVAL_MS)
 }
 
 // ============================================================
