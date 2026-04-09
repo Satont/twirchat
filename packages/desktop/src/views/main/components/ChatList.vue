@@ -8,7 +8,10 @@ import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
 import { rpc } from '../main'
 import { platformColor } from '../../shared/utils/platform'
-import { usePolling } from '../composables/usePolling'
+import { useStreamStatusStore } from '../stores/streamStatus'
+import KickIcon from '../../../assets/icons/platforms/kick.svg'
+import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
+import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import type {
   Account,
   AppSettings,
@@ -67,8 +70,21 @@ function onReply(msg: NormalizedChatMessage) {
   replyTarget.value = msg
 }
 
-// ---- Channel status bar ----
-const channelStatuses = ref<ChannelStatus[]>([])
+const streamStatusStore = useStreamStatusStore()
+
+function platformIcon(platform: string) {
+  if (platform === 'twitch') return TwitchIcon
+  if (platform === 'kick') return KickIcon
+  return YoutubeIcon
+}
+
+const watchedStreamStatus = computed(() => {
+  if (!props.watchedChannel || props.watchedChannel.platform === 'youtube') return undefined
+  return streamStatusStore.getStatus(
+    props.watchedChannel.platform as 'twitch' | 'kick',
+    props.watchedChannel.channelSlug,
+  )
+})
 
 // ---- Active messages (home vs watched) ----
 const activeMessages = computed<NormalizedChatMessage[]>(() => {
@@ -122,48 +138,18 @@ const allChannels = computed<ChannelStatusRequest[]>(() => [
   ...autoConnectedChannels.value,
 ])
 
-// Channels shown in the bar: merge allChannels with backend-fetched statuses.
+// Channels shown in the bar: merge allChannels with store-fetched statuses.
 // This ensures the bar is visible immediately when a channel is joined, even if
-// The backend fetch hasn't returned yet (or fails).
-const displayedChannels = computed<ChannelStatus[]>(() => {
-  const backendMap = new Map(
-    channelStatuses.value.map((s) => [`${s.platform}:${s.channelLogin}`, s]),
-  )
-  return allChannels.value.map((ch) => {
-    const key = `${ch.platform}:${ch.channelLogin}`
-    const backendStatus = backendMap.get(key)
-
-    if (backendStatus) {
-      return backendStatus
-    }
-
-    return {
-      channelLogin: ch.channelLogin,
-      isLive: false,
-      platform: ch.platform,
-      title: '',
-    }
-  })
-})
-
-async function fetchChannelStatuses() {
-  const channels = allChannels.value
-  if (channels.length === 0) {
-    channelStatuses.value = []
-    return
-  }
-  try {
-    const res = await rpc.request.getChannelsStatus({ channels })
-    channelStatuses.value = res.channels
-  } catch (error) {
-    console.warn('[ChannelStatusBar] fetch failed:', error)
-  }
-}
-
-const { start: startPolling } = usePolling(fetchChannelStatuses, 10_000)
+// The store hasn't fetched yet (or fails).
+const displayedChannels = computed<ChannelStatus[]>(() =>
+  allChannels.value.map((ch) => {
+    const stored = streamStatusStore.getStatus(ch.platform, ch.channelLogin)
+    if (stored) return stored
+    return { channelLogin: ch.channelLogin, isLive: false, platform: ch.platform, title: '' }
+  }),
+)
 
 onMounted(() => {
-  startPolling()
   scrollToBottom()
 })
 
@@ -183,9 +169,6 @@ watch(
   },
   { flush: 'post' },
 )
-
-// Re-fetch immediately when channels change
-watch(allChannels, () => fetchChannelStatuses(), { deep: true })
 
 // ---- Scroll ----
 const hasAnyConnection = computed(() =>
@@ -269,10 +252,25 @@ function onAppearanceChange(s: AppSettings) {
             connecting: watchedChannelStatus?.status === 'connecting',
           }"
         />
+        <component
+          :is="platformIcon(watchedChannel.platform)"
+          class="watched-platform-icon"
+          :style="{ color: platformColor(watchedChannel.platform) }"
+          width="14"
+          height="14"
+        />
         <span class="chat-header-title">{{ watchedChannel.displayName }}</span>
-        <span class="watched-platform" :style="{ color: platformColor(watchedChannel.platform) }">
-          {{ watchedChannel.platform }}
-        </span>
+        <template v-if="watchedStreamStatus?.isLive">
+          <span v-if="watchedStreamStatus.viewerCount !== undefined" class="watched-viewers">
+            {{ formatViewers(watchedStreamStatus.viewerCount) }}
+          </span>
+          <span v-if="watchedStreamStatus.categoryName" class="watched-category">
+            {{ watchedStreamStatus.categoryName }}
+          </span>
+          <span v-if="watchedStreamStatus.title" class="watched-stream-title">
+            {{ watchedStreamStatus.title }}
+          </span>
+        </template>
         <span
           v-if="watchedChannelStatus"
           class="watched-mode"
@@ -556,11 +554,37 @@ function onAppearanceChange(s: AppSettings) {
   background: #f59e0b;
 }
 
-.watched-platform {
+.watched-platform-icon {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.watched-viewers {
   font-size: 11px;
   font-weight: 600;
-  text-transform: capitalize;
-  opacity: 0.8;
+  color: #22c55e;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.watched-category {
+  font-size: 11px;
+  color: var(--c-text-2, #8b8b99);
+  flex-shrink: 0;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watched-stream-title {
+  font-size: 11px;
+  color: var(--c-text-2, #8b8b99);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .watched-mode {

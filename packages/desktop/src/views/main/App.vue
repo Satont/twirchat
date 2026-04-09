@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, triggerRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { usePolling } from './composables/usePolling'
 import { useRpcListener } from './composables/useRpcListener'
 import { useAccountsStore } from './stores/accounts'
 import { useSettingsStore } from './stores/settings'
 import { useChannelStatusStore } from './stores/channelStatus'
+import { useStreamStatusStore } from './stores/streamStatus'
 import PlatformsPanel from './components/PlatformsPanel.vue'
 import WatchedChannelsView from './components/WatchedChannelsView.vue'
 import ChatList from './components/ChatList.vue'
 import EventsFeed from './components/EventsFeed.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ChannelTabBar from './components/ChannelTabBar.vue'
+import type { WatchedLiveStatus } from './components/ChannelTabBar.vue'
 import AddChannelModal from './components/AddChannelModal.vue'
 import TabSelectorModal from './components/TabSelectorModal.vue'
 import type { TabItem } from './components/TabSelectorModal.vue'
@@ -37,6 +38,7 @@ const events = ref<NormalizedEvent[]>([])
 const accountsStore = useAccountsStore()
 const settingsStore = useSettingsStore()
 const channelStatusStore = useChannelStatusStore()
+const streamStatusStore = useStreamStatusStore()
 
 const { accounts } = storeToRefs(accountsStore)
 const { settings } = storeToRefs(settingsStore)
@@ -64,6 +66,16 @@ const tabWatchedChannels = computed(() =>
   watchedChannels.value.filter((ch) => tabChannelIds.value.has(ch.id)),
 )
 
+const watchedLiveStatuses = computed<Map<string, WatchedLiveStatus>>(() => {
+  const map = new Map<string, WatchedLiveStatus>()
+  for (const ch of watchedChannels.value) {
+    if (ch.platform === 'youtube') continue
+    const status = streamStatusStore.getStatus(ch.platform as 'twitch' | 'kick', ch.channelSlug)
+    map.set(ch.id, { isLive: status?.isLive ?? false, viewerCount: status?.viewerCount })
+  }
+  return map
+})
+
 const tabSelectorItems = computed<TabItem[]>(() => {
   const items: TabItem[] = [{ id: 'home', label: 'My channels' }]
   for (const ch of tabWatchedChannels.value) {
@@ -71,7 +83,7 @@ const tabSelectorItems = computed<TabItem[]>(() => {
       id: ch.id,
       label: ch.displayName,
       platform: ch.platform,
-      isLive: watchedLiveStatuses.value.get(ch.id) ?? false,
+      isLive: watchedLiveStatuses.value.get(ch.id)?.isLive ?? false,
     })
   }
   return items
@@ -83,8 +95,6 @@ const activeWatchedTab = ref<string>('home')
 const watchedMessages = ref<Map<string, NormalizedChatMessage[]>>(new Map())
 /** ChannelId → PlatformStatusInfo */
 const watchedStatuses = ref<Map<string, PlatformStatusInfo>>(new Map())
-/** ChannelId → stream is live */
-const watchedLiveStatuses = ref<Map<string, boolean>>(new Map())
 const tabChannelNames = ref<Map<string, string[]>>(new Map())
 const showAddModal = ref(false)
 const showTabSelector = ref(false)
@@ -96,42 +106,6 @@ const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === 'tru
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(sidebarCollapsed.value))
-}
-
-const { start: startLiveStatusPolling } = usePolling(refreshWatchedLiveStatuses, 60_000)
-
-async function refreshWatchedLiveStatuses() {
-  const channels = watchedChannels.value
-  // YouTube is not supported by the channels-status API — skip it
-  const supportedChannels = channels.filter(
-    (ch): ch is WatchedChannel & { platform: 'twitch' | 'kick' } => ch.platform !== 'youtube',
-  )
-  if (supportedChannels.length === 0) {
-    return
-  }
-  try {
-    const result = await rpc.request.getChannelsStatus({
-      channels: supportedChannels.map((ch) => ({
-        channelLogin: ch.channelSlug,
-        platform: ch.platform,
-      })),
-    })
-    if (!result) {
-      return
-    }
-    const map = new Map<string, boolean>(watchedLiveStatuses.value)
-    for (const ch of supportedChannels) {
-      const s = result.channels.find(
-        (r) =>
-          r.platform === ch.platform &&
-          r.channelLogin.toLowerCase() === ch.channelSlug.toLowerCase(),
-      )
-      map.set(ch.id, s?.isLive ?? false)
-    }
-    watchedLiveStatuses.value = map
-  } catch {
-    // Not fatal — live status is best-effort
-  }
 }
 
 const connectedAccountsCount = computed(() => accounts.value.length)
@@ -246,9 +220,10 @@ async function loadInitialData() {
     }
   }
 
-  // Fetch stream live status for watched channels immediately, then poll every 60s
-  void refreshWatchedLiveStatuses()
-  startLiveStatusPolling()
+  streamStatusStore.startPolling(
+    () => accounts.value,
+    () => watchedChannels.value,
+  )
 
   // Attempt migration from legacy layout format
   await attemptMigration()
@@ -463,7 +438,7 @@ async function doAddWatchedChannel(
   if (!watchedChannels.value.find((c: WatchedChannel) => c.id === ch.id)) {
     watchedChannels.value = [...watchedChannels.value, ch]
   }
-  void refreshWatchedLiveStatuses()
+  void streamStatusStore.refresh(accounts.value, watchedChannels.value)
   return ch
 }
 
@@ -480,14 +455,16 @@ async function onAddChannel(platform: 'twitch' | 'kick' | 'youtube', channelSlug
 
 async function onRemoveChannel(id: string) {
   try {
+    const ch = watchedChannels.value.find((c: WatchedChannel) => c.id === id)
     await rpc.request.removeWatchedChannel({ id })
     watchedChannels.value = watchedChannels.value.filter((c: WatchedChannel) => c.id !== id)
     tabChannelIds.value = new Set([...tabChannelIds.value].filter((i) => i !== id))
     await rpc.request.setTabChannelIds?.({ ids: [...tabChannelIds.value] })
     watchedMessages.value = new Map([...watchedMessages.value].filter(([k]) => k !== id))
     watchedStatuses.value = new Map([...watchedStatuses.value].filter(([k]) => k !== id))
-    watchedLiveStatuses.value = new Map([...watchedLiveStatuses.value].filter(([k]) => k !== id))
-    // Layout cleanup is handled by RPC
+    if (ch && ch.platform !== 'youtube') {
+      streamStatusStore.removeChannel(ch.platform as 'twitch' | 'kick', ch.channelSlug)
+    }
   } catch (error) {
     console.error('[App] removeWatchedChannel failed:', error)
   }
