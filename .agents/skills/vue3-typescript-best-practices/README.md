@@ -7,6 +7,7 @@ This skill provides a comprehensive, production-quality reference for writing Vu
 **SKILL.md** (1,518 lines, ~34 KB) covers:
 
 ### 1. Composables
+
 - When to extract (reusable, stateful, side-effect heavy)
 - Naming convention (`use*`)
 - Return patterns (refs vs reactive)
@@ -15,6 +16,7 @@ This skill provides a comprehensive, production-quality reference for writing Vu
 - TypeScript patterns (generics, return types)
 
 ### 2. Pinia State Management
+
 - Store definition (Option vs Setup stores)
 - TypeScript store typing
 - Actions (sync, async, error handling)
@@ -24,6 +26,7 @@ This skill provides a comprehensive, production-quality reference for writing Vu
 - Composable stores (using other stores)
 
 ### 3. Component Design
+
 - `<script setup>` syntax
 - Props with TypeScript interfaces
 - Emits with strong typing
@@ -34,6 +37,7 @@ This skill provides a comprehensive, production-quality reference for writing Vu
 - Full component examples
 
 ### 4. Avoiding `any`
+
 - Props typing (never any)
 - Event handler typing (MouseEvent, KeyboardEvent, etc.)
 - Template refs (HTMLElement | null)
@@ -42,6 +46,7 @@ This skill provides a comprehensive, production-quality reference for writing Vu
 - Emits typing (with payloads)
 
 ### 5. Component Composition
+
 - Named slots
 - Scoped slots
 - Renderless components
@@ -49,6 +54,7 @@ This skill provides a comprehensive, production-quality reference for writing Vu
 - Advanced v-model with modifiers
 
 ### 6. Reactivity System
+
 - ref vs reactive comparison
 - toRef / toRefs (extract reactivity)
 - watch vs watchEffect (explicit vs automatic)
@@ -57,16 +63,19 @@ This skill provides a comprehensive, production-quality reference for writing Vu
 - Utility functions (unref, isRef, isReactive, isReadonly)
 
 ### 7. Advanced Patterns
+
 - VueUse common composables (useLocalStorage, useAsyncState, useEventListener, useDebounceFn)
 - Error handling composables
 - Async state in components
 - Status management (idle/loading/success/error)
 
 ### 8. TypeScript Configuration
+
 - Recommended tsconfig.json with strict mode enabled
 - All compiler options explained
 
 ### 9-10. Checklists & Resources
+
 - Component shipping checklist (12 items)
 - Composable audit checklist (11 items)
 - Links to official docs (Vue 3, Pinia, VueUse, Vue Language Tools)
@@ -82,6 +91,7 @@ load_skill("vue3-typescript-best-practices")
 ```
 
 Then reference patterns and examples from SKILL.md when implementing:
+
 - New Vue components
 - Composables for state/logic
 - Pinia stores
@@ -108,6 +118,7 @@ Then reference patterns and examples from SKILL.md when implementing:
 ## Target Audience
 
 Frontend developers building:
+
 - Electrobun + Vue 3 desktop applications
 - TypeScript-first codebases
 - Production-quality components with best practices
@@ -122,7 +133,6 @@ Frontend developers building:
 - Community patterns from VueUse documented
 - Focused on desktop app context (Electrobun + Vite)
 
-
 ## Integration with Project
 
 This skill is designed specifically for **TwirChat** desktop application development:
@@ -136,6 +146,7 @@ This skill is designed specifically for **TwirChat** desktop application develop
 ### Example Application
 
 When building a chat message component for TwirChat:
+
 1. Load this skill
 2. Check section 3 (Component Design) for prop/emit patterns
 3. Reference section 4 (Avoiding `any`) for event typing
@@ -148,4 +159,3 @@ When building a chat message component for TwirChat:
 - `7tv-events-api` — 7TV EventAPI v3 implementation reference
 - (Future) Backend API patterns — Bun REST/WebSocket
 - (Future) Electron/Electrobun best practices
-

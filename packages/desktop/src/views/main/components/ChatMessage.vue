@@ -71,6 +71,8 @@ function formatTime(ts: Date): string {
   return new Date(ts).toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
   })
 }
 
@@ -92,7 +94,6 @@ function onMsgClick(e: MouseEvent): void {
 }
 
 // Copy functionality
-const showCopyButton = ref(false)
 const copySuccess = ref(false)
 
 function copyMessage(): void {
@@ -102,6 +103,22 @@ function copyMessage(): void {
       copySuccess.value = false
     }, 1500)
   })
+}
+
+/**
+ * SVG badges from Kick/7TV embed linearGradient/clipPath with global IDs like
+ * "paint0_linear_817_50667". When multiple messages in the virtual list render
+ * the same badge, duplicate IDs cause browsers to reuse the first definition,
+ * making subsequent badges invisible. We scope each SVG by replacing those IDs
+ * with a unique prefix tied to the message+badge composite key.
+ */
+function scopeBadgeSvg(svgString: string, badgeId: string): string {
+  const scope = `${props.message.id}-${badgeId}`.replace(/[^a-zA-Z0-9-]/g, '_')
+  // Replace id="..." and url(#...) and xlink:href="#..." occurrences
+  return svgString
+    .replace(/\bid="([^"]+)"/g, `id="${scope}_$1"`)
+    .replace(/url\(#([^)]+)\)/g, `url(#${scope}_$1)`)
+    .replace(/xlink:href="#([^"]+)"/g, `xlink:href="#${scope}_$1"`)
 }
 </script>
 
@@ -147,8 +164,6 @@ function copyMessage(): void {
     :class="[`platform-${message.platform}`, { 'self-ping': isSelfPing }]"
     :style="{ '--font-size': `${props.fontSize ?? 14}px`, ...selfPingStyle }"
     @click="onMsgClick"
-    @mouseenter="showCopyButton = true"
-    @mouseleave="showCopyButton = false"
   >
     <span
       v-if="props.showPlatformColorStripe !== false"
@@ -156,7 +171,7 @@ function copyMessage(): void {
       :style="{ background: platformColor(message.platform) }"
     />
 
-    <!-- Reply Preview -->
+    <!-- Reply preview: sits above the message row as its own line -->
     <div v-if="message.reply" class="reply-preview compact-reply">
       <span class="reply-icon">↩</span>
       <span class="reply-author">{{ message.reply.parentAuthor.displayName }}</span
@@ -168,129 +183,142 @@ function copyMessage(): void {
       }}</span>
     </div>
 
-    <!-- Platform icon -->
-    <span v-if="props.showPlatformIcon" class="platform-icon" :title="message.platform">
-      <component
-        :is="
-          message.platform === 'twitch'
-            ? TwitchIcon
-            : message.platform === 'youtube'
-              ? YoutubeIcon
-              : KickIcon
-        "
-        :style="{ color: platformColor(message.platform) }"
-        width="12"
-        height="12"
-      />
-    </span>
+    <!--
+      Message row: inline content, wraps naturally.
+      Buttons live outside this row as absolute children of .msg-compact.
+    -->
+    <div class="msg-compact-row">
+      <!-- Timestamp -->
+      <span v-if="props.showTimestamp" class="timestamp compact-time">{{
+        formatTime(message.timestamp)
+      }}</span>
 
-    <!-- Badges inline -->
-    <span v-if="props.showBadges !== false && message.author.badges.length" class="badges">
+      <!-- Platform icon -->
       <span
-        v-for="badge in message.author.badges"
-        :key="badge.id"
-        class="badge"
-        :title="badge.type"
+        v-if="props.showPlatformIcon"
+        class="platform-icon compact-platform-icon"
+        :title="message.platform"
+      >
+        <component
+          :is="
+            message.platform === 'twitch'
+              ? TwitchIcon
+              : message.platform === 'youtube'
+                ? YoutubeIcon
+                : KickIcon
+          "
+          :style="{ color: platformColor(message.platform) }"
+          width="12"
+          height="12"
+        />
+      </span>
+
+      <!--
+        Badges, author, colon and text are all inline.
+        Wrapping: second line starts at the left edge of the container
+        (no text-indent), which is the standard Twitch behaviour.
+      -->
+      <span
+        v-if="props.showBadges !== false && message.author.badges.length"
+        class="badges compact-badges"
       >
         <span
-          v-if="badge.imageUrl && badge.imageUrl.startsWith('<svg')"
-          class="badge-svg"
-          v-html="badge.imageUrl"
-        />
-        <img
-          v-else-if="badge.imageUrl && !brokenBadges.has(badge.id)"
-          :src="badge.imageUrl"
-          :alt="badge.text"
-          @error="onBadgeError(badge.id)"
-        />
-        <span v-else class="badge-text">{{ badge.text }}</span>
-      </span>
-    </span>
-
-    <span class="author" :style="message.author.color ? { color: message.author.color } : {}">{{
-      message.author.displayName
-    }}</span
-    ><span class="compact-sep">:</span
-    ><span class="msg-text" :class="{ italic: message.type === 'action' }">
-      <template v-for="(part, index) in messageParts" :key="index">
-        <EmoteTooltip v-if="part.type === 'emote' && part.emote" :emote="part.emote">
-          <img
-            class="emote"
-            :src="part.emote.imageUrl"
-            :alt="part.emote.name"
-            :title="part.emote.name"
+          v-for="badge in message.author.badges"
+          :key="badge.id"
+          class="badge"
+          :title="badge.type"
+        >
+          <span
+            v-if="badge.imageUrl && badge.imageUrl.startsWith('<svg')"
+            class="badge-svg"
+            v-html="scopeBadgeSvg(badge.imageUrl, badge.id)"
           />
-        </EmoteTooltip>
-        <img
-          v-else-if="part.type === 'emote' && part.emote"
-          class="emote"
-          :src="part.emote.imageUrl"
-          :alt="part.emote.name"
-          :title="part.emote.name"
-        />
-        <span v-else-if="part.type === 'text' && part.content" v-html="processText(part.content)" />
-      </template>
-    </span>
-    <span v-if="props.showTimestamp" class="timestamp compact-time">{{
-      formatTime(message.timestamp)
-    }}</span>
+          <img
+            v-else-if="badge.imageUrl && !brokenBadges.has(badge.id)"
+            :src="badge.imageUrl"
+            :alt="badge.text"
+            @error="onBadgeError(badge.id)"
+          />
+          <span v-else class="badge-text">{{ badge.text }}</span>
+        </span></span
+      ><span class="author" :style="message.author.color ? { color: message.author.color } : {}">{{
+        message.author.displayName
+      }}</span
+      ><span class="compact-sep">: </span
+      ><span class="msg-text" :class="{ italic: message.type === 'action' }">
+        <template v-for="(part, index) in messageParts" :key="index">
+          <EmoteTooltip v-if="part.type === 'emote' && part.emote" :emote="part.emote">
+            <img
+              class="emote"
+              :src="part.emote.imageUrl"
+              :alt="part.emote.name"
+              :title="part.emote.name"
+            />
+          </EmoteTooltip>
+          <span
+            v-else-if="part.type === 'text' && part.content"
+            v-html="processText(part.content)"
+          />
+        </template>
+      </span>
+    </div>
 
-    <!-- Reply button -->
-    <button v-if="showCopyButton" class="reply-btn" @click.stop="onReply" title="Reply to message">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <polyline points="9 17 4 12 9 7"></polyline>
-        <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
-      </svg>
-    </button>
+    <div style="position: absolute; right: 0; top: 0">
+      <button class="reply-btn compact-reply-btn" title="Reply to message" @click.stop="onReply">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="9 17 4 12 9 7"></polyline>
+          <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
+        </svg>
+      </button>
 
-    <!-- Copy button -->
-    <button
-      v-if="showCopyButton"
-      class="copy-btn"
-      :class="{ success: copySuccess }"
-      @click.stop="copyMessage"
-      title="Copy message"
-    >
-      <svg
-        v-if="!copySuccess"
-        xmlns="http://www.w3.org/2000/svg"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+      <!-- Copy button: always in DOM, absolute on .msg-compact, opacity:0 → 1 on hover -->
+      <button
+        class="copy-btn compact-copy-btn"
+        :class="{ success: copySuccess }"
+        title="Copy message"
+        @click.stop="copyMessage"
       >
-        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-      </svg>
-      <svg
-        v-else
-        xmlns="http://www.w3.org/2000/svg"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-    </button>
+        <svg
+          v-if="!copySuccess"
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <svg
+          v-else
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </button>
+    </div>
   </div>
 
   <div
@@ -303,8 +331,6 @@ function copyMessage(): void {
     ]"
     :style="{ '--font-size': `${props.fontSize ?? 14}px`, ...selfPingStyle }"
     @click="onMsgClick"
-    @mouseenter="showCopyButton = true"
-    @mouseleave="showCopyButton = false"
   >
     <!-- Platform colour stripe -->
     <span
@@ -414,8 +440,8 @@ function copyMessage(): void {
       </span>
     </div>
 
-    <!-- Reply button -->
-    <button v-if="showCopyButton" class="reply-btn" @click.stop="onReply" title="Reply to message">
+    <!-- Reply button: always in DOM, shown via CSS hover on .msg -->
+    <button class="reply-btn" title="Reply to message" @click.stop="onReply">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="14"
@@ -432,13 +458,12 @@ function copyMessage(): void {
       </svg>
     </button>
 
-    <!-- Copy button -->
+    <!-- Copy button: always in DOM, shown via CSS hover on .msg -->
     <button
-      v-if="showCopyButton"
       class="copy-btn"
       :class="{ success: copySuccess }"
-      @click.stop="copyMessage"
       title="Copy message"
+      @click.stop="copyMessage"
     >
       <svg
         v-if="!copySuccess"
@@ -479,7 +504,6 @@ function copyMessage(): void {
   align-items: flex-start;
   gap: 10px;
   padding: 6px 14px;
-  padding-right: 64px;
   font-size: var(--font-size, 14px);
   line-height: 1.45;
   word-break: break-word;
@@ -526,8 +550,10 @@ function copyMessage(): void {
 }
 
 .compact-time {
-  margin-left: auto;
   flex-shrink: 0;
+  font-size: 10px;
+  color: var(--c-text-2, #8b8b99);
+  opacity: 0.8;
 }
 
 .avatar-wrap {
@@ -735,7 +761,8 @@ function copyMessage(): void {
   justify-content: center;
 }
 
-.msg:hover .copy-btn {
+.msg:hover .copy-btn,
+.msg-compact:hover .copy-btn {
   opacity: 1;
 }
 
@@ -753,15 +780,12 @@ function copyMessage(): void {
 /* ── Compact (single-line) ──────────────────────────────── */
 .msg-compact {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 14px;
-  padding-right: 64px;
+  flex-direction: column;
+  padding: 2px 14px;
   font-size: var(--font-size, 14px);
   line-height: 1.5;
-  word-break: break-word;
-  flex-wrap: wrap;
   position: relative;
+  gap: 2px;
 }
 .msg-compact:hover {
   background: rgba(255, 255, 255, 0.025);
@@ -769,53 +793,82 @@ function copyMessage(): void {
 .msg-compact .platform-stripe {
   position: absolute;
   left: 0;
-  top: 3px;
-  bottom: 3px;
+  top: 2px;
+  bottom: 2px;
   width: 2px;
   border-radius: 2px;
   opacity: 0.7;
 }
+
+/* Reply preview row — sits above the message row */
+.compact-reply {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+/*
+  The message row uses display:block so all inline children wrap naturally.
+  This is the key to Twitch-style line wrapping: when text overflows, the
+  next line starts at the left edge of the container — not under the author.
+*/
+.msg-compact-row {
+  display: block;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.5;
+  position: relative;
+}
+
+/* Compact-specific button overrides: position relative to the text row */
+.compact-reply-btn {
+  top: 50%;
+  bottom: auto;
+  right: 30px;
+  transform: translateY(-50%);
+}
+
+.compact-copy-btn {
+  top: 50%;
+  bottom: auto;
+  right: 2px;
+  transform: translateY(-50%);
+}
+
+.msg-compact .compact-platform-icon {
+  margin-right: 3px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.msg-compact .compact-time {
+  margin-right: 4px;
+  margin-left: 0;
+}
+
 .msg-compact .author {
   font-weight: 700;
   font-size: 0.9em;
-  flex-shrink: 0;
 }
+
 .compact-sep {
   color: var(--c-text-2, #8b8b99);
-  flex-shrink: 0;
-  margin-right: 1px;
 }
+
 .msg-compact .msg-text {
-  flex: 1;
-  min-width: 0;
-  margin-left: 4px;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
-.msg-compact .badges {
-  display: flex;
+
+/* Badges in compact mode: inline-flex so they sit on the text baseline */
+.compact-badges {
+  display: inline-flex;
   align-items: center;
   gap: 3px;
-  flex-shrink: 0;
-  align-self: center;
   line-height: 1;
-}
-
-.compact-reply {
-  order: -1;
-  width: 100%;
-}
-
-.msg-compact .copy-btn {
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 0;
-}
-
-.msg-compact .reply-btn {
-  right: 34px;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 0;
+  vertical-align: middle;
+  margin-right: 3px;
 }
 
 /* ── System Messages ────────────────────────────────────── */

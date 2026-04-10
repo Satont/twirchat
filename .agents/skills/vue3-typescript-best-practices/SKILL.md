@@ -21,12 +21,13 @@ These rules are **non-negotiable** for TwirChat frontend code.
 
 The desktop app has two distinct runtime environments. **Never cross them.**
 
-| Environment | Location | Access |
-|---|---|---|
-| **Main process** | `src/bun/` | Full Bun/Node.js, SQLite, file system |
-| **Webview** | `src/views/` | Browser context only — NO Bun APIs |
+| Environment      | Location     | Access                                |
+| ---------------- | ------------ | ------------------------------------- |
+| **Main process** | `src/bun/`   | Full Bun/Node.js, SQLite, file system |
+| **Webview**      | `src/views/` | Browser context only — NO Bun APIs    |
 
 **Forbidden in `src/views/`:**
+
 - `bun:sqlite` — use RPC `get*` / `set*` methods instead
 - `node:fs` — use RPC for file operations
 - Direct imports from `src/store/` — SQLite runs on Bun side only
@@ -57,7 +58,9 @@ const accounts = await rpc.request.getAccounts()
 rpc.send.someMessage({ payload: 'value' })
 
 // Listen for messages pushed FROM bun side
-rpc.on.chat_message((msg) => { /* ... */ })
+rpc.on.chat_message((msg) => {
+  /* ... */
+})
 ```
 
 **Always wrap RPC calls in composables** — never call `rpc.request.*` directly in component setup.
@@ -75,34 +78,39 @@ The overlay (`src/views/overlay/`) has **no Electrobun RPC** — it uses a plain
 ### When to Extract a Composable
 
 Extract when logic is:
+
 - **Reusable** across 2+ components
 - **Stateful** (maintains internal state over time)
 - **Side-effect heavy** (subscriptions, timers, cleanup required)
 - **Complex** enough to warrant naming
 
 ❌ **Don't extract**:
+
 ```typescript
 // Single-use logic, just put it in the component
-const handleClick = () => { count.value++ }
+const handleClick = () => {
+  count.value++
+}
 ```
 
 ✅ **Do extract**:
+
 ```typescript
 // Reusable, stateful, has cleanup
 export function useFormValidation(initialData: T) {
   const data = ref(initialData)
   const errors = reactive<Record<string, string>>({})
   const isDirty = computed(() => !isEqual(data.value, initialData))
-  
+
   const reset = () => {
     data.value = initialData
     errors.value = {}
   }
-  
+
   onUnmounted(() => {
     // cleanup
   })
-  
+
   return { data, errors, isDirty, reset }
 }
 ```
@@ -110,6 +118,7 @@ export function useFormValidation(initialData: T) {
 ### Naming Convention: `use*`
 
 All composables must start with `use`:
+
 - ✅ `useLocalStorage(key)`
 - ✅ `useAsyncData(url)`
 - ✅ `useFormValidation(schema)`
@@ -119,31 +128,36 @@ All composables must start with `use`:
 ### Return Patterns
 
 **Pattern 1: Direct refs/computed** (preferred)
+
 ```typescript
 export function useCounter() {
   const count = ref(0)
   const doubled = computed(() => count.value * 2)
-  const increment = () => { count.value++ }
-  
+  const increment = () => {
+    count.value++
+  }
+
   return { count, doubled, increment }
 }
 ```
 
 **Pattern 2: Object with reactive** (use sparingly)
+
 ```typescript
 export function useFormState(initial: T) {
   const state = reactive({ ...initial, loading: false })
-  
+
   // BUT: destructure returns break reactivity
   // const { name, email } = useFormState() // ❌ WRONG
   // Use: const formState = useFormState(); formState.name // ✅ CORRECT
   // Or: const { name, email } = toRefs(useFormState()) // ✅ CORRECT
-  
+
   return state
 }
 ```
 
 **Pattern 3: Never mix** `reactive()` **with destructuring**
+
 ```typescript
 // ❌ WRONG: breaks reactivity
 export function useCounter() {
@@ -161,6 +175,7 @@ export function useCounter() {
 ### Reactivity Rules Inside Composables
 
 **Rule 1**: `ref()` for primitives, `reactive()` for objects
+
 ```typescript
 // ✅ CORRECT
 const count = ref(0) // primitive → ref
@@ -172,13 +187,14 @@ const user = ref({ name: '', age: 0 }) // object in ref (awkward access)
 ```
 
 **Rule 2**: Always use `toRefs()` when returning reactive objects
+
 ```typescript
 export function useUser() {
   const user = reactive({ name: '', email: '' })
-  
+
   // ❌ WRONG: caller destructures and loses reactivity
   return user
-  
+
   // ✅ CORRECT: caller can destructure safely
   return toRefs(user)
 }
@@ -188,14 +204,15 @@ const { name, email } = useUser() // Reactivity preserved
 ```
 
 **Rule 3**: Use `readonly()` for exposed state you don't want modified
+
 ```typescript
 export function useAppConfig() {
   const config = reactive({ apiUrl: 'https://...', timeout: 5000 })
-  
+
   const updateConfig = (newConfig: Partial<typeof config>) => {
     Object.assign(config, newConfig)
   }
-  
+
   return { config: readonly(config), updateConfig }
 }
 ```
@@ -205,16 +222,16 @@ export function useAppConfig() {
 ```typescript
 export function useEventListener(target: string, event: string, handler: Function) {
   const el = ref<HTMLElement | null>(null)
-  
+
   onMounted(() => {
     el.value = document.querySelector(target)
     el.value?.addEventListener(event, handler as EventListener)
   })
-  
+
   onUnmounted(() => {
     el.value?.removeEventListener(event, handler as EventListener)
   })
-  
+
   return { el }
 }
 ```
@@ -222,12 +239,13 @@ export function useEventListener(target: string, event: string, handler: Functio
 ### Composable TypeScript Patterns
 
 **Generic composables**:
+
 ```typescript
 export function useAsync<T>(fn: () => Promise<T>) {
   const data = ref<T | null>(null)
   const loading = ref(false)
   const error = ref<Error | null>(null)
-  
+
   const execute = async () => {
     loading.value = true
     error.value = null
@@ -239,13 +257,13 @@ export function useAsync<T>(fn: () => Promise<T>) {
       loading.value = false
     }
   }
-  
+
   return { data: readonly(data), loading: readonly(loading), error: readonly(error), execute }
 }
 
 // Usage
 const { data, loading, error, execute } = useAsync(async () => {
-  return await fetch('/api/users').then(r => r.json()) as User[]
+  return (await fetch('/api/users').then((r) => r.json())) as User[]
 })
 ```
 
@@ -263,22 +281,22 @@ import { ref, computed } from 'vue'
 export const useCounterStore = defineStore('counter', {
   state: () => ({
     count: 0,
-    name: 'Counter'
+    name: 'Counter',
   }),
-  
+
   getters: {
     doubled: (state) => state.count * 2,
-    description: (state) => `${state.name}: ${state.count}`
+    description: (state) => `${state.name}: ${state.count}`,
   },
-  
+
   actions: {
     increment() {
       this.count++
     },
     setCount(val: number) {
       this.count = val
-    }
-  }
+    },
+  },
 })
 ```
 
@@ -291,18 +309,18 @@ import { ref, computed } from 'vue'
 export const useCounterStore = defineStore('counter', () => {
   const count = ref(0)
   const name = ref('Counter')
-  
+
   const doubled = computed(() => count.value * 2)
   const description = computed(() => `${name.value}: ${count.value}`)
-  
+
   function increment() {
     count.value++
   }
-  
+
   function setCount(val: number) {
     count.value = val
   }
-  
+
   return { count, name, doubled, description, increment, setCount }
 })
 ```
@@ -331,9 +349,9 @@ export const useUserStore = defineStore('user', () => {
   const currentUser = ref<User | null>(null)
   const loading = ref(false)
   const error = ref<Error | null>(null)
-  
-  const getUserById = computed(() => (id: string) => users.value.find(u => u.id === id))
-  
+
+  const getUserById = computed(() => (id: string) => users.value.find((u) => u.id === id))
+
   async function fetchUsers() {
     loading.value = true
     error.value = null
@@ -346,14 +364,19 @@ export const useUserStore = defineStore('user', () => {
       loading.value = false
     }
   }
-  
+
   function setCurrentUser(user: User | null) {
     currentUser.value = user
   }
-  
-  return { 
-    users, currentUser, loading, error, 
-    getUserById, fetchUsers, setCurrentUser 
+
+  return {
+    users,
+    currentUser,
+    loading,
+    error,
+    getUserById,
+    fetchUsers,
+    setCurrentUser,
   }
 })
 ```
@@ -365,12 +388,12 @@ export const useAccountStore = defineStore('account', () => {
   const account = ref<Account | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  
+
   // Simple action (synchronous)
   function setAccount(acc: Account) {
     account.value = acc
   }
-  
+
   // Async action with error handling
   async function login(email: string, password: string) {
     loading.value = true
@@ -378,7 +401,7 @@ export const useAccountStore = defineStore('account', () => {
     try {
       const response = await fetch('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
       })
       if (!response.ok) throw new Error(response.statusText)
       account.value = await response.json()
@@ -388,7 +411,7 @@ export const useAccountStore = defineStore('account', () => {
       loading.value = false
     }
   }
-  
+
   // Action that uses other actions
   async function logout() {
     try {
@@ -398,7 +421,7 @@ export const useAccountStore = defineStore('account', () => {
       error.value = (e as Error).message
     }
   }
-  
+
   return { account, loading, error, setAccount, login, logout }
 })
 ```
@@ -408,15 +431,15 @@ export const useAccountStore = defineStore('account', () => {
 ```typescript
 export const useProductStore = defineStore('product', () => {
   const products = ref<Product[]>([])
-  
+
   // Getter that returns a function
   const getProductsByCategory = computed(() => (category: string) => {
-    return products.value.filter(p => p.category === category)
+    return products.value.filter((p) => p.category === category)
   })
-  
+
   // Usage
   const electronics = getProductsByCategory.value('electronics')
-  
+
   return { products, getProductsByCategory }
 })
 ```
@@ -427,11 +450,11 @@ export const useProductStore = defineStore('product', () => {
 export const useSettingsStore = defineStore('settings', () => {
   const theme = ref<'light' | 'dark'>('light')
   const language = ref('en')
-  
+
   function setTheme(t: typeof theme.value) {
     theme.value = t
   }
-  
+
   return { theme, language, setTheme }
 })
 
@@ -456,18 +479,18 @@ import { storeToRefs } from 'pinia'
 export default {
   setup() {
     const counterStore = useCounterStore()
-    
+
     // ❌ WRONG: destructuring breaks reactivity
     // const { count, doubled } = counterStore
-    
+
     // ✅ CORRECT: use storeToRefs for destructuring
     const { count, doubled } = storeToRefs(counterStore)
-    
+
     // ✅ CORRECT: direct access (no destructuring)
     // counterStore.count, counterStore.doubled
-    
+
     return { count, doubled }
-  }
+  },
 }
 ```
 
@@ -477,18 +500,18 @@ export default {
 export const useCartStore = defineStore('cart', () => {
   // Use other stores
   const productStore = useProductStore()
-  
+
   const items = ref<CartItem[]>([])
-  
+
   const total = computed(() => {
     return items.value.reduce((sum, item) => {
       const product = productStore.getProductsByCategory.value(item.id)
       return sum + (product?.price ?? 0) * item.quantity
     }, 0)
   })
-  
+
   async function addItem(productId: string, quantity: number) {
-    const existing = items.value.find(i => i.id === productId)
+    const existing = items.value.find((i) => i.id === productId)
     if (existing) {
       existing.quantity += quantity
     } else {
@@ -497,7 +520,7 @@ export const useCartStore = defineStore('cart', () => {
     // Trigger action from another store
     await productStore.fetchProducts()
   }
-  
+
   return { items, total, addItem }
 })
 ```
@@ -523,7 +546,7 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   label: 'Count',
-  initialCount: 0
+  initialCount: 0,
 })
 
 const emit = defineEmits<{
@@ -555,7 +578,7 @@ const props = withDefaults(defineProps<Props>(), {
   placeholder: 'Enter text...',
   disabled: false,
   maxLength: 255,
-  type: 'text'
+  type: 'text',
 })
 
 // Props are read-only
@@ -576,8 +599,8 @@ defineProps<Props>()
 const emit = defineEmits<{
   // Event name → payload tuple
   'update:value': [newValue: string]
-  'submit': [value: string, timestamp: number]
-  'error': [error: Error]
+  submit: [value: string, timestamp: number]
+  error: [error: Error]
 }>()
 
 function updateValue(newValue: string) {
@@ -645,6 +668,7 @@ const inputRef = ref()
 ### Computed vs Methods
 
 **Use `computed` for**:
+
 - Derived state that depends on reactive data
 - Expensive calculations (Vue caches automatically)
 - Properties accessed multiple times in template
@@ -654,13 +678,18 @@ const fullName = computed(() => `${firstName.value} ${lastName.value}`)
 ```
 
 **Use `methods` for**:
+
 - Event handlers
 - Side effects
 - Actions unrelated to template rendering
 
 ```typescript
-function handleClick() { /* do something */ }
-function logMessage() { /* logging */ }
+function handleClick() {
+  /* do something */
+}
+function logMessage() {
+  /* logging */
+}
 ```
 
 ### Conditional Rendering with TypeScript
@@ -696,22 +725,22 @@ function selectUser(user: User) {
 ```vue
 <template>
   <form @submit.prevent="handleSubmit" class="form">
-    <input 
-      v-model="formData.email" 
-      type="email" 
+    <input
+      v-model="formData.email"
+      type="email"
       placeholder="Email"
       @blur="validateField('email')"
     />
     <span v-if="errors.email" class="error">{{ errors.email }}</span>
-    
-    <input 
-      v-model="formData.password" 
-      type="password" 
+
+    <input
+      v-model="formData.password"
+      type="password"
       placeholder="Password"
       @blur="validateField('password')"
     />
     <span v-if="errors.password" class="error">{{ errors.password }}</span>
-    
+
     <button :disabled="loading">{{ loading ? 'Logging in...' : 'Login' }}</button>
   </form>
 </template>
@@ -743,15 +772,15 @@ function validateField(field: keyof LoginForm) {
 
 async function handleSubmit() {
   // Validate all
-  Object.keys(formData).forEach(field => validateField(field as keyof LoginForm))
-  
-  if (Object.values(errors).some(e => e)) return
-  
+  Object.keys(formData).forEach((field) => validateField(field as keyof LoginForm))
+
+  if (Object.values(errors).some((e) => e)) return
+
   loading.value = true
   try {
     const response = await fetch('/auth/login', {
       method: 'POST',
-      body: JSON.stringify(formData)
+      body: JSON.stringify(formData),
     })
     const user = await response.json()
     emit('login-success', user)
@@ -808,7 +837,9 @@ function handleInputChange(e: Event) {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Enter') { /* ... */ }
+  if (e.key === 'Enter') {
+    /* ... */
+  }
 }
 </script>
 
@@ -848,14 +879,14 @@ export function useForm(initial: any) {
 export function useForm<T extends Record<string, any>>(initial: T) {
   const data = ref<T>(initial)
   const errors = ref<Record<keyof T, string>>({} as any)
-  
+
   const reset = () => {
     data.value = structuredClone(initial)
-    Object.keys(errors.value).forEach(key => {
+    Object.keys(errors.value).forEach((key) => {
       errors.value[key as keyof T] = ''
     })
   }
-  
+
   return { data, errors, reset }
 }
 ```
@@ -865,7 +896,9 @@ export function useForm<T extends Record<string, any>>(initial: T) {
 ```typescript
 // ❌ WRONG
 const userKey = Symbol()
-provide(userKey, { /* any user object */ })
+provide(userKey, {
+  /* any user object */
+})
 const user = inject(userKey) // type is `any`
 
 // ✅ CORRECT: Use strong typing
@@ -911,6 +944,7 @@ emit('error', new Error('Something went wrong'))
 ### Slots Basics
 
 **Named slots**:
+
 ```vue
 <!-- Parent -->
 <template>
@@ -934,7 +968,8 @@ emit('error', new Error('Something went wrong'))
       <slot name="header"></slot>
     </div>
     <div class="card-body">
-      <slot></slot> <!-- default slot -->
+      <slot></slot>
+      <!-- default slot -->
     </div>
     <div class="card-footer">
       <slot name="footer"></slot>
@@ -964,12 +999,7 @@ defineProps<{ users: User[] }>()
 
 <template>
   <div>
-    <slot 
-      v-for="(user, index) in users" 
-      :key="index"
-      :user="user"
-      :index="index"
-    ></slot>
+    <slot v-for="(user, index) in users" :key="index" :user="user" :index="index"></slot>
   </div>
 </template>
 ```
@@ -1041,7 +1071,7 @@ const dialogKey = Symbol() as InjectionKey<DialogContext>
 export function useDialogProvider() {
   const isOpen = ref(false)
   const title = ref('')
-  
+
   const context: DialogContext = {
     isOpen,
     title,
@@ -1053,7 +1083,7 @@ export function useDialogProvider() {
       isOpen.value = false
     }
   }
-  
+
   provide(dialogKey, context)
   return context
 }
@@ -1125,15 +1155,15 @@ const emit = defineEmits<{
 
 function updateValue(e: Event) {
   let value: any = (e.target as HTMLInputElement).value
-  
+
   if (props.modelModifiers?.trim) {
     value = value.trim()
   }
-  
+
   if (props.modelModifiers?.number) {
     value = parseInt(value, 10) || value
   }
-  
+
   emit('update:modelValue', value)
 }
 </script>
@@ -1189,6 +1219,7 @@ const name = toRef(user, 'name')
 ### watch vs watchEffect
 
 **watch: explicit dependency tracking**
+
 ```typescript
 const count = ref(0)
 const multiplied = ref(0)
@@ -1206,18 +1237,23 @@ watch([count, multiplied], ([c, m], [oldC, oldM]) => {
 // Watch object property with deep
 watch(
   () => user.profile.name,
-  (name) => { console.log(name) }
+  (name) => {
+    console.log(name)
+  },
 )
 
 // Watch with options
 watch(
   count,
-  (newVal) => { console.log(newVal) },
-  { immediate: true, deep: true, flush: 'post' }
+  (newVal) => {
+    console.log(newVal)
+  },
+  { immediate: true, deep: true, flush: 'post' },
 )
 ```
 
 **watchEffect: automatic dependency collection**
+
 ```typescript
 const count = ref(0)
 const multiplied = ref(0)
@@ -1267,7 +1303,7 @@ const fullName = computed({
     const [first, last] = value.split(' ')
     firstName.value = first
     lastName.value = last
-  }
+  },
 })
 ```
 
@@ -1292,6 +1328,7 @@ isReadonly(readonly(user)) // true
 ### VueUse Common Composables
 
 **useLocalStorage**:
+
 ```typescript
 import { useLocalStorage } from '@vueuse/core'
 
@@ -1303,12 +1340,13 @@ theme.value = 'dark' // Auto-syncs to localStorage
 const user = useLocalStorage('user', null, {
   serializer: {
     read: (v) => JSON.parse(v ?? 'null'),
-    write: (v) => JSON.stringify(v)
-  }
+    write: (v) => JSON.stringify(v),
+  },
 })
 ```
 
 **useAsyncState**:
+
 ```typescript
 import { useAsyncState } from '@vueuse/core'
 
@@ -1330,6 +1368,7 @@ return <div>{state.value.map(...)}</div>
 ```
 
 **useEventListener**:
+
 ```typescript
 import { useEventListener } from '@vueuse/core'
 
@@ -1348,13 +1387,14 @@ useEventListener(el, 'scroll', () => {
 ```
 
 **useDebounceFn**:
+
 ```typescript
 import { useDebounceFn } from '@vueuse/core'
 
 const search = ref('')
 
 const debouncedSearch = useDebounceFn(async (query: string) => {
-  const results = await fetch(`/api/search?q=${query}`).then(r => r.json())
+  const results = await fetch(`/api/search?q=${query}`).then((r) => r.json())
   return results
 }, 300)
 
@@ -1366,13 +1406,11 @@ watch(search, (query) => {
 ### Error Handling Composable
 
 ```typescript
-export function useAsyncTask<T>(
-  fn: () => Promise<T>
-) {
+export function useAsyncTask<T>(fn: () => Promise<T>) {
   const data = ref<T | null>(null)
   const loading = ref(false)
   const error = ref<Error | null>(null)
-  
+
   async function execute() {
     loading.value = true
     error.value = null
@@ -1384,16 +1422,16 @@ export function useAsyncTask<T>(
       loading.value = false
     }
   }
-  
+
   onMounted(() => {
     execute()
   })
-  
+
   return {
     data: readonly(data),
     loading: readonly(loading),
     error: readonly(error),
-    retry: execute
+    retry: execute,
   }
 }
 
@@ -1420,21 +1458,20 @@ const error = ref<string | null>(null)
 async function handleLogin() {
   status.value = 'loading'
   error.value = null
-  
+
   try {
     const response = await fetch('/auth/login', {
       method: 'POST',
-      body: JSON.stringify(formData)
+      body: JSON.stringify(formData),
     })
-    
+
     if (!response.ok) {
       throw new Error(`Login failed: ${response.statusText}`)
     }
-    
+
     const user = await response.json()
     status.value = 'success'
     // Redirect or emit success
-    
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Unknown error'
     status.value = 'error'
@@ -1473,7 +1510,7 @@ const canSubmit = computed(() => {
     "module": "ESNext",
     "skipLibCheck": false,
     "esModuleInterop": true,
-    
+
     // Strict mode (REQUIRED for production)
     "strict": true,
     "noImplicitAny": true,
@@ -1487,7 +1524,7 @@ const canSubmit = computed(() => {
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    
+
     "resolveJsonModule": true,
     "isolatedModules": true,
     "moduleResolution": "bundler",
@@ -1519,10 +1556,7 @@ const canSubmit = computed(() => {
 import svgLoader from 'vite-svg-loader'
 
 export default defineConfig({
-  plugins: [
-    vue(),
-    svgLoader({ defaultImport: 'component' }),
-  ],
+  plugins: [vue(), svgLoader({ defaultImport: 'component' })],
 })
 ```
 
@@ -1663,9 +1697,7 @@ export const useAccountsStore = defineStore('accounts', () => {
   const accounts = ref<Account[]>([])
   const loading = ref(false)
 
-  const twitchAccounts = computed(() =>
-    accounts.value.filter((a) => a.platform === 'twitch')
-  )
+  const twitchAccounts = computed(() => accounts.value.filter((a) => a.platform === 'twitch'))
 
   async function loadAccounts() {
     loading.value = true
@@ -1702,14 +1734,15 @@ const { accounts } = useAccountsStore() // NOT reactive!
 
 ### What belongs in a Pinia store vs a composable
 
-| Use Pinia store when | Use a composable when |
-|---|---|
-| State shared across multiple components | State local to one component tree |
-| State needs to persist through navigation | State is component lifecycle-scoped |
+| Use Pinia store when                         | Use a composable when                     |
+| -------------------------------------------- | ----------------------------------------- |
+| State shared across multiple components      | State local to one component tree         |
+| State needs to persist through navigation    | State is component lifecycle-scoped       |
 | Multiple components read/write the same data | Logic is reusable but not globally shared |
-| Devtools debugging needed | Simple utility logic |
+| Devtools debugging needed                    | Simple utility logic                      |
 
 **TwirChat Pinia stores to create:**
+
 - `useAccountsStore` — loaded accounts from RPC
 - `useSettingsStore` — app settings (from RPC, locally cached)
 - `useChannelStatusStore` — live/offline status per channel
@@ -1733,7 +1766,7 @@ type BunMessages = TwirChatRPCSchema['bun']['messages']
 
 export function useRpcListener<K extends keyof BunMessages>(
   event: K,
-  handler: (payload: BunMessages[K]) => void
+  handler: (payload: BunMessages[K]) => void,
 ) {
   rpc.on[event](handler)
 
@@ -1831,17 +1864,17 @@ const { color, icon: PlatformIcon, label } = usePlatformMeta(props.platform)
 
 Patterns found in existing code that **must not be repeated** in new code:
 
-| Anti-Pattern | Why It's Wrong | Correct Approach |
-|---|---|---|
-| Inline `<svg>` in templates | Hard to reuse, bloats components, no SVGO optimization | Import `.svg` file via vite-svg-loader |
-| `v-html` with SVG strings | XSS risk, no TS types, not composable | SVG as Vue component |
-| `platformColor()` duplicated in every file | Copy-paste debt, inconsistent | `usePlatformMeta()` composable |
-| `rpc.request.*` called directly in `setup()` | No cleanup, no error handling, can't be tested | Wrap in composable with error/loading state |
-| `setInterval` in component `onMounted` | Memory leak if not cleaned up | `usePolling()` composable with auto cleanup |
-| Logic in component that spans >50 lines | Untestable, hard to read | Extract to `use*` composable |
-| Direct mutation of layout state | Bypasses reactivity contract | Actions in Pinia store |
-| `const { x } = useStore()` without `storeToRefs` | Breaks reactivity silently | `const { x } = storeToRefs(useStore())` |
-| Importing from `src/store/` in views | Crashes at runtime (SQLite in browser) | Use `rpc.request.*` |
+| Anti-Pattern                                     | Why It's Wrong                                         | Correct Approach                            |
+| ------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------- |
+| Inline `<svg>` in templates                      | Hard to reuse, bloats components, no SVGO optimization | Import `.svg` file via vite-svg-loader      |
+| `v-html` with SVG strings                        | XSS risk, no TS types, not composable                  | SVG as Vue component                        |
+| `platformColor()` duplicated in every file       | Copy-paste debt, inconsistent                          | `usePlatformMeta()` composable              |
+| `rpc.request.*` called directly in `setup()`     | No cleanup, no error handling, can't be tested         | Wrap in composable with error/loading state |
+| `setInterval` in component `onMounted`           | Memory leak if not cleaned up                          | `usePolling()` composable with auto cleanup |
+| Logic in component that spans >50 lines          | Untestable, hard to read                               | Extract to `use*` composable                |
+| Direct mutation of layout state                  | Bypasses reactivity contract                           | Actions in Pinia store                      |
+| `const { x } = useStore()` without `storeToRefs` | Breaks reactivity silently                             | `const { x } = storeToRefs(useStore())`     |
+| Importing from `src/store/` in views             | Crashes at runtime (SQLite in browser)                 | Use `rpc.request.*`                         |
 
 ---
 
@@ -1893,34 +1926,40 @@ Patterns found in existing code that **must not be repeated** in new code:
 ## Summary: Mental Model for TwirChat Frontend
 
 **State Management**:
+
 - Global app state → Pinia store (`useAccountsStore()`, `useSettingsStore()`)
 - Component local state → `ref()` or `reactive()`
 - Derived state → `computed()`
 - Bun-side persistence → always via `rpc.request.*`
 
 **Side Effects**:
+
 - Polling → `usePolling()` composable (auto-cleanup)
 - RPC listeners → `useRpcListener()` composable (auto-cleanup)
 - Data fetching → composable with loading/error state
 - Cleanup → `onUnmounted()` always
 
 **Typing**:
+
 - Props → interface + `defineProps<Props>()`
 - Emits → type def + `defineEmits<{ event: [args] }>()`
 - Refs → `ref<Type>()`
 - Stores → access directly or `storeToRefs()` for destructuring
 
 **Composables**:
+
 - Name: `use*`
 - Return: object with refs/computed, NOT reactive root
 - Cleanup: `onUnmounted()`
 
 **SVGs**:
+
 - Place in `src/assets/icons/`
 - Import as Vue component via vite-svg-loader
 - Never inline `<svg>` or use `v-html` for icons
 
 **Components**:
+
 - `<script setup lang="ts">`
 - Type everything (no `any`)
 - `withDefaults()` for optional props

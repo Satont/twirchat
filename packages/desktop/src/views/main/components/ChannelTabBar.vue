@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PlatformStatusInfo, WatchedChannel } from '@twirchat/shared/types'
+import { ref } from 'vue'
 import { platformColor } from '../../shared/utils/platform'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
   'select-tab': [id: string]
   'add-channel': []
   'remove-channel': [id: string]
+  reorder: [fromId: string, toId: string]
 }>()
 
 function isLive(id: string): boolean {
@@ -38,6 +40,42 @@ function formatViewers(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1000) return `${(n / 1_000).toFixed(1)}K`
   return String(n)
+}
+
+// ---- Drag-and-drop reordering ----
+const dragOverId = ref<string | null>(null)
+let dragSourceId: string | null = null
+
+function onDragStart(e: DragEvent, id: string) {
+  dragSourceId = id
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+  }
+}
+
+function onDragOver(e: DragEvent, id: string) {
+  if (!dragSourceId || dragSourceId === id) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dragOverId.value = id
+}
+
+function onDragLeave(id: string) {
+  if (dragOverId.value === id) dragOverId.value = null
+}
+
+function onDrop(e: DragEvent, toId: string) {
+  e.preventDefault()
+  dragOverId.value = null
+  if (!dragSourceId || dragSourceId === toId) return
+  emit('reorder', dragSourceId, toId)
+  dragSourceId = null
+}
+
+function onDragEnd() {
+  dragOverId.value = null
+  dragSourceId = null
 }
 </script>
 
@@ -67,7 +105,18 @@ function formatViewers(n: number): string {
     </button>
 
     <!-- Watched channel tabs -->
-    <div v-for="ch in watchedChannels" :key="ch.id" class="tab-wrapper">
+    <div
+      v-for="ch in watchedChannels"
+      :key="ch.id"
+      class="tab-wrapper"
+      :class="{ 'drag-over': dragOverId === ch.id }"
+      draggable="true"
+      @dragstart="onDragStart($event, ch.id)"
+      @dragover="onDragOver($event, ch.id)"
+      @dragleave="onDragLeave(ch.id)"
+      @drop="onDrop($event, ch.id)"
+      @dragend="onDragEnd"
+    >
       <button
         class="tab"
         :class="{ active: activeTabId === ch.id }"
@@ -261,5 +310,9 @@ function formatViewers(n: number): string {
 
 .tab-add:hover {
   opacity: 1;
+}
+
+.tab-wrapper.drag-over {
+  border-left: 2px solid var(--c-text-2, #8b8b99);
 }
 </style>

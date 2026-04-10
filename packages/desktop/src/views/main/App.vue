@@ -469,6 +469,19 @@ async function onAddChannel(platform: 'twitch' | 'kick' | 'youtube', channelSlug
   }
 }
 
+function onTabReorder(fromId: string, toId: string) {
+  const ids = [...tabChannelIds.value]
+  const fromIdx = ids.indexOf(fromId)
+  const toIdx = ids.indexOf(toId)
+  if (fromIdx === -1 || toIdx === -1) return
+  ids.splice(fromIdx, 1)
+  ids.splice(toIdx, 0, fromId)
+  tabChannelIds.value = new Set(ids)
+  rpc.request
+    .setTabChannelIds?.({ ids })
+    .catch((e) => console.warn('[App] reorder tabs failed:', e))
+}
+
 async function onRemoveChannel(id: string) {
   try {
     const ch = watchedChannels.value.find((c: WatchedChannel) => c.id === id)
@@ -660,6 +673,7 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
         @select-tab="activeWatchedTab = $event"
         @add-channel="showAddModal = true"
         @remove-channel="onRemoveChannel"
+        @reorder="onTabReorder"
       />
 
       <!-- Home tab: combined chat across all own channels -->

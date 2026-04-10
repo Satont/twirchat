@@ -204,6 +204,16 @@ function send() {
   })
 }
 
+// Focus textarea when a reply target is set
+watch(
+  () => props.replyTarget,
+  (newVal) => {
+    if (newVal) {
+      void nextTick(() => textareaEl.value?.focus())
+    }
+  },
+)
+
 function onKeydown(e: KeyboardEvent) {
   if (isOpen.value) {
     if (e.key === 'ArrowUp') {
