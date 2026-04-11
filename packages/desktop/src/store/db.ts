@@ -100,5 +100,16 @@ function runMigrations(db: Database): void {
     )
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS user_aliases (
+      platform TEXT NOT NULL,
+      platform_user_id TEXT NOT NULL,
+      alias TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      updated_at INTEGER DEFAULT (unixepoch()),
+      PRIMARY KEY (platform, platform_user_id)
+    )
+  `)
+
   log.info('Migrations applied')
 }

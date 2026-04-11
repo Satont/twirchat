@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getDb, initDb } from '@desktop/store/db'
 import { AccountStore } from '@desktop/store/account-store'
 import { SettingsStore } from '@desktop/store/settings-store'
+import { UserAliasStore } from '@desktop/store/user-alias-store'
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 import { existsSync, unlinkSync } from 'node:fs'
 
@@ -186,5 +187,69 @@ describe('SettingsStore', () => {
     SettingsStore.update({ theme: 'light' })
     const settings = SettingsStore.get()
     expect(settings.theme).toBe('light')
+  })
+})
+
+describe('UserAliasStore', () => {
+  beforeEach(() => {
+    if (existsSync(TEST_DB)) {
+      unlinkSync(TEST_DB)
+    }
+    initDb(TEST_DB)
+  })
+
+  afterEach(() => {
+    if (existsSync(TEST_DB)) {
+      unlinkSync(TEST_DB)
+    }
+  })
+
+  test('creates user_aliases table on init', () => {
+    const db = getDb()
+    const tables = db
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+      )
+      .all()
+      .map((r) => r.name)
+
+    expect(tables).toContain('user_aliases')
+  })
+
+  test('findAll returns empty array on fresh DB', () => {
+    const aliases = UserAliasStore.findAll()
+    expect(aliases).toEqual([])
+  })
+
+  test('upsert creates new alias', () => {
+    UserAliasStore.upsert('twitch', 'user123', 'CoolStreamer')
+    const aliases = UserAliasStore.findAll()
+    expect(aliases.length).toBe(1)
+    expect(aliases[0].platform).toBe('twitch')
+    expect(aliases[0].platformUserId).toBe('user123')
+    expect(aliases[0].alias).toBe('CoolStreamer')
+  })
+
+  test('upsert updates existing alias (same platform+userId)', () => {
+    UserAliasStore.upsert('twitch', 'user123', 'OldAlias')
+    UserAliasStore.upsert('twitch', 'user123', 'NewAlias')
+    const aliases = UserAliasStore.findAll()
+    expect(aliases.length).toBe(1)
+    expect(aliases[0].alias).toBe('NewAlias')
+  })
+
+  test('remove deletes alias', () => {
+    UserAliasStore.upsert('kick', 'user456', 'SomeAlias')
+    UserAliasStore.remove('kick', 'user456')
+    const aliases = UserAliasStore.findAll()
+    expect(aliases.length).toBe(0)
+  })
+
+  test('findAll returns all aliases', () => {
+    UserAliasStore.upsert('twitch', 'user1', 'Alias1')
+    UserAliasStore.upsert('kick', 'user2', 'Alias2')
+    UserAliasStore.upsert('youtube', 'user3', 'Alias3')
+    const aliases = UserAliasStore.findAll()
+    expect(aliases.length).toBe(3)
   })
 })
