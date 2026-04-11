@@ -42,6 +42,7 @@ import {
   SettingsStore,
   UsernameColorCache,
 } from '../store'
+import { UserAliasStore } from '../store/user-alias-store'
 import { BackendConnection } from '../backend-connection'
 import { ChatAggregator } from '../chat/aggregator'
 import { pushOverlayEvent, pushOverlayMessage, startOverlayServer } from '../overlay-server'
@@ -250,6 +251,19 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
       },
 
       getChannels: () => ChannelStore.findAll(),
+
+      getUserAliases: () => UserAliasStore.findAll(),
+
+      setUserAlias: ({ platform, platformUserId, alias }) => {
+        if (!alias) {
+          UserAliasStore.remove(platform, platformUserId)
+        } else {
+          UserAliasStore.upsert(platform, platformUserId, alias)
+        }
+      },
+
+      removeUserAlias: ({ platform, platformUserId }) =>
+        UserAliasStore.remove(platform, platformUserId),
 
       authStart: async ({ platform }) => {
         if (platform === 'twitch') {

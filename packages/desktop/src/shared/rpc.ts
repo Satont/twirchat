@@ -39,6 +39,14 @@ import type {
 // Bun-side schema (what the webview calls into)
 // ----------------------------------------------------------------
 
+export interface UserAlias {
+  platform: Platform
+  platformUserId: string
+  alias: string
+  createdAt: number
+  updatedAt: number
+}
+
 type BunRequests = {
   /** Return all stored accounts */
   getAccounts: { params: void; response: Account[] }
@@ -46,6 +54,15 @@ type BunRequests = {
   getSettings: { params: void; response: AppSettings }
   /** Save app settings */
   saveSettings: { params: AppSettings; response: void }
+  /** Return all stored user aliases */
+  getUserAliases: { params: void; response: UserAlias[] }
+  /** Set (create or update) a user alias */
+  setUserAlias: {
+    params: { platform: Platform; platformUserId: string; alias: string }
+    response: void
+  }
+  /** Remove a user alias */
+  removeUserAlias: { params: { platform: Platform; platformUserId: string }; response: void }
   /** Return all persisted joined channels grouped by platform */
   getChannels: { params: void; response: Partial<Record<Platform, string[]>> }
   /** Start OAuth flow for a platform */
