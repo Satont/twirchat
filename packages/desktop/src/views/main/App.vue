@@ -3,6 +3,7 @@ import { computed, onMounted, ref, triggerRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRpcListener } from './composables/useRpcListener'
 import { useAccountsStore } from './stores/accounts'
+import { useAliasStore } from './stores/useAliasStore'
 import { useSettingsStore } from './stores/settings'
 import { useChannelStatusStore } from './stores/channelStatus'
 import { useStreamStatusStore } from './stores/streamStatus'
@@ -36,6 +37,7 @@ import type {
 const messages = ref<NormalizedChatMessage[]>([])
 const events = ref<NormalizedEvent[]>([])
 const accountsStore = useAccountsStore()
+const aliasStore = useAliasStore()
 const settingsStore = useSettingsStore()
 const channelStatusStore = useChannelStatusStore()
 const streamStatusStore = useStreamStatusStore()
@@ -117,8 +119,9 @@ const youtubeAuthenticated = computed(() => accounts.value.some((a) => a.platfor
 
 async function loadInitialData() {
   try {
-    const [accs, setts, statList, watched] = await Promise.all([
+    const [accs, , setts, statList, watched] = await Promise.all([
       rpc.request.getAccounts(),
+      aliasStore.loadAliases(),
       rpc.request.getSettings(),
       rpc.request.getStatuses(),
       rpc.request.getWatchedChannels(),
