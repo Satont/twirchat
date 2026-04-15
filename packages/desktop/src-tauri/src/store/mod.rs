@@ -1,0 +1,11 @@
+pub mod accounts;
+pub mod client_identity;
+pub mod connections;
+pub mod crypto;
+pub mod db;
+pub mod messages;
+pub mod migration;
+pub mod settings;
+pub mod user_aliases;
+pub mod username_colors;
+pub mod watched_channels;

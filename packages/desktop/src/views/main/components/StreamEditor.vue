@@ -9,158 +9,158 @@
  *
  * On mount it polls for the current status. The user can then edit and save.
  */
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from "vue";
 import type {
   CategorySearchResult,
   SearchCategoriesResponse,
   StreamStatusResponse,
-} from '@twirchat/shared/protocol'
-import { usePolling } from '../composables/usePolling'
-import { rpc } from '../main'
+} from "@twirchat/shared/protocol";
+import { usePolling } from "../composables/usePolling";
+import { invoke } from "@tauri-apps/api/core";
 
 const props = defineProps<{
-  platform: 'twitch' | 'kick'
-  channelId: string
-}>()
+  platform: "twitch" | "kick";
+  channelId: string;
+}>();
 
 // ---------------------------------------------------------------
 // Stream status state
 // ---------------------------------------------------------------
-const isLive = ref(false)
-const title = ref('')
-const categoryId = ref<string | undefined>(undefined)
-const categoryName = ref<string | undefined>(undefined)
-const viewerCount = ref<number | undefined>(undefined)
-const loadError = ref<string | null>(null)
-const loading = ref(false)
+const isLive = ref(false);
+const title = ref("");
+const categoryId = ref<string | undefined>(undefined);
+const categoryName = ref<string | undefined>(undefined);
+const viewerCount = ref<number | undefined>(undefined);
+const loadError = ref<string | null>(null);
+const loading = ref(false);
 
 // ---------------------------------------------------------------
 // Edit state
 // ---------------------------------------------------------------
-const editing = ref(false)
-const editTitle = ref('')
-const editCategoryId = ref<string | undefined>(undefined)
-const editCategoryName = ref<string | undefined>(undefined)
-const saving = ref(false)
-const saveError = ref<string | null>(null)
-const saveSuccess = ref(false)
+const editing = ref(false);
+const editTitle = ref("");
+const editCategoryId = ref<string | undefined>(undefined);
+const editCategoryName = ref<string | undefined>(undefined);
+const saving = ref(false);
+const saveError = ref<string | null>(null);
+const saveSuccess = ref(false);
 
 // ---------------------------------------------------------------
 // Category search
 // ---------------------------------------------------------------
-const categoryQuery = ref('')
-const categoryResults = ref<CategorySearchResult[]>([])
-const searchLoading = ref(false)
-let searchTimer: ReturnType<typeof setTimeout> | null = null
+const categoryQuery = ref("");
+const categoryResults = ref<CategorySearchResult[]>([]);
+const searchLoading = ref(false);
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onCategoryInput() {
   if (searchTimer) {
-    clearTimeout(searchTimer)
+    clearTimeout(searchTimer);
   }
   if (!categoryQuery.value.trim()) {
-    categoryResults.value = []
-    return
+    categoryResults.value = [];
+    return;
   }
   searchTimer = setTimeout(async () => {
-    searchLoading.value = true
+    searchLoading.value = true;
     try {
-      const res = (await rpc.request.searchCategories!({
+      const res = (await invoke<SearchCategoriesResponse>("search_categories", {
         platform: props.platform,
         query: categoryQuery.value,
-      })) as SearchCategoriesResponse
-      categoryResults.value = res.categories
+      })) as SearchCategoriesResponse;
+      categoryResults.value = res.categories;
     } catch {
-      categoryResults.value = []
+      categoryResults.value = [];
     } finally {
-      searchLoading.value = false
+      searchLoading.value = false;
     }
-  }, 350)
+  }, 350);
 }
 
 function selectCategory(cat: CategorySearchResult) {
-  editCategoryId.value = cat.id
-  editCategoryName.value = cat.name
-  categoryQuery.value = cat.name
-  categoryResults.value = []
+  editCategoryId.value = cat.id;
+  editCategoryName.value = cat.name;
+  categoryQuery.value = cat.name;
+  categoryResults.value = [];
 }
 
 // ---------------------------------------------------------------
 // Load current status
 // ---------------------------------------------------------------
 async function loadStatus() {
-  loading.value = true
-  loadError.value = null
+  loading.value = true;
+  loadError.value = null;
   try {
-    const s = (await rpc.request.getStreamStatus!({
+    const s = (await invoke<StreamStatusResponse>("get_stream_status", {
       channelId: props.channelId,
       platform: props.platform,
-    })) as StreamStatusResponse
-    isLive.value = s.isLive
-    title.value = s.title
-    categoryId.value = s.categoryId
-    categoryName.value = s.categoryName
-    viewerCount.value = s.viewerCount
+    })) as StreamStatusResponse;
+    isLive.value = s.isLive;
+    title.value = s.title;
+    categoryId.value = s.categoryId;
+    categoryName.value = s.categoryName;
+    viewerCount.value = s.viewerCount;
   } catch (error) {
-    loadError.value = String(error)
+    loadError.value = String(error);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 // Poll every 60 seconds
-const { start: startStatusPolling } = usePolling(loadStatus, 60_000)
+const { start: startStatusPolling } = usePolling(loadStatus, 60_000);
 
 onMounted(() => {
-  startStatusPolling()
-})
+  startStatusPolling();
+});
 
 onUnmounted(() => {
   if (searchTimer) {
-    clearTimeout(searchTimer)
+    clearTimeout(searchTimer);
   }
-})
+});
 
 // ---------------------------------------------------------------
 // Edit / Save
 // ---------------------------------------------------------------
 function startEdit() {
-  editTitle.value = title.value
-  editCategoryId.value = categoryId.value
-  editCategoryName.value = categoryName.value
-  categoryQuery.value = categoryName.value ?? ''
-  categoryResults.value = []
-  saveError.value = null
-  saveSuccess.value = false
-  editing.value = true
+  editTitle.value = title.value;
+  editCategoryId.value = categoryId.value;
+  editCategoryName.value = categoryName.value;
+  categoryQuery.value = categoryName.value ?? "";
+  categoryResults.value = [];
+  saveError.value = null;
+  saveSuccess.value = false;
+  editing.value = true;
 }
 
 function cancelEdit() {
-  editing.value = false
+  editing.value = false;
 }
 
 async function save() {
-  saving.value = true
-  saveError.value = null
+  saving.value = true;
+  saveError.value = null;
   try {
-    await rpc.request.updateStream!({
-      categoryId: editCategoryId.value,
-      channelId: props.channelId,
+    await invoke("update_stream", {
+      category_id: editCategoryId.value,
+      channel_id: props.channelId,
       platform: props.platform,
       title: editTitle.value,
-    })
+    });
     // Reflect changes locally immediately
-    title.value = editTitle.value
-    categoryId.value = editCategoryId.value
-    categoryName.value = editCategoryName.value
-    saveSuccess.value = true
+    title.value = editTitle.value;
+    categoryId.value = editCategoryId.value;
+    categoryName.value = editCategoryName.value;
+    saveSuccess.value = true;
     setTimeout(() => {
-      saveSuccess.value = false
-      editing.value = false
-    }, 1500)
+      saveSuccess.value = false;
+      editing.value = false;
+    }, 1500);
   } catch (error) {
-    saveError.value = String(error)
+    saveError.value = String(error);
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
 </script>
@@ -168,14 +168,18 @@ async function save() {
 <template>
   <div class="stream-editor">
     <!-- Loading / error -->
-    <div v-if="loading && !title" class="se-placeholder">Loading stream info…</div>
-    <div v-else-if="loadError" class="se-placeholder se-error">{{ loadError }}</div>
+    <div v-if="loading && !title" class="se-placeholder">
+      Loading stream info…
+    </div>
+    <div v-else-if="loadError" class="se-placeholder se-error">
+      {{ loadError }}
+    </div>
 
     <!-- Status display (not editing) -->
     <template v-else-if="!editing">
       <div class="se-status-row">
         <span class="se-live-badge" :class="{ live: isLive }">
-          {{ isLive ? 'LIVE' : 'OFFLINE' }}
+          {{ isLive ? "LIVE" : "OFFLINE" }}
         </span>
         <span v-if="isLive && viewerCount !== undefined" class="se-viewers">
           {{ viewerCount.toLocaleString() }} viewers
@@ -191,7 +195,9 @@ async function save() {
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path
+              d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+            />
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
           Edit
@@ -205,7 +211,12 @@ async function save() {
     <template v-else>
       <div class="se-form">
         <label class="se-label">Title</label>
-        <input v-model="editTitle" class="se-input" maxlength="140" placeholder="Stream title…" />
+        <input
+          v-model="editTitle"
+          class="se-input"
+          maxlength="140"
+          placeholder="Stream title…"
+        />
 
         <label class="se-label">Category / Game</label>
         <div class="se-search-wrap">
@@ -237,8 +248,18 @@ async function save() {
         <div v-if="saveError" class="se-save-error">{{ saveError }}</div>
 
         <div class="se-actions">
-          <button class="se-btn se-btn-ghost" :disabled="saving" @click="cancelEdit">Cancel</button>
-          <button class="se-btn se-btn-primary" :disabled="saving" @click="save">
+          <button
+            class="se-btn se-btn-ghost"
+            :disabled="saving"
+            @click="cancelEdit"
+          >
+            Cancel
+          </button>
+          <button
+            class="se-btn se-btn-primary"
+            :disabled="saving"
+            @click="save"
+          >
             <svg
               v-if="saveSuccess"
               width="13"
@@ -252,7 +273,7 @@ async function save() {
             >
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            {{ saveSuccess ? 'Saved!' : saving ? 'Saving…' : 'Save' }}
+            {{ saveSuccess ? "Saved!" : saving ? "Saving…" : "Save" }}
           </button>
         </div>
       </div>

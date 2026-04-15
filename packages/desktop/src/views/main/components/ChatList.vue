@@ -6,7 +6,7 @@ import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
 import { platformColor } from '../../shared/utils/platform'
 import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
@@ -214,12 +214,11 @@ async function onSend(
 ) {
   await Promise.allSettled(
     targets.map((t) =>
-      rpc.request
-        .sendMessage({
-          channelId: t.channelLogin,
+      invoke('send_message', {
+          channel_id: t.channelLogin,
           platform: t.platform as Platform,
           text: t.text,
-          replyToMessageId: t.replyToMessageId,
+          reply_to_message_id: t.replyToMessageId,
         })
         .catch((error) => console.warn(`[ChatInput] send failed on ${t.platform}:`, error)),
     ),
@@ -234,8 +233,7 @@ function onSendWatched(payload: { text: string; channelId: string; replyToMessag
 
 function onAppearanceChange(s: AppSettings) {
   emit('settings-change', s)
-  rpc.request
-    .saveSettings(s)
+  invoke('save_settings', { settings: s })
     .catch((error) => console.warn('[ChatList] saveSettings failed:', error))
 }
 </script>

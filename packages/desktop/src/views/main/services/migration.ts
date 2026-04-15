@@ -1,4 +1,4 @@
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
 import type {
   LegacyChatLayout,
   WatchedChannelsLayout,
@@ -110,7 +110,7 @@ export async function attemptMigration(): Promise<boolean> {
 
   // Check if layout exists in v2 format (indicates user already has new system)
   try {
-    const existing = await rpc.request.getWatchedChannelsLayout?.({ tabId: '' })
+    const existing = await invoke<WatchedChannelsLayout | null>('get_watched_channels_layout', { tab_id: ''  })
     if (
       existing &&
       typeof existing === 'object' &&

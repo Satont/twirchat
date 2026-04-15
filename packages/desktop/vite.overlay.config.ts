@@ -11,6 +11,7 @@ export default defineConfig({
     outDir: resolve(__dirname, 'dist/overlay'),
   },
   plugins: [vue(), svgLoader({ defaultImport: 'component' })],
+  publicDir: resolve(__dirname, 'public'),
   resolve: {
     alias: {
       '@desktop': resolve(__dirname, 'src'),

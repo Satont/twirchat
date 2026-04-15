@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.0)'
+        description: "Version to release (e.g., v1.0.0)"
         required: true
         type: string
 
@@ -45,23 +45,36 @@ jobs:
         uses: TriPSs/conventional-changelog-action@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-file: './packages/desktop/package.json'
-          version-path: 'version'
+          version-file: "./packages/desktop/package.json"
+          version-path: "version"
           skip-version-file: true
           skip-commit: true
           skip-tag: true
           skip-git-pull: true
           create-summary: true
 
+  rust-lint:
+    name: Rust Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --manifest-path packages/desktop/src-tauri/Cargo.toml -- --check
+      - run: cargo clippy --manifest-path packages/desktop/src-tauri/Cargo.toml -- -D warnings
+
   build-desktop:
     name: Build Desktop (${{ matrix.os }})
-    needs: changelog
+    needs:
+      - changelog
+      - rust-lint
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: linux-x64
           - os: macos-latest
             target: macos-arm64
@@ -77,6 +90,24 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: >
+          sudo apt-get update && sudo apt-get install -y
+          libgtk-3-dev
+          libssl-dev
+          libwebkit2gtk-4.1-dev
+          build-essential
+          libayatana-appindicator3-dev
+          librsvg2-dev
+
+      - name: Install macOS system dependencies
+        if: matrix.os == 'macos-latest'
+        run: brew install pkg-config
+
       - name: Install dependencies
         run: bun install
 
@@ -84,20 +115,30 @@ jobs:
         working-directory: packages/desktop
         run: bun run build:views
 
-      - name: Build Electrobun
-        working-directory: packages/desktop
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
         env:
-          NODE_ENV: production
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHATRIX_BACKEND_URL: ${{ secrets.BACKEND_URL }}
           CHATRIX_BACKEND_WS_URL: ${{ secrets.BACKEND_WS_URL }}
-        run: bunx electrobun build --env=stable
+        with:
+          projectPath: packages/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "TwirChat ${{ github.ref_name }}"
+          releaseBody: ${{ needs.changelog.outputs.release_notes }}
+          releaseDraft: true
+          prerelease: false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}
-          path: packages/desktop/artifacts/**
-          if-no-files-found: error
+          path: |
+            packages/desktop/src-tauri/target/release/bundle/deb/**
+            packages/desktop/src-tauri/target/release/bundle/appimage/**
+            packages/desktop/src-tauri/target/release/bundle/dmg/**
+            packages/desktop/src-tauri/target/release/bundle/msi/**
+          if-no-files-found: warn
 
   build-backend:
     name: Build Backend

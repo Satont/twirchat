@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import type { AppSettings, HotkeySettings } from '@twirchat/shared/types'
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
 import { pause, resume, startKeyRecording, stopKeyRecording } from '../composables/useHotkeys'
 
 const props = defineProps<{
@@ -60,7 +60,7 @@ const saved = ref(false)
 async function save() {
   saving.value = true
   try {
-    await rpc.request.saveSettings!(local.value)
+    await invoke('save_settings', { settings: local.value })
     emit('saved', makeLocal(local.value))
     saved.value = true
     setTimeout(() => {

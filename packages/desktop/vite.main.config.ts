@@ -8,9 +8,11 @@ const __dirname = import.meta.dirname
 export default defineConfig({
   build: {
     emptyOutDir: true,
+    base: './',
     outDir: resolve(__dirname, 'dist/main'),
   },
   plugins: [vue(), svgLoader({ defaultImport: 'component' })],
+  publicDir: resolve(__dirname, 'public'),
   resolve: {
     alias: {
       '@twirchat/shared/types': resolve(__dirname, '../shared/types.ts'),

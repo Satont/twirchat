@@ -24,6 +24,6 @@
       "@twirchat/shared/*": ["../shared/*"]
     }
   },
-  "include": ["src/**/*", "index.ts", "electrobun.config.ts"],
+  "include": ["src/**/*", "index.ts"],
   "exclude": ["overlay", "node_modules"]
 }

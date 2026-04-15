@@ -4,7 +4,8 @@ import { defineStore } from 'pinia'
 import type { Platform } from '@twirchat/shared/types'
 import type { SevenTVEmote } from '@twirchat/shared/protocol'
 
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 
 export const useEmoteStore = defineStore('emotes', () => {
   const emoteMap = ref<Map<string, SevenTVEmote[]>>(new Map())
@@ -63,17 +64,17 @@ export const useEmoteStore = defineStore('emotes', () => {
     if (listenersRegistered.value) return
     listenersRegistered.value = true
 
-    rpc.addMessageListener('channel_emotes_set', (payload) =>
-      _setEmotes(payload.platform, payload.channelId, payload.emotes),
+    listen<{ platform: Platform; channelId: string; emotes: SevenTVEmote[] }>('channel_emotes:set', (event) =>
+      _setEmotes(event.payload.platform, event.payload.channelId, event.payload.emotes),
     )
-    rpc.addMessageListener('channel_emote_added', (payload) =>
-      _addEmote(payload.platform, payload.channelId, payload.emote),
+    listen<{ platform: Platform; channelId: string; emote: SevenTVEmote }>('channel_emote:added', (event) =>
+      _addEmote(event.payload.platform, event.payload.channelId, event.payload.emote),
     )
-    rpc.addMessageListener('channel_emote_removed', (payload) =>
-      _removeEmote(payload.platform, payload.channelId, payload.emoteId),
+    listen<{ platform: Platform; channelId: string; emoteId: string }>('channel_emote:removed', (event) =>
+      _removeEmote(event.payload.platform, event.payload.channelId, event.payload.emoteId),
     )
-    rpc.addMessageListener('channel_emote_updated', (payload) =>
-      _updateEmote(payload.platform, payload.channelId, payload.emoteId, payload.newAlias),
+    listen<{ platform: Platform; channelId: string; emoteId: string; newAlias: string }>('channel_emote:updated', (event) =>
+      _updateEmote(event.payload.platform, event.payload.channelId, event.payload.emoteId, event.payload.newAlias),
     )
   }
 
@@ -93,10 +94,7 @@ export const useEmoteStore = defineStore('emotes', () => {
 
     const promise = (async () => {
       try {
-        const emotes = await rpc.request.getChannelEmotes({
-          platform: platform as Platform,
-          channelId,
-        })
+        const emotes = await invoke<SevenTVEmote[]>('get_channel_emotes', { platform: platform as Platform, channel_id: channelId })
         if (emotes.length > 0) {
           const next = new Map(emoteMap.value)
           next.set(key, emotes)

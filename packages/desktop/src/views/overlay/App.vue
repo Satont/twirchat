@@ -81,10 +81,6 @@ let expireTimer: ReturnType<typeof setInterval> | null = null
 function connect() {
   ws = new WebSocket(`ws://localhost:${cfg.port}`)
 
-  ws.addEventListener('open', () => {
-    console.log('[Overlay] WS connected')
-  })
-
   ws.addEventListener('message', (ev) => {
     try {
       const data = JSON.parse(ev.data as string)

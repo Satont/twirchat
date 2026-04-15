@@ -2,7 +2,7 @@ import { computed, onMounted, type ComputedRef } from 'vue'
 
 import type { Emote, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
@@ -26,10 +26,8 @@ async function fetchMentionColor(platform: string, username: string): Promise<vo
   }
 
   try {
-    const color = await rpc.request.getUsernameColor({
-      platform: platform as Platform,
-      username,
-    })
+    const color = await invoke<string | null>('get_username_color', { platform: platform as Platform, username,
+     })
     if (mentionColorCache.size > 2000) {
       mentionColorCache.clear()
     }

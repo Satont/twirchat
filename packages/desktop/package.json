@@ -4,32 +4,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "electrobun dev",
+    "start": "tauri dev",
     "dev": "bun run --parallel hmr start",
     "hmr": "vite --config vite.main.config.ts --port 5173",
     "build:views": "vite build --config vite.main.config.ts && vite build --config vite.overlay.config.ts",
     "gen": "cd src/platforms/youtube && bunx @bufbuild/buf generate",
     "typecheck": "vue-tsc --noEmit",
     "test": "bun test tests/",
-    "build:prod": "bun run build:views && electrobun build --env=stable",
-    "build:prod:ci": "bun run build:views && CHATRIX_BACKEND_URL=$CHATRIX_BACKEND_URL CHATRIX_BACKEND_WS_URL=$CHATRIX_BACKEND_WS_URL electrobun build --env=stable"
+    "build:prod": "bun run build:views && tauri build",
+    "build:prod:ci": "bun run build:views && CHATRIX_BACKEND_URL=$CHATRIX_BACKEND_URL CHATRIX_BACKEND_WS_URL=$CHATRIX_BACKEND_WS_URL tauri build"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.11.0",
     "@grpc/grpc-js": "1.14.3",
+    "@tauri-apps/api": "^2.7.0",
     "@twirchat/shared": "workspace:*",
-    "@twurple/api": "8.0.3",
-    "@twurple/auth": "8.0.3",
-    "@twurple/chat": "8.0.3",
-    "electrobun": "1.16.0",
     "reka-ui": "2.9.2",
     "splitpanes": "4.0.4",
     "virtua": "0.49.0",
-    "vue": "3.5.30",
-    "youtubei.js": "17.0.1"
+    "vue": "3.5.30"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.66.1",
+    "@tauri-apps/cli": "^2.7.0",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",

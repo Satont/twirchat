@@ -1,0 +1,4 @@
+- Replaced all usages of rpc.request with invoke() from @tauri-apps/api/core
+- Replaced useRpcListener with useTauriEvent
+- Replaced direct rpc.addMessageListener with listen() from @tauri-apps/api/event
+- Replaced main.ts setup to remove Electrobun completely

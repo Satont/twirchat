@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TwirChat",
+  "version": "0.1.0",
+  "identifier": "dev.twirchat.app",
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist/main"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "TwirChat",
+        "width": 800,
+        "height": 1200
+      }
+    ]
+  }
+}

@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Account, WatchedChannel } from '@twirchat/shared/types'
-import type { ChannelStatus, ChannelStatusRequest } from '@twirchat/shared/protocol'
-import { rpc } from '../main'
+import type { ChannelStatus, ChannelStatusRequest, ChannelsStatusResponse } from '@twirchat/shared/protocol'
+import { invoke } from '@tauri-apps/api/core'
 
 export const useStreamStatusStore = defineStore('streamStatus', () => {
   const statusMap = ref<Map<string, ChannelStatus>>(new Map())
@@ -54,7 +54,7 @@ export const useStreamStatusStore = defineStore('streamStatus', () => {
     if (requests.length === 0) return
 
     try {
-      const res = await rpc.request.getChannelsStatus({ channels: requests })
+      const res = await invoke<ChannelsStatusResponse>('get_channels_status', { channels: requests })
       if (res?.channels) {
         setStatuses(res.channels)
       }

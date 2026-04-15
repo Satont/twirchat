@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
 import type {
   LayoutNode,
   PanelNode,
@@ -52,7 +52,7 @@ export const useLayoutStore = defineStore('layout', () => {
     isLoading.value = true
     error.value = null
     try {
-      const saved = await rpc.request.getWatchedChannelsLayout?.({ tabId })
+      const saved = await invoke<WatchedChannelsLayout | null>('get_watched_channels_layout', { tab_id: tabId })
       layout.value = (saved as WatchedChannelsLayout | null | undefined) ?? null
     } catch (e) {
       error.value = String(e)
@@ -65,8 +65,8 @@ export const useLayoutStore = defineStore('layout', () => {
   const saveLayout = async (): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.setWatchedChannelsLayout?.({
-        tabId: currentTabId.value,
+      await invoke('set_watched_channels_layout', {
+        tab_id: currentTabId.value,
         layout: layout.value,
       })
     } catch (e) {
@@ -82,7 +82,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const splitPanel = async (panelId: string, direction: SplitDirection): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.splitPanel?.({ tabId: currentTabId.value, panelId, direction })
+      await invoke('split_panel', { tab_id: currentTabId.value, panel_id: panelId, direction  })
       await loadLayout(currentTabId.value)
     } catch (e) {
       error.value = String(e)
@@ -92,7 +92,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const removePanel = async (panelId: string): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.removePanel?.({ tabId: currentTabId.value, panelId })
+      await invoke('remove_panel', { tab_id: currentTabId.value, panel_id: panelId })
       await loadLayout(currentTabId.value)
     } catch (e) {
       error.value = String(e)
@@ -102,11 +102,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const assignChannel = async (panelId: string, channelId: string | null): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.assignChannelToPanel?.({
-        tabId: currentTabId.value,
-        panelId,
-        channelId,
-      })
+      await invoke('assign_channel_to_panel', { tab_id: currentTabId.value, panel_id: panelId, channel_id: channelId })
       const panel = getPanel(panelId)
       if (panel) {
         panel.content = channelId ? { type: 'watched', channelId } : { type: 'empty' }

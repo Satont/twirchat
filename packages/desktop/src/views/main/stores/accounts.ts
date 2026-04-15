@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Account } from '@twirchat/shared/types'
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
 
 export const useAccountsStore = defineStore('accounts', () => {
   const accounts = ref<Account[]>([])
@@ -10,7 +10,7 @@ export const useAccountsStore = defineStore('accounts', () => {
   async function loadAccounts(): Promise<void> {
     loading.value = true
     try {
-      const result = await rpc.request.getAccounts()
+      const result = await invoke<Account[]>('get_accounts')
       if (result !== undefined) {
         accounts.value = result
       }

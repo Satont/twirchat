@@ -67,7 +67,7 @@ export const authRoutes = {
         const tokens = await exchangeKickCode(body.code, body.codeVerifier, body.redirectUri)
         return json(tokens satisfies KickExchangeResponse)
       } catch (error) {
-        log.error('kick/exchange failed', { err: String(error) })
+        log.error('kick/exchange failed', { err: String(error), body: JSON.stringify(body) })
         return json({ error: String(error) }, 500)
       }
     },
@@ -83,7 +83,7 @@ export const authRoutes = {
         const tokens = await refreshKickToken(body.refreshToken)
         return json(tokens satisfies KickRefreshResponse)
       } catch (error) {
-        log.error('kick/refresh failed', { err: String(error) })
+        log.error('kick/refresh failed', { err: String(error), body: JSON.stringify(body) })
         return json({ error: String(error) }, 500)
       }
     },
@@ -104,7 +104,7 @@ export const authRoutes = {
         const url = await startKickOAuth(body.clientSecret)
         return json({ url } satisfies AuthStartResponse)
       } catch (error) {
-        log.error('kick/legacy-start failed', { err: String(error) })
+        log.error('kick/legacy-start failed', { err: String(error), body: JSON.stringify(body) })
         return json({ error: 'Failed to start OAuth' }, 500)
       }
     },
@@ -125,7 +125,7 @@ export const authRoutes = {
           { headers: { 'Content-Type': 'text/html' } },
         )
       } catch (error) {
-        log.error('kick/callback failed', { err: String(error) })
+        log.error('kick/callback failed', { err: String(error), code, state })
         return new Response(`<html><body><h2>OAuth failed: ${String(error)}</h2></body></html>`, {
           headers: { 'Content-Type': 'text/html' },
           status: 500,

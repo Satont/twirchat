@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { AppSettings } from '@twirchat/shared/types'
-import { rpc } from '../main'
+import { invoke } from '@tauri-apps/api/core'
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AppSettings | null>(null)
@@ -10,7 +10,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function loadSettings(): Promise<void> {
     loading.value = true
     try {
-      const result = await rpc.request.getSettings()
+      const result = await invoke<AppSettings>('get_settings')
       if (result !== undefined) {
         settings.value = result
       }
@@ -21,7 +21,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function saveSettings(newSettings: AppSettings): Promise<void> {
     settings.value = newSettings
-    await rpc.request.saveSettings(newSettings)
+    await invoke('save_settings', { settings: newSettings })
   }
 
   return { settings, loading, loadSettings, saveSettings }
