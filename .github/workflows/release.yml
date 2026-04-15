@@ -117,14 +117,14 @@ jobs:
           bun-version: latest
 
       - name: Cache dependencies
-        id: cache
         uses: actions/cache@v4
         with:
-          path: node_modules
+          path: |
+            node_modules
+            packages/*/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('bun.lock', 'package.json') }}
 
       - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
         run: bun install --frozen-lockfile
 
       - name: Download views artifacts
