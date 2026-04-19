@@ -31,6 +31,19 @@ process.on('unhandledRejection', (reason) => {
   console.error('UNHANDLED REJECTION:', reason)
 })
 
+// Workaround for WebKitGTK + NVIDIA + Wayland rendering issue.
+// The DMA-BUF renderer fails to create GBM buffers on NVIDIA in Wayland
+// sessions, resulting in a blank webview. Disabling it forces the fallback
+// to the shared-memory renderer which works correctly.
+// See: https://bugs.webkit.org/show_bug.cgi?id=261874
+if (process.platform === "linux") {
+  const wayland = process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === "wayland"
+  if (wayland && process.env.WEBKIT_DISABLE_DMABUF_RENDERER !== "1") {
+    process.env.WEBKIT_DISABLE_DMABUF_RENDERER = "1"
+    console.log("[linux] Wayland detected: WEBKIT_DISABLE_DMABUF_RENDERER=1")
+  }
+}
+
 import { BrowserWindow, BuildConfig, Updater, Utils, defineElectrobunRPC } from 'electrobun/bun'
 
 import { getDb, initDb } from '../store/db'
@@ -870,7 +883,7 @@ if (process.platform === 'linux') {
             if (child) clearSizeRequest(child as Ptr)
           }
           gtk.symbols.g_list_free(children)
-        } catch {}
+        } catch { }
       }
 
       clearSizeRequest(win.ptr)
