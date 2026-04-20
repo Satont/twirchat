@@ -39,8 +39,16 @@ export class BackendConnection {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    this.ws?.close()
-    this.ws = null
+    // Remove all listeners before closing to prevent callbacks
+    // from firing during teardown (avoids Bun WebWorker UAF).
+    if (this.ws) {
+      this.ws.onopen = null
+      this.ws.onmessage = null
+      this.ws.onclose = null
+      this.ws.onerror = null
+      this.ws.close()
+      this.ws = null
+    }
   }
 
   send(msg: DesktopToBackendMessage): void {

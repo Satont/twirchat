@@ -31,26 +31,38 @@ const view = new Electroview({ rpc })
 // ----------------------------------------------------------------
 
 function waitForSocket(): Promise<void> {
+  const socket = (view as unknown as { bunSocket?: WebSocket }).bunSocket
+
+  // Electrobun creates the socket synchronously in the constructor,
+  // so this should only happen if internals change.
+  if (!socket) {
+    console.warn('[main.ts] bunSocket not available — mounting anyway')
+    return Promise.resolve()
+  }
+
+  // Already open or already failed — no need to wait.
+  if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSED) {
+    return Promise.resolve()
+  }
+
+  // Socket is still CONNECTING — wait for one of the terminal events.
   return new Promise((resolve) => {
-    function check() {
-      const socket = (view as unknown as { bunSocket?: WebSocket }).bunSocket
-      if (!socket) {
-        // BunSocket not assigned yet — poll in next microtask
-        setTimeout(check, 10)
-        return
-      }
-      if (socket.readyState === WebSocket.OPEN) {
-        resolve()
-        return
-      }
-      if (socket.readyState === WebSocket.CONNECTING) {
-        socket.addEventListener('open', () => resolve(), { once: true })
-        socket.addEventListener('error', () => resolve(), { once: true })
-        return
-      }
-      resolve() // CLOSED / unknown — mount anyway
+    const cleanup = () => {
+      socket.removeEventListener('open', onDone)
+      socket.removeEventListener('error', onDone)
+      socket.removeEventListener('close', onDone)
+      window.removeEventListener('pagehide', onDone)
     }
-    check()
+
+    const onDone = () => {
+      cleanup()
+      resolve()
+    }
+
+    socket.addEventListener('open', onDone, { once: true })
+    socket.addEventListener('error', onDone, { once: true })
+    socket.addEventListener('close', onDone, { once: true })
+    window.addEventListener('pagehide', onDone, { once: true })
   })
 }
 

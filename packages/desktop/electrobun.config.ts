@@ -1,6 +1,6 @@
 import type { ElectrobunConfig } from 'electrobun/bun'
-import path from "path";
-import { readFileSync } from "fs";
+import path from 'path'
+import { readFileSync } from 'fs'
 
 /**
  * TwirChat Electrobun build configuration.
@@ -9,20 +9,20 @@ import { readFileSync } from "fs";
  * Electrobun copies the Vite dist output into the views:// protocol.
  */
 
-const packageJson = JSON.parse(readFileSync("./package.json", "utf-8"));
+const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
 const aliasPlugin = {
-  name: "alias-resolver",
+  name: 'alias-resolver',
   setup(build: Bun.PluginBuilder) {
     build.onResolve({ filter: /^@\// }, (args) => {
-      let resolved = path.resolve(process.cwd(), "src", args.path.slice(2));
+      let resolved = path.resolve(process.cwd(), 'src', args.path.slice(2))
       if (!path.extname(resolved)) {
-        resolved += ".ts";
+        resolved += '.ts'
       }
-      return { path: resolved };
-    });
+      return { path: resolved }
+    })
   },
-};
+}
 
 const config: ElectrobunConfig = {
   app: {
