@@ -37,7 +37,7 @@ const config: ElectrobunConfig = {
       entrypoint: 'src/bun/index.ts',
       plugins: [aliasPlugin],
     },
-    bunVersion: '1.3.12',
+    bunVersion: '1.3.13',
 
     copy: {
       'dist/main/assets': 'views/main/assets',
