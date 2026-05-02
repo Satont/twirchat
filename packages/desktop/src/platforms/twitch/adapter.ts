@@ -18,11 +18,46 @@ import type { ChatMessage, UserNotice } from '@twurple/chat'
 import { LogLevel } from '@twurple/chat'
 import { getBackendUrl } from '../../runtime-config'
 import { AccountStore } from '../../store/account-store'
+import { MessageStore } from '../../store/message-store'
 import { refreshTwitchToken } from '../../auth/twitch'
 import type { TwitchBadgesResponse } from '@twirchat/shared/types'
 import { logger } from '@twirchat/shared/logger'
 
 const log = logger('twitch')
+
+interface LocalTwitchSentMessageParams {
+  channelId: string
+  text: string
+  author: {
+    displayName: string
+    id: string
+    username?: string
+  }
+  id?: string
+  reply?: NormalizedChatMessage['reply']
+  timestamp?: Date
+}
+
+export function createLocalTwitchSentMessage(
+  params: LocalTwitchSentMessageParams,
+): NormalizedChatMessage {
+  return {
+    author: {
+      badges: [],
+      displayName: params.author.displayName,
+      id: params.author.id,
+      username: params.author.username,
+    },
+    channelId: params.channelId.toLowerCase(),
+    emotes: [],
+    id: params.id ?? `local:twitch:${params.channelId.toLowerCase()}:${crypto.randomUUID()}`,
+    platform: 'twitch',
+    text: params.text,
+    timestamp: params.timestamp ?? new Date(),
+    type: 'message',
+    ...(params.reply ? { reply: params.reply } : {}),
+  }
+}
 
 // ============================================================
 // TwitchAdapter
@@ -45,11 +80,19 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private accountId: string | null = null
   private displayName: string | null = null
   private login: string | null = null
+  private platformUserId: string | null = null
 
   async connect(channelName: string): Promise<void> {
     this.channelName = channelName.toLowerCase()
     this.shouldReconnect = true
     this.isConnected = false
+
+    this.anonymous = true
+    this.accessToken = null
+    this.accountId = null
+    this.displayName = null
+    this.login = null
+    this.platformUserId = null
 
     // Check for stored account
     const account = AccountStore.findByPlatform('twitch')
@@ -61,6 +104,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         this.accountId = account.id
         this.displayName = account.displayName
         this.login = account.username
+        this.platformUserId = account.platformUserId
 
         // Check if token needs refresh before connecting
         const now = Math.floor(Date.now() / 1000)
@@ -137,6 +181,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         text,
         replyToMessageId ? { replyTo: replyToMessageId } : undefined,
       )
+      this.emitLocalSentMessage(channelId, text, replyToMessageId)
     } catch (error) {
       // If we get an auth error, try to refresh and retry once
       if (this.isAuthError(error)) {
@@ -150,6 +195,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
             text,
             replyToMessageId ? { replyTo: replyToMessageId } : undefined,
           )
+          this.emitLocalSentMessage(channelId, text, replyToMessageId)
           return
         }
       }
@@ -379,6 +425,68 @@ export class TwitchAdapter extends BasePlatformAdapter {
       )
     }
     return false
+  }
+
+  private emitLocalSentMessage(channelId: string, text: string, replyToMessageId?: string): void {
+    try {
+      const displayName = this.displayName ?? this.login
+      if (!displayName) {
+        log.warn(
+          '[Twitch] Sent message succeeded but account identity is unavailable for local echo',
+          {
+            channelId,
+          },
+        )
+        return
+      }
+
+      const reply = replyToMessageId ? this.findReplyContext(channelId, replyToMessageId) : undefined
+
+      this.emit(
+        'message',
+        createLocalTwitchSentMessage({
+          author: {
+            displayName,
+            id: this.platformUserId ?? this.accountId ?? this.login ?? 'twitch-self',
+            username: this.login ?? undefined,
+          },
+          channelId,
+          reply,
+          text,
+        }),
+      )
+    } catch (error) {
+      log.error('[Twitch] Failed to emit local sent message', {
+        channelId,
+        error: String(error),
+      })
+    }
+  }
+
+  private findReplyContext(
+    channelId: string,
+    replyToMessageId: string,
+  ): NormalizedChatMessage['reply'] | undefined {
+    const replyTarget = MessageStore.getRecent(250).find(
+      (message) =>
+        message.platform === 'twitch' &&
+        message.channelId === channelId.toLowerCase() &&
+        message.id === replyToMessageId,
+    )
+
+    if (!replyTarget) {
+      return undefined
+    }
+
+    return {
+      parentAuthor: {
+        displayName: replyTarget.author.displayName,
+        id: replyTarget.author.id,
+        username: replyTarget.author.username ?? '',
+      },
+      parentMessageId: replyTarget.id,
+      parentMessageText: replyTarget.text,
+    }
   }
 
   private handleChatMessage(msg: ChatMessage, isAction = false): void {
