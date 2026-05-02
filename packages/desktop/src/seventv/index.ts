@@ -10,6 +10,7 @@ interface EmoteSetData {
 interface ChannelSubscription {
   platform: Platform
   channelId: string
+  platformUserId?: string
   lookupIds: Set<string>
 }
 
@@ -27,6 +28,7 @@ class DesktopSevenTVService {
     platform: Platform,
     channelId: string,
     lookupIds: Iterable<string>,
+    platformUserId?: string,
   ): ChannelSubscription {
     const channelKey = this.getChannelKey(platform, channelId)
     let subscription = this.subscriptions.get(channelKey)
@@ -36,8 +38,13 @@ class DesktopSevenTVService {
         channelId,
         lookupIds: new Set<string>(),
         platform,
+        platformUserId,
       }
       this.subscriptions.set(channelKey, subscription)
+    }
+
+    if (platformUserId) {
+      subscription.platformUserId = platformUserId
     }
 
     for (const lookupId of lookupIds) {
@@ -66,13 +73,21 @@ class DesktopSevenTVService {
     platform: Platform,
     channelId: string,
     lookupIds: string[] = [],
+    platformUserId?: string,
   ): Promise<void> {
-    this.rememberLookupIds(platform, channelId, [channelId, ...lookupIds])
+    const subscription = this.rememberLookupIds(
+      platform,
+      channelId,
+      [channelId, ...lookupIds],
+      platformUserId,
+    )
+    subscription.platformUserId = platformUserId
 
     // Send via backend WebSocket
     const message = {
       channelId,
       platform,
+      platformUserId,
       type: 'seventv_subscribe' as const,
     }
 
@@ -110,7 +125,7 @@ class DesktopSevenTVService {
 
   // Called on reconnect - resubscribe to all channels
   async resubscribeToChannels(
-    subscriptions: { platform: Platform; channelId: string }[],
+    subscriptions: { platform: Platform; channelId: string; platformUserId?: string }[],
   ): Promise<void> {
     const message = {
       subscriptions,
@@ -216,10 +231,11 @@ class DesktopSevenTVService {
   }
 
   // Get all subscribed channels
-  getSubscribedChannels(): { platform: Platform; channelId: string }[] {
+  getSubscribedChannels(): { platform: Platform; channelId: string; platformUserId?: string }[] {
     return [...this.subscriptions.values()].map((subscription) => ({
       channelId: subscription.channelId,
       platform: subscription.platform,
+      platformUserId: subscription.platformUserId,
     }))
   }
 

@@ -162,6 +162,19 @@ startOverlayServer()
 
 const watchedChannelManager = new WatchedChannelManager()
 
+function getSevenTvTwitchPlatformUserId(channelSlug: string): string | undefined {
+  const twitchAccount = AccountStore.findByPlatform('twitch')
+  if (!twitchAccount) {
+    return undefined
+  }
+
+  if (twitchAccount.username.toLowerCase() !== channelSlug.toLowerCase()) {
+    return undefined
+  }
+
+  return twitchAccount.platformUserId
+}
+
 // ============================================================
 // 1c. Set up auth success callback BEFORE starting auth server
 // ============================================================
@@ -203,15 +216,18 @@ setOnAuthSuccessCallback(async (platform, channelSlug) => {
     // Subscribe to 7TV emotes for this channel
     // For Kick, use broadcasterUserId instead of slug
     let sevenTvChannelId = targetChannel
+    let sevenTvPlatformUserId: string | undefined
     if (platform === 'kick') {
       const kickAdapterCast = adapter as KickAdapter
       const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
       if (broadcasterUserId) {
         sevenTvChannelId = String(broadcasterUserId)
       }
+    } else if (platform === 'twitch') {
+      sevenTvPlatformUserId = getSevenTvTwitchPlatformUserId(targetChannel)
     }
     sevenTVService
-      .subscribeToChannel(platform, sevenTvChannelId, [targetChannel])
+      .subscribeToChannel(platform, sevenTvChannelId, [targetChannel], sevenTvPlatformUserId)
       .catch((error) => {
         log.error('Failed to subscribe to 7TV', {
           platform,
@@ -334,15 +350,18 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
             // Subscribe to 7TV emotes for this channel
             // For Kick, use broadcasterUserId instead of slug
             let sevenTvChannelId = channelSlug
+            let sevenTvPlatformUserId: string | undefined
             if (platform === 'kick') {
               const kickAdapterCast = adapter as KickAdapter
               const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
               if (broadcasterUserId) {
                 sevenTvChannelId = String(broadcasterUserId)
               }
+            } else if (platform === 'twitch') {
+              sevenTvPlatformUserId = getSevenTvTwitchPlatformUserId(channelSlug)
             }
             sevenTVService
-              .subscribeToChannel(platform, sevenTvChannelId, [channelSlug])
+              .subscribeToChannel(platform, sevenTvChannelId, [channelSlug], sevenTvPlatformUserId)
               .catch((err) => {
                 log.error('Failed to subscribe to 7TV', {
                   platform,
@@ -1240,15 +1259,18 @@ for (const [platform, slugs] of Object.entries(savedChannels)) {
         // Subscribe to 7TV emotes for this channel
         // For Kick, use broadcasterUserId instead of slug
         let sevenTvChannelId = slug
+        let sevenTvPlatformUserId: string | undefined
         if (platform === 'kick') {
           const kickAdapterCast = adapter as KickAdapter
           const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
           if (broadcasterUserId) {
             sevenTvChannelId = String(broadcasterUserId)
           }
+        } else if (platform === 'twitch') {
+          sevenTvPlatformUserId = getSevenTvTwitchPlatformUserId(slug)
         }
         sevenTVService
-          .subscribeToChannel(platform as Platform, sevenTvChannelId, [slug])
+          .subscribeToChannel(platform as Platform, sevenTvChannelId, [slug], sevenTvPlatformUserId)
           .catch((error) => {
             log.error('Failed to subscribe to 7TV', {
               platform,
@@ -1309,15 +1331,23 @@ for (const account of accounts) {
         // Subscribe to 7TV emotes for this channel
         // For Kick, use broadcasterUserId instead of slug
         let sevenTvChannelId = channelSlug
+        let sevenTvPlatformUserId: string | undefined
         if (account.platform === 'kick') {
           const kickAdapterCast = adapter as KickAdapter
           const broadcasterUserId = kickAdapterCast.getBroadcasterUserId()
           if (broadcasterUserId) {
             sevenTvChannelId = String(broadcasterUserId)
           }
+        } else if (account.platform === 'twitch') {
+          sevenTvPlatformUserId = getSevenTvTwitchPlatformUserId(channelSlug)
         }
         sevenTVService
-          .subscribeToChannel(account.platform, sevenTvChannelId, [channelSlug])
+          .subscribeToChannel(
+            account.platform,
+            sevenTvChannelId,
+            [channelSlug],
+            sevenTvPlatformUserId,
+          )
           .catch((error) => {
             log.error('Failed to subscribe to 7TV', {
               platform: account.platform,

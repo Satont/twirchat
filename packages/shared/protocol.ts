@@ -98,10 +98,13 @@ export type DesktopToBackendMessage =
   | { type: 'channel_join'; platform: Platform; channel: string }
   | { type: 'channel_leave'; platform: Platform; channel: string }
   // 7TV commands
-  | { type: 'seventv_subscribe'; platform: Platform; channelId: string }
+  | { type: 'seventv_subscribe'; platform: Platform; channelId: string; platformUserId?: string }
   | { type: 'seventv_unsubscribe'; platform: Platform; channelId: string }
   // Client reconnect - send list of subscribed channels
-  | { type: 'seventv_resubscribe'; subscriptions: { platform: Platform; channelId: string }[] }
+  | {
+      type: 'seventv_resubscribe'
+      subscriptions: { platform: Platform; channelId: string; platformUserId?: string }[]
+    }
 
 // ============================================================
 // HTTP API — запросы от desktop к backend

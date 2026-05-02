@@ -18,6 +18,11 @@
 
 import { config } from '../config.ts'
 import { getKickAppToken, getTwitchAppToken } from './stream-status.ts'
+import {
+  isTwitchUserId,
+  normalizeTwitchLogin,
+  resolveTwitchUserIdsByLogin,
+} from './twitch-users.ts'
 import { logger } from '@twirchat/shared/logger'
 import type { ChannelStatus, ChannelStatusRequest, ChannelsStatusResponse } from '@twirchat/shared'
 
@@ -26,11 +31,6 @@ const log = logger('channels-status')
 // ----------------------------------------------------------------
 // Twitch bulk fetch
 // ----------------------------------------------------------------
-
-interface HelixUser {
-  id: string
-  login: string
-}
 
 interface HelixStream {
   user_id: string
@@ -54,7 +54,16 @@ async function fetchTwitchChannelsStatus(
     return []
   }
 
-  const logins = channels.map((c) => c.channelLogin.toLowerCase())
+  const normalizedChannels = channels.map((channel) => {
+    const normalizedLogin = normalizeTwitchLogin(channel.channelLogin)
+
+    return {
+      originalLogin: channel.channelLogin,
+      normalizedLogin,
+      normalizedChannelId: isTwitchUserId(channel.channelId) ? channel.channelId : undefined,
+      request: channel,
+    }
+  })
 
   // Prefer user token from first channel that has one. Fall back to app token.
   const userToken = channels.find((c) => c.userAccessToken)?.userAccessToken
@@ -66,45 +75,49 @@ async function fetchTwitchChannelsStatus(
   }
 
   const loginToId = new Map<string, string>()
-  for (const ch of channels) {
-    if (ch.channelId) {
-      loginToId.set(ch.channelLogin.toLowerCase(), ch.channelId)
+  for (const channel of normalizedChannels) {
+    if (channel.normalizedLogin && channel.normalizedChannelId) {
+      loginToId.set(channel.normalizedLogin, channel.normalizedChannelId)
     }
   }
 
-  const loginsNeedingResolution = logins.filter((l) => !loginToId.has(l))
+  const validLogins = normalizedChannels
+    .map((channel) => channel.normalizedLogin)
+    .filter((login): login is string => Boolean(login))
+  const loginsNeedingResolution = validLogins.filter((login) => !loginToId.has(login))
+
   if (loginsNeedingResolution.length > 0) {
-    const userParams = loginsNeedingResolution
-      .map((l) => `login=${encodeURIComponent(l)}`)
-      .join('&')
-    const usersRes = await fetch(`https://api.twitch.tv/helix/users?${userParams}`, { headers })
-    if (!usersRes.ok) {
-      const body = await usersRes.text()
-      log.warn('Twitch /helix/users failed', { body, status: usersRes.status })
-      return logins.map((login) => ({
-        channelLogin: login,
+    try {
+      const resolvedUsers = await resolveTwitchUserIdsByLogin(loginsNeedingResolution, token)
+      for (const [login, id] of resolvedUsers) {
+        loginToId.set(login, id)
+      }
+    } catch (error) {
+      log.warn('Twitch /helix/users failed', { error: String(error) })
+      return normalizedChannels.map((channel) => ({
+        channelLogin: channel.normalizedLogin ?? channel.originalLogin.toLowerCase(),
         isLive: false,
         platform: 'twitch' as const,
         title: '',
       }))
     }
-    const usersBody = (await usersRes.json()) as { data: HelixUser[] }
-    for (const u of usersBody.data) {
-      loginToId.set(u.login.toLowerCase(), u.id)
-    }
   }
 
-  const broadcasterIds = logins.map((l) => loginToId.get(l)).filter(Boolean) as string[]
+  const broadcasterIds = [
+    ...new Set(validLogins.map((login) => loginToId.get(login)).filter(Boolean)),
+  ] as string[]
   if (broadcasterIds.length === 0) {
-    return logins.map((login) => ({
-      channelLogin: login,
+    return normalizedChannels.map((channel) => ({
+      channelLogin: channel.normalizedLogin ?? channel.originalLogin.toLowerCase(),
       isLive: false,
       platform: 'twitch' as const,
       title: '',
     }))
   }
 
-  const loginParams = logins.map((l) => `user_login=${encodeURIComponent(l)}`).join('&')
+  const loginParams = validLogins
+    .map((login) => `user_login=${encodeURIComponent(login)}`)
+    .join('&')
   const idParams = broadcasterIds.map((id) => `broadcaster_id=${encodeURIComponent(id)}`).join('&')
 
   const [streamsRes, channelsRes] = await Promise.all([
@@ -135,7 +148,17 @@ async function fetchTwitchChannelsStatus(
     log.warn('Twitch /helix/channels failed', { body, status: channelsRes.status })
   }
 
-  return logins.map((login) => {
+  return normalizedChannels.map((channel) => {
+    const login = channel.normalizedLogin
+    if (!login) {
+      return {
+        channelLogin: channel.originalLogin.toLowerCase(),
+        isLive: false,
+        platform: 'twitch' as const,
+        title: '',
+      }
+    }
+
     const live = liveMap.get(login)
     if (live) {
       return {

@@ -440,7 +440,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
         return
       }
 
-      const reply = replyToMessageId ? this.findReplyContext(channelId, replyToMessageId) : undefined
+      const reply = replyToMessageId
+        ? this.findReplyContext(channelId, replyToMessageId)
+        : undefined
 
       this.emit(
         'message',

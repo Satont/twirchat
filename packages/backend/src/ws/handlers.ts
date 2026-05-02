@@ -128,7 +128,12 @@ export async function handleWsMessage(
 
     case 'seventv_subscribe': {
       try {
-        await sevenTVManager.subscribeClient(ws.data.clientSecret, msg.platform, msg.channelId)
+        await sevenTVManager.subscribeClient(
+          ws.data.clientSecret,
+          msg.platform,
+          msg.channelId,
+          msg.platformUserId,
+        )
       } catch (error) {
         log.error('7TV subscribe error', { error: String(error) })
         ws.send(
@@ -154,7 +159,12 @@ export async function handleWsMessage(
       // Handle reconnect - client sends list of channels to resubscribe
       try {
         for (const sub of msg.subscriptions) {
-          await sevenTVManager.subscribeClient(ws.data.clientSecret, sub.platform, sub.channelId)
+          await sevenTVManager.subscribeClient(
+            ws.data.clientSecret,
+            sub.platform,
+            sub.channelId,
+            sub.platformUserId,
+          )
         }
       } catch (error) {
         log.error('7TV resubscribe error', { error: String(error) })

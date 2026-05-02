@@ -20,6 +20,7 @@ import type {
 } from '@twirchat/shared/types'
 import { WatchedChannelStore } from '../store/watched-channels-store'
 import { WatchedChannelsLayoutStore } from '../store/watched-channels-layout-store'
+import { AccountStore } from '../store/account-store'
 import { logger } from '@twirchat/shared/logger'
 import { sevenTVService } from '../seventv'
 import { parseMessageWithEmotes } from '../platforms/7tv/emote-parser'
@@ -38,6 +39,7 @@ interface WatchedEntry {
   messages: NormalizedChatMessage[]
   status: PlatformStatusInfo | null
   sevenTvChannelId: string
+  sevenTvPlatformUserId?: string
 }
 
 export class WatchedChannelManager {
@@ -196,6 +198,7 @@ export class WatchedChannelManager {
       adapter,
       messages: [],
       sevenTvChannelId: ch.channelSlug,
+      sevenTvPlatformUserId: undefined,
       status: null,
       watchedChannel: ch,
     }
@@ -222,10 +225,20 @@ export class WatchedChannelManager {
       if (broadcasterUserId) {
         entry.sevenTvChannelId = String(broadcasterUserId)
       }
+    } else if (ch.platform === 'twitch') {
+      const twitchAccount = AccountStore.findByPlatform('twitch')
+      if (twitchAccount && twitchAccount.username.toLowerCase() === ch.channelSlug.toLowerCase()) {
+        entry.sevenTvPlatformUserId = twitchAccount.platformUserId
+      }
     }
 
     sevenTVService
-      .subscribeToChannel(ch.platform, entry.sevenTvChannelId, [ch.channelSlug])
+      .subscribeToChannel(
+        ch.platform,
+        entry.sevenTvChannelId,
+        [ch.channelSlug],
+        entry.sevenTvPlatformUserId,
+      )
       .catch((error) => {
         log.error('Failed to subscribe to 7TV for watched channel', {
           id: ch.id,

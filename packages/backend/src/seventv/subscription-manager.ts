@@ -1,5 +1,10 @@
 import type { Platform } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
+import {
+  isTwitchUserId,
+  normalizeTwitchLogin,
+  resolveTwitchUserIdsByLogin,
+} from '../api/twitch-users.ts'
 import { sevenTVCache } from './cache'
 import type { SevenTVEmote } from './cache'
 import { sevenTVEventClient } from './event-client'
@@ -38,6 +43,7 @@ export class SevenTVSubscriptionManager {
     clientSecret: string,
     platform: Platform,
     channelId: string,
+    platformUserId?: string,
   ): Promise<boolean> {
     const channelKey = `${platform}:${channelId}`
     log.info('Subscribing client to channel', {
@@ -73,7 +79,7 @@ export class SevenTVSubscriptionManager {
     let userId: string | null = this.channelKeyToUserId.get(channelKey) ?? null
     if (!cached || isExpired) {
       try {
-        userId = await this.fetchAndCacheEmoteSet(platform, channelId)
+        userId = await this.fetchAndCacheEmoteSet(platform, channelId, platformUserId)
         if (userId) {
           this.channelKeyToUserId.set(channelKey, userId)
         }
@@ -182,6 +188,7 @@ export class SevenTVSubscriptionManager {
   private async fetchAndCacheEmoteSet(
     platform: Platform,
     channelId: string,
+    platformUserId?: string,
   ): Promise<string | null> {
     const channelKey = `${platform}:${channelId}`
     log.info('Fetching emote set from 7TV', { channelKey })
@@ -189,7 +196,32 @@ export class SevenTVSubscriptionManager {
     // Convert platform to 7TV Platform enum
     const sevenTVPlatform = platform.toUpperCase()
 
-    const result = await getUserByConnection(sevenTVPlatform as 'TWITCH' | 'KICK', channelId)
+    let sevenTVPlatformId = channelId
+    if (platform === 'twitch') {
+      if (isTwitchUserId(platformUserId)) {
+        sevenTVPlatformId = platformUserId
+      } else if (isTwitchUserId(channelId)) {
+        sevenTVPlatformId = channelId
+      } else {
+        const normalizedLogin = normalizeTwitchLogin(channelId)
+        if (!normalizedLogin) {
+          throw new Error(`Invalid Twitch channel login: ${channelId}`)
+        }
+
+        const resolvedUsers = await resolveTwitchUserIdsByLogin([normalizedLogin])
+        const resolvedPlatformId = resolvedUsers.get(normalizedLogin)
+        if (!resolvedPlatformId) {
+          throw new Error(`Twitch user not found for login: ${normalizedLogin}`)
+        }
+
+        sevenTVPlatformId = resolvedPlatformId
+      }
+    }
+
+    const result = await getUserByConnection(
+      sevenTVPlatform as 'TWITCH' | 'KICK',
+      sevenTVPlatformId,
+    )
 
     const user = result.users?.userByConnection
     if (!user) {

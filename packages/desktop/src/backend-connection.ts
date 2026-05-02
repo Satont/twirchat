@@ -94,14 +94,16 @@ export class BackendConnection {
       const channels = sevenTVService.getSubscribedChannels()
       if (channels.length > 0) {
         log.info(`Resubscribing to ${channels.length} 7TV channels`)
-        for (const { platform, channelId } of channels) {
-          sevenTVService.subscribeToChannel(platform, channelId).catch((error) => {
-            log.error('Failed to resubscribe to 7TV', {
-              platform,
-              channelId,
-              error: String(error),
+        for (const { platform, channelId, platformUserId } of channels) {
+          sevenTVService
+            .subscribeToChannel(platform, channelId, [], platformUserId)
+            .catch((error) => {
+              log.error('Failed to resubscribe to 7TV', {
+                platform,
+                channelId,
+                error: String(error),
+              })
             })
-          })
         }
       }
     })
