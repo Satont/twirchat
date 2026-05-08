@@ -1,12 +1,34 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getDb, initDb } from '@desktop/store/db'
 import { AccountStore } from '@desktop/store/account-store'
+import { MessageStore } from '@desktop/store/message-store'
 import { SettingsStore } from '@desktop/store/settings-store'
 import { UserAliasStore } from '@desktop/store/user-alias-store'
-import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
+import { DEFAULT_SETTINGS, type NormalizedChatMessage } from '@twirchat/shared/types'
 import { existsSync, unlinkSync } from 'node:fs'
 
 const TEST_DB = '/tmp/twirchat-test.sqlite'
+
+function createMessage(overrides: Partial<NormalizedChatMessage> = {}): NormalizedChatMessage {
+  return {
+    id: overrides.id ?? 'msg-default',
+    platform: overrides.platform ?? 'twitch',
+    channelId: overrides.channelId ?? 'channel-1',
+    author: {
+      id: overrides.author?.id ?? 'author-1',
+      username: overrides.author?.username ?? 'author1',
+      displayName: overrides.author?.displayName ?? 'Author One',
+      color: overrides.author?.color,
+      avatarUrl: overrides.author?.avatarUrl,
+      badges: overrides.author?.badges ?? [],
+    },
+    text: overrides.text ?? 'hello',
+    emotes: overrides.emotes ?? [],
+    timestamp: overrides.timestamp ?? new Date('2024-01-01T00:00:00.000Z'),
+    type: overrides.type ?? 'message',
+    reply: overrides.reply,
+  }
+}
 
 describe('Database', () => {
   beforeEach(() => {
@@ -251,5 +273,181 @@ describe('UserAliasStore', () => {
     UserAliasStore.upsert('youtube', 'user3', 'Alias3')
     const aliases = UserAliasStore.findAll()
     expect(aliases.length).toBe(3)
+  })
+})
+
+describe('MessageStore', () => {
+  beforeEach(() => {
+    if (existsSync(TEST_DB)) {
+      unlinkSync(TEST_DB)
+    }
+    initDb(TEST_DB)
+  })
+
+  afterEach(() => {
+    if (existsSync(TEST_DB)) {
+      unlinkSync(TEST_DB)
+    }
+  })
+
+  test('getByUser returns only selected platform user messages oldest-first', () => {
+    MessageStore.save(
+      createMessage({
+        id: 'a1',
+        platform: 'twitch',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        text: 'first',
+        timestamp: new Date('2024-01-01T00:00:01.000Z'),
+      }),
+    )
+    MessageStore.save(
+      createMessage({
+        id: 'a2',
+        platform: 'twitch',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        text: 'second',
+        timestamp: new Date('2024-01-01T00:00:02.000Z'),
+      }),
+    )
+    MessageStore.save(
+      createMessage({
+        id: 'b1',
+        platform: 'kick',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        text: 'other-platform',
+        timestamp: new Date('2024-01-01T00:00:03.000Z'),
+      }),
+    )
+    MessageStore.save(
+      createMessage({
+        id: 'c1',
+        platform: 'twitch',
+        author: { id: 'user-2', username: 'beta', displayName: 'Beta', badges: [] },
+        text: 'other-user',
+        timestamp: new Date('2024-01-01T00:00:04.000Z'),
+      }),
+    )
+
+    const result = MessageStore.getByUser({
+      platform: 'twitch',
+      platformUserId: 'user-1',
+      limit: 10,
+    })
+
+    expect(result.messages.map((message) => message.id)).toEqual(['a1', 'a2'])
+    expect(result.hasMore).toBe(false)
+    expect(result.nextCursor).toEqual({ createdAt: 1704067201000, id: 'a1' })
+  })
+
+  test('getByUser paginates older messages with stable cursor ordering', () => {
+    MessageStore.save(
+      createMessage({
+        id: 'm1',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        text: 'one',
+        timestamp: new Date('2024-01-01T00:00:01.000Z'),
+      }),
+    )
+    MessageStore.save(
+      createMessage({
+        id: 'm2',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        text: 'two',
+        timestamp: new Date('2024-01-01T00:00:02.000Z'),
+      }),
+    )
+    MessageStore.save(
+      createMessage({
+        id: 'm3',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        text: 'three',
+        timestamp: new Date('2024-01-01T00:00:03.000Z'),
+      }),
+    )
+
+    const firstPage = MessageStore.getByUser({
+      platform: 'twitch',
+      platformUserId: 'user-1',
+      limit: 2,
+    })
+
+    expect(firstPage.messages.map((message) => message.id)).toEqual(['m2', 'm3'])
+    expect(firstPage.hasMore).toBe(true)
+    expect(firstPage.nextCursor).toEqual({ createdAt: 1704067202000, id: 'm2' })
+
+    const secondPage = MessageStore.getByUser({
+      platform: 'twitch',
+      platformUserId: 'user-1',
+      limit: 2,
+      cursor: firstPage.nextCursor ?? undefined,
+    })
+
+    expect(secondPage.messages.map((message) => message.id)).toEqual(['m1'])
+    expect(secondPage.hasMore).toBe(false)
+    expect(secondPage.nextCursor).toEqual({ createdAt: 1704067201000, id: 'm1' })
+  })
+
+  test('getByUser uses id as tie-breaker when timestamps match', () => {
+    MessageStore.save(
+      createMessage({
+        id: 'a',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        timestamp: new Date('2024-01-01T00:00:05.000Z'),
+      }),
+    )
+    MessageStore.save(
+      createMessage({
+        id: 'b',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        timestamp: new Date('2024-01-01T00:00:05.000Z'),
+      }),
+    )
+    MessageStore.save(
+      createMessage({
+        id: 'c',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        timestamp: new Date('2024-01-01T00:00:05.000Z'),
+      }),
+    )
+
+    const firstPage = MessageStore.getByUser({
+      platform: 'twitch',
+      platformUserId: 'user-1',
+      limit: 2,
+    })
+    const secondPage = MessageStore.getByUser({
+      platform: 'twitch',
+      platformUserId: 'user-1',
+      limit: 2,
+      cursor: firstPage.nextCursor ?? undefined,
+    })
+
+    expect(firstPage.messages.map((message) => message.id)).toEqual(['b', 'c'])
+    expect(secondPage.messages.map((message) => message.id)).toEqual(['a'])
+  })
+
+  test('getByUser skips malformed rows safely', () => {
+    MessageStore.save(
+      createMessage({
+        id: 'valid-1',
+        author: { id: 'user-1', username: 'alpha', displayName: 'Alpha', badges: [] },
+        timestamp: new Date('2024-01-01T00:00:01.000Z'),
+      }),
+    )
+
+    const db = getDb()
+    db.run(
+      `INSERT OR REPLACE INTO chat_messages (id, platform, channel_id, author_id, author_name, text, type, created_at, data)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['broken', 'twitch', 'channel-1', 'user-1', 'Alpha', 'bad', 'message', 1704067202000, '{'],
+    )
+
+    const result = MessageStore.getByUser({
+      platform: 'twitch',
+      platformUserId: 'user-1',
+      limit: 10,
+    })
+
+    expect(result.messages.map((message) => message.id)).toEqual(['valid-1'])
   })
 })
