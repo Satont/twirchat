@@ -492,6 +492,15 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
         return MessageStore.getRecent(limit)
       },
 
+      getUserChatHistory: ({ platform, platformUserId, limit, cursor }) => {
+        return MessageStore.getByUser({
+          platform,
+          platformUserId,
+          limit,
+          cursor,
+        })
+      },
+
       getUsernameColor: ({ platform, username }) => {
         return UsernameColorCache.get(platform, username) ?? null
       },

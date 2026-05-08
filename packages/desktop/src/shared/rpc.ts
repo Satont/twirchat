@@ -47,6 +47,17 @@ export interface UserAlias {
   updatedAt: number
 }
 
+export interface UserChatHistoryCursor {
+  createdAt: number
+  id: string
+}
+
+export interface UserChatHistoryPage {
+  messages: NormalizedChatMessage[]
+  nextCursor: UserChatHistoryCursor | null
+  hasMore: boolean
+}
+
 type BunRequests = {
   /** Return all stored accounts */
   getAccounts: { params: void; response: Account[] }
@@ -108,6 +119,16 @@ type BunRequests = {
   getRecentMessages: {
     params: { limit?: number } | void
     response: NormalizedChatMessage[]
+  }
+  /** Return paginated persisted chat messages for a specific user */
+  getUserChatHistory: {
+    params: {
+      platform: Platform
+      platformUserId: string
+      limit?: number
+      cursor?: UserChatHistoryCursor
+    }
+    response: UserChatHistoryPage
   }
   /** Return current connection status for all platform adapters */
   getStatuses: {

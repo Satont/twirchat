@@ -70,8 +70,13 @@ function runMigrations(db: Database): void {
       text TEXT NOT NULL,
       type TEXT NOT NULL,
       created_at INTEGER NOT NULL,
-      data TEXT
-    )
+       data TEXT
+     )
+   `)
+
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_user_history
+    ON chat_messages(platform, author_id, created_at DESC, id DESC)
   `)
 
   // Migration: add data column to existing installations
