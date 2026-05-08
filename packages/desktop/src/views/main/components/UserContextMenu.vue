@@ -1,25 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import {
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuPortal,
-  ContextMenuRoot,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-  DialogContent,
-  DialogOverlay,
-  DialogPortal,
-  DialogRoot,
-} from 'reka-ui'
+import { computed, ref } from 'vue'
+import { DialogContent, DialogOverlay, DialogPortal, DialogRoot } from 'reka-ui'
 import type { Platform } from '@twirchat/shared/types'
+
+import KickIcon from '../../../assets/icons/platforms/kick.svg'
+import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
+import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
+import { platformColor } from '../../shared/utils/platform'
 import { useAliasStore } from '../stores/useAliasStore'
+import UserChatHistoryPanel from './UserChatHistoryPanel.vue'
 
 interface Props {
   platform: Platform
   platformUserId: string
   displayName: string
+  username?: string
+  avatarUrl?: string
   currentAlias?: string
 }
 
@@ -29,6 +25,14 @@ const aliasStore = useAliasStore()
 const dialogOpen = ref(false)
 const aliasValue = ref('')
 const aliasInput = ref<HTMLInputElement | null>(null)
+
+const platformIcon = computed(() => {
+  if (props.platform === 'twitch') return TwitchIcon
+  if (props.platform === 'kick') return KickIcon
+  return YoutubeIcon
+})
+
+const titleHandle = computed(() => props.username ?? props.platformUserId)
 
 function openDialog() {
   aliasValue.value = props.currentAlias ?? ''
@@ -51,73 +55,93 @@ async function handleSaveAlias() {
 
 async function handleRemoveAlias() {
   await aliasStore.removeAlias(props.platform, props.platformUserId)
+  aliasValue.value = ''
+  dialogOpen.value = false
+}
+
+function initials(name: string): string {
+  return name.slice(0, 2).toUpperCase()
+}
+
+function onContextMenu(event: MouseEvent): void {
+  event.preventDefault()
+  openDialog()
 }
 </script>
 
 <template>
-  <ContextMenuRoot>
-    <ContextMenuTrigger as-child>
-      <slot />
-    </ContextMenuTrigger>
-    <ContextMenuPortal>
-      <ContextMenuContent class="context-menu-content">
-        <!-- Header -->
-        <ContextMenuLabel class="context-menu-label">
-          {{ displayName }} ({{ platform }})
-        </ContextMenuLabel>
+  <span class="user-card-trigger" @contextmenu="onContextMenu">
+    <slot />
+  </span>
 
-        <ContextMenuSeparator class="context-menu-separator" />
-
-        <!-- Show current alias if set -->
-        <ContextMenuLabel v-if="currentAlias" class="context-menu-alias-label">
-          Alias: {{ currentAlias }}
-        </ContextMenuLabel>
-
-        <!-- Set/Edit alias → opens Dialog -->
-        <ContextMenuItem class="context-menu-item" @select="openDialog">
-          {{ currentAlias ? 'Edit alias' : 'Set alias' }}
-        </ContextMenuItem>
-
-        <!-- Remove alias → only shown if alias is set -->
-        <ContextMenuItem
-          v-if="currentAlias"
-          class="context-menu-item context-menu-item-danger"
-          @select="handleRemoveAlias"
-        >
-          Remove alias
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenuPortal>
-  </ContextMenuRoot>
-
-  <!-- Alias edit Dialog — separate from ContextMenu -->
   <DialogRoot v-model:open="dialogOpen">
     <DialogPortal>
       <DialogOverlay class="dialog-overlay" />
       <DialogContent class="dialog-content" @open-auto-focus="focusInput">
-        <h3 class="dialog-title">Set alias for {{ displayName }}</h3>
-        <p class="dialog-description">
-          Replaces the displayed name in chat. Leave empty to remove alias.
-        </p>
-        <input
-          ref="aliasInput"
-          v-model="aliasValue"
-          class="dialog-input"
-          :placeholder="displayName"
-          maxlength="50"
-          @keydown.enter.prevent="handleSaveAlias"
-          @keydown.escape.prevent="dialogOpen = false"
-        />
-        <div class="dialog-actions">
-          <button class="dialog-btn-cancel" @click="dialogOpen = false">Cancel</button>
-          <button class="dialog-btn-save" @click="handleSaveAlias">Save</button>
+        <div class="user-card-header" :style="{ '--platform-color': platformColor(platform) }">
+          <div class="user-card-avatar-wrap">
+            <img v-if="avatarUrl" :src="avatarUrl" :alt="displayName" class="user-card-avatar" />
+            <div v-else class="user-card-avatar user-card-avatar-fallback">
+              {{ initials(displayName) }}
+            </div>
+          </div>
+
+          <div class="user-card-header-main">
+            <div class="user-card-title-row">
+              <h3 class="dialog-title">{{ displayName }}</h3>
+              <component :is="platformIcon" class="user-card-platform-icon" />
+            </div>
+            <p class="dialog-description">{{ titleHandle }}</p>
+            <div class="user-card-badges-row">
+              <span class="user-card-pill">{{ platform }}</span>
+              <span v-if="currentAlias" class="user-card-pill user-card-pill-accent">
+                Alias: {{ currentAlias }}
+              </span>
+            </div>
+          </div>
         </div>
+
+        <div class="user-card-section">
+          <label class="dialog-label" for="user-alias-input">Display alias</label>
+          <p class="dialog-description">
+            Replaces the displayed name in chat. Leave empty to remove alias.
+          </p>
+          <div class="user-card-alias-row">
+            <input
+              id="user-alias-input"
+              ref="aliasInput"
+              v-model="aliasValue"
+              class="dialog-input"
+              :placeholder="displayName"
+              maxlength="50"
+              @keydown.enter.prevent="handleSaveAlias"
+              @keydown.escape.prevent="dialogOpen = false"
+            />
+            <button class="dialog-btn-save" @click="handleSaveAlias">Save</button>
+          </div>
+          <div class="dialog-actions dialog-actions-inline">
+            <button class="dialog-btn-cancel" @click="dialogOpen = false">Close</button>
+            <button v-if="currentAlias" class="dialog-btn-danger" @click="handleRemoveAlias">
+              Remove alias
+            </button>
+          </div>
+        </div>
+
+        <UserChatHistoryPanel
+          :open="dialogOpen"
+          :platform="platform"
+          :platform-user-id="platformUserId"
+        />
       </DialogContent>
     </DialogPortal>
   </DialogRoot>
 </template>
 
 <style scoped>
+.user-card-trigger {
+  display: inline;
+}
+
 .dialog-overlay {
   background: rgba(0, 0, 0, 0.6);
   position: fixed;
@@ -135,21 +159,121 @@ async function handleRemoveAlias() {
   left: 50%;
   transform: translate(-50%, -50%);
   width: 90vw;
-  max-width: 320px;
+  max-width: 760px;
   padding: 20px;
   z-index: 2001;
+  max-height: min(85vh, 820px);
+  overflow: auto;
 }
 
 .dialog-title {
-  margin: 0 0 8px;
-  font-size: 1.1em;
+  margin: 0;
+  font-size: 1.35em;
   color: var(--c-text, #e2e2e8);
 }
 
 .dialog-description {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 0.9em;
   color: var(--c-text-2, #8b8b99);
+}
+
+.dialog-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8em;
+  font-weight: 700;
+  color: var(--c-text, #e2e2e8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.user-card-header {
+  display: flex;
+  gap: 16px;
+  margin: -20px -20px 18px;
+  padding: 20px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--platform-color) 72%, #101012) 0%,
+    #1a1a22 100%
+  );
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.user-card-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.user-card-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.user-card-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 24px;
+  color: white;
+}
+
+.user-card-header-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-card-platform-icon {
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.user-card-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.user-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.user-card-pill-accent {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.user-card-section {
+  margin-bottom: 18px;
+}
+
+.user-card-alias-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
 }
 
 .dialog-input {
@@ -160,7 +284,6 @@ async function handleRemoveAlias() {
   border: 1px solid var(--c-border, #3a3a45);
   color: var(--c-text, #e2e2e8);
   border-radius: 4px;
-  margin-bottom: 20px;
   font-size: 0.95em;
 }
 
@@ -175,8 +298,14 @@ async function handleRemoveAlias() {
   gap: 10px;
 }
 
+.dialog-actions-inline {
+  margin-top: 12px;
+  justify-content: space-between;
+}
+
 .dialog-btn-cancel,
-.dialog-btn-save {
+.dialog-btn-save,
+.dialog-btn-danger {
   padding: 6px 14px;
   border-radius: 4px;
   cursor: pointer;
@@ -197,68 +326,19 @@ async function handleRemoveAlias() {
 .dialog-btn-save {
   background: var(--c-accent, #9147ff);
   color: #fff;
+  flex-shrink: 0;
 }
 
 .dialog-btn-save:hover {
   opacity: 0.9;
 }
-</style>
 
-<style>
-/* Global styles — ContextMenuContent is portalled outside the component tree */
-.context-menu-content {
-  min-width: 160px;
-  background-color: var(--c-surface-2, #1f1f24) !important;
-  border: 1px solid var(--c-border, #2a2a33);
-  border-radius: 6px;
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
-  color-scheme: dark;
+.dialog-btn-danger {
+  background: rgba(255, 80, 80, 0.14);
+  color: #ff9b9b;
 }
 
-.context-menu-label {
-  padding: 6px 10px;
-  font-size: 0.85em;
-  color: var(--c-text-2, #8b8b99);
-  font-weight: 600;
-}
-
-.context-menu-alias-label {
-  padding: 0 10px 6px;
-  font-size: 0.8em;
-  color: var(--c-accent, #9147ff);
-  font-style: italic;
-}
-
-.context-menu-item {
-  padding: 6px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9em;
-  color: var(--c-text, #e2e2e8);
-  outline: none;
-}
-
-.context-menu-item:hover,
-.context-menu-item[data-highlighted] {
-  background: var(--c-bg, #1e1e24);
-  color: var(--c-text, #e2e2e8);
-}
-
-.context-menu-item-danger {
-  color: #ff5050;
-}
-
-.context-menu-item-danger:hover,
-.context-menu-item-danger[data-highlighted] {
-  background: rgba(255, 80, 80, 0.15);
-  color: #ff5050;
-}
-
-.context-menu-separator {
-  height: 1px;
-  background: var(--c-border, #2a2a33);
-  margin: 4px 0;
+.dialog-btn-danger:hover {
+  background: rgba(255, 80, 80, 0.2);
 }
 </style>

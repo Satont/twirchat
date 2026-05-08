@@ -254,6 +254,8 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         :platform="message.platform"
         :platform-user-id="message.author.id"
         :display-name="message.author.displayName"
+        :username="message.author.username"
+        :avatar-url="message.author.avatarUrl"
         :current-alias="props.alias"
       >
         <span class="author" :style="message.author.color ? { color: message.author.color } : {}">{{
@@ -438,6 +440,8 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           :platform="message.platform"
           :platform-user-id="message.author.id"
           :display-name="message.author.displayName"
+          :username="message.author.username"
+          :avatar-url="message.author.avatarUrl"
           :current-alias="props.alias"
         >
           <span
