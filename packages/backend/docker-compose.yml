@@ -12,7 +12,7 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - twirchat-postgres-data:/var/lib/postgresql/data
+      - twirchat-postgres-data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U twirchat -d twirchat']
       interval: 5s
