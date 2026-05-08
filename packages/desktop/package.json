@@ -21,7 +21,7 @@
     "@twurple/api": "8.0.3",
     "@twurple/auth": "8.0.3",
     "@twurple/chat": "8.0.3",
-    "electrobun": "1.16.0",
+    "electrobun": "1.18.1",
     "reka-ui": "2.9.2",
     "splitpanes": "4.0.4",
     "virtua": "0.49.0",
