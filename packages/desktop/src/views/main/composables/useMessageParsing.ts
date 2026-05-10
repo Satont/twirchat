@@ -1,19 +1,14 @@
 import { computed, onMounted, type ComputedRef } from 'vue'
 
-import type { Emote, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
 import { rpc } from '../main'
+import { buildMessageParts, type MessagePart } from '../../shared/utils/messageParts'
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
 
 export const mentionColorCache = new Map<string, string | null>()
-
-export interface MessagePart {
-  type: 'text' | 'emote'
-  content?: string
-  emote?: Emote
-}
 
 function makeMentionKey(platform: string, username: string): string {
   return `${platform}:${username.toLowerCase()}`
@@ -75,38 +70,7 @@ export function useMessageParsing(message: NormalizedChatMessage): {
   messageParts: ComputedRef<MessagePart[]>
   processText: (text: string) => string
 } {
-  const messageParts = computed((): MessagePart[] => {
-    const parts: MessagePart[] = []
-
-    if (!message.emotes.length) {
-      return [{ content: message.text, type: 'text' }]
-    }
-
-    const chars = [...message.text]
-    let i = 0
-
-    const ranges: { start: number; end: number; emote: Emote }[] = []
-    for (const emote of message.emotes) {
-      for (const pos of emote.positions) {
-        ranges.push({ ...pos, emote })
-      }
-    }
-    ranges.sort((a, b) => a.start - b.start)
-
-    for (const range of ranges) {
-      if (i < range.start) {
-        parts.push({ content: chars.slice(i, range.start).join(''), type: 'text' })
-      }
-      parts.push({ emote: range.emote, type: 'emote' })
-      i = range.end + 1
-    }
-
-    if (i < chars.length) {
-      parts.push({ content: chars.slice(i).join(''), type: 'text' })
-    }
-
-    return parts
-  })
+  const messageParts = computed((): MessagePart[] => buildMessageParts(message))
 
   function processText(text: string): string {
     let result = escapeHtml(text)
