@@ -25,7 +25,8 @@
 import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
 import type { ServerWebSocket } from 'bun'
-import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { extname, join } from 'path'
 import { logger } from '@twirchat/shared/logger'
 
 const log = logger('overlay-server')
@@ -45,6 +46,11 @@ export type OverlayMessage =
 
 const clients = new Set<ServerWebSocket<unknown>>()
 
+interface OverlayRuntimePaths {
+  fontsDir: string | null
+  overlayDir: string | null
+}
+
 // ============================================================
 // Public API — called from src/bun/index.ts
 // ============================================================
@@ -56,7 +62,12 @@ export function pushOverlayMessage(msg: NormalizedChatMessage): void {
   const payload: OverlayMessage = { data: msg, type: 'chat_message' }
   const json = JSON.stringify(payload, replacer)
   for (const ws of clients) {
-    ws.send(json)
+    try {
+      ws.send(json)
+    } catch (error) {
+      clients.delete(ws)
+      log.warn('Failed to send overlay chat message', { error: String(error) })
+    }
   }
 }
 
@@ -67,7 +78,12 @@ export function pushOverlayEvent(event: NormalizedEvent): void {
   const payload: OverlayMessage = { data: event, type: 'chat_event' }
   const json = JSON.stringify(payload, replacer)
   for (const ws of clients) {
-    ws.send(json)
+    try {
+      ws.send(json)
+    } catch (error) {
+      clients.delete(ws)
+      log.warn('Failed to send overlay chat event', { error: String(error) })
+    }
   }
 }
 
@@ -78,7 +94,12 @@ export function clearOverlay(): void {
   const payload: OverlayMessage = { type: 'clear' }
   const json = JSON.stringify(payload)
   for (const ws of clients) {
-    ws.send(json)
+    try {
+      ws.send(json)
+    } catch (error) {
+      clients.delete(ws)
+      log.warn('Failed to send overlay clear event', { error: String(error) })
+    }
   }
 }
 
@@ -91,11 +112,59 @@ export function clearOverlay(): void {
  * Works both in development (src/overlay-server.ts) and after electrobun
  * copies the built assets.
  */
-const OVERLAY_DIST = join(import.meta.dir, '..', 'dist', 'overlay')
+export function resolveOverlayRuntimePaths(
+  baseDir: string,
+  pathExists: (path: string) => boolean = existsSync,
+): OverlayRuntimePaths {
+  const overlayCandidates = [
+    join(baseDir, '..', 'views', 'overlay'),
+    join(baseDir, '..', 'dist', 'overlay'),
+  ]
+
+  const fontCandidates = [
+    join(baseDir, '..', 'views', 'fonts'),
+    join(baseDir, '..', 'public', 'fonts'),
+  ]
+
+  return {
+    overlayDir: overlayCandidates.find(pathExists) ?? null,
+    fontsDir: fontCandidates.find(pathExists) ?? null,
+  }
+}
+
+function createMissingResponse(kind: 'fonts' | 'overlay', pathname: string): Response {
+  log.error('Overlay asset root missing', { kind, pathname })
+
+  return new Response(`Missing ${kind} asset root`, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    status: 500,
+  })
+}
+
+function createFileResponse(filePath: string, contentType?: string): Response {
+  if (!existsSync(filePath)) {
+    log.warn('Overlay file not found', { filePath })
+    return new Response('Not found', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
+    })
+  }
+
+  return new Response(Bun.file(filePath), {
+    headers: contentType ? { 'Content-Type': contentType } : undefined,
+  })
+}
 
 export function startOverlayServer(
   port: number = OVERLAY_SERVER_PORT,
 ): ReturnType<typeof Bun.serve> {
+  const runtimePaths = resolveOverlayRuntimePaths(import.meta.dir)
+
+  log.info('Resolved overlay runtime paths', {
+    fontsDir: runtimePaths.fontsDir,
+    overlayDir: runtimePaths.overlayDir,
+  })
+
   const server = Bun.serve({
     fetch(req, server) {
       // WebSocket upgrade (no path restriction — OBS connects to any path)
@@ -106,17 +175,39 @@ export function startOverlayServer(
       const url = new URL(req.url)
       const pathname = url.pathname
 
+      if (pathname.startsWith('/fonts/')) {
+        if (!runtimePaths.fontsDir) {
+          return createMissingResponse('fonts', pathname)
+        }
+
+        return createFileResponse(join(runtimePaths.fontsDir, pathname.slice('/fonts/'.length)))
+      }
+
       // Serve static assets from dist/overlay/assets/
       if (pathname.startsWith('/assets/')) {
-        const file = Bun.file(join(OVERLAY_DIST, pathname))
-        return new Response(file)
+        if (!runtimePaths.overlayDir) {
+          return createMissingResponse('overlay', pathname)
+        }
+
+        return createFileResponse(join(runtimePaths.overlayDir, pathname))
+      }
+
+      if (pathname !== '/' && pathname !== '/index.html' && extname(pathname)) {
+        return new Response('Not found', {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          status: 404,
+        })
+      }
+
+      if (!runtimePaths.overlayDir) {
+        return createMissingResponse('overlay', pathname)
       }
 
       // Everything else → index.html (SPA entry, query params passed through)
-      const indexFile = Bun.file(join(OVERLAY_DIST, 'index.html'))
-      return new Response(indexFile, {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      })
+      return createFileResponse(
+        join(runtimePaths.overlayDir, 'index.html'),
+        'text/html; charset=utf-8',
+      )
     },
     port,
     websocket: {

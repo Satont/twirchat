@@ -40,8 +40,11 @@ const config: ElectrobunConfig = {
     bunVersion: '1.3.13',
 
     copy: {
+      'dist/overlay/assets': 'views/overlay/assets',
+      'dist/overlay/index.html': 'views/overlay/index.html',
       'dist/main/assets': 'views/main/assets',
       'dist/main/index.html': 'views/main/index.html',
+      'public/fonts': 'views/fonts',
     },
 
     linux: {
