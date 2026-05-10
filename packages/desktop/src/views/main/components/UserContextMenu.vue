@@ -7,6 +7,7 @@ import UserCardDialog from './UserCardDialog.vue'
 interface Props {
   platform: Platform
   platformUserId: string
+  channelId?: string
   displayName: string
   username?: string
   avatarUrl?: string
@@ -36,6 +37,7 @@ function onContextMenu(event: MouseEvent): void {
     v-model:open="dialogOpen"
     :platform="platform"
     :platform-user-id="platformUserId"
+    :channel-id="channelId"
     :display-name="displayName"
     :username="username"
     :avatar-url="avatarUrl"

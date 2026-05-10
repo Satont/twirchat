@@ -537,6 +537,7 @@ function onAppearanceChange(s: AppSettings) {
       v-model:open="isUserCardDialogOpen"
       :platform="selectedUserCardTarget.platform"
       :platform-user-id="selectedUserCardTarget.platformUserId"
+      :channel-id="selectedUserCardTarget.channelId"
       :display-name="selectedUserCardTarget.displayName"
       :username="selectedUserCardTarget.username"
       :avatar-url="selectedUserCardTarget.avatarUrl"

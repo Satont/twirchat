@@ -252,6 +252,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         v-else
         :platform="message.platform"
         :platform-user-id="message.author.id"
+        :channel-id="message.channelId"
         :display-name="message.author.displayName"
         :username="message.author.username"
         :avatar-url="message.author.avatarUrl"
@@ -438,6 +439,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           v-else
           :platform="message.platform"
           :platform-user-id="message.author.id"
+          :channel-id="message.channelId"
           :display-name="message.author.displayName"
           :username="message.author.username"
           :avatar-url="message.author.avatarUrl"
