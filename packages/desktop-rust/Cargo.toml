@@ -1,0 +1,12 @@
+[package]
+name = "twirchat-desktop-rust"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", rev = "8bdd78e023805bdc1f8cae6dea79ef097cc49f46" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "8bdd78e023805bdc1f8cae6dea79ef097cc49f46", features = [
+  "wayland",
+  "x11",
+] }
