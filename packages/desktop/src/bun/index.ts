@@ -86,10 +86,11 @@ process.title = 'TwirChat'
 import type { TwirChatRPCSchema, WebviewSender } from '../shared/rpc'
 import type {
   ChannelsStatusResponse,
+  SearchCategoriesResponse,
   StreamStatusResponse,
   UpdateStreamRequest,
   UpdateStreamResponse,
-  SearchCategoriesResponse,
+  UserCardMetadataResponse,
 } from '@twirchat/shared/protocol'
 import { startAuthServer, setAuthServerRpcSender, setOnAuthSuccessCallback } from '../auth'
 import { setRuntimeConfig, getRuntimeConfig, backendFetch } from '../runtime-config'
@@ -499,6 +500,21 @@ const rpc = defineElectrobunRPC<TwirChatRPCSchema>('bun', {
           limit,
           cursor,
         })
+      },
+
+      getUserCardMetadata: async ({ platform, platformUserId, channelId }) => {
+        const query = new URLSearchParams({
+          platform,
+          platformUserId,
+        })
+
+        if (channelId) {
+          query.set('channelId', channelId)
+        }
+
+        const res = await backendFetch(`/api/user-card-metadata?${query.toString()}`)
+        if (!res.ok) throw new Error(`user-card-metadata: ${res.status}`)
+        return (await res.json()) as UserCardMetadataResponse
       },
 
       getUsernameColor: ({ platform, username }) => {
