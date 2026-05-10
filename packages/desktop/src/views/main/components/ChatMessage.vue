@@ -9,7 +9,6 @@ import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import UserContextMenu from './UserContextMenu.vue'
 import { useMessageParsing } from '../composables/useMessageParsing'
-import type { MessagePart } from '../composables/useMessageParsing'
 
 const props = defineProps<{
   message: NormalizedChatMessage

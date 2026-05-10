@@ -41,7 +41,7 @@ export function parseMessageWithEmotes(
       const parsedEmote: ParsedEmote = {
         animated: emote.animated,
         aspectRatio: emote.aspectRatio,
-        end: currentPosition + token.length,
+        end: currentPosition + token.length - 1,
         id: emote.id,
         imageUrl: sevenTVService.getImageUrl(emote.id),
         name: emote.name,
@@ -95,7 +95,7 @@ export function getEmotesInMessage(
       emotes.push({
         animated: emote.animated,
         aspectRatio: emote.aspectRatio,
-        end: currentPosition + token.length,
+        end: currentPosition + token.length - 1,
         id: emote.id,
         imageUrl: sevenTVService.getImageUrl(emote.id),
         name: emote.name,
