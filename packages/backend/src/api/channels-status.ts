@@ -17,7 +17,7 @@
  */
 
 import { config } from '../config.ts'
-import { getKickAppToken, getTwitchAppToken } from './stream-status.ts'
+import { fetchTwitchHelixWithAppToken, getKickAppToken } from './stream-status.ts'
 import {
   isTwitchUserId,
   normalizeTwitchLogin,
@@ -67,12 +67,12 @@ async function fetchTwitchChannelsStatus(
 
   // Prefer user token from first channel that has one. Fall back to app token.
   const userToken = channels.find((c) => c.userAccessToken)?.userAccessToken
-  const token = userToken ?? (await getTwitchAppToken())
-
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Client-Id': config.TWITCH_CLIENT_ID,
-  }
+  const headers = userToken
+    ? {
+        Authorization: `Bearer ${userToken}`,
+        'Client-Id': config.TWITCH_CLIENT_ID,
+      }
+    : undefined
 
   const loginToId = new Map<string, string>()
   for (const channel of normalizedChannels) {
@@ -88,7 +88,7 @@ async function fetchTwitchChannelsStatus(
 
   if (loginsNeedingResolution.length > 0) {
     try {
-      const resolvedUsers = await resolveTwitchUserIdsByLogin(loginsNeedingResolution, token)
+      const resolvedUsers = await resolveTwitchUserIdsByLogin(loginsNeedingResolution, userToken)
       for (const [login, id] of resolvedUsers) {
         loginToId.set(login, id)
       }
@@ -120,10 +120,19 @@ async function fetchTwitchChannelsStatus(
     .join('&')
   const idParams = broadcasterIds.map((id) => `broadcaster_id=${encodeURIComponent(id)}`).join('&')
 
-  const [streamsRes, channelsRes] = await Promise.all([
-    fetch(`https://api.twitch.tv/helix/streams?${loginParams}&first=100`, { headers }),
-    fetch(`https://api.twitch.tv/helix/channels?${idParams}`, { headers }),
-  ])
+  const [streamsRes, channelsRes] = await Promise.all(
+    userToken
+      ? [
+          fetch(`https://api.twitch.tv/helix/streams?${loginParams}&first=100`, { headers }),
+          fetch(`https://api.twitch.tv/helix/channels?${idParams}`, { headers }),
+        ]
+      : [
+          fetchTwitchHelixWithAppToken(
+            `https://api.twitch.tv/helix/streams?${loginParams}&first=100`,
+          ),
+          fetchTwitchHelixWithAppToken(`https://api.twitch.tv/helix/channels?${idParams}`),
+        ],
+  )
 
   const liveMap = new Map<string, HelixStream>()
   const offlineMap = new Map<string, HelixChannel>()

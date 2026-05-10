@@ -9,10 +9,9 @@
  * Example: { "subscriber/6": "https://static-cdn.jtvnw.net/badges/v1/<uuid>/1" }
  */
 
-import { config } from '../config.ts'
-import { getTwitchAppToken } from './stream-status.ts'
 import { logger } from '@twirchat/shared/logger'
 import type { TwitchBadgesResponse } from '@twirchat/shared'
+import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
 
 const log = logger('twitch-badges')
 
@@ -38,17 +37,13 @@ function mergeHelixBadges(result: Record<string, string>, body: HelixBadgesBody)
 
 export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse> {
   const broadcasterLogin = url.searchParams.get('broadcasterLogin')
-  const token = await getTwitchAppToken()
-
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Client-Id': config.TWITCH_CLIENT_ID,
-  }
 
   const badges: Record<string, string> = {}
 
   // 1. Global badges
-  const globalRes = await fetch('https://api.twitch.tv/helix/chat/badges/global', { headers })
+  const globalRes = await fetchTwitchHelixWithAppToken(
+    'https://api.twitch.tv/helix/chat/badges/global',
+  )
   if (!globalRes.ok) {
     throw new Error(`Helix global badges failed: ${globalRes.status}`)
   }
@@ -61,17 +56,15 @@ export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse
   // 2. Channel-specific badges (subscriber tiers, bits, custom, etc.)
   if (broadcasterLogin) {
     // Resolve login → broadcaster_id
-    const userRes = await fetch(
+    const userRes = await fetchTwitchHelixWithAppToken(
       `https://api.twitch.tv/helix/users?login=${encodeURIComponent(broadcasterLogin)}`,
-      { headers },
     )
     if (userRes.ok) {
       const userData = (await userRes.json()) as { data: { id: string }[] }
       const broadcasterId = userData.data[0]?.id
       if (broadcasterId) {
-        const chanRes = await fetch(
+        const chanRes = await fetchTwitchHelixWithAppToken(
           `https://api.twitch.tv/helix/chat/badges?broadcaster_id=${broadcasterId}`,
-          { headers },
         )
         if (chanRes.ok) {
           const chanBody = (await chanRes.json()) as HelixBadgesBody

@@ -18,6 +18,19 @@ import type { StreamStatusResponse } from '@twirchat/shared'
 let twitchAppToken: string | null = null
 let twitchAppTokenExpiresAt = 0
 
+function invalidateTwitchAppToken(): void {
+  twitchAppToken = null
+  twitchAppTokenExpiresAt = 0
+}
+
+function getTwitchHelixHeaders(token: string, headers?: RequestInit['headers']): Headers {
+  const nextHeaders = new Headers(headers)
+  nextHeaders.set('Authorization', `Bearer ${token}`)
+  nextHeaders.set('Client-Id', config.TWITCH_CLIENT_ID)
+
+  return nextHeaders
+}
+
 async function getTwitchAppToken(): Promise<string> {
   if (twitchAppToken && Date.now() < twitchAppTokenExpiresAt - 60_000) {
     return twitchAppToken
@@ -47,6 +60,29 @@ async function getTwitchAppToken(): Promise<string> {
   twitchAppTokenExpiresAt = Date.now() + data.expires_in * 1000
 
   return twitchAppToken
+}
+
+async function fetchTwitchHelixWithAppToken(
+  input: string | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  const token = await getTwitchAppToken()
+  const response = await fetch(input, {
+    ...init,
+    headers: getTwitchHelixHeaders(token, init.headers),
+  })
+
+  if (response.status !== 401) {
+    return response
+  }
+
+  invalidateTwitchAppToken()
+
+  const refreshedToken = await getTwitchAppToken()
+  return fetch(input, {
+    ...init,
+    headers: getTwitchHelixHeaders(refreshedToken, init.headers),
+  })
 }
 
 // ----------------------------------------------------------------
@@ -92,17 +128,9 @@ async function getKickAppToken(): Promise<string> {
 // ----------------------------------------------------------------
 
 async function getTwitchStreamStatus(channelId: string): Promise<StreamStatusResponse> {
-  const token = await getTwitchAppToken()
-
   // First, try to get live stream data
-  const streamRes = await fetch(
+  const streamRes = await fetchTwitchHelixWithAppToken(
     `https://api.twitch.tv/helix/streams?user_id=${encodeURIComponent(channelId)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-      },
-    },
   )
 
   if (!streamRes.ok) {
@@ -130,14 +158,8 @@ async function getTwitchStreamStatus(channelId: string): Promise<StreamStatusRes
   }
 
   // Offline: fetch channel info for title/game
-  const channelRes = await fetch(
+  const channelRes = await fetchTwitchHelixWithAppToken(
     `https://api.twitch.tv/helix/channels?broadcaster_id=${encodeURIComponent(channelId)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-      },
-    },
   )
 
   if (!channelRes.ok) {
@@ -240,4 +262,4 @@ export async function handleStreamStatus(url: URL): Promise<StreamStatusResponse
 }
 
 // Re-export app token helpers for use in other API modules
-export { getTwitchAppToken, getKickAppToken }
+export { fetchTwitchHelixWithAppToken, getKickAppToken, getTwitchAppToken }
