@@ -1,5 +1,5 @@
 import { config } from '../config.ts'
-import { getTwitchAppToken } from './stream-status.ts'
+import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
 
 export interface HelixUser {
   id: string
@@ -30,6 +30,23 @@ export function isTwitchUserId(id: string | undefined | null): id is string {
   return Boolean(id && TWITCH_USER_ID_RE.test(id))
 }
 
+export async function resolveTwitchUserId(
+  identifier: string,
+  userAccessToken?: string,
+): Promise<string | null> {
+  if (isTwitchUserId(identifier)) {
+    return identifier
+  }
+
+  const normalizedLogin = normalizeTwitchLogin(identifier)
+  if (!normalizedLogin) {
+    return null
+  }
+
+  const resolvedUsers = await resolveTwitchUserIdsByLogin([normalizedLogin], userAccessToken)
+  return resolvedUsers.get(normalizedLogin) ?? null
+}
+
 export async function resolveTwitchUserIdsByLogin(
   logins: string[],
   userAccessToken?: string,
@@ -43,14 +60,16 @@ export async function resolveTwitchUserIdsByLogin(
     return loginToId
   }
 
-  const token = userAccessToken ?? (await getTwitchAppToken())
   const params = normalizedLogins.map((login) => `login=${encodeURIComponent(login)}`).join('&')
-  const response = await fetch(`https://api.twitch.tv/helix/users?${params}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Client-Id': config.TWITCH_CLIENT_ID,
-    },
-  })
+  const url = `https://api.twitch.tv/helix/users?${params}`
+  const response = userAccessToken
+    ? await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+          'Client-Id': config.TWITCH_CLIENT_ID,
+        },
+      })
+    : await fetchTwitchHelixWithAppToken(url)
 
   if (!response.ok) {
     const body = await response.text()

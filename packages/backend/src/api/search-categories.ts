@@ -8,23 +8,15 @@
 
 import { config } from '../config.ts'
 import type { CategorySearchResult, SearchCategoriesResponse } from '@twirchat/shared'
-import { getKickAppToken, getTwitchAppToken } from './stream-status.ts'
+import { fetchTwitchHelixWithAppToken, getKickAppToken } from './stream-status.ts'
 
 // ----------------------------------------------------------------
 // Twitch
 // ----------------------------------------------------------------
 
 async function searchTwitchCategories(query: string): Promise<CategorySearchResult[]> {
-  const token = await getTwitchAppToken()
-
-  const res = await fetch(
+  const res = await fetchTwitchHelixWithAppToken(
     `https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(query)}&first=25`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-      },
-    },
   )
 
   if (!res.ok) {
