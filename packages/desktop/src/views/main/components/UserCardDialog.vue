@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { DialogContent, DialogOverlay, DialogPortal, DialogRoot } from 'reka-ui'
 import type { Platform } from '@twirchat/shared/types'
 
@@ -7,12 +7,15 @@ import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import { platformColor } from '../../shared/utils/platform'
+import { useUserCardMetadata } from '../composables/useUserCardMetadata'
 import { useAliasStore } from '../stores/useAliasStore'
 import UserChatHistoryPanel from './UserChatHistoryPanel.vue'
 
 interface Props {
   platform: Platform
   platformUserId: string
+  channelId?: string
+  channelSlug?: string
   displayName: string
   username?: string
   avatarUrl?: string
@@ -25,6 +28,20 @@ const open = defineModel<boolean>('open', { required: true })
 const aliasStore = useAliasStore()
 const aliasValue = ref('')
 const aliasInput = ref<HTMLInputElement | null>(null)
+const platformRef = toRef(props, 'platform')
+const platformUserIdRef = toRef(props, 'platformUserId')
+const usernameRef = toRef(props, 'username')
+const channelIdRef = toRef(props, 'channelId')
+const channelSlugRef = toRef(props, 'channelSlug')
+
+const { metadata, loading, error, reload, supportedByCard } = useUserCardMetadata(
+  platformRef,
+  platformUserIdRef,
+  usernameRef,
+  channelIdRef,
+  channelSlugRef,
+  open,
+)
 
 watch(
   open,
@@ -43,6 +60,79 @@ const platformIcon = computed(() => {
 })
 
 const titleHandle = computed(() => props.username ?? props.platformUserId)
+
+function formatAbsoluteDate(value: string | null | undefined): string | null {
+  if (!value) return null
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  return date.toLocaleDateString()
+}
+
+const accountAgeText = computed(() => {
+  const field = metadata.value?.accountAge
+  if (!field) return null
+
+  if (field.status === 'available') {
+    return `Created ${formatAbsoluteDate(field.createdAt) ?? field.createdAt}`
+  }
+
+  return field.message ?? 'Unavailable'
+})
+
+const followAgeText = computed(() => {
+  const field = metadata.value?.followAge
+  if (!field) return null
+
+  if (field.status === 'available') {
+    return `Following since ${formatAbsoluteDate(field.followedAt) ?? field.followedAt}`
+  }
+
+  return field.message ?? 'Unavailable'
+})
+
+const subscriptionDurationText = computed(() => {
+  const field = metadata.value?.subscriptionDuration
+  if (!field) return null
+
+  if (field.status === 'available') {
+    if (field.currentlySubscribed === true) {
+      const parts = ['Currently subscribed']
+
+      if (field.tier) {
+        parts.push(`Tier ${field.tier}`)
+      }
+
+      if (field.isGift) {
+        parts.push(field.gifterDisplayName ? `Gifted by ${field.gifterDisplayName}` : 'Gifted sub')
+      }
+
+      if (field.message) {
+        parts.push(field.message)
+      }
+
+      return parts.join(' · ')
+    }
+
+    return field.message ?? 'Not currently subscribed'
+  }
+
+  return field.message ?? 'Unavailable'
+})
+
+const subAgeText = computed(() => {
+  const field = metadata.value?.subAge
+  if (!field) return null
+
+  if (field.status === 'available' && field.months !== null) {
+    return `${field.months} month${field.months === 1 ? '' : 's'}`
+  }
+
+  return field.message ?? 'Unavailable'
+})
 
 function focusInput() {
   aliasInput.value?.focus()
@@ -127,6 +217,51 @@ function initials(name: string): string {
               Remove alias
             </button>
           </div>
+        </div>
+
+        <div class="user-card-section">
+          <div class="user-card-metadata-header">
+            <div>
+              <h4 class="user-card-metadata-title">Account metadata</h4>
+              <p class="dialog-description">Fetched through the backend for this platform.</p>
+            </div>
+
+            <button
+              v-if="supportedByCard"
+              class="user-card-metadata-refresh"
+              :disabled="loading"
+              @click="void reload()"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div v-if="!supportedByCard" class="user-card-metadata-state">
+            Metadata is not supported for this platform yet.
+          </div>
+          <div v-else-if="loading" class="user-card-metadata-state">Loading metadata…</div>
+          <div v-else-if="error" class="user-card-metadata-state user-card-metadata-state-error">
+            <span>{{ error }}</span>
+            <button class="user-card-metadata-inline-btn" @click="void reload()">Retry</button>
+          </div>
+          <dl v-else-if="metadata" class="user-card-metadata-list">
+            <div class="user-card-metadata-item">
+              <dt>Account age</dt>
+              <dd>{{ accountAgeText }}</dd>
+            </div>
+            <div class="user-card-metadata-item">
+              <dt>Follow age</dt>
+              <dd>{{ followAgeText }}</dd>
+            </div>
+            <div class="user-card-metadata-item">
+              <dt>Subscription duration</dt>
+              <dd>{{ subscriptionDurationText }}</dd>
+            </div>
+            <div class="user-card-metadata-item">
+              <dt>Sub age</dt>
+              <dd>{{ subAgeText }}</dd>
+            </div>
+          </dl>
         </div>
 
         <UserChatHistoryPanel
@@ -278,6 +413,99 @@ function initials(name: string): string {
   gap: 10px;
   align-items: center;
   margin-top: 12px;
+}
+
+.user-card-metadata-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.user-card-metadata-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-text, #e2e2e8);
+}
+
+.user-card-metadata-refresh,
+.user-card-metadata-inline-btn {
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--c-text, #e2e2e8);
+  cursor: pointer;
+  font: inherit;
+}
+
+.user-card-metadata-refresh {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.user-card-metadata-inline-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.user-card-metadata-refresh:disabled,
+.user-card-metadata-inline-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.user-card-metadata-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 96px;
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--c-text-2, #8b8b99);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.user-card-metadata-state-error {
+  color: #fca5a5;
+  flex-direction: column;
+}
+
+.user-card-metadata-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.user-card-metadata-item {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.user-card-metadata-item dt {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text-2, #8b8b99);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.user-card-metadata-item dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--c-text, #e2e2e8);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .dialog-input {

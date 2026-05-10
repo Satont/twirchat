@@ -169,6 +169,24 @@ export async function handleTwitchCallback(url: URL): Promise<{
     scopes: string[]
   }
 
+  const userInfoRes = await fetch(
+    `https://api.twitch.tv/helix/users?id=${encodeURIComponent(validateData.user_id)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${tokens.accessToken}`,
+        'Client-Id': validateData.client_id,
+      },
+    },
+  )
+
+  const userInfo = userInfoRes.ok
+    ? (
+        (await userInfoRes.json()) as {
+          data?: Array<{ display_name?: string; profile_image_url?: string | null }>
+        }
+      ).data?.[0]
+    : undefined
+
   const expiresAt = tokens.expiresIn ? Math.floor(Date.now() / 1000) + tokens.expiresIn : undefined
 
   AccountStore.upsert({
@@ -176,7 +194,8 @@ export async function handleTwitchCallback(url: URL): Promise<{
     platform: 'twitch',
     platformUserId: validateData.user_id,
     username: validateData.login,
-    displayName: validateData.login, // Twitch validate endpoint doesn't return display name; good enough for now
+    displayName: userInfo?.display_name ?? validateData.login,
+    avatarUrl: userInfo?.profile_image_url ?? undefined,
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresAt,

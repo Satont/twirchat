@@ -2,6 +2,7 @@ import { handleStreamStatus } from '../api/stream-status.ts'
 import { handleUpdateStream } from '../api/update-stream.ts'
 import { handleSearchCategories } from '../api/search-categories.ts'
 import { handleTwitchBadges } from '../api/twitch-badges.ts'
+import { fetchTwitchUserById } from '../api/twitch-users.ts'
 import { handleChannelsStatus } from '../api/channels-status.ts'
 import { handleKickChatroom } from '../api/kick-chatroom.ts'
 import { json, requireClient } from './utils.ts'
@@ -71,6 +72,23 @@ export const streamRoutes = {
         return json(result)
       } catch (err) {
         log.error('twitch/badges failed', { err: String(err) })
+        return json({ error: String(err) }, 500)
+      }
+    },
+  },
+  '/api/twitch/user': {
+    async GET(req: Request) {
+      try {
+        const url = new URL(req.url)
+        const userId = url.searchParams.get('userId')
+        if (!userId) {
+          return json({ error: 'userId is required' }, 400)
+        }
+
+        const user = await fetchTwitchUserById(userId)
+        return json({ user })
+      } catch (err) {
+        log.error('twitch/user failed', { err: String(err) })
         return json({ error: String(err) }, 500)
       }
     },

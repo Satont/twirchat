@@ -41,6 +41,7 @@ describe('resolveUserCardCommand', () => {
       target: {
         platform: 'twitch',
         platformUserId: 'user-1',
+        channelId: 'channel-1',
         displayName: 'Satont',
         username: 'satont',
         avatarUrl: undefined,
@@ -59,6 +60,7 @@ describe('resolveUserCardCommand', () => {
       target: {
         platform: 'twitch',
         platformUserId: 'user-1',
+        channelId: 'channel-1',
         displayName: 'Satont',
         username: 'satont',
         avatarUrl: undefined,

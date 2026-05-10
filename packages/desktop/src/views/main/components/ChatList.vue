@@ -75,8 +75,19 @@ function onReply(msg: NormalizedChatMessage) {
   replyTarget.value = msg
 }
 
+function getChannelSlugForPlatform(platform: Platform): string | undefined {
+  if (props.watchedChannel?.platform === platform) {
+    return props.watchedChannel.channelSlug
+  }
+
+  return props.statuses.get(platform)?.channelLogin
+}
+
 function onOpenUserCard(target: UserCardTarget) {
-  selectedUserCardTarget.value = target
+  selectedUserCardTarget.value = {
+    ...target,
+    channelSlug: target.channelSlug ?? getChannelSlugForPlatform(target.platform),
+  }
   isUserCardDialogOpen.value = true
 }
 
@@ -408,6 +419,7 @@ function onAppearanceChange(s: AppSettings) {
           <ChatMessage
             :key="item.id"
             :message="item"
+            :channel-slug="getChannelSlugForPlatform(item.platform)"
             :alias="getAliasForMessage(item)"
             :show-platform-color-stripe="settings?.showPlatformColorStripe"
             :show-platform-icon="settings?.showPlatformIcon"
@@ -537,6 +549,8 @@ function onAppearanceChange(s: AppSettings) {
       v-model:open="isUserCardDialogOpen"
       :platform="selectedUserCardTarget.platform"
       :platform-user-id="selectedUserCardTarget.platformUserId"
+      :channel-id="selectedUserCardTarget.channelId"
+      :channel-slug="selectedUserCardTarget.channelSlug"
       :display-name="selectedUserCardTarget.displayName"
       :username="selectedUserCardTarget.username"
       :avatar-url="selectedUserCardTarget.avatarUrl"

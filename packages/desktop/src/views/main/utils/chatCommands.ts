@@ -3,6 +3,8 @@ import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 export interface UserCardTarget {
   platform: Platform
   platformUserId: string
+  channelId?: string
+  channelSlug?: string
   displayName: string
   username?: string
   avatarUrl?: string
@@ -66,6 +68,7 @@ export function resolveUserCardCommand(
     deduped.set(key, {
       platform: msg.platform,
       platformUserId: msg.author.id,
+      channelId: msg.channelId,
       displayName: msg.author.displayName,
       username: msg.author.username,
       avatarUrl: msg.author.avatarUrl,

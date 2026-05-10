@@ -326,6 +326,68 @@ export interface SearchCategoriesResponse {
   categories: CategorySearchResult[]
 }
 
+export type UserCardMetadataPlatform = Extract<Platform, 'twitch' | 'kick'>
+
+export type UserCardFieldStatus = 'available' | 'unavailable' | 'unsupported' | 'missing_permission'
+
+export interface UserCardMetadataRequest {
+  platform: UserCardMetadataPlatform
+  platformUserId: string
+  username?: string
+  /**
+   * Chat channel context from the selected message.
+   * Twitch messages currently carry the channel login here.
+   * Kick messages currently carry the broadcaster user id here.
+   */
+  channelId?: string
+  channelSlug?: string
+}
+
+export interface UserCardMetadataBackendRequest extends UserCardMetadataRequest {
+  twitchAuth?: {
+    accessToken: string
+    platformUserId: string
+    scopes: string[]
+  }
+}
+
+export interface UserCardAccountAgeField {
+  status: UserCardFieldStatus
+  createdAt: string | null
+  message?: string
+}
+
+export interface UserCardFollowAgeField {
+  status: UserCardFieldStatus
+  followedAt: string | null
+  message?: string
+}
+
+export interface UserCardSubscriptionDurationField {
+  status: UserCardFieldStatus
+  currentlySubscribed: boolean | null
+  tier?: string
+  isGift?: boolean
+  gifterDisplayName?: string
+  message?: string
+}
+
+export interface UserCardSubAgeField {
+  status: UserCardFieldStatus
+  months: number | null
+  message?: string
+}
+
+export interface UserCardMetadataResponse {
+  platform: UserCardMetadataPlatform
+  platformUserId: string
+  fetchedAt: number
+  accountAge: UserCardAccountAgeField
+  followAge: UserCardFollowAgeField
+  subscriptionDuration: UserCardSubscriptionDurationField
+  subAge: UserCardSubAgeField
+}
+
 // ============================================================
 
 /** GET /api/accounts — список аккаунтов */

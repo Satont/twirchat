@@ -31,6 +31,8 @@ import type {
   SearchCategoriesResponse,
   SevenTVEmote,
   StreamStatusResponse,
+  UserCardMetadataRequest,
+  UserCardMetadataResponse,
   UpdateStreamRequest,
   UpdateStreamResponse,
 } from '@twirchat/shared/protocol'
@@ -129,6 +131,11 @@ type BunRequests = {
       cursor?: UserChatHistoryCursor
     }
     response: UserChatHistoryPage
+  }
+  /** Return backend-routed metadata for the user card */
+  getUserCardMetadata: {
+    params: UserCardMetadataRequest
+    response: UserCardMetadataResponse
   }
   /** Return current connection status for all platform adapters */
   getStatuses: {

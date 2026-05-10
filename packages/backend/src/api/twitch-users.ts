@@ -6,6 +6,11 @@ export interface HelixUser {
   login: string
 }
 
+export interface HelixUserProfile extends HelixUser {
+  display_name?: string
+  profile_image_url?: string
+}
+
 const TWITCH_LOGIN_RE = /^[a-z0-9_]{4,25}$/
 const TWITCH_USER_ID_RE = /^\d+$/
 
@@ -82,4 +87,31 @@ export async function resolveTwitchUserIdsByLogin(
   }
 
   return loginToId
+}
+
+export async function fetchTwitchUserById(
+  userId: string,
+  userAccessToken?: string,
+): Promise<HelixUserProfile | null> {
+  if (!isTwitchUserId(userId)) {
+    return null
+  }
+
+  const url = `https://api.twitch.tv/helix/users?id=${encodeURIComponent(userId)}`
+  const response = userAccessToken
+    ? await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+          'Client-Id': config.TWITCH_CLIENT_ID,
+        },
+      })
+    : await fetchTwitchHelixWithAppToken(url)
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Twitch /helix/users by id failed: ${response.status} ${body}`)
+  }
+
+  const payload = (await response.json()) as { data: HelixUserProfile[] }
+  return payload.data[0] ?? null
 }

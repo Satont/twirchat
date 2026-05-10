@@ -22,6 +22,7 @@ import { MessageStore } from '../../store/message-store'
 import { refreshTwitchToken } from '../../auth/twitch'
 import type { TwitchBadgesResponse } from '@twirchat/shared/types'
 import { logger } from '@twirchat/shared/logger'
+import { resolveTwitchAvatarUrl } from './avatar-cache'
 
 const log = logger('twitch')
 
@@ -29,6 +30,7 @@ interface LocalTwitchSentMessageParams {
   channelId: string
   text: string
   author: {
+    avatarUrl?: string
     displayName: string
     id: string
     username?: string
@@ -43,6 +45,7 @@ export function createLocalTwitchSentMessage(
 ): NormalizedChatMessage {
   return {
     author: {
+      avatarUrl: params.author.avatarUrl,
       badges: [],
       displayName: params.author.displayName,
       id: params.author.id,
@@ -299,7 +302,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     // Messages (also handles bits/cheers — msg.bits > 0 means a cheer)
     this.chatClient.onMessage((channel, user, text, msg) => {
-      this.handleChatMessage(msg)
+      void this.handleChatMessage(msg)
       if (msg.bits > 0) {
         this.handleCheerEvent(msg)
       }
@@ -307,7 +310,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     // Actions (/me)
     this.chatClient.onAction((channel, user, text, msg) => {
-      this.handleChatMessage(msg, true)
+      void this.handleChatMessage(msg, true)
     })
 
     // Subscriptions
@@ -448,6 +451,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         'message',
         createLocalTwitchSentMessage({
           author: {
+            avatarUrl: AccountStore.findByPlatform('twitch')?.avatarUrl,
             displayName,
             id: this.platformUserId ?? this.accountId ?? this.login ?? 'twitch-self',
             username: this.login ?? undefined,
@@ -491,7 +495,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
   }
 
-  private handleChatMessage(msg: ChatMessage, isAction = false): void {
+  private async handleChatMessage(msg: ChatMessage, isAction = false): Promise<void> {
     const channel = msg.target
     const { text } = msg
     const { tags } = msg
@@ -501,6 +505,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     const color = tags.get('color') || undefined
     const msgId = tags.get('id') ?? `${Date.now()}`
     const timestamp = msg.date
+    const avatarUrl = await resolveTwitchAvatarUrl({ authorId: userId })
 
     const replyParentMsgId = tags.get('reply-parent-msg-id')
     const replyParentMsgBody = tags.get('reply-parent-msg-body')
@@ -550,6 +555,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     const normalized: NormalizedChatMessage = {
       author: {
+        avatarUrl,
         badges,
         color,
         displayName,
