@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { platformColor } from '../shared/utils/platform'
+import type { MessagePart } from '../shared/utils/messageParts'
 
 // ----------------------------------------------------------------
 // Config from URL query params
@@ -36,21 +37,26 @@ const allowedPlatforms = cfg.platforms
 
 interface DisplayMessage {
   id: string
-  msg: NormalizedChatMessage
+  payload: OverlayChatMessage
   expireAt?: number
+}
+
+interface OverlayChatMessage {
+  message: NormalizedChatMessage
+  parts: MessagePart[]
 }
 
 const messages = ref<DisplayMessage[]>([])
 
-function addMessage(msg: NormalizedChatMessage) {
-  if (allowedPlatforms && !allowedPlatforms.has(msg.platform)) {
+function addMessage(payload: OverlayChatMessage) {
+  if (allowedPlatforms && !allowedPlatforms.has(payload.message.platform)) {
     return
   }
 
   const dm: DisplayMessage = {
     expireAt: cfg.timeout > 0 ? Date.now() + cfg.timeout * 1000 : undefined,
-    id: msg.id,
-    msg,
+    id: payload.message.id,
+    payload,
   }
 
   if (cfg.position === 'bottom') {
@@ -89,7 +95,7 @@ function connect() {
     try {
       const data = JSON.parse(ev.data as string)
       if (data.type === 'chat_message') {
-        addMessage(data.data as NormalizedChatMessage)
+        addMessage(data.data as OverlayChatMessage)
       } else if (data.type === 'clear') {
         clearMessages()
       }
@@ -153,26 +159,41 @@ const cssVars = computed(() => ({
         <span
           v-if="cfg.showPlatform"
           class="platform-dot"
-          :style="{ background: platformColor(dm.msg.platform) }"
+          :style="{ background: platformColor(dm.payload.message.platform) }"
         />
 
         <!-- Avatar -->
         <img
-          v-if="cfg.showAvatar && dm.msg.author.avatarUrl"
+          v-if="cfg.showAvatar && dm.payload.message.author.avatarUrl"
           class="avatar"
-          :src="dm.msg.author.avatarUrl"
-          :alt="dm.msg.author.displayName"
+          :src="dm.payload.message.author.avatarUrl"
+          :alt="dm.payload.message.author.displayName"
         />
 
         <!-- Author -->
-        <span class="author" :style="dm.msg.author.color ? { color: dm.msg.author.color } : {}">{{
-          dm.msg.author.displayName
-        }}</span>
+        <span
+          class="author"
+          :style="dm.payload.message.author.color ? { color: dm.payload.message.author.color } : {}"
+          >{{ dm.payload.message.author.displayName }}</span
+        >
 
         <span class="sep">:</span>
 
-        <!-- Text -->
-        <span class="text">{{ dm.msg.text }}</span>
+        <span class="text">
+          <template
+            v-for="(part, index) in dm.payload.parts"
+            :key="`${dm.id}-${part.type}-${index}`"
+          >
+            <img
+              v-if="part.type === 'emote' && part.emote"
+              class="emote"
+              :src="part.emote.imageUrl"
+              :alt="part.emote.name"
+              :title="part.emote.name"
+            />
+            <span v-else-if="part.type === 'text' && part.content">{{ part.content }}</span>
+          </template>
+        </span>
       </div>
     </TransitionGroup>
   </div>
@@ -246,6 +267,16 @@ const cssVars = computed(() => ({
 .text {
   flex: 1;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  word-break: break-word;
+}
+
+.emote {
+  height: 1.7em;
+  width: auto;
+  max-width: 5.2em;
+  vertical-align: middle;
+  display: inline-block;
+  object-fit: contain;
 }
 
 /* ---- Slide animation ---- */

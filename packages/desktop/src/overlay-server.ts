@@ -28,6 +28,7 @@ import type { ServerWebSocket } from 'bun'
 import { existsSync } from 'node:fs'
 import { extname, join } from 'path'
 import { logger } from '@twirchat/shared/logger'
+import { buildMessageParts, type MessagePart } from './views/shared/utils/messageParts'
 
 const log = logger('overlay-server')
 
@@ -35,8 +36,13 @@ const log = logger('overlay-server')
 // Overlay WS message types (server → browser)
 // ============================================================
 
+export interface OverlayChatMessage {
+  message: NormalizedChatMessage
+  parts: MessagePart[]
+}
+
 export type OverlayMessage =
-  | { type: 'chat_message'; data: NormalizedChatMessage }
+  | { type: 'chat_message'; data: OverlayChatMessage }
   | { type: 'chat_event'; data: NormalizedEvent }
   | { type: 'clear' }
 
@@ -59,7 +65,10 @@ interface OverlayRuntimePaths {
  * Push a chat message to all connected overlay clients.
  */
 export function pushOverlayMessage(msg: NormalizedChatMessage): void {
-  const payload: OverlayMessage = { data: msg, type: 'chat_message' }
+  const payload: OverlayMessage = {
+    data: { message: msg, parts: buildMessageParts(msg) },
+    type: 'chat_message',
+  }
   const json = JSON.stringify(payload, replacer)
   for (const ws of clients) {
     try {
