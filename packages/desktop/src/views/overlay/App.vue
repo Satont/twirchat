@@ -13,7 +13,7 @@ function qp(name: string, fallback: string): string {
 
 const cfg = {
   bg: qp('bg', 'transparent'),
-  textColor: qp('textColor', '#ffffff'),
+  textColor: qp('textColor', qp('color', '#ffffff')),
   fontSize: Number(qp('fontSize', '14')),
   maxMessages: Number(qp('maxMessages', '20')),
   timeout: Number(qp('timeout', '0')), // Seconds, 0 = never
