@@ -12,6 +12,7 @@ import { useMessageParsing } from '../composables/useMessageParsing'
 
 const props = defineProps<{
   message: NormalizedChatMessage
+  channelSlug?: string
   showPlatformColorStripe?: boolean
   showPlatformIcon?: boolean
   showTimestamp?: boolean
@@ -253,6 +254,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         :platform="message.platform"
         :platform-user-id="message.author.id"
         :channel-id="message.channelId"
+        :channel-slug="props.channelSlug"
         :display-name="message.author.displayName"
         :username="message.author.username"
         :avatar-url="message.author.avatarUrl"
@@ -440,6 +442,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           :platform="message.platform"
           :platform-user-id="message.author.id"
           :channel-id="message.channelId"
+          :channel-slug="props.channelSlug"
           :display-name="message.author.displayName"
           :username="message.author.username"
           :avatar-url="message.author.avatarUrl"

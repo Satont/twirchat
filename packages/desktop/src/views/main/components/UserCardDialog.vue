@@ -15,6 +15,7 @@ interface Props {
   platform: Platform
   platformUserId: string
   channelId?: string
+  channelSlug?: string
   displayName: string
   username?: string
   avatarUrl?: string
@@ -29,12 +30,16 @@ const aliasValue = ref('')
 const aliasInput = ref<HTMLInputElement | null>(null)
 const platformRef = toRef(props, 'platform')
 const platformUserIdRef = toRef(props, 'platformUserId')
+const usernameRef = toRef(props, 'username')
 const channelIdRef = toRef(props, 'channelId')
+const channelSlugRef = toRef(props, 'channelSlug')
 
 const { metadata, loading, error, reload, supportedByCard } = useUserCardMetadata(
   platformRef,
   platformUserIdRef,
+  usernameRef,
   channelIdRef,
+  channelSlugRef,
   open,
 )
 
@@ -473,12 +478,14 @@ function initials(name: string): string {
 
 .user-card-metadata-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin: 0;
 }
 
 .user-card-metadata-item {
-  padding: 12px 14px;
+  min-width: 0;
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.16);
@@ -498,6 +505,7 @@ function initials(name: string): string {
   font-size: 13px;
   color: var(--c-text, #e2e2e8);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .dialog-input {

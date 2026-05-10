@@ -333,12 +333,22 @@ export type UserCardFieldStatus = 'available' | 'unavailable' | 'unsupported' | 
 export interface UserCardMetadataRequest {
   platform: UserCardMetadataPlatform
   platformUserId: string
+  username?: string
   /**
    * Chat channel context from the selected message.
    * Twitch messages currently carry the channel login here.
    * Kick messages currently carry the broadcaster user id here.
    */
   channelId?: string
+  channelSlug?: string
+}
+
+export interface UserCardMetadataBackendRequest extends UserCardMetadataRequest {
+  twitchAuth?: {
+    accessToken: string
+    platformUserId: string
+    scopes: string[]
+  }
 }
 
 export interface UserCardAccountAgeField {

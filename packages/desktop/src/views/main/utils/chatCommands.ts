@@ -4,6 +4,7 @@ export interface UserCardTarget {
   platform: Platform
   platformUserId: string
   channelId?: string
+  channelSlug?: string
   displayName: string
   username?: string
   avatarUrl?: string

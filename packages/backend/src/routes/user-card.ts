@@ -6,23 +6,19 @@ const log = logger('user-card-route')
 
 export const userCardRoutes = {
   '/api/user-card-metadata': {
-    async GET(req: Request) {
+    async POST(req: Request) {
       const auth = await requireClient(req)
       if (auth instanceof Response) return auth
 
       try {
-        const url = new URL(req.url)
-        const platform = url.searchParams.get('platform')
-        const platformUserId = url.searchParams.get('platformUserId')
-        const channelId = url.searchParams.get('channelId') ?? undefined
+        const body = (await req.json()) as import('@twirchat/shared').UserCardMetadataBackendRequest
+        const { platform, platformUserId } = body
 
         if ((platform !== 'twitch' && platform !== 'kick') || !platformUserId) {
           return json({ error: 'platform=twitch|kick and platformUserId are required' }, 400)
         }
 
-        return json(
-          await fetchUserCardMetadata(auth.clientSecret, platform, platformUserId, channelId),
-        )
+        return json(await fetchUserCardMetadata(body))
       } catch (err) {
         log.error('user-card-metadata failed', { err: String(err) })
         return json({ error: String(err) }, 500)

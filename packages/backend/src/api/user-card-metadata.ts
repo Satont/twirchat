@@ -1,14 +1,20 @@
 import { config } from '../config.ts'
-import { AccountStore, type PlatformAccount } from '../db/index.ts'
 import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
 import { resolveTwitchUserId } from './twitch-users.ts'
 import type {
   UserCardAccountAgeField,
+  UserCardMetadataBackendRequest,
   UserCardFollowAgeField,
   UserCardMetadataResponse,
   UserCardSubAgeField,
   UserCardSubscriptionDurationField,
 } from '@twirchat/shared'
+
+interface TwitchAuthContext {
+  accessToken: string
+  platformUserId: string
+  scopes: string[]
+}
 
 interface TwitchUserResponse {
   data: Array<{
@@ -29,6 +35,14 @@ interface TwitchSubscriptionResponse {
     is_gift?: boolean
     gifter_name?: string
   }>
+}
+
+interface KickChannelUserResponse {
+  username: string
+  slug: string
+  profile_pic?: string | null
+  following_since?: string | null
+  subscribed_for?: number | null
 }
 
 function unavailableAccountAge(
@@ -82,15 +96,19 @@ function unavailableSubAge(
   return { status, months: null, message }
 }
 
+function availableSubAge(months: number, message?: string): UserCardSubAgeField {
+  return { status: 'available', months, message }
+}
+
 async function resolveTwitchBroadcasterId(
   channelId: string | undefined,
-  account: PlatformAccount | null,
+  auth: TwitchAuthContext | undefined,
 ): Promise<string | null> {
-  if (!channelId || !account) {
+  if (!channelId || !auth) {
     return null
   }
 
-  return resolveTwitchUserId(channelId, account.accessToken)
+  return resolveTwitchUserId(channelId, auth.accessToken)
 }
 
 async function fetchTwitchAccountAge(platformUserId: string): Promise<UserCardAccountAgeField> {
@@ -115,23 +133,23 @@ async function fetchTwitchAccountAge(platformUserId: string): Promise<UserCardAc
 async function fetchTwitchFollowAge(
   targetUserId: string,
   channelId: string | undefined,
-  account: PlatformAccount | null,
+  auth: TwitchAuthContext | undefined,
 ): Promise<UserCardFollowAgeField> {
-  if (!account) {
+  if (!auth) {
     return unavailableFollowAge(
       'unavailable',
       'Follow age requires an authenticated Twitch account.',
     )
   }
 
-  if (!account.scopes.includes('moderator:read:followers')) {
+  if (!auth.scopes.includes('moderator:read:followers')) {
     return unavailableFollowAge(
       'missing_permission',
       'Follow age requires Twitch broadcaster auth with moderator:read:followers.',
     )
   }
 
-  const broadcasterId = await resolveTwitchBroadcasterId(channelId, account)
+  const broadcasterId = await resolveTwitchBroadcasterId(channelId, auth)
   if (!broadcasterId) {
     return unavailableFollowAge(
       'unavailable',
@@ -145,7 +163,7 @@ async function fetchTwitchFollowAge(
     )}&user_id=${encodeURIComponent(targetUserId)}`,
     {
       headers: {
-        Authorization: `Bearer ${account.accessToken}`,
+        Authorization: `Bearer ${auth.accessToken}`,
         'Client-Id': config.TWITCH_CLIENT_ID,
       },
     },
@@ -175,23 +193,23 @@ async function fetchTwitchFollowAge(
 async function fetchTwitchSubscriptionDuration(
   targetUserId: string,
   channelId: string | undefined,
-  account: PlatformAccount | null,
+  auth: TwitchAuthContext | undefined,
 ): Promise<UserCardSubscriptionDurationField> {
-  if (!account) {
+  if (!auth) {
     return unavailableSubscriptionDuration(
       'unavailable',
       'Subscription status requires an authenticated Twitch account.',
     )
   }
 
-  if (!account.scopes.includes('channel:read:subscriptions')) {
+  if (!auth.scopes.includes('channel:read:subscriptions')) {
     return unavailableSubscriptionDuration(
       'missing_permission',
       'Subscription status requires Twitch broadcaster auth with channel:read:subscriptions.',
     )
   }
 
-  const broadcasterId = await resolveTwitchBroadcasterId(channelId, account)
+  const broadcasterId = await resolveTwitchBroadcasterId(channelId, auth)
   if (!broadcasterId) {
     return unavailableSubscriptionDuration(
       'unavailable',
@@ -199,7 +217,7 @@ async function fetchTwitchSubscriptionDuration(
     )
   }
 
-  if (broadcasterId !== account.platformUserId) {
+  if (broadcasterId !== auth.platformUserId) {
     return unavailableSubscriptionDuration(
       'unavailable',
       'Subscription status is only available for your authenticated Twitch channel.',
@@ -212,7 +230,7 @@ async function fetchTwitchSubscriptionDuration(
     )}&user_id=${encodeURIComponent(targetUserId)}`,
     {
       headers: {
-        Authorization: `Bearer ${account.accessToken}`,
+        Authorization: `Bearer ${auth.accessToken}`,
         'Client-Id': config.TWITCH_CLIENT_ID,
       },
     },
@@ -249,7 +267,67 @@ async function fetchTwitchSubscriptionDuration(
   })
 }
 
-function buildKickMetadata(platformUserId: string): UserCardMetadataResponse {
+async function fetchKickUserMetadata(
+  platformUserId: string,
+  username: string | undefined,
+  channelSlug: string | undefined,
+): Promise<UserCardMetadataResponse> {
+  if (!username || !channelSlug) {
+    return {
+      platform: 'kick',
+      platformUserId,
+      fetchedAt: Date.now(),
+      accountAge: unavailableAccountAge(
+        'unsupported',
+        'Kick does not expose account age through the available API.',
+      ),
+      followAge: unavailableFollowAge(
+        'unavailable',
+        'Kick follow/subscription metadata needs the channel slug and chatter username.',
+      ),
+      subscriptionDuration: unavailableSubscriptionDuration(
+        'unavailable',
+        'Kick follow/subscription metadata needs the channel slug and chatter username.',
+      ),
+      subAge: unavailableSubAge(
+        'unavailable',
+        'Kick follow/subscription metadata needs the channel slug and chatter username.',
+      ),
+    }
+  }
+
+  const response = await fetch(
+    `https://kick.com/api/v2/channels/${encodeURIComponent(channelSlug)}/users/${encodeURIComponent(username)}`,
+  )
+
+  if (!response.ok) {
+    return {
+      platform: 'kick',
+      platformUserId,
+      fetchedAt: Date.now(),
+      accountAge: unavailableAccountAge(
+        'unsupported',
+        'Kick does not expose account age through the available API.',
+      ),
+      followAge: unavailableFollowAge(
+        'unavailable',
+        `Kick user metadata lookup failed (${response.status}).`,
+      ),
+      subscriptionDuration: unavailableSubscriptionDuration(
+        'unavailable',
+        `Kick user metadata lookup failed (${response.status}).`,
+      ),
+      subAge: unavailableSubAge(
+        'unavailable',
+        `Kick user metadata lookup failed (${response.status}).`,
+      ),
+    }
+  }
+
+  const body = (await response.json()) as KickChannelUserResponse
+  const subscribedFor = body.subscribed_for ?? 0
+  const isSubscribed = subscribedFor > 0
+
   return {
     platform: 'kick',
     platformUserId,
@@ -258,36 +336,38 @@ function buildKickMetadata(platformUserId: string): UserCardMetadataResponse {
       'unsupported',
       'Kick does not expose account age through the available API.',
     ),
-    followAge: unavailableFollowAge(
-      'unsupported',
-      'Kick does not expose follow age through the available API.',
-    ),
-    subscriptionDuration: unavailableSubscriptionDuration(
-      'unsupported',
-      'Kick does not expose on-demand subscription status through the available API.',
-    ),
-    subAge: unavailableSubAge(
-      'unsupported',
-      'Kick does not expose on-demand sub age through the available API.',
-    ),
+    followAge: body.following_since
+      ? availableFollowAge(body.following_since)
+      : unavailableFollowAge('unavailable', 'This user is not currently following this channel.'),
+    subscriptionDuration: isSubscribed
+      ? availableSubscriptionDuration(true, {
+          message: `Subscribed for ${subscribedFor} month${subscribedFor === 1 ? '' : 's'}.`,
+        })
+      : availableSubscriptionDuration(false, {
+          message: 'Not currently subscribed to this channel.',
+        }),
+    subAge: isSubscribed
+      ? availableSubAge(
+          subscribedFor,
+          `Subscribed for ${subscribedFor} month${subscribedFor === 1 ? '' : 's'}.`,
+        )
+      : unavailableSubAge('unavailable', 'This user is not currently subscribed to this channel.'),
   }
 }
 
 export async function fetchUserCardMetadata(
-  clientSecret: string,
-  platform: 'twitch' | 'kick',
-  platformUserId: string,
-  channelId?: string,
+  params: UserCardMetadataBackendRequest,
 ): Promise<UserCardMetadataResponse> {
+  const { platform, platformUserId, channelId, channelSlug, username, twitchAuth } = params
+
   if (platform === 'kick') {
-    return buildKickMetadata(platformUserId)
+    return fetchKickUserMetadata(platformUserId, username, channelSlug)
   }
 
-  const account = await AccountStore.findByClientAndPlatform(clientSecret, 'twitch')
   const [accountAge, followAge, subscriptionDuration] = await Promise.all([
     fetchTwitchAccountAge(platformUserId),
-    fetchTwitchFollowAge(platformUserId, channelId, account),
-    fetchTwitchSubscriptionDuration(platformUserId, channelId, account),
+    fetchTwitchFollowAge(platformUserId, channelId, twitchAuth),
+    fetchTwitchSubscriptionDuration(platformUserId, channelId, twitchAuth),
   ])
 
   return {

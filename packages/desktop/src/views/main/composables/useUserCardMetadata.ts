@@ -7,7 +7,9 @@ import { rpc } from '../main'
 export function useUserCardMetadata(
   platform: Ref<Platform>,
   platformUserId: Ref<string>,
+  username: Ref<string | undefined>,
   channelId: Ref<string | undefined>,
+  channelSlug: Ref<string | undefined>,
   isActive: Ref<boolean>,
 ): {
   metadata: Readonly<Ref<UserCardMetadataResponse | null>>
@@ -40,7 +42,9 @@ export function useUserCardMetadata(
       const response = await rpc.request.getUserCardMetadata({
         platform: platform.value as 'twitch' | 'kick',
         platformUserId: platformUserId.value,
+        username: username.value,
         channelId: channelId.value,
+        channelSlug: channelSlug.value,
       })
 
       if (generation !== requestGeneration.value) return
@@ -57,7 +61,7 @@ export function useUserCardMetadata(
   }
 
   watch(
-    [platform, platformUserId, channelId],
+    [platform, platformUserId, username, channelId, channelSlug],
     () => {
       requestGeneration.value += 1
       metadata.value = null

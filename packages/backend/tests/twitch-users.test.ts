@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import {
+  fetchTwitchUserById,
   isTwitchUserId,
   normalizeTwitchLogin,
   resolveTwitchUserId,
@@ -108,5 +109,39 @@ describe('twitch-users helpers', () => {
       'https://id.twitch.tv/oauth2/token',
       'https://api.twitch.tv/helix/users?login=satont',
     ])
+  })
+
+  it('fetches Twitch user profile by id', async () => {
+    global.fetch = mock(async (input: string | URL | Request) => {
+      const url = String(input)
+
+      if (url === 'https://id.twitch.tv/oauth2/token') {
+        return Response.json({ access_token: 'app-token', expires_in: 3600 })
+      }
+
+      if (url === 'https://api.twitch.tv/helix/users?id=12345') {
+        return Response.json({
+          data: [
+            {
+              id: '12345',
+              login: 'satont',
+              display_name: 'Satont',
+              profile_image_url: 'https://example.com/avatar.png',
+            },
+          ],
+        })
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as unknown as typeof global.fetch
+
+    const profile = await fetchTwitchUserById('12345')
+
+    expect(profile).toEqual({
+      id: '12345',
+      login: 'satont',
+      display_name: 'Satont',
+      profile_image_url: 'https://example.com/avatar.png',
+    })
   })
 })
