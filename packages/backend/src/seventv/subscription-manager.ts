@@ -1,10 +1,6 @@
 import type { Platform } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
-import {
-  isTwitchUserId,
-  normalizeTwitchLogin,
-  resolveTwitchUserIdsByLogin,
-} from '../api/twitch-users.ts'
+import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
 import { sevenTVCache } from './cache'
 import type { SevenTVEmote } from './cache'
 import { sevenTVEventClient } from './event-client'
@@ -198,24 +194,19 @@ export class SevenTVSubscriptionManager {
 
     let sevenTVPlatformId = channelId
     if (platform === 'twitch') {
-      if (isTwitchUserId(platformUserId)) {
-        sevenTVPlatformId = platformUserId
-      } else if (isTwitchUserId(channelId)) {
-        sevenTVPlatformId = channelId
-      } else {
-        const normalizedLogin = normalizeTwitchLogin(channelId)
-        if (!normalizedLogin) {
-          throw new Error(`Invalid Twitch channel login: ${channelId}`)
-        }
-
-        const resolvedUsers = await resolveTwitchUserIdsByLogin([normalizedLogin])
-        const resolvedPlatformId = resolvedUsers.get(normalizedLogin)
-        if (!resolvedPlatformId) {
-          throw new Error(`Twitch user not found for login: ${normalizedLogin}`)
-        }
-
-        sevenTVPlatformId = resolvedPlatformId
+      const twitchIdentifier = isTwitchUserId(platformUserId) ? platformUserId : channelId
+      const resolvedPlatformId = await resolveTwitchUserId(twitchIdentifier)
+      if (!resolvedPlatformId) {
+        throw new Error(`Twitch user not found for identifier: ${twitchIdentifier}`)
       }
+
+      sevenTVPlatformId = resolvedPlatformId
+      log.info('Resolved Twitch user for 7TV lookup', {
+        channelId,
+        channelKey,
+        platformUserId,
+        sevenTVPlatformId,
+      })
     }
 
     const result = await getUserByConnection(
@@ -225,7 +216,7 @@ export class SevenTVSubscriptionManager {
 
     const user = result.users?.userByConnection
     if (!user) {
-      throw new Error('User not found on 7TV')
+      throw new Error(`User not found on 7TV for ${platform}:${sevenTVPlatformId}`)
     }
 
     const emoteSet = user.style?.activeEmoteSet
