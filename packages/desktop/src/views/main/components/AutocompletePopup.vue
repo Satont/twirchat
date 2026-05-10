@@ -4,7 +4,7 @@ import type { AutocompleteSuggestion } from '../composables/useAutocomplete'
 const props = defineProps<{
   suggestions: AutocompleteSuggestion[]
   selectedIndex: number
-  mode: 'mention' | 'emote' | null
+  mode: 'mention' | 'emote' | 'command' | null
 }>()
 
 const emit = defineEmits<{
@@ -20,7 +20,9 @@ const emit = defineEmits<{
         :key="
           suggestion.type === 'mention'
             ? `${suggestion.label}:${suggestion.insertLabel}`
-            : suggestion.label
+            : suggestion.type === 'command'
+              ? `${suggestion.label}:${suggestion.insertText}`
+              : suggestion.label
         "
         class="autocomplete-item"
         :class="{ 'is-selected': i === selectedIndex }"
@@ -32,14 +34,22 @@ const emit = defineEmits<{
             :style="{ backgroundColor: suggestion.color || '#8b8b99' }"
           ></span>
           <span class="mention-label">{{ suggestion.label }}</span>
-          <span v-if="suggestion.insertLabel !== suggestion.label" class="mention-real-name"
-            >→ {{ suggestion.insertLabel }}</span
-          >
+          <span class="suggestion-description">
+            <template v-if="suggestion.insertLabel !== suggestion.label"
+              >→ {{ suggestion.insertLabel }}</template
+            >
+            <template v-else-if="suggestion.description">{{ suggestion.description }}</template>
+          </span>
         </template>
 
         <template v-else-if="suggestion.type === 'emote'">
           <img :src="suggestion.imageUrl" width="24" height="24" alt="" class="emote-image" />
           <span class="emote-label">{{ suggestion.label }}</span>
+        </template>
+
+        <template v-else>
+          <span class="command-label">{{ suggestion.label }}</span>
+          <span class="suggestion-description">{{ suggestion.description }}</span>
         </template>
       </li>
     </ul>
@@ -107,11 +117,17 @@ const emit = defineEmits<{
   color: var(--c-text);
 }
 
-.mention-real-name {
+.suggestion-description {
   margin-left: auto;
   font-size: 12px;
   color: var(--c-text-2);
   white-space: nowrap;
+}
+
+.command-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text);
 }
 
 .emote-image {

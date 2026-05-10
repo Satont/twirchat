@@ -6,10 +6,12 @@ import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
+import UserCardDialog from './UserCardDialog.vue'
 import { rpc } from '../main'
 import { platformColor } from '../../shared/utils/platform'
 import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
+import type { UserCardTarget } from '../utils/chatCommands'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
@@ -65,10 +67,17 @@ function scrollToBottom() {
 }
 
 const replyTarget = ref<NormalizedChatMessage | null>(null)
+const selectedUserCardTarget = ref<UserCardTarget | null>(null)
+const isUserCardDialogOpen = ref(false)
 const showMenu = ref(false)
 
 function onReply(msg: NormalizedChatMessage) {
   replyTarget.value = msg
+}
+
+function onOpenUserCard(target: UserCardTarget) {
+  selectedUserCardTarget.value = target
+  isUserCardDialogOpen.value = true
 }
 
 const streamStatusStore = useStreamStatusStore()
@@ -91,6 +100,15 @@ const watchedStreamStatus = computed(() => {
     props.watchedChannel.platform as 'twitch' | 'kick',
     props.watchedChannel.channelSlug,
   )
+})
+
+const selectedUserCardAlias = computed(() => {
+  const target = selectedUserCardTarget.value
+  if (!target) {
+    return undefined
+  }
+
+  return aliasStore.getAlias(target.platform, target.platformUserId) ?? target.currentAlias
 })
 
 // ---- Active messages (home vs watched) ----
@@ -509,8 +527,20 @@ function onAppearanceChange(s: AppSettings) {
       :reply-target="replyTarget"
       :messages="watchedChannel ? (watchedMessages ?? []) : messages"
       @cancel-reply="replyTarget = null"
+      @open-user-card="onOpenUserCard"
       @send="onSend"
       @send-watched="onSendWatched"
+    />
+
+    <UserCardDialog
+      v-if="selectedUserCardTarget"
+      v-model:open="isUserCardDialogOpen"
+      :platform="selectedUserCardTarget.platform"
+      :platform-user-id="selectedUserCardTarget.platformUserId"
+      :display-name="selectedUserCardTarget.displayName"
+      :username="selectedUserCardTarget.username"
+      :avatar-url="selectedUserCardTarget.avatarUrl"
+      :current-alias="selectedUserCardAlias"
     />
   </div>
 </template>

@@ -5,6 +5,7 @@ import { getBackendUrl } from '../../runtime-config'
 import { AccountStore } from '../../store/account-store'
 import { refreshKickToken } from '../../auth/kick'
 import { getKickBadgeSvg } from './badges'
+import { resolveKickAvatarUrl, type KickAvatarResolver } from './avatar-cache'
 import { logger } from '@twirchat/shared/logger'
 
 const log = logger('kick')
@@ -13,7 +14,7 @@ const log = logger('kick')
 // Типы Kick Pusher events
 // ============================================================
 
-interface KickChatMessage {
+export interface KickChatMessage {
   id: string
   chatroom_id: number
   content: string
@@ -95,6 +96,7 @@ export class KickAdapter extends BasePlatformAdapter {
   private anonymous = true
   private accessToken: string | null = null
   private accountId: string | null = null
+  private messageQueue: Promise<void> = Promise.resolve()
   private platformUserId: string | null = null
 
   async connect(channelSlug: string): Promise<void> {
@@ -363,7 +365,11 @@ export class KickAdapter extends BasePlatformAdapter {
           typeof event.data === 'string'
             ? (JSON.parse(event.data) as KickChatMessage)
             : (event.data as unknown as KickChatMessage)
-        this.handleChatMessage(data)
+        this.messageQueue = this.messageQueue
+          .then(() => this.handleChatMessage(data))
+          .catch((error) => {
+            log.error('[Kick] Failed to handle chat message', { error: String(error) })
+          })
         break
       }
 
@@ -410,77 +416,8 @@ export class KickAdapter extends BasePlatformAdapter {
     )
   }
 
-  private handleChatMessage(msg: KickChatMessage): void {
-    const badges: Badge[] = msg.sender.identity.badges.map((b) => ({
-      id: b.type,
-      imageUrl: getKickBadgeSvg(b.type) || undefined,
-      text: b.text,
-      type: b.type,
-    }))
-
-    // Parse Kick emotes from content
-    // Format: [emote:37232:PeepoClap]
-    const emotes: Emote[] = []
-    const emoteRegex = /\[emote:(\d+):([^\]]+)\]/g
-    let match
-    let cleanText = msg.content
-    let offsetDelta = 0
-
-    while ((match = emoteRegex.exec(msg.content)) !== null) {
-      const [fullMatch, emoteId, emoteName] = match
-      if (!emoteId || !emoteName) {
-        continue
-      }
-      const originalStart = match.index
-      // Calculate position in clean text (after removing emote tags)
-      const cleanStart = originalStart - offsetDelta
-      const cleanEnd = cleanStart + emoteName.length - 1
-
-      emotes.push({
-        id: emoteId,
-        imageUrl: `https://files.kick.com/emotes/${emoteId}/fullsize`,
-        name: emoteName,
-        positions: [{ start: cleanStart, end: cleanEnd }],
-      })
-
-      // Update offset for next matches
-      offsetDelta += fullMatch.length - emoteName.length
-    }
-
-    // Remove emote tags from text, leaving just the name
-    cleanText = msg.content.replace(/\[emote:\d+:([^\]]+)\]/g, '$1')
-
-    const normalized: NormalizedChatMessage = {
-      author: {
-        avatarUrl: msg.sender.profile_picture ?? undefined,
-        badges,
-        color: msg.sender.identity.color || undefined,
-        displayName: msg.sender.username,
-        id: String(msg.sender.id),
-        username: msg.sender.username,
-      },
-      channelId: String(this.broadcasterUserId ?? msg.chatroom_id),
-      emotes,
-      id: msg.id,
-      platform: 'kick',
-      text: cleanText,
-      timestamp: new Date(msg.created_at),
-      type: 'message',
-      ...(msg.type === 'reply' && msg.metadata
-        ? {
-            reply: {
-              parentAuthor: {
-                displayName: msg.metadata.original_sender.username,
-                id: msg.metadata.original_sender.id,
-                username: msg.metadata.original_sender.username,
-              },
-              parentMessageId: msg.metadata.original_message.id,
-              parentMessageText: msg.metadata.original_message.content,
-            },
-          }
-        : {}),
-    }
-
+  private async handleChatMessage(msg: KickChatMessage): Promise<void> {
+    const normalized = await normalizeKickChatMessage(msg, this.broadcasterUserId)
     this.emit('message', normalized)
   }
 
@@ -529,5 +466,88 @@ export class KickAdapter extends BasePlatformAdapter {
       clearTimeout(this.reconnectTimeout)
       this.reconnectTimeout = null
     }
+  }
+}
+
+export async function normalizeKickChatMessage(
+  msg: KickChatMessage,
+  broadcasterUserId: number | null,
+  resolveAvatar: KickAvatarResolver = resolveKickAvatarUrl,
+): Promise<NormalizedChatMessage> {
+  const badges: Badge[] = msg.sender.identity.badges.map((b) => ({
+    id: b.type,
+    imageUrl: getKickBadgeSvg(b.type) || undefined,
+    text: b.text,
+    type: b.type,
+  }))
+
+  // Parse Kick emotes from content
+  // Format: [emote:37232:PeepoClap]
+  const emotes: Emote[] = []
+  const emoteRegex = /\[emote:(\d+):([^\]]+)\]/g
+  let match
+  let cleanText = msg.content
+  let offsetDelta = 0
+
+  while ((match = emoteRegex.exec(msg.content)) !== null) {
+    const [fullMatch, emoteId, emoteName] = match
+    if (!emoteId || !emoteName) {
+      continue
+    }
+    const originalStart = match.index
+    // Calculate position in clean text (after removing emote tags)
+    const cleanStart = originalStart - offsetDelta
+    const cleanEnd = cleanStart + emoteName.length - 1
+
+    emotes.push({
+      id: emoteId,
+      imageUrl: `https://files.kick.com/emotes/${emoteId}/fullsize`,
+      name: emoteName,
+      positions: [{ start: cleanStart, end: cleanEnd }],
+    })
+
+    // Update offset for next matches
+    offsetDelta += fullMatch.length - emoteName.length
+  }
+
+  // Remove emote tags from text, leaving just the name
+  cleanText = msg.content.replace(/\[emote:\d+:([^\]]+)\]/g, '$1')
+
+  const avatarUrl = await resolveAvatar({
+    authorId: String(msg.sender.id),
+    lookupSource: msg.sender.slug ? 'slug' : 'username',
+    profilePicture: msg.sender.profile_picture,
+    slugOrUsername: msg.sender.slug || msg.sender.username,
+  })
+
+  return {
+    author: {
+      avatarUrl,
+      badges,
+      color: msg.sender.identity.color || undefined,
+      displayName: msg.sender.username,
+      id: String(msg.sender.id),
+      username: msg.sender.username,
+    },
+    channelId: String(broadcasterUserId ?? msg.chatroom_id),
+    emotes,
+    id: msg.id,
+    platform: 'kick',
+    text: cleanText,
+    timestamp: new Date(msg.created_at),
+    type: 'message',
+    ...(msg.type === 'reply' && msg.metadata
+      ? {
+          reply: {
+            parentAuthor: {
+              displayName: msg.metadata.original_sender.username,
+              id: msg.metadata.original_sender.id,
+              username: msg.metadata.original_sender.username,
+            },
+            parentMessageId: msg.metadata.original_message.id,
+            parentMessageText: msg.metadata.original_message.content,
+          },
+        }
+      : {}),
   }
 }

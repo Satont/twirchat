@@ -35,7 +35,12 @@ class MockAdapter extends BasePlatformAdapter {
 
 function makeMessage(id: string): NormalizedChatMessage {
   return {
-    author: { badges: [], displayName: 'User', id: 'user1' },
+    author: {
+      avatarUrl: 'https://files.kick.com/images/user/1/profile.webp',
+      badges: [],
+      displayName: 'User',
+      id: 'user1',
+    },
     channelId: 'test-channel',
     emotes: [],
     id,
@@ -60,6 +65,7 @@ describe('ChatAggregator', () => {
 
     expect(received.length).toBe(2)
     expect(received[0]!.id).toBe('1')
+    expect(received[0]!.author.avatarUrl).toBe('https://files.kick.com/images/user/1/profile.webp')
   })
 
   test('deduplicates messages with same id', () => {

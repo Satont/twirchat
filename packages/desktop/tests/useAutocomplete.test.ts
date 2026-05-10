@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   parseToken,
   replaceToken,
+  type CommandSuggestion,
   type EmoteSuggestion,
   type MentionSuggestion,
 } from '../src/views/main/utils/autocompleteUtils'
@@ -49,11 +50,31 @@ describe('parseToken', () => {
     expect(result.mode).toBe('mention')
     expect(result.query).toBe('satont')
   })
+
+  test('detects command mode for slash commands at the start', () => {
+    const result = parseToken('/us')
+    expect(result.mode).toBe('command')
+    expect(result.query).toBe('us')
+  })
+
+  test('detects command mode for bare slash so commands are discoverable', () => {
+    const result = parseToken('/')
+    expect(result.mode).toBe('command')
+    expect(result.query).toBe('')
+  })
 })
 
 describe('replaceToken', () => {
   test('replaces mention token with selected displayName + space', () => {
-    const suggestion: MentionSuggestion = { type: 'mention', label: 'satont', color: null }
+    const suggestion: MentionSuggestion = {
+      type: 'mention',
+      label: 'satont',
+      insertLabel: 'satont',
+      color: null,
+      platform: 'twitch',
+      platformUserId: '1',
+      displayName: 'satont',
+    }
     const result = replaceToken('hello @sa', suggestion)
     expect(result).toBe('hello @satont ')
   })
@@ -70,7 +91,15 @@ describe('replaceToken', () => {
   })
 
   test('replaces token at end of longer text', () => {
-    const suggestion: MentionSuggestion = { type: 'mention', label: 'alice', color: '#f00' }
+    const suggestion: MentionSuggestion = {
+      type: 'mention',
+      label: 'alice',
+      insertLabel: 'alice',
+      color: '#f00',
+      platform: 'twitch',
+      platformUserId: '2',
+      displayName: 'alice',
+    }
     const result = replaceToken('hey there @al', suggestion)
     expect(result).toBe('hey there @alice ')
   })
@@ -87,7 +116,15 @@ describe('replaceToken', () => {
   })
 
   test('returns original text when no token found', () => {
-    const suggestion: MentionSuggestion = { type: 'mention', label: 'nobody', color: null }
+    const suggestion: MentionSuggestion = {
+      type: 'mention',
+      label: 'nobody',
+      insertLabel: 'nobody',
+      color: null,
+      platform: 'twitch',
+      platformUserId: '3',
+      displayName: 'nobody',
+    }
     const result = replaceToken('no trigger here', suggestion)
     expect(result).toBe('no trigger here')
   })
@@ -96,7 +133,11 @@ describe('replaceToken', () => {
     const suggestion: MentionSuggestion = {
       type: 'mention',
       label: 'testUser',
+      insertLabel: 'testUser',
       color: null,
+      platform: 'twitch',
+      platformUserId: '4',
+      displayName: 'testUser',
     }
     const result = replaceToken('@t', suggestion)
     expect(result).toBe('@testUser ')
@@ -106,10 +147,25 @@ describe('replaceToken', () => {
     const mentionSuggestion: MentionSuggestion = {
       type: 'mention',
       label: 'myuser',
+      insertLabel: 'myuser',
       color: null,
+      platform: 'twitch',
+      platformUserId: '5',
+      displayName: 'myuser',
     }
     const result = replaceToken('text @my', mentionSuggestion)
     expect(result).toStartWith('text @myuser')
+  })
+
+  test('replaces slash command token with insert text + space', () => {
+    const suggestion: CommandSuggestion = {
+      type: 'command',
+      label: '/user',
+      insertText: '/user',
+      description: 'Open user card',
+    }
+    const result = replaceToken('/us', suggestion)
+    expect(result).toBe('/user ')
   })
 })
 

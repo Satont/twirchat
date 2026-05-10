@@ -11,6 +11,7 @@ import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import { parseToken, replaceToken, useAutocomplete } from '../composables/useAutocomplete'
 import { useAliasStore } from '../stores/useAliasStore'
+import { resolveUserCardCommand, type UserCardTarget } from '../utils/chatCommands'
 import AutocompletePopup from './AutocompletePopup.vue'
 import { PopoverContent, PopoverRoot, PopoverTrigger } from 'reka-ui'
 import EmotePicker from './EmotePicker.vue'
@@ -30,12 +31,14 @@ const emit = defineEmits<{
     payload: { platform: string; channelLogin: string; text: string; replyToMessageId?: string }[],
   ]
   'send-watched': [payload: { text: string; channelId: string; replyToMessageId?: string }]
+  'open-user-card': [target: UserCardTarget]
   'cancel-reply': []
 }>()
 
 const text = ref('')
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
 const aliasStore = useAliasStore()
+const commandError = ref('')
 
 const showEmotePicker = ref(false)
 const emotePickerRef = ref<InstanceType<typeof EmotePicker> | null>(null)
@@ -110,6 +113,10 @@ function resizeTextarea() {
 
 watch(text, () => nextTick(resizeTextarea))
 
+watch(text, () => {
+  commandError.value = ''
+})
+
 // ---- Normal (home tab) mode ----
 
 const connectedPlatforms = computed(() => {
@@ -178,6 +185,29 @@ function send() {
     return
   }
 
+  const userCardCommand = resolveUserCardCommand(trimmed, props.messages ?? [], aliasStore.aliasMap)
+  if (userCardCommand) {
+    if (!userCardCommand.ok) {
+      commandError.value =
+        userCardCommand.error === 'missing-query'
+          ? 'Usage: /user @nickname'
+          : userCardCommand.error === 'ambiguous'
+            ? 'Multiple users match that nickname.'
+            : 'No user found for that nickname.'
+      return
+    }
+
+    emit('open-user-card', userCardCommand.target)
+    commandError.value = ''
+    text.value = ''
+    nextTick(() => {
+      if (textareaEl.value) {
+        textareaEl.value.style.height = 'auto'
+      }
+    })
+    return
+  }
+
   if (props.watchedChannel) {
     emit('send-watched', {
       text: trimmed,
@@ -199,6 +229,7 @@ function send() {
     emit('send', targets)
   }
 
+  commandError.value = ''
   text.value = ''
   nextTick(() => {
     if (textareaEl.value) {
@@ -392,6 +423,7 @@ function placeholderText(): string {
       :mode="mode"
       @select="selectSuggestion"
     />
+    <div v-if="commandError" class="command-error">{{ commandError }}</div>
     <div class="input-row">
       <textarea
         ref="textareaEl"
@@ -587,6 +619,12 @@ function placeholderText(): string {
   display: flex;
   align-items: flex-end;
   gap: 8px;
+}
+
+.command-error {
+  font-size: 12px;
+  color: #fca5a5;
+  padding: 0 2px;
 }
 
 .chat-textarea {

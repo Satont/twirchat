@@ -15,6 +15,7 @@ import {
   parseToken,
   replaceToken,
   type AutocompleteSuggestion,
+  type CommandSuggestion,
   type EmoteSuggestion,
   type MentionSuggestion,
   type ParsedToken,
@@ -33,7 +34,7 @@ export function useAutocomplete(params: {
   suggestions: ComputedRef<AutocompleteSuggestion[]>
   isOpen: ComputedRef<boolean>
   selectedIndex: Ref<number>
-  mode: ComputedRef<'mention' | 'emote' | null>
+  mode: ComputedRef<'mention' | 'emote' | 'command' | null>
   selectSuggestion: (index: number) => void
   moveUp: () => void
   moveDown: () => void
@@ -48,6 +49,13 @@ export function useAutocomplete(params: {
   const token = computed(() => parseToken(text.value))
   const mode = computed(() => token.value.mode)
   const query = computed(() => token.value.query)
+  const queryKey = computed(() => {
+    if (mode.value === 'command') {
+      return `/${query.value}`
+    }
+
+    return query.value
+  })
 
   const mentionSuggestions = computed((): MentionSuggestion[] => {
     const seen = new Set<string>()
@@ -72,11 +80,29 @@ export function useAutocomplete(params: {
         label: alias || displayName,
         insertLabel: displayName,
         color: mentionColorCache.get(`${msg.platform}:${lower}`) ?? null,
+        description: msg.author.username
+          ? `@${msg.author.username} • ${msg.platform}`
+          : msg.platform,
+        platform: msg.platform,
+        platformUserId: msg.author.id,
+        displayName,
+        username: msg.author.username,
+        avatarUrl: msg.author.avatarUrl,
+        currentAlias: alias,
       })
     }
 
     return result
   })
+
+  const commandSuggestions = computed((): CommandSuggestion[] => [
+    {
+      type: 'command',
+      label: '/user',
+      insertText: '/user',
+      description: 'Open user card',
+    },
+  ])
 
   function getCurrentChannelKey(): { platform: string; channelId: string } | null {
     const wc = watchedChannel.value
@@ -113,7 +139,17 @@ export function useAutocomplete(params: {
     const m = mode.value
     const q = query.value
 
-    if (!m || !q) return []
+    if (!m) return []
+
+    if (m === 'command') {
+      if (!q) {
+        return commandSuggestions.value.slice(0, 15)
+      }
+
+      return fuzzyFilter(commandSuggestions.value, q).slice(0, 15) as AutocompleteSuggestion[]
+    }
+
+    if (!q) return []
 
     if (m === 'mention') {
       return fuzzyFilter(mentionSuggestions.value, q).slice(0, 15) as AutocompleteSuggestion[]
@@ -122,7 +158,9 @@ export function useAutocomplete(params: {
     return fuzzyFilter(emoteSuggestions.value, q).slice(0, 15) as AutocompleteSuggestion[]
   })
 
-  const isOpen = computed(() => suggestions.value.length > 0 && query.value !== closedQuery.value)
+  const isOpen = computed(
+    () => suggestions.value.length > 0 && queryKey.value !== closedQuery.value,
+  )
 
   watch(text, () => {
     closedQuery.value = ''
@@ -172,7 +210,7 @@ export function useAutocomplete(params: {
   }
 
   function close(): void {
-    closedQuery.value = query.value
+    closedQuery.value = queryKey.value
     selectedIndex.value = 0
   }
 
