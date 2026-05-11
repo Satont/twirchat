@@ -8,11 +8,6 @@ fn main() -> ExitCode {
     let smoke_exit_after_first_frame =
         env::args().any(|arg| arg == "--smoke-exit-after-first-frame");
 
-    if smoke_exit_after_first_frame {
-        println!("gpui first frame rendered");
-        return ExitCode::SUCCESS;
-    }
-
     let wayland_display = env::var_os("WAYLAND_DISPLAY");
     let x11_display = env::var_os("DISPLAY");
     let headless = env::var_os("ZED_HEADLESS").is_some();
@@ -24,7 +19,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    application().run(|cx: &mut App| {
+    application().run(move |cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(1280.0), px(900.0)), cx);
 
         let window = cx.open_window(
@@ -36,7 +31,13 @@ fn main() -> ExitCode {
         );
 
         match window {
-            Ok(_) => cx.activate(true),
+            Ok(_) => {
+                cx.activate(true);
+                if smoke_exit_after_first_frame {
+                    println!("gpui app/window initialized");
+                    cx.quit();
+                }
+            }
             Err(error) => eprintln!("failed to open desktop-rust window: {error}"),
         }
     });

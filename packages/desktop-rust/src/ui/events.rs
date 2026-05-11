@@ -184,9 +184,7 @@ pub(crate) fn render_events_list(events: &[NormalizedEvent]) -> Div {
     }
 }
 
-pub(crate) fn panel() -> Div {
-    let mock_events: Vec<NormalizedEvent> = vec![];
-
+pub(crate) fn panel(state: &crate::app_state::AppState) -> Div {
     let title_row = div()
         .flex()
         .flex_row()
@@ -197,7 +195,7 @@ pub(crate) fn panel() -> Div {
             "Realtime follows, gifts, raids and platform activity",
         ));
 
-    let header = if !mock_events.is_empty() {
+    let header = if !state.events.is_empty() {
         title_row.child(
             div()
                 .bg(rgb(0xa78bfa))
@@ -207,7 +205,7 @@ pub(crate) fn panel() -> Div {
                 .py(px(2.0))
                 .text_xs()
                 .font_weight(gpui::FontWeight::BOLD)
-                .child(mock_events.len().to_string()),
+                .child(state.events.len().to_string()),
         )
     } else {
         title_row
@@ -220,7 +218,7 @@ pub(crate) fn panel() -> Div {
         .flex_col()
         .gap(px(12.0))
         .child(header)
-        .child(render_events_list(&mock_events))
+        .child(render_events_list(&state.events))
 }
 
 #[cfg(test)]

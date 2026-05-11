@@ -3,16 +3,26 @@ use crate::protocol::types::{ChatMessageType, NormalizedChatMessage, Platform, W
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
-use gpui::{AnyElement, Context, Div, div, prelude::*, px, rgb, rgba, uniform_list};
+use gpui::{
+    AnyElement, Context, Div, Entity, Stateful, div, prelude::*, px, rgb, rgba, uniform_list,
+};
 use std::ops::Range;
 
-pub(crate) fn panel(state: &AppState, cx: &mut Context<TwirChatApp>) -> Div {
+pub(crate) fn panel(
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    cx: &mut Context<TwirChatApp>,
+) -> Div {
     div()
         .flex_1()
         .flex()
         .flex_col()
         .bg(theme::background())
-        .child(header(&state.watched_channels, state.messages.len()))
+        .child(header(
+            &state.watched_channels,
+            state.messages.len(),
+            state_entity,
+        ))
         .child(
             div().flex_1().bg(theme::background()).child(
                 {
@@ -40,7 +50,11 @@ pub(crate) fn panel(state: &AppState, cx: &mut Context<TwirChatApp>) -> Div {
         .child(composer(&state.watched_channels))
 }
 
-fn header(channels: &[WatchedChannel], message_count: usize) -> Div {
+fn header(
+    channels: &[WatchedChannel],
+    message_count: usize,
+    state_entity: Entity<AppState>,
+) -> Div {
     let message_count_text = format!("{} messages", message_count);
 
     div()
@@ -90,24 +104,39 @@ fn header(channels: &[WatchedChannel], message_count: usize) -> Div {
                         .flex_row()
                         .items_center()
                         .gap(px(2.0))
-                        .child(panel_action_btn("⚙"))
-                        .child(panel_action_btn("+"))
-                        .child(panel_action_btn("⋮")),
+                        .child(panel_action_btn("⚙", true).on_click({
+                            let state_entity = state_entity.clone();
+                            move |_event, _window, cx| {
+                                state_entity.update(cx, |state, cx| {
+                                    state.select_section(crate::app_state::MainSection::Settings);
+                                    cx.notify();
+                                });
+                            }
+                        }))
+                        .child(panel_action_btn("+", false))
+                        .child(panel_action_btn("⋮", false)),
                 ),
         )
 }
 
-fn panel_action_btn(icon: &'static str) -> Div {
-    div()
+fn panel_action_btn(icon: &'static str, active: bool) -> Stateful<Div> {
+    let base = div()
+        .id(icon)
         .w(px(26.0))
         .h(px(26.0))
         .rounded_md()
-        .text_color(theme::text_muted())
         .flex()
         .items_center()
-        .justify_center()
-        .hover(|s| s.bg(rgb(0x2a2a33)).text_color(theme::text_primary()))
-        .child(icon)
+        .justify_center();
+
+    if active {
+        base.text_color(theme::text_muted())
+            .cursor_pointer()
+            .hover(|s| s.bg(rgb(0x2a2a33)).text_color(theme::text_primary()))
+            .child(icon)
+    } else {
+        base.text_color(rgba(0xffffff26)).child(icon)
+    }
 }
 
 fn composer(channels: &[WatchedChannel]) -> Div {

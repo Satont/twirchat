@@ -111,6 +111,66 @@ fn color_swatch(color: Rgba) -> Div {
         .border_color(theme::border())
 }
 
+fn hotkey_badge(keys: &'static str) -> Div {
+    div()
+        .min_w(px(100.0))
+        .px(px(10.0))
+        .py(px(4.0))
+        .bg(theme::surface_2())
+        .border_1()
+        .border_color(theme::border())
+        .rounded_md()
+        .text_color(theme::text_primary())
+        .text_size(px(12.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .hover(|s| s.bg(with_alpha(gpui::white().into(), 0.05)))
+        .child(keys)
+}
+
+fn slider_mock(val: &'static str, percent: f32) -> Div {
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(10.0))
+        .child(
+            div()
+                .w(px(130.0))
+                .h(px(4.0))
+                .bg(theme::surface_2())
+                .rounded_full()
+                .flex()
+                .items_center()
+                .child(
+                    div()
+                        .w(px(130.0 * percent))
+                        .h(px(4.0))
+                        .bg(theme::accent())
+                        .rounded_l_full(),
+                )
+                .child(
+                    div()
+                        .w(px(12.0))
+                        .h(px(12.0))
+                        .bg(theme::accent())
+                        .rounded_full()
+                        .ml(px(-6.0)),
+                ),
+        )
+        .child(
+            div()
+                .w(px(36.0))
+                .text_color(theme::text_muted())
+                .text_size(px(12.0))
+                .flex()
+                .justify_end()
+                .child(val),
+        )
+}
+
 pub(crate) fn panel() -> Div {
     div().flex_1().child(
         div()
@@ -158,6 +218,7 @@ pub(crate) fn panel() -> Div {
                             .text_size(px(13.0))
                             .font_weight(gpui::FontWeight::BOLD)
                             .cursor_pointer()
+                            .hover(|s| s.bg(with_alpha(theme::accent(), 0.88)))
                             .child("Save changes"),
                     ),
             )
@@ -350,6 +411,7 @@ pub(crate) fn panel() -> Div {
                                     .rounded_md()
                                     .text_size(px(12.0))
                                     .cursor_pointer()
+                                    .hover(|s| s.bg(with_alpha(theme::accent(), 0.22)))
                                     .child("Copy"),
                             ),
                     )
@@ -373,72 +435,9 @@ pub(crate) fn panel() -> Div {
                             .child(color_swatch(theme::text_primary())),
                     ))
                     .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Font size",
-                        None,
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(10.0))
-                            .child(
-                                div()
-                                    .w(px(130.0))
-                                    .h(px(4.0))
-                                    .bg(theme::surface_2())
-                                    .rounded_full()
-                                    .flex()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .w(px(12.0))
-                                            .h(px(12.0))
-                                            .bg(theme::accent())
-                                            .rounded_full(),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .w(px(36.0))
-                                    .text_color(theme::text_muted())
-                                    .text_size(px(12.0))
-                                    .child("14px"),
-                            ),
-                    ))
+                    .child(form_row("Font size", None, slider_mock("14px", 0.3)))
                     .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Max messages",
-                        None,
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(10.0))
-                            .child(
-                                div()
-                                    .w(px(130.0))
-                                    .h(px(4.0))
-                                    .bg(theme::surface_2())
-                                    .rounded_full()
-                                    .flex()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .w(px(12.0))
-                                            .h(px(12.0))
-                                            .bg(theme::accent())
-                                            .rounded_full()
-                                            .ml(px(30.0)),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .w(px(36.0))
-                                    .text_color(theme::text_muted())
-                                    .text_size(px(12.0))
-                                    .child("50"),
-                            ),
-                    ))
+                    .child(form_row("Max messages", None, slider_mock("50", 1.0)))
                     .child(div().w_full().h(px(1.0)).bg(theme::border()))
                     .child(form_row(
                         "Animation",
@@ -470,61 +469,25 @@ pub(crate) fn panel() -> Div {
                     .child(form_row(
                         "Open new tab",
                         Some("Add a watched channel tab"),
-                        div()
-                            .bg(theme::surface_2())
-                            .border_1()
-                            .border_color(theme::border())
-                            .rounded_md()
-                            .px(px(10.0))
-                            .py(px(4.0))
-                            .text_color(theme::text_primary())
-                            .text_size(px(12.0))
-                            .child("Ctrl+T"),
+                        hotkey_badge("Ctrl+T"),
                     ))
                     .child(div().w_full().h(px(1.0)).bg(theme::border()))
                     .child(form_row(
                         "Next tab",
                         Some("Cycle to the next tab"),
-                        div()
-                            .bg(theme::surface_2())
-                            .border_1()
-                            .border_color(theme::border())
-                            .rounded_md()
-                            .px(px(10.0))
-                            .py(px(4.0))
-                            .text_color(theme::text_primary())
-                            .text_size(px(12.0))
-                            .child("Ctrl+Tab"),
+                        hotkey_badge("Ctrl+Tab"),
                     ))
                     .child(div().w_full().h(px(1.0)).bg(theme::border()))
                     .child(form_row(
                         "Previous tab",
                         Some("Cycle to the previous tab"),
-                        div()
-                            .bg(theme::surface_2())
-                            .border_1()
-                            .border_color(theme::border())
-                            .rounded_md()
-                            .px(px(10.0))
-                            .py(px(4.0))
-                            .text_color(theme::text_primary())
-                            .text_size(px(12.0))
-                            .child("Ctrl+Shift+Tab"),
+                        hotkey_badge("Ctrl+Shift+Tab"),
                     ))
                     .child(div().w_full().h(px(1.0)).bg(theme::border()))
                     .child(form_row(
                         "Tab selector",
                         Some("Open fuzzy tab search (Ctrl+K always works)"),
-                        div()
-                            .bg(theme::surface_2())
-                            .border_1()
-                            .border_color(theme::border())
-                            .rounded_md()
-                            .px(px(10.0))
-                            .py(px(4.0))
-                            .text_color(theme::text_primary())
-                            .text_size(px(12.0))
-                            .child("Ctrl+K"),
+                        hotkey_badge("Ctrl+K"),
                     )),
             ),
     )

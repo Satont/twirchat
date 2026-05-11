@@ -1,10 +1,15 @@
 pub mod mock_data;
 
-use crate::protocol::types::{NormalizedChatMessage, WatchedChannel};
+use crate::protocol::types::{
+    NormalizedChatMessage, PlatformStatus, PlatformStatusInfo, PlatformStatusMode, WatchedChannel,
+    WatchedChannelsLayout,
+};
 use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
+use crate::services::{BackendWsEvent, LifecycleEvent, ServiceEvent};
 use crate::storage::Storage;
 use gpui::{App, Entity};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainSection {
@@ -20,10 +25,15 @@ pub struct AppState {
     active_channel_tab_id: String,
     sidebar_collapsed: bool,
     unread_events: usize,
+    runtime_started: bool,
+    service_events_seen: usize,
+    runtime_errors: Vec<String>,
     update_state: UpdateStatusSnapshot,
     pub platforms_panel: crate::ui::platforms::PlatformsPanel,
     pub messages: Vec<NormalizedChatMessage>,
     pub watched_channels: Vec<WatchedChannel>,
+    pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
+    pub events: Vec<crate::protocol::types::NormalizedEvent>,
 }
 
 impl Default for AppState {
@@ -33,6 +43,9 @@ impl Default for AppState {
             active_channel_tab_id: String::from("home"),
             sidebar_collapsed: false,
             unread_events: 3,
+            runtime_started: false,
+            service_events_seen: 0,
+            runtime_errors: Vec::new(),
             update_state: UpdateStatusSnapshot {
                 show: false,
                 status: None,
@@ -45,23 +58,56 @@ impl Default for AppState {
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
             messages: vec![],
             watched_channels: vec![],
+            watched_layouts: BTreeMap::new(),
+            events: vec![],
         }
     }
 }
 
 impl AppState {
     pub fn new() -> Self {
-        let mut state = Self::default();
         let config = RuntimeConfig::default();
-        if let Ok(storage) = Storage::open_or_recover(config.db_path()) {
-            if let Ok(messages) = storage.messages().get_recent(Some(50)) {
-                state.messages = messages;
+        Storage::open_or_recover(config.db_path())
+            .map(|storage| Self::from_storage(&storage))
+            .unwrap_or_else(|_| Self::default())
+    }
+
+    pub fn from_storage(storage: &Storage) -> Self {
+        let mut state = Self::default();
+        state.load_storage_snapshot(storage);
+        state
+    }
+
+    fn load_storage_snapshot(&mut self, storage: &Storage) {
+        if let Ok(messages) = storage.messages().get_recent(Some(50)) {
+            self.messages = messages;
+        }
+        if let Ok(channels) = storage.watched_channels().find_all() {
+            self.watched_channels = channels;
+        }
+        if let Ok(accounts) = storage.accounts().find_all() {
+            for account in &accounts {
+                self.platforms_panel.statuses.insert(
+                    account.platform,
+                    PlatformStatusInfo {
+                        platform: account.platform,
+                        status: PlatformStatus::Connected,
+                        error: None,
+                        mode: PlatformStatusMode::Authenticated,
+                        channel_login: Some(account.username.clone()),
+                    },
+                );
             }
-            if let Ok(channels) = storage.watched_channels().find_all() {
-                state.watched_channels = channels;
+            self.platforms_panel.accounts = accounts;
+        }
+        if let Ok(joined_channels) = storage.channels().find_all() {
+            self.platforms_panel.joined_channels = joined_channels;
+        }
+        for channel in &self.watched_channels {
+            if let Ok(layout) = storage.watched_layout().get(&channel.id) {
+                self.watched_layouts.insert(channel.id.clone(), layout);
             }
         }
-        state
     }
 
     pub fn active_section(&self) -> MainSection {
@@ -82,6 +128,92 @@ impl AppState {
 
     pub fn update_state(&self) -> &UpdateStatusSnapshot {
         &self.update_state
+    }
+
+    pub fn connected_platform_count(&self) -> usize {
+        self.platforms_panel
+            .statuses
+            .values()
+            .filter(|status| status.status == PlatformStatus::Connected)
+            .count()
+    }
+
+    pub fn watched_layout(&self, tab_id: &str) -> Option<&WatchedChannelsLayout> {
+        self.watched_layouts.get(tab_id)
+    }
+
+    pub fn apply_service_event(&mut self, event: ServiceEvent) {
+        self.service_events_seen = self.service_events_seen.saturating_add(1);
+        match event {
+            ServiceEvent::Lifecycle(LifecycleEvent::RuntimeStarted) => {
+                self.runtime_started = true;
+            }
+            ServiceEvent::Lifecycle(LifecycleEvent::RuntimeStopped { .. }) => {
+                self.runtime_started = false;
+            }
+            ServiceEvent::BackendWs(BackendWsEvent::MessageDecoded { message }) => {
+                self.apply_backend_message(message);
+            }
+            ServiceEvent::BackendWs(BackendWsEvent::AuthRejected { message, .. }) => {
+                self.runtime_errors.push(message);
+            }
+            ServiceEvent::BackendWs(BackendWsEvent::MalformedPayload { error }) => {
+                self.runtime_errors.push(error);
+            }
+            ServiceEvent::BackendWs(BackendWsEvent::SendFailed { reason }) => {
+                self.runtime_errors.push(reason);
+            }
+            _ => {}
+        }
+    }
+
+    fn apply_backend_message(
+        &mut self,
+        message: crate::protocol::messages::BackendToDesktopMessage,
+    ) {
+        match message {
+            crate::protocol::messages::BackendToDesktopMessage::ChatMessage { data } => {
+                if let Ok(message) = serde_json::from_value(data) {
+                    self.messages.push(message);
+                }
+            }
+            crate::protocol::messages::BackendToDesktopMessage::ChatEvent { data } => {
+                if let Ok(event) = serde_json::from_value(data) {
+                    self.events.push(event);
+                    if !matches!(self.active_section, MainSection::Events) {
+                        self.unread_events = self.unread_events.saturating_add(1);
+                    }
+                }
+            }
+            crate::protocol::messages::BackendToDesktopMessage::PlatformStatus {
+                platform,
+                status,
+                error,
+            } => {
+                let status = match status {
+                    crate::protocol::messages::BackendPlatformStatus::Connected => {
+                        PlatformStatus::Connected
+                    }
+                    crate::protocol::messages::BackendPlatformStatus::Disconnected => {
+                        PlatformStatus::Disconnected
+                    }
+                    crate::protocol::messages::BackendPlatformStatus::Error => {
+                        PlatformStatus::Error
+                    }
+                };
+                self.platforms_panel.statuses.insert(
+                    platform,
+                    PlatformStatusInfo {
+                        platform,
+                        status,
+                        error,
+                        mode: PlatformStatusMode::Anonymous,
+                        channel_login: None,
+                    },
+                );
+            }
+            _ => {}
+        }
     }
 
     pub fn select_section(&mut self, section: MainSection) {

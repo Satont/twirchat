@@ -3,11 +3,13 @@
 //! This module intentionally mirrors the TypeScript desktop utility boundary without
 //! binding to GPUI, webviews, RPC transports, or the real updater pipeline.
 
+pub mod app;
 pub mod browser;
 pub mod config;
 pub mod packaging;
 pub mod update;
 
+pub use app::{AppRuntime, AppRuntimeError};
 pub use browser::{ExternalOpenError, ExternalOpenResult, ExternalOpener, SystemExternalOpener};
 pub use config::{BackendRequestConfig, RuntimeConfig, RuntimeConfigInput};
 pub use packaging::{

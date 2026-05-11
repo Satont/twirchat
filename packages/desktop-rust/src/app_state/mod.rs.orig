@@ -1,6 +1,9 @@
 pub mod mock_data;
 
+use crate::protocol::types::{NormalizedChatMessage, WatchedChannel};
+use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
+use crate::storage::Storage;
 use gpui::{App, Entity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +21,9 @@ pub struct AppState {
     sidebar_collapsed: bool,
     unread_events: usize,
     update_state: UpdateStatusSnapshot,
+    pub platforms_panel: crate::ui::platforms::PlatformsPanel,
+    pub messages: Vec<NormalizedChatMessage>,
+    pub watched_channels: Vec<WatchedChannel>,
 }
 
 impl Default for AppState {
@@ -36,13 +42,26 @@ impl Default for AppState {
                 skipped_hash: None,
                 auto_check_updates: true,
             },
+            platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
+            messages: vec![],
+            watched_channels: vec![],
         }
     }
 }
 
 impl AppState {
     pub fn new() -> Self {
-        Self::default()
+        let mut state = Self::default();
+        let config = RuntimeConfig::default();
+        if let Ok(storage) = Storage::open_or_recover(config.db_path()) {
+            if let Ok(messages) = storage.messages().get_recent(Some(50)) {
+                state.messages = messages;
+            }
+            if let Ok(channels) = storage.watched_channels().find_all() {
+                state.watched_channels = channels;
+            }
+        }
+        state
     }
 
     pub fn active_section(&self) -> MainSection {

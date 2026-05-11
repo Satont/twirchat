@@ -65,7 +65,7 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     MainSection::Platforms,
                     "icons/platforms.svg",
                     "Platforms",
-                    Some(String::from("2")), // placeholder badge for connected platforms
+                    connected_platforms_badge(state),
                 ))
                 .child(button(
                     state,
@@ -78,6 +78,11 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
         )
         .child(div().flex_1())
         .child(sidebar_toggle(state, state_entity))
+}
+
+fn connected_platforms_badge(state: &AppState) -> Option<String> {
+    let count = state.connected_platform_count();
+    (count > 0).then(|| count.to_string())
 }
 
 fn button(
