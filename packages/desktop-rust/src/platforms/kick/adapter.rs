@@ -8,6 +8,7 @@ use crate::protocol::types::{
     PlatformStatusInfo, PlatformStatusMode, ReplyAuthor, StreamStatus,
 };
 use crate::storage::{Storage, TokenPair, TokenState};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -82,21 +83,21 @@ impl KickAdapterError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickChatroom {
     pub channel_slug: String,
     pub chatroom_id: u64,
     pub broadcaster_user_id: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickBadge {
     pub badge_type: String,
     pub text: String,
     pub count: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickEmote {
     pub id: String,
     pub name: String,
@@ -104,7 +105,7 @@ pub struct KickEmote {
     pub end: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickMessageSender {
     pub id: u64,
     pub username: String,
@@ -114,31 +115,32 @@ pub struct KickMessageSender {
     pub profile_picture: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickOriginalSender {
     pub id: String,
     pub username: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickOriginalMessage {
     pub id: String,
     pub content: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickReplyMetadata {
     pub original_sender: KickOriginalSender,
     pub original_message: KickOriginalMessage,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum KickChatMessageKind {
     Message,
     Reply,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickChatMessage {
     pub id: String,
     pub chatroom_id: u64,
@@ -149,7 +151,7 @@ pub struct KickChatMessage {
     pub metadata: Option<KickReplyMetadata>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickFollowEvent {
     pub channel_id: u64,
     pub user_id: u64,
@@ -159,7 +161,7 @@ pub struct KickFollowEvent {
     pub followed_at: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickSubscriptionEvent {
     pub channel_id: u64,
     pub user_id: u64,
@@ -309,15 +311,29 @@ impl<'a, C> KickAdapter<'a, C> {
 
 impl<C: KickChatClient> KickAdapter<'_, C> {
     pub fn poll(&mut self, sink: &mut dyn PlatformEventSink) -> PlatformResult<()> {
-        for message in self.client.drain_messages()? {
+        let messages = self.client.drain_messages()?;
+        let follows = self.client.drain_follow_events()?;
+        let subscriptions = self.client.drain_subscription_events()?;
+
+        if !messages.is_empty() || !follows.is_empty() || !subscriptions.is_empty() {
+            eprintln!(
+                "[kick/live] drained messages={} follows={} subscriptions={} slug={:?}",
+                messages.len(),
+                follows.len(),
+                subscriptions.len(),
+                self.channel_slug
+            );
+        }
+
+        for message in messages {
             sink.emit(PlatformEvent::Message(self.normalize_message(message)))?;
         }
 
-        for event in self.client.drain_follow_events()? {
+        for event in follows {
             sink.emit(PlatformEvent::Event(normalize_follow_event(event)))?;
         }
 
-        for event in self.client.drain_subscription_events()? {
+        for event in subscriptions {
             sink.emit(PlatformEvent::Event(normalize_subscription_event(event)))?;
         }
 

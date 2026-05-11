@@ -242,6 +242,9 @@ pub fn run_watched_channels_service(
     commands: BusReceiver<ServiceCommand>,
     events: BusSender<ServiceEvent>,
 ) -> ServiceStopReport {
+    eprintln!(
+        "[watched/live] starting watched-channels service: Kick uses real client, Twitch/YouTube still use mock clients"
+    );
     let storage = match Storage::open_or_recover(&storage_path) {
         Ok(storage) => storage,
         Err(error) => {
@@ -267,7 +270,13 @@ pub fn run_watched_channels_service(
         )) as Box<dyn WatchedChannelAdapter>),
         Platform::Kick => Ok(Box::new(KickAdapter::new(
             &storage,
-            crate::platforms::kick::MockKickClient::new(),
+            crate::platforms::kick::RealKickClient::new(&storage).map_err(|error| {
+                WatchedChannelsRuntimeError::adapter_factory(
+                    Platform::Kick,
+                    channel.channel_slug.clone(),
+                    error.message,
+                )
+            })?,
         )) as Box<dyn WatchedChannelAdapter>),
         Platform::Youtube => Ok(Box::new(YouTubeAdapter::new(
             &storage,
@@ -357,6 +366,10 @@ fn publish_runtime_events(
                 channel_id,
                 message,
             } => {
+                eprintln!(
+                    "[watched/live] buffered {:?} message for channel={} id={} text={}",
+                    message.platform, channel_id, message.id, message.text
+                );
                 publish_watched_event(
                     events,
                     WatchedChannelsEvent::MessageBuffered {
@@ -366,12 +379,17 @@ fn publish_runtime_events(
                 );
             }
             WatchedChannelsRuntimeEvent::StatusChanged { channel_id, status } => {
+                eprintln!(
+                    "[watched/live] status update channel={} platform={:?} status={:?} mode={:?}",
+                    channel_id, status.platform, status.status, status.mode
+                );
                 publish_watched_event(
                     events,
                     WatchedChannelsEvent::StatusChanged { channel_id, status },
                 );
             }
             WatchedChannelsRuntimeEvent::BackendMessagePlanned { message } => {
+                eprintln!("[watched/live] planned backend message: {:?}", message);
                 publish_watched_event(
                     events,
                     WatchedChannelsEvent::BackendMessagePlanned {
@@ -383,7 +401,13 @@ fn publish_runtime_events(
                 channel_id,
                 platform,
                 message,
-            } => publish_runtime_error(events, channel_id, platform, message),
+            } => {
+                eprintln!(
+                    "[watched/live] adapter error channel={} platform={:?}: {}",
+                    channel_id, platform, message
+                );
+                publish_runtime_error(events, channel_id, platform, message)
+            }
             WatchedChannelsRuntimeEvent::ChannelStarted { .. }
             | WatchedChannelsRuntimeEvent::ChannelRemoved { .. } => {}
         }
@@ -496,7 +520,15 @@ impl<'a> WatchedChannelsRuntime<'a> {
 
     pub fn auto_connect(&mut self) -> WatchedChannelsRuntimeResult<Vec<WatchedChannel>> {
         let channels = self.storage.watched_channels().find_all()?;
+        eprintln!(
+            "[watched/live] auto_connect found {} watched channel(s)",
+            channels.len()
+        );
         for channel in channels.iter().cloned() {
+            eprintln!(
+                "[watched/live] auto_connect starting platform={:?} slug={} id={}",
+                channel.platform, channel.channel_slug, channel.id
+            );
             self.start_channel(channel)?;
         }
         Ok(channels)
@@ -707,8 +739,17 @@ impl<'a> WatchedChannelsRuntime<'a> {
 
     fn start_channel(&mut self, channel: WatchedChannel) -> WatchedChannelsRuntimeResult<()> {
         if self.entries.contains_key(&channel.id) {
+            eprintln!(
+                "[watched/live] skipping already-started channel id={} slug={}",
+                channel.id, channel.channel_slug
+            );
             return Ok(());
         }
+
+        eprintln!(
+            "[watched/live] start_channel platform={:?} slug={} id={}",
+            channel.platform, channel.channel_slug, channel.id
+        );
 
         let adapter = (self.adapter_factory)(&channel)?;
         let adapter_platform = adapter.platform();
@@ -742,6 +783,13 @@ impl<'a> WatchedChannelsRuntime<'a> {
             };
             entry.adapter.connect(&channel_slug, &mut sink)
         };
+        eprintln!(
+            "[watched/live] connect attempted for platform={:?} slug={} id={} result={}",
+            platform,
+            channel_slug,
+            channel_id,
+            if connect_result.is_ok() { "ok" } else { "error" }
+        );
         self.apply_adapter_events(&channel_id, sink.into_events());
         if let Err(error) = connect_result {
             self.record_adapter_error(&channel_id, error);

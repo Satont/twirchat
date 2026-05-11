@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::app_state::AppStateActions;
 use crate::protocol::messages::{CategorySearchResult, StreamStatusResponse};
 use crate::protocol::types::{
     Account, Platform, PlatformStatus, PlatformStatusInfo, PlatformStatusMode,
@@ -7,7 +8,7 @@ use crate::protocol::types::{
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::shared::panel_title;
 use crate::ui::theme;
-use gpui::{Div, div, prelude::*, px, rgb};
+use gpui::{Div, Entity, div, img, prelude::*, px, rgb};
 use std::collections::BTreeMap;
 
 pub struct StreamEditor {
@@ -202,7 +203,10 @@ fn status_color(info: Option<&PlatformStatusInfo>) -> gpui::Rgba {
     }
 }
 
-pub(crate) fn panel(state: &PlatformsPanel) -> Div {
+pub(crate) fn panel(
+    state: &PlatformsPanel,
+    state_entity: Entity<crate::app_state::AppState>,
+) -> Div {
     let platforms = [Platform::Twitch, Platform::Youtube, Platform::Kick];
 
     div()
@@ -221,6 +225,30 @@ pub(crate) fn panel(state: &PlatformsPanel) -> Div {
                 .flex()
                 .flex_col()
                 .gap(px(16.0))
+                .when(!state.toasts.is_empty(), |this| {
+                    this.child(div().flex().flex_col().gap(px(8.0)).children(
+                        state.toasts.iter().map(|toast| {
+                            div()
+                                .rounded_lg()
+                                .border_1()
+                                .border_color(if toast.kind == ToastKind::Success {
+                                    gpui::rgba(0x22c55e66)
+                                } else {
+                                    gpui::rgba(0xef444466)
+                                })
+                                .bg(if toast.kind == ToastKind::Success {
+                                    gpui::rgba(0x14532d66)
+                                } else {
+                                    gpui::rgba(0x7f1d1d66)
+                                })
+                                .px(px(14.0))
+                                .py(px(10.0))
+                                .text_size(px(12.0))
+                                .text_color(theme::text_primary())
+                                .child(toast.message.clone())
+                        }),
+                    ))
+                })
                 .children(platforms.into_iter().map(|platform| {
                     let display_name = match platform {
                         Platform::Twitch => "Twitch",
@@ -321,7 +349,18 @@ pub(crate) fn panel(state: &PlatformsPanel) -> Div {
                                                 .flex()
                                                 .items_center()
                                                 .gap(px(10.0))
-                                                .child(
+                                                .child(if let Some(url) = &acc.avatar_url {
+                                                    div()
+                                                        .w(px(36.0))
+                                                        .h(px(36.0))
+                                                        .rounded_full()
+                                                        .border_2()
+                                                        .border_color(theme::platform_color(
+                                                            models_platform,
+                                                        ))
+                                                        .overflow_hidden()
+                                                        .child(img(url.clone()).w_full().h_full())
+                                                } else {
                                                     div()
                                                         .w(px(36.0))
                                                         .h(px(36.0))
@@ -341,8 +380,8 @@ pub(crate) fn panel(state: &PlatformsPanel) -> Div {
                                                                 .font_weight(gpui::FontWeight::BOLD)
                                                                 .text_size(px(15.0))
                                                                 .child(avatar_fallback),
-                                                        ),
-                                                )
+                                                        )
+                                                })
                                                 .child(
                                                     div()
                                                         .flex()
@@ -376,6 +415,20 @@ pub(crate) fn panel(state: &PlatformsPanel) -> Div {
                                                         .text_size(px(13.0))
                                                         .font_weight(gpui::FontWeight::SEMIBOLD)
                                                         .text_color(theme::text_muted())
+                                                        .cursor_pointer()
+                                                        .hover(|s| {
+                                                            s.bg(theme::surface_2())
+                                                                .text_color(theme::text_primary())
+                                                        })
+                                                        .on_mouse_down(gpui::MouseButton::Left, {
+                                                            let state_entity = state_entity.clone();
+                                                            move |_event, _window, app| {
+                                                                state_entity
+                                                                    .disconnect_platform_account(
+                                                                        app, platform,
+                                                                    );
+                                                            }
+                                                        })
                                                         .child("Disconnect"),
                                                 ),
                                         )
@@ -392,6 +445,17 @@ pub(crate) fn panel(state: &PlatformsPanel) -> Div {
                                                     rgb(0x000000)
                                                 } else {
                                                     rgb(0xffffff)
+                                                })
+                                                .cursor_pointer()
+                                                .hover(|s| s.opacity(0.9))
+                                                .on_mouse_down(gpui::MouseButton::Left, {
+                                                    let state_entity = state_entity.clone();
+                                                    move |_event, _window, app| {
+                                                        state_entity
+                                                            .connect_platform_account_placeholder(
+                                                                app, platform,
+                                                            );
+                                                    }
                                                 })
                                                 .child("Connect account"),
                                         )
@@ -457,6 +521,17 @@ pub(crate) fn panel(state: &PlatformsPanel) -> Div {
                                                         .text_color(rgb(0xa78bfa))
                                                         .text_size(px(13.0))
                                                         .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                        .cursor_pointer()
+                                                        .hover(|s| s.bg(gpui::rgba(0xa78bfa33)))
+                                                        .on_mouse_down(gpui::MouseButton::Left, {
+                                                            let state_entity = state_entity.clone();
+                                                            move |_event, _window, app| {
+                                                                state_entity
+                                                                    .join_channel_from_account(
+                                                                        app, platform,
+                                                                    );
+                                                            }
+                                                        })
                                                         .child("Join"),
                                                 ),
                                         )
@@ -609,11 +684,5 @@ mod tests {
 
         editor.cancel_edit();
         assert!(!editor.editing);
-    }
-
-    #[test]
-    fn panel_renders_without_panic() {
-        let panel_state = PlatformsPanel::new();
-        let _view = super::panel(&panel_state);
     }
 }

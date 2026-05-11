@@ -6,16 +6,17 @@ use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
-use gpui::{
-    AnyElement, Context, Div, Entity, Stateful, div, img, prelude::*, px, rgb, rgba, uniform_list,
-};
-use std::ops::Range;
+use gpui::{Context, Div, Entity, Stateful, div, img, prelude::*, px, rgb, rgba};
 
 pub(crate) fn panel(
     state: &AppState,
     state_entity: Entity<AppState>,
-    cx: &mut Context<TwirChatApp>,
+    _cx: &mut Context<TwirChatApp>,
 ) -> Div {
+    let start = state.messages.len().saturating_sub(120);
+    let visible_messages = state.messages[start..].to_vec();
+    let settings = state.settings().clone();
+
     div()
         .flex_1()
         .flex()
@@ -28,29 +29,18 @@ pub(crate) fn panel(
             state_entity,
         ))
         .child(
-            div().flex_1().bg(theme::background()).child(
-                {
-                    let messages = state.messages.clone();
-                    let settings = state.settings().clone();
-                    uniform_list(
-                        "chat-messages",
-                        messages.len(),
-                        cx.processor(
-                            move |_this: &mut TwirChatApp,
-                                  range: Range<usize>,
-                                  _window,
-                                  _cx|
-                                  -> Vec<AnyElement> {
-                                messages[range]
-                                    .iter()
-                                    .map(|msg| message_row(msg, &settings).into_any_element())
-                                    .collect()
-                            },
-                        ),
-                    )
-                }
-                .h_full(),
-            ),
+            div()
+                .id("chat-scroll")
+                .flex_1()
+                .bg(theme::background())
+                .overflow_y_scroll()
+                .child(
+                    div().min_h_full().flex().flex_col().justify_end().children(
+                        visible_messages
+                            .iter()
+                            .map(|msg| message_row(msg, &settings).into_any_element()),
+                    ),
+                ),
         )
         .child(composer(&state.watched_channels))
 }
@@ -438,24 +428,28 @@ fn header(
                                                     add_menu_row(label, {
                                                         let state_entity = state_entity.clone();
                                                         move |_event, _window, app| {
-                                                            state_entity.add_watched_channel_from_account(
-                                                                app,
-                                                                &account_id,
-                                                            );
+                                                            state_entity
+                                                                .add_watched_channel_from_account(
+                                                                    app,
+                                                                    &account_id,
+                                                                );
                                                         }
                                                     })
                                                 }
                                             }))
-                                            .when(state.platforms_panel.accounts.is_empty(), |this| {
-                                                this.child(
-                                                    div()
-                                                        .px(px(8.0))
-                                                        .py(px(6.0))
-                                                        .text_size(px(12.0))
-                                                        .text_color(theme::text_muted())
-                                                        .child("No connected accounts"),
-                                                )
-                                            }),
+                                            .when(
+                                                state.platforms_panel.accounts.is_empty(),
+                                                |this| {
+                                                    this.child(
+                                                        div()
+                                                            .px(px(8.0))
+                                                            .py(px(6.0))
+                                                            .text_size(px(12.0))
+                                                            .text_color(theme::text_muted())
+                                                            .child("No connected accounts"),
+                                                    )
+                                                },
+                                            ),
                                     )
                                 }),
                         )
@@ -670,7 +664,7 @@ fn header_chip(chip: &WatchedChannel) -> Div {
 fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
-    let v_pad = if is_compact { 2.0 } else { 4.0 };
+    let v_pad = if is_compact { 1.0 } else { 2.0 };
 
     if message.message_type == ChatMessageType::System {
         return div()
@@ -698,7 +692,7 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
             .child(
                 div()
                     .flex_1()
-                    .text_size(px(14.0))
+                    .text_size(px(13.0))
                     .text_color(theme::text_muted())
                     .child(message.text.clone()),
             )
@@ -737,15 +731,15 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
         .when(settings.show_avatars, |el| {
             el.child(
                 div()
-                    .w(px(28.0))
-                    .h(px(28.0))
+                    .w(px(if is_compact { 22.0 } else { 26.0 }))
+                    .h(px(if is_compact { 22.0 } else { 26.0 }))
                     .rounded_full()
                     .flex()
                     .items_center()
                     .justify_center()
                     .bg(rgb(0x8b8b99))
                     .text_color(theme::text_primary())
-                    .text_size(px(11.0))
+                    .text_size(px(if is_compact { 9.0 } else { 10.0 }))
                     .font_weight(gpui::FontWeight::BOLD)
                     .child(if let Some(url) = &message.author.avatar_url {
                         img(url.clone())
@@ -782,7 +776,7 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                         .when(settings.show_platform_icon, |el| {
                             el.child(
                                 PlatformIcon::new(to_model_platform(message.platform))
-                                    .size(px(13.0)),
+                                    .size(px(12.0)),
                             )
                         })
                         .when(settings.show_badges, |el| {
@@ -791,6 +785,8 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                                     div()
                                         .w(px(18.0))
                                         .h(px(18.0))
+                                        .rounded_sm()
+                                        .overflow_hidden()
                                         .child(img(url.clone()).w_full().h_full())
                                 } else {
                                     div()
@@ -807,14 +803,14 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                         .child(
                             div()
                                 .text_color(rgb(0x8b8b99))
-                                .text_size(px(13.0))
+                                .text_size(px(12.0))
                                 .font_weight(gpui::FontWeight::BOLD)
                                 .child(message.author.display_name.clone()),
                         )
                         .when(settings.show_timestamp, |el| {
                             el.child(
                                 div()
-                                    .text_size(px(10.0))
+                                    .text_size(px(9.0))
                                     .text_color(theme::text_muted())
                                     .child(message.timestamp.clone()),
                             )
@@ -822,7 +818,7 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                 )
                 .child(
                     div()
-                        .text_size(px(13.0))
+                        .text_size(px(if is_compact { 12.0 } else { 13.0 }))
                         .text_color(theme::text_primary())
                         .child(message.text.clone()),
                 ),

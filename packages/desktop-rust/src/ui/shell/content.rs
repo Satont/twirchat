@@ -34,7 +34,7 @@ pub(crate) fn panel(
                 .child(chat_content)
         }
         MainSection::Events => events::panel(state),
-        MainSection::Platforms => platforms::panel(&state.platforms_panel),
+        MainSection::Platforms => platforms::panel(&state.platforms_panel, state_entity.clone()),
         MainSection::Settings => settings::panel(state, state_entity.clone()),
     }
 }

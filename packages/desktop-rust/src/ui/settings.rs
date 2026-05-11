@@ -4,6 +4,8 @@ use crate::ui::theme;
 use gpui::{Div, Rgba, div, prelude::*, px};
 use std::rc::Rc;
 
+type ToggleGroupCallback = Rc<dyn Fn(&'static str, &mut gpui::Window, &mut gpui::App) + 'static>;
+
 fn with_alpha(color: Rgba, alpha: f32) -> Rgba {
     let mut c = color;
     c.a = alpha;
@@ -55,10 +57,7 @@ fn form_row(label: &'static str, hint: Option<&'static str>, control: impl IntoE
         .child(control)
 }
 
-fn toggle_group(
-    options: &[(&'static str, bool)],
-    on_click: Rc<dyn Fn(&'static str, &mut gpui::Window, &mut gpui::App) + 'static>,
-) -> Div {
+fn toggle_group(options: &[(&'static str, bool)], on_click: ToggleGroupCallback) -> Div {
     let mut g = div()
         .flex()
         .flex_row()
@@ -329,10 +328,13 @@ pub(crate) fn panel(
                                 .child(form_row(
                                     "Enable highlights",
                                     Some("Highlight messages mentioning you"),
-                                    Switch::new(settings.self_ping.as_ref().map_or(false, |p| p.enabled))
+                                    Switch::new(
+                                        settings.self_ping.as_ref().is_some_and(|p| p.enabled),
+                                    )
                                         .on_click({
                                             let state_entity = state_entity.clone();
-                                            let current = settings.self_ping.as_ref().map_or(false, |p| p.enabled);
+                                            let current =
+                                                settings.self_ping.as_ref().is_some_and(|p| p.enabled);
                                             let color = settings.self_ping.as_ref().map_or("rgba(167, 139, 250, 0.15)".to_string(), |p| p.color.clone());
                                             move |_event, _window, app| {
                                                 state_entity.set_self_ping(app, !current, color.clone());

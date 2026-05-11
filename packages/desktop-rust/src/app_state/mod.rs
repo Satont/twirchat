@@ -2,7 +2,7 @@ pub mod mock_data;
 
 use crate::protocol::types::{
     AppSettings, AppTheme, ChatTheme, FontFamilyChoice, LayoutNode, NormalizedChatMessage,
-    OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent, PlatformStatus,
+    OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent, Platform, PlatformStatus,
     PlatformStatusInfo, PlatformStatusMode, SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
 use crate::runtime::config::RuntimeConfig;
@@ -12,6 +12,7 @@ use crate::settings::SettingsManager;
 use crate::storage::Storage;
 use crate::storage::settings::default_app_settings;
 use crate::storage::watched_layout::{MAX_PANELS, create_default_tab_layout};
+use crate::ui::platforms::ToastKind;
 use gpui::{App, Entity};
 use std::collections::BTreeMap;
 
@@ -234,7 +235,11 @@ impl AppState {
             &account.display_name,
         )?;
 
-        if !self.watched_channels.iter().any(|existing| existing.id == channel.id) {
+        if !self
+            .watched_channels
+            .iter()
+            .any(|existing| existing.id == channel.id)
+        {
             self.watched_channels.push(channel.clone());
         }
 
@@ -248,6 +253,84 @@ impl AppState {
 
     pub fn persist_settings(&self, storage: &Storage) -> crate::storage::StorageResult<()> {
         storage.settings().set_app_settings(self.settings())
+    }
+
+    pub fn connect_platform_account_placeholder(&mut self, platform: Platform) {
+        self.platforms_panel.auth_loading.insert(platform, true);
+        self.platforms_panel.statuses.insert(
+            platform,
+            PlatformStatusInfo {
+                platform,
+                status: PlatformStatus::Connecting,
+                error: Some(String::from(
+                    "Native auth flow is not wired yet in desktop-rust",
+                )),
+                mode: PlatformStatusMode::Anonymous,
+                channel_login: None,
+            },
+        );
+        self.platforms_panel.add_toast(
+            platform,
+            ToastKind::Error,
+            String::from("Native auth flow is not wired yet in desktop-rust"),
+        );
+    }
+
+    pub fn disconnect_platform_account(&mut self, platform: Platform) {
+        self.platforms_panel
+            .accounts
+            .retain(|account| account.platform != platform);
+        self.platforms_panel.joined_channels.remove(&platform);
+        self.platforms_panel.auth_loading.remove(&platform);
+        self.platforms_panel.statuses.insert(
+            platform,
+            PlatformStatusInfo {
+                platform,
+                status: PlatformStatus::Disconnected,
+                error: None,
+                mode: PlatformStatusMode::Anonymous,
+                channel_login: None,
+            },
+        );
+        self.platforms_panel.add_toast(
+            platform,
+            ToastKind::Success,
+            format!("Disconnected {} account", format_platform_label(platform)),
+        );
+    }
+
+    pub fn join_channel_from_account(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+    ) -> crate::storage::StorageResult<bool> {
+        let Some(account) = self
+            .platforms_panel
+            .accounts
+            .iter()
+            .find(|account| account.platform == platform)
+            .cloned()
+        else {
+            self.platforms_panel.add_toast(
+                platform,
+                ToastKind::Error,
+                format!(
+                    "Connect a {} account first",
+                    format_platform_label(platform)
+                ),
+            );
+            return Ok(false);
+        };
+
+        let changed = self.add_watched_channel_from_account(storage, &account.id)?;
+        self.platforms_panel
+            .join_channel(platform, account.username.clone());
+        self.platforms_panel.add_toast(
+            platform,
+            ToastKind::Success,
+            format!("Watching {}", account.display_name),
+        );
+        Ok(changed)
     }
 
     pub fn apply_service_event(&mut self, event: ServiceEvent) {
@@ -279,6 +362,10 @@ impl AppState {
     fn apply_watched_channels_event(&mut self, event: WatchedChannelsEvent) {
         match event {
             WatchedChannelsEvent::MessageBuffered { message, .. } => {
+                eprintln!(
+                    "[watched/live] app_state accepted {:?} message id={} channel={}",
+                    message.platform, message.id, message.channel_id
+                );
                 self.messages.push(*message);
             }
             WatchedChannelsEvent::StatusChanged { channel_id, status } => {
@@ -527,6 +614,9 @@ pub trait AppStateActions {
     fn toggle_chat_options_menu(&self, app: &mut App);
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
     fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str);
+    fn connect_platform_account_placeholder(&self, app: &mut App, platform: Platform);
+    fn disconnect_platform_account(&self, app: &mut App, platform: Platform);
+    fn join_channel_from_account(&self, app: &mut App, platform: Platform);
     fn persist_settings(&self, app: &mut App);
 }
 
@@ -786,6 +876,35 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
+    fn connect_platform_account_placeholder(&self, app: &mut App, platform: Platform) {
+        self.update(app, |state, cx| {
+            state.connect_platform_account_placeholder(platform);
+            cx.notify();
+        });
+    }
+
+    fn disconnect_platform_account(&self, app: &mut App, platform: Platform) {
+        self.update(app, |state, cx| {
+            state.disconnect_platform_account(platform);
+            cx.notify();
+        });
+    }
+
+    fn join_channel_from_account(&self, app: &mut App, platform: Platform) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.join_channel_from_account(&storage, platform) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
     fn persist_settings(&self, app: &mut App) {
         self.update(app, |state, cx| {
             let config = RuntimeConfig::default();
@@ -837,6 +956,14 @@ fn count_layout_panels(node: &LayoutNode) -> usize {
     match node {
         LayoutNode::Panel { .. } => 1,
         LayoutNode::Split { children, .. } => children.iter().map(count_layout_panels).sum(),
+    }
+}
+
+fn format_platform_label(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Twitch => "Twitch",
+        Platform::Youtube => "YouTube",
+        Platform::Kick => "Kick",
     }
 }
 
@@ -897,7 +1024,7 @@ mod tests {
         assert_eq!(state.settings().theme, AppTheme::Light);
         assert_eq!(state.settings().chat_theme, ChatTheme::Compact);
         assert_eq!(state.settings().overlay.max_messages, 7);
-        assert_eq!(state.update_state().auto_check_updates, false);
+        assert!(!state.update_state().auto_check_updates);
     }
 
     #[test]
@@ -1010,7 +1137,11 @@ mod tests {
         assert!(changed);
         assert_eq!(state.watched_channels.len(), 1);
         assert_eq!(state.active_channel_tab_id(), state.watched_channels[0].id);
-        assert!(state.watched_layout(&state.watched_channels[0].id).is_some());
+        assert!(
+            state
+                .watched_layout(&state.watched_channels[0].id)
+                .is_some()
+        );
 
         let persisted = storage
             .watched_channels()
