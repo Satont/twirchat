@@ -5,10 +5,16 @@
 
 pub mod browser;
 pub mod config;
+pub mod packaging;
 pub mod update;
 
 pub use browser::{ExternalOpenError, ExternalOpenResult, ExternalOpener, SystemExternalOpener};
 pub use config::{BackendRequestConfig, RuntimeConfig, RuntimeConfigInput};
+pub use packaging::{
+    AssetKind, AssetRequirement, PackagingAppMetadata, PackagingVerificationError,
+    PackagingVerificationReport, PackagingVerificationStatus, TwirChatPackagingSpec,
+    verify_packaging_artifact,
+};
 pub use update::{
     UPDATE_CHECK_INTERVAL, UpdateEvent, UpdateRuntime, UpdateState, UpdateStatus,
     UpdateStatusSnapshot,

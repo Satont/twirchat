@@ -1,7 +1,9 @@
 use serde::Deserialize;
 use serde_json::json;
 use std::fs;
+use std::hint::black_box;
 use std::path::PathBuf;
+use std::time::Instant;
 use twirchat_desktop_rust::chat::{
     AliasBook, ChatAggregator, ChatReplayItem, IngestOutcome, SevenTvCatalog, SevenTvEmote,
     insert_live_message, merge_older_page, sort_messages,
@@ -212,6 +214,110 @@ fn chat_burst_preserves_order_and_dedupe() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+#[test]
+fn chat_burst_performance() -> Result<(), Box<dyn std::error::Error>> {
+    let fixture: BurstFixture = read_json_fixture("burst.json")?;
+    let mut aggregator = ChatAggregator::new(fixture.count + 20);
+    let duplicate_attempts = duplicate_attempts(&fixture);
+    let total_attempts = fixture.count + duplicate_attempts;
+
+    let ingest_start = Instant::now();
+    for index in 0..fixture.count {
+        let message = make_message(
+            format!("burst-{index:04}"),
+            fixture.platform,
+            fixture.channel_id.clone(),
+            fixture.author_id.clone(),
+            format!("Burst User {index}"),
+            1_710_000_100_000_i128 + i128::try_from(index)?,
+        );
+        let inserted = aggregator.inject_message(black_box(message));
+        assert!(inserted.is_some());
+
+        if index % fixture.duplicate_every == 0 {
+            let duplicate = make_message(
+                format!("burst-{index:04}"),
+                fixture.platform,
+                fixture.channel_id.clone(),
+                fixture.author_id.clone(),
+                "Duplicate Burst User".to_string(),
+                1_710_999_999_999,
+            );
+            let inserted = aggregator.inject_message(black_box(duplicate));
+            assert!(inserted.is_none());
+        }
+    }
+    let ingest_elapsed = ingest_start.elapsed();
+
+    let recent = aggregator.get_recent_messages();
+    assert_eq!(recent.len(), fixture.count);
+    assert_eq!(aggregator.seen_message_count(), fixture.count);
+    assert_eq!(
+        recent.first().map(|message| message.id.as_str()),
+        Some("burst-0000")
+    );
+    assert_eq!(
+        recent.last().map(|message| message.id.as_str()),
+        Some("burst-0249")
+    );
+
+    let history_start = Instant::now();
+    let mut sorted_history = Vec::new();
+    for message in recent.iter().rev() {
+        sorted_history =
+            insert_live_message(black_box(&sorted_history), black_box(message.clone()));
+    }
+    let history_elapsed = history_start.elapsed();
+
+    assert_eq!(sorted_history.len(), fixture.count);
+    assert_eq!(
+        sorted_history.first().map(|message| message.id.as_str()),
+        Some("burst-0000")
+    );
+    assert_eq!(
+        sorted_history.last().map(|message| message.id.as_str()),
+        Some("burst-0249")
+    );
+
+    let duplicate_insert = insert_live_message(&sorted_history, sorted_history[0].clone());
+    assert_eq!(duplicate_insert.len(), sorted_history.len());
+
+    write_evidence(
+        "task-24-chat-burst-performance.json",
+        &json!({
+            "fixture": "packages/desktop-rust/fixtures/chat/burst.json",
+            "fixtureCount": fixture.count,
+            "duplicateEvery": fixture.duplicate_every,
+            "duplicateAttempts": duplicate_attempts,
+            "totalIngestAttempts": total_attempts,
+            "acceptedMessages": recent.len(),
+            "dedupeSeenIds": aggregator.seen_message_count(),
+            "historyInsertions": recent.len(),
+            "deterministicAssertions": {
+                "acceptedEqualsFixtureCount": recent.len() == fixture.count,
+                "dedupeSeenIdsEqualsFixtureCount": aggregator.seen_message_count() == fixture.count,
+                "duplicatesRejected": total_attempts - recent.len() == duplicate_attempts,
+                "historyPreservesAscendingOrder": sorted_history.first().map(|message| message.id.as_str()) == Some("burst-0000")
+                    && sorted_history.last().map(|message| message.id.as_str()) == Some("burst-0249")
+            },
+            "timings": {
+                "ingestMicros": ingest_elapsed.as_micros(),
+                "historyMicros": history_elapsed.as_micros(),
+                "totalMicros": ingest_elapsed.saturating_add(history_elapsed).as_micros()
+            }
+        }),
+    )?;
+
+    println!(
+        "chat_burst_performance accepted {} messages, rejected {duplicate_attempts} duplicates, ingest={}us, history={}us",
+        recent.len(),
+        ingest_elapsed.as_micros(),
+        history_elapsed.as_micros()
+    );
+
+    Ok(())
+}
+
 fn make_message(
     id: String,
     platform: Platform,
@@ -274,6 +380,12 @@ fn write_evidence(name: &str, value: &serde_json::Value) -> Result<(), Box<dyn s
     }
     fs::write(path, serde_json::to_string_pretty(value)?)?;
     Ok(())
+}
+
+fn duplicate_attempts(fixture: &BurstFixture) -> usize {
+    (0..fixture.count)
+        .filter(|index| index % fixture.duplicate_every == 0)
+        .count()
 }
 
 #[allow(dead_code)]

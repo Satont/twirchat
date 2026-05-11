@@ -1,6 +1,11 @@
 [
   { "type": "auth_url", "platform": "kick", "url": "https://kick.example/oauth" },
-  { "type": "auth_success", "platform": "twitch", "username": "streamer", "displayName": "Streamer" },
+  {
+    "type": "auth_success",
+    "platform": "twitch",
+    "username": "streamer",
+    "displayName": "Streamer"
+  },
   { "type": "auth_error", "platform": "youtube", "error": "denied" },
   { "type": "error", "message": "backend failed" },
   { "type": "pong" },
@@ -37,7 +42,12 @@
       "imageUrl": "https://cdn.7tv.app/emote/7tv-2/1x.webp"
     }
   },
-  { "type": "seventv_emote_removed", "platform": "twitch", "channelId": "streamer", "emoteId": "7tv-2" },
+  {
+    "type": "seventv_emote_removed",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "emoteId": "7tv-2"
+  },
   {
     "type": "seventv_emote_updated",
     "platform": "twitch",

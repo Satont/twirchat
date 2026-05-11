@@ -28,9 +28,9 @@ fn visual_chat_page_matches_vue_reference() {
 
     // Message List (Modern)
     assert!(chat_rs.contains("message_row"));
-    assert!(chat_rs.contains("message.system"));
+    assert!(chat_rs.contains("ChatMessageType::System"));
     assert!(chat_rs.contains("rgba(0xffffff06)")); // Hover
-    assert!(chat_rs.contains("theme::platform_color(message.platform)")); // Stripe
+    assert!(chat_rs.contains("theme::platform_color(to_model_platform(message.platform))")); // Stripe
 
     // Composer
     assert!(chat_rs.contains("composer"));

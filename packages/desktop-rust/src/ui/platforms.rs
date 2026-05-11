@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
-use crate::app_state::mock_data::PrototypeData;
 use crate::protocol::messages::{CategorySearchResult, StreamStatusResponse};
-use crate::protocol::types::{Account, Platform, PlatformStatusInfo};
+use crate::protocol::types::{
+    Account, Platform, PlatformStatus, PlatformStatusInfo, PlatformStatusMode,
+};
+use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::shared::panel_title;
 use crate::ui::theme;
 use gpui::{Div, div, prelude::*, px, rgb};
@@ -102,6 +104,7 @@ impl StreamEditor {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PlatformsPanel {
     pub accounts: Vec<Account>,
     pub statuses: BTreeMap<Platform, PlatformStatusInfo>,
@@ -172,87 +175,352 @@ impl PlatformsPanel {
     }
 }
 
-pub(crate) fn panel(data: &PrototypeData) -> Div {
+fn status_label(info: Option<&PlatformStatusInfo>) -> String {
+    match info {
+        None => "Not connected".to_string(),
+        Some(s) => match s.status {
+            PlatformStatus::Connected => match s.mode {
+                PlatformStatusMode::Authenticated => "Connected".to_string(),
+                PlatformStatusMode::Anonymous => "Connected (anonymous)".to_string(),
+            },
+            PlatformStatus::Connecting => "Connecting…".to_string(),
+            PlatformStatus::Error => s.error.clone().unwrap_or_else(|| "Error".to_string()),
+            PlatformStatus::Disconnected => "Disconnected".to_string(),
+        },
+    }
+}
+
+fn status_color(info: Option<&PlatformStatusInfo>) -> gpui::Rgba {
+    match info {
+        None => theme::text_muted(),
+        Some(s) => match s.status {
+            PlatformStatus::Connected => theme::green(),
+            PlatformStatus::Connecting => rgb(0xf59e0b),
+            PlatformStatus::Error => theme::red(),
+            PlatformStatus::Disconnected => theme::text_muted(),
+        },
+    }
+}
+
+pub(crate) fn panel(state: &PlatformsPanel) -> Div {
+    let platforms = [Platform::Twitch, Platform::Youtube, Platform::Kick];
+
     div()
         .flex_1()
-        .p(px(24.0))
+        .p(px(28.0))
+        .px(px(32.0))
         .flex()
         .flex_col()
-        .gap(px(16.0))
+        .gap(px(24.0))
         .child(panel_title(
             "Platforms",
             "Connect your streaming accounts and join channels",
         ))
-        .children(data.platform_cards.iter().map(|card| {
+        .child(
             div()
-                .rounded_lg()
-                .bg(theme::surface())
-                .border_1()
-                .border_color(theme::border())
-                .p(px(18.0))
                 .flex()
                 .flex_col()
-                .gap(px(12.0))
-                .child(
+                .gap(px(16.0))
+                .children(platforms.into_iter().map(|platform| {
+                    let display_name = match platform {
+                        Platform::Twitch => "Twitch",
+                        Platform::Youtube => "YouTube",
+                        Platform::Kick => "Kick",
+                    };
+
+                    let models_platform = match platform {
+                        Platform::Twitch => crate::models::Platform::Twitch,
+                        Platform::Youtube => crate::models::Platform::YouTube,
+                        Platform::Kick => crate::models::Platform::Kick,
+                    };
+
+                    let account = state.account(platform);
+                    let status_info = state.status(platform);
+                    let status_text = status_label(status_info);
+                    let dot_color = status_color(status_info);
+
                     div()
+                        .rounded_lg()
+                        .bg(theme::surface())
+                        .border_1()
+                        .border_color(theme::border())
                         .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(10.0))
+                        .flex_col()
                         .child(
                             div()
-                                .w(px(40.0))
-                                .h(px(40.0))
-                                .rounded_md()
-                                .bg(theme::platform_color(card.platform))
-                                .text_color(theme::background())
                                 .flex()
                                 .items_center()
-                                .justify_center()
-                                .child(card.platform.glyph()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .flex()
-                                .flex_col()
-                                .gap(px(2.0))
+                                .gap(px(14.0))
+                                .p(px(18.0))
+                                .px(px(20.0))
+                                .border_b_1()
+                                .border_color(theme::border())
                                 .child(
                                     div()
-                                        .text_color(theme::text_primary())
-                                        .child(card.display_name.clone()),
+                                        .w(px(42.0))
+                                        .h(px(42.0))
+                                        .rounded_md()
+                                        .bg(theme::platform_color(models_platform))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(
+                                            PlatformIcon::new(models_platform)
+                                                .size(px(20.0))
+                                                .color(if platform == Platform::Kick {
+                                                    rgb(0x000000)
+                                                } else {
+                                                    rgb(0xffffff)
+                                                }),
+                                        ),
                                 )
                                 .child(
                                     div()
-                                        .text_color(theme::text_muted())
-                                        .child(card.username.clone()),
-                                ),
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(4.0))
+                                        .child(
+                                            div()
+                                                .text_size(px(15.0))
+                                                .font_weight(gpui::FontWeight::BOLD)
+                                                .text_color(theme::text_primary())
+                                                .child(display_name),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(5.0))
+                                                .child(
+                                                    div()
+                                                        .w(px(7.0))
+                                                        .h(px(7.0))
+                                                        .rounded_full()
+                                                        .bg(dot_color),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(12.0))
+                                                        .text_color(theme::text_muted())
+                                                        .child(status_text),
+                                                ),
+                                        ),
+                                )
+                                .child(div().flex().items_center().gap(px(10.0)).map(|this| {
+                                    if let Some(acc) = account {
+                                        let avatar_fallback = acc
+                                            .display_name
+                                            .chars()
+                                            .next()
+                                            .unwrap_or('?')
+                                            .to_uppercase()
+                                            .to_string();
+                                        this.child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(10.0))
+                                                .child(
+                                                    div()
+                                                        .w(px(36.0))
+                                                        .h(px(36.0))
+                                                        .rounded_full()
+                                                        .border_2()
+                                                        .border_color(theme::platform_color(
+                                                            models_platform,
+                                                        ))
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .child(
+                                                            div()
+                                                                .text_color(theme::platform_color(
+                                                                    models_platform,
+                                                                ))
+                                                                .font_weight(gpui::FontWeight::BOLD)
+                                                                .text_size(px(15.0))
+                                                                .child(avatar_fallback),
+                                                        ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(13.0))
+                                                                .font_weight(
+                                                                    gpui::FontWeight::SEMIBOLD,
+                                                                )
+                                                                .text_color(theme::text_primary())
+                                                                .child(acc.display_name.clone()),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(11.0))
+                                                                .text_color(theme::text_muted())
+                                                                .child(format!(
+                                                                    "@{}",
+                                                                    acc.username
+                                                                )),
+                                                        ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .rounded_md()
+                                                        .px(px(14.0))
+                                                        .py(px(7.0))
+                                                        .border_1()
+                                                        .border_color(theme::border())
+                                                        .text_size(px(13.0))
+                                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                        .text_color(theme::text_muted())
+                                                        .child("Disconnect"),
+                                                ),
+                                        )
+                                    } else {
+                                        this.child(
+                                            div()
+                                                .rounded_md()
+                                                .px(px(14.0))
+                                                .py(px(7.0))
+                                                .bg(theme::platform_color(models_platform))
+                                                .text_size(px(13.0))
+                                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                .text_color(if platform == Platform::Kick {
+                                                    rgb(0x000000)
+                                                } else {
+                                                    rgb(0xffffff)
+                                                })
+                                                .child("Connect account"),
+                                        )
+                                    }
+                                })),
                         )
                         .child(
                             div()
-                                .rounded_md()
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .bg(rgb(0x163522))
-                                .text_color(theme::green())
-                                .child(card.status.clone()),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_color(theme::text_muted())
-                        .child(format!("Joined: {}", card.joined_channel)),
-                )
-                .child(
-                    div()
-                        .rounded_md()
-                        .px(px(10.0))
-                        .py(px(8.0))
-                        .bg(rgb(0x22193c))
-                        .text_color(theme::accent())
-                        .child(card.action_label.clone()),
-                )
-        }))
+                                .p(px(14.0))
+                                .px(px(20.0))
+                                .flex()
+                                .flex_col()
+                                .gap(px(10.0))
+                                .map(|this| {
+                                    if platform == Platform::Twitch || account.is_none() {
+                                        this.child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(8.0))
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .flex()
+                                                        .items_center()
+                                                        .bg(theme::surface_2())
+                                                        .border_1()
+                                                        .border_color(theme::border())
+                                                        .rounded_md()
+                                                        .child(
+                                                            div()
+                                                                .pl(px(12.0))
+                                                                .pr(px(4.0))
+                                                                .text_size(px(14.0))
+                                                                .text_color(theme::text_muted())
+                                                                .child("#"),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .py(px(8.0))
+                                                                .pr(px(12.0))
+                                                                .text_size(px(14.0))
+                                                                .text_color(theme::text_muted())
+                                                                .child(
+                                                                    if platform == Platform::Youtube
+                                                                    {
+                                                                        "Channel ID or handle"
+                                                                    } else {
+                                                                        "channel name"
+                                                                    },
+                                                                ),
+                                                        ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .rounded_md()
+                                                        .px(px(18.0))
+                                                        .py(px(8.0))
+                                                        .border_1()
+                                                        .border_color(gpui::rgba(0xa78bfa4d))
+                                                        .bg(gpui::rgba(0xa78bfa26))
+                                                        .text_color(rgb(0xa78bfa))
+                                                        .text_size(px(13.0))
+                                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                        .child("Join"),
+                                                ),
+                                        )
+                                    } else {
+                                        this.child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(12.0))
+                                                .py(px(8.0))
+                                                .child(
+                                                    div()
+                                                        .text_size(px(13.0))
+                                                        .text_color(theme::text_muted())
+                                                        .child("Connected to your channel"),
+                                                ),
+                                        )
+                                    }
+                                }),
+                        )
+                        .map(|this| {
+                            if let Some(acc) = account {
+                                if platform == Platform::Twitch || platform == Platform::Kick {
+                                    this.child(
+                                        div()
+                                            .border_t_1()
+                                            .border_color(theme::border())
+                                            .p(px(18.0))
+                                            .px(px(20.0))
+                                            .flex()
+                                            .flex_col()
+                                            .gap(px(12.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(14.0))
+                                                    .font_weight(gpui::FontWeight::BOLD)
+                                                    .text_color(theme::text_primary())
+                                                    .child("Stream Editor"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .w_full()
+                                                    .bg(theme::surface_2())
+                                                    .border_1()
+                                                    .border_color(theme::border())
+                                                    .rounded_md()
+                                                    .p(px(12.0))
+                                                    .text_size(px(13.0))
+                                                    .text_color(theme::text_muted())
+                                                    .child(format!(
+                                                        "Managing stream for {}",
+                                                        acc.platform_user_id
+                                                    )),
+                                            ),
+                                    )
+                                } else {
+                                    this
+                                }
+                            } else {
+                                this
+                            }
+                        })
+                })),
+        )
 }
 
 #[cfg(test)]
@@ -341,5 +609,11 @@ mod tests {
 
         editor.cancel_edit();
         assert!(!editor.editing);
+    }
+
+    #[test]
+    fn panel_renders_without_panic() {
+        let panel_state = PlatformsPanel::new();
+        let _view = super::panel(&panel_state);
     }
 }

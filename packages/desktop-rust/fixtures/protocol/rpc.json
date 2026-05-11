@@ -1,17 +1,112 @@
 {
   "bunRequests": [
     { "method": "getAccounts" },
-    { "method": "saveSettings", "params": { "theme": "dark", "chatTheme": "compact", "fontFamily": "system", "fontSize": 13.0, "showPlatformColorStripe": false, "showPlatformIcon": true, "showTimestamp": true, "showAvatars": false, "showBadges": true, "platformFilter": ["twitch", "kick"], "hotkeys": { "newTab": "ctrl+t", "nextTab": "ctrl+tab", "prevTab": "ctrl+shift+tab", "tabSelector": "ctrl+l" }, "overlay": { "background": "transparent", "textColor": "#fff", "fontSize": 14.0, "fontFamily": "inter", "maxMessages": 20, "messageTimeout": 0, "showPlatformIcon": true, "showAvatar": true, "showBadges": true, "animation": "fade", "position": "top", "port": 45823 } } },
-    { "method": "setUserAlias", "params": { "platform": "twitch", "platformUserId": "u1", "alias": "friend" } },
-    { "method": "sendMessage", "params": { "platform": "twitch", "channelId": "streamer", "text": "hello", "replyToMessageId": "m1" } },
-    { "method": "getChannelsStatus", "params": { "channels": [{ "platform": "twitch", "channelLogin": "streamer", "channelId": "1001", "userAccessToken": "token" }] } },
-    { "method": "getUserCardMetadata", "params": { "platform": "twitch", "platformUserId": "u1", "username": "viewer", "channelId": "streamer" } },
-    { "method": "splitPanel", "params": { "tabId": "main", "panelId": "panel-1", "direction": "vertical" } }
+    {
+      "method": "saveSettings",
+      "params": {
+        "theme": "dark",
+        "chatTheme": "compact",
+        "fontFamily": "system",
+        "fontSize": 13.0,
+        "showPlatformColorStripe": false,
+        "showPlatformIcon": true,
+        "showTimestamp": true,
+        "showAvatars": false,
+        "showBadges": true,
+        "platformFilter": ["twitch", "kick"],
+        "hotkeys": {
+          "newTab": "ctrl+t",
+          "nextTab": "ctrl+tab",
+          "prevTab": "ctrl+shift+tab",
+          "tabSelector": "ctrl+l"
+        },
+        "overlay": {
+          "background": "transparent",
+          "textColor": "#fff",
+          "fontSize": 14.0,
+          "fontFamily": "inter",
+          "maxMessages": 20,
+          "messageTimeout": 0,
+          "showPlatformIcon": true,
+          "showAvatar": true,
+          "showBadges": true,
+          "animation": "fade",
+          "position": "top",
+          "port": 45823
+        }
+      }
+    },
+    {
+      "method": "setUserAlias",
+      "params": { "platform": "twitch", "platformUserId": "u1", "alias": "friend" }
+    },
+    {
+      "method": "sendMessage",
+      "params": {
+        "platform": "twitch",
+        "channelId": "streamer",
+        "text": "hello",
+        "replyToMessageId": "m1"
+      }
+    },
+    {
+      "method": "getChannelsStatus",
+      "params": {
+        "channels": [
+          {
+            "platform": "twitch",
+            "channelLogin": "streamer",
+            "channelId": "1001",
+            "userAccessToken": "token"
+          }
+        ]
+      }
+    },
+    {
+      "method": "getUserCardMetadata",
+      "params": {
+        "platform": "twitch",
+        "platformUserId": "u1",
+        "username": "viewer",
+        "channelId": "streamer"
+      }
+    },
+    {
+      "method": "splitPanel",
+      "params": { "tabId": "main", "panelId": "panel-1", "direction": "vertical" }
+    }
   ],
   "webviewMessages": [
-    { "message": "platform_status", "payload": { "platform": "twitch", "status": "connected", "mode": "authenticated", "channelLogin": "streamer" } },
-    { "message": "auth_url", "payload": { "platform": "kick", "url": "https://kick.example/oauth" } },
-    { "message": "update_status", "payload": { "status": "downloading", "message": "Downloading update", "progress": 42.5, "hash": "abc" } },
-    { "message": "channel_emote_updated", "payload": { "platform": "twitch", "channelId": "streamer", "emoteId": "7tv-1", "newAlias": "peepoHey" } }
+    {
+      "message": "platform_status",
+      "payload": {
+        "platform": "twitch",
+        "status": "connected",
+        "mode": "authenticated",
+        "channelLogin": "streamer"
+      }
+    },
+    {
+      "message": "auth_url",
+      "payload": { "platform": "kick", "url": "https://kick.example/oauth" }
+    },
+    {
+      "message": "update_status",
+      "payload": {
+        "status": "downloading",
+        "message": "Downloading update",
+        "progress": 42.5,
+        "hash": "abc"
+      }
+    },
+    {
+      "message": "channel_emote_updated",
+      "payload": {
+        "platform": "twitch",
+        "channelId": "streamer",
+        "emoteId": "7tv-1",
+        "newAlias": "peepoHey"
+      }
+    }
   ]
 }

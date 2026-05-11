@@ -1,46 +1,55 @@
-use crate::app_state::mock_data::PrototypeData;
-use crate::models::{ChatMessage, StreamChip};
+use crate::app_state::AppState;
+use crate::protocol::types::{ChatMessageType, NormalizedChatMessage, Platform, WatchedChannel};
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
-use gpui::{Context, Div, div, prelude::*, px, rgb, rgba, uniform_list};
+use gpui::{AnyElement, Context, Div, div, prelude::*, px, rgb, rgba, uniform_list};
 use std::ops::Range;
 
-pub(crate) fn panel(data: &PrototypeData, cx: &mut Context<TwirChatApp>) -> Div {
+pub(crate) fn panel(state: &AppState, cx: &mut Context<TwirChatApp>) -> Div {
     div()
         .flex_1()
         .flex()
         .flex_col()
         .bg(theme::background())
-        .child(header(data))
+        .child(header(&state.watched_channels, state.messages.len()))
         .child(
             div().flex_1().bg(theme::background()).child(
-                uniform_list(
-                    "chat-messages",
-                    data.messages.len(),
-                    cx.processor(
-                        |this: &mut TwirChatApp, range: Range<usize>, _window, _cx| {
-                            range
-                                .filter_map(|index| this.data.messages.get(index))
-                                .map(message_row)
-                                .collect::<Vec<_>>()
-                        },
-                    ),
-                )
+                {
+                    let messages = state.messages.clone();
+                    uniform_list(
+                        "chat-messages",
+                        messages.len(),
+                        cx.processor(
+                            move |_this: &mut TwirChatApp,
+                                  range: Range<usize>,
+                                  _window,
+                                  _cx|
+                                  -> Vec<AnyElement> {
+                                messages[range]
+                                    .iter()
+                                    .map(|msg| message_row(msg).into_any_element())
+                                    .collect()
+                            },
+                        ),
+                    )
+                }
                 .h_full(),
             ),
         )
-        .child(composer(data))
+        .child(composer(&state.watched_channels))
 }
 
-fn header(data: &PrototypeData) -> Div {
+fn header(channels: &[WatchedChannel], message_count: usize) -> Div {
+    let message_count_text = format!("{} messages", message_count);
+
     div()
         .w_full()
-        .min_h(px(44.0))
+        .min_h(px(40.0))
         .border_b_1()
         .border_color(theme::border())
         .px(px(16.0))
-        .py(px(8.0))
+        .py(px(6.0))
         .flex()
         .flex_row()
         .items_center()
@@ -60,7 +69,7 @@ fn header(data: &PrototypeData) -> Div {
                 .items_center()
                 .gap(px(6.0))
                 .overflow_x_hidden()
-                .children(data.chips.iter().take(2).map(header_chip)),
+                .children(channels.iter().map(header_chip)),
         )
         .child(
             div()
@@ -72,7 +81,8 @@ fn header(data: &PrototypeData) -> Div {
                     div()
                         .text_color(theme::text_muted())
                         .text_size(px(11.0))
-                        .child(format!("{} messages", data.messages.len())),
+                        .mr(px(8.0))
+                        .child(message_count_text),
                 )
                 .child(
                     div()
@@ -100,25 +110,25 @@ fn panel_action_btn(icon: &'static str) -> Div {
         .child(icon)
 }
 
-fn composer(data: &PrototypeData) -> Div {
+fn composer(channels: &[WatchedChannel]) -> Div {
     div()
         .w_full()
         .bg(theme::surface())
         .border_t_1()
         .border_color(theme::border())
-        .pt(px(8.0))
+        .pt(px(6.0))
         .px(px(12.0))
-        .pb(px(10.0))
+        .pb(px(8.0))
         .flex()
         .flex_col()
-        .gap(px(7.0))
+        .gap(px(6.0))
         .child(
-            div().flex().flex_row().flex_wrap().gap(px(6.0)).children(
-                data.chips
-                    .iter()
-                    .take(2)
-                    .map(|chip| status_chip(chip, true)),
-            ),
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .gap(px(6.0))
+                .children(channels.iter().map(|chip| status_chip(chip, true))),
         )
         .child(
             div()
@@ -170,9 +180,9 @@ fn composer(data: &PrototypeData) -> Div {
         )
 }
 
-fn status_chip(chip: &StreamChip, accent_bg: bool) -> Div {
+fn status_chip(chip: &WatchedChannel, accent_bg: bool) -> Div {
     let active = accent_bg;
-    let color = theme::platform_color(chip.platform);
+    let color = theme::platform_color(to_model_platform(chip.platform));
 
     div()
         .rounded_full()
@@ -195,17 +205,17 @@ fn status_chip(chip: &StreamChip, accent_bg: bool) -> Div {
         .child(
             div()
                 .text_color(color)
-                .child(PlatformIcon::new(chip.platform).size(px(13.0))),
+                .child(PlatformIcon::new(to_model_platform(chip.platform)).size(px(13.0))),
         )
         .child(
             div()
                 .max_w(px(80.0))
                 .overflow_hidden()
-                .child(chip.channel_name.clone()),
+                .child(chip.display_name.clone()),
         )
 }
 
-fn header_chip(chip: &StreamChip) -> Div {
+fn header_chip(chip: &WatchedChannel) -> Div {
     div()
         .rounded_full()
         .px(px(8.0))
@@ -213,7 +223,7 @@ fn header_chip(chip: &StreamChip) -> Div {
         .bg(theme::surface_2())
         .border_1()
         .border_color(theme::border())
-        .text_color(if chip.live {
+        .text_color(if true {
             theme::text_primary()
         } else {
             theme::text_muted()
@@ -224,8 +234,8 @@ fn header_chip(chip: &StreamChip) -> Div {
         .flex_row()
         .items_center()
         .gap(px(5.0))
-        .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(if chip.live {
-            theme::platform_color(chip.platform)
+        .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(if true {
+            theme::platform_color(to_model_platform(chip.platform))
         } else {
             rgb(0x666666)
         }))
@@ -233,18 +243,13 @@ fn header_chip(chip: &StreamChip) -> Div {
             div()
                 .max_w(px(100.0))
                 .overflow_hidden()
-                .child(chip.channel_name.clone()),
+                .child(chip.display_name.clone()),
         )
-        .children(chip.viewer_count.map(|count| {
-            div()
-                .text_size(px(11.0))
-                .text_color(theme::text_muted())
-                .child(format_viewers(count))
-        }))
 }
 
-fn message_row(message: &ChatMessage) -> Div {
-    if message.system {
+#[allow(dead_code)]
+fn message_row(message: &NormalizedChatMessage) -> Div {
+    if message.message_type == ChatMessageType::System {
         return div()
             .w_full()
             .px(px(14.0))
@@ -285,29 +290,29 @@ fn message_row(message: &ChatMessage) -> Div {
     div()
         .w_full()
         .px(px(14.0))
-        .py(px(6.0))
+        .py(px(4.0))
         .flex()
         .flex_row()
         .items_start()
-        .gap(px(10.0))
+        .gap(px(8.0))
         .relative()
         .hover(|s| s.bg(rgba(0xffffff06))) // 0.025 * 255 = 6.375
         .child(
             div()
                 .absolute()
                 .left(px(0.0))
-                .top(px(6.0))
-                .bottom(px(6.0))
+                .top(px(4.0))
+                .bottom(px(4.0))
                 .w(px(2.0))
                 .rounded_sm()
-                .bg(theme::platform_color(message.platform)),
+                .bg(theme::platform_color(to_model_platform(message.platform))),
         )
         .child(
             div()
                 .w(px(28.0))
                 .h(px(28.0))
                 .rounded_full()
-                .bg(rgb(message.author_color_hex))
+                .bg(rgb(0x8b8b99))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -317,6 +322,7 @@ fn message_row(message: &ChatMessage) -> Div {
                 .child(
                     message
                         .author
+                        .display_name
                         .chars()
                         .next()
                         .unwrap_or('?')
@@ -337,7 +343,7 @@ fn message_row(message: &ChatMessage) -> Div {
                         .items_center()
                         .gap(px(5.0))
                         .flex_wrap()
-                        .children(message.badges.iter().map(|badge| {
+                        .children(message.author.badges.iter().map(|badge| {
                             div()
                                 .rounded_sm()
                                 .px(px(4.0))
@@ -345,14 +351,14 @@ fn message_row(message: &ChatMessage) -> Div {
                                 .bg(rgba(0xffffff1a)) // 0.1 * 255 = 25.5 = 1a
                                 .text_color(theme::text_primary())
                                 .text_size(px(10.0))
-                                .child(badge.clone())
+                                .child(badge.text.clone())
                         }))
                         .child(
                             div()
-                                .text_color(rgb(message.author_color_hex))
-                                .text_size(px(14.0))
+                                .text_color(rgb(0x8b8b99))
+                                .text_size(px(13.0))
                                 .font_weight(gpui::FontWeight::BOLD)
-                                .child(message.author.clone()),
+                                .child(message.author.display_name.clone()),
                         )
                         .child(
                             div()
@@ -363,19 +369,17 @@ fn message_row(message: &ChatMessage) -> Div {
                 )
                 .child(
                     div()
-                        .text_size(px(14.0))
+                        .text_size(px(13.0))
                         .text_color(theme::text_primary())
                         .child(message.text.clone()),
                 ),
         )
 }
 
-fn format_viewers(viewers: usize) -> String {
-    if viewers >= 1_000_000 {
-        format!("{:.1}M", viewers as f32 / 1_000_000.0)
-    } else if viewers >= 1_000 {
-        format!("{:.1}K", viewers as f32 / 1_000.0)
-    } else {
-        viewers.to_string()
+fn to_model_platform(p: Platform) -> crate::models::Platform {
+    match p {
+        Platform::Twitch => crate::models::Platform::Twitch,
+        Platform::Youtube => crate::models::Platform::YouTube,
+        Platform::Kick => crate::models::Platform::Kick,
     }
 }

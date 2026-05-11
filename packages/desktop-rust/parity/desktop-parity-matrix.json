@@ -16,223 +16,1684 @@
     }
   ],
   "rows": [
-    { "id": "page:app", "kind": "page", "name": "App.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/App.vue", "owner_module": "ui::shell::app" },
-    { "id": "component:chat-list", "kind": "component", "name": "ChatList.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChatList.vue", "owner_module": "ui::chat::list" },
-    { "id": "component:chat-input", "kind": "component", "name": "ChatInput.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChatInput.vue", "owner_module": "ui::chat::input" },
-    { "id": "component:chat-message", "kind": "component", "name": "ChatMessage.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChatMessage.vue", "owner_module": "ui::chat::message" },
-    { "id": "component:events-feed", "kind": "component", "name": "EventsFeed.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/EventsFeed.vue", "owner_module": "ui::events::feed" },
-    { "id": "component:platforms-panel", "kind": "component", "name": "PlatformsPanel.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/PlatformsPanel.vue", "owner_module": "ui::platforms::panel" },
-    { "id": "component:settings-panel", "kind": "component", "name": "SettingsPanel.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/SettingsPanel.vue", "owner_module": "ui::settings::panel" },
-    { "id": "component:watched-view", "kind": "component", "name": "WatchedChannelsView.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/WatchedChannelsView.vue", "owner_module": "ui::watched::view" },
-    { "id": "component:split-node", "kind": "component", "name": "SplitNode.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/SplitNode.vue", "owner_module": "ui::watched::split_node" },
-    { "id": "component:panel-node", "kind": "component", "name": "PanelNode.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/PanelNode.vue", "owner_module": "ui::watched::panel_node" },
-    { "id": "component:channel-tab-bar", "kind": "component", "name": "ChannelTabBar.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChannelTabBar.vue", "owner_module": "ui::watched::channel_tab_bar" },
-    { "id": "modal:add-channel-modal", "kind": "modal", "name": "AddChannelModal.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/AddChannelModal.vue", "owner_module": "ui::modals::add_channel" },
-    { "id": "component:add-channel-form", "kind": "component", "name": "AddChannelForm.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/AddChannelForm.vue", "owner_module": "ui::modals::add_channel_form" },
-    { "id": "modal:tab-selector", "kind": "modal", "name": "TabSelectorModal.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/TabSelectorModal.vue", "owner_module": "ui::modals::tab_selector" },
-    { "id": "popover:autocomplete", "kind": "popover", "name": "AutocompletePopup.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/AutocompletePopup.vue", "owner_module": "ui::chat::autocomplete_popup" },
-    { "id": "popover:chat-appearance", "kind": "popover", "name": "ChatAppearancePopover.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ui/ChatAppearancePopover.vue", "owner_module": "ui::chat::appearance_popover" },
-    { "id": "tooltip:generic", "kind": "tooltip", "name": "Tooltip.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ui/Tooltip.vue", "owner_module": "ui::primitives::tooltip" },
-    { "id": "popover:emote-picker", "kind": "popover", "name": "EmotePicker.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/EmotePicker.vue", "owner_module": "ui::chat::emote_picker" },
-    { "id": "tooltip:emote", "kind": "tooltip", "name": "EmoteTooltip.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/EmoteTooltip.vue", "owner_module": "ui::chat::emote_tooltip" },
-    { "id": "context:user", "kind": "context_menu", "name": "UserContextMenu.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/UserContextMenu.vue", "owner_module": "ui::chat::user_context_menu" },
-    { "id": "dialog:user-card", "kind": "dialog", "name": "UserCardDialog.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/UserCardDialog.vue", "owner_module": "ui::chat::user_card_dialog" },
-    { "id": "component:user-history-panel", "kind": "component", "name": "UserChatHistoryPanel.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/UserChatHistoryPanel.vue", "owner_module": "ui::chat::user_history_panel" },
-    { "id": "component:user-history-message", "kind": "component", "name": "UserChatHistoryMessage.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/UserChatHistoryMessage.vue", "owner_module": "ui::chat::user_history_message" },
-    { "id": "component:stream-editor", "kind": "component", "name": "StreamEditor.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/StreamEditor.vue", "owner_module": "ui::platforms::stream_editor" },
-    { "id": "page:overlay", "kind": "page", "name": "overlay/App.vue", "status": "in_scope", "source_path": "packages/desktop/src/views/overlay/App.vue", "owner_module": "overlay::ui::app" },
+    {
+      "id": "page:app",
+      "kind": "page",
+      "name": "App.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/App.vue",
+      "owner_module": "ui::shell::app"
+    },
+    {
+      "id": "component:chat-list",
+      "kind": "component",
+      "name": "ChatList.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChatList.vue",
+      "owner_module": "ui::chat::list"
+    },
+    {
+      "id": "component:chat-input",
+      "kind": "component",
+      "name": "ChatInput.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChatInput.vue",
+      "owner_module": "ui::chat::input"
+    },
+    {
+      "id": "component:chat-message",
+      "kind": "component",
+      "name": "ChatMessage.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChatMessage.vue",
+      "owner_module": "ui::chat::message"
+    },
+    {
+      "id": "component:events-feed",
+      "kind": "component",
+      "name": "EventsFeed.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/EventsFeed.vue",
+      "owner_module": "ui::events::feed"
+    },
+    {
+      "id": "component:platforms-panel",
+      "kind": "component",
+      "name": "PlatformsPanel.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/PlatformsPanel.vue",
+      "owner_module": "ui::platforms::panel"
+    },
+    {
+      "id": "component:settings-panel",
+      "kind": "component",
+      "name": "SettingsPanel.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/SettingsPanel.vue",
+      "owner_module": "ui::settings::panel"
+    },
+    {
+      "id": "component:watched-view",
+      "kind": "component",
+      "name": "WatchedChannelsView.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/WatchedChannelsView.vue",
+      "owner_module": "ui::watched::view"
+    },
+    {
+      "id": "component:split-node",
+      "kind": "component",
+      "name": "SplitNode.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/SplitNode.vue",
+      "owner_module": "ui::watched::split_node"
+    },
+    {
+      "id": "component:panel-node",
+      "kind": "component",
+      "name": "PanelNode.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/PanelNode.vue",
+      "owner_module": "ui::watched::panel_node"
+    },
+    {
+      "id": "component:channel-tab-bar",
+      "kind": "component",
+      "name": "ChannelTabBar.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChannelTabBar.vue",
+      "owner_module": "ui::watched::channel_tab_bar"
+    },
+    {
+      "id": "modal:add-channel-modal",
+      "kind": "modal",
+      "name": "AddChannelModal.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/AddChannelModal.vue",
+      "owner_module": "ui::modals::add_channel"
+    },
+    {
+      "id": "component:add-channel-form",
+      "kind": "component",
+      "name": "AddChannelForm.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/AddChannelForm.vue",
+      "owner_module": "ui::modals::add_channel_form"
+    },
+    {
+      "id": "modal:tab-selector",
+      "kind": "modal",
+      "name": "TabSelectorModal.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/TabSelectorModal.vue",
+      "owner_module": "ui::modals::tab_selector"
+    },
+    {
+      "id": "popover:autocomplete",
+      "kind": "popover",
+      "name": "AutocompletePopup.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/AutocompletePopup.vue",
+      "owner_module": "ui::chat::autocomplete_popup"
+    },
+    {
+      "id": "popover:chat-appearance",
+      "kind": "popover",
+      "name": "ChatAppearancePopover.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ui/ChatAppearancePopover.vue",
+      "owner_module": "ui::chat::appearance_popover"
+    },
+    {
+      "id": "tooltip:generic",
+      "kind": "tooltip",
+      "name": "Tooltip.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ui/Tooltip.vue",
+      "owner_module": "ui::primitives::tooltip"
+    },
+    {
+      "id": "popover:emote-picker",
+      "kind": "popover",
+      "name": "EmotePicker.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/EmotePicker.vue",
+      "owner_module": "ui::chat::emote_picker"
+    },
+    {
+      "id": "tooltip:emote",
+      "kind": "tooltip",
+      "name": "EmoteTooltip.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/EmoteTooltip.vue",
+      "owner_module": "ui::chat::emote_tooltip"
+    },
+    {
+      "id": "context:user",
+      "kind": "context_menu",
+      "name": "UserContextMenu.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/UserContextMenu.vue",
+      "owner_module": "ui::chat::user_context_menu"
+    },
+    {
+      "id": "dialog:user-card",
+      "kind": "dialog",
+      "name": "UserCardDialog.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/UserCardDialog.vue",
+      "owner_module": "ui::chat::user_card_dialog"
+    },
+    {
+      "id": "component:user-history-panel",
+      "kind": "component",
+      "name": "UserChatHistoryPanel.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/UserChatHistoryPanel.vue",
+      "owner_module": "ui::chat::user_history_panel"
+    },
+    {
+      "id": "component:user-history-message",
+      "kind": "component",
+      "name": "UserChatHistoryMessage.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/UserChatHistoryMessage.vue",
+      "owner_module": "ui::chat::user_history_message"
+    },
+    {
+      "id": "component:stream-editor",
+      "kind": "component",
+      "name": "StreamEditor.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/StreamEditor.vue",
+      "owner_module": "ui::platforms::stream_editor"
+    },
+    {
+      "id": "page:overlay",
+      "kind": "page",
+      "name": "overlay/App.vue",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/overlay/App.vue",
+      "owner_module": "overlay::ui::app"
+    },
 
-    { "id": "store:accounts", "kind": "store", "name": "accounts.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/stores/accounts.ts", "owner_module": "app_state::accounts" },
-    { "id": "store:settings", "kind": "store", "name": "settings.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/stores/settings.ts", "owner_module": "settings::state" },
-    { "id": "store:alias", "kind": "store", "name": "useAliasStore.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/stores/useAliasStore.ts", "owner_module": "chat::aliases" },
-    { "id": "store:channel-status", "kind": "store", "name": "channelStatus.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/stores/channelStatus.ts", "owner_module": "platforms::status_store" },
-    { "id": "store:stream-status", "kind": "store", "name": "streamStatus.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/stores/streamStatus.ts", "owner_module": "platforms::stream_status_store" },
-    { "id": "store:layout", "kind": "store", "name": "layout.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/stores/layout.ts", "owner_module": "watched::layout_state" },
-    { "id": "store:emote", "kind": "store", "name": "emoteStore.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/stores/emoteStore.ts", "owner_module": "chat::emotes" },
-    { "id": "composable:rpc-listener", "kind": "composable", "name": "useRpcListener.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useRpcListener.ts", "owner_module": "protocol::rpc::listener" },
-    { "id": "composable:hotkeys", "kind": "composable", "name": "useHotkeys.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts", "owner_module": "hotkeys::bindings" },
-    { "id": "composable:autocomplete", "kind": "composable", "name": "useAutocomplete.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useAutocomplete.ts", "owner_module": "chat::autocomplete" },
-    { "id": "composable:user-card-metadata", "kind": "composable", "name": "useUserCardMetadata.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useUserCardMetadata.ts", "owner_module": "chat::user_card_metadata" },
-    { "id": "composable:user-chat-history", "kind": "composable", "name": "useUserChatHistory.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useUserChatHistory.ts", "owner_module": "chat::history" },
-    { "id": "composable:message-parsing", "kind": "composable", "name": "useMessageParsing.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useMessageParsing.ts", "owner_module": "chat::message_parsing" },
-    { "id": "composable:polling", "kind": "composable", "name": "usePolling.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/usePolling.ts", "owner_module": "platforms::polling_support" },
-    { "id": "composable:chat-scroll", "kind": "composable", "name": "useChatScroll.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useChatScroll.ts", "owner_module": "ui::chat::scroll" },
-    { "id": "helper:chat-commands", "kind": "helper", "name": "chatCommands.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/utils/chatCommands.ts", "owner_module": "chat::commands" },
-    { "id": "helper:autocomplete-utils", "kind": "helper", "name": "autocompleteUtils.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/utils/autocompleteUtils.ts", "owner_module": "chat::autocomplete_utils" },
-    { "id": "helper:layout-tree", "kind": "helper", "name": "layout-tree.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/utils/layout-tree.ts", "owner_module": "watched::layout_tree" },
-    { "id": "helper:migration", "kind": "helper", "name": "migration.ts", "status": "in_scope", "source_path": "packages/desktop/src/views/main/services/migration.ts", "owner_module": "storage::layout_migration" },
+    {
+      "id": "store:accounts",
+      "kind": "store",
+      "name": "accounts.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/stores/accounts.ts",
+      "owner_module": "app_state::accounts"
+    },
+    {
+      "id": "store:settings",
+      "kind": "store",
+      "name": "settings.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/stores/settings.ts",
+      "owner_module": "settings::state"
+    },
+    {
+      "id": "store:alias",
+      "kind": "store",
+      "name": "useAliasStore.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/stores/useAliasStore.ts",
+      "owner_module": "chat::aliases"
+    },
+    {
+      "id": "store:channel-status",
+      "kind": "store",
+      "name": "channelStatus.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/stores/channelStatus.ts",
+      "owner_module": "platforms::status_store"
+    },
+    {
+      "id": "store:stream-status",
+      "kind": "store",
+      "name": "streamStatus.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/stores/streamStatus.ts",
+      "owner_module": "platforms::stream_status_store"
+    },
+    {
+      "id": "store:layout",
+      "kind": "store",
+      "name": "layout.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/stores/layout.ts",
+      "owner_module": "watched::layout_state"
+    },
+    {
+      "id": "store:emote",
+      "kind": "store",
+      "name": "emoteStore.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/stores/emoteStore.ts",
+      "owner_module": "chat::emotes"
+    },
+    {
+      "id": "composable:rpc-listener",
+      "kind": "composable",
+      "name": "useRpcListener.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useRpcListener.ts",
+      "owner_module": "protocol::rpc::listener"
+    },
+    {
+      "id": "composable:hotkeys",
+      "kind": "composable",
+      "name": "useHotkeys.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts",
+      "owner_module": "hotkeys::bindings"
+    },
+    {
+      "id": "composable:autocomplete",
+      "kind": "composable",
+      "name": "useAutocomplete.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useAutocomplete.ts",
+      "owner_module": "chat::autocomplete"
+    },
+    {
+      "id": "composable:user-card-metadata",
+      "kind": "composable",
+      "name": "useUserCardMetadata.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useUserCardMetadata.ts",
+      "owner_module": "chat::user_card_metadata"
+    },
+    {
+      "id": "composable:user-chat-history",
+      "kind": "composable",
+      "name": "useUserChatHistory.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useUserChatHistory.ts",
+      "owner_module": "chat::history"
+    },
+    {
+      "id": "composable:message-parsing",
+      "kind": "composable",
+      "name": "useMessageParsing.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useMessageParsing.ts",
+      "owner_module": "chat::message_parsing"
+    },
+    {
+      "id": "composable:polling",
+      "kind": "composable",
+      "name": "usePolling.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/usePolling.ts",
+      "owner_module": "platforms::polling_support"
+    },
+    {
+      "id": "composable:chat-scroll",
+      "kind": "composable",
+      "name": "useChatScroll.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useChatScroll.ts",
+      "owner_module": "ui::chat::scroll"
+    },
+    {
+      "id": "helper:chat-commands",
+      "kind": "helper",
+      "name": "chatCommands.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/utils/chatCommands.ts",
+      "owner_module": "chat::commands"
+    },
+    {
+      "id": "helper:autocomplete-utils",
+      "kind": "helper",
+      "name": "autocompleteUtils.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/utils/autocompleteUtils.ts",
+      "owner_module": "chat::autocomplete_utils"
+    },
+    {
+      "id": "helper:layout-tree",
+      "kind": "helper",
+      "name": "layout-tree.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/utils/layout-tree.ts",
+      "owner_module": "watched::layout_tree"
+    },
+    {
+      "id": "helper:migration",
+      "kind": "helper",
+      "name": "migration.ts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/services/migration.ts",
+      "owner_module": "storage::layout_migration"
+    },
 
-    { "id": "rpc:getAccounts", "kind": "rpc_request", "name": "getAccounts", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::accounts" },
-    { "id": "rpc:getSettings", "kind": "rpc_request", "name": "getSettings", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::settings" },
-    { "id": "rpc:saveSettings", "kind": "rpc_request", "name": "saveSettings", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::settings" },
-    { "id": "rpc:getUserAliases", "kind": "rpc_request", "name": "getUserAliases", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::aliases" },
-    { "id": "rpc:setUserAlias", "kind": "rpc_request", "name": "setUserAlias", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::aliases" },
-    { "id": "rpc:removeUserAlias", "kind": "rpc_request", "name": "removeUserAlias", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::aliases" },
-    { "id": "rpc:getChannels", "kind": "rpc_request", "name": "getChannels", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::channels" },
-    { "id": "rpc:authStart", "kind": "rpc_request", "name": "authStart", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::auth" },
-    { "id": "rpc:authLogout", "kind": "rpc_request", "name": "authLogout", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::auth" },
-    { "id": "rpc:joinChannel", "kind": "rpc_request", "name": "joinChannel", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::chat" },
-    { "id": "rpc:leaveChannel", "kind": "rpc_request", "name": "leaveChannel", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::chat" },
-    { "id": "rpc:sendMessage", "kind": "rpc_request", "name": "sendMessage", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::chat" },
-    { "id": "rpc:getStreamStatus", "kind": "rpc_request", "name": "getStreamStatus", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::stream" },
-    { "id": "rpc:updateStream", "kind": "rpc_request", "name": "updateStream", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::stream" },
-    { "id": "rpc:searchCategories", "kind": "rpc_request", "name": "searchCategories", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::stream" },
-    { "id": "rpc:getChannelsStatus", "kind": "rpc_request", "name": "getChannelsStatus", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::stream" },
-    { "id": "rpc:getRecentMessages", "kind": "rpc_request", "name": "getRecentMessages", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::history" },
-    { "id": "rpc:getUserChatHistory", "kind": "rpc_request", "name": "getUserChatHistory", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::history" },
-    { "id": "rpc:getUserCardMetadata", "kind": "rpc_request", "name": "getUserCardMetadata", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::user_card" },
-    { "id": "rpc:getStatuses", "kind": "rpc_request", "name": "getStatuses", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::status" },
-    { "id": "rpc:getUsernameColor", "kind": "rpc_request", "name": "getUsernameColor", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::chat" },
-    { "id": "rpc:getChannelEmotes", "kind": "rpc_request", "name": "getChannelEmotes", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::emotes" },
-    { "id": "rpc:checkForUpdate", "kind": "rpc_request", "name": "checkForUpdate", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::updates" },
-    { "id": "rpc:downloadUpdate", "kind": "rpc_request", "name": "downloadUpdate", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::updates" },
-    { "id": "rpc:applyUpdate", "kind": "rpc_request", "name": "applyUpdate", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::updates" },
-    { "id": "rpc:skipUpdate", "kind": "rpc_request", "name": "skipUpdate", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::updates" },
-    { "id": "rpc:getWatchedChannels", "kind": "rpc_request", "name": "getWatchedChannels", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched" },
-    { "id": "rpc:addWatchedChannel", "kind": "rpc_request", "name": "addWatchedChannel", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched" },
-    { "id": "rpc:removeWatchedChannel", "kind": "rpc_request", "name": "removeWatchedChannel", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched" },
-    { "id": "rpc:getWatchedChannelMessages", "kind": "rpc_request", "name": "getWatchedChannelMessages", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched" },
-    { "id": "rpc:sendWatchedChannelMessage", "kind": "rpc_request", "name": "sendWatchedChannelMessage", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched" },
-    { "id": "rpc:getWatchedChannelStatuses", "kind": "rpc_request", "name": "getWatchedChannelStatuses", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched" },
-    { "id": "rpc:openExternalUrl", "kind": "rpc_request", "name": "openExternalUrl", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::system" },
-    { "id": "rpc:getTabChannelIds", "kind": "rpc_request", "name": "getTabChannelIds", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched_layout" },
-    { "id": "rpc:setTabChannelIds", "kind": "rpc_request", "name": "setTabChannelIds", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched_layout" },
-    { "id": "rpc:getWatchedChannelsLayout", "kind": "rpc_request", "name": "getWatchedChannelsLayout", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched_layout" },
-    { "id": "rpc:setWatchedChannelsLayout", "kind": "rpc_request", "name": "setWatchedChannelsLayout", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched_layout" },
-    { "id": "rpc:removePanel", "kind": "rpc_request", "name": "removePanel", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched_layout" },
-    { "id": "rpc:assignChannelToPanel", "kind": "rpc_request", "name": "assignChannelToPanel", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched_layout" },
-    { "id": "rpc:splitPanel", "kind": "rpc_request", "name": "splitPanel", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::requests::watched_layout" },
+    {
+      "id": "rpc:getAccounts",
+      "kind": "rpc_request",
+      "name": "getAccounts",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::accounts"
+    },
+    {
+      "id": "rpc:getSettings",
+      "kind": "rpc_request",
+      "name": "getSettings",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::settings"
+    },
+    {
+      "id": "rpc:saveSettings",
+      "kind": "rpc_request",
+      "name": "saveSettings",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::settings"
+    },
+    {
+      "id": "rpc:getUserAliases",
+      "kind": "rpc_request",
+      "name": "getUserAliases",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::aliases"
+    },
+    {
+      "id": "rpc:setUserAlias",
+      "kind": "rpc_request",
+      "name": "setUserAlias",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::aliases"
+    },
+    {
+      "id": "rpc:removeUserAlias",
+      "kind": "rpc_request",
+      "name": "removeUserAlias",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::aliases"
+    },
+    {
+      "id": "rpc:getChannels",
+      "kind": "rpc_request",
+      "name": "getChannels",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::channels"
+    },
+    {
+      "id": "rpc:authStart",
+      "kind": "rpc_request",
+      "name": "authStart",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::auth"
+    },
+    {
+      "id": "rpc:authLogout",
+      "kind": "rpc_request",
+      "name": "authLogout",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::auth"
+    },
+    {
+      "id": "rpc:joinChannel",
+      "kind": "rpc_request",
+      "name": "joinChannel",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::chat"
+    },
+    {
+      "id": "rpc:leaveChannel",
+      "kind": "rpc_request",
+      "name": "leaveChannel",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::chat"
+    },
+    {
+      "id": "rpc:sendMessage",
+      "kind": "rpc_request",
+      "name": "sendMessage",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::chat"
+    },
+    {
+      "id": "rpc:getStreamStatus",
+      "kind": "rpc_request",
+      "name": "getStreamStatus",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::stream"
+    },
+    {
+      "id": "rpc:updateStream",
+      "kind": "rpc_request",
+      "name": "updateStream",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::stream"
+    },
+    {
+      "id": "rpc:searchCategories",
+      "kind": "rpc_request",
+      "name": "searchCategories",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::stream"
+    },
+    {
+      "id": "rpc:getChannelsStatus",
+      "kind": "rpc_request",
+      "name": "getChannelsStatus",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::stream"
+    },
+    {
+      "id": "rpc:getRecentMessages",
+      "kind": "rpc_request",
+      "name": "getRecentMessages",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::history"
+    },
+    {
+      "id": "rpc:getUserChatHistory",
+      "kind": "rpc_request",
+      "name": "getUserChatHistory",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::history"
+    },
+    {
+      "id": "rpc:getUserCardMetadata",
+      "kind": "rpc_request",
+      "name": "getUserCardMetadata",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::user_card"
+    },
+    {
+      "id": "rpc:getStatuses",
+      "kind": "rpc_request",
+      "name": "getStatuses",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::status"
+    },
+    {
+      "id": "rpc:getUsernameColor",
+      "kind": "rpc_request",
+      "name": "getUsernameColor",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::chat"
+    },
+    {
+      "id": "rpc:getChannelEmotes",
+      "kind": "rpc_request",
+      "name": "getChannelEmotes",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::emotes"
+    },
+    {
+      "id": "rpc:checkForUpdate",
+      "kind": "rpc_request",
+      "name": "checkForUpdate",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::updates"
+    },
+    {
+      "id": "rpc:downloadUpdate",
+      "kind": "rpc_request",
+      "name": "downloadUpdate",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::updates"
+    },
+    {
+      "id": "rpc:applyUpdate",
+      "kind": "rpc_request",
+      "name": "applyUpdate",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::updates"
+    },
+    {
+      "id": "rpc:skipUpdate",
+      "kind": "rpc_request",
+      "name": "skipUpdate",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::updates"
+    },
+    {
+      "id": "rpc:getWatchedChannels",
+      "kind": "rpc_request",
+      "name": "getWatchedChannels",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched"
+    },
+    {
+      "id": "rpc:addWatchedChannel",
+      "kind": "rpc_request",
+      "name": "addWatchedChannel",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched"
+    },
+    {
+      "id": "rpc:removeWatchedChannel",
+      "kind": "rpc_request",
+      "name": "removeWatchedChannel",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched"
+    },
+    {
+      "id": "rpc:getWatchedChannelMessages",
+      "kind": "rpc_request",
+      "name": "getWatchedChannelMessages",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched"
+    },
+    {
+      "id": "rpc:sendWatchedChannelMessage",
+      "kind": "rpc_request",
+      "name": "sendWatchedChannelMessage",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched"
+    },
+    {
+      "id": "rpc:getWatchedChannelStatuses",
+      "kind": "rpc_request",
+      "name": "getWatchedChannelStatuses",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched"
+    },
+    {
+      "id": "rpc:openExternalUrl",
+      "kind": "rpc_request",
+      "name": "openExternalUrl",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::system"
+    },
+    {
+      "id": "rpc:getTabChannelIds",
+      "kind": "rpc_request",
+      "name": "getTabChannelIds",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched_layout"
+    },
+    {
+      "id": "rpc:setTabChannelIds",
+      "kind": "rpc_request",
+      "name": "setTabChannelIds",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched_layout"
+    },
+    {
+      "id": "rpc:getWatchedChannelsLayout",
+      "kind": "rpc_request",
+      "name": "getWatchedChannelsLayout",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched_layout"
+    },
+    {
+      "id": "rpc:setWatchedChannelsLayout",
+      "kind": "rpc_request",
+      "name": "setWatchedChannelsLayout",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched_layout"
+    },
+    {
+      "id": "rpc:removePanel",
+      "kind": "rpc_request",
+      "name": "removePanel",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched_layout"
+    },
+    {
+      "id": "rpc:assignChannelToPanel",
+      "kind": "rpc_request",
+      "name": "assignChannelToPanel",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched_layout"
+    },
+    {
+      "id": "rpc:splitPanel",
+      "kind": "rpc_request",
+      "name": "splitPanel",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::requests::watched_layout"
+    },
 
-    { "id": "rpcmsg:chat_message", "kind": "rpc_message", "name": "chat_message", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::chat" },
-    { "id": "rpcmsg:chat_event", "kind": "rpc_message", "name": "chat_event", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::chat" },
-    { "id": "rpcmsg:platform_status", "kind": "rpc_message", "name": "platform_status", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::status" },
-    { "id": "rpcmsg:auth_url", "kind": "rpc_message", "name": "auth_url", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::auth" },
-    { "id": "rpcmsg:auth_success", "kind": "rpc_message", "name": "auth_success", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::auth" },
-    { "id": "rpcmsg:auth_error", "kind": "rpc_message", "name": "auth_error", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::auth" },
-    { "id": "rpcmsg:update_status", "kind": "rpc_message", "name": "update_status", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::updates" },
-    { "id": "rpcmsg:watched_channel_message", "kind": "rpc_message", "name": "watched_channel_message", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::watched" },
-    { "id": "rpcmsg:watched_channel_status", "kind": "rpc_message", "name": "watched_channel_status", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::watched" },
-    { "id": "rpcmsg:channel_emotes_set", "kind": "rpc_message", "name": "channel_emotes_set", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::emotes" },
-    { "id": "rpcmsg:channel_emote_added", "kind": "rpc_message", "name": "channel_emote_added", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::emotes" },
-    { "id": "rpcmsg:channel_emote_removed", "kind": "rpc_message", "name": "channel_emote_removed", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::emotes" },
-    { "id": "rpcmsg:channel_emote_updated", "kind": "rpc_message", "name": "channel_emote_updated", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "protocol::rpc::messages::emotes" },
+    {
+      "id": "rpcmsg:chat_message",
+      "kind": "rpc_message",
+      "name": "chat_message",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::chat"
+    },
+    {
+      "id": "rpcmsg:chat_event",
+      "kind": "rpc_message",
+      "name": "chat_event",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::chat"
+    },
+    {
+      "id": "rpcmsg:platform_status",
+      "kind": "rpc_message",
+      "name": "platform_status",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::status"
+    },
+    {
+      "id": "rpcmsg:auth_url",
+      "kind": "rpc_message",
+      "name": "auth_url",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::auth"
+    },
+    {
+      "id": "rpcmsg:auth_success",
+      "kind": "rpc_message",
+      "name": "auth_success",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::auth"
+    },
+    {
+      "id": "rpcmsg:auth_error",
+      "kind": "rpc_message",
+      "name": "auth_error",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::auth"
+    },
+    {
+      "id": "rpcmsg:update_status",
+      "kind": "rpc_message",
+      "name": "update_status",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::updates"
+    },
+    {
+      "id": "rpcmsg:watched_channel_message",
+      "kind": "rpc_message",
+      "name": "watched_channel_message",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::watched"
+    },
+    {
+      "id": "rpcmsg:watched_channel_status",
+      "kind": "rpc_message",
+      "name": "watched_channel_status",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::watched"
+    },
+    {
+      "id": "rpcmsg:channel_emotes_set",
+      "kind": "rpc_message",
+      "name": "channel_emotes_set",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::emotes"
+    },
+    {
+      "id": "rpcmsg:channel_emote_added",
+      "kind": "rpc_message",
+      "name": "channel_emote_added",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::emotes"
+    },
+    {
+      "id": "rpcmsg:channel_emote_removed",
+      "kind": "rpc_message",
+      "name": "channel_emote_removed",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::emotes"
+    },
+    {
+      "id": "rpcmsg:channel_emote_updated",
+      "kind": "rpc_message",
+      "name": "channel_emote_updated",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "protocol::rpc::messages::emotes"
+    },
 
-    { "id": "backend:auth_url", "kind": "backend_message", "name": "auth_url", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:auth_success", "kind": "backend_message", "name": "auth_success", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:auth_error", "kind": "backend_message", "name": "auth_error", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:error", "kind": "backend_message", "name": "error", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:pong", "kind": "backend_message", "name": "pong", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:chat_message", "kind": "backend_message", "name": "chat_message", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:chat_event", "kind": "backend_message", "name": "chat_event", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:platform_status", "kind": "backend_message", "name": "platform_status", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming" },
-    { "id": "backend:seventv_emote_set", "kind": "backend_message", "name": "seventv_emote_set", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming_7tv" },
-    { "id": "backend:seventv_emote_added", "kind": "backend_message", "name": "seventv_emote_added", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming_7tv" },
-    { "id": "backend:seventv_emote_removed", "kind": "backend_message", "name": "seventv_emote_removed", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming_7tv" },
-    { "id": "backend:seventv_emote_updated", "kind": "backend_message", "name": "seventv_emote_updated", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming_7tv" },
-    { "id": "backend:seventv_system_message", "kind": "backend_message", "name": "seventv_system_message", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::incoming_7tv" },
+    {
+      "id": "backend:auth_url",
+      "kind": "backend_message",
+      "name": "auth_url",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:auth_success",
+      "kind": "backend_message",
+      "name": "auth_success",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:auth_error",
+      "kind": "backend_message",
+      "name": "auth_error",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:error",
+      "kind": "backend_message",
+      "name": "error",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:pong",
+      "kind": "backend_message",
+      "name": "pong",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:chat_message",
+      "kind": "backend_message",
+      "name": "chat_message",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:chat_event",
+      "kind": "backend_message",
+      "name": "chat_event",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:platform_status",
+      "kind": "backend_message",
+      "name": "platform_status",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming"
+    },
+    {
+      "id": "backend:seventv_emote_set",
+      "kind": "backend_message",
+      "name": "seventv_emote_set",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming_7tv"
+    },
+    {
+      "id": "backend:seventv_emote_added",
+      "kind": "backend_message",
+      "name": "seventv_emote_added",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming_7tv"
+    },
+    {
+      "id": "backend:seventv_emote_removed",
+      "kind": "backend_message",
+      "name": "seventv_emote_removed",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming_7tv"
+    },
+    {
+      "id": "backend:seventv_emote_updated",
+      "kind": "backend_message",
+      "name": "seventv_emote_updated",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming_7tv"
+    },
+    {
+      "id": "backend:seventv_system_message",
+      "kind": "backend_message",
+      "name": "seventv_system_message",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::incoming_7tv"
+    },
 
-    { "id": "desktop:ping", "kind": "desktop_message", "name": "ping", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing" },
-    { "id": "desktop:auth_start", "kind": "desktop_message", "name": "auth_start", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing" },
-    { "id": "desktop:auth_start_twitch", "kind": "desktop_message", "name": "auth_start_twitch", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing" },
-    { "id": "desktop:auth_logout", "kind": "desktop_message", "name": "auth_logout", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing" },
-    { "id": "desktop:send_message", "kind": "desktop_message", "name": "send_message", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing" },
-    { "id": "desktop:channel_join", "kind": "desktop_message", "name": "channel_join", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing" },
-    { "id": "desktop:channel_leave", "kind": "desktop_message", "name": "channel_leave", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing" },
-    { "id": "desktop:seventv_subscribe", "kind": "desktop_message", "name": "seventv_subscribe", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing_7tv" },
-    { "id": "desktop:seventv_unsubscribe", "kind": "desktop_message", "name": "seventv_unsubscribe", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing_7tv" },
-    { "id": "desktop:seventv_resubscribe", "kind": "desktop_message", "name": "seventv_resubscribe", "status": "in_scope", "source_path": "packages/shared/protocol.ts", "owner_module": "protocol::backend::outgoing_7tv" },
+    {
+      "id": "desktop:ping",
+      "kind": "desktop_message",
+      "name": "ping",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing"
+    },
+    {
+      "id": "desktop:auth_start",
+      "kind": "desktop_message",
+      "name": "auth_start",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing"
+    },
+    {
+      "id": "desktop:auth_start_twitch",
+      "kind": "desktop_message",
+      "name": "auth_start_twitch",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing"
+    },
+    {
+      "id": "desktop:auth_logout",
+      "kind": "desktop_message",
+      "name": "auth_logout",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing"
+    },
+    {
+      "id": "desktop:send_message",
+      "kind": "desktop_message",
+      "name": "send_message",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing"
+    },
+    {
+      "id": "desktop:channel_join",
+      "kind": "desktop_message",
+      "name": "channel_join",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing"
+    },
+    {
+      "id": "desktop:channel_leave",
+      "kind": "desktop_message",
+      "name": "channel_leave",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing"
+    },
+    {
+      "id": "desktop:seventv_subscribe",
+      "kind": "desktop_message",
+      "name": "seventv_subscribe",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing_7tv"
+    },
+    {
+      "id": "desktop:seventv_unsubscribe",
+      "kind": "desktop_message",
+      "name": "seventv_unsubscribe",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing_7tv"
+    },
+    {
+      "id": "desktop:seventv_resubscribe",
+      "kind": "desktop_message",
+      "name": "seventv_resubscribe",
+      "status": "in_scope",
+      "source_path": "packages/shared/protocol.ts",
+      "owner_module": "protocol::backend::outgoing_7tv"
+    },
 
-    { "id": "overlay-query:bg", "kind": "overlay_query_param", "name": "bg", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:textColor", "kind": "overlay_query_param", "name": "textColor", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:color", "kind": "overlay_query_param", "name": "color", "status": "in_scope", "source_path": "packages/desktop/src/views/overlay/App.vue", "owner_module": "overlay::query" },
-    { "id": "overlay-query:fontSize", "kind": "overlay_query_param", "name": "fontSize", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:fontFamily", "kind": "overlay_query_param", "name": "fontFamily", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:maxMessages", "kind": "overlay_query_param", "name": "maxMessages", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:timeout", "kind": "overlay_query_param", "name": "timeout", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:showPlatform", "kind": "overlay_query_param", "name": "showPlatform", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:showAvatar", "kind": "overlay_query_param", "name": "showAvatar", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:showBadges", "kind": "overlay_query_param", "name": "showBadges", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:animation", "kind": "overlay_query_param", "name": "animation", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:position", "kind": "overlay_query_param", "name": "position", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:platforms", "kind": "overlay_query_param", "name": "platforms", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-query:port", "kind": "overlay_query_param", "name": "port", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "overlay::query" },
-    { "id": "overlay-event:chat_message", "kind": "overlay_event", "name": "chat_message", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::protocol" },
-    { "id": "overlay-event:chat_event", "kind": "overlay_event", "name": "chat_event", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::protocol" },
-    { "id": "overlay-event:clear", "kind": "overlay_event", "name": "clear", "status": "in_scope", "source_path": "packages/desktop/src/overlay-server.ts", "owner_module": "overlay::protocol" },
+    {
+      "id": "overlay-query:bg",
+      "kind": "overlay_query_param",
+      "name": "bg",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:textColor",
+      "kind": "overlay_query_param",
+      "name": "textColor",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:color",
+      "kind": "overlay_query_param",
+      "name": "color",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/overlay/App.vue",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:fontSize",
+      "kind": "overlay_query_param",
+      "name": "fontSize",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:fontFamily",
+      "kind": "overlay_query_param",
+      "name": "fontFamily",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:maxMessages",
+      "kind": "overlay_query_param",
+      "name": "maxMessages",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:timeout",
+      "kind": "overlay_query_param",
+      "name": "timeout",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:showPlatform",
+      "kind": "overlay_query_param",
+      "name": "showPlatform",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:showAvatar",
+      "kind": "overlay_query_param",
+      "name": "showAvatar",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:showBadges",
+      "kind": "overlay_query_param",
+      "name": "showBadges",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:animation",
+      "kind": "overlay_query_param",
+      "name": "animation",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:position",
+      "kind": "overlay_query_param",
+      "name": "position",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:platforms",
+      "kind": "overlay_query_param",
+      "name": "platforms",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-query:port",
+      "kind": "overlay_query_param",
+      "name": "port",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "overlay::query"
+    },
+    {
+      "id": "overlay-event:chat_message",
+      "kind": "overlay_event",
+      "name": "chat_message",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::protocol"
+    },
+    {
+      "id": "overlay-event:chat_event",
+      "kind": "overlay_event",
+      "name": "chat_event",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::protocol"
+    },
+    {
+      "id": "overlay-event:clear",
+      "kind": "overlay_event",
+      "name": "clear",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/overlay-server.ts",
+      "owner_module": "overlay::protocol"
+    },
 
-    { "id": "settings:theme", "kind": "settings_key", "name": "theme", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:chatTheme", "kind": "settings_key", "name": "chatTheme", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:fontFamily", "kind": "settings_key", "name": "fontFamily", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:fontSize", "kind": "settings_key", "name": "fontSize", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:showPlatformColorStripe", "kind": "settings_key", "name": "showPlatformColorStripe", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:showPlatformIcon", "kind": "settings_key", "name": "showPlatformIcon", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:showTimestamp", "kind": "settings_key", "name": "showTimestamp", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:showAvatars", "kind": "settings_key", "name": "showAvatars", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:showBadges", "kind": "settings_key", "name": "showBadges", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:platformFilter", "kind": "settings_key", "name": "platformFilter", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:autoCheckUpdates", "kind": "settings_key", "name": "autoCheckUpdates", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:chatLayout", "kind": "settings_key", "name": "chatLayout", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:selfPing.enabled", "kind": "settings_key", "name": "selfPing.enabled", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:selfPing.color", "kind": "settings_key", "name": "selfPing.color", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::model" },
-    { "id": "settings:overlay.background", "kind": "settings_key", "name": "overlay.background", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.textColor", "kind": "settings_key", "name": "overlay.textColor", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.fontSize", "kind": "settings_key", "name": "overlay.fontSize", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.fontFamily", "kind": "settings_key", "name": "overlay.fontFamily", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.maxMessages", "kind": "settings_key", "name": "overlay.maxMessages", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.messageTimeout", "kind": "settings_key", "name": "overlay.messageTimeout", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.showPlatformIcon", "kind": "settings_key", "name": "overlay.showPlatformIcon", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.showAvatar", "kind": "settings_key", "name": "overlay.showAvatar", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.showBadges", "kind": "settings_key", "name": "overlay.showBadges", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.animation", "kind": "settings_key", "name": "overlay.animation", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.position", "kind": "settings_key", "name": "overlay.position", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
-    { "id": "settings:overlay.port", "kind": "settings_key", "name": "overlay.port", "status": "in_scope", "source_path": "packages/shared/types.ts", "owner_module": "settings::overlay" },
+    {
+      "id": "settings:theme",
+      "kind": "settings_key",
+      "name": "theme",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:chatTheme",
+      "kind": "settings_key",
+      "name": "chatTheme",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:fontFamily",
+      "kind": "settings_key",
+      "name": "fontFamily",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:fontSize",
+      "kind": "settings_key",
+      "name": "fontSize",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:showPlatformColorStripe",
+      "kind": "settings_key",
+      "name": "showPlatformColorStripe",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:showPlatformIcon",
+      "kind": "settings_key",
+      "name": "showPlatformIcon",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:showTimestamp",
+      "kind": "settings_key",
+      "name": "showTimestamp",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:showAvatars",
+      "kind": "settings_key",
+      "name": "showAvatars",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:showBadges",
+      "kind": "settings_key",
+      "name": "showBadges",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:platformFilter",
+      "kind": "settings_key",
+      "name": "platformFilter",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:autoCheckUpdates",
+      "kind": "settings_key",
+      "name": "autoCheckUpdates",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:chatLayout",
+      "kind": "settings_key",
+      "name": "chatLayout",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:selfPing.enabled",
+      "kind": "settings_key",
+      "name": "selfPing.enabled",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:selfPing.color",
+      "kind": "settings_key",
+      "name": "selfPing.color",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::model"
+    },
+    {
+      "id": "settings:overlay.background",
+      "kind": "settings_key",
+      "name": "overlay.background",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.textColor",
+      "kind": "settings_key",
+      "name": "overlay.textColor",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.fontSize",
+      "kind": "settings_key",
+      "name": "overlay.fontSize",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.fontFamily",
+      "kind": "settings_key",
+      "name": "overlay.fontFamily",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.maxMessages",
+      "kind": "settings_key",
+      "name": "overlay.maxMessages",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.messageTimeout",
+      "kind": "settings_key",
+      "name": "overlay.messageTimeout",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.showPlatformIcon",
+      "kind": "settings_key",
+      "name": "overlay.showPlatformIcon",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.showAvatar",
+      "kind": "settings_key",
+      "name": "overlay.showAvatar",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.showBadges",
+      "kind": "settings_key",
+      "name": "overlay.showBadges",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.animation",
+      "kind": "settings_key",
+      "name": "overlay.animation",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.position",
+      "kind": "settings_key",
+      "name": "overlay.position",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
+    {
+      "id": "settings:overlay.port",
+      "kind": "settings_key",
+      "name": "overlay.port",
+      "status": "in_scope",
+      "source_path": "packages/shared/types.ts",
+      "owner_module": "settings::overlay"
+    },
 
-    { "id": "hotkey:newTab", "kind": "hotkey", "name": "hotkeys.newTab", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts", "owner_module": "hotkeys::bindings" },
-    { "id": "hotkey:nextTab", "kind": "hotkey", "name": "hotkeys.nextTab", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts", "owner_module": "hotkeys::bindings" },
-    { "id": "hotkey:prevTab", "kind": "hotkey", "name": "hotkeys.prevTab", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts", "owner_module": "hotkeys::bindings" },
-    { "id": "hotkey:tabSelector", "kind": "hotkey", "name": "hotkeys.tabSelector", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts", "owner_module": "hotkeys::bindings" },
-    { "id": "hotkey:ctrl-k", "kind": "hotkey", "name": "ctrl+k.tabSelectorOverride", "status": "in_scope", "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts", "owner_module": "hotkeys::bindings" },
+    {
+      "id": "hotkey:newTab",
+      "kind": "hotkey",
+      "name": "hotkeys.newTab",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts",
+      "owner_module": "hotkeys::bindings"
+    },
+    {
+      "id": "hotkey:nextTab",
+      "kind": "hotkey",
+      "name": "hotkeys.nextTab",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts",
+      "owner_module": "hotkeys::bindings"
+    },
+    {
+      "id": "hotkey:prevTab",
+      "kind": "hotkey",
+      "name": "hotkeys.prevTab",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts",
+      "owner_module": "hotkeys::bindings"
+    },
+    {
+      "id": "hotkey:tabSelector",
+      "kind": "hotkey",
+      "name": "hotkeys.tabSelector",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts",
+      "owner_module": "hotkeys::bindings"
+    },
+    {
+      "id": "hotkey:ctrl-k",
+      "kind": "hotkey",
+      "name": "ctrl+k.tabSelectorOverride",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/composables/useHotkeys.ts",
+      "owner_module": "hotkeys::bindings"
+    },
 
-    { "id": "platform:twitch-auth", "kind": "platform_capability", "name": "twitch.oauth_account_auth", "status": "in_scope", "source_path": "packages/desktop/src/bun/index.ts", "owner_module": "platforms::twitch::adapter" },
-    { "id": "platform:twitch-chat-read", "kind": "platform_capability", "name": "twitch.chat_read", "status": "in_scope", "source_path": "packages/desktop/src/platforms/twitch/adapter.ts", "owner_module": "platforms::twitch::adapter" },
-    { "id": "platform:twitch-chat-send", "kind": "platform_capability", "name": "twitch.chat_send", "status": "in_scope", "source_path": "packages/desktop/src/platforms/twitch/adapter.ts", "owner_module": "platforms::twitch::adapter" },
-    { "id": "platform:twitch-badges", "kind": "platform_capability", "name": "twitch.badges", "status": "in_scope", "source_path": "packages/desktop/src/platforms/twitch/adapter.ts", "owner_module": "platforms::twitch::adapter" },
-    { "id": "platform:twitch-emotes", "kind": "platform_capability", "name": "twitch.7tv_emotes", "status": "in_scope", "source_path": "packages/desktop/src/platforms/twitch/adapter.ts", "owner_module": "platforms::twitch::adapter" },
-    { "id": "platform:twitch-stream-status", "kind": "platform_capability", "name": "twitch.stream_status", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "platforms::twitch::stream" },
-    { "id": "platform:twitch-category-search", "kind": "platform_capability", "name": "twitch.category_search", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "platforms::twitch::stream" },
-    { "id": "platform:twitch-stream-update", "kind": "platform_capability", "name": "twitch.stream_update", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "platforms::twitch::stream" },
-    { "id": "platform:youtube-auth", "kind": "platform_capability", "name": "youtube.oauth_account_auth", "status": "in_scope", "source_path": "packages/desktop/src/bun/index.ts", "owner_module": "platforms::youtube::adapter" },
-    { "id": "platform:youtube-chat-read", "kind": "platform_capability", "name": "youtube.non_polling_chat_read", "status": "in_scope", "source_path": "packages/desktop/src/platforms/youtube/adapter.ts", "owner_module": "platforms::youtube::adapter" },
-    { "id": "platform:youtube-watched", "kind": "platform_capability", "name": "youtube.watched_channels", "status": "in_scope", "source_path": "packages/desktop/src/platforms/youtube/adapter.ts", "owner_module": "platforms::youtube::adapter" },
-    { "id": "platform:kick-auth", "kind": "platform_capability", "name": "kick.oauth_account_auth", "status": "in_scope", "source_path": "packages/desktop/src/bun/index.ts", "owner_module": "platforms::kick::adapter" },
-    { "id": "platform:kick-chat-read", "kind": "platform_capability", "name": "kick.chat_read", "status": "in_scope", "source_path": "packages/desktop/src/platforms/kick/adapter.ts", "owner_module": "platforms::kick::adapter" },
-    { "id": "platform:kick-chat-send", "kind": "platform_capability", "name": "kick.chat_send", "status": "in_scope", "source_path": "packages/desktop/src/platforms/kick/adapter.ts", "owner_module": "platforms::kick::adapter" },
-    { "id": "platform:kick-chatroom", "kind": "platform_capability", "name": "kick.chatroom_lookup", "status": "in_scope", "source_path": "packages/desktop/src/platforms/kick/adapter.ts", "owner_module": "platforms::kick::adapter" },
-    { "id": "platform:kick-stream-status", "kind": "platform_capability", "name": "kick.stream_status", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "platforms::kick::stream" },
-    { "id": "platform:kick-category-search", "kind": "platform_capability", "name": "kick.category_search", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "platforms::kick::stream" },
-    { "id": "platform:kick-stream-update", "kind": "platform_capability", "name": "kick.stream_update", "status": "in_scope", "source_path": "packages/desktop/src/shared/rpc.ts", "owner_module": "platforms::kick::stream" },
+    {
+      "id": "platform:twitch-auth",
+      "kind": "platform_capability",
+      "name": "twitch.oauth_account_auth",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/bun/index.ts",
+      "owner_module": "platforms::twitch::adapter"
+    },
+    {
+      "id": "platform:twitch-chat-read",
+      "kind": "platform_capability",
+      "name": "twitch.chat_read",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/twitch/adapter.ts",
+      "owner_module": "platforms::twitch::adapter"
+    },
+    {
+      "id": "platform:twitch-chat-send",
+      "kind": "platform_capability",
+      "name": "twitch.chat_send",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/twitch/adapter.ts",
+      "owner_module": "platforms::twitch::adapter"
+    },
+    {
+      "id": "platform:twitch-badges",
+      "kind": "platform_capability",
+      "name": "twitch.badges",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/twitch/adapter.ts",
+      "owner_module": "platforms::twitch::adapter"
+    },
+    {
+      "id": "platform:twitch-emotes",
+      "kind": "platform_capability",
+      "name": "twitch.7tv_emotes",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/twitch/adapter.ts",
+      "owner_module": "platforms::twitch::adapter"
+    },
+    {
+      "id": "platform:twitch-stream-status",
+      "kind": "platform_capability",
+      "name": "twitch.stream_status",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "platforms::twitch::stream"
+    },
+    {
+      "id": "platform:twitch-category-search",
+      "kind": "platform_capability",
+      "name": "twitch.category_search",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "platforms::twitch::stream"
+    },
+    {
+      "id": "platform:twitch-stream-update",
+      "kind": "platform_capability",
+      "name": "twitch.stream_update",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "platforms::twitch::stream"
+    },
+    {
+      "id": "platform:youtube-auth",
+      "kind": "platform_capability",
+      "name": "youtube.oauth_account_auth",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/bun/index.ts",
+      "owner_module": "platforms::youtube::adapter"
+    },
+    {
+      "id": "platform:youtube-chat-read",
+      "kind": "platform_capability",
+      "name": "youtube.non_polling_chat_read",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/youtube/adapter.ts",
+      "owner_module": "platforms::youtube::adapter"
+    },
+    {
+      "id": "platform:youtube-watched",
+      "kind": "platform_capability",
+      "name": "youtube.watched_channels",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/youtube/adapter.ts",
+      "owner_module": "platforms::youtube::adapter"
+    },
+    {
+      "id": "platform:kick-auth",
+      "kind": "platform_capability",
+      "name": "kick.oauth_account_auth",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/bun/index.ts",
+      "owner_module": "platforms::kick::adapter"
+    },
+    {
+      "id": "platform:kick-chat-read",
+      "kind": "platform_capability",
+      "name": "kick.chat_read",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/kick/adapter.ts",
+      "owner_module": "platforms::kick::adapter"
+    },
+    {
+      "id": "platform:kick-chat-send",
+      "kind": "platform_capability",
+      "name": "kick.chat_send",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/kick/adapter.ts",
+      "owner_module": "platforms::kick::adapter"
+    },
+    {
+      "id": "platform:kick-chatroom",
+      "kind": "platform_capability",
+      "name": "kick.chatroom_lookup",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/platforms/kick/adapter.ts",
+      "owner_module": "platforms::kick::adapter"
+    },
+    {
+      "id": "platform:kick-stream-status",
+      "kind": "platform_capability",
+      "name": "kick.stream_status",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "platforms::kick::stream"
+    },
+    {
+      "id": "platform:kick-category-search",
+      "kind": "platform_capability",
+      "name": "kick.category_search",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "platforms::kick::stream"
+    },
+    {
+      "id": "platform:kick-stream-update",
+      "kind": "platform_capability",
+      "name": "kick.stream_update",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/shared/rpc.ts",
+      "owner_module": "platforms::kick::stream"
+    },
 
-    { "id": "failure:app-update-toast", "kind": "failure_state", "name": "App.update_status_toast_states", "status": "in_scope", "source_path": "packages/desktop/src/views/main/App.vue", "owner_module": "ui::shell::updates", "notes": "checking, update-available, download-progress, download-complete, no-update, error, applying, extracting, replacing-app, launching-new-version, complete" },
-    { "id": "failure:app-initial-load-retry", "kind": "failure_state", "name": "App.initial_data_retry", "status": "in_scope", "source_path": "packages/desktop/src/views/main/App.vue", "owner_module": "ui::shell::app", "notes": "initial data load retry after failure" },
-    { "id": "failure:chat-list-empty", "kind": "failure_state", "name": "ChatList.empty_or_waiting_states", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChatList.vue", "owner_module": "ui::chat::list", "notes": "no accounts, waiting for connection, no messages yet" },
-    { "id": "failure:chat-input-command", "kind": "failure_state", "name": "ChatInput.command_errors", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChatInput.vue", "owner_module": "ui::chat::input", "notes": "missing-query, ambiguous, not-found" },
-    { "id": "failure:chat-input-disabled", "kind": "failure_state", "name": "ChatInput.disabled_or_anonymous", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChatInput.vue", "owner_module": "ui::chat::input" },
-    { "id": "failure:chat-message-branches", "kind": "failure_state", "name": "ChatMessage.render_branches", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChatMessage.vue", "owner_module": "ui::chat::message", "notes": "system, compact, modern, reply preview, copy success, self-ping highlight" },
-    { "id": "failure:events-empty", "kind": "failure_state", "name": "EventsFeed.empty_state", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/EventsFeed.vue", "owner_module": "ui::events::feed" },
-    { "id": "failure:platforms-auth", "kind": "failure_state", "name": "PlatformsPanel.auth_loading_and_error", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/PlatformsPanel.vue", "owner_module": "ui::platforms::panel" },
-    { "id": "failure:platforms-join-toast", "kind": "failure_state", "name": "PlatformsPanel.join_failure_toast", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/PlatformsPanel.vue", "owner_module": "ui::platforms::panel" },
-    { "id": "failure:settings-hotkey-recording", "kind": "failure_state", "name": "SettingsPanel.hotkey_recording", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/SettingsPanel.vue", "owner_module": "ui::settings::panel" },
-    { "id": "failure:settings-save", "kind": "failure_state", "name": "SettingsPanel.save_in_flight", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/SettingsPanel.vue", "owner_module": "ui::settings::panel" },
-    { "id": "failure:watched-layout", "kind": "failure_state", "name": "WatchedChannelsView.loading_error_empty", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/WatchedChannelsView.vue", "owner_module": "ui::watched::view" },
-    { "id": "failure:panel-node-drag-drop", "kind": "failure_state", "name": "PanelNode.drag_drop_and_add_states", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/PanelNode.vue", "owner_module": "ui::watched::panel_node" },
-    { "id": "failure:channel-tab-bar-live", "kind": "failure_state", "name": "ChannelTabBar.live_drag_reorder_states", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/ChannelTabBar.vue", "owner_module": "ui::watched::channel_tab_bar" },
-    { "id": "failure:add-channel-youtube-lock", "kind": "failure_state", "name": "AddChannelForm.youtube_auth_locked", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/AddChannelForm.vue", "owner_module": "ui::modals::add_channel_form" },
-    { "id": "failure:tab-selector-empty", "kind": "failure_state", "name": "TabSelectorModal.no_matches_keyboard_navigation", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/TabSelectorModal.vue", "owner_module": "ui::modals::tab_selector" },
-    { "id": "failure:stream-editor", "kind": "failure_state", "name": "StreamEditor.loading_search_save_errors", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/StreamEditor.vue", "owner_module": "ui::platforms::stream_editor" },
-    { "id": "failure:user-card-metadata", "kind": "failure_state", "name": "UserCardDialog.metadata_loading_error_unsupported", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/UserCardDialog.vue", "owner_module": "ui::chat::user_card_dialog" },
-    { "id": "failure:user-history", "kind": "failure_state", "name": "UserChatHistoryPanel.loading_error_empty_hasMore", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/UserChatHistoryPanel.vue", "owner_module": "ui::chat::user_history_panel" },
-    { "id": "failure:emote-picker", "kind": "failure_state", "name": "EmotePicker.loading_empty", "status": "in_scope", "source_path": "packages/desktop/src/views/main/components/EmotePicker.vue", "owner_module": "ui::chat::emote_picker" },
-    { "id": "failure:overlay-socket", "kind": "failure_state", "name": "overlay.socket_reconnect_and_parse_error", "status": "in_scope", "source_path": "packages/desktop/src/views/overlay/App.vue", "owner_module": "overlay::ui::app" },
-    { "id": "failure:overlay-timeout", "kind": "failure_state", "name": "overlay.message_expiry_and_platform_filter", "status": "in_scope", "source_path": "packages/desktop/src/views/overlay/App.vue", "owner_module": "overlay::ui::app" }
+    {
+      "id": "failure:app-update-toast",
+      "kind": "failure_state",
+      "name": "App.update_status_toast_states",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/App.vue",
+      "owner_module": "ui::shell::updates",
+      "notes": "checking, update-available, download-progress, download-complete, no-update, error, applying, extracting, replacing-app, launching-new-version, complete"
+    },
+    {
+      "id": "failure:app-initial-load-retry",
+      "kind": "failure_state",
+      "name": "App.initial_data_retry",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/App.vue",
+      "owner_module": "ui::shell::app",
+      "notes": "initial data load retry after failure"
+    },
+    {
+      "id": "failure:chat-list-empty",
+      "kind": "failure_state",
+      "name": "ChatList.empty_or_waiting_states",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChatList.vue",
+      "owner_module": "ui::chat::list",
+      "notes": "no accounts, waiting for connection, no messages yet"
+    },
+    {
+      "id": "failure:chat-input-command",
+      "kind": "failure_state",
+      "name": "ChatInput.command_errors",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChatInput.vue",
+      "owner_module": "ui::chat::input",
+      "notes": "missing-query, ambiguous, not-found"
+    },
+    {
+      "id": "failure:chat-input-disabled",
+      "kind": "failure_state",
+      "name": "ChatInput.disabled_or_anonymous",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChatInput.vue",
+      "owner_module": "ui::chat::input"
+    },
+    {
+      "id": "failure:chat-message-branches",
+      "kind": "failure_state",
+      "name": "ChatMessage.render_branches",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChatMessage.vue",
+      "owner_module": "ui::chat::message",
+      "notes": "system, compact, modern, reply preview, copy success, self-ping highlight"
+    },
+    {
+      "id": "failure:events-empty",
+      "kind": "failure_state",
+      "name": "EventsFeed.empty_state",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/EventsFeed.vue",
+      "owner_module": "ui::events::feed"
+    },
+    {
+      "id": "failure:platforms-auth",
+      "kind": "failure_state",
+      "name": "PlatformsPanel.auth_loading_and_error",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/PlatformsPanel.vue",
+      "owner_module": "ui::platforms::panel"
+    },
+    {
+      "id": "failure:platforms-join-toast",
+      "kind": "failure_state",
+      "name": "PlatformsPanel.join_failure_toast",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/PlatformsPanel.vue",
+      "owner_module": "ui::platforms::panel"
+    },
+    {
+      "id": "failure:settings-hotkey-recording",
+      "kind": "failure_state",
+      "name": "SettingsPanel.hotkey_recording",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/SettingsPanel.vue",
+      "owner_module": "ui::settings::panel"
+    },
+    {
+      "id": "failure:settings-save",
+      "kind": "failure_state",
+      "name": "SettingsPanel.save_in_flight",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/SettingsPanel.vue",
+      "owner_module": "ui::settings::panel"
+    },
+    {
+      "id": "failure:watched-layout",
+      "kind": "failure_state",
+      "name": "WatchedChannelsView.loading_error_empty",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/WatchedChannelsView.vue",
+      "owner_module": "ui::watched::view"
+    },
+    {
+      "id": "failure:panel-node-drag-drop",
+      "kind": "failure_state",
+      "name": "PanelNode.drag_drop_and_add_states",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/PanelNode.vue",
+      "owner_module": "ui::watched::panel_node"
+    },
+    {
+      "id": "failure:channel-tab-bar-live",
+      "kind": "failure_state",
+      "name": "ChannelTabBar.live_drag_reorder_states",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/ChannelTabBar.vue",
+      "owner_module": "ui::watched::channel_tab_bar"
+    },
+    {
+      "id": "failure:add-channel-youtube-lock",
+      "kind": "failure_state",
+      "name": "AddChannelForm.youtube_auth_locked",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/AddChannelForm.vue",
+      "owner_module": "ui::modals::add_channel_form"
+    },
+    {
+      "id": "failure:tab-selector-empty",
+      "kind": "failure_state",
+      "name": "TabSelectorModal.no_matches_keyboard_navigation",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/TabSelectorModal.vue",
+      "owner_module": "ui::modals::tab_selector"
+    },
+    {
+      "id": "failure:stream-editor",
+      "kind": "failure_state",
+      "name": "StreamEditor.loading_search_save_errors",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/StreamEditor.vue",
+      "owner_module": "ui::platforms::stream_editor"
+    },
+    {
+      "id": "failure:user-card-metadata",
+      "kind": "failure_state",
+      "name": "UserCardDialog.metadata_loading_error_unsupported",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/UserCardDialog.vue",
+      "owner_module": "ui::chat::user_card_dialog"
+    },
+    {
+      "id": "failure:user-history",
+      "kind": "failure_state",
+      "name": "UserChatHistoryPanel.loading_error_empty_hasMore",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/UserChatHistoryPanel.vue",
+      "owner_module": "ui::chat::user_history_panel"
+    },
+    {
+      "id": "failure:emote-picker",
+      "kind": "failure_state",
+      "name": "EmotePicker.loading_empty",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/main/components/EmotePicker.vue",
+      "owner_module": "ui::chat::emote_picker"
+    },
+    {
+      "id": "failure:overlay-socket",
+      "kind": "failure_state",
+      "name": "overlay.socket_reconnect_and_parse_error",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/overlay/App.vue",
+      "owner_module": "overlay::ui::app"
+    },
+    {
+      "id": "failure:overlay-timeout",
+      "kind": "failure_state",
+      "name": "overlay.message_expiry_and_platform_filter",
+      "status": "in_scope",
+      "source_path": "packages/desktop/src/views/overlay/App.vue",
+      "owner_module": "overlay::ui::app"
+    }
   ]
 }

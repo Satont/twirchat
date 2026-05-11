@@ -6,7 +6,12 @@
   { "type": "send_message", "platform": "twitch", "channel": "streamer", "message": "hello" },
   { "type": "channel_join", "platform": "kick", "channel": "creator" },
   { "type": "channel_leave", "platform": "kick", "channel": "creator" },
-  { "type": "seventv_subscribe", "platform": "twitch", "channelId": "streamer", "platformUserId": "1001" },
+  {
+    "type": "seventv_subscribe",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "platformUserId": "1001"
+  },
   { "type": "seventv_unsubscribe", "platform": "twitch", "channelId": "streamer" },
   {
     "type": "seventv_resubscribe",

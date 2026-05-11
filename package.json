@@ -18,6 +18,7 @@
     "test": "bun test --workspaces test",
     "typecheck": "bun run --workspaces typecheck",
     "build": "bun run --workspaces build",
+    "package:desktop-rust:verify": "cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_artifact_contains_required_assets -- --nocapture && cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_overlay_asset_fails -- --nocapture",
     "generate-icons": "bun scripts/generate-icons.ts",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
