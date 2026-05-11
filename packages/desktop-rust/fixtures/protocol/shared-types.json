@@ -1,0 +1,132 @@
+{
+  "account": {
+    "id": "acct-1",
+    "platform": "twitch",
+    "platformUserId": "1001",
+    "username": "streamer",
+    "displayName": "Streamer",
+    "avatarUrl": "https://cdn.example/avatar.png",
+    "scopes": ["chat:read", "chat:edit"],
+    "createdAt": 1710000000,
+    "updatedAt": 1710000100
+  },
+  "settings": {
+    "theme": "dark",
+    "chatTheme": "modern",
+    "fontFamily": "inter",
+    "fontSize": 14.0,
+    "showPlatformColorStripe": true,
+    "showPlatformIcon": true,
+    "showTimestamp": true,
+    "showAvatars": true,
+    "showBadges": true,
+    "platformFilter": "all",
+    "hotkeys": {
+      "newTab": "ctrl+t",
+      "nextTab": "ctrl+tab",
+      "prevTab": "alt+arrowleft",
+      "tabSelector": "ctrl+l"
+    },
+    "overlay": {
+      "background": "transparent",
+      "textColor": "#ffffff",
+      "fontSize": 14.0,
+      "fontFamily": "inter",
+      "maxMessages": 20,
+      "messageTimeout": 0,
+      "showPlatformIcon": true,
+      "showAvatar": true,
+      "showBadges": true,
+      "animation": "slide",
+      "position": "bottom",
+      "port": 45823
+    },
+    "autoCheckUpdates": true,
+    "chatLayout": {
+      "version": 1,
+      "mode": "combined",
+      "splits": [{ "id": "default", "type": "combined", "size": 100.0 }]
+    },
+    "selfPing": { "enabled": true, "color": "rgba(167, 139, 250, 0.15)" }
+  },
+  "chatMessage": {
+    "id": "twitch:msg:1",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "author": {
+      "id": "u1",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "color": "#9146ff",
+      "avatarUrl": "https://cdn.example/viewer.png",
+      "badges": [{ "id": "mod", "type": "moderator", "text": "Mod" }]
+    },
+    "text": "hello Kappa",
+    "emotes": [
+      {
+        "id": "25",
+        "name": "Kappa",
+        "imageUrl": "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0",
+        "positions": [{ "start": 6, "end": 10 }],
+        "aspectRatio": 1.0
+      }
+    ],
+    "timestamp": "2026-05-11T10:00:00.000Z",
+    "type": "message",
+    "reply": {
+      "parentMessageId": "parent-1",
+      "parentMessageText": "hi",
+      "parentAuthor": { "id": "u0", "username": "other", "displayName": "Other" }
+    }
+  },
+  "event": {
+    "id": "twitch:follow:u1",
+    "platform": "twitch",
+    "type": "follow",
+    "user": { "id": "u1", "displayName": "Viewer" },
+    "data": { "source": "fixture" },
+    "timestamp": "2026-05-11T10:01:00.000Z"
+  },
+  "streamStatus": {
+    "platform": "kick",
+    "channelId": "creator",
+    "isLive": true,
+    "title": "Building TwirChat",
+    "categoryId": "42",
+    "categoryName": "Software",
+    "viewerCount": 321
+  },
+  "platformStatus": {
+    "platform": "youtube",
+    "status": "connecting",
+    "mode": "authenticated",
+    "channelLogin": "creator"
+  },
+  "watchedChannel": {
+    "id": "watched-1",
+    "platform": "youtube",
+    "channelSlug": "@creator",
+    "displayName": "Creator",
+    "createdAt": 1710000200
+  },
+  "layout": {
+    "version": 2,
+    "root": {
+      "type": "split",
+      "id": "root",
+      "direction": "horizontal",
+      "flex": 100.0,
+      "children": [
+        { "type": "panel", "id": "main", "content": { "type": "main" }, "flex": 50.0 },
+        {
+          "type": "panel",
+          "id": "watched",
+          "content": { "type": "watched", "channelId": "watched-1" },
+          "flex": 50.0
+        }
+      ]
+    },
+    "meta": { "createdAt": 1710000300, "updatedAt": 1710000400, "migratedFrom": "legacy" }
+  },
+  "twitchBadges": { "badges": { "subscriber/6": "https://cdn.example/subscriber-6.png" } }
+}

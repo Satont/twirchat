@@ -5455,8 +5455,16 @@ dependencies = [
 name = "twirchat-desktop-rust"
 version = "0.1.0"
 dependencies = [
+ "base64",
+ "gethostname",
  "gpui",
  "gpui_platform",
+ "serde",
+ "serde_json",
+ "sha1_smol",
+ "tempfile",
+ "url",
+ "uuid",
 ]
 
 [[package]]

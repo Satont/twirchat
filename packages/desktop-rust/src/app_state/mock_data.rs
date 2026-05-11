@@ -2,6 +2,31 @@ use crate::models::{
     Account, ChannelTab, ChatMessage, Platform, PlatformCard, SettingRow, StreamChip, UiEvent,
 };
 
+#[derive(Debug, Clone)]
+pub struct PrototypeData {
+    pub accounts: Vec<Account>,
+    pub tabs: Vec<ChannelTab>,
+    pub chips: Vec<StreamChip>,
+    pub messages: Vec<ChatMessage>,
+    pub events: Vec<UiEvent>,
+    pub platform_cards: Vec<PlatformCard>,
+    pub settings: Vec<SettingRow>,
+}
+
+impl PrototypeData {
+    pub fn load() -> Self {
+        Self {
+            accounts: accounts(),
+            tabs: channel_tabs(),
+            chips: header_chips(),
+            messages: chat_messages(),
+            events: events(),
+            platform_cards: platform_cards(),
+            settings: settings(),
+        }
+    }
+}
+
 pub fn accounts() -> Vec<Account> {
     vec![
         Account {
@@ -325,7 +350,7 @@ pub fn chat_messages() -> Vec<ChatMessage> {
                 },
                 author_color_hex: *color,
                 system: *system,
-            })
+            });
         }
     }
 
