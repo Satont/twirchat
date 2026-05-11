@@ -5,10 +5,19 @@ use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px};
 pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
     let active_id = String::from(state.active_channel_tab_id());
 
-    let tabs = vec![
-        ("home", "Home", None),
-        ("satont", "satont", Some(crate::models::Platform::Twitch)),
-    ];
+    let mut tabs = vec![("home".to_string(), "Home".to_string(), None)];
+    for channel in &state.watched_channels {
+        let model_platform = match channel.platform {
+            crate::protocol::types::Platform::Twitch => crate::models::Platform::Twitch,
+            crate::protocol::types::Platform::Youtube => crate::models::Platform::YouTube,
+            crate::protocol::types::Platform::Kick => crate::models::Platform::Kick,
+        };
+        tabs.push((
+            channel.id.clone(),
+            channel.display_name.clone(),
+            Some(model_platform),
+        ));
+    }
 
     div()
         .w_full()
@@ -24,7 +33,7 @@ pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
         .children(tabs.into_iter().map(move |(id, label, platform)| {
             let state_entity = state_entity.clone();
             let is_active = id == active_id;
-            let tab_id = id.to_string();
+            let tab_id = id.clone();
             let accent = platform
                 .map(theme::platform_color)
                 .unwrap_or(theme::accent());

@@ -1,6 +1,8 @@
+use crate::app_state::AppStateActions;
 use crate::ui::components::switch::Switch;
 use crate::ui::theme;
 use gpui::{Div, Rgba, div, prelude::*, px};
+use std::rc::Rc;
 
 fn with_alpha(color: Rgba, alpha: f32) -> Rgba {
     let mut c = color;
@@ -53,7 +55,10 @@ fn form_row(label: &'static str, hint: Option<&'static str>, control: impl IntoE
         .child(control)
 }
 
-fn toggle_group(options: &[(&'static str, bool)]) -> Div {
+fn toggle_group(
+    options: &[(&'static str, bool)],
+    on_click: Rc<dyn Fn(&'static str, &mut gpui::Window, &mut gpui::App) + 'static>,
+) -> Div {
     let mut g = div()
         .flex()
         .flex_row()
@@ -64,6 +69,7 @@ fn toggle_group(options: &[(&'static str, bool)]) -> Div {
 
     for (i, (opt, active)) in options.iter().enumerate() {
         let mut btn = div()
+            .id(format!("toggle-{}", opt))
             .px(px(12.0))
             .py(px(5.0))
             .text_size(px(12.0))
@@ -82,7 +88,14 @@ fn toggle_group(options: &[(&'static str, bool)]) -> Div {
             btn = btn.text_color(theme::text_muted());
         }
 
-        g = g.child(btn.child(*opt));
+        let oc = on_click.clone();
+        let opt_str = *opt;
+        g = g.child(
+            btn.on_mouse_down(gpui::MouseButton::Left, move |_event, window, app| {
+                oc(opt_str, window, app);
+            })
+            .child(opt_str),
+        );
     }
     g
 }
@@ -171,324 +184,420 @@ fn slider_mock(val: &'static str, percent: f32) -> Div {
         )
 }
 
-pub(crate) fn panel() -> Div {
-    div().flex_1().child(
-        div()
-            .w_full()
-            .max_w(px(640.0))
-            .mx_auto()
-            .pt(px(28.0))
-            .px(px(32.0))
-            .pb(px(60.0))
-            .flex()
-            .flex_col()
-            .gap(px(8.0))
-            // Header
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_start()
-                    .justify_between()
-                    .mb(px(12.0))
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(
-                                div()
-                                    .text_size(px(20.0))
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .text_color(theme::text_primary())
-                                    .child("Settings"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(13.0))
-                                    .text_color(theme::text_muted())
-                                    .child("Customize appearance and overlay options"),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .bg(theme::accent())
-                            .text_color(gpui::white())
-                            .px(px(18.0))
-                            .py(px(8.0))
-                            .rounded_lg()
-                            .text_size(px(13.0))
-                            .font_weight(gpui::FontWeight::BOLD)
-                            .cursor_pointer()
-                            .hover(|s| s.bg(with_alpha(theme::accent(), 0.88)))
-                            .child("Save changes"),
-                    ),
-            )
-            // Appearance Section
-            .child(
-                div()
-                    .bg(theme::surface())
-                    .border_1()
-                    .border_color(theme::border())
-                    .rounded_xl()
-                    .p(px(20.0))
-                    .flex()
-                    .flex_col()
-                    .mb(px(8.0))
-                    .child(section_title("Appearance"))
-                    .child(form_row(
-                        "Theme",
-                        None,
-                        toggle_group(&[("Dark", true), ("Light", false)]),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Font",
-                        None,
-                        toggle_group(&[("Inter", true), ("Manrope", false), ("System", false)]),
-                    )),
-            )
-            // Self-Ping Highlight Section
-            .child(
-                div()
-                    .bg(theme::surface())
-                    .border_1()
-                    .border_color(theme::border())
-                    .rounded_xl()
-                    .p(px(20.0))
-                    .flex()
-                    .flex_col()
-                    .mb(px(8.0))
-                    .child(section_title("Self-Ping Highlight"))
-                    .child(section_desc(
-                        "Highlight messages that mention your own nickname",
-                    ))
-                    .child(form_row(
-                        "Enable highlights",
-                        Some("Highlight messages mentioning you"),
-                        Switch::new(true),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Highlight color",
-                        None,
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(input_sm("rgba(167, 139, 250, 0.15)"))
-                            .child(color_swatch(with_alpha(theme::accent(), 0.15))),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_start()
-                            .justify_between()
-                            .py(px(12.0))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.0))
-                                    .child(
-                                        div()
-                                            .text_color(theme::text_primary())
-                                            .text_size(px(14.0))
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .child("Preview"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_color(theme::text_muted())
-                                            .text_size(px(11.0))
-                                            .child("How a pinged message looks"),
+pub(crate) fn panel(
+    state: &crate::app_state::AppState,
+    state_entity: gpui::Entity<crate::app_state::AppState>,
+) -> Div {
+    let settings = state.settings();
+
+    div()
+        .flex_1()
+        .child(
+            div()
+                .id("settings-scroll")
+                .w_full()
+                .h_full()
+                .overflow_y_scroll()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(640.0))
+                        .mx_auto()
+                        .pt(px(28.0))
+                        .px(px(32.0))
+                        .pb(px(60.0))
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.0))
+                        // Header
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_start()
+                                .justify_between()
+                                .mb(px(12.0))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .child(
+                                            div()
+                                                .text_size(px(20.0))
+                                                .font_weight(gpui::FontWeight::BOLD)
+                                                .text_color(theme::text_primary())
+                                                .child("Settings"),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(13.0))
+                                                .text_color(theme::text_muted())
+                                                .child("Customize appearance and overlay options"),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .bg(theme::accent())
+                                        .text_color(gpui::white())
+                                        .px(px(18.0))
+                                        .py(px(8.0))
+                                        .rounded_lg()
+                                        .text_size(px(13.0))
+                                        .font_weight(gpui::FontWeight::BOLD)
+                                        .cursor_pointer()
+                                        .hover(|s| s.bg(with_alpha(theme::accent(), 0.88)))
+                                        .on_mouse_down(gpui::MouseButton::Left, {
+                                            let state_entity = state_entity.clone();
+                                            move |_event, _window, app| {
+                                                state_entity.persist_settings(app);
+                                            }
+                                        })
+                                        .child("Save changes"),
+                                ),
+                        )
+                        // Appearance Section
+                        .child(
+                            div()
+                                .bg(theme::surface())
+                                .border_1()
+                                .border_color(theme::border())
+                                .rounded_xl()
+                                .p(px(20.0))
+                                .flex()
+                                .flex_col()
+                                .mb(px(8.0))
+                                .child(section_title("Appearance"))
+                                .child(form_row(
+                                    "Theme",
+                                    None,
+                                    toggle_group(
+                                        &[
+                                            ("Dark", settings.theme == crate::protocol::types::AppTheme::Dark),
+                                            ("Light", settings.theme == crate::protocol::types::AppTheme::Light),
+                                        ],
+                                        Rc::new({
+                                            let state_entity = state_entity.clone();
+                                            move |opt, _window, app| {
+                                                let theme = if opt == "Dark" {
+                                                    crate::protocol::types::AppTheme::Dark
+                                                } else {
+                                                    crate::protocol::types::AppTheme::Light
+                                                };
+                                                state_entity.set_theme(app, theme);
+                                            }
+                                        }),
                                     ),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(4.0))
-                                    .px(px(12.0))
-                                    .py(px(6.0))
-                                    .rounded_lg()
-                                    .text_size(px(13.0))
-                                    .border_1()
-                                    .border_color(theme::border())
-                                    .bg(with_alpha(theme::accent(), 0.15))
-                                    .child(
-                                        div()
-                                            .font_weight(gpui::FontWeight::BOLD)
-                                            .text_color(theme::accent())
-                                            .child("StreamerName:"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_color(theme::text_primary())
-                                            .flex()
-                                            .flex_row()
-                                            .gap(px(4.0))
-                                            .child("Hey")
-                                            .child(
-                                                div()
-                                                    .text_color(theme::accent())
-                                                    .font_weight(gpui::FontWeight::BOLD)
-                                                    .child("@YourName"),
-                                            )
-                                            .child("what do you think?"),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Font",
+                                    None,
+                                    toggle_group(
+                                        &[
+                                            ("Inter", settings.font_family == crate::protocol::types::FontFamilyChoice::Inter),
+                                            ("Manrope", settings.font_family == crate::protocol::types::FontFamilyChoice::Manrope),
+                                            ("System", settings.font_family == crate::protocol::types::FontFamilyChoice::System),
+                                        ],
+                                        Rc::new({
+                                            let state_entity = state_entity.clone();
+                                            move |opt, _window, app| {
+                                                let font = match opt {
+                                                    "Manrope" => crate::protocol::types::FontFamilyChoice::Manrope,
+                                                    "System" => crate::protocol::types::FontFamilyChoice::System,
+                                                    _ => crate::protocol::types::FontFamilyChoice::Inter,
+                                                };
+                                                state_entity.set_font_family(app, font);
+                                            }
+                                        }),
                                     ),
-                            ),
-                    ),
-            )
-            // Updates Section
-            .child(
-                div()
-                    .bg(theme::surface())
-                    .border_1()
-                    .border_color(theme::border())
-                    .rounded_xl()
-                    .p(px(20.0))
-                    .flex()
-                    .flex_col()
-                    .mb(px(8.0))
-                    .child(section_title("Updates"))
-                    .child(section_desc("Automatic update settings"))
-                    .child(form_row(
-                        "Auto-check for updates",
-                        Some("Check on app startup"),
-                        Switch::new(true),
-                    )),
-            )
-            // OBS Overlay Section
-            .child(
-                div()
-                    .bg(theme::surface())
-                    .border_1()
-                    .border_color(theme::border())
-                    .rounded_xl()
-                    .p(px(20.0))
-                    .flex()
-                    .flex_col()
-                    .mb(px(8.0))
-                    .child(section_title("OBS Overlay"))
-                    .child(section_desc(
-                        "Add a Browser Source in OBS with the URL below",
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(10.0))
-                            .bg(theme::surface_2())
-                            .border_1()
-                            .border_color(theme::border())
-                            .rounded_lg()
-                            .px(px(14.0))
-                            .py(px(10.0))
-                            .mb(px(16.0))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_color(theme::accent())
-                                    .text_size(px(11.0))
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .child(
-                                        "http://localhost:45823/?animation=slide&bg=transpar...",
+                                )),
+                        )
+                        // Self-Ping Highlight Section
+                        .child(
+                            div()
+                                .bg(theme::surface())
+                                .border_1()
+                                .border_color(theme::border())
+                                .rounded_xl()
+                                .p(px(20.0))
+                                .flex()
+                                .flex_col()
+                                .mb(px(8.0))
+                                .child(section_title("Self-Ping Highlight"))
+                                .child(section_desc(
+                                    "Highlight messages that mention your own nickname",
+                                ))
+                                .child(form_row(
+                                    "Enable highlights",
+                                    Some("Highlight messages mentioning you"),
+                                    Switch::new(settings.self_ping.as_ref().map_or(false, |p| p.enabled))
+                                        .on_click({
+                                            let state_entity = state_entity.clone();
+                                            let current = settings.self_ping.as_ref().map_or(false, |p| p.enabled);
+                                            let color = settings.self_ping.as_ref().map_or("rgba(167, 139, 250, 0.15)".to_string(), |p| p.color.clone());
+                                            move |_event, _window, app| {
+                                                state_entity.set_self_ping(app, !current, color.clone());
+                                            }
+                                        }),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Highlight color",
+                                    None,
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(8.0))
+                                        .child(input_sm("rgba(167, 139, 250, 0.15)"))
+                                        .child(color_swatch(with_alpha(theme::accent(), 0.15))),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_start()
+                                        .justify_between()
+                                        .py(px(12.0))
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .flex_col()
+                                                .gap(px(2.0))
+                                                .child(
+                                                    div()
+                                                        .text_color(theme::text_primary())
+                                                        .text_size(px(14.0))
+                                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                                        .child("Preview"),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_color(theme::text_muted())
+                                                        .text_size(px(11.0))
+                                                        .child("How a pinged message looks"),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .gap(px(4.0))
+                                                .px(px(12.0))
+                                                .py(px(6.0))
+                                                .rounded_lg()
+                                                .text_size(px(13.0))
+                                                .border_1()
+                                                .border_color(theme::border())
+                                                .bg(with_alpha(theme::accent(), 0.15))
+                                                .child(
+                                                    div()
+                                                        .font_weight(gpui::FontWeight::BOLD)
+                                                        .text_color(theme::accent())
+                                                        .child("StreamerName:"),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_color(theme::text_primary())
+                                                        .flex()
+                                                        .flex_row()
+                                                        .gap(px(4.0))
+                                                        .child("Hey")
+                                                        .child(
+                                                            div()
+                                                                .text_color(theme::accent())
+                                                                .font_weight(gpui::FontWeight::BOLD)
+                                                                .child("@YourName"),
+                                                        )
+                                                        .child("what do you think?"),
+                                                ),
+                                        ),
+                                ),
+                        )
+                        // Updates Section
+                        .child(
+                            div()
+                                .bg(theme::surface())
+                                .border_1()
+                                .border_color(theme::border())
+                                .rounded_xl()
+                                .p(px(20.0))
+                                .flex()
+                                .flex_col()
+                                .mb(px(8.0))
+                                .child(section_title("Updates"))
+                                .child(section_desc("Automatic update settings"))
+                                .child(form_row(
+                                    "Auto-check for updates",
+                                    Some("Check on app startup"),
+                                    Switch::new(settings.auto_check_updates.unwrap_or(true))
+                                        .on_click({
+                                            let state_entity = state_entity.clone();
+                                            let current = settings.auto_check_updates.unwrap_or(true);
+                                            move |_event, _window, app| {
+                                                state_entity.set_auto_check_updates(app, !current);
+                                            }
+                                        }),
+                                )),
+                        )
+                        // OBS Overlay Section
+                        .child(
+                            div()
+                                .bg(theme::surface())
+                                .border_1()
+                                .border_color(theme::border())
+                                .rounded_xl()
+                                .p(px(20.0))
+                                .flex()
+                                .flex_col()
+                                .mb(px(8.0))
+                                .child(section_title("OBS Overlay"))
+                                .child(section_desc(
+                                    "Add a Browser Source in OBS with the URL below",
+                                ))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(10.0))
+                                        .bg(theme::surface_2())
+                                        .border_1()
+                                        .border_color(theme::border())
+                                        .rounded_lg()
+                                        .px(px(14.0))
+                                        .py(px(10.0))
+                                        .mb(px(16.0))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .text_color(theme::accent())
+                                                .text_size(px(11.0))
+                                                .overflow_hidden()
+                                                .whitespace_nowrap()
+                                                .child(
+                                                    "http://localhost:45823/?animation=slide&bg=transpar...",
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .bg(with_alpha(theme::accent(), 0.12))
+                                                .border_1()
+                                                .border_color(with_alpha(theme::accent(), 0.25))
+                                                .text_color(theme::accent())
+                                                .px(px(10.0))
+                                                .py(px(5.0))
+                                                .rounded_md()
+                                                .text_size(px(12.0))
+                                                .cursor_pointer()
+                                                .hover(|s| s.bg(with_alpha(theme::accent(), 0.22)))
+                                                .child("Copy"),
+                                        ),
+                                )
+                                .child(form_row("Port", None, input_sm("45823")))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Background",
+                                    Some("Use \"transparent\" for chroma key"),
+                                    input_sm("transparent"),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Text colour",
+                                    None,
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(8.0))
+                                        .child(input_sm("#e2e2e8"))
+                                        .child(color_swatch(theme::text_primary())),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row("Font size", None, slider_mock("14px", 0.3)))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row("Max messages", None, slider_mock("50", 1.0)))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Animation",
+                                    None,
+                                    toggle_group(
+                                        &[("Slide", true), ("Fade", false), ("None", false)],
+                                        Rc::new(|_, _, _| {}),
                                     ),
-                            )
-                            .child(
-                                div()
-                                    .bg(with_alpha(theme::accent(), 0.12))
-                                    .border_1()
-                                    .border_color(with_alpha(theme::accent(), 0.25))
-                                    .text_color(theme::accent())
-                                    .px(px(10.0))
-                                    .py(px(5.0))
-                                    .rounded_md()
-                                    .text_size(px(12.0))
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(with_alpha(theme::accent(), 0.22)))
-                                    .child("Copy"),
-                            ),
-                    )
-                    .child(form_row("Port", None, input_sm("45823")))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Background",
-                        Some("Use \"transparent\" for chroma key"),
-                        input_sm("transparent"),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Text colour",
-                        None,
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(input_sm("#e2e2e8"))
-                            .child(color_swatch(theme::text_primary())),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row("Font size", None, slider_mock("14px", 0.3)))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row("Max messages", None, slider_mock("50", 1.0)))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Animation",
-                        None,
-                        toggle_group(&[("Slide", true), ("Fade", false), ("None", false)]),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Position",
-                        None,
-                        toggle_group(&[("Bottom", true), ("Top", false)]),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row("Show platform icon", None, Switch::new(true)))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row("Show avatars", None, Switch::new(true))),
-            )
-            // Keyboard Shortcuts Section
-            .child(
-                div()
-                    .bg(theme::surface())
-                    .border_1()
-                    .border_color(theme::border())
-                    .rounded_xl()
-                    .p(px(20.0))
-                    .flex()
-                    .flex_col()
-                    .child(section_title("Keyboard Shortcuts"))
-                    .child(form_row(
-                        "Open new tab",
-                        Some("Add a watched channel tab"),
-                        hotkey_badge("Ctrl+T"),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Next tab",
-                        Some("Cycle to the next tab"),
-                        hotkey_badge("Ctrl+Tab"),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Previous tab",
-                        Some("Cycle to the previous tab"),
-                        hotkey_badge("Ctrl+Shift+Tab"),
-                    ))
-                    .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                    .child(form_row(
-                        "Tab selector",
-                        Some("Open fuzzy tab search (Ctrl+K always works)"),
-                        hotkey_badge("Ctrl+K"),
-                    )),
-            ),
-    )
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Position",
+                                    None,
+                                    toggle_group(
+                                        &[("Bottom", true), ("Top", false)],
+                                        Rc::new(|_, _, _| {}),
+                                    ),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Show platform icon",
+                                    None,
+                                    Switch::new(settings.overlay.show_platform_icon)
+                                        .on_click({
+                                            let state_entity = state_entity.clone();
+                                            let current = settings.overlay.show_platform_icon;
+                                            move |_event, _window, app| {
+                                                state_entity.set_overlay_show_platform_icon(app, !current);
+                                            }
+                                        })
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Show avatars",
+                                    None,
+                                    Switch::new(settings.overlay.show_avatar)
+                                        .on_click({
+                                            let state_entity = state_entity.clone();
+                                            let current = settings.overlay.show_avatar;
+                                            move |_event, _window, app| {
+                                                state_entity.set_overlay_show_avatar(app, !current);
+                                            }
+                                        })
+                                )),
+                        )
+                        // Keyboard Shortcuts Section
+                        .child(
+                            div()
+                                .bg(theme::surface())
+                                .border_1()
+                                .border_color(theme::border())
+                                .rounded_xl()
+                                .p(px(20.0))
+                                .flex()
+                                .flex_col()
+                                .child(section_title("Keyboard Shortcuts"))
+                                .child(form_row(
+                                    "Open new tab",
+                                    Some("Add a watched channel tab"),
+                                    hotkey_badge("Ctrl+T"),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Next tab",
+                                    Some("Cycle to the next tab"),
+                                    hotkey_badge("Ctrl+Tab"),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Previous tab",
+                                    Some("Cycle to the previous tab"),
+                                    hotkey_badge("Ctrl+Shift+Tab"),
+                                ))
+                                .child(div().w_full().h(px(1.0)).bg(theme::border()))
+                                .child(form_row(
+                                    "Tab selector",
+                                    Some("Open fuzzy tab search (Ctrl+K always works)"),
+                                    hotkey_badge("Ctrl+K"),
+                                )),
+                        ),
+                )
+        )
 }

@@ -1,13 +1,17 @@
 pub mod mock_data;
 
 use crate::protocol::types::{
-    NormalizedChatMessage, PlatformStatus, PlatformStatusInfo, PlatformStatusMode, WatchedChannel,
-    WatchedChannelsLayout,
+    AppSettings, AppTheme, ChatTheme, FontFamilyChoice, LayoutNode, NormalizedChatMessage,
+    OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent, PlatformStatus,
+    PlatformStatusInfo, PlatformStatusMode, SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
 use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
-use crate::services::{BackendWsEvent, LifecycleEvent, ServiceEvent};
+use crate::services::{BackendWsEvent, LifecycleEvent, ServiceEvent, WatchedChannelsEvent};
+use crate::settings::SettingsManager;
 use crate::storage::Storage;
+use crate::storage::settings::default_app_settings;
+use crate::storage::watched_layout::{MAX_PANELS, create_default_tab_layout};
 use gpui::{App, Entity};
 use std::collections::BTreeMap;
 
@@ -19,21 +23,34 @@ pub enum MainSection {
     Settings,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeStatus {
+    Starting,
+    Running,
+    Stopped,
+    Failed,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppState {
     active_section: MainSection,
     active_channel_tab_id: String,
     sidebar_collapsed: bool,
     unread_events: usize,
-    runtime_started: bool,
+    runtime_status: RuntimeStatus,
     service_events_seen: usize,
     runtime_errors: Vec<String>,
     update_state: UpdateStatusSnapshot,
+    pub settings: SettingsManager,
     pub platforms_panel: crate::ui::platforms::PlatformsPanel,
     pub messages: Vec<NormalizedChatMessage>,
     pub watched_channels: Vec<WatchedChannel>,
+    pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
     pub events: Vec<crate::protocol::types::NormalizedEvent>,
+    pub chat_appearance_popover_open: bool,
+    pub chat_add_menu_open: bool,
+    pub chat_options_menu_open: bool,
 }
 
 impl Default for AppState {
@@ -43,7 +60,7 @@ impl Default for AppState {
             active_channel_tab_id: String::from("home"),
             sidebar_collapsed: false,
             unread_events: 3,
-            runtime_started: false,
+            runtime_status: RuntimeStatus::Starting,
             service_events_seen: 0,
             runtime_errors: Vec::new(),
             update_state: UpdateStatusSnapshot {
@@ -55,11 +72,16 @@ impl Default for AppState {
                 skipped_hash: None,
                 auto_check_updates: true,
             },
+            settings: SettingsManager::new(default_app_settings()),
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
             messages: vec![],
             watched_channels: vec![],
+            watched_channel_statuses: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
             events: vec![],
+            chat_appearance_popover_open: false,
+            chat_add_menu_open: false,
+            chat_options_menu_open: false,
         }
     }
 }
@@ -81,6 +103,14 @@ impl AppState {
     fn load_storage_snapshot(&mut self, storage: &Storage) {
         if let Ok(messages) = storage.messages().get_recent(Some(50)) {
             self.messages = messages;
+        }
+        if let Ok(settings) = storage.settings().get_app_settings() {
+            self.settings = SettingsManager::new(settings);
+            self.update_state.auto_check_updates = self
+                .settings
+                .settings()
+                .auto_check_updates
+                .unwrap_or(self.update_state.auto_check_updates);
         }
         if let Ok(channels) = storage.watched_channels().find_all() {
             self.watched_channels = channels;
@@ -130,6 +160,22 @@ impl AppState {
         &self.update_state
     }
 
+    pub fn settings(&self) -> &AppSettings {
+        self.settings.settings()
+    }
+
+    pub fn runtime_status(&self) -> RuntimeStatus {
+        self.runtime_status
+    }
+
+    pub fn service_events_seen(&self) -> usize {
+        self.service_events_seen
+    }
+
+    pub fn runtime_errors(&self) -> &[String] {
+        &self.runtime_errors
+    }
+
     pub fn connected_platform_count(&self) -> usize {
         self.platforms_panel
             .statuses
@@ -142,14 +188,76 @@ impl AppState {
         self.watched_layouts.get(tab_id)
     }
 
+    pub fn add_chat_pane_for_active_tab(
+        &mut self,
+        storage: &Storage,
+    ) -> crate::storage::StorageResult<bool> {
+        let tab_id = self.active_channel_tab_id.clone();
+        if tab_id == "home" {
+            return Ok(false);
+        }
+
+        let mut layout = self
+            .watched_layouts
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_else(|| create_default_tab_layout(&tab_id));
+
+        if !append_watched_pane(&mut layout.root, &tab_id) {
+            return Ok(false);
+        }
+
+        storage.watched_layout().set(&tab_id, &layout)?;
+        self.watched_layouts.insert(tab_id, layout);
+        self.chat_add_menu_open = false;
+        Ok(true)
+    }
+
+    pub fn add_watched_channel_from_account(
+        &mut self,
+        storage: &Storage,
+        account_id: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        let Some(account) = self
+            .platforms_panel
+            .accounts
+            .iter()
+            .find(|account| account.id == account_id)
+            .cloned()
+        else {
+            return Ok(false);
+        };
+
+        let channel = storage.watched_channels().upsert(
+            account.platform,
+            &account.username,
+            &account.display_name,
+        )?;
+
+        if !self.watched_channels.iter().any(|existing| existing.id == channel.id) {
+            self.watched_channels.push(channel.clone());
+        }
+
+        self.watched_layouts
+            .entry(channel.id.clone())
+            .or_insert_with(|| create_default_tab_layout(&channel.id));
+        self.active_channel_tab_id = channel.id;
+        self.chat_add_menu_open = false;
+        Ok(true)
+    }
+
+    pub fn persist_settings(&self, storage: &Storage) -> crate::storage::StorageResult<()> {
+        storage.settings().set_app_settings(self.settings())
+    }
+
     pub fn apply_service_event(&mut self, event: ServiceEvent) {
         self.service_events_seen = self.service_events_seen.saturating_add(1);
         match event {
             ServiceEvent::Lifecycle(LifecycleEvent::RuntimeStarted) => {
-                self.runtime_started = true;
+                self.runtime_status = RuntimeStatus::Running;
             }
             ServiceEvent::Lifecycle(LifecycleEvent::RuntimeStopped { .. }) => {
-                self.runtime_started = false;
+                self.runtime_status = RuntimeStatus::Stopped;
             }
             ServiceEvent::BackendWs(BackendWsEvent::MessageDecoded { message }) => {
                 self.apply_backend_message(message);
@@ -163,7 +271,32 @@ impl AppState {
             ServiceEvent::BackendWs(BackendWsEvent::SendFailed { reason }) => {
                 self.runtime_errors.push(reason);
             }
+            ServiceEvent::WatchedChannels(event) => self.apply_watched_channels_event(event),
             _ => {}
+        }
+    }
+
+    fn apply_watched_channels_event(&mut self, event: WatchedChannelsEvent) {
+        match event {
+            WatchedChannelsEvent::MessageBuffered { message, .. } => {
+                self.messages.push(*message);
+            }
+            WatchedChannelsEvent::StatusChanged { channel_id, status } => {
+                self.platforms_panel
+                    .statuses
+                    .insert(status.platform, status.clone());
+                self.watched_channel_statuses.insert(channel_id, status);
+            }
+            WatchedChannelsEvent::AdapterError { message, .. } => {
+                self.runtime_errors.push(message);
+            }
+            WatchedChannelsEvent::BackendMessagePlanned { .. }
+            | WatchedChannelsEvent::LoadRequested
+            | WatchedChannelsEvent::AddRequested { .. }
+            | WatchedChannelsEvent::RemoveRequested { .. }
+            | WatchedChannelsEvent::ReconnectRequested { .. }
+            | WatchedChannelsEvent::SendRequested { .. }
+            | WatchedChannelsEvent::PollRequested => {}
         }
     }
 
@@ -235,6 +368,120 @@ impl AppState {
         self.update_state = state;
     }
 
+    pub fn set_theme(&mut self, theme: AppTheme) {
+        self.settings.set_theme(theme);
+    }
+
+    pub fn set_chat_theme(&mut self, chat_theme: ChatTheme) {
+        self.settings.set_chat_theme(chat_theme);
+    }
+
+    pub fn set_font_family(&mut self, font: FontFamilyChoice) {
+        self.settings.set_font_family(font);
+    }
+
+    pub fn set_font_size(&mut self, font_size: f64) {
+        self.settings.set_font_size(font_size);
+    }
+
+    pub fn set_show_platform_color_stripe(&mut self, show: bool) {
+        self.settings.set_show_platform_color_stripe(show);
+    }
+
+    pub fn set_show_platform_icon(&mut self, show: bool) {
+        self.settings.set_show_platform_icon(show);
+    }
+
+    pub fn set_show_timestamp(&mut self, show: bool) {
+        self.settings.set_show_timestamp(show);
+    }
+
+    pub fn set_show_avatars(&mut self, show: bool) {
+        self.settings.set_show_avatars(show);
+    }
+
+    pub fn set_show_badges(&mut self, show: bool) {
+        self.settings.set_show_badges(show);
+    }
+
+    pub fn set_auto_check_updates(&mut self, enabled: bool) {
+        self.settings.set_auto_check_updates(enabled);
+        self.update_state.auto_check_updates = enabled;
+    }
+
+    pub fn set_self_ping(&mut self, enabled: bool, color: String) {
+        self.settings.set_self_ping(enabled, color);
+    }
+
+    pub fn update_overlay_config(&mut self, config: OverlayConfig) {
+        self.settings.update_overlay_config(config);
+    }
+
+    pub fn set_overlay_background(&mut self, background: impl Into<String>) {
+        self.settings.set_overlay_background(background);
+    }
+
+    pub fn set_overlay_text_color(&mut self, text_color: impl Into<String>) {
+        self.settings.set_overlay_text_color(text_color);
+    }
+
+    pub fn set_overlay_font_size(&mut self, font_size: f64) {
+        self.settings.set_overlay_font_size(font_size);
+    }
+
+    pub fn set_overlay_font_family(&mut self, font_family: impl Into<String>) {
+        self.settings.set_overlay_font_family(font_family);
+    }
+
+    pub fn set_overlay_max_messages(&mut self, max_messages: u32) {
+        self.settings.set_overlay_max_messages(max_messages);
+    }
+
+    pub fn set_overlay_message_timeout(&mut self, message_timeout: u64) {
+        self.settings.set_overlay_message_timeout(message_timeout);
+    }
+
+    pub fn set_overlay_show_platform_icon(&mut self, show: bool) {
+        self.settings.set_overlay_show_platform_icon(show);
+    }
+
+    pub fn set_overlay_show_avatar(&mut self, show: bool) {
+        self.settings.set_overlay_show_avatar(show);
+    }
+
+    pub fn set_overlay_show_badges(&mut self, show: bool) {
+        self.settings.set_overlay_show_badges(show);
+    }
+
+    pub fn set_overlay_animation(&mut self, animation: OverlayAnimation) {
+        self.settings.set_overlay_animation(animation);
+    }
+
+    pub fn set_overlay_position(&mut self, position: OverlayPosition) {
+        self.settings.set_overlay_position(position);
+    }
+
+    pub fn set_overlay_port(&mut self, port: u16) {
+        self.settings.set_overlay_port(port);
+    }
+
+    pub fn record_runtime_failure(&mut self, error: impl Into<String>) {
+        self.runtime_status = RuntimeStatus::Failed;
+        self.runtime_errors.push(error.into());
+    }
+
+    pub fn toggle_chat_appearance_popover(&mut self) {
+        self.chat_appearance_popover_open = !self.chat_appearance_popover_open;
+    }
+
+    pub fn toggle_chat_add_menu(&mut self) {
+        self.chat_add_menu_open = !self.chat_add_menu_open;
+    }
+
+    pub fn toggle_chat_options_menu(&mut self) {
+        self.chat_options_menu_open = !self.chat_options_menu_open;
+    }
+
     pub fn dismiss_update_toast(&mut self) {
         self.update_state.show = false;
     }
@@ -251,6 +498,36 @@ pub trait AppStateActions {
     fn toggle_sidebar(&self, app: &mut App);
     fn set_update_state(&self, app: &mut App, state: UpdateStatusSnapshot);
     fn dismiss_update_toast(&self, app: &mut App);
+    fn set_theme(&self, app: &mut App, theme: AppTheme);
+    fn set_chat_theme(&self, app: &mut App, chat_theme: ChatTheme);
+    fn set_font_family(&self, app: &mut App, font: FontFamilyChoice);
+    fn set_font_size(&self, app: &mut App, font_size: f64);
+    fn set_show_platform_color_stripe(&self, app: &mut App, show: bool);
+    fn set_show_platform_icon(&self, app: &mut App, show: bool);
+    fn set_show_timestamp(&self, app: &mut App, show: bool);
+    fn set_show_avatars(&self, app: &mut App, show: bool);
+    fn set_show_badges(&self, app: &mut App, show: bool);
+    fn set_auto_check_updates(&self, app: &mut App, enabled: bool);
+    fn set_self_ping(&self, app: &mut App, enabled: bool, color: String);
+    fn update_overlay_config(&self, app: &mut App, config: OverlayConfig);
+    fn set_overlay_background(&self, app: &mut App, background: String);
+    fn set_overlay_text_color(&self, app: &mut App, text_color: String);
+    fn set_overlay_font_size(&self, app: &mut App, font_size: f64);
+    fn set_overlay_font_family(&self, app: &mut App, font_family: String);
+    fn set_overlay_max_messages(&self, app: &mut App, max_messages: u32);
+    fn set_overlay_message_timeout(&self, app: &mut App, message_timeout: u64);
+    fn set_overlay_show_platform_icon(&self, app: &mut App, show: bool);
+    fn set_overlay_show_avatar(&self, app: &mut App, show: bool);
+    fn set_overlay_show_badges(&self, app: &mut App, show: bool);
+    fn set_overlay_animation(&self, app: &mut App, animation: OverlayAnimation);
+    fn set_overlay_position(&self, app: &mut App, position: OverlayPosition);
+    fn set_overlay_port(&self, app: &mut App, port: u16);
+    fn toggle_chat_appearance_popover(&self, app: &mut App);
+    fn toggle_chat_add_menu(&self, app: &mut App);
+    fn toggle_chat_options_menu(&self, app: &mut App);
+    fn add_chat_pane_for_active_tab(&self, app: &mut App);
+    fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str);
+    fn persist_settings(&self, app: &mut App);
 }
 
 impl AppStateActions for Entity<AppState> {
@@ -288,11 +565,289 @@ impl AppStateActions for Entity<AppState> {
             cx.notify();
         });
     }
+
+    fn set_theme(&self, app: &mut App, theme: AppTheme) {
+        self.update(app, |state, cx| {
+            state.set_theme(theme);
+            cx.notify();
+        });
+    }
+
+    fn set_chat_theme(&self, app: &mut App, chat_theme: ChatTheme) {
+        self.update(app, |state, cx| {
+            state.set_chat_theme(chat_theme);
+            cx.notify();
+        });
+    }
+
+    fn set_font_family(&self, app: &mut App, font: FontFamilyChoice) {
+        self.update(app, |state, cx| {
+            state.set_font_family(font);
+            cx.notify();
+        });
+    }
+
+    fn set_font_size(&self, app: &mut App, font_size: f64) {
+        self.update(app, |state, cx| {
+            state.set_font_size(font_size);
+            cx.notify();
+        });
+    }
+
+    fn set_show_platform_color_stripe(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_show_platform_color_stripe(show);
+            cx.notify();
+        });
+    }
+
+    fn set_show_platform_icon(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_show_platform_icon(show);
+            cx.notify();
+        });
+    }
+
+    fn set_show_timestamp(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_show_timestamp(show);
+            cx.notify();
+        });
+    }
+
+    fn set_show_avatars(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_show_avatars(show);
+            cx.notify();
+        });
+    }
+
+    fn set_show_badges(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_show_badges(show);
+            cx.notify();
+        });
+    }
+
+    fn set_auto_check_updates(&self, app: &mut App, enabled: bool) {
+        self.update(app, |state, cx| {
+            state.set_auto_check_updates(enabled);
+            cx.notify();
+        });
+    }
+
+    fn set_self_ping(&self, app: &mut App, enabled: bool, color: String) {
+        self.update(app, |state, cx| {
+            state.set_self_ping(enabled, color);
+            cx.notify();
+        });
+    }
+
+    fn update_overlay_config(&self, app: &mut App, config: OverlayConfig) {
+        self.update(app, |state, cx| {
+            state.update_overlay_config(config);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_background(&self, app: &mut App, background: String) {
+        self.update(app, |state, cx| {
+            state.set_overlay_background(background);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_text_color(&self, app: &mut App, text_color: String) {
+        self.update(app, |state, cx| {
+            state.set_overlay_text_color(text_color);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_font_size(&self, app: &mut App, font_size: f64) {
+        self.update(app, |state, cx| {
+            state.set_overlay_font_size(font_size);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_font_family(&self, app: &mut App, font_family: String) {
+        self.update(app, |state, cx| {
+            state.set_overlay_font_family(font_family);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_max_messages(&self, app: &mut App, max_messages: u32) {
+        self.update(app, |state, cx| {
+            state.set_overlay_max_messages(max_messages);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_message_timeout(&self, app: &mut App, message_timeout: u64) {
+        self.update(app, |state, cx| {
+            state.set_overlay_message_timeout(message_timeout);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_show_platform_icon(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_overlay_show_platform_icon(show);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_show_avatar(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_overlay_show_avatar(show);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_show_badges(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_overlay_show_badges(show);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_animation(&self, app: &mut App, animation: OverlayAnimation) {
+        self.update(app, |state, cx| {
+            state.set_overlay_animation(animation);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_position(&self, app: &mut App, position: OverlayPosition) {
+        self.update(app, |state, cx| {
+            state.set_overlay_position(position);
+            cx.notify();
+        });
+    }
+
+    fn set_overlay_port(&self, app: &mut App, port: u16) {
+        self.update(app, |state, cx| {
+            state.set_overlay_port(port);
+            cx.notify();
+        });
+    }
+
+    fn toggle_chat_appearance_popover(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.toggle_chat_appearance_popover();
+            cx.notify();
+        });
+    }
+
+    fn toggle_chat_add_menu(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.toggle_chat_add_menu();
+            cx.notify();
+        });
+    }
+
+    fn toggle_chat_options_menu(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.toggle_chat_options_menu();
+            cx.notify();
+        });
+    }
+
+    fn add_chat_pane_for_active_tab(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.add_chat_pane_for_active_tab(&storage) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.add_watched_channel_from_account(&storage, account_id)
+                    {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn persist_settings(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.persist_settings(&storage) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+}
+
+fn append_watched_pane(root: &mut LayoutNode, channel_id: &str) -> bool {
+    if count_layout_panels(root) >= MAX_PANELS {
+        return false;
+    }
+
+    let new_panel = LayoutNode::Panel {
+        id: uuid::Uuid::new_v4().to_string(),
+        content: PanelContent::Watched {
+            channel_id: channel_id.to_string(),
+        },
+        flex: 100.0,
+    };
+
+    match root {
+        LayoutNode::Split { children, .. } => {
+            children.push(new_panel);
+        }
+        LayoutNode::Panel { .. } => {
+            let original = root.clone();
+            *root = LayoutNode::Split {
+                id: uuid::Uuid::new_v4().to_string(),
+                direction: SplitDirection::Horizontal,
+                children: vec![original, new_panel],
+                flex: 100.0,
+                min_size: None,
+            };
+        }
+    }
+    true
+}
+
+fn count_layout_panels(node: &LayoutNode) -> usize {
+    match node {
+        LayoutNode::Panel { .. } => 1,
+        LayoutNode::Split { children, .. } => children.iter().map(count_layout_panels).sum(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AppState, MainSection};
+    use super::{AppState, MainSection, count_layout_panels};
+    use crate::protocol::types::{
+        AppTheme, ChatTheme, LayoutNode, OverlayAnimation, Platform, WatchedChannel,
+    };
+    use crate::storage::Storage;
+    use crate::storage::settings::default_app_settings;
 
     #[test]
     fn selecting_section_updates_active_section() {
@@ -319,5 +874,174 @@ mod tests {
         state.toggle_sidebar();
 
         assert!(state.sidebar_collapsed());
+    }
+
+    #[test]
+    fn app_state_loads_persisted_settings_snapshot() {
+        let temp = tempfile::tempdir().expect("temp dir should be available");
+        let db_path = temp.path().join("settings.sqlite");
+        let storage =
+            Storage::open(&db_path).expect("storage should open for settings snapshot test");
+        let mut settings = default_app_settings();
+        settings.theme = AppTheme::Light;
+        settings.chat_theme = ChatTheme::Compact;
+        settings.overlay.max_messages = 7;
+        settings.auto_check_updates = Some(false);
+        storage
+            .settings()
+            .set_app_settings(&settings)
+            .expect("settings snapshot should persist");
+
+        let state = AppState::from_storage(&storage);
+
+        assert_eq!(state.settings().theme, AppTheme::Light);
+        assert_eq!(state.settings().chat_theme, ChatTheme::Compact);
+        assert_eq!(state.settings().overlay.max_messages, 7);
+        assert_eq!(state.update_state().auto_check_updates, false);
+    }
+
+    #[test]
+    fn app_state_settings_mutations_update_visible_snapshot() {
+        let mut state = AppState::default();
+
+        state.set_theme(AppTheme::Light);
+        state.set_chat_theme(ChatTheme::Compact);
+        state.set_font_size(18.0);
+        state.set_show_timestamp(false);
+        state.set_auto_check_updates(false);
+        state.set_self_ping(false, "rgba(0,0,0,0)".to_string());
+        state.set_overlay_animation(OverlayAnimation::Fade);
+        state.set_overlay_max_messages(0);
+
+        assert_eq!(state.settings().theme, AppTheme::Light);
+        assert_eq!(state.settings().chat_theme, ChatTheme::Compact);
+        assert_eq!(state.settings().font_size, 18.0);
+        assert!(!state.settings().show_timestamp);
+        assert_eq!(state.settings().auto_check_updates, Some(false));
+        assert!(!state.update_state().auto_check_updates);
+        assert_eq!(
+            state
+                .settings()
+                .self_ping
+                .as_ref()
+                .map(|config| config.enabled),
+            Some(false)
+        );
+        assert_eq!(state.settings().overlay.animation, OverlayAnimation::Fade);
+        assert_eq!(state.settings().overlay.max_messages, 1);
+    }
+
+    #[test]
+    fn add_chat_pane_for_active_tab_splits_visible_layout_and_persists() {
+        let temp = tempfile::tempdir().expect("temp dir should be available");
+        let db_path = temp.path().join("layout.sqlite");
+        let storage = Storage::open(&db_path).expect("storage should open for layout test");
+        let channel = WatchedChannel {
+            id: "channel-1".to_string(),
+            platform: Platform::Twitch,
+            channel_slug: "channel_one".to_string(),
+            display_name: "Channel One".to_string(),
+            created_at: 1,
+        };
+        let mut state = AppState::default();
+        state.watched_channels.push(channel);
+        state.select_channel_tab("channel-1");
+
+        let changed = state
+            .add_chat_pane_for_active_tab(&storage)
+            .expect("layout split should persist");
+
+        assert!(changed);
+        let layout = state
+            .watched_layout("channel-1")
+            .expect("visible layout should be stored in state");
+        assert_eq!(count_layout_panels(&layout.root), 2);
+        assert!(matches!(layout.root, LayoutNode::Split { .. }));
+        let persisted = storage
+            .watched_layout()
+            .get("channel-1")
+            .expect("layout should be persisted");
+        assert_eq!(count_layout_panels(&persisted.root), 2);
+    }
+
+    #[test]
+    fn add_chat_pane_for_home_tab_is_noop() {
+        let temp = tempfile::tempdir().expect("temp dir should be available");
+        let db_path = temp.path().join("layout.sqlite");
+        let storage = Storage::open(&db_path).expect("storage should open for home layout test");
+        let mut state = AppState::default();
+
+        let changed = state
+            .add_chat_pane_for_active_tab(&storage)
+            .expect("home tab should not fail");
+
+        assert!(!changed);
+        assert!(state.watched_layouts.is_empty());
+    }
+
+    #[test]
+    fn add_watched_channel_from_account_persists_and_selects_tab() {
+        let temp = tempfile::tempdir().expect("temp dir should be available");
+        let db_path = temp.path().join("watched.sqlite");
+        let storage = Storage::open(&db_path).expect("storage should open for watched add test");
+
+        storage
+            .accounts()
+            .upsert(crate::storage::accounts::UpsertAccount {
+                id: "account-1",
+                platform: Platform::Twitch,
+                platform_user_id: "user-1",
+                username: "satont",
+                display_name: "Satont",
+                avatar_url: None,
+                access_token: "token",
+                refresh_token: None,
+                expires_at: None,
+                scopes: &["chat:read".to_string()],
+            })
+            .expect("account should persist");
+
+        let mut state = AppState::from_storage(&storage);
+
+        let changed = state
+            .add_watched_channel_from_account(&storage, "account-1")
+            .expect("adding watched channel from account should persist");
+
+        assert!(changed);
+        assert_eq!(state.watched_channels.len(), 1);
+        assert_eq!(state.active_channel_tab_id(), state.watched_channels[0].id);
+        assert!(state.watched_layout(&state.watched_channels[0].id).is_some());
+
+        let persisted = storage
+            .watched_channels()
+            .find_all()
+            .expect("watched channels should reload");
+        assert_eq!(persisted.len(), 1);
+        assert_eq!(persisted[0].display_name, "Satont");
+    }
+
+    #[test]
+    fn persist_settings_saves_current_app_state_snapshot() {
+        let temp = tempfile::tempdir().expect("temp dir should be available");
+        let db_path = temp.path().join("settings.sqlite");
+        let storage = Storage::open(&db_path).expect("storage should open for save test");
+        let mut state = AppState::default();
+        state.set_theme(AppTheme::Light);
+        state.set_chat_theme(ChatTheme::Compact);
+        state.set_font_size(19.0);
+        state.set_show_avatars(false);
+
+        state
+            .persist_settings(&storage)
+            .expect("settings snapshot should persist");
+
+        let persisted = storage
+            .settings()
+            .get_app_settings()
+            .expect("settings should reload");
+        assert_eq!(persisted.theme, AppTheme::Light);
+        assert_eq!(persisted.chat_theme, ChatTheme::Compact);
+        assert_eq!(persisted.font_size, 19.0);
+        assert!(!persisted.show_avatars);
     }
 }

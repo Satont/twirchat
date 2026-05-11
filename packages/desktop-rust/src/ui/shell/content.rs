@@ -35,7 +35,7 @@ pub(crate) fn panel(
         }
         MainSection::Events => events::panel(state),
         MainSection::Platforms => platforms::panel(&state.platforms_panel),
-        MainSection::Settings => settings::panel(),
+        MainSection::Settings => settings::panel(state, state_entity.clone()),
     }
 }
 

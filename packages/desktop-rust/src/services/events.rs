@@ -1,5 +1,5 @@
 use crate::protocol::messages::BackendToDesktopMessage;
-use crate::protocol::types::Platform;
+use crate::protocol::types::{NormalizedChatMessage, Platform, PlatformStatusInfo};
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -207,7 +207,7 @@ pub enum PlatformAdapterEvent {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WatchedChannelsEvent {
     LoadRequested,
     AddRequested {
@@ -226,13 +226,19 @@ pub enum WatchedChannelsEvent {
     PollRequested,
     MessageBuffered {
         channel_id: String,
-        message_id: String,
+        message: Box<NormalizedChatMessage>,
     },
     StatusChanged {
         channel_id: String,
+        status: PlatformStatusInfo,
     },
     BackendMessagePlanned {
         kind: DesktopToBackendMessageKind,
+    },
+    AdapterError {
+        channel_id: String,
+        platform: Platform,
+        message: String,
     },
 }
 

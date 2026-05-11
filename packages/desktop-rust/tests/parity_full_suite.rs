@@ -152,6 +152,11 @@ const TEST_SURFACES: &[TestSurface] = &[
         "scaffold-level visual/user-card/modal tests; not pixel or interaction automation",
     ),
     TestSurface::new(
+        "parity_regression_contracts",
+        "tests/parity_regression_contracts.rs",
+        "source-backed regression contracts for chat visuals, settings behavior, tabs, and watched/runtime state",
+    ),
+    TestSurface::new(
         "app_state",
         "tests/app_state.rs",
         "executable app section state tests",

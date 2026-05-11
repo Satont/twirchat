@@ -1,7 +1,9 @@
 use gpui::{App, AppContext, Bounds, WindowBounds, WindowOptions, px, size};
 use gpui_platform::application;
+use std::cell::Cell;
 use std::env;
 use std::process::ExitCode;
+use std::rc::Rc;
 use twirchat_desktop_rust::app::TwirChatApp;
 
 fn main() -> ExitCode {
@@ -19,7 +21,14 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    application().run(move |cx: &mut App| {
+    let window_opened = Rc::new(Cell::new(false));
+    let startup_failed = Rc::new(Cell::new(false));
+
+    application().run({
+        let window_opened = Rc::clone(&window_opened);
+        let startup_failed = Rc::clone(&startup_failed);
+
+        move |cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(1280.0), px(900.0)), cx);
 
         let window = cx.open_window(
@@ -32,15 +41,27 @@ fn main() -> ExitCode {
 
         match window {
             Ok(_) => {
+                window_opened.set(true);
                 cx.activate(true);
                 if smoke_exit_after_first_frame {
-                    println!("gpui app/window initialized");
+                    println!(
+                        "gpui window opened; smoke mode requested immediate shutdown before interactive QA"
+                    );
                     cx.quit();
                 }
             }
-            Err(error) => eprintln!("failed to open desktop-rust window: {error}"),
+            Err(error) => {
+                startup_failed.set(true);
+                eprintln!("failed to open desktop-rust window: {error}");
+                cx.quit();
+            }
+        }
         }
     });
 
-    ExitCode::SUCCESS
+    if startup_failed.get() || !window_opened.get() {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }

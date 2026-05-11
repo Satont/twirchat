@@ -6,6 +6,7 @@ use crate::services::commands::{LifecycleCommand, ServiceCommand};
 use crate::services::events::{LifecycleEvent, ServiceEvent, ServiceKind};
 use std::error::Error;
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
@@ -52,6 +53,7 @@ pub struct ServiceRuntimeConfig {
     command_capacity: usize,
     service_poll_interval: Duration,
     reconnect_backoff: ReconnectBackoff,
+    storage_path: PathBuf,
     backend_ws: BackendWsConfig,
 }
 
@@ -64,6 +66,7 @@ impl ServiceRuntimeConfig {
             command_capacity,
             service_poll_interval: SERVICE_POLL_INTERVAL,
             reconnect_backoff: ReconnectBackoff::default(),
+            storage_path: self::default_storage_path(),
             backend_ws: BackendWsConfig::default(),
         })
     }
@@ -88,6 +91,10 @@ impl ServiceRuntimeConfig {
         &self.backend_ws
     }
 
+    pub fn storage_path(&self) -> &Path {
+        &self.storage_path
+    }
+
     pub fn with_service_poll_interval(mut self, interval: Duration) -> Self {
         self.service_poll_interval = interval;
         self
@@ -103,6 +110,11 @@ impl ServiceRuntimeConfig {
         self.backend_ws = backend_ws;
         self
     }
+
+    pub fn with_storage_path(mut self, storage_path: impl Into<PathBuf>) -> Self {
+        self.storage_path = storage_path.into();
+        self
+    }
 }
 
 impl Default for ServiceRuntimeConfig {
@@ -112,9 +124,14 @@ impl Default for ServiceRuntimeConfig {
             command_capacity: 32,
             service_poll_interval: SERVICE_POLL_INTERVAL,
             reconnect_backoff: ReconnectBackoff::default(),
+            storage_path: self::default_storage_path(),
             backend_ws: BackendWsConfig::default(),
         }
     }
+}
+
+fn default_storage_path() -> PathBuf {
+    PathBuf::from("twirchat-desktop-rust.sqlite")
 }
 
 #[derive(Debug, Clone)]
@@ -434,6 +451,7 @@ impl ServiceSupervisor {
         };
         let events = self.events.clone();
         let backend_ws = self.config.backend_ws().clone();
+        let storage_path = self.config.storage_path().to_path_buf();
         let join = thread::Builder::new()
             .name(format!("twirchat-{}", service.label()))
             .spawn(move || match service {
@@ -444,6 +462,15 @@ impl ServiceSupervisor {
                     command_receiver,
                     events,
                 ),
+                ServiceKind::WatchedChannels => {
+                    crate::services::watched_channels::run_watched_channels_service(
+                        storage_path,
+                        context.cancellation,
+                        context.poll_interval,
+                        command_receiver,
+                        events,
+                    )
+                }
                 _ => run_placeholder_service(context, command_receiver),
             })
             .map_err(|source| ServiceError::ThreadSpawn {

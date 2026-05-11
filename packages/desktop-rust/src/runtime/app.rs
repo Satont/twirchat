@@ -54,10 +54,12 @@ impl AppRuntime {
     pub fn start(input: RuntimeConfigInput) -> Result<Self, AppRuntimeError> {
         let config = RuntimeConfig::new(input);
         let storage = Storage::open_or_recover(config.db_path())?;
-        let service_config = ServiceRuntimeConfig::default().with_backend_ws(BackendWsConfig::new(
-            config.backend_ws_url(),
-            config.db_path(),
-        ));
+        let service_config = ServiceRuntimeConfig::default()
+            .with_backend_ws(BackendWsConfig::new(
+                config.backend_ws_url(),
+                config.db_path(),
+            ))
+            .with_storage_path(config.db_path());
         let mut supervisor = ServiceSupervisor::new(service_config)?;
         let events = supervisor.take_event_receiver().ok_or(
             crate::services::ServiceError::ServiceMissing {

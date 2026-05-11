@@ -1,12 +1,14 @@
-use crate::app_state::AppState;
+use crate::app_state::{AppState, RuntimeStatus};
 use crate::runtime::AppRuntime;
 
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
-use gpui::{Context, Entity, Render, Window, div, prelude::*, rgb};
+use gpui::{Context, Entity, Render, Task, Window, div, prelude::*, px, rgb};
+use std::time::Duration;
 
 pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
     runtime: Option<AppRuntime>,
+    _runtime_poll_task: Option<Task<()>>,
 }
 
 impl TwirChatApp {
@@ -18,13 +20,35 @@ impl TwirChatApp {
             }
             Err(error) => {
                 eprintln!("desktop-rust runtime startup failed: {error}");
-                (None, AppState::new())
+                let mut state = AppState::new();
+                state.record_runtime_failure(error.to_string());
+                (None, state)
             }
         };
         let state = cx.new(|_| initial_state);
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
 
-        Self { state, runtime }
+        let runtime_poll_task = runtime.as_ref().map(|_| {
+            cx.spawn(async move |this, cx| {
+                loop {
+                    if this
+                        .update(cx, |this, cx| this.drain_runtime_events(cx))
+                        .is_err()
+                    {
+                        break;
+                    }
+                    cx.background_executor()
+                        .timer(Duration::from_millis(250))
+                        .await;
+                }
+            })
+        });
+
+        Self {
+            state,
+            runtime,
+            _runtime_poll_task: runtime_poll_task,
+        }
     }
 
     fn drain_runtime_events(&self, cx: &mut Context<Self>) {
@@ -51,6 +75,7 @@ impl Render for TwirChatApp {
 
         div()
             .id("app-shell")
+            .relative()
             .size_full()
             .bg(rgb(0x0f0f11)) // Match Vue body/app background
             .text_color(rgb(0xe2e2e8))
@@ -65,6 +90,47 @@ impl Render for TwirChatApp {
                     .bg(rgb(0x0f0f11)) // Match .content background
                     .child(content::panel(&state, self.state.clone(), cx)),
             )
+            .child(runtime_status_bar(&state))
             .child(UpdateToast::new(self.state.clone()))
     }
+}
+
+fn runtime_status_bar(state: &AppState) -> impl gpui::IntoElement {
+    let status_text = if !state.runtime_errors().is_empty() {
+        format!("runtime error · {} issue(s)", state.runtime_errors().len())
+    } else {
+        match state.runtime_status() {
+            RuntimeStatus::Starting => String::from("runtime starting…"),
+            RuntimeStatus::Running => {
+                format!(
+                    "runtime connected · {} event(s)",
+                    state.service_events_seen()
+                )
+            }
+            RuntimeStatus::Stopped => String::from("runtime stopped"),
+            RuntimeStatus::Failed => String::from("runtime failed"),
+        }
+    };
+
+    div()
+        .absolute()
+        .right(px(16.0))
+        .bottom(px(12.0))
+        .rounded_lg()
+        .px(px(10.0))
+        .py(px(6.0))
+        .bg(rgb(0x18181b))
+        .border_1()
+        .border_color(if state.runtime_errors().is_empty() {
+            rgb(0x2a2a33)
+        } else {
+            rgb(0x7f1d1d)
+        })
+        .text_size(px(11.0))
+        .text_color(if state.runtime_errors().is_empty() {
+            rgb(0xa1a1aa)
+        } else {
+            rgb(0xfca5a5)
+        })
+        .child(status_text)
 }

@@ -10,11 +10,17 @@ use crate::protocol::messages::{
     DesktopToBackendMessage, SevenTvEmote as BackendSevenTvEmote, SevenTvSubscription,
 };
 use crate::protocol::types::{NormalizedChatMessage, Platform, PlatformStatusInfo, WatchedChannel};
+use crate::services::bus::{BusReceiver, BusRecvError, BusSender};
+use crate::services::commands::{LifecycleCommand, ServiceCommand, WatchedChannelsCommand};
+use crate::services::events::{DesktopToBackendMessageKind, ServiceEvent, WatchedChannelsEvent};
+use crate::services::supervisor::{CancellationToken, ServiceExitReason, ServiceStopReport};
 use crate::storage::watched_channels::normalize_watched_channel_slug;
 use crate::storage::{Storage, StorageError};
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::error::Error;
 use std::fmt;
+use std::path::PathBuf;
+use std::time::Duration;
 
 pub const DEFAULT_WATCHED_CHANNEL_BUFFER_SIZE: usize = 200;
 
@@ -228,6 +234,184 @@ impl From<StorageError> for WatchedChannelsRuntimeError {
 }
 
 pub type WatchedChannelsRuntimeResult<T> = Result<T, WatchedChannelsRuntimeError>;
+
+pub fn run_watched_channels_service(
+    storage_path: PathBuf,
+    cancellation: CancellationToken,
+    poll_interval: Duration,
+    commands: BusReceiver<ServiceCommand>,
+    events: BusSender<ServiceEvent>,
+) -> ServiceStopReport {
+    let storage = match Storage::open_or_recover(&storage_path) {
+        Ok(storage) => storage,
+        Err(error) => {
+            publish_watched_event(
+                &events,
+                WatchedChannelsEvent::AdapterError {
+                    channel_id: String::new(),
+                    platform: Platform::Twitch,
+                    message: format!("watched-channel storage open failed: {error}"),
+                },
+            );
+            return ServiceStopReport::new(
+                crate::services::ServiceKind::WatchedChannels,
+                ServiceExitReason::CommandBusClosed,
+            );
+        }
+    };
+
+    let mut runtime = WatchedChannelsRuntime::new(&storage, |channel| match channel.platform {
+        Platform::Twitch => Ok(Box::new(TwitchAdapter::new(
+            &storage,
+            crate::platforms::twitch::MockTwitchClient::new(),
+        )) as Box<dyn WatchedChannelAdapter>),
+        Platform::Kick => Ok(Box::new(KickAdapter::new(
+            &storage,
+            crate::platforms::kick::MockKickClient::new(),
+        )) as Box<dyn WatchedChannelAdapter>),
+        Platform::Youtube => Ok(Box::new(YouTubeAdapter::new(
+            &storage,
+            crate::platforms::youtube::MockYouTubeTransport::new(),
+        )) as Box<dyn WatchedChannelAdapter>),
+    });
+
+    if let Err(error) = runtime.auto_connect() {
+        publish_runtime_error(&events, String::new(), Platform::Twitch, error.to_string());
+    }
+    publish_runtime_events(&events, &mut runtime);
+
+    loop {
+        if cancellation.is_cancelled() {
+            return ServiceStopReport::new(
+                crate::services::ServiceKind::WatchedChannels,
+                ServiceExitReason::Cancelled,
+            );
+        }
+
+        if let Err(error) = runtime.poll_all() {
+            publish_runtime_error(&events, String::new(), Platform::Twitch, error.to_string());
+        }
+        publish_runtime_events(&events, &mut runtime);
+
+        match commands.recv_timeout(poll_interval) {
+            Ok(ServiceCommand::Lifecycle(LifecycleCommand::Shutdown)) => {
+                return ServiceStopReport::new(
+                    crate::services::ServiceKind::WatchedChannels,
+                    ServiceExitReason::ShutdownCommand,
+                );
+            }
+            Ok(ServiceCommand::WatchedChannels(command)) => {
+                handle_watched_command(&mut runtime, &events, command);
+                publish_runtime_events(&events, &mut runtime);
+            }
+            Ok(_) => {}
+            Err(BusRecvError::Timeout) => {}
+            Err(BusRecvError::Closed) => {
+                return ServiceStopReport::new(
+                    crate::services::ServiceKind::WatchedChannels,
+                    ServiceExitReason::CommandBusClosed,
+                );
+            }
+        }
+    }
+}
+
+fn handle_watched_command(
+    runtime: &mut WatchedChannelsRuntime<'_>,
+    events: &BusSender<ServiceEvent>,
+    command: WatchedChannelsCommand,
+) {
+    let result = match command {
+        WatchedChannelsCommand::Load => runtime.auto_connect().map(|_| ()),
+        WatchedChannelsCommand::Add {
+            platform,
+            channel_slug,
+            display_name,
+        } => runtime
+            .add_channel(platform, &channel_slug, display_name.as_deref())
+            .map(|_| ()),
+        WatchedChannelsCommand::Remove { channel_id } => runtime.remove_channel(&channel_id),
+        WatchedChannelsCommand::ReconnectByPlatform { platform } => {
+            runtime.reconnect_by_platform(platform).map(|_| ())
+        }
+        WatchedChannelsCommand::SendMessage {
+            channel_id,
+            text,
+            reply_to_message_id,
+        } => runtime.send_message(&channel_id, &text, reply_to_message_id.as_deref()),
+        WatchedChannelsCommand::Poll => runtime.poll_all(),
+    };
+
+    if let Err(error) = result {
+        publish_runtime_error(events, String::new(), Platform::Twitch, error.to_string());
+    }
+}
+
+fn publish_runtime_events(
+    events: &BusSender<ServiceEvent>,
+    runtime: &mut WatchedChannelsRuntime<'_>,
+) {
+    for event in runtime.drain_events() {
+        match event {
+            WatchedChannelsRuntimeEvent::MessageBuffered {
+                channel_id,
+                message,
+            } => {
+                publish_watched_event(
+                    events,
+                    WatchedChannelsEvent::MessageBuffered {
+                        channel_id,
+                        message,
+                    },
+                );
+            }
+            WatchedChannelsRuntimeEvent::StatusChanged { channel_id, status } => {
+                publish_watched_event(
+                    events,
+                    WatchedChannelsEvent::StatusChanged { channel_id, status },
+                );
+            }
+            WatchedChannelsRuntimeEvent::BackendMessagePlanned { message } => {
+                publish_watched_event(
+                    events,
+                    WatchedChannelsEvent::BackendMessagePlanned {
+                        kind: DesktopToBackendMessageKind::from(&message),
+                    },
+                );
+            }
+            WatchedChannelsRuntimeEvent::AdapterError {
+                channel_id,
+                platform,
+                message,
+            } => publish_runtime_error(events, channel_id, platform, message),
+            WatchedChannelsRuntimeEvent::ChannelStarted { .. }
+            | WatchedChannelsRuntimeEvent::ChannelRemoved { .. } => {}
+        }
+    }
+}
+
+fn publish_runtime_error(
+    events: &BusSender<ServiceEvent>,
+    channel_id: String,
+    platform: Platform,
+    message: String,
+) {
+    publish_watched_event(
+        events,
+        WatchedChannelsEvent::AdapterError {
+            channel_id,
+            platform,
+            message,
+        },
+    );
+}
+
+fn publish_watched_event(events: &BusSender<ServiceEvent>, event: WatchedChannelsEvent) {
+    if events
+        .try_publish(ServiceEvent::WatchedChannels(event))
+        .is_err()
+    {}
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WatchedChannelsRuntimeEvent {
