@@ -4,8 +4,9 @@ use crate::protocol::types::{
 use crate::storage::db::Connection;
 use crate::storage::settings::SettingsStore;
 use crate::storage::{StorageError, StorageResult, now_millis};
+use std::collections::BTreeSet;
 
-const MAX_PANELS: usize = 8;
+pub const MAX_PANELS: usize = 8;
 
 pub struct WatchedLayoutStore<'a> {
     conn: &'a Connection,
@@ -56,6 +57,29 @@ impl<'a> WatchedLayoutStore<'a> {
             "DELETE FROM settings WHERE key = ?",
             &[crate::storage::db::Param::Text(&layout_key(tab_id))],
         )?;
+        Ok(())
+    }
+
+    pub fn can_add_panel(&self, tab_id: &str) -> StorageResult<bool> {
+        self.get(tab_id)
+            .map(|layout| count_panels(&layout.root) < MAX_PANELS)
+    }
+
+    pub fn cleanup_stale_assignments(
+        &self,
+        tab_id: &str,
+        removed_channel_ids: &[String],
+    ) -> StorageResult<()> {
+        if removed_channel_ids.iter().any(|id| id == tab_id) {
+            return self.remove(tab_id);
+        }
+
+        let removed = removed_channel_ids.iter().cloned().collect::<BTreeSet<_>>();
+        let mut layout = self.get(tab_id)?;
+        let changed = clean_stale_node(&mut layout.root, &removed);
+        if changed {
+            self.set(tab_id, &layout)?;
+        }
         Ok(())
     }
 }
@@ -122,6 +146,29 @@ fn count_panels(node: &LayoutNode) -> usize {
     match node {
         LayoutNode::Panel { .. } => 1,
         LayoutNode::Split { children, .. } => children.iter().map(count_panels).sum(),
+    }
+}
+
+fn clean_stale_node(node: &mut LayoutNode, removed_channel_ids: &BTreeSet<String>) -> bool {
+    match node {
+        LayoutNode::Panel { content, .. } => {
+            let PanelContent::Watched { channel_id } = content else {
+                return false;
+            };
+            if removed_channel_ids.contains(channel_id) {
+                *content = PanelContent::Empty;
+                true
+            } else {
+                false
+            }
+        }
+        LayoutNode::Split { children, .. } => {
+            let mut changed = false;
+            for child in children {
+                changed |= clean_stale_node(child, removed_channel_ids);
+            }
+            changed
+        }
     }
 }
 

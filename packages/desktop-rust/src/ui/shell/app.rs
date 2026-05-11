@@ -1,8 +1,7 @@
 use crate::app_state::AppState;
 use crate::app_state::mock_data::PrototypeData;
-use crate::theme;
-use crate::ui::shell::{content, nav};
-use gpui::{Context, Entity, Render, Window, div, prelude::*, px, rgb};
+use crate::ui::shell::{content, nav, update_toast::UpdateToast};
+use gpui::{Context, Entity, Render, Window, div, prelude::*, rgb};
 
 pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
@@ -25,18 +24,22 @@ impl Render for TwirChatApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         let state = self.state.read(cx).clone();
 
-        div().size_full().bg(rgb(0x070709)).p(px(8.0)).child(
-            div()
-                .size_full()
-                .rounded_xl()
-                .border_1()
-                .border_color(rgb(0x2a2a33))
-                .bg(theme::background())
-                .text_color(theme::text_primary())
-                .flex()
-                .flex_row()
-                .child(nav::rail(&state, self.state.clone()))
-                .child(content::panel(&state, &self.data, self.state.clone(), cx)),
-        )
+        div()
+            .id("app-shell")
+            .size_full()
+            .bg(rgb(0x0f0f11)) // Match Vue body/app background
+            .text_color(rgb(0xe2e2e8))
+            .flex()
+            .flex_row()
+            .child(nav::rail(&state, self.state.clone()))
+            .child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .bg(rgb(0x0f0f11)) // Match .content background
+                    .child(content::panel(&state, &self.data, self.state.clone(), cx)),
+            )
+            .child(UpdateToast::new(self.state.clone()))
     }
 }

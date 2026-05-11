@@ -1,0 +1,172 @@
+use serde_json::json;
+use std::fs;
+use std::path::{Path, PathBuf};
+use twirchat_desktop_rust::protocol::rpc::OpenExternalUrlParams;
+use twirchat_desktop_rust::runtime::browser::{ExternalOpenError, open_external_url};
+use twirchat_desktop_rust::runtime::{
+    ExternalOpenResult, ExternalOpener, RuntimeConfig, RuntimeConfigInput, UpdateEvent,
+    UpdateRuntime, UpdateState, UpdateStatus,
+};
+use twirchat_desktop_rust::services::commands::UpdateStateCommand;
+
+#[test]
+fn runtime_update_state_transitions() -> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime = UpdateRuntime::new(UpdateState::default());
+    let checking = runtime
+        .dispatch(UpdateEvent::Command(UpdateStateCommand::CheckForUpdates))
+        .ok_or("checking payload missing")?;
+    assert_eq!(checking.status, "checking");
+
+    let available = runtime
+        .dispatch(UpdateEvent::UpdateAvailable {
+            version: Some("1.2.3".to_string()),
+            hash: Some("hash-123".to_string()),
+        })
+        .ok_or("available payload missing")?;
+    assert_eq!(available.status, "update-available");
+    assert_eq!(available.hash.as_deref(), Some("hash-123"));
+
+    let progress = runtime
+        .dispatch(UpdateEvent::Status {
+            status: UpdateStatus::DownloadProgress,
+            message: "Downloading update".to_string(),
+            progress: Some(42.0),
+            hash: None,
+        })
+        .ok_or("progress payload missing")?;
+    assert_eq!(progress.status, "download-progress");
+    assert_eq!(progress.progress, Some(42.0));
+
+    let complete = runtime
+        .dispatch(UpdateEvent::Status {
+            status: UpdateStatus::DownloadComplete,
+            message: "Download complete".to_string(),
+            progress: Some(100.0),
+            hash: Some("hash-123".to_string()),
+        })
+        .ok_or("download complete payload missing")?;
+    assert_eq!(complete.status, "download-complete");
+
+    assert!(
+        runtime
+            .dispatch(UpdateEvent::Command(UpdateStateCommand::SkipUpdate {
+                hash: "hash-123".to_string(),
+            }))
+            .is_none()
+    );
+    assert!(
+        runtime
+            .dispatch(UpdateEvent::UpdateAvailable {
+                version: Some("1.2.3".to_string()),
+                hash: Some("hash-123".to_string()),
+            })
+            .is_none()
+    );
+
+    let explicit = PathBuf::from("/tmp/explicit-twirchat.sqlite");
+    let config = RuntimeConfig::new_with_env(
+        RuntimeConfigInput {
+            backend_url: Some("http://backend.local".to_string()),
+            backend_ws_url: Some("ws://backend.local/ws".to_string()),
+            node_env: Some("development".to_string()),
+            db_path: Some(explicit.clone()),
+            client_secret: Some("secret".to_string()),
+        },
+        Some(PathBuf::from("/tmp/env.sqlite")),
+    );
+    assert_eq!(config.backend_url(), "http://backend.local");
+    assert_eq!(config.backend_ws_url(), "ws://backend.local/ws");
+    assert_eq!(config.db_path(), &explicit);
+    assert_eq!(
+        config
+            .backend_request("/api/user-card-metadata")
+            .headers
+            .get("X-Client-Secret")
+            .map(String::as_str),
+        Some("secret")
+    );
+
+    write_evidence(
+        "task-15-update-state.json",
+        &json!({
+            "checking": checking,
+            "available": available,
+            "progress": progress,
+            "complete": complete,
+            "snapshot": runtime.state().snapshot(),
+            "config": {
+                "backendUrl": config.backend_url(),
+                "backendWsUrl": config.backend_ws_url(),
+                "nodeEnv": config.node_env(),
+                "dbPath": config.db_path(),
+                "clientSecretHeader": config.backend_request("/health").headers.get("X-Client-Secret"),
+            }
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn runtime_open_external_failure_reports_error() -> Result<(), Box<dyn std::error::Error>> {
+    let invalid_url = OpenExternalUrlParams {
+        url: "not a url".to_string(),
+    };
+    let invalid_error = open_external_url(&FailingOpener, &invalid_url)
+        .err()
+        .ok_or("invalid URL unexpectedly opened")?;
+    assert!(matches!(
+        invalid_error,
+        ExternalOpenError::InvalidUrl { .. }
+    ));
+
+    let valid_url = OpenExternalUrlParams {
+        url: "https://twir.app/docs".to_string(),
+    };
+    let open_error = open_external_url(&FailingOpener, &valid_url)
+        .err()
+        .ok_or("failing opener unexpectedly succeeded")?;
+    assert_eq!(
+        open_error,
+        ExternalOpenError::OpenFailed {
+            url: valid_url.url.clone(),
+            message: "fake opener failure".to_string(),
+        }
+    );
+
+    write_evidence(
+        "task-15-open-external-error.json",
+        &json!({
+            "invalid": invalid_error.to_string(),
+            "openFailure": open_error.to_string(),
+            "url": valid_url.url,
+        }),
+    )?;
+
+    Ok(())
+}
+
+struct FailingOpener;
+
+impl ExternalOpener for FailingOpener {
+    fn open_external(&self, params: &OpenExternalUrlParams) -> ExternalOpenResult<()> {
+        Err(ExternalOpenError::OpenFailed {
+            url: params.url.clone(),
+            message: "fake opener failure".to_string(),
+        })
+    }
+}
+
+fn write_evidence(name: &str, value: &serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
+    let path = workspace_root().join(".sisyphus").join("evidence");
+    fs::create_dir_all(&path)?;
+    fs::write(path.join(name), serde_json::to_vec_pretty(value)?)?;
+    Ok(())
+}
+
+fn workspace_root() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")))
+}

@@ -1,8 +1,8 @@
 use crate::app_state::{AppState, AppStateActions, MainSection};
-use crate::theme;
-use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px, rgb};
+use crate::ui::theme;
+use gpui::{App, ClickEvent, Entity, Window, div, prelude::*, px, rgba, svg};
 
-pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> Div {
+pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl IntoElement {
     let width = if state.sidebar_collapsed() {
         44.0
     } else {
@@ -10,11 +10,12 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> Div {
     };
 
     div()
+        .id("nav-rail")
         .w(px(width))
         .h_full()
         .bg(theme::nav_background())
         .border_r_1()
-        .border_color(rgb(0x21212a))
+        .border_color(rgba(0x21212aff))
         .pt(px(12.0))
         .pb(px(16.0))
         .flex()
@@ -24,9 +25,8 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> Div {
         .child(
             div()
                 .text_color(theme::accent())
-                .text_size(px(20.0))
                 .mb(px(12.0))
-                .child("🖥"),
+                .child(svg().path("icons/logo.svg").size(px(24.0))),
         )
         .child(
             div()
@@ -39,7 +39,7 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> Div {
                     state,
                     state_entity.clone(),
                     MainSection::Chat,
-                    "💬",
+                    "icons/chat.svg",
                     "Chat",
                     None,
                 ))
@@ -47,23 +47,31 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> Div {
                     state,
                     state_entity.clone(),
                     MainSection::Events,
-                    "🔔",
+                    "icons/events.svg",
                     "Events",
-                    None,
+                    if state.unread_events() > 0 {
+                        Some(if state.unread_events() > 99 {
+                            "99+".to_string()
+                        } else {
+                            state.unread_events().to_string()
+                        })
+                    } else {
+                        None
+                    },
                 ))
                 .child(button(
                     state,
                     state_entity.clone(),
                     MainSection::Platforms,
-                    "🌐",
+                    "icons/platforms.svg",
                     "Platforms",
-                    Some(String::from("2")),
+                    Some(String::from("2")), // placeholder badge for connected platforms
                 ))
                 .child(button(
                     state,
                     state_entity.clone(),
                     MainSection::Settings,
-                    "⚙",
+                    "icons/settings.svg",
                     "Settings",
                     None,
                 )),
@@ -76,18 +84,49 @@ fn button(
     state: &AppState,
     state_entity: Entity<AppState>,
     section: MainSection,
-    icon: &'static str,
+    icon_path: &'static str,
     label: &'static str,
     badge: Option<String>,
 ) -> impl IntoElement {
     let active = state.active_section() == section;
 
+    let mut item_inner = div()
+        .relative()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(svg().path(icon_path).size(px(20.0)));
+
+    if let Some(badge_text) = badge {
+        item_inner = item_inner.child(
+            div()
+                .absolute()
+                .top(px(-6.0))
+                .right(px(-8.0))
+                .rounded_md()
+                .px(px(4.0))
+                .py(px(1.0))
+                .min_w(px(16.0))
+                .bg(if matches!(section, MainSection::Platforms) {
+                    rgba(0x22c55eff) // badge-green
+                } else {
+                    rgba(0xef4444ff) // red
+                })
+                .text_color(rgba(0xffffffff))
+                .text_size(px(9.0))
+                .font_weight(gpui::FontWeight::BOLD)
+                .flex()
+                .justify_center()
+                .child(badge_text),
+        );
+    }
+
     let mut item = div()
         .id(format!("nav-{label}"))
         .w_full()
-        .rounded_lg()
+        .rounded_xl()
         .px(px(4.0))
-        .py(px(8.0))
+        .py(px(10.0))
         .flex()
         .flex_col()
         .items_center()
@@ -97,44 +136,33 @@ fn button(
         .text_color(if active {
             theme::accent()
         } else {
-            rgb(0x6f6f7d)
+            rgba(0xffffff73) // nav-text approx opacity 0.45
         })
         .bg(if active {
-            rgb(0x1f1735)
+            rgba(0xa78bfa26) // approx accent opacity 0.15
         } else {
-            theme::nav_background()
+            rgba(0x00000000)
+        })
+        .hover(|s| {
+            if !active {
+                s.bg(rgba(0xffffff0f)).text_color(rgba(0xffffffcc)) // hover states
+            } else {
+                s
+            }
         })
         .on_click(
             move |_event: &ClickEvent, _window: &mut Window, app: &mut App| {
                 state_entity.select_section(app, section);
             },
         )
-        .child(div().text_size(px(17.0)).child(icon));
+        .child(item_inner);
 
     if !state.sidebar_collapsed() {
-        item = item.child(div().text_size(px(9.0)).child(label));
-    }
-
-    if let Some(badge) = badge {
         item = item.child(
             div()
-                .mt(px(2.0))
-                .min_w(px(16.0))
-                .rounded_md()
-                .px(px(4.0))
-                .py(px(1.0))
-                .bg(if matches!(section, MainSection::Platforms) {
-                    rgb(0x163522)
-                } else {
-                    rgb(0x451825)
-                })
-                .text_color(if matches!(section, MainSection::Platforms) {
-                    theme::green()
-                } else {
-                    theme::red()
-                })
-                .text_size(px(9.0))
-                .child(badge),
+                .text_size(px(10.0))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .child(label),
         );
     }
 
@@ -148,18 +176,24 @@ fn sidebar_toggle(state: &AppState, state_entity: Entity<AppState>) -> impl Into
         .h(px(32.0))
         .rounded_md()
         .cursor_pointer()
-        .text_color(rgb(0x777786))
+        .text_color(rgba(0xffffff59)) // 0.35 opacity
         .flex()
         .items_center()
         .justify_center()
+        .hover(|s| s.bg(rgba(0xffffff14)).text_color(rgba(0xffffffb2))) // hover
         .on_click(
             move |_event: &ClickEvent, _window: &mut Window, app: &mut App| {
                 state_entity.toggle_sidebar(app);
             },
         )
-        .child(if state.sidebar_collapsed() {
-            "›"
-        } else {
-            "‹"
-        })
+        .child(
+            svg()
+                .path(if state.sidebar_collapsed() {
+                    "icons/expand.svg"
+                } else {
+                    "icons/collapse.svg"
+                })
+                .size(px(16.0)), // Flipped icon if collapsed not supported directly via CSS rotate,
+                                 // in real app you might swap path or use graphics context
+        )
 }

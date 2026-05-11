@@ -1,6 +1,6 @@
 use crate::app_state::mock_data::PrototypeData;
-use crate::theme;
 use crate::ui::shared::panel_title;
+use crate::ui::theme;
 use gpui::{Div, div, prelude::*, px, rgb};
 
 pub(crate) fn panel(data: &PrototypeData) -> Div {

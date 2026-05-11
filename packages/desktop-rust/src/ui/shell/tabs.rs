@@ -1,6 +1,6 @@
 use crate::app_state::mock_data::PrototypeData;
 use crate::app_state::{AppState, AppStateActions};
-use crate::theme;
+use crate::ui::theme;
 use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px, rgb};
 
 pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>, data: &PrototypeData) -> Div {

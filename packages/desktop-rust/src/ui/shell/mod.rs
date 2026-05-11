@@ -1,5 +1,8 @@
 pub mod app;
+pub mod content;
+pub mod nav;
+pub mod tabs;
+pub mod update_toast;
 
-pub(crate) mod content;
-pub(crate) mod nav;
-pub(crate) mod tabs;
+#[cfg(test)]
+pub mod tests;

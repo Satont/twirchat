@@ -23,13 +23,23 @@ impl<'a> WatchedChannelsStore<'a> {
             .collect()
     }
 
+    pub fn find_by_id(&self, id: &str) -> StorageResult<Option<WatchedChannel>> {
+        self.conn
+            .query_one(
+                "SELECT * FROM watched_channels WHERE id = ? LIMIT 1",
+                &[Param::Text(id)],
+            )?
+            .map(|row| row_to_watched_channel(&row))
+            .transpose()
+    }
+
     pub fn upsert(
         &self,
         platform: Platform,
         channel_slug: &str,
         display_name: &str,
     ) -> StorageResult<WatchedChannel> {
-        let slug = channel_slug.to_lowercase();
+        let slug = normalize_watched_channel_slug(platform, channel_slug);
         if let Some(row) = self.conn.query_one(
             "SELECT * FROM watched_channels WHERE platform = ? AND channel_slug = ? LIMIT 1",
             &[Param::Text(platform_to_str(platform)), Param::Text(&slug)],
@@ -72,6 +82,15 @@ impl<'a> WatchedChannelsStore<'a> {
             &[Param::Text(id)],
         )?;
         Ok(())
+    }
+}
+
+pub fn normalize_watched_channel_slug(platform: Platform, channel_slug: &str) -> String {
+    let trimmed = channel_slug.trim();
+    match platform {
+        Platform::Twitch => trimmed.trim_start_matches('#').to_lowercase(),
+        Platform::Kick => trimmed.trim_start_matches('@').to_lowercase(),
+        Platform::Youtube => trimmed.to_lowercase(),
     }
 }
 

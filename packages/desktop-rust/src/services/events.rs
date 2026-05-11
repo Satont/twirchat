@@ -217,6 +217,23 @@ pub enum WatchedChannelsEvent {
     RemoveRequested {
         channel_id: String,
     },
+    ReconnectRequested {
+        platform: Platform,
+    },
+    SendRequested {
+        channel_id: String,
+    },
+    PollRequested,
+    MessageBuffered {
+        channel_id: String,
+        message_id: String,
+    },
+    StatusChanged {
+        channel_id: String,
+    },
+    BackendMessagePlanned {
+        kind: DesktopToBackendMessageKind,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

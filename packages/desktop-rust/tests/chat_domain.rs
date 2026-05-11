@@ -1,0 +1,293 @@
+use serde::Deserialize;
+use serde_json::json;
+use std::fs;
+use std::path::PathBuf;
+use twirchat_desktop_rust::chat::{
+    AliasBook, ChatAggregator, ChatReplayItem, IngestOutcome, SevenTvCatalog, SevenTvEmote,
+    insert_live_message, merge_older_page, sort_messages,
+};
+use twirchat_desktop_rust::protocol::{
+    Badge, ChatAuthor, ChatMessageType, Emote, EmotePosition, EventUser, NormalizedChatMessage,
+    NormalizedEvent, NormalizedEventType, Platform, UserAlias,
+};
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReplayFixture {
+    seven_tv: Vec<SevenTvFixture>,
+    aliases: Vec<UserAlias>,
+    items: Vec<FixtureReplayItem>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SevenTvFixture {
+    platform: Platform,
+    channel_id: String,
+    id: String,
+    name: String,
+    image_url: String,
+    animated: bool,
+    zero_width: bool,
+    aspect_ratio: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+enum FixtureReplayItem {
+    Message(NormalizedChatMessage),
+    Event(NormalizedEvent),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BurstFixture {
+    count: usize,
+    duplicate_every: usize,
+    platform: Platform,
+    channel_id: String,
+    author_id: String,
+}
+
+#[test]
+fn fixture_replay() -> Result<(), Box<dyn std::error::Error>> {
+    let fixture: ReplayFixture = read_json_fixture("replay.json")?;
+    let mut catalog = SevenTvCatalog::new();
+    for entry in fixture.seven_tv {
+        catalog.insert(
+            entry.platform,
+            entry.channel_id,
+            SevenTvEmote {
+                id: entry.id,
+                name: entry.name,
+                image_url: entry.image_url,
+                animated: entry.animated,
+                zero_width: entry.zero_width,
+                aspect_ratio: entry.aspect_ratio,
+            },
+        );
+    }
+
+    let mut aggregator = ChatAggregator::with_seven_tv(500, catalog);
+    let outcomes = aggregator.replay(fixture.items.into_iter().map(|item| match item {
+        FixtureReplayItem::Message(message) => ChatReplayItem::Message(message),
+        FixtureReplayItem::Event(event) => ChatReplayItem::Event(event),
+    }));
+
+    let recent = aggregator.get_recent_messages();
+    assert_eq!(recent.len(), 3);
+    assert_eq!(aggregator.events().len(), 1);
+    assert!(outcomes.iter().any(
+        |outcome| matches!(outcome, IngestOutcome::DuplicateMessage { id } if id == "tw-msg-1")
+    ));
+
+    let twitch = recent
+        .iter()
+        .find(|message| message.id == "tw-msg-1")
+        .ok_or("twitch replay message missing")?;
+    let seven_tv = twitch
+        .emotes
+        .iter()
+        .find(|emote| emote.id == "7tv-kekw")
+        .ok_or("7TV emote was not merged")?;
+    assert_eq!(seven_tv.positions.len(), 2);
+
+    let youtube = recent
+        .iter()
+        .find(|message| message.id == "yt-msg-1")
+        .ok_or("youtube reply message missing")?;
+    assert!(youtube.reply.is_some());
+
+    let aliases = AliasBook::from_aliases(fixture.aliases);
+    let aliased = aliases.apply(twitch);
+    assert_eq!(aliased.message.author.display_name, "Friendly Alias");
+    assert_eq!(aliased.original_display_name, "Twitch User");
+
+    let mut reversed = recent.clone();
+    reversed.reverse();
+    sort_messages(&mut reversed);
+    assert_eq!(
+        reversed
+            .iter()
+            .map(|message| message.id.as_str())
+            .collect::<Vec<_>>(),
+        ["tw-msg-1", "yt-msg-1", "kick-msg-1"]
+    );
+
+    let merged_history =
+        merge_older_page(vec![recent[0].clone(), recent[1].clone()], recent.clone());
+    assert_eq!(merged_history.len(), recent.len());
+    let inserted_history = insert_live_message(&recent[..2], recent[2].clone());
+    assert_eq!(inserted_history.len(), 3);
+    assert_eq!(inserted_history[2].id, "kick-msg-1");
+
+    write_evidence(
+        "task-10-fixture-replay.json",
+        &json!({
+            "acceptedMessages": recent.len(),
+            "events": aggregator.events().len(),
+            "duplicatesSkipped": outcomes.iter().filter(|outcome| matches!(outcome, IngestOutcome::DuplicateMessage { .. })).count(),
+            "platforms": recent.iter().map(|message| message.platform).collect::<Vec<_>>(),
+            "sevenTvMergedPositions": seven_tv.positions,
+            "replyPreserved": youtube.reply.is_some(),
+            "aliasApplied": aliased.message.author.display_name,
+            "historyIds": inserted_history.iter().map(|message| message.id.as_str()).collect::<Vec<_>>()
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn chat_burst_preserves_order_and_dedupe() -> Result<(), Box<dyn std::error::Error>> {
+    let fixture: BurstFixture = read_json_fixture("burst.json")?;
+    let mut aggregator = ChatAggregator::new(fixture.count + 20);
+
+    for index in (0..fixture.count).rev() {
+        let message = make_message(
+            format!("burst-{index:04}"),
+            fixture.platform,
+            fixture.channel_id.clone(),
+            fixture.author_id.clone(),
+            format!("Burst User {index}"),
+            1_710_000_100_000_i128 + i128::try_from(index)?,
+        );
+        let _ = aggregator.inject_message(message);
+
+        if index % fixture.duplicate_every == 0 {
+            let duplicate = make_message(
+                format!("burst-{index:04}"),
+                fixture.platform,
+                fixture.channel_id.clone(),
+                fixture.author_id.clone(),
+                "Duplicate Burst User".to_string(),
+                1_710_999_999_999,
+            );
+            let _ = aggregator.inject_message(duplicate);
+        }
+    }
+
+    let recent = aggregator.get_recent_messages();
+    assert_eq!(recent.len(), fixture.count);
+    assert_eq!(
+        recent.first().map(|message| message.id.as_str()),
+        Some("burst-0249")
+    );
+    assert_eq!(
+        recent.last().map(|message| message.id.as_str()),
+        Some("burst-0000")
+    );
+
+    let mut sorted_history = Vec::new();
+    for message in &recent {
+        sorted_history = insert_live_message(&sorted_history, message.clone());
+    }
+
+    assert_eq!(sorted_history.len(), fixture.count);
+    assert_eq!(
+        sorted_history.first().map(|message| message.id.as_str()),
+        Some("burst-0000")
+    );
+    assert_eq!(
+        sorted_history.last().map(|message| message.id.as_str()),
+        Some("burst-0249")
+    );
+
+    let duplicate_insert = insert_live_message(&sorted_history, sorted_history[0].clone());
+    assert_eq!(duplicate_insert.len(), sorted_history.len());
+
+    write_evidence(
+        "task-10-chat-burst.json",
+        &json!({
+            "fixtureCount": fixture.count,
+            "acceptedMessages": recent.len(),
+            "dedupeSeenIds": aggregator.seen_message_count(),
+            "replayOrderFirst": recent.first().map(|message| message.id.as_str()),
+            "replayOrderLast": recent.last().map(|message| message.id.as_str()),
+            "historyOrderFirst": sorted_history.first().map(|message| message.id.as_str()),
+            "historyOrderLast": sorted_history.last().map(|message| message.id.as_str())
+        }),
+    )?;
+
+    Ok(())
+}
+
+fn make_message(
+    id: String,
+    platform: Platform,
+    channel_id: String,
+    author_id: String,
+    display_name: String,
+    timestamp: i128,
+) -> NormalizedChatMessage {
+    NormalizedChatMessage {
+        id,
+        platform,
+        channel_id,
+        author: ChatAuthor {
+            id: author_id,
+            username: Some("burst_user".to_string()),
+            display_name,
+            color: Some("#9146ff".to_string()),
+            avatar_url: None,
+            badges: vec![Badge {
+                id: "broadcaster/1".to_string(),
+                badge_type: "broadcaster".to_string(),
+                text: "Broadcaster".to_string(),
+                image_url: None,
+            }],
+        },
+        text: "burst message".to_string(),
+        emotes: vec![Emote {
+            id: "25".to_string(),
+            name: "Kappa".to_string(),
+            image_url: "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/3.0".to_string(),
+            positions: vec![EmotePosition { start: 0, end: 4 }],
+            aspect_ratio: Some(1.0),
+        }],
+        timestamp: timestamp.to_string(),
+        message_type: ChatMessageType::Message,
+        reply: None,
+    }
+}
+
+fn read_json_fixture<T>(name: &str) -> Result<T, Box<dyn std::error::Error>>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let text = fs::read_to_string(fixture_path(name))?;
+    Ok(serde_json::from_str(&text)?)
+}
+
+fn fixture_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures/chat")
+        .join(name)
+}
+
+fn write_evidence(name: &str, value: &serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.sisyphus/evidence")
+        .join(name);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, serde_json::to_string_pretty(value)?)?;
+    Ok(())
+}
+
+#[allow(dead_code)]
+fn event_fixture(id: String, platform: Platform) -> NormalizedEvent {
+    NormalizedEvent {
+        id,
+        platform,
+        event_type: NormalizedEventType::Follow,
+        user: EventUser {
+            id: "event-user".to_string(),
+            display_name: "Event User".to_string(),
+            avatar_url: None,
+        },
+        data: serde_json::Map::new(),
+        timestamp: "1710000000000".to_string(),
+    }
+}

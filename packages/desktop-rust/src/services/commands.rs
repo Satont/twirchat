@@ -60,10 +60,20 @@ pub enum WatchedChannelsCommand {
     Add {
         platform: Platform,
         channel_slug: String,
+        display_name: Option<String>,
     },
     Remove {
         channel_id: String,
     },
+    ReconnectByPlatform {
+        platform: Platform,
+    },
+    SendMessage {
+        channel_id: String,
+        text: String,
+        reply_to_message_id: Option<String>,
+    },
+    Poll,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -25,6 +25,7 @@
 
 ### Interview Summary
 - Runtime decision: full native Rust desktop services; no temporary Bun desktop sidecar.
+- Architecture decision: `packages/desktop-rust` has no internal webview or Electrobun-style RPC boundary. GPUI UI and desktop runtime live in one native process; shared/RPC contracts remain only for backend/overlay/external boundaries or parity/reference checks.
 - Overlay decision: OBS overlay remains Vue/browser-served, but Rust owns the WebSocket/backend delivery layer and build packaging path.
 - Test decision: tests-after; every task includes implementation plus verification/QA.
 - Packaging/updater: actual packaging/updater parity happens after core parity stabilization, but update-toast UI/state behavior remains in scope.
@@ -45,7 +46,7 @@ Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacemen
 - `feat/refactor-desktop-gpui` branch created without worktree.
 - Machine-readable parity matrix covering Vue components, stores, RPC, settings, hotkeys, platform features, overlay protocol, and failure states.
 - Rust architecture split for GPUI UI, app state, async services, storage, protocol, platform adapters, overlay bridge, and tests.
-- Rust equivalents for `packages/shared/types.ts`, `packages/shared/protocol.ts`, and `packages/desktop/src/shared/rpc.ts` contracts.
+- Rust equivalents for `packages/shared/types.ts`, `packages/shared/protocol.ts`, and `packages/desktop/src/shared/rpc.ts` contracts, kept only where they model external boundaries or parity/reference data — not as an internal GPUI runtime transport.
 - SQLite/schema/token compatibility for current desktop data.
 - Rust async service bus with cancellable lifecycle and safe GPUI context updates.
 - Rust backend WebSocket bridge and overlay WebSocket server.
@@ -82,6 +83,7 @@ Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacemen
 ### Must NOT Have (guardrails, AI slop patterns, scope boundaries)
 - MUST NOT use a git worktree.
 - MUST NOT introduce a temporary Bun desktop sidecar for runtime services.
+- MUST NOT keep or introduce an internal webview/RPC runtime layer inside `packages/desktop-rust`; no Electrobun-style `BunRequests`/`WebviewMessages` transport for the native GPUI app.
 - MUST NOT commit secrets, `.env`, real tokens, live user DBs, or credentials.
 - MUST NOT commit failing lint/type/test states unless the user explicitly asks for a WIP checkpoint.
 - MUST NOT replace the Vue overlay with GPUI; OBS consumes a browser source.
@@ -208,7 +210,7 @@ Wave 7: Final Verification Wave F1-F4.
   - Pattern: `packages/desktop/src/shared/rpc.ts:63-260` - UI/backend contract.
   - Pattern: `packages/desktop/src/bun/index.ts:136-1179` - desktop runtime integration.
   - Pattern: `packages/desktop/src/overlay-server.ts:64-240` - overlay server behavior.
-  - Current gap: `packages/desktop-rust/src/app.rs:434-790` - mock-only GPUI sections.
+  - Current gap: `packages/desktop-rust/src/ui/shell/app.rs`, `src/ui/*.rs`, and `src/app_state/mock_data.rs` - prototype shell exists, but parity inventory still needs to drive the authoritative surface list.
 
   **Acceptance Criteria**:
   - [ ] `packages/desktop-rust/parity/desktop-parity-matrix.json` exists and validates with `cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin parity-check -- packages/desktop-rust/parity/desktop-parity-matrix.json`.
@@ -246,14 +248,14 @@ Wave 7: Final Verification Wave F1-F4.
   **Parallelization**: Can Parallel: NO | Wave 1 | Blocks: [6-25] | Blocked By: [1, 2]
 
   **References**:
-  - Current monolith: `packages/desktop-rust/src/app.rs:10-790` - split into views/components/state consumers.
-  - Current state: `packages/desktop-rust/src/state.rs:1-41` - replace minimal state with app state entity.
+  - Current shell entry: `packages/desktop-rust/src/ui/shell/app.rs:1-42` - GPUI shell entry and entity ownership boundary.
+  - Current state: `packages/desktop-rust/src/app_state/mod.rs:1-133` - `AppState` entity/update paths.
   - Current models: `packages/desktop-rust/src/models.rs:1-86` - move to domain modules.
   - GPUI skill: `gpui` rules `core-entity-operations`, `state-notify`, `anti-drop-task`.
   - Rust skill: `rust-best-practices` error handling and module boundaries.
 
   **Acceptance Criteria**:
-  - [ ] `packages/desktop-rust/src/app.rs` no longer contains all rendering logic; top-level app delegates to modules under `src/ui/`.
+  - [ ] `packages/desktop-rust/src/app.rs` remains a thin re-export/entry point while rendering logic lives under `src/ui/`.
   - [ ] `AppState` is a GPUI entity or entity-owned model with documented update paths and `cx.notify()` usage after state mutation.
   - [ ] `cargo fmt --manifest-path packages/desktop-rust/Cargo.toml --check` exits 0.
   - [ ] `cargo clippy --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features -- -D warnings` exits 0.
@@ -580,8 +582,8 @@ Wave 7: Final Verification Wave F1-F4.
   **References**:
   - Pattern: `packages/desktop/src/platforms/twitch/adapter.ts` - current Twitch adapter behavior.
   - Pattern: `packages/desktop/src/auth/twitch.ts` - Twitch auth.
-  - Pattern: `packages/desktop/src/api/search-categories.ts` - Twitch category search.
-  - Pattern: `packages/desktop/src/api/update-stream.ts` - stream metadata update.
+  - Pattern: `packages/backend/src/api/search-categories.ts` - Twitch category search implementation consumed by desktop RPC/backend fetch.
+  - Pattern: `packages/backend/src/api/update-stream.ts` - stream metadata update implementation consumed by desktop RPC/backend fetch.
 
   **Acceptance Criteria**:
   - [ ] `packages/desktop-rust/src/platforms/twitch/` implements adapter trait methods for auth use, connect/disconnect, chat receive, send message, badges/emotes, stream status, category search, and stream update.
@@ -660,7 +662,7 @@ Wave 7: Final Verification Wave F1-F4.
   **References**:
   - Pattern: `packages/desktop/src/platforms/kick/adapter.ts` - current Kick adapter.
   - Pattern: `packages/desktop/src/auth/kick.ts` - Kick auth.
-  - Pattern: `packages/desktop/src/api/kick-chatroom.ts` - chatroom lookup.
+  - Pattern: `packages/backend/src/api/kick-chatroom.ts` - Kick chatroom lookup implementation referenced by desktop flow.
 
   **Acceptance Criteria**:
   - [ ] `packages/desktop-rust/src/platforms/kick/` implements adapter trait methods for auth use, connect/disconnect, chat receive, send message, chatroom lookup, stream status, watched channels, and events.
@@ -822,7 +824,7 @@ Wave 7: Final Verification Wave F1-F4.
   - Pattern: `packages/desktop/src/views/main/App.vue:120-233` - section/page state and initial loads.
   - Pattern: `packages/desktop/src/views/main/App.vue:291-515` - update toast logic.
   - Pattern: `packages/desktop/src/views/main/App.vue:520-1254` - shell/nav/update styles.
-  - Current mismatch: `packages/desktop-rust/src/app.rs:774-789` - outer black frame and padded rounded container.
+  - Current mismatch: `packages/desktop-rust/src/ui/shell/app.rs:24-40` - outer black frame and padded rounded container.
 
   **Acceptance Criteria**:
   - [ ] GPUI app renders Chat, Events, Platforms, Settings nav items in matching order and visual states.
@@ -1112,7 +1114,7 @@ Wave 7: Final Verification Wave F1-F4.
   **References**:
   - Verification matrix: `packages/desktop-rust/parity/desktop-parity-matrix.json` - required parity rows.
   - Visual source: `packages/desktop/src/views/main/**/*.vue` and `packages/desktop/src/views/overlay/App.vue` - reference states.
-  - Performance risk: `packages/desktop-rust/src/app.rs` current `uniform_list` fixed-height prototype may not fit real multiline chat rows.
+  - Performance risk: `packages/desktop-rust/src/ui/chat.rs` current `uniform_list` fixed-height prototype may not fit real multiline chat rows.
 
   **Acceptance Criteria**:
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml parity_full_suite -- --nocapture` exits 0 and writes `.sisyphus/evidence/parity/index.json`.
@@ -1186,6 +1188,33 @@ Wave 7: Final Verification Wave F1-F4.
 - [ ] F2. Code Quality Review — unspecified-high
 - [ ] F3. Real Manual QA — unspecified-high (+ screenshot/fixture harness; Playwright only for overlay browser surface)
 - [ ] F4. Scope Fidelity Check — deep
+
+### Final Verification QA Scenarios
+```
+Scenario: F1 Plan Compliance Audit approves completed branch state
+  Tool: oracle
+  Steps: Run Oracle against `.sisyphus/plans/desktop-rust-gpui-parity.md` plus the final changed file set and evidence index.
+  Expected: Oracle reports that implemented work satisfies the saved plan or names concrete blocking gaps.
+  Evidence: .sisyphus/evidence/final-f1-plan-compliance.md
+
+Scenario: F2 Code Quality Review approves implementation quality
+  Tool: unspecified-high
+  Steps: Review all Rust/Vue changes included by the branch with emphasis on correctness, maintainability, and regression risk.
+  Expected: Reviewer approves or returns concrete blocking defects with file paths.
+  Evidence: .sisyphus/evidence/final-f2-code-quality.md
+
+Scenario: F3 Real Manual QA executes runnable parity surfaces
+  Tool: unspecified-high (+ Playwright for overlay browser surface if needed)
+  Steps: Run the final executable checks, overlay/browser smoke, fixture replay, storage compatibility, backend bridge, and visual parity commands from the completed tasks.
+  Expected: Runnable parity surfaces behave correctly without human intervention and all required evidence artifacts are produced.
+  Evidence: .sisyphus/evidence/final-f3-manual-qa.md
+
+Scenario: F4 Scope Fidelity Check confirms no forbidden drift
+  Tool: deep
+  Steps: Compare completed work against original request, interview summary, and Must Have / Must NOT Have sections.
+  Expected: Reviewer confirms exact-scope delivery, including no internal webview/RPC runtime layer in `packages/desktop-rust` and no parity regressions.
+  Evidence: .sisyphus/evidence/final-f4-scope-fidelity.md
+```
 
 ## Commit Strategy
 - Before implementation: create/switch branch with `git checkout -b feat/refactor-desktop-gpui` if it does not exist, otherwise `git checkout feat/refactor-desktop-gpui`.

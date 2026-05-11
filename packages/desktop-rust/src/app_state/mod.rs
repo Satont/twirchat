@@ -1,5 +1,6 @@
 pub mod mock_data;
 
+use crate::runtime::update::UpdateStatusSnapshot;
 use gpui::{App, Entity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +17,7 @@ pub struct AppState {
     active_channel_tab_id: String,
     sidebar_collapsed: bool,
     unread_events: usize,
+    update_state: UpdateStatusSnapshot,
 }
 
 impl Default for AppState {
@@ -25,6 +27,15 @@ impl Default for AppState {
             active_channel_tab_id: String::from("home"),
             sidebar_collapsed: false,
             unread_events: 3,
+            update_state: UpdateStatusSnapshot {
+                show: false,
+                status: None,
+                message: String::new(),
+                progress: None,
+                hash: None,
+                skipped_hash: None,
+                auto_check_updates: true,
+            },
         }
     }
 }
@@ -50,6 +61,10 @@ impl AppState {
         self.unread_events
     }
 
+    pub fn update_state(&self) -> &UpdateStatusSnapshot {
+        &self.update_state
+    }
+
     pub fn select_section(&mut self, section: MainSection) {
         self.active_section = section;
         if matches!(section, MainSection::Events) {
@@ -65,8 +80,16 @@ impl AppState {
         self.sidebar_collapsed = !self.sidebar_collapsed;
     }
 
+    pub fn set_update_state(&mut self, state: UpdateStatusSnapshot) {
+        self.update_state = state;
+    }
+
+    pub fn dismiss_update_toast(&mut self) {
+        self.update_state.show = false;
+    }
+
     #[cfg(test)]
-    fn set_unread_events_for_test(&mut self, unread_events: usize) {
+    pub(crate) fn set_unread_events_for_test(&mut self, unread_events: usize) {
         self.unread_events = unread_events;
     }
 }
@@ -75,6 +98,8 @@ pub trait AppStateActions {
     fn select_section(&self, app: &mut App, section: MainSection);
     fn select_channel_tab(&self, app: &mut App, tab_id: &str);
     fn toggle_sidebar(&self, app: &mut App);
+    fn set_update_state(&self, app: &mut App, state: UpdateStatusSnapshot);
+    fn dismiss_update_toast(&self, app: &mut App);
 }
 
 impl AppStateActions for Entity<AppState> {
@@ -95,6 +120,20 @@ impl AppStateActions for Entity<AppState> {
     fn toggle_sidebar(&self, app: &mut App) {
         self.update(app, |state, cx| {
             state.toggle_sidebar();
+            cx.notify();
+        });
+    }
+
+    fn set_update_state(&self, app: &mut App, update_state: UpdateStatusSnapshot) {
+        self.update(app, |state, cx| {
+            state.set_update_state(update_state);
+            cx.notify();
+        });
+    }
+
+    fn dismiss_update_toast(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.dismiss_update_toast();
             cx.notify();
         });
     }

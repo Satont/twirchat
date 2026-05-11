@@ -1,4 +1,4 @@
-use crate::theme;
+use crate::ui::theme;
 use gpui::{Div, div, prelude::*, px};
 
 pub(crate) fn panel_title(title: &'static str, subtitle: &'static str) -> Div {
