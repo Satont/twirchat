@@ -67,7 +67,7 @@ fn gpui_images_use_loading_and_fallback_contracts() {
     assert!(chat_rs.contains("ObjectFit::Cover"));
     assert!(chat_rs.contains("with_loading"));
     assert!(chat_rs.contains("with_fallback"));
-    assert!(chat_rs.contains("svg_data_uri"));
+    assert!(chat_rs.contains("Path::new(url).is_absolute()"));
     assert!(platforms_rs.contains("ImageSource::from"));
     assert!(platforms_rs.contains("ObjectFit::Cover"));
     assert!(app_rs.contains("retain_all"));
@@ -78,10 +78,14 @@ fn chat_platform_icons_and_badges_match_parity_contract() {
     let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
     let adapter_rs =
         fs::read_to_string("src/platforms/kick/adapter.rs").expect("should read adapter.rs");
+    let platform_icon_rs = fs::read_to_string("src/ui/components/platform_icon.rs")
+        .expect("should read platform_icon.rs");
 
     assert!(chat_rs.contains("PlatformIcon::new(to_model_platform(message.platform))"));
     assert!(chat_rs.contains("theme::platform_color(to_model_platform("));
-    assert!(adapter_rs.contains("generated_kick_badge_svg"));
+    assert!(adapter_rs.contains("generated_kick_badge_path"));
+    assert!(platform_icon_rs.contains("svg()"));
+    assert!(platform_icon_rs.contains("external_path"));
 }
 
 #[test]

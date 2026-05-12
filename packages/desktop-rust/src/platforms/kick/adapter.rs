@@ -947,7 +947,7 @@ fn parse_kick_emotes(content: &str) -> (String, Vec<Emote>) {
 }
 
 fn kick_badge_svg(badge_type: &str) -> Option<String> {
-    generated_kick_badge_svg(badge_type).map(str::to_string)
+    generated_kick_badge_path(badge_type).map(str::to_string)
 }
 
 fn token_needs_refresh(expires_at: Option<u64>) -> bool {

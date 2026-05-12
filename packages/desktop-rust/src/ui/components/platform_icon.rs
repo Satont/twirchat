@@ -42,6 +42,9 @@ impl PlatformIcon {
 
 impl RenderOnce for PlatformIcon {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        img(self.svg_path()).size(self.size).text_color(self.color)
+        svg()
+            .external_path(self.svg_path().to_string_lossy().to_string())
+            .size(self.size)
+            .text_color(self.color)
     }
 }

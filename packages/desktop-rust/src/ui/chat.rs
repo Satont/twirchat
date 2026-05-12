@@ -8,10 +8,10 @@ use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
-use base64::Engine;
 use gpui::{
     Context, Div, Entity, ImageSource, ObjectFit, Stateful, div, img, prelude::*, px, rgb, rgba,
 };
+use std::path::Path;
 
 pub(crate) fn panel(
     state: &AppState,
@@ -1128,10 +1128,10 @@ fn message_row(
                         })
                         .when(settings.show_badges, |el| {
                             el.children(message.author.badges.iter().map(|badge| {
-                                if let Some(svg_markup) = badge
+                                if let Some(path) = badge
                                     .image_url
                                     .as_ref()
-                                    .filter(|url| url.starts_with("<svg"))
+                                    .filter(|url| Path::new(url).is_absolute())
                                 {
                                     return div()
                                         .w(px(18.0))
@@ -1139,7 +1139,7 @@ fn message_row(
                                         .rounded_sm()
                                         .overflow_hidden()
                                         .child(
-                                            img(ImageSource::from(svg_data_uri(svg_markup)))
+                                            img(ImageSource::from(Path::new(path)))
                                                 .w_full()
                                                 .h_full()
                                                 .object_fit(ObjectFit::Contain),
@@ -1208,13 +1208,6 @@ fn message_row(
                     is_compact,
                 )),
         )
-}
-
-fn svg_data_uri(svg: &str) -> String {
-    format!(
-        "data:image/svg+xml;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(svg)
-    )
 }
 
 fn message_text_with_emotes(
