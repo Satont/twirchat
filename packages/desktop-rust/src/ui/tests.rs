@@ -35,7 +35,8 @@ fn visual_chat_page_matches_vue_reference() {
     // Composer
     assert!(chat_rs.contains("composer"));
     assert!(chat_rs.contains("status_chip"));
-    assert!(chat_rs.contains("Send a message"));
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
+    assert!(app_rs.contains("Send a message"));
 
     // Autocomplete & Emote picker buttons
     assert!(chat_rs.contains("☺"));
@@ -44,11 +45,31 @@ fn visual_chat_page_matches_vue_reference() {
 
 #[test]
 fn chat_input_keyboard_contract() {
-    // In our prototype, these are comments or placeholders indicating the required behaviour
-    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
+    let input_rs = fs::read_to_string("src/ui/components/input.rs").expect("should read input.rs");
 
-    assert!(chat_rs.contains("Enter ↵ to send"));
-    assert!(chat_rs.contains("Shift+Enter for newline"));
+    assert!(app_rs.contains("Enter ↵ to send"));
+    assert!(app_rs.contains("Shift+Enter for newline"));
+    assert!(input_rs.contains("impl EntityInputHandler for Input"));
+    assert!(input_rs.contains("window.handle_input"));
+    assert!(input_rs.contains("ctrl-a"));
+    assert!(input_rs.contains("left"));
+    assert!(input_rs.contains("right"));
+}
+
+#[test]
+fn gpui_images_use_loading_and_fallback_contracts() {
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let platforms_rs = fs::read_to_string("src/ui/platforms.rs").expect("should read platforms.rs");
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
+
+    assert!(chat_rs.contains("ImageSource::from"));
+    assert!(chat_rs.contains("ObjectFit::Cover"));
+    assert!(chat_rs.contains("with_loading"));
+    assert!(chat_rs.contains("with_fallback"));
+    assert!(platforms_rs.contains("ImageSource::from"));
+    assert!(platforms_rs.contains("ObjectFit::Cover"));
+    assert!(app_rs.contains("retain_all"));
 }
 
 #[test]
@@ -56,7 +77,7 @@ fn chat_section_is_unified_home_feed() {
     let content_rs = fs::read_to_string("src/ui/shell/content.rs").expect("should read content.rs");
     let tabs_rs = fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
 
-    assert!(content_rs.contains("chat::panel(state, state_entity.clone(), cx)"));
+    assert!(content_rs.contains("chat::panel("));
     assert!(!content_rs.contains("active_channel_tab_id"));
     assert!(!tabs_rs.contains("for channel in &state.watched_channels"));
 }
@@ -77,9 +98,11 @@ fn chat_header_buttons_have_visible_popover_contracts() {
 #[test]
 fn tab_add_button_has_visible_menu_contract() {
     let tabs_rs = fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
 
-    assert!(tabs_rs.contains("toggle_tab_add_menu"));
-    assert!(tabs_rs.contains("ADD CHANNEL"));
-    assert!(tabs_rs.contains("Watch {} ({})"));
-    assert!(tabs_rs.contains("add_watched_channel_from_account"));
+    assert!(tabs_rs.contains("open_add_channel_modal"));
+    assert!(chat_rs.contains("Add Channel"));
+    assert!(chat_rs.contains("Twitch channel name"));
+    assert!(chat_rs.contains("Kick channel name"));
+    assert!(chat_rs.contains("YouTube channel handle or ID"));
 }

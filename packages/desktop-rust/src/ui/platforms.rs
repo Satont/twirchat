@@ -8,7 +8,7 @@ use crate::protocol::types::{
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::shared::panel_title;
 use crate::ui::theme;
-use gpui::{Div, Entity, div, img, prelude::*, px, rgb};
+use gpui::{Div, Entity, ImageSource, ObjectFit, div, img, prelude::*, px, rgb};
 use std::collections::BTreeMap;
 
 pub struct StreamEditor {
@@ -358,8 +358,41 @@ pub(crate) fn panel(
                                                         .border_color(theme::platform_color(
                                                             models_platform,
                                                         ))
+                                                        .bg(theme::surface_2())
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .text_color(theme::platform_color(
+                                                            models_platform,
+                                                        ))
+                                                        .font_weight(gpui::FontWeight::BOLD)
+                                                        .text_size(px(15.0))
                                                         .overflow_hidden()
-                                                        .child(img(url.clone()).w_full().h_full())
+                                                        .child(avatar_fallback.clone())
+                                                        .child(
+                                                            img(ImageSource::from(url.clone()))
+                                                                .w_full()
+                                                                .h_full()
+                                                                .object_fit(ObjectFit::Cover)
+                                                                .with_loading({
+                                                                    let avatar_fallback =
+                                                                        avatar_fallback.clone();
+                                                                    move || {
+                                                                        avatar_fallback
+                                                                            .clone()
+                                                                            .into_any_element()
+                                                                    }
+                                                                })
+                                                                .with_fallback({
+                                                                    let avatar_fallback =
+                                                                        avatar_fallback.clone();
+                                                                    move || {
+                                                                        avatar_fallback
+                                                                            .clone()
+                                                                            .into_any_element()
+                                                                    }
+                                                                }),
+                                                        )
                                                 } else {
                                                     div()
                                                         .w(px(36.0))

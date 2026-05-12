@@ -23,6 +23,12 @@ pub struct PendingWatchedChannelAdd {
     pub display_name: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingWatchedChannelMessage {
+    pub channel_id: String,
+    pub text: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainSection {
     Chat,
@@ -60,8 +66,10 @@ pub struct AppState {
     pub chat_add_menu_open: bool,
     pub chat_options_menu_open: bool,
     pub tab_add_menu_open: bool,
+    pub add_channel_platform: Platform,
     pub composer_disabled_channel_ids: BTreeSet<String>,
     pending_watched_channel_adds: Vec<PendingWatchedChannelAdd>,
+    pending_watched_channel_messages: Vec<PendingWatchedChannelMessage>,
 }
 
 impl Default for AppState {
@@ -94,8 +102,10 @@ impl Default for AppState {
             chat_add_menu_open: false,
             chat_options_menu_open: false,
             tab_add_menu_open: false,
+            add_channel_platform: Platform::Twitch,
             composer_disabled_channel_ids: BTreeSet::new(),
             pending_watched_channel_adds: Vec::new(),
+            pending_watched_channel_messages: Vec::new(),
         }
     }
 }
@@ -725,6 +735,60 @@ impl AppState {
         self.tab_add_menu_open = !self.tab_add_menu_open;
     }
 
+    pub fn open_add_channel_modal(&mut self) {
+        self.tab_add_menu_open = true;
+        self.add_channel_platform = Platform::Twitch;
+    }
+
+    pub fn close_add_channel_modal(&mut self) {
+        self.tab_add_menu_open = false;
+    }
+
+    pub fn select_add_channel_platform(&mut self, platform: Platform) {
+        if platform == Platform::Youtube && !self.is_youtube_authenticated() {
+            return;
+        }
+        self.add_channel_platform = platform;
+    }
+
+    pub fn is_youtube_authenticated(&self) -> bool {
+        self.platforms_panel
+            .accounts
+            .iter()
+            .any(|account| account.platform == Platform::Youtube)
+    }
+
+    pub fn add_watched_channel_from_slug(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+        channel_slug: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        let slug = channel_slug.trim().to_lowercase();
+        if slug.is_empty() {
+            return Ok(false);
+        }
+
+        let channel = storage.watched_channels().upsert(platform, &slug, &slug)?;
+        if !self
+            .watched_channels
+            .iter()
+            .any(|existing| existing.id == channel.id)
+        {
+            self.watched_channels.push(channel.clone());
+        }
+        self.watched_layouts
+            .entry(channel.id.clone())
+            .or_insert_with(|| create_default_tab_layout(&channel.id));
+        self.close_add_channel_modal();
+        self.queue_watched_channel_add(
+            channel.platform,
+            channel.channel_slug.clone(),
+            Some(channel.display_name.clone()),
+        );
+        Ok(true)
+    }
+
     pub fn toggle_composer_channel(&mut self, channel_id: &str) {
         if !self
             .composer_disabled_channel_ids
@@ -734,12 +798,37 @@ impl AppState {
         }
     }
 
+    pub fn queue_composer_send(&mut self, text: &str) -> bool {
+        let text = text.trim();
+        if text.is_empty() {
+            return false;
+        }
+
+        let mut queued = false;
+        for channel in &self.watched_channels {
+            if self.composer_disabled_channel_ids.contains(&channel.id) {
+                continue;
+            }
+            self.pending_watched_channel_messages
+                .push(PendingWatchedChannelMessage {
+                    channel_id: channel.id.clone(),
+                    text: text.to_string(),
+                });
+            queued = true;
+        }
+        queued
+    }
+
     pub fn close_tab_add_menu(&mut self) {
-        self.tab_add_menu_open = false;
+        self.close_add_channel_modal();
     }
 
     pub fn take_pending_watched_channel_adds(&mut self) -> Vec<PendingWatchedChannelAdd> {
         std::mem::take(&mut self.pending_watched_channel_adds)
+    }
+
+    pub fn take_pending_watched_channel_messages(&mut self) -> Vec<PendingWatchedChannelMessage> {
+        std::mem::take(&mut self.pending_watched_channel_messages)
     }
 
     fn queue_watched_channel_add(
@@ -809,6 +898,11 @@ pub trait AppStateActions {
     fn toggle_chat_appearance_popover(&self, app: &mut App);
     fn toggle_chat_add_menu(&self, app: &mut App);
     fn toggle_chat_options_menu(&self, app: &mut App);
+    fn open_add_channel_modal(&self, app: &mut App);
+    fn close_add_channel_modal(&self, app: &mut App);
+    fn select_add_channel_platform(&self, app: &mut App, platform: Platform);
+    fn add_watched_channel_from_slug(&self, app: &mut App, platform: Platform, channel_slug: &str);
+    fn queue_composer_send(&self, app: &mut App, text: &str) -> bool;
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str);
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
     fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str);
@@ -1042,6 +1136,52 @@ impl AppStateActions for Entity<AppState> {
             state.toggle_chat_options_menu();
             cx.notify();
         });
+    }
+
+    fn open_add_channel_modal(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.open_add_channel_modal();
+            cx.notify();
+        });
+    }
+
+    fn close_add_channel_modal(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.close_add_channel_modal();
+            cx.notify();
+        });
+    }
+
+    fn select_add_channel_platform(&self, app: &mut App, platform: Platform) {
+        self.update(app, |state, cx| {
+            state.select_add_channel_platform(platform);
+            cx.notify();
+        });
+    }
+
+    fn add_watched_channel_from_slug(&self, app: &mut App, platform: Platform, channel_slug: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) =
+                        state.add_watched_channel_from_slug(&storage, platform, channel_slug)
+                    {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn queue_composer_send(&self, app: &mut App, text: &str) -> bool {
+        self.update(app, |state, cx| {
+            let queued = state.queue_composer_send(text);
+            cx.notify();
+            queued
+        })
     }
 
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str) {

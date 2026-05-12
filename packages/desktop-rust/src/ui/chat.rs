@@ -7,11 +7,16 @@ use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
-use gpui::{Context, Div, Entity, Stateful, div, img, prelude::*, px, rgb, rgba};
+use gpui::{
+    Context, Div, Entity, ImageSource, ObjectFit, Stateful, div, img, prelude::*, px, rgb, rgba,
+};
 
 pub(crate) fn panel(
     state: &AppState,
     state_entity: Entity<AppState>,
+    composer_input: Entity<Input>,
+    add_channel_input: Entity<Input>,
+    composer_text: String,
     _cx: &mut Context<TwirChatApp>,
 ) -> Div {
     let start = state.messages.len().saturating_sub(120);
@@ -41,7 +46,12 @@ pub(crate) fn panel(
                     ),
                 ),
         )
-        .child(composer(state, state_entity.clone()))
+        .child(composer(
+            state,
+            state_entity.clone(),
+            composer_input,
+            composer_text,
+        ))
         .child(
             div()
                 .absolute()
@@ -52,9 +62,16 @@ pub(crate) fn panel(
                     &state.watched_channels,
                     state.messages.len(),
                     state,
-                    state_entity,
+                    state_entity.clone(),
                 )),
         )
+        .when(state.tab_add_menu_open, |el| {
+            el.child(add_channel_modal(
+                state,
+                state_entity.clone(),
+                add_channel_input,
+            ))
+        })
 }
 
 fn header(
@@ -538,7 +555,18 @@ fn panel_action_btn(icon: &'static str, active: bool) -> Stateful<Div> {
     }
 }
 
-fn composer(state: &AppState, state_entity: Entity<AppState>) -> Div {
+fn composer(
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    composer_input: Entity<Input>,
+    composer_text: String,
+) -> Div {
+    let can_send = !composer_text.trim().is_empty()
+        && state
+            .watched_channels
+            .iter()
+            .any(|channel| !state.composer_disabled_channel_ids.contains(&channel.id));
+
     div()
         .w_full()
         .h(px(104.0))
@@ -577,14 +605,7 @@ fn composer(state: &AppState, state_entity: Entity<AppState>) -> Div {
                         .border_color(theme::border())
                         .flex()
                         .items_center()
-                        .child(
-                            Input::new(
-                                "Send a message... (Enter ↵ to send, Shift+Enter for newline)",
-                            )
-                            .on_change(|_, _, _| {
-                                eprintln!("[ui/chat] composer input focused");
-                            }),
-                        ),
+                        .child(composer_input.clone()),
                 )
                 .child(
                     div()
@@ -603,13 +624,33 @@ fn composer(state: &AppState, state_entity: Entity<AppState>) -> Div {
                         .w(px(36.0))
                         .h(px(36.0))
                         .rounded_lg()
-                        .bg(theme::accent_strong())
-                        .text_color(theme::text_primary())
+                        .bg(if can_send {
+                            theme::accent_strong()
+                        } else {
+                            theme::surface_2()
+                        })
+                        .text_color(if can_send {
+                            theme::text_primary()
+                        } else {
+                            theme::text_muted()
+                        })
                         .flex()
                         .items_center()
                         .justify_center()
-                        .hover(|s| s.bg(rgb(0x6d28d9)))
-                        .child("➤"),
+                        .when(can_send, |button| {
+                            button.cursor_pointer().hover(|s| s.bg(rgb(0x6d28d9)))
+                        })
+                        .child("➤")
+                        .on_mouse_down(gpui::MouseButton::Left, {
+                            let state_entity = state_entity.clone();
+                            let composer_input = composer_input.clone();
+                            move |_, _, app| {
+                                let text = composer_input.read(app).text().to_string();
+                                if state_entity.queue_composer_send(app, &text) {
+                                    composer_input.update(app, |input, cx| input.clear(cx));
+                                }
+                            }
+                        }),
                 ),
         )
 }
@@ -620,6 +661,11 @@ fn status_chip(
     state_entity: Entity<AppState>,
 ) -> impl IntoElement {
     let color = theme::platform_color(to_model_platform(chip.platform));
+    let foreground = if chip.platform == Platform::Kick {
+        theme::text_primary()
+    } else {
+        color
+    };
     let channel_id = chip.id.clone();
 
     div()
@@ -636,7 +682,11 @@ fn status_chip(
         .border_color(if active { color } else { theme::border() })
         .text_size(px(12.0))
         .font_weight(gpui::FontWeight::MEDIUM)
-        .text_color(if active { color } else { theme::text_muted() })
+        .text_color(if active {
+            foreground
+        } else {
+            theme::text_muted()
+        })
         .cursor_pointer()
         .flex()
         .flex_row()
@@ -646,9 +696,11 @@ fn status_chip(
             state_entity.toggle_composer_channel(cx, &channel_id);
         })
         .child(
-            div()
-                .text_color(color)
-                .child(PlatformIcon::new(to_model_platform(chip.platform)).size(px(13.0))),
+            div().text_color(foreground).child(
+                PlatformIcon::new(to_model_platform(chip.platform))
+                    .size(px(13.0))
+                    .color(foreground),
+            ),
         )
         .child(
             div()
@@ -690,6 +742,233 @@ fn header_chip(chip: &WatchedChannel) -> Div {
         )
 }
 
+fn add_channel_modal(
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    add_channel_input: Entity<Input>,
+) -> Div {
+    let active_platform = state.add_channel_platform;
+    let youtube_authenticated = state.is_youtube_authenticated();
+
+    div()
+        .absolute()
+        .top(px(0.0))
+        .left(px(0.0))
+        .right(px(0.0))
+        .bottom(px(0.0))
+        .bg(rgba(0x00000099))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .w(px(320.0))
+                .rounded_xl()
+                .bg(theme::surface())
+                .border_1()
+                .border_color(theme::border())
+                .shadow_lg()
+                .p(px(20.0))
+                .flex()
+                .flex_col()
+                .gap(px(14.0))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            div()
+                                .text_size(px(14.0))
+                                .font_weight(gpui::FontWeight::BOLD)
+                                .text_color(theme::text_primary())
+                                .child("Add Channel"),
+                        )
+                        .child(
+                            div()
+                                .p(px(4.0))
+                                .rounded_sm()
+                                .cursor_pointer()
+                                .text_color(theme::text_muted())
+                                .hover(|s| s.text_color(theme::text_primary()))
+                                .child("×")
+                                .on_mouse_down(gpui::MouseButton::Left, {
+                                    let state_entity = state_entity.clone();
+                                    let add_channel_input = add_channel_input.clone();
+                                    move |_, _, app| {
+                                        add_channel_input.update(app, |input, cx| {
+                                            input.clear(cx);
+                                            input.set_placeholder("Twitch channel name", cx);
+                                        });
+                                        state_entity.close_add_channel_modal(app);
+                                    }
+                                }),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .gap(px(8.0))
+                        .child(add_channel_platform_button(
+                            Platform::Twitch,
+                            active_platform,
+                            true,
+                            state_entity.clone(),
+                            add_channel_input.clone(),
+                        ))
+                        .child(add_channel_platform_button(
+                            Platform::Kick,
+                            active_platform,
+                            true,
+                            state_entity.clone(),
+                            add_channel_input.clone(),
+                        ))
+                        .child(add_channel_platform_button(
+                            Platform::Youtube,
+                            active_platform,
+                            youtube_authenticated,
+                            state_entity.clone(),
+                            add_channel_input.clone(),
+                        )),
+                )
+                .child(add_channel_input.clone())
+                .child(
+                    div()
+                        .flex()
+                        .justify_end()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .px(px(14.0))
+                                .py(px(7.0))
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgba(0xffffff1a))
+                                .text_color(theme::text_muted())
+                                .text_size(px(13.0))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .cursor_pointer()
+                                .hover(|s| s.bg(rgba(0xffffff0f)).text_color(theme::text_primary()))
+                                .child("Cancel")
+                                .on_mouse_down(gpui::MouseButton::Left, {
+                                    let state_entity = state_entity.clone();
+                                    let add_channel_input = add_channel_input.clone();
+                                    move |_, _, app| {
+                                        add_channel_input.update(app, |input, cx| {
+                                            input.clear(cx);
+                                            input.set_placeholder("Twitch channel name", cx);
+                                        });
+                                        state_entity.close_add_channel_modal(app);
+                                    }
+                                }),
+                        )
+                        .child(
+                            div()
+                                .px(px(16.0))
+                                .py(px(7.0))
+                                .rounded_md()
+                                .bg(rgb(0x7c3aed))
+                                .text_color(rgb(0xffffff))
+                                .text_size(px(13.0))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .cursor_pointer()
+                                .hover(|s| s.bg(rgb(0x6d28d9)))
+                                .child("Add")
+                                .on_mouse_down(gpui::MouseButton::Left, {
+                                    let state_entity = state_entity.clone();
+                                    let add_channel_input = add_channel_input.clone();
+                                    move |_, _, app| {
+                                        let channel_slug = add_channel_input
+                                            .read(app)
+                                            .text()
+                                            .trim()
+                                            .to_lowercase();
+                                        if channel_slug.is_empty() {
+                                            return;
+                                        }
+                                        state_entity.add_watched_channel_from_slug(
+                                            app,
+                                            active_platform,
+                                            &channel_slug,
+                                        );
+                                        add_channel_input.update(app, |input, cx| {
+                                            input.clear(cx);
+                                            input.set_placeholder("Twitch channel name", cx);
+                                        });
+                                    }
+                                }),
+                        ),
+                ),
+        )
+}
+
+fn add_channel_platform_button(
+    platform: Platform,
+    active_platform: Platform,
+    enabled: bool,
+    state_entity: Entity<AppState>,
+    add_channel_input: Entity<Input>,
+) -> Div {
+    let active = platform == active_platform;
+    let color = theme::platform_color(to_model_platform(platform));
+
+    div()
+        .flex_1()
+        .px(px(12.0))
+        .py(px(7.0))
+        .rounded_md()
+        .border_1()
+        .border_color(if active { color } else { rgba(0xffffff1a) })
+        .bg(if active {
+            rgba(0x7c3aed26)
+        } else {
+            rgba(0xffffff0a)
+        })
+        .text_color(if active { color } else { theme::text_muted() })
+        .text_size(px(13.0))
+        .font_weight(gpui::FontWeight::MEDIUM)
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(6.0))
+        .when(enabled, |button| button.cursor_pointer())
+        .when(!enabled, |button| button.opacity(0.35))
+        .child(
+            PlatformIcon::new(to_model_platform(platform))
+                .size(px(14.0))
+                .color(if active { color } else { theme::text_muted() }),
+        )
+        .child(platform_label(platform))
+        .when(platform == Platform::Youtube && !enabled, |button| {
+            button.child("⌕")
+        })
+        .on_mouse_down(gpui::MouseButton::Left, move |_, _, app| {
+            if !enabled {
+                return;
+            }
+            state_entity.select_add_channel_platform(app, platform);
+            add_channel_input.update(app, |input, cx| {
+                input.set_placeholder(add_channel_placeholder(platform), cx)
+            });
+        })
+}
+
+fn platform_label(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Twitch => "Twitch",
+        Platform::Youtube => "YouTube",
+        Platform::Kick => "Kick",
+    }
+}
+
+fn add_channel_placeholder(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Twitch => "Twitch channel name",
+        Platform::Youtube => "YouTube channel handle or ID",
+        Platform::Kick => "Kick channel name",
+    }
+}
+
 #[allow(dead_code)]
 fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
     let is_compact = settings.chat_theme == ChatTheme::Compact;
@@ -722,7 +1001,7 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
             .child(
                 div()
                     .flex_1()
-                    .text_size(px(13.0))
+                    .text_size(px(settings.font_size as f32))
                     .text_color(theme::text_muted())
                     .child(message.text.clone()),
             )
@@ -759,6 +1038,14 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
             )
         })
         .when(settings.show_avatars, |el| {
+            let fallback = message
+                .author
+                .display_name
+                .chars()
+                .next()
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string();
             el.child(
                 div()
                     .w(px(if is_compact { 22.0 } else { 26.0 }))
@@ -771,22 +1058,23 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                     .text_color(theme::text_primary())
                     .text_size(px(if is_compact { 9.0 } else { 10.0 }))
                     .font_weight(gpui::FontWeight::BOLD)
-                    .child(if let Some(url) = &message.author.avatar_url {
-                        img(url.clone())
-                            .w_full()
-                            .h_full()
-                            .rounded_full()
-                            .into_any_element()
-                    } else {
-                        message
-                            .author
-                            .display_name
-                            .chars()
-                            .next()
-                            .unwrap_or('?')
-                            .to_uppercase()
-                            .to_string()
-                            .into_any_element()
+                    .child(fallback.clone())
+                    .when_some(message.author.avatar_url.clone(), |avatar, url| {
+                        avatar.child(
+                            img(ImageSource::from(url))
+                                .w_full()
+                                .h_full()
+                                .rounded_full()
+                                .object_fit(ObjectFit::Cover)
+                                .with_loading({
+                                    let fallback = fallback.clone();
+                                    move || fallback.clone().into_any_element()
+                                })
+                                .with_fallback({
+                                    let fallback = fallback.clone();
+                                    move || fallback.clone().into_any_element()
+                                }),
+                        )
                     }),
             )
         })
@@ -811,13 +1099,20 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                         })
                         .when(settings.show_badges, |el| {
                             el.children(message.author.badges.iter().map(|badge| {
-                                if let Some(url) = &badge.image_url {
+                                if let Some(url) = badge.image_url.as_ref().filter(|url| {
+                                    url.starts_with("http://") || url.starts_with("https://")
+                                }) {
                                     div()
                                         .w(px(18.0))
                                         .h(px(18.0))
                                         .rounded_sm()
                                         .overflow_hidden()
-                                        .child(img(url.clone()).w_full().h_full())
+                                        .child(
+                                            img(ImageSource::from(url.clone()))
+                                                .w_full()
+                                                .h_full()
+                                                .object_fit(ObjectFit::Contain),
+                                        )
                                 } else {
                                     div()
                                         .rounded_sm()
@@ -848,7 +1143,7 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                 )
                 .child(
                     div()
-                        .text_size(px(if is_compact { 12.0 } else { 13.0 }))
+                        .text_size(px(settings.font_size as f32))
                         .text_color(theme::text_primary())
                         .child(message.text.clone()),
                 ),

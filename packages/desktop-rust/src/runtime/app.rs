@@ -117,6 +117,21 @@ impl AppRuntime {
             }),
         )
     }
+
+    pub fn dispatch_watched_channel_message(
+        &self,
+        channel_id: String,
+        text: String,
+    ) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::WatchedChannels,
+            ServiceCommand::WatchedChannels(WatchedChannelsCommand::SendMessage {
+                channel_id,
+                text,
+                reply_to_message_id: None,
+            }),
+        )
+    }
 }
 
 impl Drop for AppRuntime {

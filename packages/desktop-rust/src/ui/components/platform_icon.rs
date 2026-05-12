@@ -1,5 +1,6 @@
 use crate::models::Platform;
 use gpui::*;
+use std::path::PathBuf;
 
 #[derive(IntoElement)]
 pub struct PlatformIcon {
@@ -27,20 +28,20 @@ impl PlatformIcon {
         self
     }
 
-    fn svg_path(&self) -> &'static str {
+    fn svg_path(&self) -> PathBuf {
         match self.platform {
-            Platform::Twitch => "../desktop/src/assets/icons/platforms/twitch.svg",
-            Platform::YouTube => "../desktop/src/assets/icons/platforms/youtube.svg",
-            Platform::Kick => "../desktop/src/assets/icons/platforms/kick.svg",
+            Platform::Twitch => PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../desktop/src/assets/icons/platforms/twitch.svg"),
+            Platform::YouTube => PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../desktop/src/assets/icons/platforms/youtube.svg"),
+            Platform::Kick => PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../desktop/src/assets/icons/platforms/kick.svg"),
         }
     }
 }
 
 impl RenderOnce for PlatformIcon {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        svg()
-            .path(self.svg_path())
-            .size(self.size)
-            .text_color(self.color)
+        img(self.svg_path()).size(self.size).text_color(self.color)
     }
 }

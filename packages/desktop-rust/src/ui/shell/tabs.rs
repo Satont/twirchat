@@ -1,8 +1,13 @@
 use crate::app_state::{AppState, AppStateActions};
+use crate::ui::components::input::Input;
 use crate::ui::theme;
 use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px};
 
-pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
+pub(crate) fn bar(
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    add_channel_input: Entity<Input>,
+) -> Div {
     let active_id = String::from(state.active_channel_tab_id());
     let tabs = vec![("home".to_string(), "Home".to_string(), None)];
     let tabs_state_entity = state_entity.clone();
@@ -106,81 +111,15 @@ pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
                 .cursor_pointer()
                 .on_mouse_down(gpui::MouseButton::Left, {
                     let state_entity = state_entity.clone();
+                    let add_channel_input = add_channel_input.clone();
                     move |_event, _window, app| {
-                        eprintln!("[ui/tabs] tab add menu clicked");
-                        state_entity.update(app, |state, cx| {
-                            state.toggle_tab_add_menu();
-                            cx.notify();
+                        add_channel_input.update(app, |input, cx| {
+                            input.clear(cx);
+                            input.set_placeholder("Twitch channel name", cx);
                         });
+                        state_entity.open_add_channel_modal(app);
                     }
                 })
-                .child("+")
-                .when(state.tab_add_menu_open, |this| {
-                    this.child(
-                        div()
-                            .absolute()
-                            .top(px(34.0))
-                            .right(px(0.0))
-                            .w(px(240.0))
-                            .bg(theme::surface())
-                            .border_1()
-                            .border_color(theme::border())
-                            .rounded_lg()
-                            .shadow_md()
-                            .p(px(4.0))
-                            .child(
-                                div()
-                                    .px(px(8.0))
-                                    .py(px(4.0))
-                                    .text_size(px(11.0))
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .text_color(theme::text_muted())
-                                    .child("ADD CHANNEL"),
-                            )
-                            .children(state.platforms_panel.accounts.iter().map({
-                                let state_entity = state_entity.clone();
-                                move |account| {
-                                    let account_id = account.id.clone();
-                                    let label = format!(
-                                        "Watch {} ({})",
-                                        account.display_name, account.username
-                                    );
-                                    div()
-                                        .rounded_md()
-                                        .px(px(8.0))
-                                        .py(px(6.0))
-                                        .text_size(px(12.0))
-                                        .text_color(theme::text_primary())
-                                        .hover(|s| s.bg(theme::surface_2()))
-                                        .cursor_pointer()
-                                        .on_mouse_down(gpui::MouseButton::Left, {
-                                            let state_entity = state_entity.clone();
-                                            move |_event, _window, app| {
-                                                eprintln!("[ui/tabs] add watched account clicked");
-                                                state_entity.add_watched_channel_from_account(
-                                                    app,
-                                                    &account_id,
-                                                );
-                                                state_entity.update(app, |state, cx| {
-                                                    state.close_tab_add_menu();
-                                                    cx.notify();
-                                                });
-                                            }
-                                        })
-                                        .child(label)
-                                }
-                            }))
-                            .when(state.platforms_panel.accounts.is_empty(), |this| {
-                                this.child(
-                                    div()
-                                        .px(px(8.0))
-                                        .py(px(6.0))
-                                        .text_size(px(12.0))
-                                        .text_color(theme::text_muted())
-                                        .child("No connected accounts"),
-                                )
-                            }),
-                    )
-                }),
+                .child("+"),
         )
 }

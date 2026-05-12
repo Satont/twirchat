@@ -1,12 +1,15 @@
 use crate::app_state::{AppState, RuntimeStatus};
 use crate::runtime::AppRuntime;
 
+use crate::ui::components::input::Input;
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
-use gpui::{Context, Entity, Render, Task, Window, div, prelude::*, px, rgb};
+use gpui::{Context, Entity, Render, Task, Window, div, prelude::*, px, retain_all, rgb};
 use std::time::Duration;
 
 pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
+    composer_input: Entity<Input>,
+    add_channel_input: Entity<Input>,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
 }
@@ -26,7 +29,17 @@ impl TwirChatApp {
             }
         };
         let state = cx.new(|_| initial_state);
+        let composer_input = cx.new(|cx| {
+            Input::new(
+                "Send a message... (Enter ↵ to send, Shift+Enter for newline)",
+                cx,
+            )
+        });
+        let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        cx.observe(&composer_input, |_, _, cx| cx.notify()).detach();
+        cx.observe(&add_channel_input, |_, _, cx| cx.notify())
+            .detach();
 
         let runtime_poll_task = runtime.as_ref().map(|_| {
             cx.spawn(async move |this, cx| {
@@ -46,6 +59,8 @@ impl TwirChatApp {
 
         Self {
             state,
+            composer_input,
+            add_channel_input,
             runtime,
             _runtime_poll_task: runtime_poll_task,
         }
@@ -97,15 +112,42 @@ impl TwirChatApp {
             }
         }
     }
+
+    fn flush_pending_watched_channel_messages(&self, cx: &mut Context<Self>) {
+        let Some(runtime) = &self.runtime else {
+            return;
+        };
+        let pending = self
+            .state
+            .update(cx, |state, _| state.take_pending_watched_channel_messages());
+
+        for message in pending {
+            if let Err(error) = runtime
+                .dispatch_watched_channel_message(message.channel_id.clone(), message.text.clone())
+            {
+                let error_message = format!(
+                    "failed to send watched-channel message for {}: {}",
+                    message.channel_id, error
+                );
+                self.state.update(cx, |state, cx| {
+                    state.record_runtime_failure(error_message);
+                    cx.notify();
+                });
+            }
+        }
+    }
 }
 
 impl Render for TwirChatApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         self.drain_runtime_events(cx);
         self.flush_pending_watched_channel_adds(cx);
+        self.flush_pending_watched_channel_messages(cx);
         let state = self.state.read(cx).clone();
+        let composer_text = self.composer_input.read(cx).text().to_string();
 
         div()
+            .image_cache(retain_all("twirchat-images"))
             .id("app-shell")
             .relative()
             .size_full()
@@ -121,7 +163,14 @@ impl Render for TwirChatApp {
                     .flex()
                     .flex_col()
                     .bg(rgb(0x0f0f11)) // Match .content background
-                    .child(content::panel(&state, self.state.clone(), cx)),
+                    .child(content::panel(
+                        &state,
+                        self.state.clone(),
+                        self.composer_input.clone(),
+                        self.add_channel_input.clone(),
+                        composer_text,
+                        cx,
+                    )),
             )
             .child(runtime_status_bar(&state))
             .child(UpdateToast::new(self.state.clone()))
@@ -148,7 +197,7 @@ fn runtime_status_bar(state: &AppState) -> impl gpui::IntoElement {
     div()
         .absolute()
         .right(px(16.0))
-        .bottom(px(12.0))
+        .bottom(px(132.0))
         .rounded_lg()
         .px(px(10.0))
         .py(px(6.0))
