@@ -136,11 +136,33 @@ impl TwirChatApp {
             }
         }
     }
+
+    fn flush_composer_submit(&self, cx: &mut Context<Self>) {
+        let submit_text = self.composer_input.update(cx, |input, _cx| {
+            input
+                .take_submit_requested()
+                .then(|| input.text().trim().to_string())
+        });
+
+        let Some(text) = submit_text.filter(|text| !text.is_empty()) else {
+            return;
+        };
+
+        let queued = self.state.update(cx, |state, cx| {
+            let queued = state.queue_composer_send(&text);
+            cx.notify();
+            queued
+        });
+        if queued {
+            self.composer_input.update(cx, |input, cx| input.clear(cx));
+        }
+    }
 }
 
 impl Render for TwirChatApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         self.drain_runtime_events(cx);
+        self.flush_composer_submit(cx);
         self.flush_pending_watched_channel_adds(cx);
         self.flush_pending_watched_channel_messages(cx);
         let state = self.state.read(cx).clone();

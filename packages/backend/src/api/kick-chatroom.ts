@@ -11,8 +11,18 @@ import { logger } from '@twirchat/shared/logger'
 const log = logger('kick-chatroom')
 
 export interface KickChatroomResponse {
+  avatarUrl?: string
   chatroomId: number
   broadcasterUserId: number
+}
+
+function normalizeAvatarUrl(value?: string | null): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : undefined
 }
 
 export async function handleKickChatroom(url: URL): Promise<KickChatroomResponse> {
@@ -37,11 +47,13 @@ export async function handleKickChatroom(url: URL): Promise<KickChatroomResponse
   const body = (await res.json()) as {
     id?: number
     user_id?: number
+    user?: { profile_pic?: string | null }
     chatroom?: { id?: number }
   }
 
   const chatroomId = body.chatroom?.id
   const broadcasterUserId = body.user_id
+  const avatarUrl = normalizeAvatarUrl(body.user?.profile_pic)
 
   if (!chatroomId) {
     throw new Error(`Kick chatroom.id not found for "${slug}"`)
@@ -51,5 +63,5 @@ export async function handleKickChatroom(url: URL): Promise<KickChatroomResponse
   }
 
   log.debug('Kick chatroom resolved', { broadcasterUserId, chatroomId, slug })
-  return { broadcasterUserId, chatroomId }
+  return { avatarUrl, broadcasterUserId, chatroomId }
 }

@@ -1,6 +1,7 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
-    AppSettings, ChatMessageType, ChatTheme, NormalizedChatMessage, Platform, WatchedChannel,
+    Account, AppSettings, ChatMessageType, ChatTheme, Emote, NormalizedChatMessage, Platform,
+    WatchedChannel,
 };
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
@@ -38,13 +39,12 @@ pub(crate) fn panel(
                 .mt(px(40.0))
                 .bg(theme::background())
                 .overflow_y_scroll()
-                .child(
-                    div().min_h_full().flex().flex_col().justify_end().children(
-                        visible_messages
-                            .iter()
-                            .map(|msg| message_row(msg, &settings).into_any_element()),
-                    ),
-                ),
+                .child(div().min_h_full().flex().flex_col().justify_end().children(
+                    visible_messages.iter().map(|msg| {
+                        message_row(msg, &settings, &state.platforms_panel.accounts)
+                            .into_any_element()
+                    }),
+                )),
         )
         .child(composer(
             state,
@@ -970,7 +970,11 @@ fn add_channel_placeholder(platform: Platform) -> &'static str {
 }
 
 #[allow(dead_code)]
-fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
+fn message_row(
+    message: &NormalizedChatMessage,
+    settings: &AppSettings,
+    accounts: &[Account],
+) -> Div {
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
     let v_pad = if is_compact { 1.0 } else { 2.0 };
@@ -1038,9 +1042,27 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
             )
         })
         .when(settings.show_avatars, |el| {
-            let fallback = message
+            let avatar_url = message
                 .author
-                .display_name
+                .avatar_url
+                .clone()
+                .or_else(|| account_avatar_for_message(message, accounts));
+            let fallback_name = {
+                let dn = message.author.display_name.trim();
+                if !dn.is_empty() {
+                    dn
+                } else if let Some(un) = &message.author.username {
+                    let un = un.trim();
+                    if !un.is_empty() {
+                        un
+                    } else {
+                        &message.author.id
+                    }
+                } else {
+                    &message.author.id
+                }
+            };
+            let fallback = fallback_name
                 .chars()
                 .next()
                 .unwrap_or('?')
@@ -1058,8 +1080,8 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                     .text_color(theme::text_primary())
                     .text_size(px(if is_compact { 9.0 } else { 10.0 }))
                     .font_weight(gpui::FontWeight::BOLD)
-                    .child(fallback.clone())
-                    .when_some(message.author.avatar_url.clone(), |avatar, url| {
+                    .overflow_hidden()
+                    .when_some(avatar_url.clone(), |avatar, url| {
                         avatar.child(
                             img(ImageSource::from(url))
                                 .w_full()
@@ -1075,6 +1097,9 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                                     move || fallback.clone().into_any_element()
                                 }),
                         )
+                    })
+                    .when(avatar_url.is_none(), |avatar| {
+                        avatar.child(fallback.clone())
                     }),
             )
         })
@@ -1127,10 +1152,24 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                         })
                         .child(
                             div()
-                                .text_color(rgb(0x8b8b99))
+                                .text_color(theme::accent())
                                 .text_size(px(12.0))
                                 .font_weight(gpui::FontWeight::BOLD)
-                                .child(message.author.display_name.clone()),
+                                .child({
+                                    let dn = message.author.display_name.trim();
+                                    if !dn.is_empty() {
+                                        dn.to_string()
+                                    } else if let Some(un) = &message.author.username {
+                                        let un = un.trim();
+                                        if !un.is_empty() {
+                                            un.to_string()
+                                        } else {
+                                            message.author.id.clone()
+                                        }
+                                    } else {
+                                        message.author.id.clone()
+                                    }
+                                }),
                         )
                         .when(settings.show_timestamp, |el| {
                             el.child(
@@ -1141,13 +1180,139 @@ fn message_row(message: &NormalizedChatMessage, settings: &AppSettings) -> Div {
                             )
                         }),
                 )
-                .child(
-                    div()
-                        .text_size(px(settings.font_size as f32))
-                        .text_color(theme::text_primary())
-                        .child(message.text.clone()),
-                ),
+                .child(message_text_with_emotes(
+                    message,
+                    settings.font_size as f32,
+                    is_compact,
+                )),
         )
+}
+
+fn message_text_with_emotes(
+    message: &NormalizedChatMessage,
+    font_size: f32,
+    is_compact: bool,
+) -> Div {
+    div()
+        .text_size(px(font_size))
+        .text_color(theme::text_primary())
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap(px(3.0))
+        .children(
+            build_message_parts(message)
+                .into_iter()
+                .map(|part| match part {
+                    MessagePart::Text(text) => div().child(text).into_any_element(),
+                    MessagePart::Emote(emote) => emote_image(&emote, is_compact).into_any_element(),
+                }),
+        )
+}
+
+enum MessagePart {
+    Text(String),
+    Emote(Emote),
+}
+
+fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
+    if message.emotes.is_empty() {
+        return vec![MessagePart::Text(message.text.clone())];
+    }
+
+    let mut ranges = Vec::new();
+    for emote in &message.emotes {
+        for position in &emote.positions {
+            let start = position.start as usize;
+            let Some(end) = (position.end as usize).checked_add(1) else {
+                continue;
+            };
+            ranges.push((start, end, emote.clone()));
+        }
+    }
+    ranges.sort_by_key(|(start, _, _)| *start);
+
+    let mut parts = Vec::new();
+    let mut index = 0;
+    for (start, end, emote) in ranges {
+        if start < index || start > message.text.len() {
+            continue;
+        }
+        let end = end.min(message.text.len());
+        if !message.text.is_char_boundary(start) || !message.text.is_char_boundary(end) {
+            continue;
+        }
+        if index < start
+            && let Some(text) = message.text.get(index..start)
+        {
+            parts.push(MessagePart::Text(text.to_string()));
+        }
+        parts.push(MessagePart::Emote(emote));
+        index = end;
+    }
+
+    if index < message.text.len()
+        && let Some(text) = message.text.get(index..)
+    {
+        parts.push(MessagePart::Text(text.to_string()));
+    }
+
+    if parts.is_empty() {
+        parts.push(MessagePart::Text(message.text.clone()));
+    }
+
+    parts
+}
+
+fn emote_image(emote: &Emote, is_compact: bool) -> Div {
+    let size = if is_compact { 20.0 } else { 24.0 };
+    div()
+        .h(px(size))
+        .min_w(px(size))
+        .max_w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
+        .child(
+            img(ImageSource::from(emote.image_url.clone()))
+                .h_full()
+                .w_full()
+                .object_fit(ObjectFit::Contain)
+                .with_loading({
+                    let name = emote.name.clone();
+                    move || name.clone().into_any_element()
+                })
+                .with_fallback({
+                    let name = emote.name.clone();
+                    move || name.clone().into_any_element()
+                }),
+        )
+}
+
+fn account_avatar_for_message(
+    message: &NormalizedChatMessage,
+    accounts: &[Account],
+) -> Option<String> {
+    accounts
+        .iter()
+        .find(|account| {
+            account.platform == message.platform
+                && (account.platform_user_id == message.author.id
+                    || account.username.eq_ignore_ascii_case(
+                        message.author.username.as_deref().unwrap_or_default(),
+                    )
+                    || account
+                        .display_name
+                        .eq_ignore_ascii_case(&message.author.display_name))
+        })
+        .and_then(|account| normalize_avatar_url(account.avatar_url.as_deref()))
+}
+
+fn normalize_avatar_url(value: Option<&str>) -> Option<String> {
+    let normalized = value?.trim();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized.into())
+    }
 }
 
 fn to_model_platform(p: Platform) -> crate::models::Platform {

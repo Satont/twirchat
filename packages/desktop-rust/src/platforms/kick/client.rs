@@ -1,6 +1,6 @@
 use super::adapter::{
-    KickChatClient, KickChatMessage, KickChatroom, KickFollowEvent, KickSendMessageRequest,
-    KickStreamStatusRequest, KickSubscriptionEvent, KickTransportAuth,
+    KickAvatarLookupRequest, KickChatClient, KickChatMessage, KickChatroom, KickFollowEvent,
+    KickSendMessageRequest, KickStreamStatusRequest, KickSubscriptionEvent, KickTransportAuth,
 };
 use crate::platforms::{PlatformError, PlatformResult};
 use crate::protocol::types::Platform;
@@ -17,6 +17,7 @@ use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Message, WebSocket, connect};
 
 const KICK_PUSHER_WS: &str = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false";
+const KICK_AVATAR_FETCH_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub struct RealKickClient {
     http: Client,
@@ -275,6 +276,47 @@ impl KickChatClient for RealKickClient {
         })
     }
 
+    fn resolve_avatar_url(
+        &mut self,
+        request: KickAvatarLookupRequest,
+    ) -> PlatformResult<Option<String>> {
+        eprintln!(
+            "[kick/live] resolving avatar for author_id={} lookup={}",
+            request.author_id, request.slug_or_username
+        );
+        let response = self
+            .http
+            .get(format!("{}/api/kick/chatroom", self.backend_url))
+            .query(&[("slug", request.slug_or_username.as_str())])
+            .timeout(KICK_AVATAR_FETCH_TIMEOUT)
+            .send()
+            .map_err(|error| {
+                eprintln!("[kick/live] backend avatar request failed before response: {error}");
+                PlatformError::new(Platform::Kick, error.to_string())
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            eprintln!(
+                "[kick/live] avatar lookup returned status={} author_id={}",
+                status, request.author_id
+            );
+            return Ok(None);
+        }
+
+        let body: KickChatroomResponse = response
+            .json()
+            .map_err(|error| PlatformError::new(Platform::Kick, error.to_string()))?;
+        let avatar_url = normalize_avatar_url(body.avatar_url.as_deref());
+        if avatar_url.is_some() {
+            eprintln!(
+                "[kick/live] resolved avatar for author_id={}",
+                request.author_id
+            );
+        }
+        Ok(avatar_url)
+    }
+
     fn subscribe_chatroom(
         &mut self,
         chatroom: &KickChatroom,
@@ -447,6 +489,8 @@ impl KickChatClient for RealKickClient {
 
 #[derive(Deserialize)]
 struct KickChatroomResponse {
+    #[serde(rename = "avatarUrl")]
+    avatar_url: Option<String>,
     #[serde(rename = "chatroomId")]
     chatroom_id: u64,
     #[serde(rename = "broadcasterUserId")]
@@ -509,6 +553,15 @@ fn body_snippet(value: &str) -> String {
     } else {
         let snippet: String = trimmed.chars().take(MAX_LENGTH).collect();
         format!("{snippet}...")
+    }
+}
+
+fn normalize_avatar_url(value: Option<&str>) -> Option<String> {
+    let normalized = value?.trim();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized.into())
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::platforms::kick::adapter::{
-    KickAuthState, KickChatClient, KickChatMessage, KickChatroom, KickFollowEvent,
-    KickSendMessageRequest, KickStreamStatusRequest, KickSubscriptionEvent, KickTransportAuth,
+    KickAuthState, KickAvatarLookupRequest, KickChatClient, KickChatMessage, KickChatroom,
+    KickFollowEvent, KickSendMessageRequest, KickStreamStatusRequest, KickSubscriptionEvent,
+    KickTransportAuth,
 };
 use crate::platforms::{PlatformError, PlatformResult};
 use crate::protocol::types::{Platform, StreamStatus};
@@ -24,7 +25,9 @@ pub struct MockKickClient {
     pub sent_messages: Vec<SentKickMessage>,
     pub refresh_calls: Vec<(String, String)>,
     pub stream_status_requests: Vec<KickStreamStatusRequest>,
+    pub avatar_resolutions: Vec<KickAvatarLookupRequest>,
     chatrooms: BTreeMap<String, KickChatroom>,
+    avatar_urls: BTreeMap<String, String>,
     missing_chatrooms: VecDeque<String>,
     incoming_messages: VecDeque<KickChatMessage>,
     follow_events: VecDeque<KickFollowEvent>,
@@ -43,7 +46,9 @@ impl MockKickClient {
             sent_messages: Vec::new(),
             refresh_calls: Vec::new(),
             stream_status_requests: Vec::new(),
+            avatar_resolutions: Vec::new(),
             chatrooms: BTreeMap::new(),
+            avatar_urls: BTreeMap::new(),
             missing_chatrooms: VecDeque::new(),
             incoming_messages: VecDeque::new(),
             follow_events: VecDeque::new(),
@@ -68,6 +73,13 @@ impl MockKickClient {
                 broadcaster_user_id,
             },
         );
+    }
+
+    pub fn add_avatar(&mut self, slug_or_username: &str, avatar_url: &str) {
+        let normalized = normalize_lookup_key(slug_or_username);
+        if let Some(normalized) = normalized {
+            self.avatar_urls.insert(normalized, avatar_url.into());
+        }
     }
 
     pub fn push_missing_chatroom_once(&mut self, message: &str) {
@@ -110,6 +122,16 @@ impl KickChatClient for MockKickClient {
                 format!("Kick chatroom ID not found for channel \"{normalized}\""),
             )
         })
+    }
+
+    fn resolve_avatar_url(
+        &mut self,
+        request: KickAvatarLookupRequest,
+    ) -> PlatformResult<Option<String>> {
+        self.avatar_resolutions.push(request.clone());
+        Ok(normalize_lookup_key(&request.slug_or_username)
+            .and_then(|lookup_key| self.avatar_urls.get(&lookup_key))
+            .and_then(|avatar_url| normalize_avatar_url(avatar_url)))
     }
 
     fn subscribe_chatroom(
@@ -219,4 +241,22 @@ impl From<&KickAuthState> for KickTransportAuth {
 
 fn normalize_slug(slug: &str) -> String {
     slug.trim().trim_start_matches('@').to_lowercase()
+}
+
+fn normalize_lookup_key(value: &str) -> Option<String> {
+    let normalized = value.trim().trim_start_matches('@').to_lowercase();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn normalize_avatar_url(value: &str) -> Option<String> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized.into())
+    }
 }

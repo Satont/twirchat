@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::PathBuf;
 use twirchat_desktop_rust::platforms::kick::{
-    KickAdapter, KickAdapterErrorKind, KickAuthState, KickBadge, KickChatMessage,
-    KickChatMessageKind, KickFollowEvent, KickMessageSender, KickOriginalMessage,
-    KickOriginalSender, KickReplyMetadata, KickSenderIdentity, KickSubscriptionEvent,
-    KickTransportAuth, MockKickClient,
+    KickAdapter, KickAdapterErrorKind, KickAuthState, KickAvatarLookupRequest,
+    KickAvatarLookupSource, KickBadge, KickChatMessage, KickChatMessageKind, KickFollowEvent,
+    KickMessageSender, KickOriginalMessage, KickOriginalSender, KickReplyMetadata,
+    KickSenderIdentity, KickSubscriptionEvent, KickTransportAuth, MockKickClient,
 };
 use twirchat_desktop_rust::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
 use twirchat_desktop_rust::protocol::types::{
@@ -339,6 +339,102 @@ fn kick_adapter_missing_chatroom_reports_error() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+#[test]
+fn kick_adapter_resolves_missing_sender_avatar() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("kick-avatar-resolver.sqlite"))?;
+
+    let mut client = MockKickClient::new();
+    client.add_avatar("avatarless", " https://cdn.example/resolved-avatar.png ");
+    client.push_message(kick_chat_message(
+        "kick-avatar-missing",
+        321,
+        "Avatarless",
+        "avatarless",
+        None,
+    ));
+
+    let mut adapter = KickAdapter::new(&storage, client);
+    let mut sink = CapturingSink::default();
+
+    adapter.poll(&mut sink)?;
+
+    let message = sink
+        .messages()
+        .into_iter()
+        .find(|message| message.id == "kick-avatar-missing")
+        .ok_or("resolved-avatar Kick chat message missing")?;
+    assert_eq!(
+        message.author.avatar_url.as_deref(),
+        Some("https://cdn.example/resolved-avatar.png")
+    );
+    assert_eq!(
+        adapter.client().avatar_resolutions,
+        vec![KickAvatarLookupRequest {
+            author_id: "321".into(),
+            lookup_source: KickAvatarLookupSource::Slug,
+            slug_or_username: "avatarless".into(),
+        }]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn kick_adapter_treats_blank_sender_avatar_as_missing() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("kick-blank-avatar.sqlite"))?;
+
+    let mut client = MockKickClient::new();
+    client.push_message(kick_chat_message(
+        "kick-avatar-blank",
+        654,
+        "BlankAvatar",
+        "blank-avatar",
+        Some("   ".into()),
+    ));
+
+    let mut adapter = KickAdapter::new(&storage, client);
+    let mut sink = CapturingSink::default();
+
+    adapter.poll(&mut sink)?;
+
+    let message = sink
+        .messages()
+        .into_iter()
+        .find(|message| message.id == "kick-avatar-blank")
+        .ok_or("blank-avatar Kick chat message missing")?;
+    assert_eq!(message.author.avatar_url, None);
+    assert_eq!(adapter.client().avatar_resolutions.len(), 1);
+
+    Ok(())
+}
+
+#[test]
+fn kick_adapter_treats_blank_account_avatar_as_missing_for_local_echo()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("kick-blank-account-avatar.sqlite"))?;
+    seed_kick_account_with_avatar(&storage, Some(4_102_444_800), Some("   "))?;
+
+    let client = MockKickClient::new().with_chatroom("FixtureStreamer", 777, 42_4242);
+    let mut adapter = KickAdapter::new(&storage, client);
+    let mut sink = CapturingSink::default();
+
+    adapter.connect("FixtureStreamer", &mut sink)?;
+    adapter.send_message("424242", "local echo without blank avatar", None)?;
+
+    let local_echo = storage
+        .messages()
+        .get_recent(Some(10))?
+        .into_iter()
+        .find(|message| message.id.starts_with("local:kick:424242:"))
+        .ok_or("local Kick sent-message echo missing")?;
+    assert_eq!(local_echo.author.avatar_url, None);
+
+    Ok(())
+}
+
 #[derive(Default)]
 struct CapturingSink {
     events: Vec<PlatformEvent>,
@@ -386,9 +482,48 @@ impl PlatformEventSink for CapturingSink {
     }
 }
 
+fn kick_chat_message(
+    id: &str,
+    sender_id: u64,
+    username: &str,
+    slug: &str,
+    profile_picture: Option<String>,
+) -> KickChatMessage {
+    KickChatMessage {
+        id: id.into(),
+        chatroom_id: 777,
+        content: "hello from Kick".into(),
+        message_type: KickChatMessageKind::Message,
+        created_at: "1700000000".into(),
+        sender: KickMessageSender {
+            id: sender_id,
+            username: username.into(),
+            slug: slug.into(),
+            identity: KickSenderIdentity {
+                color: None,
+                badges: Vec::new(),
+            },
+            profile_picture,
+        },
+        metadata: None,
+    }
+}
+
 fn seed_kick_account(
     storage: &Storage,
     expires_at: Option<u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    seed_kick_account_with_avatar(
+        storage,
+        expires_at,
+        Some("https://cdn.example/kick-avatar.png"),
+    )
+}
+
+fn seed_kick_account_with_avatar(
+    storage: &Storage,
+    expires_at: Option<u64>,
+    avatar_url: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     storage.accounts().upsert(UpsertAccount {
         id: "kick:user-1",
@@ -396,7 +531,7 @@ fn seed_kick_account(
         platform_user_id: "424242",
         username: "fixturestreamer",
         display_name: "Fixture Streamer",
-        avatar_url: Some("https://cdn.example/kick-avatar.png"),
+        avatar_url,
         access_token: "kick-access-token-old",
         refresh_token: Some("kick-refresh-token"),
         expires_at,

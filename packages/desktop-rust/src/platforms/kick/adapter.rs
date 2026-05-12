@@ -10,6 +10,7 @@ use crate::protocol::types::{
 use crate::storage::{Storage, TokenPair, TokenState};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const KICK_TOKEN_REFRESH_WINDOW_SECONDS: u64 = 300;
@@ -211,8 +212,25 @@ pub struct KickStreamStatusRequest {
     pub broadcaster_user_id: Option<u64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KickAvatarLookupSource {
+    Slug,
+    Username,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KickAvatarLookupRequest {
+    pub author_id: String,
+    pub lookup_source: KickAvatarLookupSource,
+    pub slug_or_username: String,
+}
+
 pub trait KickChatClient {
     fn resolve_chatroom(&mut self, channel_slug: &str) -> PlatformResult<KickChatroom>;
+    fn resolve_avatar_url(
+        &mut self,
+        request: KickAvatarLookupRequest,
+    ) -> PlatformResult<Option<String>>;
     fn subscribe_chatroom(
         &mut self,
         chatroom: &KickChatroom,
@@ -280,6 +298,7 @@ pub struct KickAdapter<'a, C> {
     should_reconnect: bool,
     auth_state: KickAuthState,
     last_error: Option<KickAdapterError>,
+    avatar_cache: BTreeMap<String, String>,
 }
 
 impl<'a, C> KickAdapter<'a, C> {
@@ -294,6 +313,7 @@ impl<'a, C> KickAdapter<'a, C> {
             should_reconnect: true,
             auth_state: KickAuthState::Anonymous,
             last_error: None,
+            avatar_cache: BTreeMap::new(),
         }
     }
 
@@ -434,13 +454,14 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
                         reason: "Kick access token is empty".into(),
                     });
                 }
+                let avatar_url = normalize_avatar_url(entry.account.avatar_url.as_deref());
 
                 Ok(KickAuthState::Authenticated {
                     account_id: entry.account.id,
                     platform_user_id: entry.account.platform_user_id,
                     username: entry.account.username,
                     display_name: entry.account.display_name,
-                    avatar_url: entry.account.avatar_url,
+                    avatar_url,
                     access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token,
                     expires_at: tokens.expires_at,
@@ -531,8 +552,9 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
         }
     }
 
-    fn normalize_message(&self, message: KickChatMessage) -> NormalizedChatMessage {
+    fn normalize_message(&mut self, message: KickChatMessage) -> NormalizedChatMessage {
         let (text, emotes) = parse_kick_emotes(&message.content);
+        let avatar_url = self.resolve_message_avatar(&message.sender);
         NormalizedChatMessage {
             id: message.id,
             platform: Platform::Kick,
@@ -544,9 +566,15 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
             author: ChatAuthor {
                 id: message.sender.id.to_string(),
                 username: Some(message.sender.username.clone()),
-                display_name: message.sender.username,
+                display_name: if !message.sender.username.trim().is_empty() {
+                    message.sender.username.clone()
+                } else if !message.sender.slug.trim().is_empty() {
+                    message.sender.slug.clone()
+                } else {
+                    message.sender.id.to_string()
+                },
                 color: message.sender.identity.color,
-                avatar_url: message.sender.profile_picture,
+                avatar_url,
                 badges: message
                     .sender
                     .identity
@@ -560,6 +588,46 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
             timestamp: message.created_at,
             message_type: ChatMessageType::Message,
             reply: normalize_reply(message.message_type, message.metadata),
+        }
+    }
+
+    fn resolve_message_avatar(&mut self, sender: &KickMessageSender) -> Option<String> {
+        let cache_key = kick_avatar_cache_key(sender.id);
+        if let Some(avatar_url) = normalize_avatar_url(sender.profile_picture.as_deref()) {
+            self.avatar_cache.insert(cache_key, avatar_url.clone());
+            return Some(avatar_url);
+        }
+
+        if let Some(avatar_url) = self.avatar_cache.get(&cache_key) {
+            return Some(avatar_url.clone());
+        }
+
+        let (lookup_source, slug_or_username) = avatar_lookup_parts(sender)?;
+
+        let request = KickAvatarLookupRequest {
+            author_id: sender.id.to_string(),
+            lookup_source,
+            slug_or_username,
+        };
+
+        match self.client.resolve_avatar_url(request) {
+            Ok(Some(avatar_url)) => {
+                let avatar_url = normalize_avatar_url(Some(&avatar_url));
+                if let Some(avatar_url) = avatar_url {
+                    self.avatar_cache.insert(cache_key, avatar_url.clone());
+                    Some(avatar_url)
+                } else {
+                    None
+                }
+            }
+            Ok(None) => None,
+            Err(error) => {
+                eprintln!(
+                    "[kick/live] avatar lookup failed for author_id={}: {}",
+                    sender.id, error
+                );
+                None
+            }
         }
     }
 
@@ -900,6 +968,32 @@ fn reauth_reason(auth_state: &KickAuthState) -> Option<String> {
 
 fn normalize_channel_slug(channel: &str) -> String {
     channel.trim().trim_start_matches('@').to_lowercase()
+}
+
+fn avatar_lookup_parts(sender: &KickMessageSender) -> Option<(KickAvatarLookupSource, String)> {
+    if let Some(slug) = normalize_non_empty_string(Some(&sender.slug)) {
+        return Some((KickAvatarLookupSource::Slug, slug));
+    }
+
+    normalize_non_empty_string(Some(&sender.username))
+        .map(|username| (KickAvatarLookupSource::Username, username))
+}
+
+fn normalize_avatar_url(value: Option<&str>) -> Option<String> {
+    normalize_non_empty_string(value)
+}
+
+fn normalize_non_empty_string(value: Option<&str>) -> Option<String> {
+    let normalized = value?.trim();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized.into())
+    }
+}
+
+fn kick_avatar_cache_key(author_id: u64) -> String {
+    format!("kick:{author_id}")
 }
 
 fn non_empty_display_name(display_name: &str, username: &str) -> String {

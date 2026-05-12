@@ -20,6 +20,7 @@ actions!(
     [
         Backspace,
         Delete,
+        Enter,
         Left,
         Right,
         SelectLeft,
@@ -28,10 +29,11 @@ actions!(
     ]
 );
 
-pub fn key_bindings() -> [KeyBinding; 8] {
+pub fn key_bindings() -> [KeyBinding; 9] {
     [
         KeyBinding::new("backspace", Backspace, Some("TwirChatInput")),
         KeyBinding::new("delete", Delete, Some("TwirChatInput")),
+        KeyBinding::new("enter", Enter, Some("TwirChatInput")),
         KeyBinding::new("left", Left, Some("TwirChatInput")),
         KeyBinding::new("right", Right, Some("TwirChatInput")),
         KeyBinding::new("shift-left", SelectLeft, Some("TwirChatInput")),
@@ -50,6 +52,7 @@ pub struct Input {
     marked_range: Option<Range<usize>>,
     last_layout: Option<ShapedLine>,
     last_bounds: Option<Bounds<Pixels>>,
+    submit_requested: bool,
 }
 
 impl Input {
@@ -63,6 +66,7 @@ impl Input {
             marked_range: None,
             last_layout: None,
             last_bounds: None,
+            submit_requested: false,
         }
     }
 
@@ -88,6 +92,12 @@ impl Input {
 
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.set_text("", cx);
+    }
+
+    pub fn take_submit_requested(&mut self) -> bool {
+        let requested = self.submit_requested;
+        self.submit_requested = false;
+        requested
     }
 
     fn cursor_offset(&self) -> usize {
@@ -230,6 +240,11 @@ impl Input {
             self.selected_range = cursor..next;
         }
         self.replace_text_in_range(None, "", window, cx);
+    }
+
+    fn enter(&mut self, _: &Enter, _: &mut Window, cx: &mut Context<Self>) {
+        self.submit_requested = true;
+        cx.notify();
     }
 
     fn select_all(&mut self, _: &SelectAll, _: &mut Window, cx: &mut Context<Self>) {
@@ -394,6 +409,7 @@ impl Render for Input {
             .cursor(CursorStyle::IBeam)
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
+            .on_action(cx.listener(Self::enter))
             .on_action(cx.listener(Self::left))
             .on_action(cx.listener(Self::right))
             .on_action(cx.listener(Self::select_left))

@@ -368,11 +368,11 @@ pub(crate) fn panel(
                                                         .font_weight(gpui::FontWeight::BOLD)
                                                         .text_size(px(15.0))
                                                         .overflow_hidden()
-                                                        .child(avatar_fallback.clone())
                                                         .child(
                                                             img(ImageSource::from(url.clone()))
                                                                 .w_full()
                                                                 .h_full()
+                                                                .rounded_full()
                                                                 .object_fit(ObjectFit::Cover)
                                                                 .with_loading({
                                                                     let avatar_fallback =

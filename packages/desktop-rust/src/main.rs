@@ -30,34 +30,43 @@ fn main() -> ExitCode {
         let startup_failed = Rc::clone(&startup_failed);
 
         move |cx: &mut App| {
-        cx.bind_keys(input::key_bindings());
-        let bounds = Bounds::centered(None, size(px(1280.0), px(900.0)), cx);
+            match reqwest_client::ReqwestClient::proxy_and_user_agent(None, "TwirChat/0.1.0") {
+                Ok(http_client) => {
+                    cx.set_http_client(std::sync::Arc::new(http_client));
+                    println!("gpui http client configured for remote images");
+                }
+                Err(error) => {
+                    eprintln!("failed to configure gpui http client: {error}");
+                }
+            }
+            cx.bind_keys(input::key_bindings());
+            let bounds = Bounds::centered(None, size(px(1280.0), px(900.0)), cx);
 
-        let window = cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                ..Default::default()
-            },
-            |_, cx| cx.new(TwirChatApp::new),
-        );
+            let window = cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    ..Default::default()
+                },
+                |_, cx| cx.new(TwirChatApp::new),
+            );
 
-        match window {
-            Ok(_) => {
-                window_opened.set(true);
-                cx.activate(true);
-                if smoke_exit_after_first_frame {
-                    println!(
-                        "gpui window opened; smoke mode requested immediate shutdown before interactive QA"
-                    );
+            match window {
+                Ok(_) => {
+                    window_opened.set(true);
+                    cx.activate(true);
+                    if smoke_exit_after_first_frame {
+                        println!(
+                            "gpui window opened; smoke mode requested immediate shutdown before interactive QA"
+                        );
+                        cx.quit();
+                    }
+                }
+                Err(error) => {
+                    startup_failed.set(true);
+                    eprintln!("failed to open desktop-rust window: {error}");
                     cx.quit();
                 }
             }
-            Err(error) => {
-                startup_failed.set(true);
-                eprintln!("failed to open desktop-rust window: {error}");
-                cx.quit();
-            }
-        }
         }
     });
 

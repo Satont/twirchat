@@ -106,3 +106,17 @@ fn tab_add_button_has_visible_menu_contract() {
     assert!(chat_rs.contains("Kick channel name"));
     assert!(chat_rs.contains("YouTube channel handle or ID"));
 }
+
+#[test]
+fn gpui_http_client_is_wired_for_remote_avatars() {
+    let main_rs = fs::read_to_string("src/main.rs").expect("should read main.rs");
+    let cargo_toml = fs::read_to_string("Cargo.toml").expect("should read Cargo.toml");
+
+    // The GPUI-provided ReqwestClient must be configured with a stable user agent
+    assert!(main_rs.contains("reqwest_client::ReqwestClient"));
+    assert!(main_rs.contains("proxy_and_user_agent(None, \"TwirChat/0.1.0\")"));
+    assert!(main_rs.contains("cx.set_http_client(std::sync::Arc::new("));
+
+    // Ensure the correct Zed-provided crate is declared
+    assert!(cargo_toml.contains("reqwest_client"));
+}
