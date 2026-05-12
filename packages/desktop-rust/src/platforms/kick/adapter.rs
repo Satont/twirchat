@@ -13,6 +13,8 @@ use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+include!(concat!(env!("OUT_DIR"), "/kick_badges_generated.rs"));
+
 const KICK_TOKEN_REFRESH_WINDOW_SECONDS: u64 = 300;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -945,12 +947,7 @@ fn parse_kick_emotes(content: &str) -> (String, Vec<Emote>) {
 }
 
 fn kick_badge_svg(badge_type: &str) -> Option<String> {
-    match badge_type {
-        "broadcaster" | "moderator" | "subscriber" | "verified" | "founder" | "vip" => {
-            Some(format!("kick:badge:{badge_type}"))
-        }
-        _ => None,
-    }
+    generated_kick_badge_svg(badge_type).map(str::to_string)
 }
 
 fn token_needs_refresh(expires_at: Option<u64>) -> bool {

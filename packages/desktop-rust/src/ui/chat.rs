@@ -8,6 +8,7 @@ use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
+use base64::Engine;
 use gpui::{
     Context, Div, Entity, ImageSource, ObjectFit, Stateful, div, img, prelude::*, px, rgb, rgba,
 };
@@ -1119,11 +1120,32 @@ fn message_row(
                         .when(settings.show_platform_icon, |el| {
                             el.child(
                                 PlatformIcon::new(to_model_platform(message.platform))
-                                    .size(px(12.0)),
+                                    .size(px(12.0))
+                                    .color(theme::platform_color(to_model_platform(
+                                        message.platform,
+                                    ))),
                             )
                         })
                         .when(settings.show_badges, |el| {
                             el.children(message.author.badges.iter().map(|badge| {
+                                if let Some(svg_markup) = badge
+                                    .image_url
+                                    .as_ref()
+                                    .filter(|url| url.starts_with("<svg"))
+                                {
+                                    return div()
+                                        .w(px(18.0))
+                                        .h(px(18.0))
+                                        .rounded_sm()
+                                        .overflow_hidden()
+                                        .child(
+                                            img(ImageSource::from(svg_data_uri(svg_markup)))
+                                                .w_full()
+                                                .h_full()
+                                                .object_fit(ObjectFit::Contain),
+                                        );
+                                }
+
                                 if let Some(url) = badge.image_url.as_ref().filter(|url| {
                                     url.starts_with("http://") || url.starts_with("https://")
                                 }) {
@@ -1186,6 +1208,13 @@ fn message_row(
                     is_compact,
                 )),
         )
+}
+
+fn svg_data_uri(svg: &str) -> String {
+    format!(
+        "data:image/svg+xml;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(svg)
+    )
 }
 
 fn message_text_with_emotes(

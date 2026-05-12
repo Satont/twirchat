@@ -221,9 +221,11 @@ fn kick_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::
     assert_eq!(message.channel_id, "424242");
     assert_eq!(message.text, "hello PeepoClap reply");
     assert_eq!(message.author.badges.len(), 2);
-    assert_eq!(
-        message.author.badges[0].image_url.as_deref(),
-        Some("kick:badge:moderator")
+    assert!(
+        message.author.badges[0]
+            .image_url
+            .as_deref()
+            .is_some_and(|image| image.starts_with("<svg"))
     );
     assert_eq!(message.emotes[0].name, "PeepoClap");
     assert_eq!(message.emotes[0].positions[0].start, 6);
