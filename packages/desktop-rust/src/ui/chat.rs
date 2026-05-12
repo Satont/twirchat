@@ -1134,8 +1134,8 @@ fn message_row(
                                     .filter(|url| Path::new(url).is_absolute())
                                 {
                                     return div()
-                                        .w(px(18.0))
-                                        .h(px(18.0))
+                                        .w(px(14.0))
+                                        .h(px(14.0))
                                         .rounded_sm()
                                         .overflow_hidden()
                                         .child(
@@ -1150,8 +1150,8 @@ fn message_row(
                                     url.starts_with("http://") || url.starts_with("https://")
                                 }) {
                                     div()
-                                        .w(px(18.0))
-                                        .h(px(18.0))
+                                        .w(px(14.0))
+                                        .h(px(14.0))
                                         .rounded_sm()
                                         .overflow_hidden()
                                         .child(
