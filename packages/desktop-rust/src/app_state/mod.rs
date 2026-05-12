@@ -1,7 +1,7 @@
 pub mod mock_data;
 
 use crate::protocol::types::{
-    AppSettings, AppTheme, ChatTheme, FontFamilyChoice, LayoutNode, NormalizedChatMessage,
+    Account, AppSettings, AppTheme, ChatTheme, FontFamilyChoice, LayoutNode, NormalizedChatMessage,
     OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent, Platform, PlatformStatus,
     PlatformStatusInfo, PlatformStatusMode, SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
@@ -14,7 +14,14 @@ use crate::storage::settings::default_app_settings;
 use crate::storage::watched_layout::{MAX_PANELS, create_default_tab_layout};
 use crate::ui::platforms::ToastKind;
 use gpui::{App, Entity};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingWatchedChannelAdd {
+    pub platform: Platform,
+    pub channel_slug: String,
+    pub display_name: Option<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainSection {
@@ -52,6 +59,9 @@ pub struct AppState {
     pub chat_appearance_popover_open: bool,
     pub chat_add_menu_open: bool,
     pub chat_options_menu_open: bool,
+    pub tab_add_menu_open: bool,
+    pub composer_disabled_channel_ids: BTreeSet<String>,
+    pending_watched_channel_adds: Vec<PendingWatchedChannelAdd>,
 }
 
 impl Default for AppState {
@@ -83,6 +93,9 @@ impl Default for AppState {
             chat_appearance_popover_open: false,
             chat_add_menu_open: false,
             chat_options_menu_open: false,
+            tab_add_menu_open: false,
+            composer_disabled_channel_ids: BTreeSet::new(),
+            pending_watched_channel_adds: Vec::new(),
         }
     }
 }
@@ -246,8 +259,12 @@ impl AppState {
         self.watched_layouts
             .entry(channel.id.clone())
             .or_insert_with(|| create_default_tab_layout(&channel.id));
-        self.active_channel_tab_id = channel.id;
         self.chat_add_menu_open = false;
+        self.queue_watched_channel_add(
+            channel.platform,
+            channel.channel_slug.clone(),
+            Some(channel.display_name.clone()),
+        );
         Ok(true)
     }
 
@@ -256,6 +273,9 @@ impl AppState {
     }
 
     pub fn connect_platform_account_placeholder(&mut self, platform: Platform) {
+        if platform == Platform::Kick {
+            return;
+        }
         self.platforms_panel.auth_loading.insert(platform, true);
         self.platforms_panel.statuses.insert(
             platform,
@@ -333,6 +353,118 @@ impl AppState {
         Ok(changed)
     }
 
+    pub fn connect_kick_account(&mut self, storage: &Storage) -> Result<bool, String> {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Kick, true);
+        match crate::auth::kick_connect::connect_kick_account(storage) {
+            Ok(account) => {
+                let channel = storage
+                    .watched_channels()
+                    .upsert(Platform::Kick, &account.username, &account.display_name)
+                    .map_err(|error| error.to_string())?;
+                self.apply_connected_kick_account(account, channel);
+                Ok(true)
+            }
+            Err(error) => {
+                self.platforms_panel
+                    .auth_loading
+                    .insert(Platform::Kick, false);
+                self.platforms_panel.statuses.insert(
+                    Platform::Kick,
+                    PlatformStatusInfo {
+                        platform: Platform::Kick,
+                        status: PlatformStatus::Error,
+                        error: Some(error.clone()),
+                        mode: PlatformStatusMode::Anonymous,
+                        channel_login: None,
+                    },
+                );
+                self.platforms_panel
+                    .add_toast(Platform::Kick, ToastKind::Error, error.clone());
+                Err(error)
+            }
+        }
+    }
+
+    pub fn start_kick_connect(&mut self) {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Kick, true);
+        self.platforms_panel.statuses.insert(
+            Platform::Kick,
+            PlatformStatusInfo {
+                platform: Platform::Kick,
+                status: PlatformStatus::Connecting,
+                error: None,
+                mode: PlatformStatusMode::Anonymous,
+                channel_login: None,
+            },
+        );
+    }
+
+    pub fn apply_connected_kick_account(&mut self, account: Account, channel: WatchedChannel) {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Kick, false);
+        self.platforms_panel
+            .accounts
+            .retain(|existing| existing.platform != Platform::Kick);
+        self.platforms_panel.accounts.push(account.clone());
+        self.platforms_panel.statuses.insert(
+            Platform::Kick,
+            PlatformStatusInfo {
+                platform: Platform::Kick,
+                status: PlatformStatus::Connected,
+                error: None,
+                mode: PlatformStatusMode::Authenticated,
+                channel_login: Some(account.username.clone()),
+            },
+        );
+        self.platforms_panel.add_toast(
+            Platform::Kick,
+            ToastKind::Success,
+            format!("Connected Kick account @{}", account.username),
+        );
+
+        if !self
+            .watched_channels
+            .iter()
+            .any(|existing| existing.id == channel.id)
+        {
+            self.watched_channels.push(channel.clone());
+        }
+        self.watched_layouts
+            .entry(channel.id.clone())
+            .or_insert_with(|| create_default_tab_layout(&channel.id));
+        self.platforms_panel
+            .join_channel(Platform::Kick, account.username.clone());
+        self.queue_watched_channel_add(
+            Platform::Kick,
+            channel.channel_slug,
+            Some(channel.display_name),
+        );
+    }
+
+    pub fn fail_kick_connect(&mut self, error: String) {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Kick, false);
+        self.platforms_panel.statuses.insert(
+            Platform::Kick,
+            PlatformStatusInfo {
+                platform: Platform::Kick,
+                status: PlatformStatus::Error,
+                error: Some(error.clone()),
+                mode: PlatformStatusMode::Anonymous,
+                channel_login: None,
+            },
+        );
+        self.platforms_panel
+            .add_toast(Platform::Kick, ToastKind::Error, error.clone());
+        self.record_runtime_failure(error);
+    }
+
     pub fn apply_service_event(&mut self, event: ServiceEvent) {
         self.service_events_seen = self.service_events_seen.saturating_add(1);
         match event {
@@ -374,7 +506,15 @@ impl AppState {
                     .insert(status.platform, status.clone());
                 self.watched_channel_statuses.insert(channel_id, status);
             }
-            WatchedChannelsEvent::AdapterError { message, .. } => {
+            WatchedChannelsEvent::AdapterError {
+                channel_id,
+                platform,
+                message,
+            } => {
+                eprintln!(
+                    "[watched/live] app_state accepted adapter error channel={} platform={:?}: {}",
+                    channel_id, platform, message
+                );
                 self.runtime_errors.push(message);
             }
             WatchedChannelsEvent::BackendMessagePlanned { .. }
@@ -393,12 +533,24 @@ impl AppState {
     ) {
         match message {
             crate::protocol::messages::BackendToDesktopMessage::ChatMessage { data } => {
-                if let Ok(message) = serde_json::from_value(data) {
+                if let Ok(message) =
+                    serde_json::from_value::<crate::protocol::types::NormalizedChatMessage>(data)
+                {
+                    eprintln!(
+                        "[backend/live] app_state accepted {:?} message id={} channel={}",
+                        message.platform, message.id, message.channel_id
+                    );
                     self.messages.push(message);
                 }
             }
             crate::protocol::messages::BackendToDesktopMessage::ChatEvent { data } => {
-                if let Ok(event) = serde_json::from_value(data) {
+                if let Ok(event) =
+                    serde_json::from_value::<crate::protocol::types::NormalizedEvent>(data)
+                {
+                    eprintln!(
+                        "[backend/live] app_state accepted event id={} platform={:?}",
+                        event.id, event.platform
+                    );
                     self.events.push(event);
                     if !matches!(self.active_section, MainSection::Events) {
                         self.unread_events = self.unread_events.saturating_add(1);
@@ -569,6 +721,51 @@ impl AppState {
         self.chat_options_menu_open = !self.chat_options_menu_open;
     }
 
+    pub fn toggle_tab_add_menu(&mut self) {
+        self.tab_add_menu_open = !self.tab_add_menu_open;
+    }
+
+    pub fn toggle_composer_channel(&mut self, channel_id: &str) {
+        if !self
+            .composer_disabled_channel_ids
+            .insert(channel_id.to_string())
+        {
+            self.composer_disabled_channel_ids.remove(channel_id);
+        }
+    }
+
+    pub fn close_tab_add_menu(&mut self) {
+        self.tab_add_menu_open = false;
+    }
+
+    pub fn take_pending_watched_channel_adds(&mut self) -> Vec<PendingWatchedChannelAdd> {
+        std::mem::take(&mut self.pending_watched_channel_adds)
+    }
+
+    fn queue_watched_channel_add(
+        &mut self,
+        platform: Platform,
+        channel_slug: String,
+        display_name: Option<String>,
+    ) {
+        if self.pending_watched_channel_adds.iter().any(|pending| {
+            pending.platform == platform && pending.channel_slug.eq_ignore_ascii_case(&channel_slug)
+        }) {
+            return;
+        }
+
+        eprintln!(
+            "[watched/live] queued watched-channel add platform={:?} slug={}",
+            platform, channel_slug
+        );
+        self.pending_watched_channel_adds
+            .push(PendingWatchedChannelAdd {
+                platform,
+                channel_slug,
+                display_name,
+            });
+    }
+
     pub fn dismiss_update_toast(&mut self) {
         self.update_state.show = false;
     }
@@ -612,8 +809,10 @@ pub trait AppStateActions {
     fn toggle_chat_appearance_popover(&self, app: &mut App);
     fn toggle_chat_add_menu(&self, app: &mut App);
     fn toggle_chat_options_menu(&self, app: &mut App);
+    fn toggle_composer_channel(&self, app: &mut App, channel_id: &str);
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
     fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str);
+    fn connect_kick_account(&self, app: &mut App);
     fn connect_platform_account_placeholder(&self, app: &mut App, platform: Platform);
     fn disconnect_platform_account(&self, app: &mut App, platform: Platform);
     fn join_channel_from_account(&self, app: &mut App, platform: Platform);
@@ -845,6 +1044,13 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
+    fn toggle_composer_channel(&self, app: &mut App, channel_id: &str) {
+        self.update(app, |state, cx| {
+            state.toggle_composer_channel(channel_id);
+            cx.notify();
+        });
+    }
+
     fn add_chat_pane_for_active_tab(&self, app: &mut App) {
         self.update(app, |state, cx| {
             let config = RuntimeConfig::default();
@@ -874,6 +1080,44 @@ impl AppStateActions for Entity<AppState> {
             }
             cx.notify();
         });
+    }
+
+    fn connect_kick_account(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.start_kick_connect();
+            cx.notify();
+        });
+
+        let state_entity = self.clone();
+        app.spawn(async move |cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    let config = RuntimeConfig::default();
+                    let storage = Storage::open_or_recover(config.db_path())
+                        .map_err(|error| error.to_string())?;
+                    let account = crate::auth::kick_connect::connect_kick_account(&storage)?;
+                    let channel = storage
+                        .watched_channels()
+                        .upsert(Platform::Kick, &account.username, &account.display_name)
+                        .map_err(|error| error.to_string())?;
+                    Ok::<_, String>((account, channel))
+                })
+                .await;
+
+            cx.update(|app| {
+                state_entity.update(app, |state, cx| {
+                    match result {
+                        Ok((account, channel)) => {
+                            state.apply_connected_kick_account(account, channel)
+                        }
+                        Err(error) => state.fail_kick_connect(error),
+                    }
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
     }
 
     fn connect_platform_account_placeholder(&self, app: &mut App, platform: Platform) {
@@ -1107,7 +1351,7 @@ mod tests {
     }
 
     #[test]
-    fn add_watched_channel_from_account_persists_and_selects_tab() {
+    fn add_watched_channel_from_account_persists_and_keeps_home_feed() {
         let temp = tempfile::tempdir().expect("temp dir should be available");
         let db_path = temp.path().join("watched.sqlite");
         let storage = Storage::open(&db_path).expect("storage should open for watched add test");
@@ -1136,7 +1380,7 @@ mod tests {
 
         assert!(changed);
         assert_eq!(state.watched_channels.len(), 1);
-        assert_eq!(state.active_channel_tab_id(), state.watched_channels[0].id);
+        assert_eq!(state.active_channel_tab_id(), "home");
         assert!(
             state
                 .watched_layout(&state.watched_channels[0].id)

@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use twirchat_desktop_rust::platforms::kick::{
     KickAdapter, KickAdapterErrorKind, KickAuthState, KickBadge, KickChatMessage,
     KickChatMessageKind, KickFollowEvent, KickMessageSender, KickOriginalMessage,
-    KickOriginalSender, KickReplyMetadata, KickSubscriptionEvent, KickTransportAuth,
-    MockKickClient,
+    KickOriginalSender, KickReplyMetadata, KickSenderIdentity, KickSubscriptionEvent,
+    KickTransportAuth, MockKickClient,
 };
 use twirchat_desktop_rust::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
 use twirchat_desktop_rust::protocol::types::{
@@ -13,6 +13,70 @@ use twirchat_desktop_rust::protocol::types::{
 };
 use twirchat_desktop_rust::storage::accounts::UpsertAccount;
 use twirchat_desktop_rust::storage::{Storage, TokenPair};
+
+#[test]
+fn kick_chat_message_deserializes_pusher_payload_shape() -> Result<(), Box<dyn std::error::Error>> {
+    let payload = r##"
+    {
+      "id": "message-1",
+      "chatroom_id": 777,
+      "content": "hello from kick",
+      "type": "message",
+      "created_at": "2026-05-11T12:00:00Z",
+      "sender": {
+        "id": 987,
+        "username": "viewerone",
+        "slug": "viewerone",
+        "identity": {
+          "color": "#53fc18",
+          "badges": [
+            { "type": "subscriber", "text": "Subscriber", "count": 3 }
+          ]
+        },
+        "profile_picture": "https://cdn.example/avatar.png"
+      }
+    }
+    "##;
+
+    let message: KickChatMessage = serde_json::from_str(payload)?;
+
+    assert_eq!(message.message_type, KickChatMessageKind::Message);
+    assert_eq!(message.sender.identity.color.as_deref(), Some("#53fc18"));
+    assert_eq!(message.sender.identity.badges[0].badge_type, "subscriber");
+    assert_eq!(message.sender.identity.badges[0].count, Some(3));
+    Ok(())
+}
+
+#[test]
+fn kick_chat_message_deserializes_message_ref_metadata() -> Result<(), Box<dyn std::error::Error>> {
+    let payload = r##"
+    {
+      "id": "5b56b824-a245-4f65-9a23-7f46956829f4",
+      "chatroom_id": 3124040,
+      "content": "123",
+      "type": "message",
+      "created_at": "2026-05-12T08:14:22+00:00",
+      "sender": {
+        "id": 3195252,
+        "username": "Satont",
+        "slug": "satont",
+        "identity": {
+          "color": "#FBCFD8",
+          "badges": [{ "type": "broadcaster", "text": "Broadcaster" }]
+        }
+      },
+      "metadata": { "message_ref": "1778573662155" }
+    }
+    "##;
+
+    let message: KickChatMessage = serde_json::from_str(payload)?;
+
+    assert_eq!(message.message_type, KickChatMessageKind::Message);
+    assert_eq!(message.content, "123");
+    assert_eq!(message.sender.username, "Satont");
+    assert!(message.metadata.is_some());
+    Ok(())
+}
 
 #[test]
 fn kick_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,30 +101,32 @@ fn kick_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::
             id: 987,
             username: "viewerone".into(),
             slug: "viewerone".into(),
-            color: Some("#53fc18".into()),
-            badges: vec![
-                KickBadge {
-                    badge_type: "moderator".into(),
-                    text: "Moderator".into(),
-                    count: None,
-                },
-                KickBadge {
-                    badge_type: "subscriber".into(),
-                    text: "Subscriber".into(),
-                    count: Some(3),
-                },
-            ],
+            identity: KickSenderIdentity {
+                color: Some("#53fc18".into()),
+                badges: vec![
+                    KickBadge {
+                        badge_type: "moderator".into(),
+                        text: "Moderator".into(),
+                        count: None,
+                    },
+                    KickBadge {
+                        badge_type: "subscriber".into(),
+                        text: "Subscriber".into(),
+                        count: Some(3),
+                    },
+                ],
+            },
             profile_picture: Some("https://cdn.example/kick-viewer.png".into()),
         },
         metadata: Some(KickReplyMetadata {
-            original_sender: KickOriginalSender {
+            original_sender: Some(KickOriginalSender {
                 id: "123".into(),
                 username: "originalviewer".into(),
-            },
-            original_message: KickOriginalMessage {
+            }),
+            original_message: Some(KickOriginalMessage {
                 id: "original-kick-msg".into(),
                 content: "original Kick message".into(),
-            },
+            }),
         }),
     });
     client.push_follow_event(KickFollowEvent {

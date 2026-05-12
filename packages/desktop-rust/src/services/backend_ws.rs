@@ -325,6 +325,35 @@ impl BackendWsRunner {
         match result {
             Ok(Some(payload)) => match decode_backend_payload(&payload) {
                 Ok(message) => {
+                    match &message {
+                        BackendToDesktopMessage::ChatMessage { data } => {
+                            if let Ok(parsed) = serde_json::from_value::<
+                                crate::protocol::types::NormalizedChatMessage,
+                            >(data.clone())
+                            {
+                                eprintln!(
+                                    "[backend/live] incoming {:?} chat message id={} channel={} text={}",
+                                    parsed.platform, parsed.id, parsed.channel_id, parsed.text
+                                );
+                            } else {
+                                eprintln!(
+                                    "[backend/live] incoming chat message that failed local decode preview"
+                                );
+                            }
+                        }
+                        BackendToDesktopMessage::ChatEvent { .. } => {
+                            eprintln!("[backend/live] incoming chat event");
+                        }
+                        BackendToDesktopMessage::PlatformStatus {
+                            platform, status, ..
+                        } => {
+                            eprintln!(
+                                "[backend/live] incoming platform status platform={:?} status={:?}",
+                                platform, status
+                            );
+                        }
+                        _ => {}
+                    }
                     self.publish(BackendWsEvent::MessageReceived {
                         kind: BackendToDesktopMessageKind::from(&message),
                     });

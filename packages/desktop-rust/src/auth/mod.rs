@@ -1,5 +1,6 @@
 pub mod browser;
 pub mod callback;
+pub mod kick_connect;
 pub mod pkce;
 pub mod server;
 

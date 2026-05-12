@@ -451,10 +451,14 @@ pub(crate) fn panel(
                                                 .on_mouse_down(gpui::MouseButton::Left, {
                                                     let state_entity = state_entity.clone();
                                                     move |_event, _window, app| {
-                                                        state_entity
-                                                            .connect_platform_account_placeholder(
-                                                                app, platform,
-                                                            );
+                                                        if platform == Platform::Kick {
+                                                            state_entity.connect_kick_account(app);
+                                                        } else {
+                                                            state_entity
+                                                                .connect_platform_account_placeholder(
+                                                                    app, platform,
+                                                                );
+                                                        }
                                                     }
                                                 })
                                                 .child("Connect account"),

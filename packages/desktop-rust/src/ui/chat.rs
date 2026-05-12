@@ -2,6 +2,7 @@ use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
     AppSettings, ChatMessageType, ChatTheme, NormalizedChatMessage, Platform, WatchedChannel,
 };
+use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
@@ -18,20 +19,18 @@ pub(crate) fn panel(
     let settings = state.settings().clone();
 
     div()
+        .relative()
         .flex_1()
+        .min_h(px(0.0))
         .flex()
         .flex_col()
         .bg(theme::background())
-        .child(header(
-            &state.watched_channels,
-            state.messages.len(),
-            state,
-            state_entity,
-        ))
         .child(
             div()
                 .id("chat-scroll")
                 .flex_1()
+                .min_h(px(0.0))
+                .mt(px(40.0))
                 .bg(theme::background())
                 .overflow_y_scroll()
                 .child(
@@ -42,7 +41,20 @@ pub(crate) fn panel(
                     ),
                 ),
         )
-        .child(composer(&state.watched_channels))
+        .child(composer(state, state_entity.clone()))
+        .child(
+            div()
+                .absolute()
+                .top(px(0.0))
+                .left(px(0.0))
+                .right(px(0.0))
+                .child(header(
+                    &state.watched_channels,
+                    state.messages.len(),
+                    state,
+                    state_entity,
+                )),
+        )
 }
 
 fn header(
@@ -113,6 +125,7 @@ fn header(
                                         .on_click({
                                             let state_entity = state_entity.clone();
                                             move |_event, _window, cx| {
+                                                eprintln!("[ui/chat] appearance popover clicked");
                                                 state_entity.update(cx, |state, cx| {
                                                     state.toggle_chat_appearance_popover();
                                                     cx.notify();
@@ -382,6 +395,7 @@ fn header(
                                         .on_click({
                                             let state_entity = state_entity.clone();
                                             move |_event, _window, cx| {
+                                                eprintln!("[ui/chat] add menu clicked");
                                                 state_entity.update(cx, |state, cx| {
                                                     state.toggle_chat_add_menu();
                                                     cx.notify();
@@ -466,6 +480,7 @@ fn header(
                                         .on_click({
                                             let state_entity = state_entity.clone();
                                             move |_event, _window, cx| {
+                                                eprintln!("[ui/chat] options menu clicked");
                                                 state_entity.update(cx, |state, cx| {
                                                     state.toggle_chat_options_menu();
                                                     cx.notify();
@@ -523,9 +538,11 @@ fn panel_action_btn(icon: &'static str, active: bool) -> Stateful<Div> {
     }
 }
 
-fn composer(channels: &[WatchedChannel]) -> Div {
+fn composer(state: &AppState, state_entity: Entity<AppState>) -> Div {
     div()
         .w_full()
+        .h(px(104.0))
+        .min_h(px(82.0))
         .bg(theme::surface())
         .border_t_1()
         .border_color(theme::border())
@@ -535,14 +552,15 @@ fn composer(channels: &[WatchedChannel]) -> Div {
         .flex()
         .flex_col()
         .gap(px(6.0))
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .flex_wrap()
-                .gap(px(6.0))
-                .children(channels.iter().map(|chip| status_chip(chip, true))),
-        )
+        .child(div().flex().flex_row().flex_wrap().gap(px(6.0)).children(
+            state.watched_channels.iter().map({
+                let state_entity = state_entity.clone();
+                move |chip| {
+                    let enabled = !state.composer_disabled_channel_ids.contains(&chip.id);
+                    status_chip(chip, enabled, state_entity.clone())
+                }
+            }),
+        ))
         .child(
             div()
                 .flex()
@@ -557,13 +575,16 @@ fn composer(channels: &[WatchedChannel]) -> Div {
                         .bg(theme::surface_2())
                         .border_1()
                         .border_color(theme::border())
-                        .py(px(8.0))
-                        .px(px(12.0))
                         .flex()
                         .items_center()
-                        .text_size(px(13.0))
-                        .text_color(rgb(0x8b8b99))
-                        .child("Send a message... (Enter ↵ to send, Shift+Enter for newline)"),
+                        .child(
+                            Input::new(
+                                "Send a message... (Enter ↵ to send, Shift+Enter for newline)",
+                            )
+                            .on_change(|_, _, _| {
+                                eprintln!("[ui/chat] composer input focused");
+                            }),
+                        ),
                 )
                 .child(
                     div()
@@ -593,11 +614,16 @@ fn composer(channels: &[WatchedChannel]) -> Div {
         )
 }
 
-fn status_chip(chip: &WatchedChannel, accent_bg: bool) -> Div {
-    let active = accent_bg;
+fn status_chip(
+    chip: &WatchedChannel,
+    active: bool,
+    state_entity: Entity<AppState>,
+) -> impl IntoElement {
     let color = theme::platform_color(to_model_platform(chip.platform));
+    let channel_id = chip.id.clone();
 
     div()
+        .id(format!("composer-chip-{channel_id}"))
         .rounded_full()
         .px(px(9.0))
         .py(px(3.0))
@@ -611,10 +637,14 @@ fn status_chip(chip: &WatchedChannel, accent_bg: bool) -> Div {
         .text_size(px(12.0))
         .font_weight(gpui::FontWeight::MEDIUM)
         .text_color(if active { color } else { theme::text_muted() })
+        .cursor_pointer()
         .flex()
         .flex_row()
         .items_center()
         .gap(px(5.0))
+        .on_click(move |_event, _window, cx| {
+            state_entity.toggle_composer_channel(cx, &channel_id);
+        })
         .child(
             div()
                 .text_color(color)

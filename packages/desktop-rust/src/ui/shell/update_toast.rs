@@ -1,6 +1,6 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::ui::theme;
-use gpui::{App, Entity, IntoElement, RenderOnce, Window, div, prelude::*, px, rgba, svg};
+use gpui::{App, Entity, IntoElement, RenderOnce, Window, div, prelude::*, px, rgba};
 
 #[derive(IntoElement)]
 pub struct UpdateToast {
@@ -45,7 +45,8 @@ impl RenderOnce for UpdateToast {
             .child(
                 div()
                     .text_color(theme::accent())
-                    .child(svg().path("icons/update.svg").size(px(20.0))),
+                    .text_size(px(18.0))
+                    .child("↻"),
             )
             .child(
                 div()
@@ -137,7 +138,7 @@ impl RenderOnce for UpdateToast {
                     .on_click(move |_, _, cx| {
                         state_entity_clone.dismiss_update_toast(cx);
                     })
-                    .child(svg().path("icons/close.svg").size(px(14.0))),
+                    .child("×"),
             )
     }
 }

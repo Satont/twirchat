@@ -76,6 +76,7 @@ impl RealKickClient {
                         break;
                     }
                     Err(error) => {
+                        eprintln!("[kick/live] websocket read failed: {error}");
                         return Err(PlatformError::new(Platform::Kick, error.to_string()));
                     }
                 }
@@ -102,11 +103,21 @@ impl RealKickClient {
     }
 
     fn handle_pusher_event(&mut self, raw: &str) -> PlatformResult<()> {
-        let envelope: PusherEvent = serde_json::from_str(raw)
-            .map_err(|error| PlatformError::new(Platform::Kick, error.to_string()))?;
+        let envelope: PusherEvent = match serde_json::from_str(raw) {
+            Ok(envelope) => envelope,
+            Err(error) => {
+                eprintln!(
+                    "[kick/live] failed to decode Pusher envelope: {} raw={}",
+                    error,
+                    body_snippet(raw)
+                );
+                return Ok(());
+            }
+        };
 
         match envelope.event.as_str() {
             "pusher:connection_established" => {
+                eprintln!("[kick/live] websocket connected; sending subscription");
                 self.send_subscribe()?;
             }
             "pusher:ping" => {
@@ -120,20 +131,46 @@ impl RealKickClient {
             }
             "pusher_internal:subscription_succeeded" => {
                 self.pending_subscribe = false;
+                eprintln!("[kick/live] websocket subscription succeeded");
             }
-            r"App\Events\ChatMessageEvent" => {
-                let message: KickChatMessage = envelope.decode_data()?;
-                self.incoming_messages.push_back(message);
+            r"App\Events\ChatMessageEvent" => match envelope.decode_data() {
+                Ok(message) => {
+                    eprintln!("[kick/live] received chat message from websocket");
+                    self.incoming_messages.push_back(message);
+                }
+                Err(error) => eprintln!(
+                    "[kick/live] failed to decode chat message payload: {} data={}",
+                    error.message,
+                    body_snippet(&envelope.data.to_string())
+                ),
+            },
+            r"App\Events\FollowersUpdated" => match envelope.decode_data() {
+                Ok(event) => {
+                    eprintln!("[kick/live] received follow event from websocket");
+                    self.follow_events.push_back(event);
+                }
+                Err(error) => eprintln!(
+                    "[kick/live] failed to decode follow event payload: {} data={}",
+                    error.message,
+                    body_snippet(&envelope.data.to_string())
+                ),
+            },
+            r"App\Events\SubscriptionEvent" => match envelope.decode_data() {
+                Ok(event) => {
+                    eprintln!("[kick/live] received subscription event from websocket");
+                    self.subscription_events.push_back(event);
+                }
+                Err(error) => eprintln!(
+                    "[kick/live] failed to decode subscription event payload: {} data={}",
+                    error.message,
+                    body_snippet(&envelope.data.to_string())
+                ),
+            },
+            _ => {
+                if !envelope.event.starts_with("pusher") {
+                    eprintln!("[kick/live] unhandled Pusher event: {}", envelope.event);
+                }
             }
-            r"App\Events\FollowersUpdated" => {
-                let event: KickFollowEvent = envelope.decode_data()?;
-                self.follow_events.push_back(event);
-            }
-            r"App\Events\SubscriptionEvent" => {
-                let event: KickSubscriptionEvent = envelope.decode_data()?;
-                self.subscription_events.push_back(event);
-            }
-            _ => {}
         }
 
         Ok(())
@@ -168,6 +205,7 @@ impl RealKickClient {
     }
 
     fn connect_socket(&mut self) -> PlatformResult<()> {
+        eprintln!("[kick/live] connecting websocket to Kick Pusher");
         let (mut socket, _) = connect(KICK_PUSHER_WS)
             .map_err(|error| PlatformError::new(Platform::Kick, error.to_string()))?;
 
@@ -178,6 +216,7 @@ impl RealKickClient {
         }
 
         self.socket = Some(socket);
+        eprintln!("[kick/live] websocket connection established");
         self.pump_socket()?;
         Ok(())
     }
@@ -203,12 +242,22 @@ impl KickChatClient for RealKickClient {
             .get(format!("{}/api/kick/chatroom", self.backend_url))
             .query(&[("slug", channel_slug)])
             .send()
-            .map_err(|error| PlatformError::new(Platform::Kick, error.to_string()))?;
+            .map_err(|error| {
+                eprintln!("[kick/live] chatroom request failed before response: {error}");
+                PlatformError::new(Platform::Kick, error.to_string())
+            })?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        eprintln!("[kick/live] chatroom response status: {status}");
+
+        if !status.is_success() {
+            let body = response.text().unwrap_or_else(|error| error.to_string());
             return Err(PlatformError::new(
                 Platform::Kick,
-                format!("Kick chatroom lookup failed with {}", response.status()),
+                format!(
+                    "Kick chatroom lookup failed with {status}: {}",
+                    body_snippet(&body)
+                ),
             ));
         }
 
@@ -290,12 +339,19 @@ impl KickChatClient for RealKickClient {
                 "reply_to_message_id": request.reply_to_message_id,
             }))
             .send()
-            .map_err(|error| PlatformError::new(Platform::Kick, error.to_string()))?;
+            .map_err(|error| {
+                eprintln!("[kick/live] send message request failed before response: {error}");
+                PlatformError::new(Platform::Kick, error.to_string())
+            })?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        eprintln!("[kick/live] send message response status: {status}");
+
+        if !status.is_success() {
+            let body = response.text().unwrap_or_else(|error| error.to_string());
             return Err(PlatformError::new(
                 Platform::Kick,
-                format!("Kick send failed with {}", response.status()),
+                format!("Kick send failed with {status}: {}", body_snippet(&body)),
             ));
         }
 
@@ -312,12 +368,19 @@ impl KickChatClient for RealKickClient {
             .post(format!("{}/api/auth/kick/refresh", self.backend_url))
             .json(&json!({ "refreshToken": refresh_token }))
             .send()
-            .map_err(|error| PlatformError::new(Platform::Kick, error.to_string()))?;
+            .map_err(|error| {
+                eprintln!("[kick/live] refresh request failed before response: {error}");
+                PlatformError::new(Platform::Kick, error.to_string())
+            })?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        eprintln!("[kick/live] refresh response status: {status}");
+
+        if !status.is_success() {
+            let body = response.text().unwrap_or_else(|error| error.to_string());
             return Err(PlatformError::new(
                 Platform::Kick,
-                format!("Kick refresh failed with {}", response.status()),
+                format!("Kick refresh failed with {status}: {}", body_snippet(&body)),
             ));
         }
 
@@ -347,12 +410,22 @@ impl KickChatClient for RealKickClient {
                 ("channelId", request.channel_slug.as_str()),
             ])
             .send()
-            .map_err(|error| PlatformError::new(Platform::Kick, error.to_string()))?;
+            .map_err(|error| {
+                eprintln!("[kick/live] stream status request failed before response: {error}");
+                PlatformError::new(Platform::Kick, error.to_string())
+            })?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        eprintln!("[kick/live] stream status response status: {status}");
+
+        if !status.is_success() {
+            let body = response.text().unwrap_or_else(|error| error.to_string());
             return Err(PlatformError::new(
                 Platform::Kick,
-                format!("Kick stream status failed with {}", response.status()),
+                format!(
+                    "Kick stream status failed with {status}: {}",
+                    body_snippet(&body)
+                ),
             ));
         }
 
@@ -426,6 +499,17 @@ impl PusherEvent {
 fn configure_stream(stream: &mut TcpStream) {
     let _ = stream.set_read_timeout(Some(Duration::from_millis(10)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+}
+
+fn body_snippet(value: &str) -> String {
+    const MAX_LENGTH: usize = 500;
+    let trimmed = value.trim();
+    if trimmed.chars().count() <= MAX_LENGTH {
+        trimmed.to_string()
+    } else {
+        let snippet: String = trimmed.chars().take(MAX_LENGTH).collect();
+        format!("{snippet}...")
+    }
 }
 
 fn current_unix_timestamp() -> u64 {

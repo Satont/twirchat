@@ -4,20 +4,8 @@ use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px};
 
 pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
     let active_id = String::from(state.active_channel_tab_id());
-
-    let mut tabs = vec![("home".to_string(), "Home".to_string(), None)];
-    for channel in &state.watched_channels {
-        let model_platform = match channel.platform {
-            crate::protocol::types::Platform::Twitch => crate::models::Platform::Twitch,
-            crate::protocol::types::Platform::Youtube => crate::models::Platform::YouTube,
-            crate::protocol::types::Platform::Kick => crate::models::Platform::Kick,
-        };
-        tabs.push((
-            channel.id.clone(),
-            channel.display_name.clone(),
-            Some(model_platform),
-        ));
-    }
+    let tabs = vec![("home".to_string(), "Home".to_string(), None)];
+    let tabs_state_entity = state_entity.clone();
 
     div()
         .w_full()
@@ -31,7 +19,7 @@ pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
         .px(px(8.0))
         .gap(px(2.0))
         .children(tabs.into_iter().map(move |(id, label, platform)| {
-            let state_entity = state_entity.clone();
+            let state_entity = tabs_state_entity.clone();
             let is_active = id == active_id;
             let tab_id = id.clone();
             let accent = platform
@@ -106,6 +94,7 @@ pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
         }))
         .child(
             div()
+                .relative()
                 .h(px(32.0))
                 .px(px(12.0))
                 .flex()
@@ -115,6 +104,83 @@ pub(crate) fn bar(state: &AppState, state_entity: Entity<AppState>) -> Div {
                 .text_color(theme::text_muted())
                 .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
                 .cursor_pointer()
-                .child("+"),
+                .on_mouse_down(gpui::MouseButton::Left, {
+                    let state_entity = state_entity.clone();
+                    move |_event, _window, app| {
+                        eprintln!("[ui/tabs] tab add menu clicked");
+                        state_entity.update(app, |state, cx| {
+                            state.toggle_tab_add_menu();
+                            cx.notify();
+                        });
+                    }
+                })
+                .child("+")
+                .when(state.tab_add_menu_open, |this| {
+                    this.child(
+                        div()
+                            .absolute()
+                            .top(px(34.0))
+                            .right(px(0.0))
+                            .w(px(240.0))
+                            .bg(theme::surface())
+                            .border_1()
+                            .border_color(theme::border())
+                            .rounded_lg()
+                            .shadow_md()
+                            .p(px(4.0))
+                            .child(
+                                div()
+                                    .px(px(8.0))
+                                    .py(px(4.0))
+                                    .text_size(px(11.0))
+                                    .font_weight(gpui::FontWeight::BOLD)
+                                    .text_color(theme::text_muted())
+                                    .child("ADD CHANNEL"),
+                            )
+                            .children(state.platforms_panel.accounts.iter().map({
+                                let state_entity = state_entity.clone();
+                                move |account| {
+                                    let account_id = account.id.clone();
+                                    let label = format!(
+                                        "Watch {} ({})",
+                                        account.display_name, account.username
+                                    );
+                                    div()
+                                        .rounded_md()
+                                        .px(px(8.0))
+                                        .py(px(6.0))
+                                        .text_size(px(12.0))
+                                        .text_color(theme::text_primary())
+                                        .hover(|s| s.bg(theme::surface_2()))
+                                        .cursor_pointer()
+                                        .on_mouse_down(gpui::MouseButton::Left, {
+                                            let state_entity = state_entity.clone();
+                                            move |_event, _window, app| {
+                                                eprintln!("[ui/tabs] add watched account clicked");
+                                                state_entity.add_watched_channel_from_account(
+                                                    app,
+                                                    &account_id,
+                                                );
+                                                state_entity.update(app, |state, cx| {
+                                                    state.close_tab_add_menu();
+                                                    cx.notify();
+                                                });
+                                            }
+                                        })
+                                        .child(label)
+                                }
+                            }))
+                            .when(state.platforms_panel.accounts.is_empty(), |this| {
+                                this.child(
+                                    div()
+                                        .px(px(8.0))
+                                        .py(px(6.0))
+                                        .text_size(px(12.0))
+                                        .text_color(theme::text_muted())
+                                        .child("No connected accounts"),
+                                )
+                            }),
+                    )
+                }),
         )
 }

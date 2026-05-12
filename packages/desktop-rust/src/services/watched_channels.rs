@@ -298,7 +298,8 @@ pub fn run_watched_channels_service(
         }
 
         if let Err(error) = runtime.poll_all() {
-            publish_runtime_error(&events, String::new(), Platform::Twitch, error.to_string());
+            eprintln!("[watched/live] poll_all failed: {error}");
+            publish_runtime_error(&events, String::new(), Platform::Kick, error.to_string());
         }
         publish_runtime_events(&events, &mut runtime);
 
@@ -352,7 +353,8 @@ fn handle_watched_command(
     };
 
     if let Err(error) = result {
-        publish_runtime_error(events, String::new(), Platform::Twitch, error.to_string());
+        eprintln!("[watched/live] command failed: {error}");
+        publish_runtime_error(events, String::new(), Platform::Kick, error.to_string());
     }
 }
 
@@ -519,6 +521,7 @@ impl<'a> WatchedChannelsRuntime<'a> {
     }
 
     pub fn auto_connect(&mut self) -> WatchedChannelsRuntimeResult<Vec<WatchedChannel>> {
+        self.ensure_kick_accounts_are_watched()?;
         let channels = self.storage.watched_channels().find_all()?;
         eprintln!(
             "[watched/live] auto_connect found {} watched channel(s)",
@@ -532,6 +535,25 @@ impl<'a> WatchedChannelsRuntime<'a> {
             self.start_channel(channel)?;
         }
         Ok(channels)
+    }
+
+    fn ensure_kick_accounts_are_watched(&self) -> WatchedChannelsRuntimeResult<()> {
+        let accounts = self.storage.accounts().find_all()?;
+        for account in accounts
+            .iter()
+            .filter(|account| account.platform == Platform::Kick)
+        {
+            let channel = self.storage.watched_channels().upsert(
+                Platform::Kick,
+                &account.username,
+                &account.display_name,
+            )?;
+            eprintln!(
+                "[kick/live] ensured saved Kick account is watched slug={} id={}",
+                channel.channel_slug, channel.id
+            );
+        }
+        Ok(())
     }
 
     pub fn add_channel(
@@ -788,7 +810,11 @@ impl<'a> WatchedChannelsRuntime<'a> {
             platform,
             channel_slug,
             channel_id,
-            if connect_result.is_ok() { "ok" } else { "error" }
+            if connect_result.is_ok() {
+                "ok"
+            } else {
+                "error"
+            }
         );
         self.apply_adapter_events(&channel_id, sink.into_events());
         if let Err(error) = connect_result {
@@ -938,6 +964,10 @@ impl<'a> WatchedChannelsRuntime<'a> {
     }
 
     fn record_adapter_error(&mut self, channel_id: &str, error: PlatformError) {
+        eprintln!(
+            "[watched/live] recording adapter error channel={} platform={:?}: {}",
+            channel_id, error.platform, error.message
+        );
         self.events.push(WatchedChannelsRuntimeEvent::AdapterError {
             channel_id: channel_id.to_string(),
             platform: error.platform,

@@ -50,3 +50,36 @@ fn chat_input_keyboard_contract() {
     assert!(chat_rs.contains("Enter ↵ to send"));
     assert!(chat_rs.contains("Shift+Enter for newline"));
 }
+
+#[test]
+fn chat_section_is_unified_home_feed() {
+    let content_rs = fs::read_to_string("src/ui/shell/content.rs").expect("should read content.rs");
+    let tabs_rs = fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
+
+    assert!(content_rs.contains("chat::panel(state, state_entity.clone(), cx)"));
+    assert!(!content_rs.contains("active_channel_tab_id"));
+    assert!(!tabs_rs.contains("for channel in &state.watched_channels"));
+}
+
+#[test]
+fn chat_header_buttons_have_visible_popover_contracts() {
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+
+    assert!(chat_rs.contains("toggle_chat_appearance_popover"));
+    assert!(chat_rs.contains("Appearance"));
+    assert!(chat_rs.contains("toggle_chat_add_menu"));
+    assert!(chat_rs.contains("ADD"));
+    assert!(chat_rs.contains("Watch {} ({})"));
+    assert!(chat_rs.contains("toggle_chat_options_menu"));
+    assert!(chat_rs.contains("Clear chat history"));
+}
+
+#[test]
+fn tab_add_button_has_visible_menu_contract() {
+    let tabs_rs = fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
+
+    assert!(tabs_rs.contains("toggle_tab_add_menu"));
+    assert!(tabs_rs.contains("ADD CHANNEL"));
+    assert!(tabs_rs.contains("Watch {} ({})"));
+    assert!(tabs_rs.contains("add_watched_channel_from_account"));
+}

@@ -1,6 +1,6 @@
 use crate::app_state::{AppState, AppStateActions, MainSection};
 use crate::ui::theme;
-use gpui::{App, ClickEvent, Entity, Window, div, prelude::*, px, rgba, svg};
+use gpui::{App, ClickEvent, Entity, Window, div, prelude::*, px, rgba};
 
 pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl IntoElement {
     let width = if state.sidebar_collapsed() {
@@ -26,7 +26,8 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
             div()
                 .text_color(theme::accent())
                 .mb(px(12.0))
-                .child(svg().path("icons/logo.svg").size(px(24.0))),
+                .text_size(px(20.0))
+                .child("✦"),
         )
         .child(
             div()
@@ -39,7 +40,7 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Chat,
-                    "icons/chat.svg",
+                    "💬",
                     "Chat",
                     None,
                 ))
@@ -47,7 +48,7 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Events,
-                    "icons/events.svg",
+                    "⚡",
                     "Events",
                     if state.unread_events() > 0 {
                         Some(if state.unread_events() > 99 {
@@ -63,7 +64,7 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Platforms,
-                    "icons/platforms.svg",
+                    "◉",
                     "Platforms",
                     connected_platforms_badge(state),
                 ))
@@ -71,7 +72,7 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Settings,
-                    "icons/settings.svg",
+                    "⚙",
                     "Settings",
                     None,
                 )),
@@ -89,7 +90,7 @@ fn button(
     state: &AppState,
     state_entity: Entity<AppState>,
     section: MainSection,
-    icon_path: &'static str,
+    icon: &'static str,
     label: &'static str,
     badge: Option<String>,
 ) -> impl IntoElement {
@@ -100,7 +101,8 @@ fn button(
         .flex()
         .items_center()
         .justify_center()
-        .child(svg().path(icon_path).size(px(20.0)));
+        .text_size(px(17.0))
+        .child(icon);
 
     if let Some(badge_text) = badge {
         item_inner = item_inner.child(
@@ -191,14 +193,9 @@ fn sidebar_toggle(state: &AppState, state_entity: Entity<AppState>) -> impl Into
                 state_entity.toggle_sidebar(app);
             },
         )
-        .child(
-            svg()
-                .path(if state.sidebar_collapsed() {
-                    "icons/expand.svg"
-                } else {
-                    "icons/collapse.svg"
-                })
-                .size(px(16.0)), // Flipped icon if collapsed not supported directly via CSS rotate,
-                                 // in real app you might swap path or use graphics context
-        )
+        .child(if state.sidebar_collapsed() {
+            "›"
+        } else {
+            "‹"
+        })
 }

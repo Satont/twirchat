@@ -92,6 +92,7 @@ pub struct KickChatroom {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickBadge {
+    #[serde(rename = "type")]
     pub badge_type: String,
     pub text: String,
     pub count: Option<u64>,
@@ -110,9 +111,16 @@ pub struct KickMessageSender {
     pub id: u64,
     pub username: String,
     pub slug: String,
-    pub color: Option<String>,
-    pub badges: Vec<KickBadge>,
+    pub identity: KickSenderIdentity,
+    #[serde(default)]
     pub profile_picture: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KickSenderIdentity {
+    pub color: Option<String>,
+    #[serde(default)]
+    pub badges: Vec<KickBadge>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,8 +137,8 @@ pub struct KickOriginalMessage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickReplyMetadata {
-    pub original_sender: KickOriginalSender,
-    pub original_message: KickOriginalMessage,
+    pub original_sender: Option<KickOriginalSender>,
+    pub original_message: Option<KickOriginalMessage>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +153,7 @@ pub struct KickChatMessage {
     pub id: String,
     pub chatroom_id: u64,
     pub content: String,
+    #[serde(rename = "type")]
     pub message_type: KickChatMessageKind,
     pub created_at: String,
     pub sender: KickMessageSender,
@@ -536,10 +545,11 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
                 id: message.sender.id.to_string(),
                 username: Some(message.sender.username.clone()),
                 display_name: message.sender.username,
-                color: message.sender.color,
+                color: message.sender.identity.color,
                 avatar_url: message.sender.profile_picture,
                 badges: message
                     .sender
+                    .identity
                     .badges
                     .into_iter()
                     .map(normalize_badge)
@@ -806,13 +816,17 @@ fn normalize_reply(
     if message_type != KickChatMessageKind::Reply {
         return None;
     }
-    metadata.map(|metadata| ChatReply {
-        parent_message_id: metadata.original_message.id,
-        parent_message_text: metadata.original_message.content,
+    let metadata = metadata?;
+    let original_sender = metadata.original_sender?;
+    let original_message = metadata.original_message?;
+
+    Some(ChatReply {
+        parent_message_id: original_message.id,
+        parent_message_text: original_message.content,
         parent_author: ReplyAuthor {
-            id: metadata.original_sender.id,
-            username: metadata.original_sender.username.clone(),
-            display_name: metadata.original_sender.username,
+            id: original_sender.id,
+            username: original_sender.username.clone(),
+            display_name: original_sender.username,
         },
     })
 }

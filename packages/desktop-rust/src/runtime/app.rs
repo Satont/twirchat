@@ -1,7 +1,8 @@
+use crate::protocol::types::Platform;
 use crate::runtime::{RuntimeConfig, RuntimeConfigInput};
 use crate::services::{
     BackendWsCommand, BackendWsConfig, BusReceiver, ServiceCommand, ServiceEvent, ServiceKind,
-    ServiceRuntimeConfig, ServiceSupervisor,
+    ServiceResult, ServiceRuntimeConfig, ServiceSupervisor, WatchedChannelsCommand,
 };
 use crate::storage::{Storage, StorageError};
 use std::error::Error;
@@ -99,6 +100,22 @@ impl AppRuntime {
             }
         }
         events
+    }
+
+    pub fn dispatch_watched_channel_add(
+        &self,
+        platform: Platform,
+        channel_slug: String,
+        display_name: Option<String>,
+    ) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::WatchedChannels,
+            ServiceCommand::WatchedChannels(WatchedChannelsCommand::Add {
+                platform,
+                channel_slug,
+                display_name,
+            }),
+        )
     }
 }
 

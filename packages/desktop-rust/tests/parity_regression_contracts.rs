@@ -32,27 +32,21 @@ fn chat_gear_opens_appearance_popover_state_instead_of_settings_section() {
 }
 
 #[test]
-fn tabs_are_derived_from_watched_runtime_state_not_hardcoded_labels() {
+fn tabs_keep_connected_channels_in_home_feed() {
     let tabs_rs = read_source("src/ui/shell/tabs.rs");
+    let content_rs = read_source("src/ui/shell/content.rs");
 
     assert!(
-        !tabs_rs.contains("(\"home\", \"Home\", None)"),
-        "home tab is still hardcoded instead of derived from state"
+        tabs_rs.contains("Home"),
+        "home tab should remain the unified chat feed"
     );
     assert!(
-        !tabs_rs.contains("(\"satont\", \"satont\", Some"),
-        "watched tabs are still hardcoded instead of deriving from runtime state"
+        !tabs_rs.contains("for channel in &state.watched_channels"),
+        "connected watched channels should not become separate tabs"
     );
     assert!(
-        [
-            "watched_channels",
-            "watched_layouts",
-            "tab_channel_names",
-            "watched_live_status"
-        ]
-        .iter()
-        .any(|needle| tabs_rs.contains(needle)),
-        "tabs should be built from watched/runtime state, not local labels"
+        !content_rs.contains("active_channel_tab_id"),
+        "chat section should not switch away from the unified home feed"
     );
 }
 

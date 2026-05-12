@@ -29,9 +29,9 @@ impl PlatformIcon {
 
     fn svg_path(&self) -> &'static str {
         match self.platform {
-            Platform::Twitch => "icons/platforms/twitch.svg",
-            Platform::YouTube => "icons/platforms/youtube.svg",
-            Platform::Kick => "icons/platforms/kick.svg",
+            Platform::Twitch => "../desktop/src/assets/icons/platforms/twitch.svg",
+            Platform::YouTube => "../desktop/src/assets/icons/platforms/youtube.svg",
+            Platform::Kick => "../desktop/src/assets/icons/platforms/kick.svg",
         }
     }
 }

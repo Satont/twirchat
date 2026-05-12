@@ -66,11 +66,43 @@ impl TwirChatApp {
             cx.notify();
         });
     }
+
+    fn flush_pending_watched_channel_adds(&self, cx: &mut Context<Self>) {
+        let Some(runtime) = &self.runtime else {
+            return;
+        };
+        let pending = self
+            .state
+            .update(cx, |state, _| state.take_pending_watched_channel_adds());
+
+        for add in pending {
+            eprintln!(
+                "[watched/live] dispatching watched-channel add platform={:?} slug={}",
+                add.platform, add.channel_slug
+            );
+            if let Err(error) = runtime.dispatch_watched_channel_add(
+                add.platform,
+                add.channel_slug.clone(),
+                add.display_name.clone(),
+            ) {
+                let message = format!(
+                    "failed to dispatch watched-channel add for {:?}/{}: {}",
+                    add.platform, add.channel_slug, error
+                );
+                eprintln!("[watched/live] {message}");
+                self.state.update(cx, |state, cx| {
+                    state.record_runtime_failure(message);
+                    cx.notify();
+                });
+            }
+        }
+    }
 }
 
 impl Render for TwirChatApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         self.drain_runtime_events(cx);
+        self.flush_pending_watched_channel_adds(cx);
         let state = self.state.read(cx).clone();
 
         div()
@@ -85,6 +117,7 @@ impl Render for TwirChatApp {
             .child(
                 div()
                     .flex_1()
+                    .min_h(px(0.0))
                     .flex()
                     .flex_col()
                     .bg(rgb(0x0f0f11)) // Match .content background
