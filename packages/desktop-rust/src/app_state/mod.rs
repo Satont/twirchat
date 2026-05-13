@@ -1,5 +1,6 @@
 pub mod mock_data;
 
+use crate::chat::{SevenTvCatalog, SevenTvEmote, enrich_message_with_seven_tv};
 use crate::protocol::types::{
     Account, AppSettings, AppTheme, ChatTheme, FontFamilyChoice, LayoutNode, NormalizedChatMessage,
     OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent, Platform, PlatformStatus,
@@ -58,6 +59,7 @@ pub struct AppState {
     pub settings: SettingsManager,
     pub platforms_panel: crate::ui::platforms::PlatformsPanel,
     pub messages: Vec<NormalizedChatMessage>,
+    seven_tv_catalog: SevenTvCatalog,
     pub watched_channels: Vec<WatchedChannel>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
@@ -94,6 +96,7 @@ impl Default for AppState {
             settings: SettingsManager::new(default_app_settings()),
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
             messages: vec![],
+            seven_tv_catalog: SevenTvCatalog::new(),
             watched_channels: vec![],
             watched_channel_statuses: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
@@ -397,6 +400,40 @@ impl AppState {
         }
     }
 
+    pub fn connect_twitch_account(&mut self, storage: &Storage) -> Result<bool, String> {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Twitch, true);
+        match crate::auth::twitch_connect::connect_twitch_account(storage) {
+            Ok(account) => {
+                let channel = storage
+                    .watched_channels()
+                    .upsert(Platform::Twitch, &account.username, &account.display_name)
+                    .map_err(|error| error.to_string())?;
+                self.apply_connected_twitch_account(account, channel);
+                Ok(true)
+            }
+            Err(error) => {
+                self.platforms_panel
+                    .auth_loading
+                    .insert(Platform::Twitch, false);
+                self.platforms_panel.statuses.insert(
+                    Platform::Twitch,
+                    PlatformStatusInfo {
+                        platform: Platform::Twitch,
+                        status: PlatformStatus::Error,
+                        error: Some(error.clone()),
+                        mode: PlatformStatusMode::Anonymous,
+                        channel_login: None,
+                    },
+                );
+                self.platforms_panel
+                    .add_toast(Platform::Twitch, ToastKind::Error, error.clone());
+                Err(error)
+            }
+        }
+    }
+
     pub fn start_kick_connect(&mut self) {
         self.platforms_panel
             .auth_loading
@@ -405,6 +442,22 @@ impl AppState {
             Platform::Kick,
             PlatformStatusInfo {
                 platform: Platform::Kick,
+                status: PlatformStatus::Connecting,
+                error: None,
+                mode: PlatformStatusMode::Anonymous,
+                channel_login: None,
+            },
+        );
+    }
+
+    pub fn start_twitch_connect(&mut self) {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Twitch, true);
+        self.platforms_panel.statuses.insert(
+            Platform::Twitch,
+            PlatformStatusInfo {
+                platform: Platform::Twitch,
                 status: PlatformStatus::Connecting,
                 error: None,
                 mode: PlatformStatusMode::Anonymous,
@@ -456,6 +509,49 @@ impl AppState {
         );
     }
 
+    pub fn apply_connected_twitch_account(&mut self, account: Account, channel: WatchedChannel) {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Twitch, false);
+        self.platforms_panel
+            .accounts
+            .retain(|existing| existing.platform != Platform::Twitch);
+        self.platforms_panel.accounts.push(account.clone());
+        self.platforms_panel.statuses.insert(
+            Platform::Twitch,
+            PlatformStatusInfo {
+                platform: Platform::Twitch,
+                status: PlatformStatus::Connected,
+                error: None,
+                mode: PlatformStatusMode::Authenticated,
+                channel_login: Some(account.username.clone()),
+            },
+        );
+        self.platforms_panel.add_toast(
+            Platform::Twitch,
+            ToastKind::Success,
+            format!("Connected Twitch account @{}", account.username),
+        );
+
+        if !self
+            .watched_channels
+            .iter()
+            .any(|existing| existing.id == channel.id)
+        {
+            self.watched_channels.push(channel.clone());
+        }
+        self.watched_layouts
+            .entry(channel.id.clone())
+            .or_insert_with(|| create_default_tab_layout(&channel.id));
+        self.platforms_panel
+            .join_channel(Platform::Twitch, account.username.clone());
+        self.queue_watched_channel_add(
+            Platform::Twitch,
+            channel.channel_slug,
+            Some(channel.display_name),
+        );
+    }
+
     pub fn fail_kick_connect(&mut self, error: String) {
         self.platforms_panel
             .auth_loading
@@ -472,6 +568,25 @@ impl AppState {
         );
         self.platforms_panel
             .add_toast(Platform::Kick, ToastKind::Error, error.clone());
+        self.record_runtime_failure(error);
+    }
+
+    pub fn fail_twitch_connect(&mut self, error: String) {
+        self.platforms_panel
+            .auth_loading
+            .insert(Platform::Twitch, false);
+        self.platforms_panel.statuses.insert(
+            Platform::Twitch,
+            PlatformStatusInfo {
+                platform: Platform::Twitch,
+                status: PlatformStatus::Error,
+                error: Some(error.clone()),
+                mode: PlatformStatusMode::Anonymous,
+                channel_login: None,
+            },
+        );
+        self.platforms_panel
+            .add_toast(Platform::Twitch, ToastKind::Error, error.clone());
         self.record_runtime_failure(error);
     }
 
@@ -546,12 +661,57 @@ impl AppState {
                 if let Ok(message) =
                     serde_json::from_value::<crate::protocol::types::NormalizedChatMessage>(data)
                 {
+                    let channel_id = message.channel_id.clone();
+                    let message =
+                        enrich_message_with_seven_tv(message, &channel_id, &self.seven_tv_catalog);
                     eprintln!(
                         "[backend/live] app_state accepted {:?} message id={} channel={}",
                         message.platform, message.id, message.channel_id
                     );
                     self.messages.push(message);
                 }
+            }
+            crate::protocol::messages::BackendToDesktopMessage::SeventvEmoteSet {
+                platform,
+                channel_id,
+                emotes,
+            } => {
+                self.seven_tv_catalog.replace_for_channel(
+                    platform,
+                    &channel_id,
+                    emotes.into_iter().map(map_backend_seven_tv_emote),
+                );
+                self.rehydrate_channel_seven_tv_emotes(platform, &channel_id);
+            }
+            crate::protocol::messages::BackendToDesktopMessage::SeventvEmoteAdded {
+                platform,
+                channel_id,
+                emote,
+            } => {
+                self.seven_tv_catalog.insert(
+                    platform,
+                    channel_id.clone(),
+                    map_backend_seven_tv_emote(emote),
+                );
+                self.rehydrate_channel_seven_tv_emotes(platform, &channel_id);
+            }
+            crate::protocol::messages::BackendToDesktopMessage::SeventvEmoteRemoved {
+                platform,
+                channel_id,
+                emote_id,
+            } => {
+                self.seven_tv_catalog
+                    .remove_by_id(platform, &channel_id, &emote_id);
+            }
+            crate::protocol::messages::BackendToDesktopMessage::SeventvEmoteUpdated {
+                platform,
+                channel_id,
+                emote_id,
+                alias,
+            } => {
+                self.seven_tv_catalog
+                    .update_alias(platform, &channel_id, &emote_id, &alias);
+                self.rehydrate_channel_seven_tv_emotes(platform, &channel_id);
             }
             crate::protocol::messages::BackendToDesktopMessage::ChatEvent { data } => {
                 if let Ok(event) =
@@ -595,6 +755,18 @@ impl AppState {
                 );
             }
             _ => {}
+        }
+    }
+
+    fn rehydrate_channel_seven_tv_emotes(&mut self, platform: Platform, channel_id: &str) {
+        for message in &mut self.messages {
+            if message.platform != platform || message.channel_id != channel_id {
+                continue;
+            }
+
+            let enriched =
+                enrich_message_with_seven_tv(message.clone(), channel_id, &self.seven_tv_catalog);
+            *message = enriched;
         }
     }
 
@@ -865,6 +1037,17 @@ impl AppState {
     }
 }
 
+fn map_backend_seven_tv_emote(emote: crate::protocol::messages::SevenTvEmote) -> SevenTvEmote {
+    SevenTvEmote {
+        id: emote.id,
+        name: emote.alias,
+        image_url: emote.image_url,
+        animated: emote.animated,
+        zero_width: emote.zero_width,
+        aspect_ratio: emote.aspect_ratio,
+    }
+}
+
 pub trait AppStateActions {
     fn select_section(&self, app: &mut App, section: MainSection);
     fn select_channel_tab(&self, app: &mut App, tab_id: &str);
@@ -907,6 +1090,7 @@ pub trait AppStateActions {
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
     fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str);
     fn connect_kick_account(&self, app: &mut App);
+    fn connect_twitch_account(&self, app: &mut App);
     fn connect_platform_account_placeholder(&self, app: &mut App, platform: Platform);
     fn disconnect_platform_account(&self, app: &mut App, platform: Platform);
     fn join_channel_from_account(&self, app: &mut App, platform: Platform);
@@ -1252,6 +1436,44 @@ impl AppStateActions for Entity<AppState> {
                             state.apply_connected_kick_account(account, channel)
                         }
                         Err(error) => state.fail_kick_connect(error),
+                    }
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
+    }
+
+    fn connect_twitch_account(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.start_twitch_connect();
+            cx.notify();
+        });
+
+        let state_entity = self.clone();
+        app.spawn(async move |cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    let config = RuntimeConfig::default();
+                    let storage = Storage::open_or_recover(config.db_path())
+                        .map_err(|error| error.to_string())?;
+                    let account = crate::auth::twitch_connect::connect_twitch_account(&storage)?;
+                    let channel = storage
+                        .watched_channels()
+                        .upsert(Platform::Twitch, &account.username, &account.display_name)
+                        .map_err(|error| error.to_string())?;
+                    Ok::<_, String>((account, channel))
+                })
+                .await;
+
+            cx.update(|app| {
+                state_entity.update(app, |state, cx| {
+                    match result {
+                        Ok((account, channel)) => {
+                            state.apply_connected_twitch_account(account, channel)
+                        }
+                        Err(error) => state.fail_twitch_connect(error),
                     }
                     cx.notify();
                 });

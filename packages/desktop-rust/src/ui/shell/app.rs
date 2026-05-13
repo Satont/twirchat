@@ -1,9 +1,13 @@
-use crate::app_state::{AppState, RuntimeStatus};
+use crate::app_state::AppState;
 use crate::runtime::AppRuntime;
 
+use crate::ui::chat::ChatScrollUi;
 use crate::ui::components::input::Input;
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
-use gpui::{Context, Entity, Render, Task, Window, div, prelude::*, px, retain_all, rgb};
+use gpui::{
+    Context, Entity, Pixels, Render, ScrollHandle, Task, Window, div, prelude::*, px, retain_all,
+    rgb,
+};
 use std::time::Duration;
 
 pub struct TwirChatApp {
@@ -12,6 +16,11 @@ pub struct TwirChatApp {
     add_channel_input: Entity<Input>,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
+    chat_scroll_handle: ScrollHandle,
+    settings_scroll_handle: ScrollHandle,
+    platforms_scroll_handle: ScrollHandle,
+    last_chat_message_count: usize,
+    chat_scroll_paused: bool,
 }
 
 impl TwirChatApp {
@@ -63,6 +72,11 @@ impl TwirChatApp {
             add_channel_input,
             runtime,
             _runtime_poll_task: runtime_poll_task,
+            chat_scroll_handle: ScrollHandle::new(),
+            settings_scroll_handle: ScrollHandle::new(),
+            platforms_scroll_handle: ScrollHandle::new(),
+            last_chat_message_count: 0,
+            chat_scroll_paused: false,
         }
     }
 
@@ -160,13 +174,23 @@ impl TwirChatApp {
 }
 
 impl Render for TwirChatApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         self.drain_runtime_events(cx);
         self.flush_composer_submit(cx);
         self.flush_pending_watched_channel_adds(cx);
         self.flush_pending_watched_channel_messages(cx);
         let state = self.state.read(cx).clone();
         let composer_text = self.composer_input.read(cx).text().to_string();
+        let was_at_bottom = is_scroll_at_bottom(&self.chat_scroll_handle);
+        self.chat_scroll_paused = !was_at_bottom;
+
+        if state.messages.len() > self.last_chat_message_count
+            && was_at_bottom
+            && !state.messages.is_empty()
+        {
+            self.chat_scroll_handle.scroll_to_bottom();
+        }
+        self.last_chat_message_count = state.messages.len();
 
         div()
             .image_cache(retain_all("twirchat-images"))
@@ -181,60 +205,42 @@ impl Render for TwirChatApp {
             .child(
                 div()
                     .flex_1()
+                    .min_w(px(0.0))
                     .min_h(px(0.0))
                     .flex()
                     .flex_col()
                     .bg(rgb(0x0f0f11)) // Match .content background
                     .child(content::panel(
                         &state,
-                        self.state.clone(),
-                        self.composer_input.clone(),
-                        self.add_channel_input.clone(),
-                        composer_text,
+                        content::ContentPanelProps {
+                            state_entity: self.state.clone(),
+                            composer_input: self.composer_input.clone(),
+                            add_channel_input: self.add_channel_input.clone(),
+                            composer_text,
+                            scroll_ui: content::SectionScrollUi {
+                                chat: ChatScrollUi {
+                                    handle: &self.chat_scroll_handle,
+                                    paused: self.chat_scroll_paused,
+                                },
+                                settings: &self.settings_scroll_handle,
+                                platforms: &self.platforms_scroll_handle,
+                            },
+                        },
+                        window,
                         cx,
                     )),
             )
-            .child(runtime_status_bar(&state))
             .child(UpdateToast::new(self.state.clone()))
     }
 }
 
-fn runtime_status_bar(state: &AppState) -> impl gpui::IntoElement {
-    let status_text = if !state.runtime_errors().is_empty() {
-        format!("runtime error · {} issue(s)", state.runtime_errors().len())
-    } else {
-        match state.runtime_status() {
-            RuntimeStatus::Starting => String::from("runtime starting…"),
-            RuntimeStatus::Running => {
-                format!(
-                    "runtime connected · {} event(s)",
-                    state.service_events_seen()
-                )
-            }
-            RuntimeStatus::Stopped => String::from("runtime stopped"),
-            RuntimeStatus::Failed => String::from("runtime failed"),
-        }
-    };
+fn is_scroll_at_bottom(handle: &ScrollHandle) -> bool {
+    let max_offset = handle.max_offset().y;
+    if max_offset == Pixels::ZERO {
+        return true;
+    }
 
-    div()
-        .absolute()
-        .right(px(16.0))
-        .bottom(px(132.0))
-        .rounded_lg()
-        .px(px(10.0))
-        .py(px(6.0))
-        .bg(rgb(0x18181b))
-        .border_1()
-        .border_color(if state.runtime_errors().is_empty() {
-            rgb(0x2a2a33)
-        } else {
-            rgb(0x7f1d1d)
-        })
-        .text_size(px(11.0))
-        .text_color(if state.runtime_errors().is_empty() {
-            rgb(0xa1a1aa)
-        } else {
-            rgb(0xfca5a5)
-        })
-        .child(status_text)
+    let offset = handle.offset().y;
+    let delta = offset + max_offset;
+    delta >= px(-4.0) && delta <= px(4.0)
 }

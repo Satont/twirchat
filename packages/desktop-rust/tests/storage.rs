@@ -2,6 +2,7 @@ use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
 use twirchat_desktop_rust::protocol::types::{LayoutNode, PanelContent, Platform};
+use twirchat_desktop_rust::runtime::DEFAULT_OVERLAY_SERVER_PORT;
 use twirchat_desktop_rust::storage::crypto;
 use twirchat_desktop_rust::storage::{Storage, TokenState};
 
@@ -41,7 +42,7 @@ fn storage_reads_vue_fixture_db() -> Result<(), Box<dyn std::error::Error>> {
         twirchat_desktop_rust::protocol::types::AppTheme::Light
     );
     assert_eq!(settings.overlay.max_messages, 5);
-    assert_eq!(settings.overlay.port, 45823);
+    assert_eq!(settings.overlay.port, DEFAULT_OVERLAY_SERVER_PORT);
     assert_eq!(settings.hotkeys.new_tab, "ctrl+n");
     assert_eq!(settings.hotkeys.next_tab, "ctrl+tab");
 
@@ -123,7 +124,10 @@ fn storage_corrupt_db_recovers_safely() -> Result<(), Box<dyn std::error::Error>
     assert!(db_path.exists());
     assert!(db_path.with_extension("corrupt").exists());
     assert!(storage.accounts().find_all()?.is_empty());
-    assert_eq!(storage.settings().get_app_settings()?.overlay.port, 45823);
+    assert_eq!(
+        storage.settings().get_app_settings()?.overlay.port,
+        DEFAULT_OVERLAY_SERVER_PORT
+    );
 
     Ok(())
 }

@@ -229,14 +229,13 @@ export class SevenTVSubscriptionManager {
 
     for (const item of emoteSet.emotes?.items ?? []) {
       const alias = item.alias.toLowerCase()
-      const image = item.emote.images?.[0]
 
       emotes.set(alias, {
         alias: alias,
         animated: item.emote.flags?.animated ?? false,
         aspectRatio: item.emote.aspectRatio ?? 1,
         id: item.emote.id,
-        imageUrl: image?.url ?? ``,
+        imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
         name: item.emote.defaultName,
         zeroWidth: item.flags?.zeroWidth ?? false,
       })
@@ -278,13 +277,12 @@ export class SevenTVSubscriptionManager {
     const emotes = new Map<string, SevenTVEmote>()
     for (const item of emoteSet.emotes?.items ?? []) {
       const alias = item.alias.toLowerCase()
-      const image = item.emote.images?.[0]
       emotes.set(alias, {
         alias,
         animated: item.emote.flags?.animated ?? false,
         aspectRatio: item.emote.aspectRatio ?? 1,
         id: item.emote.id,
-        imageUrl: image?.url ?? '',
+        imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
         name: item.emote.defaultName,
         zeroWidth: item.flags?.zeroWidth ?? false,
       })
@@ -433,9 +431,7 @@ export class SevenTVSubscriptionManager {
         const emoteData = valueData.data
         const hostUrl = emoteData?.host?.url || ''
         const files = emoteData?.host?.files || []
-
-        const image = files.find((f: any) => f.name === '1x.webp' || f.name === '1x.avif')
-        const imageUrl = hostUrl ? `https:${hostUrl}/${image?.name || '1x.webp'}` : ''
+        const imageUrl = selectPreferredSevenTvHostFile(hostUrl, files)
 
         const emote: SevenTVEmote = {
           alias: valueData.name.toLowerCase(),
@@ -482,9 +478,7 @@ export class SevenTVSubscriptionManager {
         const emoteData = oldValueData.data
         const hostUrl = emoteData?.host?.url || ''
         const files = emoteData?.host?.files || []
-
-        const image = files.find((f: any) => f.name === '1x.webp' || f.name === '1x.avif')
-        const imageUrl = hostUrl ? `https:${hostUrl}/${image?.name || '1x.webp'}` : ''
+        const imageUrl = selectPreferredSevenTvHostFile(hostUrl, files)
 
         log.info('7TV emote REMOVED', {
           alias: oldValueData.name,
@@ -856,6 +850,45 @@ export class SevenTVSubscriptionManager {
       eventClientConnected: sevenTVEventClient.isConnected,
     }
   }
+}
+
+function selectPreferredSevenTvImageUrl(
+  images: Array<{ url?: string | null }> | null | undefined,
+): string {
+  const preferred = findPreferredImage(images, ['.gif', '.webp', '.avif'])
+  return preferred?.url ?? ''
+}
+
+function selectPreferredSevenTvHostFile(
+  hostUrl: string,
+  files: Array<{ name?: string | null }> | null | undefined,
+): string {
+  const preferred = findPreferredImage(files, ['.gif', '.webp', '.avif'])
+  const fileName = preferred?.name
+
+  if (!hostUrl || !fileName) {
+    return ''
+  }
+
+  return `https:${hostUrl}/${fileName}`
+}
+
+function findPreferredImage<T extends { url?: string | null; name?: string | null }>(
+  images: Array<T> | null | undefined,
+  extensions: string[],
+): T | undefined {
+  for (const extension of extensions) {
+    const match = images?.find((image) => {
+      const value = image.url ?? image.name ?? ''
+      return value.toLowerCase().endsWith(extension)
+    })
+
+    if (match) {
+      return match
+    }
+  }
+
+  return images?.[0]
 }
 
 export const sevenTVManager = new SevenTVSubscriptionManager()

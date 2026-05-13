@@ -30,6 +30,7 @@ fn main() -> ExitCode {
         let startup_failed = Rc::clone(&startup_failed);
 
         move |cx: &mut App| {
+            theme::init(theme::LoadThemes::JustBase, cx);
             match reqwest_client::ReqwestClient::proxy_and_user_agent(None, "TwirChat/0.1.0") {
                 Ok(http_client) => {
                     cx.set_http_client(std::sync::Arc::new(http_client));

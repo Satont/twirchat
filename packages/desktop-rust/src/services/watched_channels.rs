@@ -1,5 +1,6 @@
-use crate::chat::aggregate::merge_seven_tv_emotes;
-use crate::chat::{SevenTvCatalog, SevenTvEmote as CatalogSevenTvEmote};
+use crate::chat::{
+    SevenTvCatalog, SevenTvEmote as CatalogSevenTvEmote, enrich_message_with_seven_tv,
+};
 use crate::platforms::kick::{KickAdapter, KickChatClient};
 use crate::platforms::twitch::{TwitchAdapter, TwitchChatClient};
 use crate::platforms::youtube::{YouTubeAdapter, YouTubeStreamingTransport};
@@ -16,7 +17,7 @@ use crate::services::events::{DesktopToBackendMessageKind, ServiceEvent, Watched
 use crate::services::supervisor::{CancellationToken, ServiceExitReason, ServiceStopReport};
 use crate::storage::watched_channels::normalize_watched_channel_slug;
 use crate::storage::{Storage, StorageError};
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
@@ -1147,27 +1148,4 @@ fn seven_tv_platform_user_id(
         account.platform == Platform::Twitch && account.username.eq_ignore_ascii_case(channel_slug)
     });
     Ok(matching_account.map(|account| account.platform_user_id))
-}
-
-fn enrich_message_with_seven_tv(
-    message: NormalizedChatMessage,
-    seven_tv_channel_id: &str,
-    catalog: &SevenTvCatalog,
-) -> NormalizedChatMessage {
-    let mut lookup_message = message.clone();
-    lookup_message.channel_id = seven_tv_channel_id.to_string();
-    let merged_lookup = merge_seven_tv_emotes(lookup_message, catalog);
-    let mut enriched = message;
-    let mut existing_ids = enriched
-        .emotes
-        .iter()
-        .map(|emote| emote.id.clone())
-        .collect::<HashSet<_>>();
-
-    for emote in merged_lookup.emotes {
-        if existing_ids.insert(emote.id.clone()) {
-            enriched.emotes.push(emote);
-        }
-    }
-    enriched
 }

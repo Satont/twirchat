@@ -1,8 +1,10 @@
 use crate::app_state::AppStateActions;
+use crate::overlay::DEFAULT_OVERLAY_PORT;
 use crate::ui::components::switch::Switch;
 use crate::ui::theme;
-use gpui::{Div, Rgba, div, prelude::*, px};
+use gpui::{AnyElement, Div, Rgba, ScrollHandle, Window, div, prelude::*, px};
 use std::rc::Rc;
+use ui::WithScrollbar;
 
 type ToggleGroupCallback = Rc<dyn Fn(&'static str, &mut gpui::Window, &mut gpui::App) + 'static>;
 
@@ -99,7 +101,7 @@ fn toggle_group(options: &[(&'static str, bool)], on_click: ToggleGroupCallback)
     g
 }
 
-fn input_sm(placeholder: &'static str) -> Div {
+fn input_sm(placeholder: impl IntoElement) -> Div {
     div()
         .bg(theme::surface_2())
         .border_1()
@@ -186,17 +188,23 @@ fn slider_mock(val: &'static str, percent: f32) -> Div {
 pub(crate) fn panel(
     state: &crate::app_state::AppState,
     state_entity: gpui::Entity<crate::app_state::AppState>,
-) -> Div {
+    scroll_handle: &ScrollHandle,
+    window: &mut Window,
+    cx: &mut gpui::Context<crate::ui::shell::app::TwirChatApp>,
+) -> AnyElement {
     let settings = state.settings();
 
     div()
         .flex_1()
+        .min_h(px(0.0))
         .child(
             div()
                 .id("settings-scroll")
                 .w_full()
                 .h_full()
+                .min_h(px(0.0))
                 .overflow_y_scroll()
+                .track_scroll(scroll_handle)
                 .child(
                     div()
                         .w_full()
@@ -209,34 +217,34 @@ pub(crate) fn panel(
                         .flex_col()
                         .gap(px(8.0))
                         // Header
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_start()
-                                .justify_between()
-                                .mb(px(12.0))
                                 .child(
                                     div()
-                                        .flex_1()
+                                        .flex()
+                                        .flex_row()
+                                        .items_start()
+                                        .justify_between()
+                                        .mb(px(12.0))
                                         .child(
                                             div()
-                                                .text_size(px(20.0))
-                                                .font_weight(gpui::FontWeight::BOLD)
-                                                .text_color(theme::text_primary())
-                                                .child("Settings"),
+                                                .flex_1()
+                                                .child(
+                                                    div()
+                                                        .text_size(px(20.0))
+                                                        .font_weight(gpui::FontWeight::BOLD)
+                                                        .text_color(theme::text_primary())
+                                                        .child("Settings"),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(13.0))
+                                                        .text_color(theme::text_muted())
+                                                        .child("Customize appearance and overlay options"),
+                                                ),
                                         )
                                         .child(
                                             div()
-                                                .text_size(px(13.0))
-                                                .text_color(theme::text_muted())
-                                                .child("Customize appearance and overlay options"),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .bg(theme::accent())
-                                        .text_color(gpui::white())
+                                                .bg(theme::accent())
+                                                .text_color(gpui::white())
                                         .px(px(18.0))
                                         .py(px(8.0))
                                         .rounded_lg()
@@ -479,7 +487,9 @@ pub(crate) fn panel(
                                                 .overflow_hidden()
                                                 .whitespace_nowrap()
                                                 .child(
-                                                    "http://localhost:45823/?animation=slide&bg=transpar...",
+                                                    format!(
+                                                        "http://localhost:{DEFAULT_OVERLAY_PORT}/?animation=slide&bg=transpar..."
+                                                    ),
                                                 ),
                                         )
                                         .child(
@@ -497,7 +507,11 @@ pub(crate) fn panel(
                                                 .child("Copy"),
                                         ),
                                 )
-                                .child(form_row("Port", None, input_sm("45823")))
+                                .child(form_row(
+                                    "Port",
+                                    None,
+                                    input_sm(DEFAULT_OVERLAY_PORT.to_string()),
+                                ))
                                 .child(div().w_full().h(px(1.0)).bg(theme::border()))
                                 .child(form_row(
                                     "Background",
@@ -563,8 +577,7 @@ pub(crate) fn panel(
                                                 state_entity.set_overlay_show_avatar(app, !current);
                                             }
                                         })
-                                )),
-                        )
+                                ))
                         // Keyboard Shortcuts Section
                         .child(
                             div()
@@ -600,6 +613,7 @@ pub(crate) fn panel(
                                     hotkey_badge("Ctrl+K"),
                                 )),
                         ),
-                )
-        )
+        )))
+        .vertical_scrollbar_for(scroll_handle, window, cx)
+        .into_any_element()
 }

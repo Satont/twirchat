@@ -1,5 +1,6 @@
 use crate::overlay::protocol::OverlayMessage;
 use crate::protocol::{NormalizedChatMessage, NormalizedEvent};
+use crate::runtime::DEFAULT_OVERLAY_SERVER_PORT;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use sha1_smol::Sha1;
@@ -12,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-pub const DEFAULT_OVERLAY_PORT: u16 = 45_823;
+pub const DEFAULT_OVERLAY_PORT: u16 = DEFAULT_OVERLAY_SERVER_PORT;
 
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 

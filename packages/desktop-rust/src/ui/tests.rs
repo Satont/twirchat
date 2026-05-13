@@ -28,6 +28,9 @@ fn visual_chat_page_matches_vue_reference() {
 
     // Message List (Modern)
     assert!(chat_rs.contains("message_row"));
+    assert!(chat_rs.contains("avatar-{}"));
+    assert!(chat_rs.contains("badge-{}-{}-{}"));
+    assert!(chat_rs.contains("emote-{}-{}-{}"));
     assert!(chat_rs.contains("ChatMessageType::System"));
     assert!(chat_rs.contains("rgba(0xffffff06)")); // Hover
     assert!(chat_rs.contains("theme::platform_color(to_model_platform(message.platform))")); // Stripe
@@ -55,6 +58,26 @@ fn chat_input_keyboard_contract() {
     assert!(input_rs.contains("ctrl-a"));
     assert!(input_rs.contains("left"));
     assert!(input_rs.contains("right"));
+    assert!(input_rs.contains("ctrl-left"));
+    assert!(input_rs.contains("ctrl-right"));
+    assert!(input_rs.contains("ctrl-c"));
+    assert!(input_rs.contains("ctrl-v"));
+    assert!(input_rs.contains("ctrl-x"));
+}
+
+#[test]
+fn scrollable_sections_reserve_visible_scrollbar_space() {
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let settings_rs = fs::read_to_string("src/ui/settings.rs").expect("should read settings.rs");
+    let platforms_rs = fs::read_to_string("src/ui/platforms.rs").expect("should read platforms.rs");
+
+    assert!(chat_rs.contains("vertical_scrollbar_for(props.scroll_ui.handle, window, cx)"));
+    assert!(settings_rs.contains("vertical_scrollbar_for(scroll_handle, window, cx)"));
+    assert!(platforms_rs.contains("vertical_scrollbar_for(scroll_handle, window, cx)"));
+    assert!(chat_rs.contains("track_scroll(props.scroll_ui.handle)"));
+    assert!(settings_rs.contains("track_scroll(scroll_handle)"));
+    assert!(platforms_rs.contains("track_scroll(scroll_handle)"));
+    assert!(platforms_rs.contains("platforms-scroll"));
 }
 
 #[test]

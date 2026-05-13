@@ -8,8 +8,12 @@ use crate::protocol::types::{
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::shared::panel_title;
 use crate::ui::theme;
-use gpui::{Div, Entity, ImageSource, ObjectFit, div, img, prelude::*, px, rgb};
+use gpui::{
+    AnyElement, Context, Entity, ImageSource, ObjectFit, ScrollHandle, Window, div, img,
+    prelude::*, px, rgb,
+};
 use std::collections::BTreeMap;
+use ui::WithScrollbar;
 
 pub struct StreamEditor {
     pub platform: Platform,
@@ -206,50 +210,61 @@ fn status_color(info: Option<&PlatformStatusInfo>) -> gpui::Rgba {
 pub(crate) fn panel(
     state: &PlatformsPanel,
     state_entity: Entity<crate::app_state::AppState>,
-) -> Div {
+    scroll_handle: &ScrollHandle,
+    window: &mut Window,
+    cx: &mut Context<crate::ui::shell::app::TwirChatApp>,
+) -> AnyElement {
     let platforms = [Platform::Twitch, Platform::Youtube, Platform::Kick];
 
     div()
         .flex_1()
-        .p(px(28.0))
-        .px(px(32.0))
+        .min_h(px(0.0))
         .flex()
         .flex_col()
-        .gap(px(24.0))
+        .p(px(28.0))
+        .px(px(32.0))
         .child(panel_title(
             "Platforms",
             "Connect your streaming accounts and join channels",
         ))
         .child(
             div()
-                .flex()
-                .flex_col()
-                .gap(px(16.0))
-                .when(!state.toasts.is_empty(), |this| {
-                    this.child(div().flex().flex_col().gap(px(8.0)).children(
-                        state.toasts.iter().map(|toast| {
-                            div()
-                                .rounded_lg()
-                                .border_1()
-                                .border_color(if toast.kind == ToastKind::Success {
-                                    gpui::rgba(0x22c55e66)
-                                } else {
-                                    gpui::rgba(0xef444466)
-                                })
-                                .bg(if toast.kind == ToastKind::Success {
-                                    gpui::rgba(0x14532d66)
-                                } else {
-                                    gpui::rgba(0x7f1d1d66)
-                                })
-                                .px(px(14.0))
-                                .py(px(10.0))
-                                .text_size(px(12.0))
-                                .text_color(theme::text_primary())
-                                .child(toast.message.clone())
-                        }),
-                    ))
-                })
-                .children(platforms.into_iter().map(|platform| {
+                .flex_1()
+                .min_h(px(0.0))
+                .child(
+                    div()
+                        .id("platforms-scroll")
+                        .size_full()
+                        .flex()
+                        .flex_col()
+                        .overflow_y_scroll()
+                        .track_scroll(scroll_handle)
+                        .gap(px(16.0))
+                        .when(!state.toasts.is_empty(), |this| {
+                            this.child(div().flex().flex_col().gap(px(8.0)).children(
+                                state.toasts.iter().map(|toast| {
+                                    div()
+                                        .rounded_lg()
+                                        .border_1()
+                                        .border_color(if toast.kind == ToastKind::Success {
+                                            gpui::rgba(0x22c55e66)
+                                        } else {
+                                            gpui::rgba(0xef444466)
+                                        })
+                                        .bg(if toast.kind == ToastKind::Success {
+                                            gpui::rgba(0x14532d66)
+                                        } else {
+                                            gpui::rgba(0x7f1d1d66)
+                                        })
+                                        .px(px(14.0))
+                                        .py(px(10.0))
+                                        .text_size(px(12.0))
+                                        .text_color(theme::text_primary())
+                                        .child(toast.message.clone())
+                                }),
+                            ))
+                        })
+                        .children(platforms.into_iter().map(|platform| {
                     let display_name = match platform {
                         Platform::Twitch => "Twitch",
                         Platform::Youtube => "YouTube",
@@ -486,6 +501,8 @@ pub(crate) fn panel(
                                                     move |_event, _window, app| {
                                                         if platform == Platform::Kick {
                                                             state_entity.connect_kick_account(app);
+                                                        } else if platform == Platform::Twitch {
+                                                            state_entity.connect_twitch_account(app);
                                                         } else {
                                                             state_entity
                                                                 .connect_platform_account_placeholder(
@@ -631,8 +648,11 @@ pub(crate) fn panel(
                                 this
                             }
                         })
-                })),
+                        })),
+                ),
         )
+        .vertical_scrollbar_for(scroll_handle, window, cx)
+        .into_any_element()
 }
 
 #[cfg(test)]

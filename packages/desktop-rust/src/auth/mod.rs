@@ -3,6 +3,7 @@ pub mod callback;
 pub mod kick_connect;
 pub mod pkce;
 pub mod server;
+pub mod twitch_connect;
 
 use crate::protocol::types::Platform;
 use crate::storage::accounts::UpsertAccount;

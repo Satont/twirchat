@@ -59,6 +59,52 @@ impl SevenTvCatalog {
             name: name.to_owned(),
         })
     }
+
+    pub fn replace_for_channel(
+        &mut self,
+        platform: Platform,
+        channel_id: &str,
+        emotes: impl IntoIterator<Item = SevenTvEmote>,
+    ) {
+        self.emotes
+            .retain(|key, _| key.platform != platform || key.channel_id != channel_id);
+
+        for emote in emotes {
+            self.insert(platform, channel_id.to_owned(), emote);
+        }
+    }
+
+    pub fn remove_by_id(&mut self, platform: Platform, channel_id: &str, emote_id: &str) {
+        self.emotes.retain(|key, emote| {
+            !(key.platform == platform && key.channel_id == channel_id && emote.id == emote_id)
+        });
+    }
+
+    pub fn update_alias(
+        &mut self,
+        platform: Platform,
+        channel_id: &str,
+        emote_id: &str,
+        alias: &str,
+    ) {
+        let mut updated = None;
+
+        self.emotes.retain(|key, emote| {
+            let matches =
+                key.platform == platform && key.channel_id == channel_id && emote.id == emote_id;
+            if matches {
+                let mut next_emote = emote.clone();
+                next_emote.name = alias.to_string();
+                updated = Some(next_emote);
+            }
+
+            !matches
+        });
+
+        if let Some(emote) = updated {
+            self.insert(platform, channel_id.to_owned(), emote);
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -184,6 +230,30 @@ pub fn merge_seven_tv_emotes(
     }
 
     message
+}
+
+pub fn enrich_message_with_seven_tv(
+    message: NormalizedChatMessage,
+    seven_tv_channel_id: &str,
+    catalog: &SevenTvCatalog,
+) -> NormalizedChatMessage {
+    let mut lookup_message = message.clone();
+    lookup_message.channel_id = seven_tv_channel_id.to_string();
+    let merged_lookup = merge_seven_tv_emotes(lookup_message, catalog);
+    let mut enriched = message;
+    let mut existing_ids = enriched
+        .emotes
+        .iter()
+        .map(|emote| emote.id.clone())
+        .collect::<HashSet<_>>();
+
+    for emote in merged_lookup.emotes {
+        if existing_ids.insert(emote.id.clone()) {
+            enriched.emotes.push(emote);
+        }
+    }
+
+    enriched
 }
 
 fn parse_seven_tv_emotes(

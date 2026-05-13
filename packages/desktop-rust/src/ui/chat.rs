@@ -9,17 +9,30 @@ use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    Context, Div, Entity, ImageSource, ObjectFit, Stateful, div, img, prelude::*, px, rgb, rgba,
+    AnyElement, Context, Div, Entity, ImageSource, ObjectFit, ScrollHandle, Stateful, Window,
+    div, img, prelude::*, px, rgb, rgba,
 };
 use std::path::Path;
+use ui::{ScrollAxes, Scrollbars, WithScrollbar};
+
+pub(crate) struct ChatScrollUi<'a> {
+    pub handle: &'a ScrollHandle,
+    pub paused: bool,
+}
+
+pub(crate) struct ChatPanelProps<'a> {
+    pub state_entity: Entity<AppState>,
+    pub composer_input: Entity<Input>,
+    pub add_channel_input: Entity<Input>,
+    pub composer_text: String,
+    pub scroll_ui: ChatScrollUi<'a>,
+}
 
 pub(crate) fn panel(
     state: &AppState,
-    state_entity: Entity<AppState>,
-    composer_input: Entity<Input>,
-    add_channel_input: Entity<Input>,
-    composer_text: String,
-    _cx: &mut Context<TwirChatApp>,
+    props: ChatPanelProps<'_>,
+    window: &mut Window,
+    cx: &mut Context<TwirChatApp>,
 ) -> Div {
     let start = state.messages.len().saturating_sub(120);
     let visible_messages = state.messages[start..].to_vec();
@@ -28,31 +41,60 @@ pub(crate) fn panel(
     div()
         .relative()
         .flex_1()
+        .min_w(px(0.0))
         .min_h(px(0.0))
         .flex()
         .flex_col()
         .bg(theme::background())
         .child(
             div()
-                .id("chat-scroll")
                 .flex_1()
+                .min_w(px(0.0))
                 .min_h(px(0.0))
                 .mt(px(40.0))
-                .bg(theme::background())
-                .overflow_y_scroll()
-                .child(div().min_h_full().flex().flex_col().justify_end().children(
-                    visible_messages.iter().map(|msg| {
-                        message_row(msg, &settings, &state.platforms_panel.accounts)
-                            .into_any_element()
-                    }),
-                )),
+                .custom_scrollbars(
+                    Scrollbars::always_visible(ScrollAxes::Vertical)
+                        .tracked_scroll_handle(props.scroll_ui.handle),
+                    window,
+                    cx,
+                )
+                .child(
+                    div()
+                        .id("chat-scroll")
+                        .size_full()
+                        .bg(theme::background())
+                        .overflow_y_scroll()
+                        .track_scroll(props.scroll_ui.handle)
+                        .children(
+                            visible_messages
+                                .iter()
+                                .map(|msg| message_row(msg, &settings, &state.platforms_panel.accounts)),
+                        ),
+                ),
         )
         .child(composer(
             state,
-            state_entity.clone(),
-            composer_input,
-            composer_text,
+            props.state_entity.clone(),
+            props.composer_input,
+            props.composer_text,
         ))
+        .when(props.scroll_ui.paused, |el| {
+            el.child(
+                div()
+                    .absolute()
+                    .right(px(16.0))
+                    .bottom(px(132.0))
+                    .rounded_lg()
+                    .px(px(10.0))
+                    .py(px(6.0))
+                    .bg(rgb(0x18181b))
+                    .border_1()
+                    .border_color(rgb(0x3f3f46))
+                    .text_size(px(12.0))
+                    .text_color(theme::text_primary())
+                    .child("scroll paused"),
+            )
+        })
         .child(
             div()
                 .absolute()
@@ -63,14 +105,14 @@ pub(crate) fn panel(
                     &state.watched_channels,
                     state.messages.len(),
                     state,
-                    state_entity.clone(),
+                    props.state_entity.clone(),
                 )),
         )
         .when(state.tab_add_menu_open, |el| {
             el.child(add_channel_modal(
                 state,
-                state_entity.clone(),
-                add_channel_input,
+                props.state_entity.clone(),
+                props.add_channel_input,
             ))
         })
 }
@@ -594,11 +636,13 @@ fn composer(
             div()
                 .flex()
                 .flex_row()
+                .min_w(px(0.0))
                 .items_end()
                 .gap(px(8.0))
                 .child(
                     div()
                         .flex_1()
+                        .min_w(px(0.0))
                         .max_h(px(120.0))
                         .rounded_lg()
                         .bg(theme::surface_2())
@@ -975,13 +1019,14 @@ fn message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
     accounts: &[Account],
-) -> Div {
+) -> AnyElement {
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
     let v_pad = if is_compact { 1.0 } else { 2.0 };
 
     if message.message_type == ChatMessageType::System {
         return div()
+            .id(format!("message-row-{}", message.id))
             .w_full()
             .px(px(14.0))
             .py(px(v_pad))
@@ -1017,10 +1062,12 @@ fn message_row(
                         .text_color(theme::text_muted())
                         .child(message.timestamp.clone()),
                 )
-            });
+            })
+            .into_any_element();
     }
 
     div()
+        .id(format!("message-row-{}", message.id))
         .w_full()
         .px(px(14.0))
         .py(px(v_pad))
@@ -1085,6 +1132,7 @@ fn message_row(
                     .when_some(avatar_url.clone(), |avatar, url| {
                         avatar.child(
                             img(ImageSource::from(url))
+                                .id(format!("avatar-{}", message.id))
                                 .w_full()
                                 .h_full()
                                 .rounded_full()
@@ -1127,7 +1175,7 @@ fn message_row(
                             )
                         })
                         .when(settings.show_badges, |el| {
-                            el.children(message.author.badges.iter().map(|badge| {
+                            el.children(message.author.badges.iter().enumerate().map(|(index, badge)| {
                                 if let Some(path) = badge
                                     .image_url
                                     .as_ref()
@@ -1140,6 +1188,10 @@ fn message_row(
                                         .overflow_hidden()
                                         .child(
                                             img(ImageSource::from(Path::new(path)))
+                                                .id(format!(
+                                                    "badge-{}-{}-{}",
+                                                    message.id, badge.id, index
+                                                ))
                                                 .w_full()
                                                 .h_full()
                                                 .object_fit(ObjectFit::Contain),
@@ -1156,6 +1208,10 @@ fn message_row(
                                         .overflow_hidden()
                                         .child(
                                             img(ImageSource::from(url.clone()))
+                                                .id(format!(
+                                                    "badge-{}-{}-{}",
+                                                    message.id, badge.id, index
+                                                ))
                                                 .w_full()
                                                 .h_full()
                                                 .object_fit(ObjectFit::Contain),
@@ -1208,6 +1264,7 @@ fn message_row(
                     is_compact,
                 )),
         )
+        .into_any_element()
 }
 
 fn message_text_with_emotes(
@@ -1226,9 +1283,12 @@ fn message_text_with_emotes(
         .children(
             build_message_parts(message)
                 .into_iter()
-                .map(|part| match part {
+                .enumerate()
+                .map(|(index, part)| match part {
                     MessagePart::Text(text) => div().child(text).into_any_element(),
-                    MessagePart::Emote(emote) => emote_image(&emote, is_compact).into_any_element(),
+                    MessagePart::Emote(emote) => {
+                        emote_image(&emote, is_compact, &message.id, index).into_any_element()
+                    }
                 }),
         )
 }
@@ -1287,7 +1347,7 @@ fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
     parts
 }
 
-fn emote_image(emote: &Emote, is_compact: bool) -> Div {
+fn emote_image(emote: &Emote, is_compact: bool, message_id: &str, part_index: usize) -> Div {
     let size = if is_compact { 20.0 } else { 24.0 };
     div()
         .h(px(size))
@@ -1295,6 +1355,7 @@ fn emote_image(emote: &Emote, is_compact: bool) -> Div {
         .max_w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
         .child(
             img(ImageSource::from(emote.image_url.clone()))
+                .id(format!("emote-{}-{}-{}", message_id, emote.id, part_index))
                 .h_full()
                 .w_full()
                 .object_fit(ObjectFit::Contain)

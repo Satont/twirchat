@@ -3,6 +3,7 @@ use crate::protocol::types::{
     OverlayAnimation, OverlayConfig, OverlayPosition, PlatformFilter, SelfPingConfig, SplitConfig,
     SplitConfigType,
 };
+use crate::runtime::DEFAULT_OVERLAY_SERVER_PORT;
 use crate::storage::db::{Connection, Param};
 use crate::storage::{StorageResult, merge_json};
 use serde_json::{Value, json};
@@ -117,7 +118,7 @@ pub fn default_app_settings() -> AppSettings {
             show_badges: true,
             animation: OverlayAnimation::Slide,
             position: OverlayPosition::Bottom,
-            port: 45823,
+            port: DEFAULT_OVERLAY_SERVER_PORT,
         },
         auto_check_updates: Some(true),
         chat_layout: Some(default_chat_layout()),

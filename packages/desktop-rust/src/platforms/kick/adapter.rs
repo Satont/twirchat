@@ -7,6 +7,7 @@ use crate::protocol::types::{
     NormalizedChatMessage, NormalizedEvent, NormalizedEventType, Platform, PlatformStatus,
     PlatformStatusInfo, PlatformStatusMode, ReplyAuthor, StreamStatus,
 };
+use crate::runtime::KICK_REDIRECT_URI;
 use crate::storage::{Storage, TokenPair, TokenState};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -268,7 +269,7 @@ impl AuthProvider for KickAuthProvider {
     }
 
     fn redirect_uri(&self) -> &str {
-        "http://localhost:45825/auth/kick/callback"
+        KICK_REDIRECT_URI
     }
 
     fn build_authorization_url(&self, code_challenge: &str, state: &str) -> AuthResult<String> {

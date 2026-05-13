@@ -11,7 +11,11 @@ pub mod update;
 
 pub use app::{AppRuntime, AppRuntimeError};
 pub use browser::{ExternalOpenError, ExternalOpenResult, ExternalOpener, SystemExternalOpener};
-pub use config::{BackendRequestConfig, RuntimeConfig, RuntimeConfigInput};
+pub use config::{
+    AUTH_CALLBACK_BASE, BackendRequestConfig, DEFAULT_AUTH_SERVER_PORT, DEFAULT_BACKEND_URL,
+    DEFAULT_BACKEND_WS_URL, DEFAULT_OVERLAY_SERVER_PORT, KICK_REDIRECT_URI, RuntimeConfig,
+    RuntimeConfigInput, TWITCH_REDIRECT_URI, YOUTUBE_REDIRECT_URI,
+};
 pub use packaging::{
     AssetKind, AssetRequirement, PackagingAppMetadata, PackagingVerificationError,
     PackagingVerificationReport, PackagingVerificationStatus, TwirChatPackagingSpec,

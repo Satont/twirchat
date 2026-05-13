@@ -2,9 +2,19 @@ use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
 
-const DEFAULT_BACKEND_URL: &str = "http://127.0.0.1:3000";
-const DEFAULT_BACKEND_WS_URL: &str = "ws://127.0.0.1:3000/ws";
-const DEFAULT_NODE_ENV: &str = "production";
+mod built_defaults {
+    include!(concat!(env!("OUT_DIR"), "/build_runtime_config.rs"));
+}
+
+pub const DEFAULT_BACKEND_URL: &str = built_defaults::DEFAULT_BACKEND_URL;
+pub const DEFAULT_BACKEND_WS_URL: &str = built_defaults::DEFAULT_BACKEND_WS_URL;
+pub const DEFAULT_NODE_ENV: &str = built_defaults::DEFAULT_NODE_ENV;
+pub const DEFAULT_AUTH_SERVER_PORT: u16 = built_defaults::DEFAULT_AUTH_SERVER_PORT;
+pub const DEFAULT_OVERLAY_SERVER_PORT: u16 = built_defaults::DEFAULT_OVERLAY_SERVER_PORT;
+pub const AUTH_CALLBACK_BASE: &str = built_defaults::AUTH_CALLBACK_BASE;
+pub const TWITCH_REDIRECT_URI: &str = built_defaults::TWITCH_REDIRECT_URI;
+pub const YOUTUBE_REDIRECT_URI: &str = built_defaults::YOUTUBE_REDIRECT_URI;
+pub const KICK_REDIRECT_URI: &str = built_defaults::KICK_REDIRECT_URI;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeConfig {

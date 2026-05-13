@@ -7,6 +7,7 @@ use twirchat_desktop_rust::auth::{
     AuthError, AuthProvider, AuthResult, AuthService, AuthenticatedAccount,
 };
 use twirchat_desktop_rust::protocol::types::Platform;
+use twirchat_desktop_rust::runtime::TWITCH_REDIRECT_URI;
 use twirchat_desktop_rust::storage::{Storage, TokenState};
 
 #[test]
@@ -162,7 +163,7 @@ impl AuthProvider for FakeProvider {
     }
 
     fn redirect_uri(&self) -> &str {
-        "http://localhost:45821/auth/twitch/callback"
+        TWITCH_REDIRECT_URI
     }
 
     fn build_authorization_url(&self, code_challenge: &str, state: &str) -> AuthResult<String> {

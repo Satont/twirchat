@@ -1,9 +1,9 @@
 use gpui::{
-    App, Bounds, Context, CursorStyle, Element, ElementId, ElementInputHandler, Entity,
-    EntityInputHandler, FocusHandle, Focusable, GlobalElementId, IntoElement, KeyBinding, LayoutId,
-    MouseButton, MouseDownEvent, PaintQuad, Pixels, Render, ShapedLine, SharedString, Style,
-    TextRun, UTF16Selection, Window, actions, div, fill, hsla, point, prelude::*, px, relative,
-    rgb, rgba, size,
+    App, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
+    Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, IntoElement, KeyBinding,
+    LayoutId, MouseButton, MouseDownEvent, PaintQuad, Pixels, Render, ShapedLine, SharedString,
+    Style, TextRun, UTF16Selection, Window, actions, div, fill, hsla, point, prelude::*, px,
+    relative, rgb, rgba, size,
 };
 use std::ops::Range;
 
@@ -15,6 +15,61 @@ fn clamp_offset_to_str(content: &str, offset: usize) -> usize {
     offset
 }
 
+fn is_word_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
+fn previous_word_boundary_in(content: &str, offset: usize) -> usize {
+    if offset == 0 {
+        return 0;
+    }
+
+    let chars: Vec<(usize, char)> = content.char_indices().collect();
+    let mut index = chars.partition_point(|(idx, _)| *idx < offset);
+
+    while index > 0 && chars[index - 1].1.is_whitespace() {
+        index -= 1;
+    }
+
+    while index > 0 && !is_word_char(chars[index - 1].1) && !chars[index - 1].1.is_whitespace() {
+        index -= 1;
+    }
+
+    while index > 0 && is_word_char(chars[index - 1].1) {
+        index -= 1;
+    }
+
+    chars.get(index).map(|(idx, _)| *idx).unwrap_or(0)
+}
+
+fn next_word_boundary_in(content: &str, offset: usize) -> usize {
+    if offset >= content.len() {
+        return content.len();
+    }
+
+    let chars: Vec<(usize, char)> = content.char_indices().collect();
+    let mut index = chars.partition_point(|(idx, _)| *idx < offset);
+
+    if index < chars.len() && is_word_char(chars[index].1) {
+        while index < chars.len() && is_word_char(chars[index].1) {
+            index += 1;
+        }
+        return chars
+            .get(index)
+            .map(|(idx, _)| *idx)
+            .unwrap_or(content.len());
+    }
+
+    while index < chars.len() && !is_word_char(chars[index].1) {
+        index += 1;
+    }
+
+    chars
+        .get(index)
+        .map(|(idx, _)| *idx)
+        .unwrap_or(content.len())
+}
+
 actions!(
     twirchat_input,
     [
@@ -23,23 +78,44 @@ actions!(
         Enter,
         Left,
         Right,
+        WordLeft,
+        WordRight,
         SelectLeft,
         SelectRight,
-        SelectAll
+        SelectWordLeft,
+        SelectWordRight,
+        SelectAll,
+        Copy,
+        Cut,
+        Paste
     ]
 );
 
-pub fn key_bindings() -> [KeyBinding; 9] {
+pub fn key_bindings() -> [KeyBinding; 23] {
     [
         KeyBinding::new("backspace", Backspace, Some("TwirChatInput")),
         KeyBinding::new("delete", Delete, Some("TwirChatInput")),
         KeyBinding::new("enter", Enter, Some("TwirChatInput")),
         KeyBinding::new("left", Left, Some("TwirChatInput")),
         KeyBinding::new("right", Right, Some("TwirChatInput")),
+        KeyBinding::new("ctrl-left", WordLeft, Some("TwirChatInput")),
+        KeyBinding::new("ctrl-right", WordRight, Some("TwirChatInput")),
+        KeyBinding::new("alt-left", WordLeft, Some("TwirChatInput")),
+        KeyBinding::new("alt-right", WordRight, Some("TwirChatInput")),
         KeyBinding::new("shift-left", SelectLeft, Some("TwirChatInput")),
         KeyBinding::new("shift-right", SelectRight, Some("TwirChatInput")),
+        KeyBinding::new("ctrl-shift-left", SelectWordLeft, Some("TwirChatInput")),
+        KeyBinding::new("ctrl-shift-right", SelectWordRight, Some("TwirChatInput")),
+        KeyBinding::new("alt-shift-left", SelectWordLeft, Some("TwirChatInput")),
+        KeyBinding::new("alt-shift-right", SelectWordRight, Some("TwirChatInput")),
         KeyBinding::new("cmd-a", SelectAll, Some("TwirChatInput")),
         KeyBinding::new("ctrl-a", SelectAll, Some("TwirChatInput")),
+        KeyBinding::new("cmd-c", Copy, Some("TwirChatInput")),
+        KeyBinding::new("ctrl-c", Copy, Some("TwirChatInput")),
+        KeyBinding::new("cmd-x", Cut, Some("TwirChatInput")),
+        KeyBinding::new("ctrl-x", Cut, Some("TwirChatInput")),
+        KeyBinding::new("cmd-v", Paste, Some("TwirChatInput")),
+        KeyBinding::new("ctrl-v", Paste, Some("TwirChatInput")),
     ]
 }
 
@@ -154,6 +230,19 @@ impl Input {
             .unwrap_or(self.content.len())
     }
 
+    fn previous_word_boundary(&self, offset: usize) -> usize {
+        previous_word_boundary_in(&self.content, offset)
+    }
+
+    fn next_word_boundary(&self, offset: usize) -> usize {
+        next_word_boundary_in(&self.content, offset)
+    }
+
+    fn selected_text(&self) -> Option<String> {
+        (!self.selected_range.is_empty())
+            .then(|| self.content[self.selected_range.clone()].to_string())
+    }
+
     fn offset_from_utf16(&self, offset: usize) -> usize {
         let mut utf8_offset = 0;
         let mut utf16_count = 0;
@@ -221,12 +310,36 @@ impl Input {
         }
     }
 
+    fn word_left(&mut self, _: &WordLeft, _: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_range.is_empty() {
+            self.move_to(self.previous_word_boundary(self.cursor_offset()), cx);
+        } else {
+            self.move_to(self.selected_range.start, cx);
+        }
+    }
+
+    fn word_right(&mut self, _: &WordRight, _: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_range.is_empty() {
+            self.move_to(self.next_word_boundary(self.cursor_offset()), cx);
+        } else {
+            self.move_to(self.selected_range.end, cx);
+        }
+    }
+
     fn select_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
         self.select_to(self.previous_boundary(self.cursor_offset()), cx);
     }
 
     fn select_right(&mut self, _: &SelectRight, _: &mut Window, cx: &mut Context<Self>) {
         self.select_to(self.next_boundary(self.cursor_offset()), cx);
+    }
+
+    fn select_word_left(&mut self, _: &SelectWordLeft, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(self.previous_word_boundary(self.cursor_offset()), cx);
+    }
+
+    fn select_word_right(&mut self, _: &SelectWordRight, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(self.next_word_boundary(self.cursor_offset()), cx);
     }
 
     fn delete(&mut self, _: &Delete, window: &mut Window, cx: &mut Context<Self>) {
@@ -251,6 +364,25 @@ impl Input {
         self.selected_range = 0..self.content.len();
         self.selection_reversed = false;
         cx.notify();
+    }
+
+    fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(text) = self.selected_text() {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+        }
+    }
+
+    fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(text) = self.selected_text() {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+            self.replace_text_in_range(None, "", window, cx);
+        }
+    }
+
+    fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+            self.replace_text_in_range(None, &text, window, cx);
+        }
     }
 
     fn on_mouse_down(
@@ -412,9 +544,16 @@ impl Render for Input {
             .on_action(cx.listener(Self::enter))
             .on_action(cx.listener(Self::left))
             .on_action(cx.listener(Self::right))
+            .on_action(cx.listener(Self::word_left))
+            .on_action(cx.listener(Self::word_right))
             .on_action(cx.listener(Self::select_left))
             .on_action(cx.listener(Self::select_right))
+            .on_action(cx.listener(Self::select_word_left))
+            .on_action(cx.listener(Self::select_word_right))
             .on_action(cx.listener(Self::select_all))
+            .on_action(cx.listener(Self::copy))
+            .on_action(cx.listener(Self::cut))
+            .on_action(cx.listener(Self::paste))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .w_full()
             .min_h(px(36.0))
@@ -600,7 +739,7 @@ impl Element for TextElement {
 
 #[cfg(test)]
 mod tests {
-    use super::clamp_offset_to_str;
+    use super::{clamp_offset_to_str, next_word_boundary_in, previous_word_boundary_in};
 
     #[test]
     fn clamp_offset_handles_placeholder_range_on_empty_content() {
@@ -611,5 +750,17 @@ mod tests {
     fn clamp_offset_preserves_utf8_boundaries() {
         assert_eq!(clamp_offset_to_str("тест", 3), 2);
         assert_eq!(clamp_offset_to_str("тест", 99), "тест".len());
+    }
+
+    #[test]
+    fn word_boundaries_match_expected_navigation() {
+        let content = "hello   brave_new world!";
+
+        assert_eq!(next_word_boundary_in(content, 0), 5);
+        assert_eq!(next_word_boundary_in(content, 5), 8);
+        assert_eq!(next_word_boundary_in(content, 17), 18);
+        assert_eq!(previous_word_boundary_in(content, 23), 18);
+        assert_eq!(previous_word_boundary_in(content, 17), 8);
+        assert_eq!(previous_word_boundary_in(content, 8), 0);
     }
 }

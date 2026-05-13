@@ -13,6 +13,7 @@ use crate::protocol::types::{
     NormalizedEvent, NormalizedEventType, Platform, PlatformStatus, PlatformStatusInfo,
     PlatformStatusMode, ReplyAuthor,
 };
+use crate::runtime::YOUTUBE_REDIRECT_URI;
 use crate::storage::{Storage, TokenState};
 use serde_json::{Map, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -62,7 +63,7 @@ impl AuthProvider for YouTubeAuthProvider {
     }
 
     fn redirect_uri(&self) -> &str {
-        "http://localhost:45821/auth/youtube/callback"
+        YOUTUBE_REDIRECT_URI
     }
 
     fn build_authorization_url(&self, code_challenge: &str, state: &str) -> AuthResult<String> {
