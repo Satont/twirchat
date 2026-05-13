@@ -895,6 +895,12 @@ impl<'a> WatchedChannelsRuntime<'a> {
                 entry.messages.pop_back();
             }
         }
+        if let Err(error) = self.storage.messages().save(&enriched) {
+            eprintln!(
+                "[watched/live] failed to persist enriched message id={} channel={}: {}",
+                enriched.id, channel_id, error
+            );
+        }
         self.events
             .push(WatchedChannelsRuntimeEvent::MessageBuffered {
                 channel_id: channel_id.to_string(),

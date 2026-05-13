@@ -2,9 +2,10 @@ pub mod mock_data;
 
 use crate::chat::{SevenTvCatalog, SevenTvEmote, enrich_message_with_seven_tv};
 use crate::protocol::types::{
-    Account, AppSettings, AppTheme, ChatTheme, FontFamilyChoice, LayoutNode, NormalizedChatMessage,
-    OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent, Platform, PlatformStatus,
-    PlatformStatusInfo, PlatformStatusMode, SplitDirection, WatchedChannel, WatchedChannelsLayout,
+    Account, AppSettings, AppTheme, Badge, ChatTheme, Emote, FontFamilyChoice, LayoutNode,
+    NormalizedChatMessage, OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent,
+    Platform, PlatformStatus, PlatformStatusInfo, PlatformStatusMode, SplitDirection,
+    WatchedChannel, WatchedChannelsLayout,
 };
 use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
@@ -60,6 +61,7 @@ pub struct AppState {
     pub platforms_panel: crate::ui::platforms::PlatformsPanel,
     pub messages: Vec<NormalizedChatMessage>,
     seven_tv_catalog: SevenTvCatalog,
+    known_badge_image_urls: BTreeMap<(Platform, String), String>,
     pub watched_channels: Vec<WatchedChannel>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
@@ -97,6 +99,7 @@ impl Default for AppState {
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
             messages: vec![],
             seven_tv_catalog: SevenTvCatalog::new(),
+            known_badge_image_urls: BTreeMap::new(),
             watched_channels: vec![],
             watched_channel_statuses: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
@@ -130,6 +133,8 @@ impl AppState {
     fn load_storage_snapshot(&mut self, storage: &Storage) {
         if let Ok(messages) = storage.messages().get_recent(Some(50)) {
             self.messages = messages;
+            self.remember_badges_from_messages();
+            self.rehydrate_messages_from_known_badges();
         }
         if let Ok(settings) = storage.settings().get_app_settings() {
             self.settings = SettingsManager::new(settings);
@@ -623,7 +628,13 @@ impl AppState {
                     "[watched/live] app_state accepted {:?} message id={} channel={}",
                     message.platform, message.id, message.channel_id
                 );
-                self.messages.push(*message);
+                let channel_id = message.channel_id.clone();
+                let enriched = enrich_message_with_seven_tv(
+                    *message,
+                    &channel_id,
+                    &self.seven_tv_catalog,
+                );
+                self.upsert_message(enriched);
             }
             WatchedChannelsEvent::StatusChanged { channel_id, status } => {
                 self.platforms_panel
@@ -668,7 +679,7 @@ impl AppState {
                         "[backend/live] app_state accepted {:?} message id={} channel={}",
                         message.platform, message.id, message.channel_id
                     );
-                    self.messages.push(message);
+                    self.upsert_message(message);
                 }
             }
             crate::protocol::messages::BackendToDesktopMessage::SeventvEmoteSet {
@@ -768,6 +779,67 @@ impl AppState {
                 enrich_message_with_seven_tv(message.clone(), channel_id, &self.seven_tv_catalog);
             *message = enriched;
         }
+    }
+
+    fn upsert_message(&mut self, message: NormalizedChatMessage) {
+        let message = self.hydrate_message_from_known_badges(message);
+        let learned_badges = self.remember_badges_from_message(&message);
+
+        if let Some(existing) = self
+            .messages
+            .iter_mut()
+            .find(|existing| existing.id == message.id && existing.platform == message.platform)
+        {
+            merge_normalized_chat_message(existing, message);
+        } else {
+            self.messages = crate::chat::insert_live_message(&self.messages, message);
+        }
+
+        if learned_badges {
+            self.rehydrate_messages_from_known_badges();
+        }
+    }
+
+    fn remember_badges_from_messages(&mut self) {
+        for message in self.messages.clone() {
+            self.remember_badges_from_message(&message);
+        }
+    }
+
+    fn remember_badges_from_message(&mut self, message: &NormalizedChatMessage) -> bool {
+        let mut changed = false;
+
+        for badge in &message.author.badges {
+            let Some(image_url) = badge.image_url.as_ref() else {
+                continue;
+            };
+            let key = (message.platform, badge.id.clone());
+            match self.known_badge_image_urls.get(&key) {
+                Some(existing) if existing == image_url => {}
+                _ => {
+                    self.known_badge_image_urls.insert(key, image_url.clone());
+                    changed = true;
+                }
+            }
+        }
+
+        changed
+    }
+
+    fn rehydrate_messages_from_known_badges(&mut self) {
+        let known_badge_image_urls = self.known_badge_image_urls.clone();
+
+        for message in &mut self.messages {
+            hydrate_badges_for_message(message, &known_badge_image_urls);
+        }
+    }
+
+    fn hydrate_message_from_known_badges(
+        &self,
+        mut message: NormalizedChatMessage,
+    ) -> NormalizedChatMessage {
+        hydrate_badges_for_message(&mut message, &self.known_badge_image_urls);
+        message
     }
 
     pub fn select_section(&mut self, section: MainSection) {
@@ -1045,6 +1117,82 @@ fn map_backend_seven_tv_emote(emote: crate::protocol::messages::SevenTvEmote) ->
         animated: emote.animated,
         zero_width: emote.zero_width,
         aspect_ratio: emote.aspect_ratio,
+    }
+}
+
+fn hydrate_badges_for_message(
+    message: &mut NormalizedChatMessage,
+    known_badge_image_urls: &BTreeMap<(Platform, String), String>,
+) {
+    let platform = message.platform;
+
+    for badge in &mut message.author.badges {
+        if badge.image_url.is_some() {
+            continue;
+        }
+
+        if let Some(image_url) = known_badge_image_urls.get(&(platform, badge.id.clone())) {
+            badge.image_url = Some(image_url.clone());
+        }
+    }
+}
+
+fn merge_normalized_chat_message(existing: &mut NormalizedChatMessage, incoming: NormalizedChatMessage) {
+    if existing.author.avatar_url.is_none() {
+        existing.author.avatar_url = incoming.author.avatar_url.clone();
+    }
+
+    if existing.author.color.is_none() {
+        existing.author.color = incoming.author.color.clone();
+    }
+
+    if existing.author.username.is_none() {
+        existing.author.username = incoming.author.username.clone();
+    }
+
+    merge_badges(&mut existing.author.badges, incoming.author.badges);
+    merge_emotes(&mut existing.emotes, incoming.emotes);
+
+    if existing.reply.is_none() {
+        existing.reply = incoming.reply;
+    }
+}
+
+fn merge_badges(existing: &mut Vec<Badge>, incoming: Vec<Badge>) {
+    for badge in incoming {
+        if let Some(existing_badge) = existing.iter_mut().find(|existing_badge| existing_badge.id == badge.id)
+        {
+            if existing_badge.image_url.is_none() {
+                existing_badge.image_url = badge.image_url.clone();
+            }
+        } else {
+            existing.push(badge);
+        }
+    }
+}
+
+fn merge_emotes(existing: &mut Vec<Emote>, incoming: Vec<Emote>) {
+    for emote in incoming {
+        if let Some(existing_emote) = existing.iter_mut().find(|existing_emote| existing_emote.id == emote.id)
+        {
+            for position in emote.positions {
+                if !existing_emote.positions.iter().any(|existing_position| {
+                    existing_position.start == position.start && existing_position.end == position.end
+                }) {
+                    existing_emote.positions.push(position);
+                }
+            }
+
+            if existing_emote.image_url.is_empty() {
+                existing_emote.image_url = emote.image_url.clone();
+            }
+
+            if existing_emote.aspect_ratio.is_none() {
+                existing_emote.aspect_ratio = emote.aspect_ratio;
+            }
+        } else {
+            existing.push(emote);
+        }
     }
 }
 

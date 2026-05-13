@@ -65,6 +65,13 @@ fn watched_channels_runtime_persists_and_rehydrates() -> Result<(), Box<dyn std:
             .iter()
             .any(|emote| emote.id == "7tv-kekw")
     );
+    let stored = storage.messages().get_recent(Some(5))?;
+    assert!(
+        stored
+            .iter()
+            .any(|message| message.id == "msg-3"
+                && message.emotes.iter().any(|emote| emote.id == "7tv-kekw"))
+    );
 
     storage
         .settings()
