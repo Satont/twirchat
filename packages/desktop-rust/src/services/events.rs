@@ -1,4 +1,4 @@
-use crate::protocol::messages::BackendToDesktopMessage;
+use crate::protocol::messages::{BackendToDesktopMessage, DesktopToBackendMessage};
 use crate::protocol::types::{NormalizedChatMessage, Platform, PlatformStatusInfo};
 use std::time::Duration;
 
@@ -234,6 +234,7 @@ pub enum WatchedChannelsEvent {
     },
     BackendMessagePlanned {
         kind: DesktopToBackendMessageKind,
+        message: DesktopToBackendMessage,
     },
     AdapterError {
         channel_id: String,

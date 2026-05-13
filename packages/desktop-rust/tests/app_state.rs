@@ -97,18 +97,20 @@ fn duplicate_live_message_merges_richer_emotes() {
         },
     ));
 
-    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-        twirchat_desktop_rust::services::WatchedChannelsEvent::MessageBuffered {
-            channel_id: "watched-1".to_string(),
-            message: Box::new(chat_message_with_badges(
-                "msg-merge",
-                "fixturestreamer",
-                "hello KEKW",
-                vec![badge("vip/1", None)],
-                true,
-            )),
-        },
-    ));
+    state.apply_service_event(
+        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
+            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageBuffered {
+                channel_id: "watched-1".to_string(),
+                message: Box::new(chat_message_with_badges(
+                    "msg-merge",
+                    "fixturestreamer",
+                    "hello KEKW",
+                    vec![badge("vip/1", None)],
+                    true,
+                )),
+            },
+        ),
+    );
 
     let duplicates = state
         .messages
@@ -154,7 +156,10 @@ fn live_badge_image_backfills_older_messages() {
         .find(|message| message.id == "msg-old")
         .expect("old message should remain");
     assert_eq!(
-        old.author.badges.first().and_then(|badge| badge.image_url.as_deref()),
+        old.author
+            .badges
+            .first()
+            .and_then(|badge| badge.image_url.as_deref()),
         Some("https://example.test/vip.png")
     );
 }

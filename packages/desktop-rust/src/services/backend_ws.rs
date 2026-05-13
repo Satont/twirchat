@@ -20,7 +20,7 @@ use std::fmt;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::path::PathBuf;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use url::Url;
 
 const DEFAULT_BACKEND_WS_URL: &str = "ws://localhost:3000/ws";
@@ -163,6 +163,7 @@ struct BackendWsRunner {
     stopped: bool,
     reconnect_attempt: u32,
     reconnect_at: Option<Instant>,
+    pending_outbound: Vec<DesktopToBackendMessage>,
 }
 
 impl BackendWsRunner {
@@ -183,6 +184,7 @@ impl BackendWsRunner {
             stopped: true,
             reconnect_attempt: 0,
             reconnect_at: None,
+            pending_outbound: Vec::new(),
         }
     }
 
@@ -250,22 +252,30 @@ impl BackendWsRunner {
 
     fn connect(&mut self) {
         self.close_socket(BackendWsDisconnectReason::Commanded);
+        eprintln!("[backend-ws] connecting to {}", self.config.url());
         self.publish(BackendWsEvent::Connecting {
             url: self.config.url.clone(),
         });
 
         match self.load_client_secret().and_then(|secret| {
+            eprintln!(
+                "[backend-ws] using client secret prefix={}…",
+                secret.chars().take(8).collect::<String>()
+            );
             WebSocketClient::connect(self.config.url(), &secret, self.poll_interval)
         }) {
             Ok(socket) => {
+                eprintln!("[backend-ws] connected successfully");
                 self.socket = Some(socket);
                 self.reconnect_attempt = 0;
                 self.reconnect_at = None;
                 self.publish(BackendWsEvent::Connected);
+                self.flush_pending_outbound();
             }
             Err(BackendWsError::Handshake { status, message })
                 if status == 401 || status == 403 =>
             {
+                eprintln!("[backend-ws] auth rejected: {status} {message}");
                 self.stopped = true;
                 self.publish(BackendWsEvent::AuthRejected { status, message });
                 self.publish(BackendWsEvent::Disconnected {
@@ -273,6 +283,7 @@ impl BackendWsRunner {
                 });
             }
             Err(error) => {
+                eprintln!("[backend-ws] connection failed: {error}");
                 self.publish(BackendWsEvent::Disconnected {
                     reason: disconnect_reason(&error),
                 });
@@ -294,13 +305,16 @@ impl BackendWsRunner {
 
     fn send_message(&mut self, message: DesktopToBackendMessage) {
         let Some(socket) = self.socket.as_mut() else {
-            self.publish(BackendWsEvent::SendFailed {
-                reason: "backend websocket is not connected".into(),
-            });
+            eprintln!(
+                "[backend-ws] not connected, buffering message: {:?}",
+                DesktopToBackendMessageKind::from(&message)
+            );
+            self.pending_outbound.push(message);
             return;
         };
 
         let kind = DesktopToBackendMessageKind::from(&message);
+        eprintln!("[backend-ws] sending message: {:?}", kind);
         let result = serde_json::to_string(&message)
             .map_err(BackendWsError::from)
             .and_then(|payload| socket.send_text(&payload));
@@ -313,6 +327,19 @@ impl BackendWsRunner {
                 });
                 self.handle_unexpected_disconnect(disconnect_reason(&error));
             }
+        }
+    }
+
+    fn flush_pending_outbound(&mut self) {
+        let messages = std::mem::take(&mut self.pending_outbound);
+        if !messages.is_empty() {
+            eprintln!(
+                "[backend-ws] flushing {} buffered message(s)",
+                messages.len()
+            );
+        }
+        for message in messages {
+            self.send_message(message);
         }
     }
 
@@ -435,6 +462,9 @@ impl WebSocketClient {
 
         let key = websocket_key();
         let path = request_path(&parsed);
+        eprintln!(
+            "[backend-ws] opening websocket handshake host={host}:{port} path={path} key_bytes=16"
+        );
         let request = format!(
             "GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: {CLIENT_WEBSOCKET_VERSION}\r\nX-Client-Secret: {client_secret}\r\n\r\n"
         );
@@ -461,6 +491,7 @@ impl WebSocketClient {
         }
 
         if status != 101 {
+            eprintln!("[backend-ws] handshake rejected status={status} message={message}");
             return Err(BackendWsError::Handshake { status, message });
         }
         let expected_accept = websocket_accept(&key);
@@ -627,7 +658,7 @@ fn parse_status_line(line: &str) -> Result<(u16, String), BackendWsError> {
 }
 
 fn websocket_key() -> String {
-    STANDARD.encode(mask_seed().to_be_bytes())
+    STANDARD.encode(uuid::Uuid::new_v4().as_bytes())
 }
 
 fn websocket_accept(key: &str) -> String {
@@ -638,17 +669,8 @@ fn websocket_accept(key: &str) -> String {
 }
 
 fn mask_key() -> [u8; 4] {
-    let seed = mask_seed().to_be_bytes();
-    [seed[4], seed[5], seed[6], seed[7]]
-}
-
-fn mask_seed() -> u64 {
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => u64::try_from(duration.as_nanos())
-            .ok()
-            .map_or(u64::MAX, |value| value),
-        Err(_) => 0,
-    }
+    let bytes = *uuid::Uuid::new_v4().as_bytes();
+    [bytes[0], bytes[1], bytes[2], bytes[3]]
 }
 
 fn disconnect_reason(error: &BackendWsError) -> BackendWsDisconnectReason {

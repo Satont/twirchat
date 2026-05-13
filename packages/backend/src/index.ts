@@ -16,7 +16,7 @@ import { handleSevenTVImageProxy } from './seventv/index.ts'
 
 const log = logger('backend')
 
-runMigrations()
+await runMigrations()
 
 // Prefetch global Twitch badges at startup so the first request is instant
 

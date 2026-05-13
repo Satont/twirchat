@@ -132,6 +132,23 @@ impl AppRuntime {
             }),
         )
     }
+
+    pub fn dispatch_seven_tv_resubscribe(&self) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::WatchedChannels,
+            ServiceCommand::WatchedChannels(WatchedChannelsCommand::ResubscribeSevenTv),
+        )
+    }
+
+    pub fn dispatch_backend_ws_message(
+        &self,
+        message: crate::protocol::messages::DesktopToBackendMessage,
+    ) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::BackendWs,
+            ServiceCommand::BackendWs(BackendWsCommand::SendMessage { message }),
+        )
+    }
 }
 
 impl Drop for AppRuntime {

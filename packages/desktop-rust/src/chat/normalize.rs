@@ -51,7 +51,7 @@ fn iso_utc_timestamp_millis(value: &str) -> Option<i128> {
     let month = date_parts.next()?.parse::<u32>().ok()?;
     let day = date_parts.next()?.parse::<u32>().ok()?;
 
-    let time = time.trim_end_matches('Z');
+    let (time, offset_minutes) = strip_timezone_offset(time);
     let mut time_parts = time.split(':');
     let hour = time_parts.next()?.parse::<u32>().ok()?;
     let minute = time_parts.next()?.parse::<u32>().ok()?;
@@ -68,11 +68,36 @@ fn iso_utc_timestamp_millis(value: &str) -> Option<i128> {
     }
 
     let days = days_from_civil(year, month, day)?;
-    Some(
-        (((days * 24 + i128::from(hour)) * 60 + i128::from(minute)) * 60 + i128::from(second))
-            * 1000
-            + millis,
-    )
+    let total_millis = (((days * 24 + i128::from(hour)) * 60 + i128::from(minute)) * 60
+        + i128::from(second))
+        * 1000
+        + millis;
+    Some(total_millis - i128::from(offset_minutes) * 60 * 1000)
+}
+
+/// Strips a trailing timezone offset (`Z`, `+HH:MM`, `-HH:MM`) from the time
+/// portion and returns the bare time string plus the offset in minutes.
+fn strip_timezone_offset(time: &str) -> (&str, i32) {
+    if let Some(stripped) = time.strip_suffix('Z') {
+        return (stripped, 0);
+    }
+    // Try `+HH:MM` or `-HH:MM` (6 chars from end)
+    if time.len() >= 6 {
+        let sign_pos = time.len() - 6;
+        let candidate = &time[sign_pos..];
+        let sign = candidate.as_bytes()[0];
+        if (sign == b'+' || sign == b'-') && candidate.as_bytes()[3] == b':' {
+            if let (Ok(h), Ok(m)) = (
+                candidate[1..3].parse::<i32>(),
+                candidate[4..6].parse::<i32>(),
+            ) {
+                let offset = h * 60 + m;
+                let offset = if sign == b'-' { -offset } else { offset };
+                return (&time[..sign_pos], offset);
+            }
+        }
+    }
+    (time, 0)
 }
 
 fn parse_millis_fraction(fraction: &str) -> i128 {

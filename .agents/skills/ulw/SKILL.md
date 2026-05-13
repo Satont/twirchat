@@ -15,9 +15,9 @@ compatibility: opencode
 
 1. Reads the current task from this session's conversation history
 2. Generates a conventional-commit-style branch name
-3. Creates a git worktree at `./worktrees/<branch>` (inside the project, gitignored)
+3. Creates a git worktree at `./worktrees/<branch>` (inside the project, gitignored) only if user asks to.
 4. Symlinks `node_modules`, copies `.env`, and desktop `.env`
-5. Continues ALL implementation work inside the worktree — **same terminal, no new window**
+5. Continues ALL implementation work inside the worktree only if user asks to. — **same terminal, no new window**
 
 ---
 
@@ -59,7 +59,7 @@ Format: `<type>/<short-description>` or `<type>/<scope>/<short-description>`
 
 ---
 
-## Step 3 — Create Worktree
+## Step 3 — Create Worktree (if user asks to)
 
 Run these bash commands (replace `<branch>` with the generated name):
 

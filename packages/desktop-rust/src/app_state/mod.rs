@@ -2,10 +2,10 @@ pub mod mock_data;
 
 use crate::chat::{SevenTvCatalog, SevenTvEmote, enrich_message_with_seven_tv};
 use crate::protocol::types::{
-    Account, AppSettings, AppTheme, Badge, ChatTheme, Emote, FontFamilyChoice, LayoutNode,
-    NormalizedChatMessage, OverlayAnimation, OverlayConfig, OverlayPosition, PanelContent,
-    Platform, PlatformStatus, PlatformStatusInfo, PlatformStatusMode, SplitDirection,
-    WatchedChannel, WatchedChannelsLayout,
+    Account, AppSettings, AppTheme, Badge, ChatAuthor, ChatMessageType, ChatTheme,
+    FontFamilyChoice, LayoutNode, NormalizedChatMessage, OverlayAnimation, OverlayConfig,
+    OverlayPosition, PanelContent, Platform, PlatformStatus, PlatformStatusInfo,
+    PlatformStatusMode, SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
 use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
@@ -61,7 +61,6 @@ pub struct AppState {
     pub platforms_panel: crate::ui::platforms::PlatformsPanel,
     pub messages: Vec<NormalizedChatMessage>,
     seven_tv_catalog: SevenTvCatalog,
-    known_badge_image_urls: BTreeMap<(Platform, String), String>,
     pub watched_channels: Vec<WatchedChannel>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
@@ -74,6 +73,7 @@ pub struct AppState {
     pub composer_disabled_channel_ids: BTreeSet<String>,
     pending_watched_channel_adds: Vec<PendingWatchedChannelAdd>,
     pending_watched_channel_messages: Vec<PendingWatchedChannelMessage>,
+    pending_backend_messages: Vec<crate::protocol::messages::DesktopToBackendMessage>,
 }
 
 impl Default for AppState {
@@ -99,7 +99,6 @@ impl Default for AppState {
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
             messages: vec![],
             seven_tv_catalog: SevenTvCatalog::new(),
-            known_badge_image_urls: BTreeMap::new(),
             watched_channels: vec![],
             watched_channel_statuses: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
@@ -112,6 +111,7 @@ impl Default for AppState {
             composer_disabled_channel_ids: BTreeSet::new(),
             pending_watched_channel_adds: Vec::new(),
             pending_watched_channel_messages: Vec::new(),
+            pending_backend_messages: Vec::new(),
         }
     }
 }
@@ -133,8 +133,6 @@ impl AppState {
     fn load_storage_snapshot(&mut self, storage: &Storage) {
         if let Ok(messages) = storage.messages().get_recent(Some(50)) {
             self.messages = messages;
-            self.remember_badges_from_messages();
-            self.rehydrate_messages_from_known_badges();
         }
         if let Ok(settings) = storage.settings().get_app_settings() {
             self.settings = SettingsManager::new(settings);
@@ -624,17 +622,18 @@ impl AppState {
     fn apply_watched_channels_event(&mut self, event: WatchedChannelsEvent) {
         match event {
             WatchedChannelsEvent::MessageBuffered { message, .. } => {
+                let lookup_channel_id =
+                    self.resolve_seven_tv_channel_id(message.platform, &message.channel_id);
+                let message = enrich_message_with_seven_tv(
+                    *message,
+                    &lookup_channel_id,
+                    &self.seven_tv_catalog,
+                );
                 eprintln!(
                     "[watched/live] app_state accepted {:?} message id={} channel={}",
                     message.platform, message.id, message.channel_id
                 );
-                let channel_id = message.channel_id.clone();
-                let enriched = enrich_message_with_seven_tv(
-                    *message,
-                    &channel_id,
-                    &self.seven_tv_catalog,
-                );
-                self.upsert_message(enriched);
+                self.messages.push(message);
             }
             WatchedChannelsEvent::StatusChanged { channel_id, status } => {
                 self.platforms_panel
@@ -653,8 +652,10 @@ impl AppState {
                 );
                 self.runtime_errors.push(message);
             }
-            WatchedChannelsEvent::BackendMessagePlanned { .. }
-            | WatchedChannelsEvent::LoadRequested
+            WatchedChannelsEvent::BackendMessagePlanned { message, .. } => {
+                self.pending_backend_messages.push(message);
+            }
+            WatchedChannelsEvent::LoadRequested
             | WatchedChannelsEvent::AddRequested { .. }
             | WatchedChannelsEvent::RemoveRequested { .. }
             | WatchedChannelsEvent::ReconnectRequested { .. }
@@ -679,7 +680,7 @@ impl AppState {
                         "[backend/live] app_state accepted {:?} message id={} channel={}",
                         message.platform, message.id, message.channel_id
                     );
-                    self.upsert_message(message);
+                    self.messages.push(message);
                 }
             }
             crate::protocol::messages::BackendToDesktopMessage::SeventvEmoteSet {
@@ -687,6 +688,10 @@ impl AppState {
                 channel_id,
                 emotes,
             } => {
+                eprintln!(
+                    "[backend/7tv] received emote set platform={platform:?} channel={channel_id} count={}",
+                    emotes.len()
+                );
                 self.seven_tv_catalog.replace_for_channel(
                     platform,
                     &channel_id,
@@ -699,6 +704,10 @@ impl AppState {
                 channel_id,
                 emote,
             } => {
+                eprintln!(
+                    "[backend/7tv] emote added platform={platform:?} channel={channel_id} alias={} id={}",
+                    emote.alias, emote.id
+                );
                 self.seven_tv_catalog.insert(
                     platform,
                     channel_id.clone(),
@@ -711,8 +720,12 @@ impl AppState {
                 channel_id,
                 emote_id,
             } => {
+                eprintln!(
+                    "[backend/7tv] emote removed platform={platform:?} channel={channel_id} id={emote_id}"
+                );
                 self.seven_tv_catalog
                     .remove_by_id(platform, &channel_id, &emote_id);
+                self.rehydrate_channel_seven_tv_emotes(platform, &channel_id);
             }
             crate::protocol::messages::BackendToDesktopMessage::SeventvEmoteUpdated {
                 platform,
@@ -720,9 +733,23 @@ impl AppState {
                 emote_id,
                 alias,
             } => {
+                eprintln!(
+                    "[backend/7tv] emote updated platform={platform:?} channel={channel_id} id={emote_id} alias={alias}"
+                );
                 self.seven_tv_catalog
                     .update_alias(platform, &channel_id, &emote_id, &alias);
                 self.rehydrate_channel_seven_tv_emotes(platform, &channel_id);
+            }
+            crate::protocol::messages::BackendToDesktopMessage::SeventvSystemMessage {
+                platform,
+                channel_id,
+                message,
+            } => {
+                let text = seven_tv_system_message_text(&message);
+                eprintln!(
+                    "[backend/7tv] system message platform={platform:?} channel={channel_id}: {text}"
+                );
+                self.push_seven_tv_system_message(platform, &channel_id, text);
             }
             crate::protocol::messages::BackendToDesktopMessage::ChatEvent { data } => {
                 if let Ok(event) =
@@ -771,75 +798,75 @@ impl AppState {
 
     fn rehydrate_channel_seven_tv_emotes(&mut self, platform: Platform, channel_id: &str) {
         for message in &mut self.messages {
-            if message.platform != platform || message.channel_id != channel_id {
+            if message.platform != platform
+                || !message_matches_seven_tv_channel(
+                    &self.watched_channels,
+                    message.platform,
+                    &message.channel_id,
+                    channel_id,
+                )
+            {
                 continue;
             }
 
-            let enriched =
-                enrich_message_with_seven_tv(message.clone(), channel_id, &self.seven_tv_catalog);
+            let mut base = message.clone();
+            base.emotes.retain(|emote| !is_seven_tv_emote(emote));
+            let enriched = enrich_message_with_seven_tv(base, channel_id, &self.seven_tv_catalog);
             *message = enriched;
         }
     }
 
-    fn upsert_message(&mut self, message: NormalizedChatMessage) {
-        let message = self.hydrate_message_from_known_badges(message);
-        let learned_badges = self.remember_badges_from_message(&message);
-
-        if let Some(existing) = self
-            .messages
-            .iter_mut()
-            .find(|existing| existing.id == message.id && existing.platform == message.platform)
-        {
-            merge_normalized_chat_message(existing, message);
-        } else {
-            self.messages = crate::chat::insert_live_message(&self.messages, message);
-        }
-
-        if learned_badges {
-            self.rehydrate_messages_from_known_badges();
-        }
+    fn resolve_seven_tv_channel_id(&self, platform: Platform, message_channel_id: &str) -> String {
+        self.watched_channels
+            .iter()
+            .find(|channel| {
+                channel.platform == platform
+                    && (channel.id == message_channel_id
+                        || channel.channel_slug == message_channel_id)
+            })
+            .map(|channel| channel.channel_slug.clone())
+            .unwrap_or_else(|| message_channel_id.to_string())
     }
 
-    fn remember_badges_from_messages(&mut self) {
-        for message in self.messages.clone() {
-            self.remember_badges_from_message(&message);
-        }
-    }
-
-    fn remember_badges_from_message(&mut self, message: &NormalizedChatMessage) -> bool {
-        let mut changed = false;
-
-        for badge in &message.author.badges {
-            let Some(image_url) = badge.image_url.as_ref() else {
-                continue;
-            };
-            let key = (message.platform, badge.id.clone());
-            match self.known_badge_image_urls.get(&key) {
-                Some(existing) if existing == image_url => {}
-                _ => {
-                    self.known_badge_image_urls.insert(key, image_url.clone());
-                    changed = true;
-                }
-            }
-        }
-
-        changed
-    }
-
-    fn rehydrate_messages_from_known_badges(&mut self) {
-        let known_badge_image_urls = self.known_badge_image_urls.clone();
-
-        for message in &mut self.messages {
-            hydrate_badges_for_message(message, &known_badge_image_urls);
-        }
-    }
-
-    fn hydrate_message_from_known_badges(
+    fn display_channel_id_for_seven_tv(
         &self,
-        mut message: NormalizedChatMessage,
-    ) -> NormalizedChatMessage {
-        hydrate_badges_for_message(&mut message, &self.known_badge_image_urls);
-        message
+        platform: Platform,
+        seven_tv_channel_id: &str,
+    ) -> String {
+        self.watched_channels
+            .iter()
+            .find(|channel| {
+                channel.platform == platform && channel.channel_slug == seven_tv_channel_id
+            })
+            .map(|channel| channel.id.clone())
+            .unwrap_or_else(|| seven_tv_channel_id.to_string())
+    }
+
+    fn push_seven_tv_system_message(
+        &mut self,
+        platform: Platform,
+        seven_tv_channel_id: &str,
+        text: String,
+    ) {
+        let timestamp = crate::storage::now_millis().to_string();
+        self.messages.push(NormalizedChatMessage {
+            id: format!("seventv-system-{platform:?}-{seven_tv_channel_id}-{timestamp}"),
+            platform,
+            channel_id: self.display_channel_id_for_seven_tv(platform, seven_tv_channel_id),
+            author: ChatAuthor {
+                id: "seventv".to_string(),
+                username: Some("7tv".to_string()),
+                display_name: "7TV".to_string(),
+                color: Some("#4ade80".to_string()),
+                avatar_url: None,
+                badges: Vec::<Badge>::new(),
+            },
+            text,
+            emotes: Vec::new(),
+            timestamp,
+            message_type: ChatMessageType::System,
+            reply: None,
+        });
     }
 
     pub fn select_section(&mut self, section: MainSection) {
@@ -1075,6 +1102,12 @@ impl AppState {
         std::mem::take(&mut self.pending_watched_channel_messages)
     }
 
+    pub fn take_pending_backend_messages(
+        &mut self,
+    ) -> Vec<crate::protocol::messages::DesktopToBackendMessage> {
+        std::mem::take(&mut self.pending_backend_messages)
+    }
+
     fn queue_watched_channel_add(
         &mut self,
         platform: Platform,
@@ -1120,80 +1153,50 @@ fn map_backend_seven_tv_emote(emote: crate::protocol::messages::SevenTvEmote) ->
     }
 }
 
-fn hydrate_badges_for_message(
-    message: &mut NormalizedChatMessage,
-    known_badge_image_urls: &BTreeMap<(Platform, String), String>,
-) {
-    let platform = message.platform;
-
-    for badge in &mut message.author.badges {
-        if badge.image_url.is_some() {
-            continue;
+fn seven_tv_system_message_text(
+    message: &crate::protocol::messages::SevenTvSystemMessage,
+) -> String {
+    match message {
+        crate::protocol::messages::SevenTvSystemMessage::Added { emote, .. } => {
+            format!("7TV emote added: {}", emote.alias)
         }
-
-        if let Some(image_url) = known_badge_image_urls.get(&(platform, badge.id.clone())) {
-            badge.image_url = Some(image_url.clone());
+        crate::protocol::messages::SevenTvSystemMessage::Removed { emote, .. } => {
+            format!("7TV emote removed: {}", emote.alias)
         }
-    }
-}
-
-fn merge_normalized_chat_message(existing: &mut NormalizedChatMessage, incoming: NormalizedChatMessage) {
-    if existing.author.avatar_url.is_none() {
-        existing.author.avatar_url = incoming.author.avatar_url.clone();
-    }
-
-    if existing.author.color.is_none() {
-        existing.author.color = incoming.author.color.clone();
-    }
-
-    if existing.author.username.is_none() {
-        existing.author.username = incoming.author.username.clone();
-    }
-
-    merge_badges(&mut existing.author.badges, incoming.author.badges);
-    merge_emotes(&mut existing.emotes, incoming.emotes);
-
-    if existing.reply.is_none() {
-        existing.reply = incoming.reply;
-    }
-}
-
-fn merge_badges(existing: &mut Vec<Badge>, incoming: Vec<Badge>) {
-    for badge in incoming {
-        if let Some(existing_badge) = existing.iter_mut().find(|existing_badge| existing_badge.id == badge.id)
-        {
-            if existing_badge.image_url.is_none() {
-                existing_badge.image_url = badge.image_url.clone();
-            }
-        } else {
-            existing.push(badge);
+        crate::protocol::messages::SevenTvSystemMessage::Updated {
+            emote, old_alias, ..
+        } => old_alias.as_ref().map_or_else(
+            || format!("7TV emote updated: {}", emote.alias),
+            |old_alias| format!("7TV emote updated: {old_alias} → {}", emote.alias),
+        ),
+        crate::protocol::messages::SevenTvSystemMessage::SetChanged { set_name } => {
+            format!("7TV emote set changed: {set_name}")
+        }
+        crate::protocol::messages::SevenTvSystemMessage::SetRenamed { old_name, new_name } => {
+            format!("7TV emote set renamed: {old_name} → {new_name}")
+        }
+        crate::protocol::messages::SevenTvSystemMessage::SetDeleted { set_name } => {
+            format!("7TV emote set deleted: {set_name}")
         }
     }
 }
 
-fn merge_emotes(existing: &mut Vec<Emote>, incoming: Vec<Emote>) {
-    for emote in incoming {
-        if let Some(existing_emote) = existing.iter_mut().find(|existing_emote| existing_emote.id == emote.id)
-        {
-            for position in emote.positions {
-                if !existing_emote.positions.iter().any(|existing_position| {
-                    existing_position.start == position.start && existing_position.end == position.end
-                }) {
-                    existing_emote.positions.push(position);
-                }
-            }
+fn message_matches_seven_tv_channel(
+    watched_channels: &[WatchedChannel],
+    platform: Platform,
+    message_channel_id: &str,
+    seven_tv_channel_id: &str,
+) -> bool {
+    message_channel_id == seven_tv_channel_id
+        || watched_channels.iter().any(|channel| {
+            channel.platform == platform
+                && channel.channel_slug == seven_tv_channel_id
+                && channel.id == message_channel_id
+        })
+}
 
-            if existing_emote.image_url.is_empty() {
-                existing_emote.image_url = emote.image_url.clone();
-            }
-
-            if existing_emote.aspect_ratio.is_none() {
-                existing_emote.aspect_ratio = emote.aspect_ratio;
-            }
-        } else {
-            existing.push(emote);
-        }
-    }
+fn is_seven_tv_emote(emote: &crate::protocol::types::Emote) -> bool {
+    emote.image_url.contains("7tv") || emote.image_url.contains("/proxy/7tv/")
 }
 
 pub trait AppStateActions {

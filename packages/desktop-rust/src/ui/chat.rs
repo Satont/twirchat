@@ -9,8 +9,8 @@ use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    AnyElement, Context, Div, Entity, ImageSource, ObjectFit, ScrollHandle, Stateful, Window,
-    div, img, prelude::*, px, rgb, rgba,
+    AnyElement, Context, Div, Entity, ImageSource, ObjectFit, ScrollHandle, Stateful, Window, div,
+    img, prelude::*, px, rgb, rgba,
 };
 use std::path::Path;
 use ui::{ScrollAxes, Scrollbars, WithScrollbar};
@@ -65,11 +65,9 @@ pub(crate) fn panel(
                         .bg(theme::background())
                         .overflow_y_scroll()
                         .track_scroll(props.scroll_ui.handle)
-                        .children(
-                            visible_messages
-                                .iter()
-                                .map(|msg| message_row(msg, &settings, &state.platforms_panel.accounts)),
-                        ),
+                        .children(visible_messages.iter().map(|msg| {
+                            message_row(msg, &settings, &state.platforms_panel.accounts)
+                        })),
                 ),
         )
         .child(composer(
@@ -1175,58 +1173,60 @@ fn message_row(
                             )
                         })
                         .when(settings.show_badges, |el| {
-                            el.children(message.author.badges.iter().enumerate().map(|(index, badge)| {
-                                if let Some(path) = badge
-                                    .image_url
-                                    .as_ref()
-                                    .filter(|url| Path::new(url).is_absolute())
-                                {
-                                    return div()
-                                        .w(px(14.0))
-                                        .h(px(14.0))
-                                        .rounded_sm()
-                                        .overflow_hidden()
-                                        .child(
-                                            img(ImageSource::from(Path::new(path)))
-                                                .id(format!(
-                                                    "badge-{}-{}-{}",
-                                                    message.id, badge.id, index
-                                                ))
-                                                .w_full()
-                                                .h_full()
-                                                .object_fit(ObjectFit::Contain),
-                                        );
-                                }
+                            el.children(message.author.badges.iter().enumerate().map(
+                                |(index, badge)| {
+                                    if let Some(path) = badge
+                                        .image_url
+                                        .as_ref()
+                                        .filter(|url| Path::new(url).is_absolute())
+                                    {
+                                        return div()
+                                            .w(px(14.0))
+                                            .h(px(14.0))
+                                            .rounded_sm()
+                                            .overflow_hidden()
+                                            .child(
+                                                img(ImageSource::from(Path::new(path)))
+                                                    .id(format!(
+                                                        "badge-{}-{}-{}",
+                                                        message.id, badge.id, index
+                                                    ))
+                                                    .w_full()
+                                                    .h_full()
+                                                    .object_fit(ObjectFit::Contain),
+                                            );
+                                    }
 
-                                if let Some(url) = badge.image_url.as_ref().filter(|url| {
-                                    url.starts_with("http://") || url.starts_with("https://")
-                                }) {
-                                    div()
-                                        .w(px(14.0))
-                                        .h(px(14.0))
-                                        .rounded_sm()
-                                        .overflow_hidden()
-                                        .child(
-                                            img(ImageSource::from(url.clone()))
-                                                .id(format!(
-                                                    "badge-{}-{}-{}",
-                                                    message.id, badge.id, index
-                                                ))
-                                                .w_full()
-                                                .h_full()
-                                                .object_fit(ObjectFit::Contain),
-                                        )
-                                } else {
-                                    div()
-                                        .rounded_sm()
-                                        .px(px(4.0))
-                                        .py(px(1.0))
-                                        .bg(rgba(0xffffff1a))
-                                        .text_color(theme::text_primary())
-                                        .text_size(px(10.0))
-                                        .child(badge.text.clone())
-                                }
-                            }))
+                                    if let Some(url) = badge.image_url.as_ref().filter(|url| {
+                                        url.starts_with("http://") || url.starts_with("https://")
+                                    }) {
+                                        div()
+                                            .w(px(14.0))
+                                            .h(px(14.0))
+                                            .rounded_sm()
+                                            .overflow_hidden()
+                                            .child(
+                                                img(ImageSource::from(url.clone()))
+                                                    .id(format!(
+                                                        "badge-{}-{}-{}",
+                                                        message.id, badge.id, index
+                                                    ))
+                                                    .w_full()
+                                                    .h_full()
+                                                    .object_fit(ObjectFit::Contain),
+                                            )
+                                    } else {
+                                        div()
+                                            .rounded_sm()
+                                            .px(px(4.0))
+                                            .py(px(1.0))
+                                            .bg(rgba(0xffffff1a))
+                                            .text_color(theme::text_primary())
+                                            .text_size(px(10.0))
+                                            .child(badge.text.clone())
+                                    }
+                                },
+                            ))
                         })
                         .child(
                             div()

@@ -1,5 +1,6 @@
 use crate::app_state::AppState;
 use crate::runtime::AppRuntime;
+use crate::services::{BackendWsEvent, ServiceEvent};
 
 use crate::ui::chat::ChatScrollUi;
 use crate::ui::components::input::Input;
@@ -88,12 +89,23 @@ impl TwirChatApp {
         if events.is_empty() {
             return;
         }
+        let should_resubscribe_seven_tv = events
+            .iter()
+            .any(|event| matches!(event, ServiceEvent::BackendWs(BackendWsEvent::Connected)));
         self.state.update(cx, |state, cx| {
             for event in events {
                 state.apply_service_event(event);
             }
             cx.notify();
         });
+        if should_resubscribe_seven_tv && let Err(error) = runtime.dispatch_seven_tv_resubscribe() {
+            self.state.update(cx, |state, cx| {
+                state.record_runtime_failure(format!(
+                    "failed to resubscribe 7TV after backend reconnect: {error}"
+                ));
+                cx.notify();
+            });
+        }
     }
 
     fn flush_pending_watched_channel_adds(&self, cx: &mut Context<Self>) {
@@ -151,6 +163,25 @@ impl TwirChatApp {
         }
     }
 
+    fn flush_pending_backend_messages(&self, cx: &mut Context<Self>) {
+        let Some(runtime) = &self.runtime else {
+            return;
+        };
+        let pending = self
+            .state
+            .update(cx, |state, _| state.take_pending_backend_messages());
+
+        for message in pending {
+            if let Err(error) = runtime.dispatch_backend_ws_message(message) {
+                let error_message = format!("failed to send backend message: {}", error);
+                self.state.update(cx, |state, cx| {
+                    state.record_runtime_failure(error_message);
+                    cx.notify();
+                });
+            }
+        }
+    }
+
     fn flush_composer_submit(&self, cx: &mut Context<Self>) {
         let submit_text = self.composer_input.update(cx, |input, _cx| {
             input
@@ -179,6 +210,7 @@ impl Render for TwirChatApp {
         self.flush_composer_submit(cx);
         self.flush_pending_watched_channel_adds(cx);
         self.flush_pending_watched_channel_messages(cx);
+        self.flush_pending_backend_messages(cx);
         let state = self.state.read(cx).clone();
         let composer_text = self.composer_input.read(cx).text().to_string();
         let was_at_bottom = is_scroll_at_bottom(&self.chat_scroll_handle);

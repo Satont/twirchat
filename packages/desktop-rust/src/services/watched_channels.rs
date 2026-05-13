@@ -350,6 +350,10 @@ fn handle_watched_command(
             text,
             reply_to_message_id,
         } => runtime.send_message(&channel_id, &text, reply_to_message_id.as_deref()),
+        WatchedChannelsCommand::ResubscribeSevenTv => {
+            runtime.resubscribe_seven_tv();
+            Ok(())
+        }
         WatchedChannelsCommand::Poll => runtime.poll_all(),
     };
 
@@ -397,6 +401,7 @@ fn publish_runtime_events(
                     events,
                     WatchedChannelsEvent::BackendMessagePlanned {
                         kind: DesktopToBackendMessageKind::from(&message),
+                        message,
                     },
                 );
             }
@@ -752,6 +757,10 @@ impl<'a> WatchedChannelsRuntime<'a> {
         self.seven_tv.subscriptions()
     }
 
+    pub fn resubscribe_seven_tv(&mut self) {
+        self.plan_resubscribe();
+    }
+
     pub fn drain_backend_messages(&mut self) -> Vec<DesktopToBackendMessage> {
         self.backend_messages.drain(..).collect()
     }
@@ -894,12 +903,6 @@ impl<'a> WatchedChannelsRuntime<'a> {
             while entry.messages.len() > self.buffer_size {
                 entry.messages.pop_back();
             }
-        }
-        if let Err(error) = self.storage.messages().save(&enriched) {
-            eprintln!(
-                "[watched/live] failed to persist enriched message id={} channel={}: {}",
-                enriched.id, channel_id, error
-            );
         }
         self.events
             .push(WatchedChannelsRuntimeEvent::MessageBuffered {
