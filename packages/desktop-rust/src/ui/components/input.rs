@@ -129,6 +129,7 @@ pub struct Input {
     last_layout: Option<ShapedLine>,
     last_bounds: Option<Bounds<Pixels>>,
     submit_requested: bool,
+    clear_on_copy: bool,
 }
 
 impl Input {
@@ -143,7 +144,13 @@ impl Input {
             last_layout: None,
             last_bounds: None,
             submit_requested: false,
+            clear_on_copy: false,
         }
+    }
+
+    pub fn with_clear_on_copy(mut self) -> Self {
+        self.clear_on_copy = true;
+        self
     }
 
     pub fn text(&self) -> &str {
@@ -367,6 +374,11 @@ impl Input {
     }
 
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
+        if self.clear_on_copy {
+            self.clear(cx);
+            return;
+        }
+
         if let Some(text) = self.selected_text() {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }

@@ -39,12 +39,7 @@ impl TwirChatApp {
             }
         };
         let state = cx.new(|_| initial_state);
-        let composer_input = cx.new(|cx| {
-            Input::new(
-                "Send a message... (Enter ↵ to send, Shift+Enter for newline)",
-                cx,
-            )
-        });
+        let composer_input = cx.new(|cx| Input::new("Send a message...", cx).with_clear_on_copy());
         let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         cx.observe(&composer_input, |_, _, cx| cx.notify()).detach();

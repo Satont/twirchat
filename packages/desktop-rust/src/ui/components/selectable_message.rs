@@ -4,14 +4,19 @@ use crate::runtime::{SystemExternalOpener, browser::open_external_url};
 use crate::ui::theme;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId, Entity,
-    FocusHandle, Focusable, GlobalElementId, HighlightStyle, Hitbox, HitboxBehavior, IntoElement,
-    KeyBinding, LayoutId, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels,
-    SharedString, StyledText, TextLayout, UnderlineStyle, Window, actions, div, fill, point,
-    prelude::*, px, rgba,
+    FocusHandle, Focusable, Global, GlobalElementId, HighlightStyle, Hitbox, HitboxBehavior,
+    IntoElement, KeyBinding, LayoutId, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad,
+    Pixels, SharedString, StyledText, TextLayout, UnderlineStyle, Window, actions, div, fill,
+    point, prelude::*, px, rgba,
 };
 use std::ops::Range;
 
 actions!(twirchat_selectable_message, [Copy]);
+
+#[derive(Default)]
+struct ActiveChatSelection(Option<SharedString>);
+
+impl Global for ActiveChatSelection {}
 
 pub fn key_bindings() -> [KeyBinding; 2] {
     [
@@ -37,6 +42,7 @@ pub enum SelectableMessagePart {
 }
 
 pub struct SelectableMessage {
+    message_id: SharedString,
     focus_handle: FocusHandle,
     source_text: SharedString,
     parts: Vec<SelectableMessagePart>,
@@ -50,11 +56,13 @@ pub struct SelectableMessage {
 
 impl SelectableMessage {
     pub fn new(
+        message_id: impl Into<SharedString>,
         source_text: impl Into<SharedString>,
         parts: Vec<SelectableMessagePart>,
         font_size: f32,
         cx: &mut Context<Self>,
     ) -> Self {
+        let message_id = message_id.into();
         let source_text = source_text.into();
         let link_ranges = parts
             .iter()
@@ -68,7 +76,12 @@ impl SelectableMessage {
             })
             .collect();
 
+        cx.default_global::<ActiveChatSelection>();
+        cx.observe_global::<ActiveChatSelection>(|_, cx| cx.notify())
+            .detach();
+
         Self {
+            message_id,
             focus_handle: cx.focus_handle(),
             source_text,
             parts,
@@ -136,6 +149,9 @@ impl SelectableMessage {
 
     fn on_mouse_down_at(&mut self, offset: usize, cx: &mut Context<Self>) {
         let offset = self.clamp_offset(offset);
+        cx.update_global::<ActiveChatSelection, _>(|active, _| {
+            active.0 = Some(self.message_id.clone())
+        });
         self.selected_range = offset..offset;
         self.selection_reversed = false;
         self.is_selecting = true;
@@ -192,6 +208,16 @@ impl SelectableMessage {
 
 impl Render for SelectableMessage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_active = cx.read_global(|active: &ActiveChatSelection, _| {
+            active.0.as_ref() == Some(&self.message_id)
+        });
+        if !is_active && !self.selected_range.is_empty() {
+            self.selected_range = 0..0;
+            self.selection_reversed = false;
+            self.is_selecting = false;
+            self.mouse_down_index = None;
+        }
+
         div()
             .key_context("TwirChatSelectableMessage")
             .track_focus(&self.focus_handle(cx))

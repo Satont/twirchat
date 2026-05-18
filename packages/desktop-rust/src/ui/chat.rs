@@ -1316,9 +1316,18 @@ fn selectable_message(
     cx: &mut App,
 ) -> Entity<SelectableMessage> {
     let selectable = window.use_keyed_state(id, cx, {
+        let message_id = message.id.clone();
         let text = message.text.clone();
         let parts = parts.clone();
-        move |_, cx| SelectableMessage::new(text.clone(), parts.clone(), font_size, cx)
+        move |_, cx| {
+            SelectableMessage::new(
+                message_id.clone(),
+                text.clone(),
+                parts.clone(),
+                font_size,
+                cx,
+            )
+        }
     });
 
     selectable.update(cx, |selectable, cx| {
