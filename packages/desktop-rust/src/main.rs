@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use twirchat_desktop_rust::app::TwirChatApp;
 use twirchat_desktop_rust::ui::components::input;
+use twirchat_desktop_rust::ui::components::selectable_text;
 
 fn main() -> ExitCode {
     let smoke_exit_after_first_frame =
@@ -41,6 +42,7 @@ fn main() -> ExitCode {
                 }
             }
             cx.bind_keys(input::key_bindings());
+            cx.bind_keys(selectable_text::key_bindings());
             let bounds = Bounds::centered(None, size(px(1280.0), px(900.0)), cx);
 
             let window = cx.open_window(

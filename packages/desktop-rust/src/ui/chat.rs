@@ -7,11 +7,12 @@ use crate::protocol::types::{
 use crate::runtime::{SystemExternalOpener, browser::open_external_url};
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
+use crate::ui::components::selectable_text::SelectableText;
 use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    AnyElement, Context, Div, Entity, ImageSource, ListSizingBehavior, ListState, ObjectFit,
+    AnyElement, App, Context, Div, Entity, ImageSource, ListSizingBehavior, ListState, ObjectFit,
     Stateful, Window, div, img, list, prelude::*, px, rgb, rgba,
 };
 use std::path::Path;
@@ -57,12 +58,10 @@ pub(crate) fn panel(
                 .mt(px(40.0))
                 .vertical_scrollbar_for(props.scroll_ui.list_state, window, cx)
                 .child(
-                    list(
-                        props.scroll_ui.list_state.clone(),
-                        move |ix, _window, _cx| {
-                            message_row(&messages[ix], &settings, &accounts).into_any_element()
-                        },
-                    )
+                    list(props.scroll_ui.list_state.clone(), move |ix, window, cx| {
+                        message_row(&messages[ix], &settings, &accounts, window, cx)
+                            .into_any_element()
+                    })
                     .with_sizing_behavior(ListSizingBehavior::Auto)
                     .size_full(),
                 ),
@@ -1014,6 +1013,8 @@ fn message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
     accounts: &[Account],
+    window: &mut Window,
+    cx: &mut App,
 ) -> AnyElement {
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
@@ -1048,7 +1049,12 @@ fn message_row(
                     .flex_1()
                     .text_size(px(settings.font_size as f32))
                     .text_color(theme::text_muted())
-                    .child(message.text.clone()),
+                    .child(selectable_message_text(
+                        format!("system-message-text-{}", message.id),
+                        &message.text,
+                        window,
+                        cx,
+                    )),
             )
             .when(settings.show_timestamp, |el| {
                 el.child(
@@ -1261,6 +1267,8 @@ fn message_row(
                     message,
                     settings.font_size as f32,
                     is_compact,
+                    window,
+                    cx,
                 )),
         )
         .into_any_element()
@@ -1270,6 +1278,8 @@ fn message_text_with_emotes(
     message: &NormalizedChatMessage,
     font_size: f32,
     is_compact: bool,
+    window: &mut Window,
+    cx: &mut App,
 ) -> Div {
     let parts = build_message_parts(message);
 
@@ -1282,7 +1292,12 @@ fn message_text_with_emotes(
             .text_size(px(font_size))
             .text_color(theme::text_primary())
             .whitespace_normal()
-            .child(text.clone());
+            .child(selectable_message_text(
+                format!("message-text-{}", message.id),
+                text,
+                window,
+                cx,
+            ));
     }
 
     div()
@@ -1321,6 +1336,44 @@ fn message_text_with_emotes(
         }))
 }
 
+fn selectable_message_text(
+    id: String,
+    text: &str,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<SelectableText> {
+    let link_ranges = link_ranges(text);
+    let selectable = window.use_keyed_state(id, cx, {
+        let text = text.to_string();
+        let link_ranges = link_ranges.clone();
+        move |_, cx| SelectableText::new(text.clone(), link_ranges.clone(), cx)
+    });
+
+    selectable.update(cx, |selectable, cx| {
+        selectable.set_text_and_links(text.to_string(), link_ranges, cx)
+    });
+
+    selectable
+}
+
+fn link_ranges(text: &str) -> Vec<std::ops::Range<usize>> {
+    let mut rendered_len = 0;
+    let mut ranges = Vec::new();
+
+    for segment in build_text_segments(text) {
+        match segment {
+            TextSegment::Text(content) => rendered_len += content.len(),
+            TextSegment::Link(content) => {
+                let start = rendered_len;
+                rendered_len += content.len();
+                ranges.push(start..rendered_len);
+            }
+        }
+    }
+
+    ranges
+}
+
 enum MessagePart {
     Text(String),
     Link(String),
@@ -1342,14 +1395,11 @@ fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
     let mut ranges = Vec::new();
     for emote in &message.emotes {
         for position in &emote.positions {
-            let Some(start) = char_index_to_byte_offset(&message.text, position.start as usize)
-            else {
-                continue;
-            };
-            let Some(end_char_index) = (position.end as usize).checked_add(1) else {
-                continue;
-            };
-            let Some(end) = char_index_to_byte_offset(&message.text, end_char_index) else {
+            let Some((start, end)) = normalize_emote_range(
+                &message.text,
+                position.start as usize,
+                position.end as usize,
+            ) else {
                 continue;
             };
             ranges.push((start, end, emote.clone()));
@@ -1405,6 +1455,73 @@ fn char_index_to_byte_offset(text: &str, char_index: usize) -> Option<usize> {
     text.char_indices()
         .nth(char_index)
         .map(|(byte_index, _)| byte_index)
+}
+
+fn normalize_emote_range(text: &str, start: usize, inclusive_end: usize) -> Option<(usize, usize)> {
+    let byte_candidate = inclusive_end
+        .checked_add(1)
+        .and_then(|end| validate_emote_range(text, start, end));
+    let char_candidate = inclusive_end
+        .checked_add(1)
+        .and_then(|end| {
+            Some((
+                char_index_to_byte_offset(text, start)?,
+                char_index_to_byte_offset(text, end)?,
+            ))
+        })
+        .and_then(|(start, end)| validate_emote_range(text, start, end));
+
+    match (byte_candidate, char_candidate) {
+        (Some(byte_range), Some(char_range)) => {
+            let byte_score = emote_range_score(text, byte_range);
+            let char_score = emote_range_score(text, char_range);
+            if byte_score >= char_score {
+                Some(byte_range)
+            } else {
+                Some(char_range)
+            }
+        }
+        (Some(range), None) | (None, Some(range)) => Some(range),
+        (None, None) => None,
+    }
+}
+
+fn validate_emote_range(text: &str, start: usize, end: usize) -> Option<(usize, usize)> {
+    if start >= end || end > text.len() {
+        return None;
+    }
+    if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+        return None;
+    }
+    Some((start, end))
+}
+
+fn emote_range_score(text: &str, range: (usize, usize)) -> i32 {
+    let (start, end) = range;
+    let Some(content) = text.get(start..end) else {
+        return i32::MIN;
+    };
+
+    let has_whitespace = content.chars().any(char::is_whitespace);
+    let left_boundary = start == 0
+        || text[..start]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_whitespace);
+    let right_boundary =
+        end == text.len() || text[end..].chars().next().is_some_and(char::is_whitespace);
+
+    let mut score = 0;
+    if !has_whitespace {
+        score += 4;
+    }
+    if left_boundary {
+        score += 2;
+    }
+    if right_boundary {
+        score += 2;
+    }
+    score - i32::try_from(content.chars().count()).unwrap_or(i32::MAX)
 }
 
 fn build_text_segments(text: &str) -> Vec<TextSegment> {
@@ -1717,6 +1834,48 @@ mod tests {
                 aspect_ratio: Some(1.0),
             }],
             timestamp: "2026-05-18T20:20:41.000Z".into(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        };
+
+        let parts = build_message_parts(&message);
+
+        assert_eq!(parts.len(), 4);
+        assert!(matches!(&parts[0], MessagePart::Text(text) if text == "А "));
+        assert!(matches!(&parts[1], MessagePart::Emote(emote) if emote.name == "che"));
+        assert!(matches!(
+            &parts[2],
+            MessagePart::Text(text) if text == " они так и не пофиксили эту хуйню? "
+        ));
+        assert!(matches!(
+            &parts[3],
+            MessagePart::Link(text) if text == "https://al4.dev/6wYTrB"
+        ));
+    }
+
+    #[test]
+    fn build_message_parts_handles_byte_offsets_for_unicode_emote_positions() {
+        let message = NormalizedChatMessage {
+            id: "message-2".into(),
+            platform: Platform::Kick,
+            channel_id: "channel-1".into(),
+            author: ChatAuthor {
+                id: "author-1".into(),
+                username: Some("satont".into()),
+                display_name: "Satont".into(),
+                color: None,
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text: "А че они так и не пофиксили эту хуйню? https://al4.dev/6wYTrB".into(),
+            emotes: vec![Emote {
+                id: "emote-1".into(),
+                name: "che".into(),
+                image_url: "https://example.com/che.png".into(),
+                positions: vec![EmotePosition { start: 3, end: 6 }],
+                aspect_ratio: Some(1.0),
+            }],
+            timestamp: "2026-05-18T21:08:48.000Z".into(),
             message_type: ChatMessageType::Message,
             reply: None,
         };
