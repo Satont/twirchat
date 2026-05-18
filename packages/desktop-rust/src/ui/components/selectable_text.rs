@@ -2,11 +2,11 @@ use crate::protocol::rpc::OpenExternalUrlParams;
 use crate::runtime::{SystemExternalOpener, browser::open_external_url};
 use crate::ui::theme;
 use gpui::{
-    App, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
-    Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, HighlightStyle,
-    IntoElement, KeyBinding, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    PaintQuad, Pixels, SharedString, StyledText, TextLayout, UTF16Selection, UnderlineStyle,
-    Window, actions, div, fill, point, prelude::*, px, rgba,
+    App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId,
+    ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId,
+    HighlightStyle, Hitbox, HitboxBehavior, IntoElement, KeyBinding, LayoutId, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, SharedString, StyledText, TextLayout,
+    UTF16Selection, UnderlineStyle, Window, actions, div, fill, point, prelude::*, px, rgba,
 };
 use std::ops::Range;
 
@@ -112,14 +112,6 @@ impl SelectableText {
         }
     }
 
-    fn text_position_to_offset(&self, position: gpui::Point<Pixels>) -> Option<usize> {
-        let layout = self.layout.as_ref()?;
-        let local = layout.bounds().localize(&position)?;
-        Some(match layout.index_for_position(local) {
-            Ok(index) | Err(index) => self.clamp_offset_to_text(index),
-        })
-    }
-
     fn open_link_at(&self, offset: usize) {
         let Some(range) = self
             .link_ranges
@@ -140,17 +132,7 @@ impl SelectableText {
         }
     }
 
-    fn on_mouse_down(
-        &mut self,
-        event: &MouseDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        window.focus(&self.focus_handle, cx);
-        let Some(offset) = self.text_position_to_offset(event.position) else {
-            return;
-        };
-
+    fn on_mouse_down_at(&mut self, offset: usize, cx: &mut Context<Self>) {
         self.selected_range = offset..offset;
         self.selection_reversed = false;
         self.is_selecting = true;
@@ -158,24 +140,20 @@ impl SelectableText {
         cx.notify();
     }
 
-    fn on_mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_mouse_move_to(&mut self, offset: usize, cx: &mut Context<Self>) {
         if !self.is_selecting {
             return;
         }
 
-        if let Some(offset) = self.text_position_to_offset(event.position) {
-            self.select_to(offset, cx);
-        }
+        self.select_to(offset, cx);
     }
 
-    fn on_mouse_up(&mut self, event: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_mouse_up_at(&mut self, offset: Option<usize>, cx: &mut Context<Self>) {
         self.is_selecting = false;
 
         let mouse_down_index = self.mouse_down_index.take();
-        let mouse_up_index = self.text_position_to_offset(event.position);
         if self.selected_range.is_empty()
-            && let (Some(mouse_down_index), Some(mouse_up_index)) =
-                (mouse_down_index, mouse_up_index)
+            && let (Some(mouse_down_index), Some(mouse_up_index)) = (mouse_down_index, offset)
             && mouse_down_index == mouse_up_index
         {
             self.open_link_at(mouse_up_index);
@@ -216,9 +194,6 @@ impl Render for SelectableText {
             .track_focus(&self.focus_handle(cx))
             .cursor(CursorStyle::IBeam)
             .on_action(cx.listener(Self::copy))
-            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-            .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .w_full()
             .min_w(px(0.0))
             .child(SelectableTextElement {
@@ -249,7 +224,7 @@ impl IntoElement for SelectableTextElement {
 
 impl Element for SelectableTextElement {
     type RequestLayoutState = ();
-    type PrepaintState = ();
+    type PrepaintState = Hitbox;
 
     fn id(&self) -> Option<ElementId> {
         None
@@ -283,6 +258,7 @@ impl Element for SelectableTextElement {
         let measured_layout = self.text.layout().clone();
         self.state
             .update(cx, |state, _cx| state.layout = Some(measured_layout));
+        window.insert_hitbox(bounds, HitboxBehavior::Normal)
     }
 
     fn paint(
@@ -291,7 +267,7 @@ impl Element for SelectableTextElement {
         inspector_id: Option<&gpui::InspectorElementId>,
         bounds: Bounds<Pixels>,
         layout: &mut Self::RequestLayoutState,
-        prepaint: &mut Self::PrepaintState,
+        hitbox: &mut Self::PrepaintState,
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -308,6 +284,64 @@ impl Element for SelectableTextElement {
             cx,
         );
 
+        let selection_entity = self.state.clone();
+        let selection_layout = measured_layout.clone();
+        let selection_hitbox = hitbox.clone();
+        let selection_focus = focus_handle.clone();
+        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
+            if phase != DispatchPhase::Bubble || !selection_hitbox.is_hovered(window) {
+                return;
+            }
+
+            let Some(layout) = selection_layout.as_ref() else {
+                return;
+            };
+
+            let offset = match layout.index_for_position(event.position) {
+                Ok(index) | Err(index) => index,
+            };
+
+            window.focus(&selection_focus, cx);
+            selection_entity.update(cx, |state, cx| state.on_mouse_down_at(offset, cx));
+            window.refresh();
+        });
+
+        let selection_entity = self.state.clone();
+        let selection_layout = measured_layout.clone();
+        window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+            if phase != DispatchPhase::Bubble {
+                return;
+            }
+
+            let Some(layout) = selection_layout.as_ref() else {
+                return;
+            };
+
+            let offset = match layout.index_for_position(event.position) {
+                Ok(index) | Err(index) => index,
+            };
+
+            selection_entity.update(cx, |state, cx| state.on_mouse_move_to(offset, cx));
+            window.refresh();
+        });
+
+        let selection_entity = self.state.clone();
+        let selection_layout = measured_layout.clone();
+        window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
+            if phase != DispatchPhase::Bubble {
+                return;
+            }
+
+            let offset = selection_layout.as_ref().map(|layout| {
+                match layout.index_for_position(event.position) {
+                    Ok(index) | Err(index) => index,
+                }
+            });
+
+            selection_entity.update(cx, |state, cx| state.on_mouse_up_at(offset, cx));
+            window.refresh();
+        });
+
         if let Some(layout) = measured_layout.as_ref() {
             for quad in selection_quads(layout, &text, &selected_range) {
                 window.paint_quad(quad);
@@ -315,7 +349,7 @@ impl Element for SelectableTextElement {
         }
 
         self.text
-            .paint(id, inspector_id, bounds, layout, prepaint, window, cx);
+            .paint(id, inspector_id, bounds, layout, &mut (), window, cx);
 
         if focus_handle.is_focused(window)
             && selected_range.is_empty()
@@ -491,8 +525,11 @@ impl EntityInputHandler for SelectableText {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
-        self.text_position_to_offset(point)
-            .map(|offset| utf8_offset_to_utf16(&self.text, offset))
+        let layout = self.layout.as_ref()?;
+        let offset = match layout.index_for_position(point) {
+            Ok(index) | Err(index) => self.clamp_offset_to_text(index),
+        };
+        Some(utf8_offset_to_utf16(&self.text, offset))
     }
 }
 

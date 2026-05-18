@@ -1,13 +1,11 @@
 use crate::app_state::{AppState, AppStateActions};
-use crate::protocol::rpc::OpenExternalUrlParams;
 use crate::protocol::types::{
-    Account, AppSettings, ChatMessageType, ChatTheme, Emote, NormalizedChatMessage, Platform,
+    Account, AppSettings, ChatMessageType, ChatTheme, NormalizedChatMessage, Platform,
     WatchedChannel,
 };
-use crate::runtime::{SystemExternalOpener, browser::open_external_url};
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
-use crate::ui::components::selectable_text::SelectableText;
+use crate::ui::components::selectable_message::{SelectableMessage, SelectableMessagePart};
 use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
@@ -1049,9 +1047,15 @@ fn message_row(
                     .flex_1()
                     .text_size(px(settings.font_size as f32))
                     .text_color(theme::text_muted())
-                    .child(selectable_message_text(
+                    .child(selectable_message(
                         format!("system-message-text-{}", message.id),
-                        &message.text,
+                        message,
+                        vec![SelectableMessagePart::Text {
+                            text: message.text.clone().into(),
+                            source_range: 0..message.text.len(),
+                            is_link: false,
+                        }],
+                        settings.font_size as f32,
                         window,
                         cx,
                     )),
@@ -1281,24 +1285,7 @@ fn message_text_with_emotes(
     window: &mut Window,
     cx: &mut App,
 ) -> Div {
-    let parts = build_message_parts(message);
-
-    if parts.len() == 1
-        && let Some(MessagePart::Text(text)) = parts.first()
-    {
-        return div()
-            .w_full()
-            .min_w(px(0.0))
-            .text_size(px(font_size))
-            .text_color(theme::text_primary())
-            .whitespace_normal()
-            .child(selectable_message_text(
-                format!("message-text-{}", message.id),
-                text,
-                window,
-                cx,
-            ));
-    }
+    let segments = build_message_segments(message, is_compact);
 
     div()
         .w_full()
@@ -1310,85 +1297,50 @@ fn message_text_with_emotes(
         .flex_wrap()
         .items_center()
         .whitespace_normal()
-        .children(parts.into_iter().enumerate().map(|(index, part)| {
-            match part {
-                MessagePart::Text(text) => div().whitespace_normal().child(text).into_any_element(),
-                MessagePart::Link(text) => div()
-                    .whitespace_normal()
-                    .text_color(theme::accent())
-                    .text_decoration_1()
-                    .cursor_pointer()
-                    .child(text.clone())
-                    .on_mouse_down(gpui::MouseButton::Left, move |_, _, _| {
-                        let params = OpenExternalUrlParams { url: text.clone() };
-                        if let Err(error) = open_external_url(&SystemExternalOpener, &params) {
-                            eprintln!(
-                                "[ui/chat] failed to open external link `{}`: {}",
-                                params.url, error
-                            )
-                        }
-                    })
-                    .into_any_element(),
-                MessagePart::Emote(emote) => {
-                    emote_image(&emote, is_compact, &message.id, index).into_any_element()
-                }
-            }
-        }))
+        .child(selectable_message(
+            format!("message-{}", message.id),
+            message,
+            segments,
+            font_size,
+            window,
+            cx,
+        ))
 }
 
-fn selectable_message_text(
+fn selectable_message(
     id: String,
-    text: &str,
+    message: &NormalizedChatMessage,
+    parts: Vec<SelectableMessagePart>,
+    font_size: f32,
     window: &mut Window,
     cx: &mut App,
-) -> Entity<SelectableText> {
-    let link_ranges = link_ranges(text);
+) -> Entity<SelectableMessage> {
     let selectable = window.use_keyed_state(id, cx, {
-        let text = text.to_string();
-        let link_ranges = link_ranges.clone();
-        move |_, cx| SelectableText::new(text.clone(), link_ranges.clone(), cx)
+        let text = message.text.clone();
+        let parts = parts.clone();
+        move |_, cx| SelectableMessage::new(text.clone(), parts.clone(), font_size, cx)
     });
 
     selectable.update(cx, |selectable, cx| {
-        selectable.set_text_and_links(text.to_string(), link_ranges, cx)
+        selectable.set_content(message.text.clone(), parts, font_size, cx)
     });
 
     selectable
 }
 
-fn link_ranges(text: &str) -> Vec<std::ops::Range<usize>> {
-    let mut rendered_len = 0;
-    let mut ranges = Vec::new();
-
-    for segment in build_text_segments(text) {
-        match segment {
-            TextSegment::Text(content) => rendered_len += content.len(),
-            TextSegment::Link(content) => {
-                let start = rendered_len;
-                rendered_len += content.len();
-                ranges.push(start..rendered_len);
-            }
-        }
-    }
-
-    ranges
+#[derive(Clone)]
+struct TextSegmentWithRange {
+    text: String,
+    is_link: bool,
 }
 
-enum MessagePart {
-    Text(String),
-    Link(String),
-    Emote(Emote),
-}
-
-enum TextSegment {
-    Text(String),
-    Link(String),
-}
-
-fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
+fn build_message_segments(
+    message: &NormalizedChatMessage,
+    is_compact: bool,
+) -> Vec<SelectableMessagePart> {
     if message.emotes.is_empty() {
         let mut parts = Vec::new();
-        append_text_message_parts(&mut parts, &message.text);
+        append_selectable_text_parts(&mut parts, &message.text, 0);
         return parts;
     }
 
@@ -1409,7 +1361,7 @@ fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
 
     let mut parts = Vec::new();
     let mut index = 0;
-    for (start, end, emote) in ranges {
+    for (part_index, (start, end, emote)) in ranges.into_iter().enumerate() {
         if start < index || start > message.text.len() {
             continue;
         }
@@ -1420,23 +1372,113 @@ fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
         if index < start
             && let Some(text) = message.text.get(index..start)
         {
-            append_text_message_parts(&mut parts, text);
+            append_selectable_text_parts(&mut parts, text, index);
         }
-        parts.push(MessagePart::Emote(emote));
+        parts.push(SelectableMessagePart::Emote {
+            emote,
+            source_range: start..end,
+            message_id: message.id.clone().into(),
+            part_index,
+            is_compact,
+        });
         index = end;
     }
 
     if index < message.text.len()
         && let Some(text) = message.text.get(index..)
     {
-        append_text_message_parts(&mut parts, text);
+        append_selectable_text_parts(&mut parts, text, index);
     }
 
     if parts.is_empty() {
-        append_text_message_parts(&mut parts, &message.text);
+        append_selectable_text_parts(&mut parts, &message.text, 0);
     }
 
     parts
+}
+
+fn append_selectable_text_parts(
+    parts: &mut Vec<SelectableMessagePart>,
+    text: &str,
+    base_offset: usize,
+) {
+    let mut cursor = 0;
+    for segment in build_text_segments_with_ranges(text) {
+        let len = segment.text.len();
+        parts.push(SelectableMessagePart::Text {
+            text: segment.text.into(),
+            source_range: base_offset + cursor..base_offset + cursor + len,
+            is_link: segment.is_link,
+        });
+        cursor += len;
+    }
+}
+
+fn build_text_segments_with_ranges(text: &str) -> Vec<TextSegmentWithRange> {
+    let mut parts = Vec::new();
+    let mut cursor = 0;
+
+    while let Some(start) = find_next_url_start(text, cursor) {
+        let end = find_url_end(text, start);
+        let candidate = &text[start..end];
+        let trimmed_len = trim_trailing_link_punctuation(candidate);
+
+        if cursor < start {
+            push_text_segment_with_range(&mut parts, text[cursor..start].to_string(), false);
+        }
+
+        let link_text = &candidate[..trimmed_len];
+        if is_valid_http_link(link_text) {
+            parts.push(TextSegmentWithRange {
+                text: link_text.to_string(),
+                is_link: true,
+            });
+        } else {
+            push_text_segment_with_range(&mut parts, link_text.to_string(), false);
+        }
+
+        if trimmed_len < candidate.len() {
+            push_text_segment_with_range(&mut parts, candidate[trimmed_len..].to_string(), false);
+        }
+
+        cursor = end;
+    }
+
+    if cursor < text.len() {
+        push_text_segment_with_range(&mut parts, text[cursor..].to_string(), false);
+    }
+
+    if parts.is_empty() {
+        parts.push(TextSegmentWithRange {
+            text: text.to_string(),
+            is_link: false,
+        });
+    }
+
+    parts
+}
+
+fn push_text_segment_with_range(
+    parts: &mut Vec<TextSegmentWithRange>,
+    text: String,
+    is_link: bool,
+) {
+    if text.is_empty() {
+        return;
+    }
+
+    if !is_link
+        && let Some(TextSegmentWithRange {
+            text: existing,
+            is_link: false,
+            ..
+        }) = parts.last_mut()
+    {
+        existing.push_str(&text);
+        return;
+    }
+
+    parts.push(TextSegmentWithRange { text, is_link });
 }
 
 fn char_index_to_byte_offset(text: &str, char_index: usize) -> Option<usize> {
@@ -1524,70 +1566,6 @@ fn emote_range_score(text: &str, range: (usize, usize)) -> i32 {
     score - i32::try_from(content.chars().count()).unwrap_or(i32::MAX)
 }
 
-fn build_text_segments(text: &str) -> Vec<TextSegment> {
-    let mut parts = Vec::new();
-    append_text_segments(&mut parts, text);
-
-    if parts.is_empty() {
-        parts.push(TextSegment::Text(text.to_string()));
-    }
-
-    parts
-}
-
-fn append_text_message_parts(parts: &mut Vec<MessagePart>, text: &str) {
-    for segment in build_text_segments(text) {
-        match segment {
-            TextSegment::Text(text) => parts.push(MessagePart::Text(text)),
-            TextSegment::Link(text) => parts.push(MessagePart::Link(text)),
-        }
-    }
-}
-
-fn append_text_segments(parts: &mut Vec<TextSegment>, text: &str) {
-    let mut cursor = 0;
-
-    while let Some(start) = find_next_url_start(text, cursor) {
-        let end = find_url_end(text, start);
-        let candidate = &text[start..end];
-        let trimmed_len = trim_trailing_link_punctuation(candidate);
-
-        if cursor < start {
-            push_text_segment(parts, &text[cursor..start]);
-        }
-
-        let link_text = &candidate[..trimmed_len];
-        if is_valid_http_link(link_text) {
-            parts.push(TextSegment::Link(link_text.to_string()));
-        } else {
-            push_text_segment(parts, link_text);
-        }
-
-        if trimmed_len < candidate.len() {
-            push_text_segment(parts, &candidate[trimmed_len..]);
-        }
-
-        cursor = end;
-    }
-
-    if cursor < text.len() {
-        push_text_segment(parts, &text[cursor..]);
-    }
-}
-
-fn push_text_segment(parts: &mut Vec<TextSegment>, text: &str) {
-    if text.is_empty() {
-        return;
-    }
-
-    if let Some(TextSegment::Text(existing)) = parts.last_mut() {
-        existing.push_str(text);
-        return;
-    }
-
-    parts.push(TextSegment::Text(text.to_string()));
-}
-
 fn find_next_url_start(text: &str, from: usize) -> Option<usize> {
     let slice = text.get(from..)?;
     let http = slice.find("http://").map(|index| from + index);
@@ -1639,30 +1617,6 @@ fn is_valid_http_link(candidate: &str) -> bool {
     Url::parse(candidate)
         .ok()
         .is_some_and(|url| matches!(url.scheme(), "http" | "https"))
-}
-
-fn emote_image(emote: &Emote, is_compact: bool, message_id: &str, part_index: usize) -> Div {
-    let size = if is_compact { 20.0 } else { 24.0 };
-    div()
-        .mx(px(1.5))
-        .h(px(size))
-        .min_w(px(size))
-        .max_w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
-        .child(
-            img(ImageSource::from(emote.image_url.clone()))
-                .id(format!("emote-{}-{}-{}", message_id, emote.id, part_index))
-                .h_full()
-                .w_full()
-                .object_fit(ObjectFit::Contain)
-                .with_loading({
-                    let name = emote.name.clone();
-                    move || name.clone().into_any_element()
-                })
-                .with_fallback({
-                    let name = emote.name.clone();
-                    move || name.clone().into_any_element()
-                }),
-        )
 }
 
 fn account_avatar_for_message(

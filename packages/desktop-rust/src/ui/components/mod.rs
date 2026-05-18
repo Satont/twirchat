@@ -6,6 +6,7 @@ pub mod input;
 pub mod modal;
 pub mod platform_icon;
 pub mod popover;
+pub mod selectable_message;
 pub mod selectable_text;
 pub mod slider;
 pub mod switch;
