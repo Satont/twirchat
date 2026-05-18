@@ -133,6 +133,13 @@ impl AppRuntime {
         )
     }
 
+    pub fn dispatch_watched_channel_remove(&self, channel_id: String) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::WatchedChannels,
+            ServiceCommand::WatchedChannels(WatchedChannelsCommand::Remove { channel_id }),
+        )
+    }
+
     pub fn dispatch_seven_tv_resubscribe(&self) -> ServiceResult<()> {
         self.supervisor.dispatch(
             ServiceKind::WatchedChannels,

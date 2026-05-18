@@ -1,3 +1,4 @@
+use crate::hotkeys::{HotkeyAction, hotkey_for_action, set_hotkey_for_action};
 use crate::protocol::types::{
     AppSettings, AppTheme, ChatTheme, FontFamilyChoice, OverlayAnimation, OverlayConfig,
     OverlayPosition, SelfPingConfig,
@@ -15,6 +16,10 @@ impl SettingsManager {
 
     pub fn settings(&self) -> &AppSettings {
         &self.settings
+    }
+
+    pub fn hotkey(&self, action: HotkeyAction) -> &str {
+        hotkey_for_action(&self.settings.hotkeys, action)
     }
 
     pub fn set_theme(&mut self, theme: AppTheme) {
@@ -59,6 +64,10 @@ impl SettingsManager {
 
     pub fn set_auto_check_updates(&mut self, enabled: bool) {
         self.settings.auto_check_updates = Some(enabled);
+    }
+
+    pub fn set_hotkey(&mut self, action: HotkeyAction, hotkey: impl Into<String>) {
+        set_hotkey_for_action(&mut self.settings.hotkeys, action, hotkey);
     }
 
     pub fn update_overlay_config(&mut self, config: OverlayConfig) {
@@ -117,6 +126,7 @@ impl SettingsManager {
 #[cfg(test)]
 mod settings_parity_tests {
     use super::*;
+    use crate::hotkeys::HotkeyAction;
     use crate::protocol::types::OverlayAnimation;
     use crate::storage::settings::default_app_settings;
 
@@ -154,6 +164,10 @@ mod settings_parity_tests {
 
         m.set_auto_check_updates(false);
         assert_eq!(m.settings.auto_check_updates, Some(false));
+
+        m.set_hotkey(HotkeyAction::NewTab, "ctrl+n");
+        assert_eq!(m.hotkey(HotkeyAction::NewTab), "ctrl+n");
+        assert_eq!(m.hotkey(HotkeyAction::NextTab), "ctrl+tab");
 
         let mut overlay = m.settings.overlay.clone();
         overlay.animation = OverlayAnimation::Fade;

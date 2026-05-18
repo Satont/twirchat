@@ -1,6 +1,7 @@
 pub mod mock_data;
 
 use crate::chat::{SevenTvCatalog, SevenTvEmote, enrich_message_with_seven_tv};
+use crate::hotkeys::{HotkeyAction, HotkeyManager};
 use crate::protocol::types::{
     Account, AppSettings, AppTheme, Badge, ChatAuthor, ChatMessageType, ChatTheme,
     FontFamilyChoice, LayoutNode, NormalizedChatMessage, OverlayAnimation, OverlayConfig,
@@ -15,7 +16,7 @@ use crate::storage::Storage;
 use crate::storage::settings::default_app_settings;
 use crate::storage::watched_layout::{MAX_PANELS, create_default_tab_layout};
 use crate::ui::platforms::ToastKind;
-use gpui::{App, Entity};
+use gpui::{App, Entity, Keystroke};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +30,11 @@ pub struct PendingWatchedChannelAdd {
 pub struct PendingWatchedChannelMessage {
     pub channel_id: String,
     pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingWatchedChannelRemove {
+    pub channel_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,16 +69,20 @@ pub struct AppState {
     seven_tv_catalog: SevenTvCatalog,
     pub watched_channels: Vec<WatchedChannel>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
+    pub watched_channel_messages: BTreeMap<String, Vec<NormalizedChatMessage>>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
     pub events: Vec<crate::protocol::types::NormalizedEvent>,
+    hotkey_manager: HotkeyManager,
     pub chat_appearance_popover_open: bool,
     pub chat_add_menu_open: bool,
     pub chat_options_menu_open: bool,
     pub tab_add_menu_open: bool,
+    panel_assignment_target: Option<String>,
     pub add_channel_platform: Platform,
     pub composer_disabled_channel_ids: BTreeSet<String>,
     pending_watched_channel_adds: Vec<PendingWatchedChannelAdd>,
     pending_watched_channel_messages: Vec<PendingWatchedChannelMessage>,
+    pending_watched_channel_removals: Vec<PendingWatchedChannelRemove>,
     pending_backend_messages: Vec<crate::protocol::messages::DesktopToBackendMessage>,
 }
 
@@ -101,16 +111,20 @@ impl Default for AppState {
             seven_tv_catalog: SevenTvCatalog::new(),
             watched_channels: vec![],
             watched_channel_statuses: BTreeMap::new(),
+            watched_channel_messages: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
             events: vec![],
+            hotkey_manager: HotkeyManager::new(),
             chat_appearance_popover_open: false,
             chat_add_menu_open: false,
             chat_options_menu_open: false,
             tab_add_menu_open: false,
+            panel_assignment_target: None,
             add_channel_platform: Platform::Twitch,
             composer_disabled_channel_ids: BTreeSet::new(),
             pending_watched_channel_adds: Vec::new(),
             pending_watched_channel_messages: Vec::new(),
+            pending_watched_channel_removals: Vec::new(),
             pending_backend_messages: Vec::new(),
         }
     }
@@ -233,7 +247,7 @@ impl AppState {
             .cloned()
             .unwrap_or_else(|| create_default_tab_layout(&tab_id));
 
-        if !append_watched_pane(&mut layout.root, &tab_id) {
+        if !append_watched_pane(&mut layout.root) {
             return Ok(false);
         }
 
@@ -621,9 +635,18 @@ impl AppState {
 
     fn apply_watched_channels_event(&mut self, event: WatchedChannelsEvent) {
         match event {
-            WatchedChannelsEvent::MessageBuffered { message, .. } => {
-                let lookup_channel_id =
-                    self.resolve_seven_tv_channel_id(message.platform, &message.channel_id);
+            WatchedChannelsEvent::MessageBuffered {
+                channel_id,
+                message,
+            } => {
+                let lookup_channel_id = self
+                    .watched_channels
+                    .iter()
+                    .find(|channel| channel.id == channel_id)
+                    .map(|channel| channel.channel_slug.clone())
+                    .unwrap_or_else(|| {
+                        self.resolve_seven_tv_channel_id(message.platform, &message.channel_id)
+                    });
                 let message = enrich_message_with_seven_tv(
                     *message,
                     &lookup_channel_id,
@@ -633,12 +656,17 @@ impl AppState {
                     "[watched/live] app_state accepted {:?} message id={} channel={}",
                     message.platform, message.id, message.channel_id
                 );
-                self.messages.push(message);
+                let channel_messages = self.watched_channel_messages.entry(channel_id).or_default();
+                channel_messages.push(message);
+                if channel_messages.len()
+                    > crate::services::watched_channels::DEFAULT_WATCHED_CHANNEL_BUFFER_SIZE
+                {
+                    let excess = channel_messages.len()
+                        - crate::services::watched_channels::DEFAULT_WATCHED_CHANNEL_BUFFER_SIZE;
+                    channel_messages.drain(0..excess);
+                }
             }
             WatchedChannelsEvent::StatusChanged { channel_id, status } => {
-                self.platforms_panel
-                    .statuses
-                    .insert(status.platform, status.clone());
                 self.watched_channel_statuses.insert(channel_id, status);
             }
             WatchedChannelsEvent::AdapterError {
@@ -814,6 +842,26 @@ impl AppState {
             let enriched = enrich_message_with_seven_tv(base, channel_id, &self.seven_tv_catalog);
             *message = enriched;
         }
+
+        for (watched_channel_id, messages) in &mut self.watched_channel_messages {
+            let Some(watched_channel) = self
+                .watched_channels
+                .iter()
+                .find(|channel| channel.id == *watched_channel_id)
+            else {
+                continue;
+            };
+
+            if watched_channel.platform != platform || watched_channel.channel_slug != channel_id {
+                continue;
+            }
+
+            for message in messages {
+                let mut base = message.clone();
+                base.emotes.retain(|emote| !is_seven_tv_emote(emote));
+                *message = enrich_message_with_seven_tv(base, channel_id, &self.seven_tv_catalog);
+            }
+        }
     }
 
     fn resolve_seven_tv_channel_id(&self, platform: Platform, message_channel_id: &str) -> String {
@@ -849,7 +897,7 @@ impl AppState {
         text: String,
     ) {
         let timestamp = crate::storage::now_millis().to_string();
-        self.messages.push(NormalizedChatMessage {
+        let message = NormalizedChatMessage {
             id: format!("seventv-system-{platform:?}-{seven_tv_channel_id}-{timestamp}"),
             platform,
             channel_id: self.display_channel_id_for_seven_tv(platform, seven_tv_channel_id),
@@ -866,7 +914,20 @@ impl AppState {
             timestamp,
             message_type: ChatMessageType::System,
             reply: None,
-        });
+        };
+
+        if self
+            .watched_channels
+            .iter()
+            .any(|channel| channel.id == message.channel_id)
+        {
+            self.watched_channel_messages
+                .entry(message.channel_id.clone())
+                .or_default()
+                .push(message);
+        } else {
+            self.messages.push(message);
+        }
     }
 
     pub fn select_section(&mut self, section: MainSection) {
@@ -927,6 +988,31 @@ impl AppState {
     pub fn set_auto_check_updates(&mut self, enabled: bool) {
         self.settings.set_auto_check_updates(enabled);
         self.update_state.auto_check_updates = enabled;
+    }
+
+    pub fn recording_hotkey(&self) -> Option<HotkeyAction> {
+        self.hotkey_manager.recording_action()
+    }
+
+    pub fn is_recording_hotkey(&self, action: HotkeyAction) -> bool {
+        self.hotkey_manager.is_recording(action)
+    }
+
+    pub fn start_hotkey_recording(&mut self, action: HotkeyAction) {
+        self.hotkey_manager.start_recording(action);
+    }
+
+    pub fn cancel_hotkey_recording(&mut self) {
+        self.hotkey_manager.cancel_recording();
+    }
+
+    pub fn record_hotkey(&mut self, keystroke: &Keystroke) -> bool {
+        let Some((action, hotkey)) = self.hotkey_manager.record_keystroke(keystroke) else {
+            return false;
+        };
+
+        self.settings.set_hotkey(action, hotkey);
+        true
     }
 
     pub fn set_self_ping(&mut self, enabled: bool, color: String) {
@@ -1008,11 +1094,19 @@ impl AppState {
 
     pub fn open_add_channel_modal(&mut self) {
         self.tab_add_menu_open = true;
+        self.panel_assignment_target = None;
+        self.add_channel_platform = Platform::Twitch;
+    }
+
+    pub fn open_add_channel_modal_for_panel(&mut self, panel_id: impl Into<String>) {
+        self.tab_add_menu_open = true;
+        self.panel_assignment_target = Some(panel_id.into());
         self.add_channel_platform = Platform::Twitch;
     }
 
     pub fn close_add_channel_modal(&mut self) {
         self.tab_add_menu_open = false;
+        self.panel_assignment_target = None;
     }
 
     pub fn select_add_channel_platform(&mut self, platform: Platform) {
@@ -1035,29 +1129,69 @@ impl AppState {
         platform: Platform,
         channel_slug: &str,
     ) -> crate::storage::StorageResult<bool> {
-        let slug = channel_slug.trim().to_lowercase();
-        if slug.is_empty() {
+        let Some(_channel) = self.upsert_watched_channel(storage, platform, channel_slug)? else {
             return Ok(false);
-        }
+        };
+        self.close_add_channel_modal();
+        Ok(true)
+    }
 
-        let channel = storage.watched_channels().upsert(platform, &slug, &slug)?;
-        if !self
+    pub fn add_watched_channel_tab_from_slug(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+        channel_slug: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        let Some(channel) = self.upsert_watched_channel(storage, platform, channel_slug)? else {
+            return Ok(false);
+        };
+
+        self.select_channel_tab(channel.id.clone());
+        self.close_add_channel_modal();
+        Ok(true)
+    }
+
+    pub fn submit_add_channel_modal(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+        channel_slug: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        if let Some(panel_id) = self.panel_assignment_target.clone() {
+            self.assign_watched_channel_to_active_panel(storage, &panel_id, platform, channel_slug)
+        } else {
+            self.add_watched_channel_tab_from_slug(storage, platform, channel_slug)
+        }
+    }
+
+    pub fn remove_watched_channel(&mut self, channel_id: &str) -> bool {
+        let Some(removed_channel) = self
             .watched_channels
             .iter()
-            .any(|existing| existing.id == channel.id)
-        {
-            self.watched_channels.push(channel.clone());
+            .find(|channel| channel.id == channel_id)
+            .cloned()
+        else {
+            return false;
+        };
+
+        self.watched_channels
+            .retain(|channel| channel.id != channel_id);
+        self.watched_channel_statuses.remove(channel_id);
+        self.watched_channel_messages.remove(channel_id);
+        self.watched_layouts.remove(channel_id);
+        self.composer_disabled_channel_ids.remove(channel_id);
+        self.chat_add_menu_open = false;
+
+        if self.active_channel_tab_id == channel_id {
+            self.active_channel_tab_id = String::from("home");
         }
-        self.watched_layouts
-            .entry(channel.id.clone())
-            .or_insert_with(|| create_default_tab_layout(&channel.id));
-        self.close_add_channel_modal();
-        self.queue_watched_channel_add(
-            channel.platform,
-            channel.channel_slug.clone(),
-            Some(channel.display_name.clone()),
-        );
-        Ok(true)
+
+        self.pending_watched_channel_messages
+            .retain(|message| message.channel_id != channel_id);
+        self.pending_watched_channel_removals
+            .retain(|remove| remove.channel_id != channel_id);
+        self.queue_watched_channel_remove(removed_channel.id);
+        true
     }
 
     pub fn toggle_composer_channel(&mut self, channel_id: &str) {
@@ -1076,22 +1210,128 @@ impl AppState {
         }
 
         let mut queued = false;
-        for channel in &self.watched_channels {
-            if self.composer_disabled_channel_ids.contains(&channel.id) {
+        for target in self.home_channel_targets() {
+            if self.composer_disabled_channel_ids.contains(&target.id) {
                 continue;
             }
-            self.pending_watched_channel_messages
-                .push(PendingWatchedChannelMessage {
-                    channel_id: channel.id.clone(),
-                    text: text.to_string(),
-                });
+            self.pending_backend_messages.push(
+                crate::protocol::messages::DesktopToBackendMessage::SendMessage {
+                    platform: target.platform,
+                    channel: target.channel_login,
+                    message: text.to_string(),
+                },
+            );
             queued = true;
         }
         queued
     }
 
+    pub fn queue_watched_channel_send(&mut self, channel_id: &str, text: &str) -> bool {
+        let text = text.trim();
+        if text.is_empty()
+            || !self
+                .watched_channels
+                .iter()
+                .any(|channel| channel.id == channel_id)
+        {
+            return false;
+        }
+
+        self.pending_watched_channel_messages
+            .push(PendingWatchedChannelMessage {
+                channel_id: channel_id.to_string(),
+                text: text.to_string(),
+            });
+        true
+    }
+
+    pub fn remove_chat_pane_for_active_tab(
+        &mut self,
+        storage: &Storage,
+        panel_id: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        let tab_id = self.active_channel_tab_id.clone();
+        if tab_id == "home" {
+            return Ok(false);
+        }
+
+        let mut layout = self
+            .watched_layouts
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_else(|| create_default_tab_layout(&tab_id));
+        if !remove_panel_from_layout(&mut layout.root, panel_id) {
+            return Ok(false);
+        }
+
+        storage.watched_layout().set(&tab_id, &layout)?;
+        self.watched_layouts.insert(tab_id, layout);
+        Ok(true)
+    }
+
     pub fn close_tab_add_menu(&mut self) {
         self.close_add_channel_modal();
+    }
+
+    fn upsert_watched_channel(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+        channel_slug: &str,
+    ) -> crate::storage::StorageResult<Option<WatchedChannel>> {
+        let slug = channel_slug.trim().to_lowercase();
+        if slug.is_empty() {
+            return Ok(None);
+        }
+
+        let channel = storage.watched_channels().upsert(platform, &slug, &slug)?;
+        if !self
+            .watched_channels
+            .iter()
+            .any(|existing| existing.id == channel.id)
+        {
+            self.watched_channels.push(channel.clone());
+        }
+        self.watched_layouts
+            .entry(channel.id.clone())
+            .or_insert_with(|| create_default_tab_layout(&channel.id));
+        self.queue_watched_channel_add(
+            channel.platform,
+            channel.channel_slug.clone(),
+            Some(channel.display_name.clone()),
+        );
+        Ok(Some(channel))
+    }
+
+    fn assign_watched_channel_to_active_panel(
+        &mut self,
+        storage: &Storage,
+        panel_id: &str,
+        platform: Platform,
+        channel_slug: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        let tab_id = self.active_channel_tab_id.clone();
+        if tab_id == "home" {
+            return Ok(false);
+        }
+
+        let Some(channel) = self.upsert_watched_channel(storage, platform, channel_slug)? else {
+            return Ok(false);
+        };
+
+        let mut layout = self
+            .watched_layouts
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_else(|| create_default_tab_layout(&tab_id));
+        if !assign_channel_to_panel(&mut layout.root, panel_id, &channel.id) {
+            return Ok(false);
+        }
+
+        storage.watched_layout().set(&tab_id, &layout)?;
+        self.watched_layouts.insert(tab_id, layout);
+        self.close_add_channel_modal();
+        Ok(true)
     }
 
     pub fn take_pending_watched_channel_adds(&mut self) -> Vec<PendingWatchedChannelAdd> {
@@ -1100,6 +1340,10 @@ impl AppState {
 
     pub fn take_pending_watched_channel_messages(&mut self) -> Vec<PendingWatchedChannelMessage> {
         std::mem::take(&mut self.pending_watched_channel_messages)
+    }
+
+    pub fn take_pending_watched_channel_removals(&mut self) -> Vec<PendingWatchedChannelRemove> {
+        std::mem::take(&mut self.pending_watched_channel_removals)
     }
 
     pub fn take_pending_backend_messages(
@@ -1132,6 +1376,49 @@ impl AppState {
             });
     }
 
+    fn queue_watched_channel_remove(&mut self, channel_id: String) {
+        if self
+            .pending_watched_channel_removals
+            .iter()
+            .any(|pending| pending.channel_id == channel_id)
+        {
+            return;
+        }
+
+        self.pending_watched_channel_removals
+            .push(PendingWatchedChannelRemove { channel_id });
+    }
+
+    fn home_channel_targets(&self) -> Vec<HomeChannelTarget> {
+        let mut targets = Vec::new();
+        let mut seen = BTreeSet::new();
+
+        for status in self.platforms_panel.statuses.values() {
+            let Some(channel_login) = status.channel_login.as_ref() else {
+                continue;
+            };
+            if !matches!(
+                status.status,
+                PlatformStatus::Connected | PlatformStatus::Connecting
+            ) {
+                continue;
+            }
+
+            let id = home_channel_target_id(status.platform, channel_login);
+            if !seen.insert(id.clone()) {
+                continue;
+            }
+
+            targets.push(HomeChannelTarget {
+                id,
+                platform: status.platform,
+                channel_login: channel_login.clone(),
+            });
+        }
+
+        targets
+    }
+
     pub fn dismiss_update_toast(&mut self) {
         self.update_state.show = false;
     }
@@ -1140,6 +1427,17 @@ impl AppState {
     pub(crate) fn set_unread_events_for_test(&mut self, unread_events: usize) {
         self.unread_events = unread_events;
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HomeChannelTarget {
+    id: String,
+    platform: Platform,
+    channel_login: String,
+}
+
+fn home_channel_target_id(platform: Platform, channel_login: &str) -> String {
+    format!("{platform:?}:{}", channel_login.to_lowercase())
 }
 
 fn map_backend_seven_tv_emote(emote: crate::protocol::messages::SevenTvEmote) -> SevenTvEmote {
@@ -1233,12 +1531,23 @@ pub trait AppStateActions {
     fn toggle_chat_add_menu(&self, app: &mut App);
     fn toggle_chat_options_menu(&self, app: &mut App);
     fn open_add_channel_modal(&self, app: &mut App);
+    fn open_add_channel_modal_for_panel(&self, app: &mut App, panel_id: &str);
     fn close_add_channel_modal(&self, app: &mut App);
     fn select_add_channel_platform(&self, app: &mut App, platform: Platform);
     fn add_watched_channel_from_slug(&self, app: &mut App, platform: Platform, channel_slug: &str);
+    fn add_watched_channel_tab_from_slug(
+        &self,
+        app: &mut App,
+        platform: Platform,
+        channel_slug: &str,
+    );
+    fn submit_add_channel_modal(&self, app: &mut App, platform: Platform, channel_slug: &str);
+    fn remove_watched_channel(&self, app: &mut App, channel_id: &str);
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool;
+    fn queue_watched_channel_send(&self, app: &mut App, channel_id: &str, text: &str) -> bool;
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str);
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
+    fn remove_chat_pane_for_active_tab(&self, app: &mut App, panel_id: &str);
     fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str);
     fn connect_kick_account(&self, app: &mut App);
     fn connect_twitch_account(&self, app: &mut App);
@@ -1480,6 +1789,13 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
+    fn open_add_channel_modal_for_panel(&self, app: &mut App, panel_id: &str) {
+        self.update(app, |state, cx| {
+            state.open_add_channel_modal_for_panel(panel_id);
+            cx.notify();
+        });
+    }
+
     fn close_add_channel_modal(&self, app: &mut App) {
         self.update(app, |state, cx| {
             state.close_add_channel_modal();
@@ -1511,9 +1827,63 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
+    fn add_watched_channel_tab_from_slug(
+        &self,
+        app: &mut App,
+        platform: Platform,
+        channel_slug: &str,
+    ) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) =
+                        state.add_watched_channel_tab_from_slug(&storage, platform, channel_slug)
+                    {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn submit_add_channel_modal(&self, app: &mut App, platform: Platform, channel_slug: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) =
+                        state.submit_add_channel_modal(&storage, platform, channel_slug)
+                    {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn remove_watched_channel(&self, app: &mut App, channel_id: &str) {
+        self.update(app, |state, cx| {
+            state.remove_watched_channel(channel_id);
+            cx.notify();
+        });
+    }
+
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool {
         self.update(app, |state, cx| {
             let queued = state.queue_composer_send(text);
+            cx.notify();
+            queued
+        })
+    }
+
+    fn queue_watched_channel_send(&self, app: &mut App, channel_id: &str, text: &str) -> bool {
+        self.update(app, |state, cx| {
+            let queued = state.queue_watched_channel_send(channel_id, text);
             cx.notify();
             queued
         })
@@ -1532,6 +1902,21 @@ impl AppStateActions for Entity<AppState> {
             match Storage::open_or_recover(config.db_path()) {
                 Ok(storage) => {
                     if let Err(error) = state.add_chat_pane_for_active_tab(&storage) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn remove_chat_pane_for_active_tab(&self, app: &mut App, panel_id: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.remove_chat_pane_for_active_tab(&storage, panel_id) {
                         state.record_runtime_failure(error.to_string());
                     }
                 }
@@ -1678,16 +2063,14 @@ impl AppStateActions for Entity<AppState> {
     }
 }
 
-fn append_watched_pane(root: &mut LayoutNode, channel_id: &str) -> bool {
+fn append_watched_pane(root: &mut LayoutNode) -> bool {
     if count_layout_panels(root) >= MAX_PANELS {
         return false;
     }
 
     let new_panel = LayoutNode::Panel {
         id: uuid::Uuid::new_v4().to_string(),
-        content: PanelContent::Watched {
-            channel_id: channel_id.to_string(),
-        },
+        content: PanelContent::Empty,
         flex: 100.0,
     };
 
@@ -1716,6 +2099,57 @@ fn count_layout_panels(node: &LayoutNode) -> usize {
     }
 }
 
+fn assign_channel_to_panel(root: &mut LayoutNode, panel_id: &str, channel_id: &str) -> bool {
+    match root {
+        LayoutNode::Panel { id, content, .. } => {
+            if id != panel_id {
+                return false;
+            }
+            *content = PanelContent::Watched {
+                channel_id: channel_id.to_string(),
+            };
+            true
+        }
+        LayoutNode::Split { children, .. } => children
+            .iter_mut()
+            .any(|child| assign_channel_to_panel(child, panel_id, channel_id)),
+    }
+}
+
+fn remove_panel_from_layout(root: &mut LayoutNode, panel_id: &str) -> bool {
+    match root {
+        LayoutNode::Panel { .. } => false,
+        LayoutNode::Split { children, .. } => {
+            if let Some(index) = children
+                .iter()
+                .position(|child| matches!(child, LayoutNode::Panel { id, .. } if id == panel_id))
+            {
+                children.remove(index);
+                if children.len() == 1 {
+                    *root = children.remove(0);
+                } else if !children.is_empty() {
+                    let flex = 100.0 / children.len() as f64;
+                    for child in children.iter_mut() {
+                        match child {
+                            LayoutNode::Panel {
+                                flex: child_flex, ..
+                            }
+                            | LayoutNode::Split {
+                                flex: child_flex, ..
+                            } => *child_flex = flex,
+                        }
+                    }
+                }
+                return true;
+            }
+
+            children
+                .iter_mut()
+                .any(|child| remove_panel_from_layout(child, panel_id))
+        }
+    }
+}
+
 fn format_platform_label(platform: Platform) -> &'static str {
     match platform {
         Platform::Twitch => "Twitch",
@@ -1727,11 +2161,14 @@ fn format_platform_label(platform: Platform) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{AppState, MainSection, count_layout_panels};
+    use crate::hotkeys::HotkeyAction;
     use crate::protocol::types::{
-        AppTheme, ChatTheme, LayoutNode, OverlayAnimation, Platform, WatchedChannel,
+        AppTheme, ChatTheme, LayoutNode, OverlayAnimation, PanelContent, Platform, WatchedChannel,
     };
     use crate::storage::Storage;
     use crate::storage::settings::default_app_settings;
+    use crate::storage::watched_layout::create_default_tab_layout;
+    use gpui::{Keystroke, Modifiers};
 
     #[test]
     fn selecting_section_updates_active_section() {
@@ -1758,6 +2195,43 @@ mod tests {
         state.toggle_sidebar();
 
         assert!(state.sidebar_collapsed());
+    }
+
+    #[test]
+    fn recording_hotkey_updates_selected_setting_only() {
+        let mut state = AppState::default();
+        let previous_next = state.settings().hotkeys.next_tab.clone();
+
+        state.start_hotkey_recording(HotkeyAction::NewTab);
+        let changed = state.record_hotkey(&Keystroke {
+            key: "n".to_string(),
+            modifiers: Modifiers {
+                control: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert!(changed);
+        assert_eq!(state.settings().hotkeys.new_tab, "ctrl+n");
+        assert_eq!(state.settings().hotkeys.next_tab, previous_next);
+        assert_eq!(state.recording_hotkey(), None);
+    }
+
+    #[test]
+    fn escape_cancels_hotkey_recording_without_mutation() {
+        let mut state = AppState::default();
+        let original = state.settings().hotkeys.prev_tab.clone();
+
+        state.start_hotkey_recording(HotkeyAction::PrevTab);
+        let changed = state.record_hotkey(&Keystroke {
+            key: "escape".to_string(),
+            ..Default::default()
+        });
+
+        assert!(!changed);
+        assert_eq!(state.settings().hotkeys.prev_tab, original);
+        assert_eq!(state.recording_hotkey(), None);
     }
 
     #[test]
@@ -1841,11 +2315,13 @@ mod tests {
             .expect("visible layout should be stored in state");
         assert_eq!(count_layout_panels(&layout.root), 2);
         assert!(matches!(layout.root, LayoutNode::Split { .. }));
+        assert!(layout_contains_empty_panel(&layout.root));
         let persisted = storage
             .watched_layout()
             .get("channel-1")
             .expect("layout should be persisted");
         assert_eq!(count_layout_panels(&persisted.root), 2);
+        assert!(layout_contains_empty_panel(&persisted.root));
     }
 
     #[test]
@@ -1909,6 +2385,55 @@ mod tests {
     }
 
     #[test]
+    fn add_watched_channel_tab_from_slug_selects_created_tab() {
+        let temp = tempfile::tempdir().expect("temp dir should be available");
+        let db_path = temp.path().join("watched-tab.sqlite");
+        let storage = Storage::open(&db_path).expect("storage should open for watched tab test");
+        let mut state = AppState::from_storage(&storage);
+
+        let changed = state
+            .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "satont")
+            .expect("adding watched tab should persist");
+
+        assert!(changed);
+        assert_eq!(state.watched_channels.len(), 1);
+        assert_eq!(state.active_channel_tab_id(), state.watched_channels[0].id);
+        assert!(
+            state
+                .watched_layout(&state.watched_channels[0].id)
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn remove_watched_channel_falls_back_to_home_and_clears_local_state() {
+        let mut state = AppState::default();
+        let channel = WatchedChannel {
+            id: "channel-1".to_string(),
+            platform: Platform::Kick,
+            channel_slug: "suhodolskiy".to_string(),
+            display_name: "suhodolskiy".to_string(),
+            created_at: 1,
+        };
+        state.watched_channels.push(channel.clone());
+        state
+            .watched_layouts
+            .insert(channel.id.clone(), create_default_tab_layout(&channel.id));
+        state
+            .watched_channel_messages
+            .insert(channel.id.clone(), Vec::new());
+        state.select_channel_tab(channel.id.clone());
+
+        let removed = state.remove_watched_channel(&channel.id);
+
+        assert!(removed);
+        assert_eq!(state.active_channel_tab_id(), "home");
+        assert!(state.watched_channels.is_empty());
+        assert!(state.watched_layouts.is_empty());
+        assert!(state.watched_channel_messages.is_empty());
+    }
+
+    #[test]
     fn persist_settings_saves_current_app_state_snapshot() {
         let temp = tempfile::tempdir().expect("temp dir should be available");
         let db_path = temp.path().join("settings.sqlite");
@@ -1931,5 +2456,12 @@ mod tests {
         assert_eq!(persisted.chat_theme, ChatTheme::Compact);
         assert_eq!(persisted.font_size, 19.0);
         assert!(!persisted.show_avatars);
+    }
+
+    fn layout_contains_empty_panel(node: &LayoutNode) -> bool {
+        match node {
+            LayoutNode::Panel { content, .. } => matches!(content, PanelContent::Empty),
+            LayoutNode::Split { children, .. } => children.iter().any(layout_contains_empty_panel),
+        }
     }
 }

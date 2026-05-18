@@ -6,15 +6,18 @@ use crate::ui::chat::ChatScrollUi;
 use crate::ui::components::input::Input;
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
 use gpui::{
-    Context, Entity, FollowMode, ListAlignment, ListState, Render, ScrollHandle, Task, Window, div,
-    prelude::*, px, retain_all, rgb,
+    Context, Entity, FocusHandle, FollowMode, ListAlignment, ListState, Render, ScrollHandle, Task,
+    Window, div, prelude::*, px, retain_all, rgb,
 };
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
     composer_input: Entity<Input>,
     add_channel_input: Entity<Input>,
+    watched_composer_inputs: BTreeMap<String, Entity<Input>>,
+    hotkey_capture_focus: FocusHandle,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
     chat_list_state: ListState,
@@ -41,6 +44,7 @@ impl TwirChatApp {
         let state = cx.new(|_| initial_state);
         let composer_input = cx.new(|cx| Input::new("Send a message...", cx).with_clear_on_copy());
         let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
+        let hotkey_capture_focus = cx.focus_handle();
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         cx.observe(&composer_input, |_, _, cx| cx.notify()).detach();
         cx.observe(&add_channel_input, |_, _, cx| cx.notify())
@@ -69,6 +73,8 @@ impl TwirChatApp {
             state,
             composer_input,
             add_channel_input,
+            watched_composer_inputs: BTreeMap::new(),
+            hotkey_capture_focus,
             runtime,
             _runtime_poll_task: runtime_poll_task,
             chat_list_state,
@@ -200,16 +206,86 @@ impl TwirChatApp {
             self.composer_input.update(cx, |input, cx| input.clear(cx));
         }
     }
+
+    fn flush_pending_watched_channel_removals(&self, cx: &mut Context<Self>) {
+        let Some(runtime) = &self.runtime else {
+            return;
+        };
+        let pending = self
+            .state
+            .update(cx, |state, _| state.take_pending_watched_channel_removals());
+
+        for remove in pending {
+            if let Err(error) = runtime.dispatch_watched_channel_remove(remove.channel_id.clone()) {
+                let error_message = format!(
+                    "failed to remove watched channel {}: {}",
+                    remove.channel_id, error
+                );
+                self.state.update(cx, |state, cx| {
+                    state.record_runtime_failure(error_message);
+                    cx.notify();
+                });
+            }
+        }
+    }
+
+    fn flush_watched_composer_submits(&self, cx: &mut Context<Self>) {
+        for (channel_id, input) in &self.watched_composer_inputs {
+            let submit_text = input.update(cx, |input, _cx| {
+                input
+                    .take_submit_requested()
+                    .then(|| input.text().trim().to_string())
+            });
+
+            let Some(text) = submit_text.filter(|text| !text.is_empty()) else {
+                continue;
+            };
+
+            let queued = self.state.update(cx, |state, cx| {
+                let queued = state.queue_watched_channel_send(channel_id, &text);
+                cx.notify();
+                queued
+            });
+            if queued {
+                input.update(cx, |input, cx| input.clear(cx));
+            }
+        }
+    }
+
+    fn sync_watched_composer_inputs(&mut self, state: &AppState, cx: &mut Context<Self>) {
+        let watched_ids = state
+            .watched_channels
+            .iter()
+            .map(|channel| channel.id.clone())
+            .collect::<BTreeSet<_>>();
+        self.watched_composer_inputs
+            .retain(|channel_id, _| watched_ids.contains(channel_id));
+
+        for channel in &state.watched_channels {
+            if self.watched_composer_inputs.contains_key(&channel.id) {
+                continue;
+            }
+
+            let input =
+                cx.new(|input_cx| Input::new("Send a message...", input_cx).with_clear_on_copy());
+            cx.observe(&input, |_, _, cx| cx.notify()).detach();
+            self.watched_composer_inputs
+                .insert(channel.id.clone(), input);
+        }
+    }
 }
 
 impl Render for TwirChatApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         self.drain_runtime_events(cx);
         self.flush_composer_submit(cx);
+        self.flush_watched_composer_submits(cx);
         self.flush_pending_watched_channel_adds(cx);
         self.flush_pending_watched_channel_messages(cx);
+        self.flush_pending_watched_channel_removals(cx);
         self.flush_pending_backend_messages(cx);
         let state = self.state.read(cx).clone();
+        self.sync_watched_composer_inputs(&state, cx);
         let composer_text = self.composer_input.read(cx).text().to_string();
         let was_following_tail = self.chat_list_state.is_following_tail();
         self.chat_scroll_paused = !was_following_tail;
@@ -246,6 +322,8 @@ impl Render for TwirChatApp {
                             state_entity: self.state.clone(),
                             composer_input: self.composer_input.clone(),
                             add_channel_input: self.add_channel_input.clone(),
+                            watched_composer_inputs: self.watched_composer_inputs.clone(),
+                            hotkey_capture_focus: self.hotkey_capture_focus.clone(),
                             composer_text,
                             scroll_ui: content::SectionScrollUi {
                                 chat: ChatScrollUi {

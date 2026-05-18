@@ -1,11 +1,13 @@
 use crate::app_state::{AppState, MainSection};
 use crate::ui::chat::{ChatPanelProps, ChatScrollUi};
 use crate::ui::components::input::Input;
+use crate::ui::components::watched_layout;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::shell::tabs;
 use crate::ui::theme;
 use crate::ui::{chat, events, platforms, settings};
-use gpui::{AnyElement, Context, Entity, ScrollHandle, Window, div, prelude::*, px};
+use gpui::{AnyElement, Context, Entity, FocusHandle, ScrollHandle, Window, div, prelude::*, px};
+use std::collections::BTreeMap;
 
 pub(crate) struct SectionScrollUi<'a> {
     pub chat: ChatScrollUi<'a>,
@@ -17,6 +19,8 @@ pub(crate) struct ContentPanelProps<'a> {
     pub state_entity: Entity<AppState>,
     pub composer_input: Entity<Input>,
     pub add_channel_input: Entity<Input>,
+    pub watched_composer_inputs: BTreeMap<String, Entity<Input>>,
+    pub hotkey_capture_focus: FocusHandle,
     pub composer_text: String,
     pub scroll_ui: SectionScrollUi<'a>,
 }
@@ -28,42 +32,61 @@ pub(crate) fn panel(
     cx: &mut Context<TwirChatApp>,
 ) -> AnyElement {
     match state.active_section() {
-        MainSection::Chat => div()
-            .flex_1()
-            .min_w(px(0.0))
-            .min_h(px(0.0))
-            .relative()
-            .flex()
-            .flex_col()
-            .bg(theme::background())
-            .child(
-                chat::panel(
-                    state,
-                    ChatPanelProps {
-                        state_entity: props.state_entity.clone(),
-                        composer_input: props.composer_input,
-                        add_channel_input: props.add_channel_input.clone(),
-                        composer_text: props.composer_text,
-                        scroll_ui: props.scroll_ui.chat,
-                    },
-                    window,
-                    cx,
+        MainSection::Chat => {
+            let is_home_tab = state.active_channel_tab_id() == "home";
+
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .min_h(px(0.0))
+                .relative()
+                .flex()
+                .flex_col()
+                .bg(theme::background())
+                .child(if is_home_tab {
+                    chat::panel(
+                        state,
+                        ChatPanelProps {
+                            state_entity: props.state_entity.clone(),
+                            composer_input: props.composer_input,
+                            composer_text: props.composer_text,
+                            scroll_ui: props.scroll_ui.chat,
+                        },
+                        window,
+                        cx,
+                    )
+                    .mt(px(40.0))
+                    .into_any_element()
+                } else {
+                    watched_layout::tab_panel(
+                        state,
+                        props.state_entity.clone(),
+                        &props.watched_composer_inputs,
+                    )
+                    .mt(px(40.0))
+                    .into_any_element()
+                })
+                .child(
+                    div()
+                        .absolute()
+                        .top(px(0.0))
+                        .left(px(0.0))
+                        .right(px(0.0))
+                        .child(tabs::bar(
+                            state,
+                            props.state_entity.clone(),
+                            props.add_channel_input.clone(),
+                        )),
                 )
-                .mt(px(40.0)),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .top(px(0.0))
-                    .left(px(0.0))
-                    .right(px(0.0))
-                    .child(tabs::bar(
+                .when(state.tab_add_menu_open, |el| {
+                    el.child(chat::add_channel_modal(
                         state,
                         props.state_entity.clone(),
                         props.add_channel_input,
-                    )),
-            )
-            .into_any_element(),
+                    ))
+                })
+                .into_any_element()
+        }
         MainSection::Events => events::panel(state).into_any_element(),
         MainSection::Platforms => platforms::panel(
             &state.platforms_panel,
@@ -75,6 +98,7 @@ pub(crate) fn panel(
         MainSection::Settings => settings::panel(
             state,
             props.state_entity.clone(),
+            &props.hotkey_capture_focus,
             props.scroll_ui.settings,
             window,
             cx,

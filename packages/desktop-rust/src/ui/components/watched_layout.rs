@@ -1,186 +1,647 @@
-use crate::protocol::types::{LayoutNode, PanelContent, SplitDirection, WatchedChannelsLayout};
+use crate::app_state::{AppState, AppStateActions};
+use crate::protocol::types::{
+    AppSettings, ChatMessageType, LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode,
+    SplitDirection, WatchedChannel, WatchedChannelsLayout,
+};
+use crate::ui::components::input::Input;
 use crate::ui::theme;
-use gpui::{Div, Stateful, div, prelude::*, px};
+use gpui::{Div, Entity, ImageSource, ObjectFit, Stateful, div, img, prelude::*, px, rgb, rgba};
+use std::collections::BTreeMap;
 
-pub fn render_layout(layout: &WatchedChannelsLayout) -> Div {
+pub fn tab_panel(
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+) -> Div {
+    let active_tab_id = state.active_channel_tab_id().to_string();
+    let layout = state
+        .watched_layout(&active_tab_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            crate::storage::watched_layout::create_default_tab_layout(&active_tab_id)
+        });
+
     div()
         .flex_1()
+        .min_w(px(0.0))
+        .min_h(px(0.0))
         .flex()
-        .flex_row()
         .bg(theme::background())
-        .child(render_node(&layout.root))
+        .child(render_layout(
+            &layout,
+            state,
+            state_entity,
+            watched_composer_inputs,
+        ))
 }
 
-fn render_node(node: &LayoutNode) -> Stateful<Div> {
+fn render_layout(
+    layout: &WatchedChannelsLayout,
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+) -> Div {
+    div()
+        .flex_1()
+        .min_w(px(0.0))
+        .min_h(px(0.0))
+        .flex()
+        .bg(theme::background())
+        .child(render_node(
+            &layout.root,
+            state,
+            state_entity,
+            watched_composer_inputs,
+        ))
+}
+
+fn render_node(
+    node: &LayoutNode,
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+) -> Stateful<Div> {
     match node {
-        LayoutNode::Panel {
-            id,
-            content,
-            flex: _,
-        } => {
-            let content_div = match content {
-                PanelContent::Main => render_chat_panel("Main Chat", None),
-                PanelContent::Watched { channel_id } => {
-                    render_chat_panel(channel_id, Some(theme::accent()))
-                }
-                PanelContent::Empty => div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .bg(theme::surface_2())
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .gap(px(16.0))
-                            .child(
-                                div()
-                                    .w(px(48.0))
-                                    .h(px(48.0))
-                                    .rounded_lg()
-                                    .bg(theme::surface())
-                                    .border_1()
-                                    .border_color(theme::border())
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(div().text_color(theme::text_muted()).child("+")),
-                            )
-                            .child(
-                                div()
-                                    .text_color(theme::text_muted())
-                                    .child("Select a channel to watch"),
-                            ),
-                    ),
+        LayoutNode::Panel { id, content, .. } => {
+            let panel = match content {
+                PanelContent::Main => empty_panel(
+                    state_entity.clone(),
+                    id,
+                    "Main pane",
+                    "Watched tabs render channel panes only.",
+                ),
+                PanelContent::Watched { channel_id } => watched_panel(
+                    state,
+                    state_entity,
+                    channel_id,
+                    watched_composer_inputs.get(channel_id).cloned(),
+                ),
+                PanelContent::Empty => empty_panel(
+                    state_entity,
+                    id,
+                    "Empty pane",
+                    "Use the plus button in a pane header to add another split.",
+                ),
             };
+
             div()
                 .id(id.clone())
-                .flex_grow()
-                .flex()
-                .flex_col()
-                .border_1()
-                .border_color(theme::border())
-                .child(content_div)
+                .flex_1()
+                .min_w(px(0.0))
+                .min_h(px(0.0))
+                .child(panel)
         }
         LayoutNode::Split {
             id,
             direction,
             children,
-            flex: _,
             ..
         } => {
-            let mut container = div().id(id.clone()).flex_grow().flex();
-            if *direction == SplitDirection::Horizontal {
-                container = container.flex_row();
+            let mut container = div()
+                .id(id.clone())
+                .flex_1()
+                .min_w(px(0.0))
+                .min_h(px(0.0))
+                .flex()
+                .gap(px(1.0));
+
+            container = if *direction == SplitDirection::Horizontal {
+                container.flex_row()
             } else {
-                container = container.flex_col();
-            }
-            container.children(children.iter().map(render_node))
+                container.flex_col()
+            };
+
+            container.children(children.iter().map(|child| {
+                render_node(child, state, state_entity.clone(), watched_composer_inputs)
+            }))
         }
     }
 }
 
-fn render_chat_panel(title: &str, dot_color: Option<gpui::Rgba>) -> Div {
+fn watched_panel(
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    channel_id: &str,
+    composer_input: Option<Entity<Input>>,
+) -> Div {
+    let settings = state.settings().clone();
+    let channel = state
+        .watched_channels
+        .iter()
+        .find(|channel| channel.id == channel_id)
+        .cloned();
+    let title = channel
+        .as_ref()
+        .map(|channel| channel.display_name.clone())
+        .unwrap_or_else(|| channel_id.to_string());
+    let status = channel
+        .as_ref()
+        .and_then(|channel| state.watched_channel_statuses.get(&channel.id))
+        .cloned();
+    let messages = channel
+        .as_ref()
+        .map(|channel| collect_panel_messages(state, channel))
+        .unwrap_or_default();
+    let status_dot = status
+        .as_ref()
+        .map(|status| match status.status {
+            PlatformStatus::Connected => rgb(0x22c55e),
+            PlatformStatus::Connecting => rgb(0xf59e0b),
+            PlatformStatus::Error => rgb(0xef4444),
+            PlatformStatus::Disconnected => theme::text_muted(),
+        })
+        .unwrap_or(theme::text_muted());
+    let mode_label = status.as_ref().map(|status| match status.mode {
+        PlatformStatusMode::Authenticated => "authenticated",
+        PlatformStatusMode::Anonymous => "read-only",
+    });
+    let status_label = status.as_ref().map(|status| match status.status {
+        PlatformStatus::Connected => "connected",
+        PlatformStatus::Connecting => "connecting",
+        PlatformStatus::Disconnected => "disconnected",
+        PlatformStatus::Error => "error",
+    });
+
     div()
-        .flex_1()
+        .size_full()
+        .min_w(px(0.0))
+        .min_h(px(0.0))
+        .bg(theme::background())
         .flex()
         .flex_col()
+        .overflow_hidden()
         .child(
             div()
                 .w_full()
-                .h(px(40.0))
-                .bg(theme::surface())
+                .min_h(px(38.0))
+                .px(px(12.0))
+                .py(px(8.0))
                 .border_b_1()
                 .border_color(theme::border())
                 .flex()
+                .flex_row()
                 .items_center()
                 .justify_between()
-                .px(px(12.0))
+                .gap(px(8.0))
                 .child(
                     div()
                         .flex()
                         .flex_row()
                         .items_center()
                         .gap(px(8.0))
-                        .when_some(dot_color, |this, color| {
-                            this.child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(color))
-                        })
+                        .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(status_dot))
                         .child(
                             div()
                                 .text_color(theme::text_primary())
                                 .font_weight(gpui::FontWeight::BOLD)
-                                .child(title.to_string()),
-                        ),
+                                .child(title),
+                        )
+                        .when_some(mode_label, |row, label| {
+                            row.child(
+                                div()
+                                    .px(px(8.0))
+                                    .py(px(2.0))
+                                    .rounded_full()
+                                    .bg(rgba(0xffffff12))
+                                    .text_color(theme::text_muted())
+                                    .text_size(px(11.0))
+                                    .child(label),
+                            )
+                        }),
                 )
                 .child(
-                    div().flex().flex_row().items_center().gap(px(4.0)).child(
-                        div()
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .rounded_md()
-                            .bg(theme::surface_2())
-                            .text_color(theme::text_muted())
-                            .text_size(px(12.0))
-                            .child("1.2k"),
-                    ),
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .when_some(status_label, |row, label| {
+                            row.child(
+                                div()
+                                    .text_color(theme::text_muted())
+                                    .text_size(px(11.0))
+                                    .child(label),
+                            )
+                        })
+                        .child(action_button("+").on_click({
+                            let state_entity = state_entity.clone();
+                            move |_event, _window, cx| {
+                                state_entity.add_chat_pane_for_active_tab(cx);
+                            }
+                        })),
                 ),
         )
         .child(
             div()
                 .flex_1()
-                .bg(theme::background())
+                .min_w(px(0.0))
+                .min_h(px(0.0))
+                .id(format!("watched-pane-scroll-{channel_id}"))
+                .overflow_y_scroll()
                 .flex()
                 .flex_col()
                 .justify_end()
-                .p(px(12.0))
-                .gap(px(8.0))
-                .child(render_mock_message(
-                    "user1",
-                    "Hello everyone!",
-                    gpui::rgb(0xff0000),
-                ))
-                .child(render_mock_message(
-                    "mod_user",
-                    "Welcome to the stream!",
-                    gpui::rgb(0x00ff00),
-                ))
-                .child(render_mock_message(
-                    "viewer99",
-                    "PogChamp",
-                    gpui::rgb(0x0000ff),
-                ))
+                .children(if messages.is_empty() {
+                    vec![
+                        div()
+                            .flex_1()
+                            .min_h(px(0.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_color(theme::text_muted())
+                            .text_size(px(12.0))
+                            .child(match status.as_ref().map(|status| status.status) {
+                                Some(PlatformStatus::Connecting) => "Connecting...",
+                                _ => "No messages yet",
+                            })
+                            .into_any_element(),
+                    ]
+                } else {
+                    messages
+                        .into_iter()
+                        .map(|message| watched_message_row(&message, &settings))
+                        .collect::<Vec<_>>()
+                }),
+        )
+        .when_some(composer_input, |panel, composer_input| {
+            panel.child(watched_composer(
+                state_entity,
+                channel_id.to_string(),
+                composer_input,
+            ))
+        })
+}
+
+fn empty_panel(
+    state_entity: Entity<AppState>,
+    panel_id: &str,
+    title: &str,
+    description: &str,
+) -> Div {
+    let panel_id = panel_id.to_string();
+    div()
+        .size_full()
+        .bg(theme::background())
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .relative()
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap(px(10.0))
                 .child(
                     div()
-                        .w_full()
-                        .mt(px(8.0))
-                        .p(px(8.0))
-                        .rounded_md()
-                        .bg(theme::surface())
+                        .w(px(40.0))
+                        .h(px(40.0))
+                        .rounded_lg()
+                        .bg(theme::surface_2())
                         .border_1()
                         .border_color(theme::border())
+                        .flex()
+                        .items_center()
+                        .justify_center()
                         .text_color(theme::text_muted())
-                        .child("Send a message..."),
+                        .cursor_pointer()
+                        .hover(|s| s.bg(theme::surface()))
+                        .child("+")
+                        .on_mouse_down(gpui::MouseButton::Left, {
+                            let state_entity = state_entity.clone();
+                            let panel_id = panel_id.clone();
+                            move |_event, _window, app| {
+                                state_entity.open_add_channel_modal_for_panel(app, &panel_id);
+                            }
+                        }),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .top(px(-6.0))
+                        .right(px(-26.0))
+                        .w(px(18.0))
+                        .h(px(18.0))
+                        .rounded_md()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .text_color(theme::text_muted())
+                        .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
+                        .child("×")
+                        .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, app| {
+                            state_entity.remove_chat_pane_for_active_tab(app, &panel_id);
+                        }),
+                )
+                .child(
+                    div()
+                        .text_color(theme::text_primary())
+                        .font_weight(gpui::FontWeight::BOLD)
+                        .child(title.to_string()),
+                )
+                .child(
+                    div()
+                        .text_color(theme::text_muted())
+                        .text_size(px(12.0))
+                        .child(description.to_string()),
                 ),
         )
 }
 
-fn render_mock_message(author: &str, content: &str, color: gpui::Rgba) -> Div {
+fn collect_panel_messages(
+    state: &AppState,
+    channel: &WatchedChannel,
+) -> Vec<crate::protocol::types::NormalizedChatMessage> {
+    if let Some(messages) = state.watched_channel_messages.get(&channel.id) {
+        return messages.clone();
+    }
+
+    let mut messages = state
+        .messages
+        .iter()
+        .filter(|message| {
+            message.platform == channel.platform
+                && (message.channel_id == channel.id
+                    || message
+                        .channel_id
+                        .eq_ignore_ascii_case(&channel.channel_slug))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if messages.len() > 120 {
+        let start = messages.len() - 120;
+        messages = messages.split_off(start);
+    }
+
+    messages
+}
+
+fn watched_message_row(
+    message: &crate::protocol::types::NormalizedChatMessage,
+    settings: &AppSettings,
+) -> gpui::AnyElement {
+    let is_compact = settings.chat_theme == crate::protocol::types::ChatTheme::Compact;
+    let v_pad = if is_compact { 1.0 } else { 2.0 };
+
+    if message.message_type == ChatMessageType::System {
+        return div()
+            .w_full()
+            .px(px(14.0))
+            .py(px(v_pad))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .w(px(17.0))
+                    .h(px(17.0))
+                    .rounded_full()
+                    .bg(rgba(0x4ade8026))
+                    .text_color(rgb(0x4ade80))
+                    .text_size(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .font_weight(gpui::FontWeight::BOLD)
+                    .child("~"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .text_size(px(settings.font_size as f32))
+                    .text_color(theme::text_muted())
+                    .child(message.text.clone()),
+            )
+            .when(settings.show_timestamp, |el| {
+                el.child(
+                    div()
+                        .text_size(px(10.0))
+                        .text_color(theme::text_muted())
+                        .child(message.timestamp.clone()),
+                )
+            })
+            .into_any_element();
+    }
+
     div()
+        .w_full()
+        .px(px(14.0))
+        .py(px(v_pad))
         .flex()
         .flex_row()
         .items_start()
-        .gap(px(6.0))
+        .gap(px(8.0))
+        .relative()
+        .hover(|s| s.bg(rgba(0xffffff06)))
+        .when(settings.show_avatars, |el| {
+            let avatar_url = message.author.avatar_url.clone();
+            let fallback = message
+                .author
+                .display_name
+                .chars()
+                .next()
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string();
+            el.child(
+                div()
+                    .w(px(if is_compact { 22.0 } else { 26.0 }))
+                    .h(px(if is_compact { 22.0 } else { 26.0 }))
+                    .rounded_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(rgb(0x8b8b99))
+                    .text_color(theme::text_primary())
+                    .text_size(px(if is_compact { 9.0 } else { 10.0 }))
+                    .font_weight(gpui::FontWeight::BOLD)
+                    .overflow_hidden()
+                    .when_some(avatar_url.clone(), |avatar, url| {
+                        avatar.child(
+                            img(ImageSource::from(url))
+                                .w_full()
+                                .h_full()
+                                .rounded_full()
+                                .object_fit(ObjectFit::Cover)
+                                .with_loading({
+                                    let fallback = fallback.clone();
+                                    move || fallback.clone().into_any_element()
+                                })
+                                .with_fallback({
+                                    let fallback = fallback.clone();
+                                    move || fallback.clone().into_any_element()
+                                }),
+                        )
+                    })
+                    .when(avatar_url.is_none(), |avatar| {
+                        avatar.child(fallback.clone())
+                    }),
+            )
+        })
         .child(
             div()
-                .text_color(color)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(author.to_string()),
+                .flex_1()
+                .w_full()
+                .min_w(px(0.0))
+                .flex()
+                .flex_col()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(5.0))
+                        .flex_wrap()
+                        .when(settings.show_badges, |el| {
+                            el.children(message.author.badges.iter().enumerate().map(
+                                |(index, badge)| {
+                                    if let Some(path) = badge
+                                        .image_url
+                                        .as_ref()
+                                        .filter(|url| std::path::Path::new(url).is_absolute())
+                                    {
+                                        return div()
+                                            .w(px(14.0))
+                                            .h(px(14.0))
+                                            .rounded_sm()
+                                            .overflow_hidden()
+                                            .child(
+                                                img(ImageSource::from(std::path::Path::new(path)))
+                                                    .id(format!(
+                                                        "watched-badge-{}-{}-{}",
+                                                        message.id, badge.id, index
+                                                    ))
+                                                    .w_full()
+                                                    .h_full()
+                                                    .object_fit(ObjectFit::Contain),
+                                            );
+                                    }
+
+                                    if let Some(url) = badge.image_url.as_ref().filter(|url| {
+                                        url.starts_with("http://") || url.starts_with("https://")
+                                    }) {
+                                        div()
+                                            .w(px(14.0))
+                                            .h(px(14.0))
+                                            .rounded_sm()
+                                            .overflow_hidden()
+                                            .child(
+                                                img(ImageSource::from(url.clone()))
+                                                    .id(format!(
+                                                        "watched-badge-{}-{}-{}",
+                                                        message.id, badge.id, index
+                                                    ))
+                                                    .w_full()
+                                                    .h_full()
+                                                    .object_fit(ObjectFit::Contain),
+                                            )
+                                    } else {
+                                        div()
+                                            .rounded_sm()
+                                            .px(px(4.0))
+                                            .py(px(1.0))
+                                            .bg(rgba(0xffffff1a))
+                                            .text_color(theme::text_primary())
+                                            .text_size(px(10.0))
+                                            .child(badge.text.clone())
+                                    }
+                                },
+                            ))
+                        })
+                        .child(
+                            div()
+                                .text_color(theme::accent())
+                                .text_size(px(12.0))
+                                .font_weight(gpui::FontWeight::BOLD)
+                                .child(message.author.display_name.clone()),
+                        )
+                        .when(settings.show_timestamp, |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(9.0))
+                                    .text_color(theme::text_muted())
+                                    .child(message.timestamp.clone()),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .w_full()
+                        .min_w(px(0.0))
+                        .text_size(px(settings.font_size as f32))
+                        .text_color(theme::text_primary())
+                        .child(message.text.clone()),
+                ),
+        )
+        .into_any_element()
+}
+
+fn watched_composer(
+    state_entity: Entity<AppState>,
+    channel_id: String,
+    composer_input: Entity<Input>,
+) -> Div {
+    div()
+        .w_full()
+        .h(px(58.0))
+        .border_t_1()
+        .border_color(theme::border())
+        .px(px(10.0))
+        .py(px(10.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(8.0))
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .rounded_md()
+                .bg(theme::surface_2())
+                .border_1()
+                .border_color(theme::border())
+                .flex()
+                .items_center()
+                .child(composer_input.clone()),
         )
         .child(
             div()
+                .w(px(36.0))
+                .h(px(36.0))
+                .rounded_md()
+                .bg(theme::accent_strong())
                 .text_color(theme::text_primary())
-                .child(content.to_string()),
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(rgb(0x6d28d9)))
+                .child("➤")
+                .on_mouse_down(gpui::MouseButton::Left, move |_, _, app| {
+                    let text = composer_input.read(app).text().to_string();
+                    if state_entity.queue_watched_channel_send(app, &channel_id, &text) {
+                        composer_input.update(app, |input, cx| input.clear(cx));
+                    }
+                }),
         )
+}
+
+fn action_button(icon: &'static str) -> Stateful<Div> {
+    div()
+        .id(icon)
+        .w(px(26.0))
+        .h(px(26.0))
+        .rounded_md()
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_color(theme::text_muted())
+        .cursor_pointer()
+        .hover(|s| s.bg(rgb(0x2a2a33)).text_color(theme::text_primary()))
+        .child(icon)
 }

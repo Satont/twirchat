@@ -112,26 +112,34 @@ fn chat_platform_icons_and_badges_match_parity_contract() {
 }
 
 #[test]
-fn chat_section_is_unified_home_feed() {
+fn chat_section_routes_home_and_watched_tabs() {
     let content_rs = fs::read_to_string("src/ui/shell/content.rs").expect("should read content.rs");
     let tabs_rs = fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
 
     assert!(content_rs.contains("chat::panel("));
-    assert!(!content_rs.contains("active_channel_tab_id"));
-    assert!(!tabs_rs.contains("for channel in &state.watched_channels"));
+    assert!(content_rs.contains("state.active_channel_tab_id() == \"home\""));
+    assert!(content_rs.contains("watched_layout::tab_panel"));
+    assert!(tabs_rs.contains("state\n            .watched_channels"));
 }
 
 #[test]
-fn chat_header_buttons_have_visible_popover_contracts() {
+fn home_chat_header_buttons_have_visible_popover_contracts() {
     let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
 
     assert!(chat_rs.contains("toggle_chat_appearance_popover"));
     assert!(chat_rs.contains("Appearance"));
-    assert!(chat_rs.contains("toggle_chat_add_menu"));
-    assert!(chat_rs.contains("ADD"));
-    assert!(chat_rs.contains("Watch {} ({})"));
     assert!(chat_rs.contains("toggle_chat_options_menu"));
     assert!(chat_rs.contains("Clear chat history"));
+}
+
+#[test]
+fn watched_tab_header_has_pane_add_contract() {
+    let watched_layout_rs = fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+
+    assert!(watched_layout_rs.contains("toggle_chat_add_menu"));
+    assert!(watched_layout_rs.contains("Add chat pane (Split)"));
+    assert!(watched_layout_rs.contains("PanelContent::Empty"));
 }
 
 #[test]

@@ -1,8 +1,9 @@
 use crate::app_state::AppStateActions;
+use crate::hotkeys::{HotkeyAction, format_hotkey_display};
 use crate::overlay::DEFAULT_OVERLAY_PORT;
 use crate::ui::components::switch::Switch;
 use crate::ui::theme;
-use gpui::{AnyElement, Div, Rgba, ScrollHandle, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, FocusHandle, Rgba, ScrollHandle, Window, div, prelude::*, px};
 use std::rc::Rc;
 use ui::WithScrollbar;
 
@@ -125,23 +126,54 @@ fn color_swatch(color: Rgba) -> Div {
         .border_color(theme::border())
 }
 
-fn hotkey_badge(keys: &'static str) -> Div {
-    div()
+fn hotkey_badge(
+    label: String,
+    is_recording: bool,
+    action: HotkeyAction,
+    state_entity: gpui::Entity<crate::app_state::AppState>,
+    hotkey_capture_focus: &FocusHandle,
+) -> Div {
+    let mut badge = div()
         .min_w(px(100.0))
         .px(px(10.0))
         .py(px(4.0))
         .bg(theme::surface_2())
         .border_1()
-        .border_color(theme::border())
+        .border_color(if is_recording {
+            theme::accent()
+        } else {
+            theme::border()
+        })
         .rounded_md()
-        .text_color(theme::text_primary())
+        .text_color(if is_recording {
+            theme::accent()
+        } else {
+            theme::text_primary()
+        })
         .text_size(px(12.0))
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
         .hover(|s| s.bg(with_alpha(gpui::white().into(), 0.05)))
-        .child(keys)
+        .on_mouse_down(gpui::MouseButton::Left, {
+            let state_entity = state_entity.clone();
+            let hotkey_capture_focus = hotkey_capture_focus.clone();
+            move |_event, window, app| {
+                window.focus(&hotkey_capture_focus, app);
+                state_entity.update(app, |state, cx| {
+                    state.start_hotkey_recording(action);
+                    cx.notify();
+                });
+            }
+        })
+        .child(label);
+
+    if is_recording {
+        badge = badge.bg(with_alpha(theme::accent(), 0.12));
+    }
+
+    badge
 }
 
 fn slider_mock(val: &'static str, percent: f32) -> Div {
@@ -188,6 +220,7 @@ fn slider_mock(val: &'static str, percent: f32) -> Div {
 pub(crate) fn panel(
     state: &crate::app_state::AppState,
     state_entity: gpui::Entity<crate::app_state::AppState>,
+    hotkey_capture_focus: &FocusHandle,
     scroll_handle: &ScrollHandle,
     window: &mut Window,
     cx: &mut gpui::Context<crate::ui::shell::app::TwirChatApp>,
@@ -586,31 +619,85 @@ pub(crate) fn panel(
                                 .border_color(theme::border())
                                 .rounded_xl()
                                 .p(px(20.0))
+                                .track_focus(hotkey_capture_focus)
+                                .on_key_down({
+                                    let state_entity = state_entity.clone();
+                                    move |event, _window, app| {
+                                        state_entity.update(app, |state, cx| {
+                                            if state.recording_hotkey().is_none() {
+                                                return;
+                                            }
+
+                                            state.record_hotkey(&event.keystroke);
+                                            cx.notify();
+                                        });
+                                    }
+                                })
                                 .flex()
                                 .flex_col()
                                 .child(section_title("Keyboard Shortcuts"))
                                 .child(form_row(
                                     "Open new tab",
                                     Some("Add a watched channel tab"),
-                                    hotkey_badge("Ctrl+T"),
+                                    hotkey_badge(
+                                        if state.is_recording_hotkey(HotkeyAction::NewTab) {
+                                            "Press keys...".to_string()
+                                        } else {
+                                            format_hotkey_display(&settings.hotkeys.new_tab)
+                                        },
+                                        state.is_recording_hotkey(HotkeyAction::NewTab),
+                                        HotkeyAction::NewTab,
+                                        state_entity.clone(),
+                                        hotkey_capture_focus,
+                                    ),
                                 ))
                                 .child(div().w_full().h(px(1.0)).bg(theme::border()))
                                 .child(form_row(
                                     "Next tab",
                                     Some("Cycle to the next tab"),
-                                    hotkey_badge("Ctrl+Tab"),
+                                    hotkey_badge(
+                                        if state.is_recording_hotkey(HotkeyAction::NextTab) {
+                                            "Press keys...".to_string()
+                                        } else {
+                                            format_hotkey_display(&settings.hotkeys.next_tab)
+                                        },
+                                        state.is_recording_hotkey(HotkeyAction::NextTab),
+                                        HotkeyAction::NextTab,
+                                        state_entity.clone(),
+                                        hotkey_capture_focus,
+                                    ),
                                 ))
                                 .child(div().w_full().h(px(1.0)).bg(theme::border()))
                                 .child(form_row(
                                     "Previous tab",
                                     Some("Cycle to the previous tab"),
-                                    hotkey_badge("Ctrl+Shift+Tab"),
+                                    hotkey_badge(
+                                        if state.is_recording_hotkey(HotkeyAction::PrevTab) {
+                                            "Press keys...".to_string()
+                                        } else {
+                                            format_hotkey_display(&settings.hotkeys.prev_tab)
+                                        },
+                                        state.is_recording_hotkey(HotkeyAction::PrevTab),
+                                        HotkeyAction::PrevTab,
+                                        state_entity.clone(),
+                                        hotkey_capture_focus,
+                                    ),
                                 ))
                                 .child(div().w_full().h(px(1.0)).bg(theme::border()))
                                 .child(form_row(
                                     "Tab selector",
-                                    Some("Open fuzzy tab search (Ctrl+K always works)"),
-                                    hotkey_badge("Ctrl+K"),
+                                    Some("Open fuzzy tab search"),
+                                    hotkey_badge(
+                                        if state.is_recording_hotkey(HotkeyAction::TabSelector) {
+                                            "Press keys...".to_string()
+                                        } else {
+                                            format_hotkey_display(&settings.hotkeys.tab_selector)
+                                        },
+                                        state.is_recording_hotkey(HotkeyAction::TabSelector),
+                                        HotkeyAction::TabSelector,
+                                        state_entity.clone(),
+                                        hotkey_capture_focus,
+                                    ),
                                 )),
                         ),
         )))

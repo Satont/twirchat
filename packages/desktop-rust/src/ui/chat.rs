@@ -1,7 +1,7 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
     Account, AppSettings, ChatMessageType, ChatTheme, NormalizedChatMessage, Platform,
-    WatchedChannel,
+    PlatformStatus,
 };
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
@@ -25,7 +25,6 @@ pub(crate) struct ChatScrollUi<'a> {
 pub(crate) struct ChatPanelProps<'a> {
     pub state_entity: Entity<AppState>,
     pub composer_input: Entity<Input>,
-    pub add_channel_input: Entity<Input>,
     pub composer_text: String,
     pub scroll_ui: ChatScrollUi<'a>,
 }
@@ -100,28 +99,16 @@ pub(crate) fn panel(
                 .left(px(0.0))
                 .right(px(0.0))
                 .child(header(
-                    &state.watched_channels,
                     state.messages.len(),
                     state,
                     props.state_entity.clone(),
                 )),
         )
-        .when(state.tab_add_menu_open, |el| {
-            el.child(add_channel_modal(
-                state,
-                props.state_entity.clone(),
-                props.add_channel_input,
-            ))
-        })
 }
 
-fn header(
-    channels: &[WatchedChannel],
-    message_count: usize,
-    state: &AppState,
-    state_entity: Entity<AppState>,
-) -> Div {
+fn header(message_count: usize, state: &AppState, state_entity: Entity<AppState>) -> Div {
     let message_count_text = format!("{} messages", message_count);
+    let home_targets = home_chat_targets(state);
 
     div()
         .w_full()
@@ -149,7 +136,7 @@ fn header(
                 .items_center()
                 .gap(px(6.0))
                 .overflow_x_hidden()
-                .children(channels.iter().map(header_chip)),
+                .children(home_targets.iter().map(header_chip)),
         )
         .child(
             div()
@@ -444,91 +431,6 @@ fn header(
                             div()
                                 .relative()
                                 .child(
-                                    panel_action_btn("+", true)
-                                        .bg(if state.chat_add_menu_open {
-                                            gpui::rgba(0x2a2a33ff)
-                                        } else {
-                                            gpui::rgba(0x00000000)
-                                        })
-                                        .on_click({
-                                            let state_entity = state_entity.clone();
-                                            move |_event, _window, cx| {
-                                                eprintln!("[ui/chat] add menu clicked");
-                                                state_entity.update(cx, |state, cx| {
-                                                    state.toggle_chat_add_menu();
-                                                    cx.notify();
-                                                });
-                                            }
-                                        }),
-                                )
-                                .when(state.chat_add_menu_open, |el| {
-                                    el.child(
-                                        div()
-                                            .absolute()
-                                            .top(px(32.0))
-                                            .right(px(0.0))
-                                            .w(px(240.0))
-                                            .bg(theme::surface())
-                                            .border_1()
-                                            .border_color(theme::border())
-                                            .rounded_lg()
-                                            .shadow_md()
-                                            .p(px(4.0))
-                                            .child(
-                                                div()
-                                                    .px(px(8.0))
-                                                    .py(px(4.0))
-                                                    .text_size(px(11.0))
-                                                    .font_weight(gpui::FontWeight::BOLD)
-                                                    .text_color(theme::text_muted())
-                                                    .child("ADD"),
-                                            )
-                                            .child(popover_btn("Add chat pane (Split)", {
-                                                let state_entity = state_entity.clone();
-                                                move |_event, _window, cx| {
-                                                    state_entity.add_chat_pane_for_active_tab(cx);
-                                                }
-                                            }))
-                                            .children(state.platforms_panel.accounts.iter().map({
-                                                let state_entity = state_entity.clone();
-                                                move |account| {
-                                                    let account_id = account.id.clone();
-                                                    let label = format!(
-                                                        "Watch {} ({})",
-                                                        account.display_name, account.username
-                                                    );
-                                                    add_menu_row(label, {
-                                                        let state_entity = state_entity.clone();
-                                                        move |_event, _window, app| {
-                                                            state_entity
-                                                                .add_watched_channel_from_account(
-                                                                    app,
-                                                                    &account_id,
-                                                                );
-                                                        }
-                                                    })
-                                                }
-                                            }))
-                                            .when(
-                                                state.platforms_panel.accounts.is_empty(),
-                                                |this| {
-                                                    this.child(
-                                                        div()
-                                                            .px(px(8.0))
-                                                            .py(px(6.0))
-                                                            .text_size(px(12.0))
-                                                            .text_color(theme::text_muted())
-                                                            .child("No connected accounts"),
-                                                    )
-                                                },
-                                            ),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .relative()
-                                .child(
                                     panel_action_btn("⋮", true)
                                         .bg(if state.chat_options_menu_open {
                                             gpui::rgba(0x2a2a33ff)
@@ -602,9 +504,9 @@ fn composer(
     composer_input: Entity<Input>,
     composer_text: String,
 ) -> Div {
+    let home_targets = home_chat_targets(state);
     let can_send = !composer_text.trim().is_empty()
-        && state
-            .watched_channels
+        && home_targets
             .iter()
             .any(|channel| !state.composer_disabled_channel_ids.contains(&channel.id));
 
@@ -621,15 +523,20 @@ fn composer(
         .flex()
         .flex_col()
         .gap(px(6.0))
-        .child(div().flex().flex_row().flex_wrap().gap(px(6.0)).children(
-            state.watched_channels.iter().map({
-                let state_entity = state_entity.clone();
-                move |chip| {
-                    let enabled = !state.composer_disabled_channel_ids.contains(&chip.id);
-                    status_chip(chip, enabled, state_entity.clone())
-                }
-            }),
-        ))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .gap(px(6.0))
+                .children(home_targets.iter().map({
+                    let state_entity = state_entity.clone();
+                    move |chip| {
+                        let enabled = !state.composer_disabled_channel_ids.contains(&chip.id);
+                        status_chip(chip, enabled, state_entity.clone())
+                    }
+                })),
+        )
         .child(
             div()
                 .flex()
@@ -699,7 +606,7 @@ fn composer(
 }
 
 fn status_chip(
-    chip: &WatchedChannel,
+    chip: &HomeChatTarget,
     active: bool,
     state_entity: Entity<AppState>,
 ) -> impl IntoElement {
@@ -753,7 +660,7 @@ fn status_chip(
         )
 }
 
-fn header_chip(chip: &WatchedChannel) -> Div {
+fn header_chip(chip: &HomeChatTarget) -> Div {
     div()
         .rounded_full()
         .px(px(8.0))
@@ -785,7 +692,49 @@ fn header_chip(chip: &WatchedChannel) -> Div {
         )
 }
 
-fn add_channel_modal(
+#[derive(Clone)]
+struct HomeChatTarget {
+    id: String,
+    platform: Platform,
+    display_name: String,
+}
+
+fn home_chat_targets(state: &AppState) -> Vec<HomeChatTarget> {
+    let mut targets = Vec::new();
+
+    for status in state.platforms_panel.statuses.values() {
+        let Some(channel_login) = status.channel_login.as_ref() else {
+            continue;
+        };
+        if !matches!(
+            status.status,
+            PlatformStatus::Connected | PlatformStatus::Connecting
+        ) {
+            continue;
+        }
+
+        let display_name = state
+            .platforms_panel
+            .accounts
+            .iter()
+            .find(|account| {
+                account.platform == status.platform
+                    && account.username.eq_ignore_ascii_case(channel_login)
+            })
+            .map(|account| account.display_name.clone())
+            .unwrap_or_else(|| channel_login.clone());
+
+        targets.push(HomeChatTarget {
+            id: format!("{:?}:{}", status.platform, channel_login.to_lowercase()),
+            platform: status.platform,
+            display_name,
+        });
+    }
+
+    targets
+}
+
+pub(crate) fn add_channel_modal(
     state: &AppState,
     state_entity: Entity<AppState>,
     add_channel_input: Entity<Input>,
@@ -929,7 +878,7 @@ fn add_channel_modal(
                                         if channel_slug.is_empty() {
                                             return;
                                         }
-                                        state_entity.add_watched_channel_from_slug(
+                                        state_entity.submit_add_channel_modal(
                                             app,
                                             active_platform,
                                             &channel_slug,
@@ -1701,25 +1650,6 @@ fn popover_btn(
         .text_size(px(13.0))
         .cursor_pointer()
         .hover(|s| s.bg(gpui::rgb(0x3a3a44)))
-        .child(label)
-        .on_mouse_down(gpui::MouseButton::Left, on_click)
-}
-
-fn add_menu_row(
-    label: impl Into<gpui::SharedString>,
-    on_click: impl Fn(&gpui::MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> Div {
-    let label: gpui::SharedString = label.into();
-
-    div()
-        .w_full()
-        .px(px(8.0))
-        .py(px(6.0))
-        .rounded_sm()
-        .text_color(theme::text_primary())
-        .text_size(px(13.0))
-        .cursor_pointer()
-        .hover(|s| s.bg(rgba(0xffffff1a)))
         .child(label)
         .on_mouse_down(gpui::MouseButton::Left, on_click)
 }

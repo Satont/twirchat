@@ -32,21 +32,35 @@ fn chat_gear_opens_appearance_popover_state_instead_of_settings_section() {
 }
 
 #[test]
-fn tabs_keep_connected_channels_in_home_feed() {
+fn tabs_restore_home_and_watched_tab_split() {
     let tabs_rs = read_source("src/ui/shell/tabs.rs");
     let content_rs = read_source("src/ui/shell/content.rs");
+    let watched_layout_rs = read_source("src/ui/components/watched_layout.rs");
 
     assert!(
         tabs_rs.contains("Home"),
         "home tab should remain the unified chat feed"
     );
     assert!(
-        !tabs_rs.contains("for channel in &state.watched_channels"),
-        "connected watched channels should not become separate tabs"
+        tabs_rs.contains("state.watched_channels.iter()"),
+        "watched channels should render as separate tabs again"
     );
     assert!(
-        !content_rs.contains("active_channel_tab_id"),
-        "chat section should not switch away from the unified home feed"
+        content_rs.contains("state.active_channel_tab_id() == \"home\""),
+        "chat section should branch between home and watched tabs"
+    );
+    assert!(
+        content_rs.contains("watched_layout::tab_panel"),
+        "non-home tabs should render the watched layout surface"
+    );
+    assert!(
+        watched_layout_rs.contains("add_chat_pane_for_active_tab")
+            && watched_layout_rs.contains("action_button(\"+\")"),
+        "watched tabs should expose an inner add-pane control"
+    );
+    assert!(
+        watched_layout_rs.contains("PanelContent::Empty"),
+        "inner pane add should create an empty pane instead of duplicating the current channel"
     );
 }
 
