@@ -14,6 +14,7 @@ use gpui::{
 };
 use std::path::Path;
 use ui::WithScrollbar;
+use url::Url;
 
 pub(crate) struct ChatScrollUi<'a> {
     pub list_state: &'a ListState,
@@ -1268,14 +1269,18 @@ fn message_text_with_emotes(
     font_size: f32,
     is_compact: bool,
 ) -> Div {
-    if message.emotes.is_empty() {
+    let parts = build_message_parts(message);
+
+    if parts.len() == 1
+        && let Some(MessagePart::Text(text)) = parts.first()
+    {
         return div()
             .w_full()
             .min_w(px(0.0))
             .text_size(px(font_size))
             .text_color(theme::text_primary())
             .whitespace_normal()
-            .child(message.text.clone());
+            .child(text.clone());
     }
 
     div()
@@ -1288,27 +1293,31 @@ fn message_text_with_emotes(
         .flex_wrap()
         .items_center()
         .whitespace_normal()
-        .gap(px(3.0))
-        .children(
-            build_message_parts(message)
-                .into_iter()
-                .enumerate()
-                .map(|(index, part)| match part {
-                    MessagePart::Text(text) => div()
-                        .max_w_full()
-                        .whitespace_normal()
-                        .child(text)
-                        .into_any_element(),
-                    MessagePart::Emote(emote) => {
-                        emote_image(&emote, is_compact, &message.id, index).into_any_element()
-                    }
-                }),
-        )
+        .children(parts.into_iter().enumerate().map(|(index, part)| {
+            match part {
+                MessagePart::Text(text) => div().whitespace_normal().child(text).into_any_element(),
+                MessagePart::Link(text) => div()
+                    .whitespace_normal()
+                    .text_color(theme::accent())
+                    .text_decoration_1()
+                    .child(text)
+                    .into_any_element(),
+                MessagePart::Emote(emote) => {
+                    emote_image(&emote, is_compact, &message.id, index).into_any_element()
+                }
+            }
+        }))
 }
 
 enum MessagePart {
     Text(String),
+    Link(String),
     Emote(Emote),
+}
+
+enum TextSegment {
+    Text(String),
+    Link(String),
 }
 
 fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
@@ -1319,8 +1328,14 @@ fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
     let mut ranges = Vec::new();
     for emote in &message.emotes {
         for position in &emote.positions {
-            let start = position.start as usize;
-            let Some(end) = (position.end as usize).checked_add(1) else {
+            let Some(start) = char_index_to_byte_offset(&message.text, position.start as usize)
+            else {
+                continue;
+            };
+            let Some(end_char_index) = (position.end as usize).checked_add(1) else {
+                continue;
+            };
+            let Some(end) = char_index_to_byte_offset(&message.text, end_char_index) else {
                 continue;
             };
             ranges.push((start, end, emote.clone()));
@@ -1341,7 +1356,7 @@ fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
         if index < start
             && let Some(text) = message.text.get(index..start)
         {
-            parts.push(MessagePart::Text(text.to_string()));
+            append_text_message_parts(&mut parts, text);
         }
         parts.push(MessagePart::Emote(emote));
         index = end;
@@ -1350,19 +1365,155 @@ fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
     if index < message.text.len()
         && let Some(text) = message.text.get(index..)
     {
-        parts.push(MessagePart::Text(text.to_string()));
+        append_text_message_parts(&mut parts, text);
     }
 
     if parts.is_empty() {
-        parts.push(MessagePart::Text(message.text.clone()));
+        append_text_message_parts(&mut parts, &message.text);
     }
 
     parts
 }
 
+fn char_index_to_byte_offset(text: &str, char_index: usize) -> Option<usize> {
+    if char_index == 0 {
+        return Some(0);
+    }
+
+    let char_count = text.chars().count();
+    if char_index == char_count {
+        return Some(text.len());
+    }
+    if char_index > char_count {
+        return None;
+    }
+
+    text.char_indices()
+        .nth(char_index)
+        .map(|(byte_index, _)| byte_index)
+}
+
+fn build_text_segments(text: &str) -> Vec<TextSegment> {
+    let mut parts = Vec::new();
+    append_text_segments(&mut parts, text);
+
+    if parts.is_empty() {
+        parts.push(TextSegment::Text(text.to_string()));
+    }
+
+    parts
+}
+
+fn append_text_message_parts(parts: &mut Vec<MessagePart>, text: &str) {
+    for segment in build_text_segments(text) {
+        match segment {
+            TextSegment::Text(text) => parts.push(MessagePart::Text(text)),
+            TextSegment::Link(text) => parts.push(MessagePart::Link(text)),
+        }
+    }
+}
+
+fn append_text_segments(parts: &mut Vec<TextSegment>, text: &str) {
+    let mut cursor = 0;
+
+    while let Some(start) = find_next_url_start(text, cursor) {
+        let end = find_url_end(text, start);
+        let candidate = &text[start..end];
+        let trimmed_len = trim_trailing_link_punctuation(candidate);
+
+        if cursor < start {
+            push_text_segment(parts, &text[cursor..start]);
+        }
+
+        let link_text = &candidate[..trimmed_len];
+        if is_valid_http_link(link_text) {
+            parts.push(TextSegment::Link(link_text.to_string()));
+        } else {
+            push_text_segment(parts, link_text);
+        }
+
+        if trimmed_len < candidate.len() {
+            push_text_segment(parts, &candidate[trimmed_len..]);
+        }
+
+        cursor = end;
+    }
+
+    if cursor < text.len() {
+        push_text_segment(parts, &text[cursor..]);
+    }
+}
+
+fn push_text_segment(parts: &mut Vec<TextSegment>, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+
+    if let Some(TextSegment::Text(existing)) = parts.last_mut() {
+        existing.push_str(text);
+        return;
+    }
+
+    parts.push(TextSegment::Text(text.to_string()));
+}
+
+fn find_next_url_start(text: &str, from: usize) -> Option<usize> {
+    let slice = text.get(from..)?;
+    let http = slice.find("http://").map(|index| from + index);
+    let https = slice.find("https://").map(|index| from + index);
+
+    match (http, https) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (Some(index), None) | (None, Some(index)) => Some(index),
+        (None, None) => None,
+    }
+}
+
+fn find_url_end(text: &str, start: usize) -> usize {
+    let slice = &text[start..];
+
+    for (offset, ch) in slice.char_indices() {
+        if offset > 0 && is_link_terminator(ch) {
+            return start + offset;
+        }
+    }
+
+    text.len()
+}
+
+fn is_link_terminator(ch: char) -> bool {
+    ch.is_whitespace() || matches!(ch, '<' | '>' | '"' | '\'')
+}
+
+fn trim_trailing_link_punctuation(candidate: &str) -> usize {
+    let mut end = candidate.len();
+
+    while end > 0 {
+        let Some(ch) = candidate[..end].chars().next_back() else {
+            break;
+        };
+
+        if matches!(ch, '.' | ',' | '!' | '?' | ':' | ';' | ')' | ']' | '}') {
+            end -= ch.len_utf8();
+            continue;
+        }
+
+        break;
+    }
+
+    end
+}
+
+fn is_valid_http_link(candidate: &str) -> bool {
+    Url::parse(candidate)
+        .ok()
+        .is_some_and(|url| matches!(url.scheme(), "http" | "https"))
+}
+
 fn emote_image(emote: &Emote, is_compact: bool, message_id: &str, part_index: usize) -> Div {
     let size = if is_compact { 20.0 } else { 24.0 };
     div()
+        .mx(px(1.5))
         .h(px(size))
         .min_w(px(size))
         .max_w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
@@ -1471,4 +1622,75 @@ fn add_menu_row(
         .hover(|s| s.bg(rgba(0xffffff1a)))
         .child(label)
         .on_mouse_down(gpui::MouseButton::Left, on_click)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MessagePart, TextSegment, build_message_parts, build_text_segments};
+    use crate::protocol::types::{
+        ChatAuthor, ChatMessageType, Emote, EmotePosition, NormalizedChatMessage, Platform,
+    };
+
+    #[test]
+    fn build_text_segments_extracts_links_without_swallowing_punctuation() {
+        let parts = build_text_segments("go https://example.com, now");
+
+        assert_eq!(parts.len(), 3);
+        assert!(matches!(&parts[0], TextSegment::Text(text) if text == "go "));
+        assert!(matches!(
+            &parts[1],
+            TextSegment::Link(text) if text == "https://example.com"
+        ));
+        assert!(matches!(&parts[2], TextSegment::Text(text) if text == ", now"));
+    }
+
+    #[test]
+    fn build_text_segments_keeps_plain_text_without_links() {
+        let parts = build_text_segments("hello world");
+
+        assert_eq!(parts.len(), 1);
+        assert!(matches!(&parts[0], TextSegment::Text(text) if text == "hello world"));
+    }
+
+    #[test]
+    fn build_message_parts_handles_unicode_emote_positions_before_link() {
+        let message = NormalizedChatMessage {
+            id: "message-1".into(),
+            platform: Platform::Kick,
+            channel_id: "channel-1".into(),
+            author: ChatAuthor {
+                id: "author-1".into(),
+                username: Some("alexue4".into()),
+                display_name: "alexue4".into(),
+                color: None,
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text: "А че они так и не пофиксили эту хуйню? https://al4.dev/6wYTrB".into(),
+            emotes: vec![Emote {
+                id: "emote-1".into(),
+                name: "che".into(),
+                image_url: "https://example.com/che.png".into(),
+                positions: vec![EmotePosition { start: 2, end: 3 }],
+                aspect_ratio: Some(1.0),
+            }],
+            timestamp: "2026-05-18T20:20:41.000Z".into(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        };
+
+        let parts = build_message_parts(&message);
+
+        assert_eq!(parts.len(), 4);
+        assert!(matches!(&parts[0], MessagePart::Text(text) if text == "А "));
+        assert!(matches!(&parts[1], MessagePart::Emote(emote) if emote.name == "che"));
+        assert!(matches!(
+            &parts[2],
+            MessagePart::Text(text) if text == " они так и не пофиксили эту хуйню? "
+        ));
+        assert!(matches!(
+            &parts[3],
+            MessagePart::Link(text) if text == "https://al4.dev/6wYTrB"
+        ));
+    }
 }
