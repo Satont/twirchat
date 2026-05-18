@@ -6,8 +6,8 @@ use crate::ui::chat::ChatScrollUi;
 use crate::ui::components::input::Input;
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
 use gpui::{
-    Context, Entity, Pixels, Render, ScrollHandle, Task, Window, div, prelude::*, px, retain_all,
-    rgb,
+    Context, Entity, FollowMode, ListAlignment, ListState, Render, ScrollHandle, Task, Window, div,
+    prelude::*, px, retain_all, rgb,
 };
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ pub struct TwirChatApp {
     add_channel_input: Entity<Input>,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
-    chat_scroll_handle: ScrollHandle,
+    chat_list_state: ListState,
     settings_scroll_handle: ScrollHandle,
     platforms_scroll_handle: ScrollHandle,
     last_chat_message_count: usize,
@@ -67,13 +67,16 @@ impl TwirChatApp {
             })
         });
 
+        let chat_list_state = ListState::new(0, ListAlignment::Bottom, px(2048.));
+        chat_list_state.set_follow_mode(FollowMode::Tail);
+
         Self {
             state,
             composer_input,
             add_channel_input,
             runtime,
             _runtime_poll_task: runtime_poll_task,
-            chat_scroll_handle: ScrollHandle::new(),
+            chat_list_state,
             settings_scroll_handle: ScrollHandle::new(),
             platforms_scroll_handle: ScrollHandle::new(),
             last_chat_message_count: 0,
@@ -213,14 +216,14 @@ impl Render for TwirChatApp {
         self.flush_pending_backend_messages(cx);
         let state = self.state.read(cx).clone();
         let composer_text = self.composer_input.read(cx).text().to_string();
-        let was_at_bottom = is_scroll_at_bottom(&self.chat_scroll_handle);
-        self.chat_scroll_paused = !was_at_bottom;
+        let was_following_tail = self.chat_list_state.is_following_tail();
+        self.chat_scroll_paused = !was_following_tail;
 
-        if state.messages.len() > self.last_chat_message_count
-            && was_at_bottom
-            && !state.messages.is_empty()
-        {
-            self.chat_scroll_handle.scroll_to_bottom();
+        if state.messages.len() != self.last_chat_message_count {
+            self.chat_list_state.reset(state.messages.len());
+            if was_following_tail {
+                self.chat_list_state.set_follow_mode(FollowMode::Tail);
+            }
         }
         self.last_chat_message_count = state.messages.len();
 
@@ -251,7 +254,7 @@ impl Render for TwirChatApp {
                             composer_text,
                             scroll_ui: content::SectionScrollUi {
                                 chat: ChatScrollUi {
-                                    handle: &self.chat_scroll_handle,
+                                    list_state: &self.chat_list_state,
                                     paused: self.chat_scroll_paused,
                                 },
                                 settings: &self.settings_scroll_handle,
@@ -264,15 +267,4 @@ impl Render for TwirChatApp {
             )
             .child(UpdateToast::new(self.state.clone()))
     }
-}
-
-fn is_scroll_at_bottom(handle: &ScrollHandle) -> bool {
-    let max_offset = handle.max_offset().y;
-    if max_offset == Pixels::ZERO {
-        return true;
-    }
-
-    let offset = handle.offset().y;
-    let delta = offset + max_offset;
-    delta >= px(-4.0) && delta <= px(4.0)
 }

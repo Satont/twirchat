@@ -9,14 +9,14 @@ use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    AnyElement, Context, Div, Entity, ImageSource, ObjectFit, ScrollHandle, Stateful, Window, div,
-    img, prelude::*, px, rgb, rgba,
+    AnyElement, Context, Div, Entity, ImageSource, ListSizingBehavior, ListState, ObjectFit,
+    Stateful, Window, div, img, list, prelude::*, px, rgb, rgba,
 };
 use std::path::Path;
-use ui::{ScrollAxes, Scrollbars, WithScrollbar};
+use ui::WithScrollbar;
 
 pub(crate) struct ChatScrollUi<'a> {
-    pub handle: &'a ScrollHandle,
+    pub list_state: &'a ListState,
     pub paused: bool,
 }
 
@@ -34,9 +34,9 @@ pub(crate) fn panel(
     window: &mut Window,
     cx: &mut Context<TwirChatApp>,
 ) -> Div {
-    let start = state.messages.len().saturating_sub(120);
-    let visible_messages = state.messages[start..].to_vec();
     let settings = state.settings().clone();
+    let accounts = state.platforms_panel.accounts.clone();
+    let messages = state.messages.clone();
 
     div()
         .relative()
@@ -52,22 +52,16 @@ pub(crate) fn panel(
                 .min_w(px(0.0))
                 .min_h(px(0.0))
                 .mt(px(40.0))
-                .custom_scrollbars(
-                    Scrollbars::always_visible(ScrollAxes::Vertical)
-                        .tracked_scroll_handle(props.scroll_ui.handle),
-                    window,
-                    cx,
-                )
+                .vertical_scrollbar_for(props.scroll_ui.list_state, window, cx)
                 .child(
-                    div()
-                        .id("chat-scroll")
-                        .size_full()
-                        .bg(theme::background())
-                        .overflow_y_scroll()
-                        .track_scroll(props.scroll_ui.handle)
-                        .children(visible_messages.iter().map(|msg| {
-                            message_row(msg, &settings, &state.platforms_panel.accounts)
-                        })),
+                    list(
+                        props.scroll_ui.list_state.clone(),
+                        move |ix, _window, _cx| {
+                            message_row(&messages[ix], &settings, &accounts).into_any_element()
+                        },
+                    )
+                    .with_sizing_behavior(ListSizingBehavior::Auto)
+                    .size_full(),
                 ),
         )
         .child(composer(
