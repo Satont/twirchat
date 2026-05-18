@@ -1,8 +1,10 @@
 use crate::app_state::{AppState, AppStateActions};
+use crate::protocol::rpc::OpenExternalUrlParams;
 use crate::protocol::types::{
     Account, AppSettings, ChatMessageType, ChatTheme, Emote, NormalizedChatMessage, Platform,
     WatchedChannel,
 };
+use crate::runtime::{SystemExternalOpener, browser::open_external_url};
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::switch::Switch;
@@ -1300,7 +1302,17 @@ fn message_text_with_emotes(
                     .whitespace_normal()
                     .text_color(theme::accent())
                     .text_decoration_1()
-                    .child(text)
+                    .cursor_pointer()
+                    .child(text.clone())
+                    .on_mouse_down(gpui::MouseButton::Left, move |_, _, _| {
+                        let params = OpenExternalUrlParams { url: text.clone() };
+                        if let Err(error) = open_external_url(&SystemExternalOpener, &params) {
+                            eprintln!(
+                                "[ui/chat] failed to open external link `{}`: {}",
+                                params.url, error
+                            )
+                        }
+                    })
                     .into_any_element(),
                 MessagePart::Emote(emote) => {
                     emote_image(&emote, is_compact, &message.id, index).into_any_element()
@@ -1322,7 +1334,9 @@ enum TextSegment {
 
 fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
     if message.emotes.is_empty() {
-        return vec![MessagePart::Text(message.text.clone())];
+        let mut parts = Vec::new();
+        append_text_message_parts(&mut parts, &message.text);
+        return parts;
     }
 
     let mut ranges = Vec::new();
@@ -1650,6 +1664,34 @@ mod tests {
 
         assert_eq!(parts.len(), 1);
         assert!(matches!(&parts[0], TextSegment::Text(text) if text == "hello world"));
+    }
+
+    #[test]
+    fn build_message_parts_splits_plain_text_link_messages() {
+        let message = NormalizedChatMessage {
+            id: "message-link".into(),
+            platform: Platform::Kick,
+            channel_id: "channel-1".into(),
+            author: ChatAuthor {
+                id: "author-1".into(),
+                username: Some("fossabot".into()),
+                display_name: "Fossabot".into(),
+                color: None,
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text: "Tg: https://t.me/satontdev".into(),
+            emotes: Vec::new(),
+            timestamp: "2026-05-18T21:03:27.000Z".into(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        };
+
+        let parts = build_message_parts(&message);
+
+        assert_eq!(parts.len(), 2);
+        assert!(matches!(&parts[0], MessagePart::Text(text) if text == "Tg: "));
+        assert!(matches!(&parts[1], MessagePart::Link(text) if text == "https://t.me/satontdev"));
     }
 
     #[test]
