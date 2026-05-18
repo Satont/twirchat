@@ -1147,6 +1147,8 @@ fn message_row(
         .child(
             div()
                 .flex_1()
+                .w_full()
+                .min_w(px(0.0))
                 .flex()
                 .flex_col()
                 .gap(px(2.0))
@@ -1266,20 +1268,37 @@ fn message_text_with_emotes(
     font_size: f32,
     is_compact: bool,
 ) -> Div {
+    if message.emotes.is_empty() {
+        return div()
+            .w_full()
+            .min_w(px(0.0))
+            .text_size(px(font_size))
+            .text_color(theme::text_primary())
+            .whitespace_normal()
+            .child(message.text.clone());
+    }
+
     div()
+        .w_full()
+        .min_w(px(0.0))
         .text_size(px(font_size))
         .text_color(theme::text_primary())
         .flex()
         .flex_row()
         .flex_wrap()
         .items_center()
+        .whitespace_normal()
         .gap(px(3.0))
         .children(
             build_message_parts(message)
                 .into_iter()
                 .enumerate()
                 .map(|(index, part)| match part {
-                    MessagePart::Text(text) => div().child(text).into_any_element(),
+                    MessagePart::Text(text) => div()
+                        .max_w_full()
+                        .whitespace_normal()
+                        .child(text)
+                        .into_any_element(),
                     MessagePart::Emote(emote) => {
                         emote_image(&emote, is_compact, &message.id, index).into_any_element()
                     }
