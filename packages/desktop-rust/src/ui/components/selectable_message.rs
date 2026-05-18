@@ -413,15 +413,20 @@ impl Element for SelectableTextPartElement {
         let hitbox_snapshot = hitbox.clone();
         let state_entity = self.state.clone();
         let source_range = self.source_range.clone();
+        let local_text_len = self.local_text.len();
+        let text_bounds = bounds;
         let focus_handle_for_down = focus_handle.clone();
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if phase != DispatchPhase::Bubble || !hitbox_snapshot.is_hovered(window) {
                 return;
             }
 
-            let local_offset = match layout_snapshot.index_for_position(event.position) {
-                Ok(index) | Err(index) => index,
-            };
+            let local_offset = local_offset_for_position(
+                &layout_snapshot,
+                text_bounds,
+                event.position,
+                local_text_len,
+            );
             window.focus(&focus_handle_for_down, cx);
             state_entity.update(cx, |state, cx| {
                 state.on_mouse_down_at(source_range.start + local_offset, cx)
@@ -433,14 +438,19 @@ impl Element for SelectableTextPartElement {
         let hitbox_snapshot = hitbox.clone();
         let state_entity = self.state.clone();
         let source_range = self.source_range.clone();
+        let local_text_len = self.local_text.len();
+        let text_bounds = bounds;
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
             if phase != DispatchPhase::Bubble || !hitbox_snapshot.is_hovered(window) {
                 return;
             }
 
-            let local_offset = match layout_snapshot.index_for_position(event.position) {
-                Ok(index) | Err(index) => index,
-            };
+            let local_offset = local_offset_for_position(
+                &layout_snapshot,
+                text_bounds,
+                event.position,
+                local_text_len,
+            );
             state_entity.update(cx, |state, cx| {
                 state.on_mouse_move_to(source_range.start + local_offset, cx)
             });
@@ -451,14 +461,19 @@ impl Element for SelectableTextPartElement {
         let hitbox_snapshot = hitbox.clone();
         let state_entity = self.state.clone();
         let source_range = self.source_range.clone();
+        let local_text_len = self.local_text.len();
+        let text_bounds = bounds;
         window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
             if phase != DispatchPhase::Bubble || !hitbox_snapshot.is_hovered(window) {
                 return;
             }
 
-            let local_offset = match layout_snapshot.index_for_position(event.position) {
-                Ok(index) | Err(index) => index,
-            };
+            let local_offset = local_offset_for_position(
+                &layout_snapshot,
+                text_bounds,
+                event.position,
+                local_text_len,
+            );
             state_entity.update(cx, |state, cx| {
                 state.on_mouse_up_at(Some(source_range.start + local_offset), cx)
             });
@@ -486,6 +501,21 @@ fn intersect_local_range(
         Some(start - source_range.start..end - source_range.start)
     } else {
         None
+    }
+}
+
+fn local_offset_for_position(
+    layout: &TextLayout,
+    bounds: Bounds<Pixels>,
+    position: gpui::Point<Pixels>,
+    text_len: usize,
+) -> usize {
+    if position.x >= bounds.right() {
+        return text_len;
+    }
+
+    match layout.index_for_position(position) {
+        Ok(index) | Err(index) => index.min(text_len),
     }
 }
 

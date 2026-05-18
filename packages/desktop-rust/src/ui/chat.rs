@@ -10,8 +10,8 @@ use crate::ui::components::switch::Switch;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    AnyElement, App, Context, Div, Entity, ImageSource, ListSizingBehavior, ListState, ObjectFit,
-    Stateful, Window, div, img, list, prelude::*, px, rgb, rgba,
+    AnyElement, App, Context, Div, Entity, FollowMode, ImageSource, ListSizingBehavior, ListState,
+    ObjectFit, Stateful, Window, div, img, list, prelude::*, px, rgb, rgba,
 };
 use std::path::Path;
 use ui::WithScrollbar;
@@ -71,6 +71,7 @@ pub(crate) fn panel(
             props.composer_text,
         ))
         .when(props.scroll_ui.paused, |el| {
+            let list_state = props.scroll_ui.list_state.clone();
             el.child(
                 div()
                     .absolute()
@@ -84,6 +85,11 @@ pub(crate) fn panel(
                     .border_color(rgb(0x3f3f46))
                     .text_size(px(12.0))
                     .text_color(theme::text_primary())
+                    .cursor_pointer()
+                    .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, _cx| {
+                        list_state.scroll_to_end();
+                        list_state.set_follow_mode(FollowMode::Tail);
+                    })
                     .child("scroll paused"),
             )
         })
