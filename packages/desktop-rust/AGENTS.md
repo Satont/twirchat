@@ -1,19 +1,72 @@
-# TwirChat Desktop Rust / GPUI Notes
+# Contributor Guide: TwirChat Desktop (Rust + GPUI)
 
-## GPUI component references
+This package is a native GPUI desktop shell for TwirChat. It is designed to replace the existing Electrobun/Vue implementation incrementally while maintaining strict parity with established protocols, storage schemas, and user behaviors.
 
-- It is acceptable to use https://longbridge.github.io/gpui-component/ as a visual/API reference, but adapt components to this codebase instead of copying them wholesale.
-- Keep state in GPUI `Entity<T>` models and call `cx.notify()` after state changes.
+## Package Architecture
 
-## Text input
+Every module has a specific role in maintaining the boundary between the UI, the system, and the external world.
 
-- Real editable text fields must use GPUI input plumbing: `EntityInputHandler`, `ElementInputHandler`, a `FocusHandle`, `track_focus`, and app-level `KeyBinding`s.
-- Do not implement text fields as static `div()` placeholders with click callbacks; that cannot type, move the cursor, or select text.
-- Bind common input actions explicitly for the input key context, including backspace/delete, left/right, shift-left/shift-right, and ctrl/cmd-a.
+### Where Code Belongs
 
-## Images
+*   **ui/**: The visual layer. Holds views, shell layout, shared components, and theme definitions. All GPUI element composition (`div()`, `img()`, etc.) stays here.
+*   **runtime/**: System and platform boundaries. Opening URLs in browsers, configuration loading, window lifecycle, and updater state. Intentionally GPUI-agnostic.
+*   **services/**: Business logic and event orchestration. Handles background tasks like message aggregation and platform event routing.
+*   **storage/**: SQLite persistence. Must preserve schema parity with the TypeScript desktop package to allow seamless user migrations.
+*   **protocol/**: Shared contracts. Holds Rust ports of the TypeScript protocol definitions. Do not deviate from these types; they are the source of truth for backend communication.
+*   **platforms/**: Platform-specific adapters (Twitch, YouTube, Kick). Normalizes external API responses into internal TwirChat types.
+*   **auth/**: OAuth implementation. PKCE flows, token storage, and refresh logic.
+*   **overlay/**: Internal server logic for OBS overlays. Manages serving local assets and pushing real-time events to the browser-based overlay.
+*   **parity.rs**: The verification layer. Contains logic to ensure the Rust shell correctly recognizes the asset contract (`dist/`, `views/`) required by the packaging pipeline.
 
-- Use GPUI image primitives for avatars, badges, and platform icons: `gpui::{img, ImageSource, ObjectFit}`.
-- For remote URLs, pass `ImageSource::from(url)` to `img(...)` and set `.object_fit(ObjectFit::Cover)` for avatars or `.object_fit(ObjectFit::Contain)` for icons/badges.
-- Always provide `.with_loading(...)` and `.with_fallback(...)` for avatars so pending/failed images do not render as blank circles.
-- Keep an image cache mounted near the app root with `retain_all(...)` when a screen renders repeated remote images.
+## GPUI Working Rules
+
+GPUI is a single-ownership, reactive framework. Stability depends on following these core patterns.
+
+### Documentation & Reference Workflow
+
+*   **Primary Documentation**: Use **Context7 MCP** to query up-to-date GPUI documentation, API details, and usage examples.
+*   **Visual Reference**: Use **Context7 MCP** and/or **WebFetch** to inspect `https://longbridge.github.io/gpui-component/`.
+*   **Constraint**: Treat external component sites as an API reference for patterns. Do not copy snippets wholesale; adapt them to the local theme and architecture of this codebase.
+*   **Expert Knowledge**: Use available Rust-domain skills when relevant to solve low-level implementation problems.
+
+### State & Reactivity
+
+*   **Entities**: State must live in an `Entity<T>`. Access via `cx.read()` or `cx.update()`.
+*   **Notification**: Always call `cx.notify()` after state changes in an `update` block.
+*   **Weak References**: Use `WeakEntity<T>` for any callback or async block that might outlive the entity to prevent circular references and leaks.
+
+### Inputs & Images
+
+*   **Text Inputs**: Never use static elements for inputs. Real fields require `EntityInputHandler`, `ElementInputHandler`, `FocusHandle`, and `track_focus`. You must implement key bindings for navigation (arrows), deletion (backspace/delete), and selection (shift+arrows, cmd/ctrl+a) within the key context.
+*   **Image Primitives**: Use `gpui::{img, ImageSource, ObjectFit}` for all visual assets. Remote URLs require `ImageSource::from(url)`. Use `.object_fit(ObjectFit::Cover)` for user avatars and `.object_fit(ObjectFit::Contain)` for platform icons and badges.
+*   **Fault Tolerance**: Always provide `.with_loading(...)` and `.with_fallback(...)`.
+*   **Optimization**: Mount an image cache at the app root with `retain_all(...)` for views with many repeating assets.
+
+## Good Patterns
+
+*   **Separation of Concerns**: Keep the app boot path (`main.rs`) thin. View state belongs in UI entities, but business logic belongs in services or runtime modules.
+*   **Protocol Integrity**: Preserve strict schema/protocol parity. If the backend or TS package changes a field, update the `protocol/` module to match.
+*   **UI Organization**: Maintain clear separation between global shell, reusable components, and the theme definition within the `ui/` directory.
+*   **Focused Testing**: Put tests near the affected boundary. New storage logic should have a storage test; new platform normalization needs a platform test.
+
+## Anti-patterns
+
+*   **Boundary Leaks**: Moving storage, network, or complex business logic into GPUI `render` or `update` paths.
+*   **Type Invention**: Creating local protocol types that drift from the central `protocol/` definitions.
+*   **Silent Failures**: Hiding errors in detached background tasks. Log every error or surface it to the user.
+*   **Bypassing Parity**: Making changes that break the packaging/asset verification logic in `parity.rs` or `docs/updater-stabilization.md`.
+*   **Code Bloat**: Bloating `main.rs` with product-specific logic; use services instead.
+*   **Blind Copying**: Copying `gpui-component` or LLM-generated snippets without adapting them to the local `Context<T>` or theme patterns.
+
+## Validation & Verification
+
+Always run these commands from the package root before committing.
+
+*   **Check**: `cargo check` for fast feedback.
+*   **Format**: `cargo fmt` to maintain style.
+*   **Test**: `cargo test` for unit and integration logic.
+*   **Strict Lint**: `cargo clippy --all-targets --all-features -- -D warnings`.
+*   **Parity Verification**: If you touch asset paths or packaging logic, run:
+    `cargo test packaging_artifact_contains_required_assets -- --nocapture`
+
+The `tests/` directory is broad and boundary-oriented. Ensure new features are covered by a matching test in the relevant domain (storage, protocol, runtime, etc.).
