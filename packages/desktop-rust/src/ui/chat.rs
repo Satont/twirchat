@@ -796,6 +796,194 @@ fn author_label_text(message: &NormalizedChatMessage, use_fallback: bool) -> Str
     display_name.to_string()
 }
 
+fn compact_message_row(
+    message: &NormalizedChatMessage,
+    settings: &AppSettings,
+    _accounts: &[Account],
+    window: &mut Window,
+    cx: &mut App,
+    options: MessageRowOptions,
+) -> AnyElement {
+    let font_size = settings.font_size as f32;
+    let mut custom_parts = Vec::new();
+
+    if settings.show_timestamp {
+        let ts = message.timestamp.clone();
+        custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
+            move |_win, _cx| {
+                div()
+                    .text_size(px(10.0))
+                    .text_color(theme::text_muted())
+                    .child(ts.clone())
+                    .into_any_element()
+            },
+        )));
+    }
+
+    if settings.show_platform_icon {
+        let platform = message.platform;
+        custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
+            move |_win, _cx| {
+                PlatformIcon::new(to_model_platform(platform))
+                    .size(px(12.0))
+                    .color(theme::platform_color(to_model_platform(platform)))
+                    .into_any_element()
+            },
+        )));
+    }
+
+    if settings.show_badges {
+        for (index, badge) in message.author.badges.iter().enumerate() {
+            let badge = badge.clone();
+            let msg_id = message.id.clone();
+            custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
+                move |_win, _cx| {
+                    if let Some(path) = badge
+                        .image_url
+                        .as_ref()
+                        .filter(|url| Path::new(url).is_absolute())
+                    {
+                        return div()
+                            .w(px(14.0))
+                            .h(px(14.0))
+                            .rounded_sm()
+                            .overflow_hidden()
+                            .child(
+                                img(ImageSource::from(Path::new(path)))
+                                    .id(options.badge_id(&msg_id, &badge.id, index))
+                                    .w_full()
+                                    .h_full()
+                                    .object_fit(ObjectFit::Contain),
+                            )
+                            .into_any_element();
+                    }
+
+                    if let Some(url) = badge
+                        .image_url
+                        .as_ref()
+                        .filter(|url| url.starts_with("http://") || url.starts_with("https://"))
+                    {
+                        div()
+                            .w(px(14.0))
+                            .h(px(14.0))
+                            .rounded_sm()
+                            .overflow_hidden()
+                            .child(
+                                img(ImageSource::from(url.clone()))
+                                    .id(options.badge_id(&msg_id, &badge.id, index))
+                                    .w_full()
+                                    .h_full()
+                                    .object_fit(ObjectFit::Contain),
+                            )
+                            .into_any_element()
+                    } else {
+                        div()
+                            .rounded_sm()
+                            .px(px(4.0))
+                            .py(px(1.0))
+                            .bg(rgba(0xffffff1a))
+                            .text_color(theme::text_primary())
+                            .text_size(px(10.0))
+                            .child(badge.text.clone())
+                            .into_any_element()
+                    }
+                },
+            )));
+        }
+    }
+
+    let author_text = format!(
+        "{}:",
+        author_label_text(message, options.use_author_fallback)
+    );
+    custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
+        move |_win, _cx| {
+            div()
+                .text_color(theme::accent())
+                .text_size(px(12.0))
+                .font_weight(gpui::FontWeight::BOLD)
+                .child(author_text.clone())
+                .into_any_element()
+        },
+    )));
+
+    let scoped_message_id = format!(
+        "{}-compact-{}-{}-{}",
+        options.selectable_key(&message.id),
+        settings.show_timestamp,
+        settings.show_platform_icon,
+        settings.show_badges,
+    );
+    let mut parts = custom_parts;
+
+    parts.extend(
+        build_message_segments(message, true)
+            .into_iter()
+            .map(|part| match part {
+                SelectableMessagePart::Emote {
+                    emote,
+                    source_range,
+                    part_index,
+                    is_compact,
+                    ..
+                } => SelectableMessagePart::Emote {
+                    emote,
+                    source_range,
+                    message_id: scoped_message_id.clone().into(),
+                    part_index,
+                    is_compact,
+                },
+                part => part,
+            }),
+    );
+
+    div()
+        .id(options.message_row_id(&message.id))
+        .w_full()
+        .px(px(14.0))
+        .py(px(1.0))
+        .flex()
+        .flex_row()
+        .items_start()
+        .relative()
+        .hover(|s| s.bg(rgba(0xffffff06)))
+        .when(settings.show_platform_color_stripe, |el| {
+            el.child(
+                div()
+                    .absolute()
+                    .left(px(0.0))
+                    .top(px(4.0))
+                    .bottom(px(4.0))
+                    .w(px(2.0))
+                    .rounded_sm()
+                    .bg(theme::platform_color(to_model_platform(message.platform))),
+            )
+        })
+        .child(
+            div()
+                .flex_1()
+                .w_full()
+                .min_w(px(0.0))
+                .text_size(px(font_size))
+                .text_color(theme::text_primary())
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .items_center()
+                .whitespace_normal()
+                .child(selectable_message(
+                    scoped_message_id.clone(),
+                    scoped_message_id,
+                    message,
+                    parts,
+                    font_size,
+                    window,
+                    cx,
+                )),
+        )
+        .into_any_element()
+}
+
 pub(crate) fn message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
@@ -860,6 +1048,10 @@ pub(crate) fn message_row(
                 )
             })
             .into_any_element();
+    }
+
+    if is_compact {
+        return compact_message_row(message, settings, accounts, window, cx, options);
     }
 
     div()

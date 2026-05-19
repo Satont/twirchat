@@ -14,6 +14,9 @@ use std::ops::Range;
 
 actions!(twirchat_selectable_message, [Copy]);
 
+pub type CustomMessagePart =
+    std::sync::Arc<dyn Fn(&mut Window, &mut App) -> gpui::AnyElement + Send + Sync>;
+
 #[derive(Default)]
 struct ActiveChatSelection(Option<SharedString>);
 
@@ -40,6 +43,7 @@ pub enum SelectableMessagePart {
         part_index: usize,
         is_compact: bool,
     },
+    Custom(CustomMessagePart),
 }
 
 pub struct SelectableMessage {
@@ -278,6 +282,7 @@ impl Render for SelectableMessage {
                         ))
                         .into_any_element()
                 }
+                SelectableMessagePart::Custom(render_fn) => render_fn(window, cx),
             };
 
             parts.push(element);

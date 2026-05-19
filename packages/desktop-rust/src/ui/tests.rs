@@ -239,3 +239,21 @@ fn chat_appearance_toggles_apply_to_all_scopes() {
     // Switch instances are rendered repeatedly in the appearance popover and must not share identity.
     assert!(!switch_rs.contains(".id(\"switch\")"));
 }
+
+#[test]
+fn compact_chat_uses_distinct_layout_without_avatar_branch() {
+    let chat_rs = std::fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+
+    assert!(chat_rs.contains("if is_compact {"));
+    assert!(chat_rs.contains("return compact_message_row("));
+
+    let compact_fn_start = chat_rs.find("fn compact_message_row").unwrap();
+    let message_fn_start = chat_rs.find("pub(crate) fn message_row").unwrap();
+    let compact_body = &chat_rs[compact_fn_start..message_fn_start];
+
+    assert!(!compact_body.contains("settings.show_avatars"));
+    assert!(!compact_body.contains("avatar_url"));
+    assert!(!compact_body.contains("flex_col()"));
+
+    assert!(compact_body.contains("SelectableMessagePart::Custom"));
+}
