@@ -370,6 +370,7 @@ pub(crate) fn panel(
                                     "Enable highlights",
                                     Some("Highlight messages mentioning you"),
                                     Switch::new(
+                                        "settings-self-ping-enabled",
                                         settings.self_ping.as_ref().is_some_and(|p| p.enabled),
                                     )
                                         .on_click({
@@ -474,7 +475,10 @@ pub(crate) fn panel(
                                 .child(form_row(
                                     "Auto-check for updates",
                                     Some("Check on app startup"),
-                                    Switch::new(settings.auto_check_updates.unwrap_or(true))
+                                    Switch::new(
+                                        "settings-auto-check-updates",
+                                        settings.auto_check_updates.unwrap_or(true),
+                                    )
                                         .on_click({
                                             let state_entity = state_entity.clone();
                                             let current = settings.auto_check_updates.unwrap_or(true);
@@ -589,7 +593,10 @@ pub(crate) fn panel(
                                 .child(form_row(
                                     "Show platform icon",
                                     None,
-                                    Switch::new(settings.overlay.show_platform_icon)
+                                    Switch::new(
+                                        "settings-overlay-show-platform-icon",
+                                        settings.overlay.show_platform_icon,
+                                    )
                                         .on_click({
                                             let state_entity = state_entity.clone();
                                             let current = settings.overlay.show_platform_icon;
@@ -602,7 +609,10 @@ pub(crate) fn panel(
                                 .child(form_row(
                                     "Show avatars",
                                     None,
-                                    Switch::new(settings.overlay.show_avatar)
+                                    Switch::new(
+                                        "settings-overlay-show-avatar",
+                                        settings.overlay.show_avatar,
+                                    )
                                         .on_click({
                                             let state_entity = state_entity.clone();
                                             let current = settings.overlay.show_avatar;

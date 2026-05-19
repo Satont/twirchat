@@ -192,3 +192,50 @@ fn watched_tab_header_has_appearance_popover_contract() {
     assert!(watched_layout_rs.contains("toggle_chat_appearance_popover"));
     assert!(watched_layout_rs.contains("render_appearance_popover"));
 }
+
+#[test]
+fn chat_appearance_toggles_apply_to_all_scopes() {
+    let chat_rs = std::fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let switch_rs =
+        std::fs::read_to_string("src/ui/components/switch.rs").expect("should read switch.rs");
+
+    for (label, switch_id, setter) in [
+        ("Show Avatars", "chat-show-avatars", "set_show_avatars"),
+        ("Show Badges", "chat-show-badges", "set_show_badges"),
+        (
+            "Platform Icon",
+            "chat-show-platform-icon",
+            "set_show_platform_icon",
+        ),
+        ("Timestamp", "chat-show-timestamp", "set_show_timestamp"),
+        (
+            "Platform Stripe",
+            "chat-show-platform-stripe",
+            "set_show_platform_color_stripe",
+        ),
+    ] {
+        assert!(chat_rs.contains(label));
+        assert!(chat_rs.contains(switch_id));
+        assert!(chat_rs.contains(setter));
+    }
+
+    for gate in [
+        "settings.show_avatars",
+        "settings.show_badges",
+        "settings.show_platform_icon",
+        "settings.show_timestamp",
+        "settings.show_platform_color_stripe",
+    ] {
+        assert!(chat_rs.contains(gate));
+    }
+
+    // Verify MessageRowOptions doesn't have stripe/icon gating.
+    assert!(!chat_rs.contains("show_platform_stripe: false"));
+    assert!(!chat_rs.contains("show_platform_icon: false"));
+
+    // Verify popover interactions persist without changing global settings-page semantics.
+    assert!(chat_rs.contains("state_entity.persist_settings(cx);"));
+
+    // Switch instances are rendered repeatedly in the appearance popover and must not share identity.
+    assert!(!switch_rs.contains(".id(\"switch\")"));
+}

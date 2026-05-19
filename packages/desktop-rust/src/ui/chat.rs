@@ -735,8 +735,6 @@ fn add_channel_placeholder(platform: Platform) -> &'static str {
 #[derive(Clone, Copy)]
 pub(crate) struct MessageRowOptions {
     surface_scope: &'static str,
-    show_platform_stripe: bool,
-    show_platform_icon: bool,
     use_account_avatar_fallback: bool,
     use_author_fallback: bool,
 }
@@ -745,8 +743,6 @@ impl MessageRowOptions {
     pub(crate) const fn home() -> Self {
         Self {
             surface_scope: "home",
-            show_platform_stripe: true,
-            show_platform_icon: true,
             use_account_avatar_fallback: true,
             use_author_fallback: true,
         }
@@ -755,8 +751,6 @@ impl MessageRowOptions {
     pub(crate) const fn watched() -> Self {
         Self {
             surface_scope: "watched",
-            show_platform_stripe: false,
-            show_platform_icon: false,
             use_account_avatar_fallback: false,
             use_author_fallback: false,
         }
@@ -879,21 +873,18 @@ pub(crate) fn message_row(
         .gap(px(8.0))
         .relative()
         .hover(|s| s.bg(rgba(0xffffff06))) // 0.025 * 255 = 6.375
-        .when(
-            settings.show_platform_color_stripe && options.show_platform_stripe,
-            |el| {
-                el.child(
-                    div()
-                        .absolute()
-                        .left(px(0.0))
-                        .top(px(4.0))
-                        .bottom(px(4.0))
-                        .w(px(2.0))
-                        .rounded_sm()
-                        .bg(theme::platform_color(to_model_platform(message.platform))),
-                )
-            },
-        )
+        .when(settings.show_platform_color_stripe, |el| {
+            el.child(
+                div()
+                    .absolute()
+                    .left(px(0.0))
+                    .top(px(4.0))
+                    .bottom(px(4.0))
+                    .w(px(2.0))
+                    .rounded_sm()
+                    .bg(theme::platform_color(to_model_platform(message.platform))),
+            )
+        })
         .when(settings.show_avatars, |el| {
             let avatar_url = message.author.avatar_url.clone().or_else(|| {
                 if options.use_account_avatar_fallback {
@@ -959,18 +950,15 @@ pub(crate) fn message_row(
                         .items_center()
                         .gap(px(5.0))
                         .flex_wrap()
-                        .when(
-                            settings.show_platform_icon && options.show_platform_icon,
-                            |el| {
-                                el.child(
-                                    PlatformIcon::new(to_model_platform(message.platform))
-                                        .size(px(12.0))
-                                        .color(theme::platform_color(to_model_platform(
-                                            message.platform,
-                                        ))),
-                                )
-                            },
-                        )
+                        .when(settings.show_platform_icon, |el| {
+                            el.child(
+                                PlatformIcon::new(to_model_platform(message.platform))
+                                    .size(px(12.0))
+                                    .color(theme::platform_color(to_model_platform(
+                                        message.platform,
+                                    ))),
+                            )
+                        })
                         .when(settings.show_badges, |el| {
                             el.children(message.author.badges.iter().enumerate().map(
                                 |(index, badge)| {
@@ -1715,7 +1703,10 @@ pub fn render_appearance_popover(
                         .child("Modern")
                         .on_mouse_down(gpui::MouseButton::Left, {
                             let state_entity = state_entity.clone();
-                            move |_, _, cx| state_entity.set_chat_theme(cx, ChatTheme::Modern)
+                            move |_, _, cx| {
+                                state_entity.set_chat_theme(cx, ChatTheme::Modern);
+                                state_entity.persist_settings(cx);
+                            }
                         }),
                 )
                 .child(
@@ -1737,7 +1728,10 @@ pub fn render_appearance_popover(
                         .child("Compact")
                         .on_mouse_down(gpui::MouseButton::Left, {
                             let state_entity = state_entity.clone();
-                            move |_, _, cx| state_entity.set_chat_theme(cx, ChatTheme::Compact)
+                            move |_, _, cx| {
+                                state_entity.set_chat_theme(cx, ChatTheme::Compact);
+                                state_entity.persist_settings(cx);
+                            }
                         }),
                 ),
         ))
@@ -1764,7 +1758,10 @@ pub fn render_appearance_popover(
                         .on_mouse_down(gpui::MouseButton::Left, {
                             let state_entity = state_entity.clone();
                             let fs = settings.font_size;
-                            move |_, _, cx| state_entity.set_font_size(cx, (fs - 1.0).max(10.0))
+                            move |_, _, cx| {
+                                state_entity.set_font_size(cx, (fs - 1.0).max(10.0));
+                                state_entity.persist_settings(cx);
+                            }
                         }),
                 )
                 .child(
@@ -1788,49 +1785,71 @@ pub fn render_appearance_popover(
                         .on_mouse_down(gpui::MouseButton::Left, {
                             let state_entity = state_entity.clone();
                             let fs = settings.font_size;
-                            move |_, _, cx| state_entity.set_font_size(cx, (fs + 1.0).min(30.0))
+                            move |_, _, cx| {
+                                state_entity.set_font_size(cx, (fs + 1.0).min(30.0));
+                                state_entity.persist_settings(cx);
+                            }
                         }),
                 ),
         ))
         .child(div().w_full().h(px(1.0)).bg(theme::border()))
         .child(popover_row(
             "Show Avatars",
-            Switch::new(settings.show_avatars).on_click({
+            Switch::new("chat-show-avatars", settings.show_avatars).on_click({
                 let state_entity = state_entity.clone();
                 let current = settings.show_avatars;
-                move |_, _, cx| state_entity.set_show_avatars(cx, !current)
+                move |_, _, cx| {
+                    state_entity.set_show_avatars(cx, !current);
+                    state_entity.persist_settings(cx);
+                }
             }),
         ))
         .child(popover_row(
             "Show Badges",
-            Switch::new(settings.show_badges).on_click({
+            Switch::new("chat-show-badges", settings.show_badges).on_click({
                 let state_entity = state_entity.clone();
                 let current = settings.show_badges;
-                move |_, _, cx| state_entity.set_show_badges(cx, !current)
+                move |_, _, cx| {
+                    state_entity.set_show_badges(cx, !current);
+                    state_entity.persist_settings(cx);
+                }
             }),
         ))
         .child(popover_row(
             "Platform Icon",
-            Switch::new(settings.show_platform_icon).on_click({
+            Switch::new("chat-show-platform-icon", settings.show_platform_icon).on_click({
                 let state_entity = state_entity.clone();
                 let current = settings.show_platform_icon;
-                move |_, _, cx| state_entity.set_show_platform_icon(cx, !current)
+                move |_, _, cx| {
+                    state_entity.set_show_platform_icon(cx, !current);
+                    state_entity.persist_settings(cx);
+                }
             }),
         ))
         .child(popover_row(
             "Timestamp",
-            Switch::new(settings.show_timestamp).on_click({
+            Switch::new("chat-show-timestamp", settings.show_timestamp).on_click({
                 let state_entity = state_entity.clone();
                 let current = settings.show_timestamp;
-                move |_, _, cx| state_entity.set_show_timestamp(cx, !current)
+                move |_, _, cx| {
+                    state_entity.set_show_timestamp(cx, !current);
+                    state_entity.persist_settings(cx);
+                }
             }),
         ))
         .child(popover_row(
             "Platform Stripe",
-            Switch::new(settings.show_platform_color_stripe).on_click({
+            Switch::new(
+                "chat-show-platform-stripe",
+                settings.show_platform_color_stripe,
+            )
+            .on_click({
                 let state_entity = state_entity.clone();
                 let current = settings.show_platform_color_stripe;
-                move |_, _, cx| state_entity.set_show_platform_color_stripe(cx, !current)
+                move |_, _, cx| {
+                    state_entity.set_show_platform_color_stripe(cx, !current);
+                    state_entity.persist_settings(cx);
+                }
             }),
         ))
 }

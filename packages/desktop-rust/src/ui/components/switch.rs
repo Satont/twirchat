@@ -6,14 +6,16 @@ type SwitchCallback = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 type ToggleCallback = Box<dyn Fn(bool, &mut Window, &mut App) + 'static>;
 
 pub struct Switch {
+    id: String,
     checked: bool,
     on_click: Option<SwitchCallback>,
     on_toggle: Option<ToggleCallback>,
 }
 
 impl Switch {
-    pub fn new(checked: bool) -> Self {
+    pub fn new(id: impl Into<String>, checked: bool) -> Self {
         Self {
+            id: id.into(),
             checked,
             on_click: None,
             on_toggle: None,
@@ -59,7 +61,7 @@ impl IntoElement for Switch {
         let checked = self.checked;
 
         let element = div()
-            .id("switch")
+            .id(self.id)
             .w(px(36.0))
             .h(px(20.0))
             .rounded_full()
