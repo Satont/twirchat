@@ -968,7 +968,9 @@ fn add_channel_placeholder(platform: Platform) -> &'static str {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct MessageRowOptions {
+    surface_scope: &'static str,
     show_platform_stripe: bool,
     show_platform_icon: bool,
     use_account_avatar_fallback: bool,
@@ -978,6 +980,7 @@ pub(crate) struct MessageRowOptions {
 impl MessageRowOptions {
     pub(crate) const fn home() -> Self {
         Self {
+            surface_scope: "home",
             show_platform_stripe: true,
             show_platform_icon: true,
             use_account_avatar_fallback: true,
@@ -987,11 +990,31 @@ impl MessageRowOptions {
 
     pub(crate) const fn watched() -> Self {
         Self {
+            surface_scope: "watched",
             show_platform_stripe: false,
             show_platform_icon: false,
             use_account_avatar_fallback: false,
             use_author_fallback: false,
         }
+    }
+
+    fn message_row_id(self, message_id: &str) -> String {
+        format!("{}-message-row-{}", self.surface_scope, message_id)
+    }
+
+    fn selectable_key(self, message_id: &str) -> String {
+        format!("{}-message-{}", self.surface_scope, message_id)
+    }
+
+    fn avatar_id(self, message_id: &str) -> String {
+        format!("{}-avatar-{}", self.surface_scope, message_id)
+    }
+
+    fn badge_id(self, message_id: &str, badge_id: &str, index: usize) -> String {
+        format!(
+            "{}-badge-{}-{}-{}",
+            self.surface_scope, message_id, badge_id, index
+        )
     }
 }
 
@@ -1029,7 +1052,7 @@ pub(crate) fn message_row(
 
     if message.message_type == ChatMessageType::System {
         return div()
-            .id(format!("message-row-{}", message.id))
+            .id(options.message_row_id(&message.id))
             .w_full()
             .px(px(14.0))
             .py(px(v_pad))
@@ -1057,7 +1080,8 @@ pub(crate) fn message_row(
                     .text_size(px(settings.font_size as f32))
                     .text_color(theme::text_muted())
                     .child(selectable_message(
-                        format!("system-message-text-{}", message.id),
+                        options.selectable_key(&message.id),
+                        options.selectable_key(&message.id),
                         message,
                         vec![SelectableMessagePart::Text {
                             text: message.text.clone().into(),
@@ -1081,7 +1105,7 @@ pub(crate) fn message_row(
     }
 
     div()
-        .id(format!("message-row-{}", message.id))
+        .id(options.message_row_id(&message.id))
         .w_full()
         .px(px(14.0))
         .py(px(v_pad))
@@ -1136,7 +1160,7 @@ pub(crate) fn message_row(
                     .when_some(avatar_url.clone(), |avatar, url| {
                         avatar.child(
                             img(ImageSource::from(url))
-                                .id(format!("avatar-{}", message.id))
+                                .id(options.avatar_id(&message.id))
                                 .w_full()
                                 .h_full()
                                 .rounded_full()
@@ -1198,9 +1222,10 @@ pub(crate) fn message_row(
                                             .overflow_hidden()
                                             .child(
                                                 img(ImageSource::from(Path::new(path)))
-                                                    .id(format!(
-                                                        "badge-{}-{}-{}",
-                                                        message.id, badge.id, index
+                                                    .id(options.badge_id(
+                                                        &message.id,
+                                                        &badge.id,
+                                                        index,
                                                     ))
                                                     .w_full()
                                                     .h_full()
@@ -1218,9 +1243,10 @@ pub(crate) fn message_row(
                                             .overflow_hidden()
                                             .child(
                                                 img(ImageSource::from(url.clone()))
-                                                    .id(format!(
-                                                        "badge-{}-{}-{}",
-                                                        message.id, badge.id, index
+                                                    .id(options.badge_id(
+                                                        &message.id,
+                                                        &badge.id,
+                                                        index,
                                                     ))
                                                     .w_full()
                                                     .h_full()
@@ -1259,6 +1285,7 @@ pub(crate) fn message_row(
                     message,
                     settings.font_size as f32,
                     is_compact,
+                    options,
                     window,
                     cx,
                 )),
@@ -1270,10 +1297,30 @@ fn message_text_with_emotes(
     message: &NormalizedChatMessage,
     font_size: f32,
     is_compact: bool,
+    options: MessageRowOptions,
     window: &mut Window,
     cx: &mut App,
 ) -> Div {
-    let segments = build_message_segments(message, is_compact);
+    let scoped_message_id = options.selectable_key(&message.id);
+    let segments = build_message_segments(message, is_compact)
+        .into_iter()
+        .map(|part| match part {
+            SelectableMessagePart::Emote {
+                emote,
+                source_range,
+                part_index,
+                is_compact,
+                ..
+            } => SelectableMessagePart::Emote {
+                emote,
+                source_range,
+                message_id: scoped_message_id.clone().into(),
+                part_index,
+                is_compact,
+            },
+            part => part,
+        })
+        .collect();
 
     div()
         .w_full()
@@ -1286,7 +1333,8 @@ fn message_text_with_emotes(
         .items_center()
         .whitespace_normal()
         .child(selectable_message(
-            format!("message-{}", message.id),
+            scoped_message_id.clone(),
+            scoped_message_id,
             message,
             segments,
             font_size,
@@ -1297,6 +1345,7 @@ fn message_text_with_emotes(
 
 fn selectable_message(
     id: String,
+    selection_id: String,
     message: &NormalizedChatMessage,
     parts: Vec<SelectableMessagePart>,
     font_size: f32,
@@ -1304,7 +1353,7 @@ fn selectable_message(
     cx: &mut App,
 ) -> Entity<SelectableMessage> {
     let selectable = window.use_keyed_state(id, cx, {
-        let message_id = message.id.clone();
+        let message_id = selection_id;
         let text = message.text.clone();
         let parts = parts.clone();
         move |_, cx| {

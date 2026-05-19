@@ -952,8 +952,8 @@ impl AppState {
     pub fn cycle_channel_tab(&mut self, direction: i32) -> bool {
         let mut tab_ids = vec![String::from("home")];
         tab_ids.extend(
-            self.watched_channels
-                .iter()
+            self.visible_watched_channels()
+                .into_iter()
                 .map(|channel| channel.id.clone()),
         );
 

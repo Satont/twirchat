@@ -300,23 +300,10 @@ impl TwirChatApp {
             return true;
         }
 
-        if self
-            .composer_input
+        self.add_channel_input
             .read(cx)
             .focus_handle(cx)
             .is_focused(window)
-            || self
-                .add_channel_input
-                .read(cx)
-                .focus_handle(cx)
-                .is_focused(window)
-        {
-            return true;
-        }
-
-        self.watched_composer_inputs
-            .values()
-            .any(|input| input.read(cx).focus_handle(cx).is_focused(window))
     }
 
     fn observe_keystrokes(
