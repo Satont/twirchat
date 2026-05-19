@@ -9,7 +9,7 @@ use crate::protocol::types::{
 };
 use crate::runtime::KICK_REDIRECT_URI;
 use crate::storage::{Storage, TokenPair, TokenState};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -129,6 +129,7 @@ pub struct KickSenderIdentity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickOriginalSender {
+    #[serde(deserialize_with = "deserialize_string_or_number")]
     pub id: String,
     pub username: String,
 }
@@ -900,6 +901,75 @@ fn normalize_reply(
             display_name: original_sender.username,
         },
     })
+}
+
+fn deserialize_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        String(String),
+        Number(u64),
+    }
+
+    match StringOrNumber::deserialize(deserializer)? {
+        StringOrNumber::String(value) => Ok(value),
+        StringOrNumber::Number(value) => Ok(value.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{KickChatMessage, KickChatMessageKind, normalize_reply};
+
+    #[test]
+    fn kick_reply_payload_accepts_numeric_original_sender_id() {
+        let raw = r#"{
+            \"id\": \"msg-1\",
+            \"chatroom_id\": 3124040,
+            \"content\": \"reply body\",
+            \"type\": \"reply\",
+            \"created_at\": \"2026-05-19T20:38:27+00:00\",
+            \"sender\": {
+                \"id\": 1,
+                \"username\": \"sender\",
+                \"slug\": \"sender\",
+                \"identity\": { \"color\": null, \"badges\": [] },
+                \"profile_picture\": null
+            },
+            \"metadata\": {
+                \"original_sender\": {
+                    \"id\": 103024073,
+                    \"username\": \"j0yc\"
+                },
+                \"original_message\": {
+                    \"id\": \"parent-1\",
+                    \"content\": \"parent text\"
+                }
+            }
+        }"#;
+
+        let message: KickChatMessage =
+            serde_json::from_str(raw).expect("reply payload should parse");
+        assert_eq!(
+            message
+                .metadata
+                .as_ref()
+                .unwrap()
+                .original_sender
+                .as_ref()
+                .unwrap()
+                .id,
+            "103024073"
+        );
+
+        let reply = normalize_reply(KickChatMessageKind::Reply, message.metadata)
+            .expect("reply metadata should normalize");
+        assert_eq!(reply.parent_author.id, "103024073");
+        assert_eq!(reply.parent_message_id, "parent-1");
+    }
 }
 
 fn parse_kick_emotes(content: &str) -> (String, Vec<Emote>) {

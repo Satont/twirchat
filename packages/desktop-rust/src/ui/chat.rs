@@ -1298,7 +1298,7 @@ struct TextSegmentWithRange {
     is_link: bool,
 }
 
-fn build_message_segments(
+pub(crate) fn build_message_segments(
     message: &NormalizedChatMessage,
     is_compact: bool,
 ) -> Vec<SelectableMessagePart> {

@@ -1,8 +1,9 @@
 use twirchat_desktop_rust::app_state::AppState;
-use twirchat_desktop_rust::protocol::messages::DesktopToBackendMessage;
+use twirchat_desktop_rust::protocol::types::{ChatAuthor, ChatMessageType, NormalizedChatMessage};
 use twirchat_desktop_rust::protocol::types::{LayoutNode, PanelContent, Platform};
 use twirchat_desktop_rust::services::{ServiceEvent, WatchedChannelsEvent};
 use twirchat_desktop_rust::storage::Storage;
+use twirchat_desktop_rust::storage::accounts::UpsertAccount;
 
 #[test]
 fn top_level_add_creates_and_selects_a_watched_tab() {
@@ -210,41 +211,188 @@ fn empty_pane_can_be_removed_and_layout_collapses() {
 }
 
 #[test]
-fn home_composer_queues_backend_messages_not_watched_channel_messages() {
+fn home_composer_routes_owned_kick_channel_through_watched_runtime() {
     let temp = tempfile::tempdir().expect("temp dir should be available");
     let db_path = temp.path().join("home-send.sqlite");
     let storage = Storage::open(&db_path).expect("storage should open for home send test");
+
+    storage
+        .accounts()
+        .upsert(UpsertAccount {
+            id: "kick-account-1",
+            platform: Platform::Kick,
+            platform_user_id: "kick-user-1",
+            username: "satont",
+            display_name: "Satont",
+            avatar_url: None,
+            access_token: "token",
+            refresh_token: None,
+            expires_at: None,
+            scopes: &[],
+        })
+        .expect("kick account should persist");
+
     let mut state = AppState::from_storage(&storage);
 
     state.platforms_panel.statuses.insert(
-        Platform::Twitch,
+        Platform::Kick,
         twirchat_desktop_rust::protocol::types::PlatformStatusInfo {
-            platform: Platform::Twitch,
+            platform: Platform::Kick,
             status: twirchat_desktop_rust::protocol::types::PlatformStatus::Connected,
             error: None,
             mode: twirchat_desktop_rust::protocol::types::PlatformStatusMode::Authenticated,
-            channel_login: Some("stray228".into()),
+            channel_login: Some("satont".into()),
         },
     );
     state
-        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "suhodolskiy")
-        .expect("watched tab should persist");
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "satont")
+        .expect("owned watched channel should persist");
     state.select_channel_tab("home");
 
     assert!(state.queue_composer_send("test message"));
 
     let watched_pending = state.take_pending_watched_channel_messages();
     let backend_pending = state.take_pending_backend_messages();
-    assert!(watched_pending.is_empty());
-    assert_eq!(backend_pending.len(), 1);
-    assert!(matches!(
-        &backend_pending[0],
-        DesktopToBackendMessage::SendMessage {
-            platform: Platform::Twitch,
-            channel,
-            message,
-        } if channel == "stray228" && message == "test message"
-    ));
+    assert_eq!(watched_pending.len(), 1);
+    assert_eq!(watched_pending[0].channel_id, state.watched_channels[0].id);
+    assert_eq!(watched_pending[0].text, "test message");
+    assert!(backend_pending.is_empty());
+}
+
+#[test]
+fn watched_history_persists_across_reload() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("watched-history.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for watched history test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "suhodolskiy")
+        .expect("watched tab should persist");
+    let watched_id = state.active_channel_tab_id().to_string();
+
+    let message = NormalizedChatMessage {
+        id: "kick-history-1".into(),
+        platform: Platform::Kick,
+        channel_id: "16992646".into(),
+        author: ChatAuthor {
+            id: "viewer-1".into(),
+            username: Some("viewerone".into()),
+            display_name: "Viewer One".into(),
+            color: None,
+            avatar_url: None,
+            badges: vec![],
+        },
+        text: "persist me".into(),
+        emotes: vec![],
+        timestamp: "1700000000".into(),
+        message_type: ChatMessageType::Message,
+        reply: None,
+    };
+
+    storage
+        .messages()
+        .save(&message)
+        .expect("message store save should work");
+    storage
+        .watched_history()
+        .set(&watched_id, std::slice::from_ref(&message))
+        .expect("watched history save should work");
+
+    let reloaded = AppState::from_storage(&storage);
+    let watched_history = reloaded
+        .watched_channel_messages
+        .get(&watched_id)
+        .expect("watched history should reload by watched channel id");
+
+    assert_eq!(watched_history.len(), 1);
+    assert_eq!(watched_history[0].id, "kick-history-1");
+    assert_eq!(watched_history[0].text, "persist me");
+}
+
+#[test]
+fn own_account_watched_channel_is_not_exposed_as_tab() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("own-account-tab.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for own account tab test");
+
+    storage
+        .accounts()
+        .upsert(UpsertAccount {
+            id: "kick-account-1",
+            platform: Platform::Kick,
+            platform_user_id: "kick-user-1",
+            username: "satont",
+            display_name: "Satont",
+            avatar_url: None,
+            access_token: "token",
+            refresh_token: None,
+            expires_at: None,
+            scopes: &[],
+        })
+        .expect("account should persist");
+
+    let mut state = AppState::from_storage(&storage);
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "satont")
+        .expect("own account watched channel should persist");
+
+    assert!(state.visible_watched_channels().is_empty());
+}
+
+#[test]
+fn custom_watched_history_is_filtered_out_of_home_reload() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("custom-home-filter.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for custom home filter test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "suhodolskiy")
+        .expect("custom watched tab should persist");
+    let watched_id = state.active_channel_tab_id().to_string();
+    let watched_message = NormalizedChatMessage {
+        id: "custom-kick-1".into(),
+        platform: Platform::Kick,
+        channel_id: "16992646".into(),
+        author: ChatAuthor {
+            id: "viewer-1".into(),
+            username: Some("viewerone".into()),
+            display_name: "Viewer One".into(),
+            color: None,
+            avatar_url: None,
+            badges: vec![],
+        },
+        text: "custom watched only".into(),
+        emotes: vec![],
+        timestamp: "1700000000".into(),
+        message_type: ChatMessageType::Message,
+        reply: None,
+    };
+
+    storage
+        .messages()
+        .save(&watched_message)
+        .expect("global message save should work");
+    storage
+        .watched_history()
+        .set(&watched_id, std::slice::from_ref(&watched_message))
+        .expect("watched history save should work");
+
+    let reloaded = AppState::from_storage(&storage);
+    assert!(
+        reloaded
+            .messages
+            .iter()
+            .all(|message| message.id != "custom-kick-1")
+    );
+    assert_eq!(
+        reloaded
+            .watched_channel_messages
+            .get(&watched_id)
+            .map(|messages| messages.len()),
+        Some(1)
+    );
 }
 
 fn count_panels(node: &LayoutNode) -> usize {

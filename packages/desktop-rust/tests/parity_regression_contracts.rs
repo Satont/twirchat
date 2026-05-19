@@ -42,8 +42,8 @@ fn tabs_restore_home_and_watched_tab_split() {
         "home tab should remain the unified chat feed"
     );
     assert!(
-        tabs_rs.contains("state.watched_channels.iter()"),
-        "watched channels should render as separate tabs again"
+        tabs_rs.contains("visible_watched_channels()"),
+        "only explicit watched-tab channels should render as tabs again"
     );
     assert!(
         content_rs.contains("state.active_channel_tab_id() == \"home\""),

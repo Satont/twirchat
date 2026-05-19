@@ -178,10 +178,36 @@ impl AppState {
             self.platforms_panel.joined_channels = joined_channels;
         }
         for channel in &self.watched_channels {
+            if let Ok(messages) = storage.watched_history().get(&channel.id)
+                && !messages.is_empty()
+            {
+                if self.is_home_account_channel(channel) {
+                    self.messages.extend(messages.iter().cloned());
+                }
+                self.watched_channel_messages
+                    .insert(channel.id.clone(), messages);
+            }
             if let Ok(layout) = storage.watched_layout().get(&channel.id) {
                 self.watched_layouts.insert(channel.id.clone(), layout);
             }
         }
+
+        let non_home_watched_ids = self
+            .watched_channels
+            .iter()
+            .filter(|channel| !self.is_home_account_channel(channel))
+            .filter_map(|channel| self.watched_channel_messages.get(&channel.id))
+            .flat_map(|messages| messages.iter().map(|message| message.id.clone()))
+            .collect::<BTreeSet<_>>();
+
+        self.messages
+            .retain(|message| !non_home_watched_ids.contains(&message.id));
+
+        let mut seen_ids = BTreeSet::new();
+        self.messages
+            .retain(|message| seen_ids.insert(message.id.clone()));
+        self.messages
+            .sort_by_key(|message| message.timestamp.clone());
     }
 
     pub fn active_section(&self) -> MainSection {
@@ -230,6 +256,13 @@ impl AppState {
 
     pub fn watched_layout(&self, tab_id: &str) -> Option<&WatchedChannelsLayout> {
         self.watched_layouts.get(tab_id)
+    }
+
+    pub fn visible_watched_channels(&self) -> Vec<&WatchedChannel> {
+        self.watched_channels
+            .iter()
+            .filter(|channel| !self.is_home_account_channel(channel))
+            .collect()
     }
 
     pub fn add_chat_pane_for_active_tab(
@@ -639,14 +672,7 @@ impl AppState {
                 channel_id,
                 message,
             } => {
-                let lookup_channel_id = self
-                    .watched_channels
-                    .iter()
-                    .find(|channel| channel.id == channel_id)
-                    .map(|channel| channel.channel_slug.clone())
-                    .unwrap_or_else(|| {
-                        self.resolve_seven_tv_channel_id(message.platform, &message.channel_id)
-                    });
+                let lookup_channel_id = message.channel_id.clone();
                 let message = enrich_message_with_seven_tv(
                     *message,
                     &lookup_channel_id,
@@ -656,6 +682,9 @@ impl AppState {
                     "[watched/live] app_state accepted {:?} message id={} channel={}",
                     message.platform, message.id, message.channel_id
                 );
+                if self.is_home_account_channel_id(&channel_id) {
+                    self.messages.push(message.clone());
+                }
                 let channel_messages = self.watched_channel_messages.entry(channel_id).or_default();
                 channel_messages.push(message);
                 if channel_messages.len()
@@ -843,37 +872,16 @@ impl AppState {
             *message = enriched;
         }
 
-        for (watched_channel_id, messages) in &mut self.watched_channel_messages {
-            let Some(watched_channel) = self
-                .watched_channels
-                .iter()
-                .find(|channel| channel.id == *watched_channel_id)
-            else {
-                continue;
-            };
-
-            if watched_channel.platform != platform || watched_channel.channel_slug != channel_id {
-                continue;
-            }
-
+        for messages in self.watched_channel_messages.values_mut() {
             for message in messages {
+                if message.platform != platform || message.channel_id != channel_id {
+                    continue;
+                }
                 let mut base = message.clone();
                 base.emotes.retain(|emote| !is_seven_tv_emote(emote));
                 *message = enrich_message_with_seven_tv(base, channel_id, &self.seven_tv_catalog);
             }
         }
-    }
-
-    fn resolve_seven_tv_channel_id(&self, platform: Platform, message_channel_id: &str) -> String {
-        self.watched_channels
-            .iter()
-            .find(|channel| {
-                channel.platform == platform
-                    && (channel.id == message_channel_id
-                        || channel.channel_slug == message_channel_id)
-            })
-            .map(|channel| channel.channel_slug.clone())
-            .unwrap_or_else(|| message_channel_id.to_string())
     }
 
     fn display_channel_id_for_seven_tv(
@@ -939,6 +947,29 @@ impl AppState {
 
     pub fn select_channel_tab(&mut self, tab_id: impl Into<String>) {
         self.active_channel_tab_id = tab_id.into();
+    }
+
+    pub fn cycle_channel_tab(&mut self, direction: i32) -> bool {
+        let mut tab_ids = vec![String::from("home")];
+        tab_ids.extend(
+            self.watched_channels
+                .iter()
+                .map(|channel| channel.id.clone()),
+        );
+
+        if tab_ids.len() <= 1 {
+            return false;
+        }
+
+        let current_index = tab_ids
+            .iter()
+            .position(|id| id == &self.active_channel_tab_id)
+            .unwrap_or(0) as i32;
+        let next_index = (current_index + direction).rem_euclid(tab_ids.len() as i32) as usize;
+
+        self.active_section = MainSection::Chat;
+        self.active_channel_tab_id = tab_ids[next_index].clone();
+        true
     }
 
     pub fn toggle_sidebar(&mut self) {
@@ -1214,13 +1245,21 @@ impl AppState {
             if self.composer_disabled_channel_ids.contains(&target.id) {
                 continue;
             }
-            self.pending_backend_messages.push(
-                crate::protocol::messages::DesktopToBackendMessage::SendMessage {
-                    platform: target.platform,
-                    channel: target.channel_login,
-                    message: text.to_string(),
-                },
-            );
+            if let Some(watched_channel_id) = &target.watched_channel_id {
+                self.pending_watched_channel_messages
+                    .push(PendingWatchedChannelMessage {
+                        channel_id: watched_channel_id.clone(),
+                        text: text.to_string(),
+                    });
+            } else {
+                self.pending_backend_messages.push(
+                    crate::protocol::messages::DesktopToBackendMessage::SendMessage {
+                        platform: target.platform,
+                        channel: target.channel_login,
+                        message: text.to_string(),
+                    },
+                );
+            }
             queued = true;
         }
         queued
@@ -1389,6 +1428,20 @@ impl AppState {
             .push(PendingWatchedChannelRemove { channel_id });
     }
 
+    fn is_home_account_channel(&self, channel: &WatchedChannel) -> bool {
+        self.platforms_panel.accounts.iter().any(|account| {
+            account.platform == channel.platform
+                && account.username.eq_ignore_ascii_case(&channel.channel_slug)
+        })
+    }
+
+    fn is_home_account_channel_id(&self, channel_id: &str) -> bool {
+        self.watched_channels
+            .iter()
+            .find(|channel| channel.id == channel_id)
+            .is_some_and(|channel| self.is_home_account_channel(channel))
+    }
+
     fn home_channel_targets(&self) -> Vec<HomeChannelTarget> {
         let mut targets = Vec::new();
         let mut seen = BTreeSet::new();
@@ -1413,6 +1466,14 @@ impl AppState {
                 id,
                 platform: status.platform,
                 channel_login: channel_login.clone(),
+                watched_channel_id: self
+                    .watched_channels
+                    .iter()
+                    .find(|channel| {
+                        channel.platform == status.platform
+                            && channel.channel_slug.eq_ignore_ascii_case(channel_login)
+                    })
+                    .map(|channel| channel.id.clone()),
             });
         }
 
@@ -1434,6 +1495,7 @@ struct HomeChannelTarget {
     id: String,
     platform: Platform,
     channel_login: String,
+    watched_channel_id: Option<String>,
 }
 
 fn home_channel_target_id(platform: Platform, channel_login: &str) -> String {

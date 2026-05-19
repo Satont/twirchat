@@ -105,6 +105,62 @@ pub fn normalize_keystroke(keystroke: &Keystroke) -> Option<String> {
     Some(parts.join("+"))
 }
 
+pub fn normalize_hotkey_combo(value: &str) -> Option<String> {
+    let mut control = false;
+    let mut alt = false;
+    let mut shift = false;
+    let mut platform = false;
+    let mut function = false;
+    let mut key = None;
+
+    for part in value
+        .split('+')
+        .map(|part| part.trim().to_ascii_lowercase())
+        .filter(|part| !part.is_empty())
+    {
+        match part.as_str() {
+            "ctrl" | "control" => control = true,
+            "alt" => alt = true,
+            "shift" => shift = true,
+            "cmd" | "command" | "meta" | "platform" | "super" => platform = true,
+            "fn" | "function" => function = true,
+            other => key = normalize_key_name(other),
+        }
+    }
+
+    let key = key?;
+    let mut parts = Vec::new();
+
+    if control {
+        parts.push("ctrl".to_string());
+    }
+    if alt {
+        parts.push("alt".to_string());
+    }
+    if shift {
+        parts.push("shift".to_string());
+    }
+    if platform {
+        parts.push("cmd".to_string());
+    }
+    if function {
+        parts.push("fn".to_string());
+    }
+
+    parts.push(key);
+    Some(parts.join("+"))
+}
+
+pub fn matches_hotkey(keystroke: &Keystroke, combo: &str) -> bool {
+    match (
+        normalize_keystroke(keystroke),
+        normalize_hotkey_combo(combo),
+    ) {
+        (Some(actual), Some(expected)) => actual == expected,
+        _ => false,
+    }
+}
+
 pub fn format_hotkey_display(value: &str) -> String {
     value
         .split('+')
@@ -133,6 +189,22 @@ pub fn format_hotkey_display(value: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("+")
+}
+
+pub fn to_gpui_binding(value: &str) -> Option<String> {
+    let parts = value
+        .split('+')
+        .filter(|part| !part.is_empty())
+        .map(|part| match part {
+            "arrowleft" => "left".to_string(),
+            "arrowright" => "right".to_string(),
+            "arrowup" => "up".to_string(),
+            "arrowdown" => "down".to_string(),
+            other => other.to_string(),
+        })
+        .collect::<Vec<_>>();
+
+    (!parts.is_empty()).then(|| parts.join("-"))
 }
 
 fn normalize_key_name(key: &str) -> Option<String> {

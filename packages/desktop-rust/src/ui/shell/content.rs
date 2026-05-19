@@ -3,7 +3,7 @@ use crate::ui::chat::{ChatPanelProps, ChatScrollUi};
 use crate::ui::components::input::Input;
 use crate::ui::components::watched_layout;
 use crate::ui::shell::app::TwirChatApp;
-use crate::ui::shell::tabs;
+use crate::ui::shell::tabs::{self, TabItem};
 use crate::ui::theme;
 use crate::ui::{chat, events, platforms, settings};
 use gpui::{AnyElement, Context, Entity, FocusHandle, ScrollHandle, Window, div, prelude::*, px};
@@ -23,6 +23,10 @@ pub(crate) struct ContentPanelProps<'a> {
     pub hotkey_capture_focus: FocusHandle,
     pub composer_text: String,
     pub scroll_ui: SectionScrollUi<'a>,
+}
+
+pub(crate) fn tab_items(state: &AppState) -> Vec<TabItem> {
+    tabs::items(state)
 }
 
 pub(crate) fn panel(

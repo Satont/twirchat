@@ -1,4 +1,6 @@
-use crate::app_state::AppState;
+use crate::app_state::{AppState, MainSection};
+use crate::hotkeys::matches_hotkey;
+use crate::protocol::types::Platform;
 use crate::runtime::AppRuntime;
 use crate::services::{BackendWsEvent, ServiceEvent};
 
@@ -6,8 +8,9 @@ use crate::ui::chat::ChatScrollUi;
 use crate::ui::components::input::Input;
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
 use gpui::{
-    Context, Entity, FocusHandle, FollowMode, ListAlignment, ListState, Render, ScrollHandle, Task,
-    Window, div, prelude::*, px, retain_all, rgb,
+    App, Context, Entity, FocusHandle, Focusable, FollowMode, KeystrokeEvent, ListAlignment,
+    ListState, Render, ScrollHandle, Subscription, Task, Window, div, prelude::*, px, retain_all,
+    rgb,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -16,8 +19,10 @@ pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
     composer_input: Entity<Input>,
     add_channel_input: Entity<Input>,
+    tab_selector_input: Entity<Input>,
     watched_composer_inputs: BTreeMap<String, Entity<Input>>,
     hotkey_capture_focus: FocusHandle,
+    tab_selector_focus: FocusHandle,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
     chat_list_state: ListState,
@@ -25,6 +30,10 @@ pub struct TwirChatApp {
     platforms_scroll_handle: ScrollHandle,
     last_chat_message_count: usize,
     chat_scroll_paused: bool,
+    tab_selector_open: bool,
+    tab_selector_selected_index: usize,
+    last_tab_selector_query: String,
+    _keystroke_subscription: Subscription,
 }
 
 impl TwirChatApp {
@@ -44,11 +53,17 @@ impl TwirChatApp {
         let state = cx.new(|_| initial_state);
         let composer_input = cx.new(|cx| Input::new("Send a message...", cx).with_clear_on_copy());
         let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
+        let tab_selector_input = cx.new(|cx| Input::new("Switch to tab...", cx));
         let hotkey_capture_focus = cx.focus_handle();
+        let tab_selector_focus = cx.focus_handle();
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         cx.observe(&composer_input, |_, _, cx| cx.notify()).detach();
         cx.observe(&add_channel_input, |_, _, cx| cx.notify())
             .detach();
+        cx.observe(&tab_selector_input, |_, _, cx| cx.notify())
+            .detach();
+        let keystroke_listener = cx.listener(Self::observe_keystrokes);
+        let keystroke_subscription = cx.intercept_keystrokes(keystroke_listener);
 
         let runtime_poll_task = runtime.as_ref().map(|_| {
             cx.spawn(async move |this, cx| {
@@ -73,8 +88,10 @@ impl TwirChatApp {
             state,
             composer_input,
             add_channel_input,
+            tab_selector_input,
             watched_composer_inputs: BTreeMap::new(),
             hotkey_capture_focus,
+            tab_selector_focus,
             runtime,
             _runtime_poll_task: runtime_poll_task,
             chat_list_state,
@@ -82,6 +99,10 @@ impl TwirChatApp {
             platforms_scroll_handle: ScrollHandle::new(),
             last_chat_message_count: 0,
             chat_scroll_paused: false,
+            tab_selector_open: false,
+            tab_selector_selected_index: 0,
+            last_tab_selector_query: String::new(),
+            _keystroke_subscription: keystroke_subscription,
         }
     }
 
@@ -273,6 +294,332 @@ impl TwirChatApp {
                 .insert(channel.id.clone(), input);
         }
     }
+
+    fn shortcuts_blocked(&self, window: &Window, cx: &App) -> bool {
+        if self.hotkey_capture_focus.is_focused(window) {
+            return true;
+        }
+
+        if self
+            .composer_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+            || self
+                .add_channel_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        {
+            return true;
+        }
+
+        self.watched_composer_inputs
+            .values()
+            .any(|input| input.read(cx).focus_handle(cx).is_focused(window))
+    }
+
+    fn observe_keystrokes(
+        &mut self,
+        event: &KeystrokeEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tab_selector_open {
+            self.handle_tab_selector_keystroke(event, cx);
+            return;
+        }
+
+        if self.shortcuts_blocked(window, cx) {
+            return;
+        }
+
+        let hotkeys = self.state.read(cx).settings().hotkeys.clone();
+
+        if matches_hotkey(&event.keystroke, &hotkeys.new_tab) {
+            self.add_channel_input.update(cx, |input, cx| {
+                input.clear(cx);
+                input.set_placeholder("Twitch channel name", cx);
+            });
+            self.state.update(cx, |state, cx| {
+                state.select_section(MainSection::Chat);
+                state.open_add_channel_modal();
+                cx.notify();
+            });
+            cx.stop_propagation();
+            return;
+        }
+
+        if matches_hotkey(&event.keystroke, &hotkeys.next_tab) {
+            self.state.update(cx, |state, cx| {
+                state.cycle_channel_tab(1);
+                cx.notify();
+            });
+            cx.stop_propagation();
+            return;
+        }
+
+        if matches_hotkey(&event.keystroke, &hotkeys.prev_tab) {
+            self.state.update(cx, |state, cx| {
+                state.cycle_channel_tab(-1);
+                cx.notify();
+            });
+            cx.stop_propagation();
+            return;
+        }
+
+        if matches_hotkey(&event.keystroke, &hotkeys.tab_selector) {
+            self.open_tab_selector(window, cx);
+            cx.stop_propagation();
+        }
+    }
+
+    fn close_tab_selector(&mut self, cx: &mut Context<Self>) {
+        self.tab_selector_open = false;
+        self.tab_selector_selected_index = 0;
+        self.last_tab_selector_query.clear();
+        self.tab_selector_input
+            .update(cx, |input, cx| input.clear(cx));
+        cx.notify();
+    }
+
+    fn open_tab_selector(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let state = self.state.read(cx).clone();
+        let items = fuzzy_filter_tab_items(
+            &content::tab_items(&state),
+            self.tab_selector_input.read(cx).text(),
+        );
+        if items.is_empty() {
+            return;
+        }
+
+        self.tab_selector_input
+            .update(cx, |input, cx| input.clear(cx));
+        self.last_tab_selector_query.clear();
+        self.tab_selector_selected_index = items
+            .iter()
+            .position(|item| item.id == state.active_channel_tab_id())
+            .unwrap_or(0);
+        self.tab_selector_open = true;
+        window.focus(&self.tab_selector_focus, cx);
+        let input_focus = self.tab_selector_input.read(cx).focus_handle(cx);
+        window.focus(&input_focus, cx);
+        cx.notify();
+    }
+
+    fn handle_tab_selector_keystroke(&mut self, event: &KeystrokeEvent, cx: &mut Context<Self>) {
+        let items = fuzzy_filter_tab_items(
+            &content::tab_items(&self.state.read(cx)),
+            self.tab_selector_input.read(cx).text(),
+        );
+
+        match event.keystroke.key.as_str() {
+            "escape" => {
+                self.close_tab_selector(cx);
+                cx.stop_propagation();
+            }
+            "down" | "arrowdown" if !items.is_empty() => {
+                self.tab_selector_selected_index =
+                    (self.tab_selector_selected_index + 1).min(items.len().saturating_sub(1));
+                cx.stop_propagation();
+                cx.notify();
+            }
+            "up" | "arrowup" if !items.is_empty() => {
+                self.tab_selector_selected_index =
+                    self.tab_selector_selected_index.saturating_sub(1);
+                cx.stop_propagation();
+                cx.notify();
+            }
+            "enter" if !items.is_empty() => {
+                let selected = self
+                    .tab_selector_selected_index
+                    .min(items.len().saturating_sub(1));
+                let tab_id = items[selected].id.clone();
+                self.state.update(cx, |state, cx| {
+                    state.select_section(MainSection::Chat);
+                    state.select_channel_tab(tab_id);
+                    cx.notify();
+                });
+                self.close_tab_selector(cx);
+                cx.stop_propagation();
+            }
+            _ => {}
+        }
+    }
+
+    fn render_tab_selector_modal(
+        &self,
+        state: &AppState,
+        cx: &mut Context<Self>,
+    ) -> impl gpui::IntoElement {
+        let items = fuzzy_filter_tab_items(
+            &content::tab_items(state),
+            self.tab_selector_input.read(cx).text(),
+        );
+        let selected_index = self
+            .tab_selector_selected_index
+            .min(items.len().saturating_sub(1));
+
+        div()
+            .absolute()
+            .top(px(0.0))
+            .right(px(0.0))
+            .bottom(px(0.0))
+            .left(px(0.0))
+            .bg(gpui::rgba(0x00000080))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .track_focus(&self.tab_selector_focus)
+                    .w(px(400.0))
+                    .max_w(px(640.0))
+                    .max_h(px(360.0))
+                    .bg(rgb(0x18181b))
+                    .border_1()
+                    .border_color(rgb(0x2a2a33))
+                    .rounded_lg()
+                    .shadow_md()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .px(px(16.0))
+                            .py(px(12.0))
+                            .border_b_1()
+                            .border_color(rgb(0x2a2a33))
+                            .flex()
+                            .flex_col()
+                            .gap(px(10.0))
+                            .child(
+                                div()
+                                    .text_size(px(14.0))
+                                    .font_weight(gpui::FontWeight::BOLD)
+                                    .text_color(crate::ui::theme::text_primary())
+                                    .child("Switch to tab"),
+                            )
+                            .child(self.tab_selector_input.clone()),
+                    )
+                    .child(if items.is_empty() {
+                        div()
+                            .px(px(16.0))
+                            .py(px(18.0))
+                            .text_size(px(13.0))
+                            .text_color(crate::ui::theme::text_muted())
+                            .child("No tabs match the current query")
+                            .into_any_element()
+                    } else {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .children(items.into_iter().enumerate().map(move |(index, item)| {
+                                let is_selected = index == selected_index;
+                                let is_active = item.id == state.active_channel_tab_id();
+
+                                div()
+                                    .cursor_pointer()
+                                    .px(px(16.0))
+                                    .py(px(10.0))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(8.0))
+                                    .bg(if is_selected {
+                                        gpui::rgba(0xa78bfa26)
+                                    } else {
+                                        gpui::rgba(0x00000000)
+                                    })
+                                    .text_color(crate::ui::theme::text_primary())
+                                    .hover(|style| style.bg(crate::ui::theme::surface()))
+                                    .on_mouse_down(gpui::MouseButton::Left, {
+                                        let tab_id = item.id.clone();
+                                        cx.listener(move |this, _event, _window, cx| {
+                                            this.state.update(cx, |state, cx| {
+                                                state.select_section(MainSection::Chat);
+                                                state.select_channel_tab(tab_id.clone());
+                                                cx.notify();
+                                            });
+                                            this.close_tab_selector(cx);
+                                        })
+                                    })
+                                    .child(
+                                        div()
+                                            .text_size(px(11.0))
+                                            .text_color(crate::ui::theme::text_muted())
+                                            .child(match item.platform {
+                                                Some(Platform::Twitch) => "[twitch]",
+                                                Some(Platform::Youtube) => "[youtube]",
+                                                Some(Platform::Kick) => "[kick]",
+                                                None => "[home]",
+                                            }),
+                                    )
+                                    .child(div().flex_1().child(item.label))
+                                    .when(is_active, |el| {
+                                        el.child(
+                                            div()
+                                                .text_size(px(11.0))
+                                                .font_weight(gpui::FontWeight::BOLD)
+                                                .text_color(crate::ui::theme::accent())
+                                                .child("active"),
+                                        )
+                                    })
+                            }))
+                            .into_any_element()
+                    })
+                    .child(
+                        div()
+                            .px(px(16.0))
+                            .py(px(10.0))
+                            .border_t_1()
+                            .border_color(rgb(0x2a2a33))
+                            .text_size(px(11.0))
+                            .text_color(crate::ui::theme::text_muted())
+                            .child("Up/Down to navigate, Enter to switch, Escape to close"),
+                    ),
+            )
+    }
+}
+
+fn fuzzy_filter_tab_items(
+    items: &[crate::ui::shell::tabs::TabItem],
+    query: &str,
+) -> Vec<crate::ui::shell::tabs::TabItem> {
+    if query.is_empty() {
+        return items.to_vec();
+    }
+
+    let query = query.to_ascii_lowercase();
+    let Some(first_char) = query.chars().next() else {
+        return items.to_vec();
+    };
+
+    let mut matches = items
+        .iter()
+        .filter_map(|item| {
+            let label = item.label.to_ascii_lowercase();
+            let mut query_chars = query.chars();
+            let mut current = query_chars.next()?;
+
+            for ch in label.chars() {
+                if ch == current {
+                    match query_chars.next() {
+                        Some(next) => current = next,
+                        None => {
+                            let rank = label.find(first_char).unwrap_or(usize::MAX);
+                            return Some((rank, item.clone()));
+                        }
+                    }
+                }
+            }
+
+            None
+        })
+        .collect::<Vec<_>>();
+
+    matches.sort_by_key(|(rank, item)| (*rank, item.label.to_ascii_lowercase()));
+    matches.into_iter().map(|(_, item)| item).collect()
 }
 
 impl Render for TwirChatApp {
@@ -287,8 +634,14 @@ impl Render for TwirChatApp {
         let state = self.state.read(cx).clone();
         self.sync_watched_composer_inputs(&state, cx);
         let composer_text = self.composer_input.read(cx).text().to_string();
+        let tab_selector_query = self.tab_selector_input.read(cx).text().to_string();
         let was_following_tail = self.chat_list_state.is_following_tail();
         self.chat_scroll_paused = !was_following_tail;
+
+        if self.tab_selector_open && tab_selector_query != self.last_tab_selector_query {
+            self.last_tab_selector_query = tab_selector_query;
+            self.tab_selector_selected_index = 0;
+        }
 
         if state.messages.len() != self.last_chat_message_count {
             self.chat_list_state.reset(state.messages.len());
@@ -338,6 +691,9 @@ impl Render for TwirChatApp {
                         cx,
                     )),
             )
+            .when(self.tab_selector_open, |el| {
+                el.child(self.render_tab_selector_modal(&state, cx))
+            })
             .child(UpdateToast::new(self.state.clone()))
     }
 }

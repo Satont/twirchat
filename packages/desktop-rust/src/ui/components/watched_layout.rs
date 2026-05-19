@@ -3,7 +3,9 @@ use crate::protocol::types::{
     AppSettings, ChatMessageType, LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode,
     SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
+use crate::ui::chat::build_message_segments;
 use crate::ui::components::input::Input;
+use crate::ui::components::selectable_message::SelectableMessagePart;
 use crate::ui::theme;
 use gpui::{Div, Entity, ImageSource, ObjectFit, Stateful, div, img, prelude::*, px, rgb, rgba};
 use std::collections::BTreeMap;
@@ -575,10 +577,48 @@ fn watched_message_row(
                         .min_w(px(0.0))
                         .text_size(px(settings.font_size as f32))
                         .text_color(theme::text_primary())
-                        .child(message.text.clone()),
+                        .flex()
+                        .flex_row()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(2.0))
+                        .children(render_message_parts(message, is_compact)),
                 ),
         )
         .into_any_element()
+}
+
+fn render_message_parts(
+    message: &crate::protocol::types::NormalizedChatMessage,
+    is_compact: bool,
+) -> Vec<gpui::AnyElement> {
+    build_message_segments(message, is_compact)
+        .into_iter()
+        .map(|part| match part {
+            SelectableMessagePart::Text { text, is_link, .. } => div()
+                .text_color(if is_link {
+                    theme::accent()
+                } else {
+                    theme::text_primary()
+                })
+                .child(text)
+                .into_any_element(),
+            SelectableMessagePart::Emote {
+                emote, is_compact, ..
+            } => {
+                let size = if is_compact { 18.0 } else { 24.0 };
+                div()
+                    .h(px(size))
+                    .child(
+                        img(ImageSource::from(emote.image_url))
+                            .h(px(size))
+                            .w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
+                            .object_fit(ObjectFit::Contain),
+                    )
+                    .into_any_element()
+            }
+        })
+        .collect()
 }
 
 fn watched_composer(

@@ -68,6 +68,16 @@ fn watched_channels_runtime_persists_and_rehydrates() -> Result<(), Box<dyn std:
     let stored = storage.messages().get_recent(Some(5))?;
     assert!(stored.iter().any(|message| message.id == "msg-3"
         && message.emotes.iter().any(|emote| emote.id == "7tv-kekw")));
+    let watched_history = storage.watched_history().get(&twitch.id)?;
+    assert_eq!(watched_history.len(), 2);
+    assert_eq!(watched_history[0].id, "msg-2");
+    assert_eq!(watched_history[1].id, "msg-3");
+    assert!(
+        watched_history[1]
+            .emotes
+            .iter()
+            .any(|emote| emote.id == "7tv-kekw")
+    );
 
     storage
         .settings()
@@ -101,6 +111,15 @@ fn watched_channels_runtime_persists_and_rehydrates() -> Result<(), Box<dyn std:
     assert_eq!(rehydrated_channels.len(), 1);
     assert!(rehydrated.contains_channel(&twitch.id));
     assert_eq!(rehydrated.channel_count(), 1);
+    let rehydrated_messages = rehydrated.get_messages(&twitch.id);
+    assert_eq!(rehydrated_messages.len(), 2);
+    assert_eq!(rehydrated_messages[0].id, "msg-3");
+    assert!(
+        rehydrated_messages[0]
+            .emotes
+            .iter()
+            .any(|emote| emote.id == "7tv-kekw")
+    );
     assert_eq!(
         rehydrate_harness
             .snapshot(Platform::Twitch, "fixturestreamer")

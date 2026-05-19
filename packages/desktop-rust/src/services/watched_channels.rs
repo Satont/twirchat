@@ -600,6 +600,7 @@ impl<'a> WatchedChannelsRuntime<'a> {
         }
 
         self.storage.watched_channels().remove(channel_id)?;
+        self.storage.watched_history().remove(channel_id)?;
         self.storage.watched_layout().remove(channel_id)?;
         self.cleanup_stale_persistence(channel_id)?;
         self.events
@@ -799,7 +800,13 @@ impl<'a> WatchedChannelsRuntime<'a> {
         let entry = WatchedEntry {
             watched_channel: channel,
             adapter,
-            messages: VecDeque::new(),
+            messages: self
+                .storage
+                .watched_history()
+                .get(&channel_id)?
+                .into_iter()
+                .rev()
+                .collect(),
             status: None,
             seven_tv_channel_id: channel_slug.clone(),
             seven_tv_platform_user_id: None,
@@ -902,6 +909,20 @@ impl<'a> WatchedChannelsRuntime<'a> {
             entry.messages.push_front(enriched.clone());
             while entry.messages.len() > self.buffer_size {
                 entry.messages.pop_back();
+            }
+
+            let persisted = entry.messages.iter().rev().cloned().collect::<Vec<_>>();
+            if let Err(error) = self.storage.messages().save(&enriched) {
+                eprintln!(
+                    "[watched/live] failed to persist watched message id={} channel={}: {}",
+                    enriched.id, channel_id, error
+                );
+            }
+            if let Err(error) = self.storage.watched_history().set(channel_id, &persisted) {
+                eprintln!(
+                    "[watched/live] failed to persist watched history channel={}: {}",
+                    channel_id, error
+                );
             }
         }
         self.events

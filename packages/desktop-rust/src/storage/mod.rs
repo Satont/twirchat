@@ -9,6 +9,7 @@ pub mod messages;
 pub mod settings;
 pub mod user_aliases;
 pub mod watched_channels;
+pub mod watched_history;
 pub mod watched_layout;
 
 use db::{Connection, DbError};
@@ -25,6 +26,7 @@ pub use messages::MessageStore;
 pub use settings::SettingsStore;
 pub use user_aliases::UserAliasStore;
 pub use watched_channels::WatchedChannelsStore;
+pub use watched_history::WatchedHistoryStore;
 pub use watched_layout::WatchedLayoutStore;
 
 #[derive(Debug)]
@@ -134,6 +136,10 @@ impl Storage {
 
     pub fn watched_layout(&self) -> WatchedLayoutStore<'_> {
         WatchedLayoutStore::new(&self.conn)
+    }
+
+    pub fn watched_history(&self) -> WatchedHistoryStore<'_> {
+        WatchedHistoryStore::new(&self.conn)
     }
 
     pub fn messages(&self) -> MessageStore<'_> {

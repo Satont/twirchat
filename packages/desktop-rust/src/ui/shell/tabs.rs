@@ -5,20 +5,39 @@ use crate::ui::components::input::Input;
 use crate::ui::theme;
 use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px};
 
+#[derive(Clone)]
+pub(crate) struct TabItem {
+    pub id: String,
+    pub label: String,
+    pub platform: Option<Platform>,
+}
+
+pub(crate) fn items(state: &AppState) -> Vec<TabItem> {
+    let mut tabs = vec![TabItem {
+        id: "home".to_string(),
+        label: "Home".to_string(),
+        platform: None,
+    }];
+    tabs.extend(
+        state
+            .visible_watched_channels()
+            .into_iter()
+            .map(|channel| TabItem {
+                id: channel.id.clone(),
+                label: channel.display_name.clone(),
+                platform: Some(channel.platform),
+            }),
+    );
+    tabs
+}
+
 pub(crate) fn bar(
     state: &AppState,
     state_entity: Entity<AppState>,
     add_channel_input: Entity<Input>,
 ) -> Div {
     let active_id = String::from(state.active_channel_tab_id());
-    let mut tabs = vec![("home".to_string(), "Home".to_string(), None)];
-    tabs.extend(state.watched_channels.iter().map(|channel| {
-        (
-            channel.id.clone(),
-            channel.display_name.clone(),
-            Some(channel.platform),
-        )
-    }));
+    let tabs = items(state);
     let tabs_state_entity = state_entity.clone();
 
     div()
@@ -32,8 +51,11 @@ pub(crate) fn bar(
         .items_end()
         .px(px(8.0))
         .gap(px(2.0))
-        .children(tabs.into_iter().map(move |(id, label, platform)| {
+        .children(tabs.into_iter().map(move |tab| {
             let state_entity = tabs_state_entity.clone();
+            let id = tab.id.clone();
+            let label = tab.label.clone();
+            let platform = tab.platform;
             let is_active = id == active_id;
             let tab_id = id.clone();
             let accent = tab_accent(platform);
