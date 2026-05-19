@@ -1,6 +1,7 @@
 use crate::protocol::rpc::OpenExternalUrlParams;
 use crate::protocol::types::Emote;
 use crate::runtime::{SystemExternalOpener, browser::open_external_url};
+use crate::ui::components::animated_emote;
 use crate::ui::theme;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId, Entity,
@@ -207,7 +208,7 @@ impl SelectableMessage {
 }
 
 impl Render for SelectableMessage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let is_active = cx.read_global(|active: &ActiveChatSelection, _| {
             active.0.as_ref() == Some(&self.message_id)
         });
@@ -216,6 +217,70 @@ impl Render for SelectableMessage {
             self.selection_reversed = false;
             self.is_selecting = false;
             self.mouse_down_index = None;
+        }
+
+        let mut parts = Vec::with_capacity(self.parts.len());
+        for part in self.parts.iter().cloned() {
+            let element = match part {
+                SelectableMessagePart::Text {
+                    text,
+                    source_range,
+                    is_link,
+                } => SelectableTextPartElement::new(cx.entity(), text, source_range, is_link)
+                    .into_any_element(),
+                SelectableMessagePart::Emote {
+                    emote,
+                    source_range,
+                    message_id,
+                    part_index,
+                    is_compact,
+                } => {
+                    let is_selected = ranges_overlap(&self.selected_range, &source_range);
+                    let state = cx.entity();
+                    let focus_handle = self.focus_handle.clone();
+                    div()
+                        .mx(px(1.5))
+                        .h(px(if is_compact { 20.0 } else { 24.0 }))
+                        .min_w(px(if is_compact { 20.0 } else { 24.0 }))
+                        .max_w(px(if is_compact { 20.0 } else { 24.0 }
+                            * emote.aspect_ratio.unwrap_or(1.0) as f32))
+                        .when(is_selected, |el| el.bg(rgba(0x7c3aed55)).rounded_sm())
+                        .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+                            window.focus(&focus_handle, cx);
+                            state.update(cx, |state, cx| {
+                                state.on_mouse_down_at(source_range.start, cx)
+                            });
+                        })
+                        .on_mouse_move({
+                            let state = cx.entity();
+                            let source_range = source_range.clone();
+                            move |_, _, cx| {
+                                state.update(cx, |state, cx| {
+                                    state.on_mouse_move_to(source_range.end, cx)
+                                });
+                            }
+                        })
+                        .on_mouse_up(gpui::MouseButton::Left, {
+                            let state = cx.entity();
+                            let source_range = source_range.clone();
+                            move |_, _, cx| {
+                                state.update(cx, |state, cx| {
+                                    state.on_mouse_up_at(Some(source_range.end), cx)
+                                });
+                            }
+                        })
+                        .child(animated_emote(
+                            format!("emote-{}-{}-{}", message_id, emote.id, part_index),
+                            emote.image_url.clone(),
+                            emote.name.clone(),
+                            window,
+                            cx,
+                        ))
+                        .into_any_element()
+                }
+            };
+
+            parts.push(element);
         }
 
         div()
@@ -232,74 +297,7 @@ impl Render for SelectableMessage {
             .text_size(px(self.font_size))
             .text_color(theme::text_primary())
             .on_action(cx.listener(Self::on_copy))
-            .children(self.parts.iter().cloned().map(|part| {
-                match part {
-                    SelectableMessagePart::Text {
-                        text,
-                        source_range,
-                        is_link,
-                    } => SelectableTextPartElement::new(cx.entity(), text, source_range, is_link)
-                        .into_any_element(),
-                    SelectableMessagePart::Emote {
-                        emote,
-                        source_range,
-                        message_id,
-                        part_index,
-                        is_compact,
-                    } => {
-                        let is_selected = ranges_overlap(&self.selected_range, &source_range);
-                        let state = cx.entity();
-                        let focus_handle = self.focus_handle.clone();
-                        div()
-                            .mx(px(1.5))
-                            .h(px(if is_compact { 20.0 } else { 24.0 }))
-                            .min_w(px(if is_compact { 20.0 } else { 24.0 }))
-                            .max_w(px(if is_compact { 20.0 } else { 24.0 }
-                                * emote.aspect_ratio.unwrap_or(1.0) as f32))
-                            .when(is_selected, |el| el.bg(rgba(0x7c3aed55)).rounded_sm())
-                            .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
-                                window.focus(&focus_handle, cx);
-                                state.update(cx, |state, cx| {
-                                    state.on_mouse_down_at(source_range.start, cx)
-                                });
-                            })
-                            .on_mouse_move({
-                                let state = cx.entity();
-                                let source_range = source_range.clone();
-                                move |_, _, cx| {
-                                    state.update(cx, |state, cx| {
-                                        state.on_mouse_move_to(source_range.end, cx)
-                                    });
-                                }
-                            })
-                            .on_mouse_up(gpui::MouseButton::Left, {
-                                let state = cx.entity();
-                                let source_range = source_range.clone();
-                                move |_, _, cx| {
-                                    state.update(cx, |state, cx| {
-                                        state.on_mouse_up_at(Some(source_range.end), cx)
-                                    });
-                                }
-                            })
-                            .child(
-                                gpui::img(gpui::ImageSource::from(emote.image_url.clone()))
-                                    .id(format!("emote-{}-{}-{}", message_id, emote.id, part_index))
-                                    .h_full()
-                                    .w_full()
-                                    .object_fit(gpui::ObjectFit::Contain)
-                                    .with_loading({
-                                        let name = emote.name.clone();
-                                        move || name.clone().into_any_element()
-                                    })
-                                    .with_fallback({
-                                        let name = emote.name.clone();
-                                        move || name.clone().into_any_element()
-                                    }),
-                            )
-                            .into_any_element()
-                    }
-                }
-            }))
+            .children(parts)
     }
 }
 

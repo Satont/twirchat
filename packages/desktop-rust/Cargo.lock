@@ -6298,9 +6298,11 @@ name = "twirchat-desktop-rust"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "futures",
  "gethostname",
  "gpui",
  "gpui_platform",
+ "image",
  "reqwest",
  "reqwest_client",
  "serde",

@@ -1,3 +1,4 @@
+pub mod animated_emote;
 pub mod button;
 pub mod card;
 pub mod chip;
@@ -13,6 +14,7 @@ pub mod switch;
 pub mod tabs;
 pub mod tooltip;
 
+pub use animated_emote::*;
 pub use button::*;
 pub use card::*;
 pub use chip::*;

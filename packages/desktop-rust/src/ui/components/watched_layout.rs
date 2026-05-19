@@ -1,19 +1,21 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
-    AppSettings, ChatMessageType, LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode,
-    SplitDirection, WatchedChannel, WatchedChannelsLayout,
+    AppSettings, LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection,
+    WatchedChannel, WatchedChannelsLayout,
 };
-use crate::ui::chat::build_message_segments;
+use crate::ui::chat::{MessageRowOptions, message_row};
 use crate::ui::components::input::Input;
-use crate::ui::components::selectable_message::SelectableMessagePart;
+use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
-use gpui::{Div, Entity, ImageSource, ObjectFit, Stateful, div, img, prelude::*, px, rgb, rgba};
+use gpui::{Div, Entity, Stateful, div, prelude::*, px, rgb, rgba};
 use std::collections::BTreeMap;
 
 pub fn tab_panel(
     state: &AppState,
     state_entity: Entity<AppState>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
     let active_tab_id = state.active_channel_tab_id().to_string();
     let layout = state
@@ -34,6 +36,8 @@ pub fn tab_panel(
             state,
             state_entity,
             watched_composer_inputs,
+            window,
+            cx,
         ))
 }
 
@@ -42,6 +46,8 @@ fn render_layout(
     state: &AppState,
     state_entity: Entity<AppState>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
     div()
         .flex_1()
@@ -54,6 +60,8 @@ fn render_layout(
             state,
             state_entity,
             watched_composer_inputs,
+            window,
+            cx,
         ))
 }
 
@@ -62,6 +70,8 @@ fn render_node(
     state: &AppState,
     state_entity: Entity<AppState>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<TwirChatApp>,
 ) -> Stateful<Div> {
     match node {
         LayoutNode::Panel { id, content, .. } => {
@@ -77,6 +87,8 @@ fn render_node(
                     state_entity,
                     channel_id,
                     watched_composer_inputs.get(channel_id).cloned(),
+                    window,
+                    cx,
                 ),
                 PanelContent::Empty => empty_panel(
                     state_entity,
@@ -113,9 +125,19 @@ fn render_node(
                 container.flex_col()
             };
 
-            container.children(children.iter().map(|child| {
-                render_node(child, state, state_entity.clone(), watched_composer_inputs)
-            }))
+            let mut child_elements = Vec::with_capacity(children.len());
+            for child in children {
+                child_elements.push(render_node(
+                    child,
+                    state,
+                    state_entity.clone(),
+                    watched_composer_inputs,
+                    window,
+                    cx,
+                ));
+            }
+
+            container.children(child_elements)
         }
     }
 }
@@ -125,6 +147,8 @@ fn watched_panel(
     state_entity: Entity<AppState>,
     channel_id: &str,
     composer_input: Option<Entity<Input>>,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
     let settings = state.settings().clone();
     let channel = state
@@ -262,7 +286,7 @@ fn watched_panel(
                 } else {
                     messages
                         .into_iter()
-                        .map(|message| watched_message_row(&message, &settings))
+                        .map(|message| watched_message_row(&message, &settings, window, cx))
                         .collect::<Vec<_>>()
                 }),
         )
@@ -384,241 +408,17 @@ fn collect_panel_messages(
 fn watched_message_row(
     message: &crate::protocol::types::NormalizedChatMessage,
     settings: &AppSettings,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<TwirChatApp>,
 ) -> gpui::AnyElement {
-    let is_compact = settings.chat_theme == crate::protocol::types::ChatTheme::Compact;
-    let v_pad = if is_compact { 1.0 } else { 2.0 };
-
-    if message.message_type == ChatMessageType::System {
-        return div()
-            .w_full()
-            .px(px(14.0))
-            .py(px(v_pad))
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .w(px(17.0))
-                    .h(px(17.0))
-                    .rounded_full()
-                    .bg(rgba(0x4ade8026))
-                    .text_color(rgb(0x4ade80))
-                    .text_size(px(12.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .child("~"),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .text_size(px(settings.font_size as f32))
-                    .text_color(theme::text_muted())
-                    .child(message.text.clone()),
-            )
-            .when(settings.show_timestamp, |el| {
-                el.child(
-                    div()
-                        .text_size(px(10.0))
-                        .text_color(theme::text_muted())
-                        .child(message.timestamp.clone()),
-                )
-            })
-            .into_any_element();
-    }
-
-    div()
-        .w_full()
-        .px(px(14.0))
-        .py(px(v_pad))
-        .flex()
-        .flex_row()
-        .items_start()
-        .gap(px(8.0))
-        .relative()
-        .hover(|s| s.bg(rgba(0xffffff06)))
-        .when(settings.show_avatars, |el| {
-            let avatar_url = message.author.avatar_url.clone();
-            let fallback = message
-                .author
-                .display_name
-                .chars()
-                .next()
-                .unwrap_or('?')
-                .to_uppercase()
-                .to_string();
-            el.child(
-                div()
-                    .w(px(if is_compact { 22.0 } else { 26.0 }))
-                    .h(px(if is_compact { 22.0 } else { 26.0 }))
-                    .rounded_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .bg(rgb(0x8b8b99))
-                    .text_color(theme::text_primary())
-                    .text_size(px(if is_compact { 9.0 } else { 10.0 }))
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .overflow_hidden()
-                    .when_some(avatar_url.clone(), |avatar, url| {
-                        avatar.child(
-                            img(ImageSource::from(url))
-                                .w_full()
-                                .h_full()
-                                .rounded_full()
-                                .object_fit(ObjectFit::Cover)
-                                .with_loading({
-                                    let fallback = fallback.clone();
-                                    move || fallback.clone().into_any_element()
-                                })
-                                .with_fallback({
-                                    let fallback = fallback.clone();
-                                    move || fallback.clone().into_any_element()
-                                }),
-                        )
-                    })
-                    .when(avatar_url.is_none(), |avatar| {
-                        avatar.child(fallback.clone())
-                    }),
-            )
-        })
-        .child(
-            div()
-                .flex_1()
-                .w_full()
-                .min_w(px(0.0))
-                .flex()
-                .flex_col()
-                .gap(px(2.0))
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(5.0))
-                        .flex_wrap()
-                        .when(settings.show_badges, |el| {
-                            el.children(message.author.badges.iter().enumerate().map(
-                                |(index, badge)| {
-                                    if let Some(path) = badge
-                                        .image_url
-                                        .as_ref()
-                                        .filter(|url| std::path::Path::new(url).is_absolute())
-                                    {
-                                        return div()
-                                            .w(px(14.0))
-                                            .h(px(14.0))
-                                            .rounded_sm()
-                                            .overflow_hidden()
-                                            .child(
-                                                img(ImageSource::from(std::path::Path::new(path)))
-                                                    .id(format!(
-                                                        "watched-badge-{}-{}-{}",
-                                                        message.id, badge.id, index
-                                                    ))
-                                                    .w_full()
-                                                    .h_full()
-                                                    .object_fit(ObjectFit::Contain),
-                                            );
-                                    }
-
-                                    if let Some(url) = badge.image_url.as_ref().filter(|url| {
-                                        url.starts_with("http://") || url.starts_with("https://")
-                                    }) {
-                                        div()
-                                            .w(px(14.0))
-                                            .h(px(14.0))
-                                            .rounded_sm()
-                                            .overflow_hidden()
-                                            .child(
-                                                img(ImageSource::from(url.clone()))
-                                                    .id(format!(
-                                                        "watched-badge-{}-{}-{}",
-                                                        message.id, badge.id, index
-                                                    ))
-                                                    .w_full()
-                                                    .h_full()
-                                                    .object_fit(ObjectFit::Contain),
-                                            )
-                                    } else {
-                                        div()
-                                            .rounded_sm()
-                                            .px(px(4.0))
-                                            .py(px(1.0))
-                                            .bg(rgba(0xffffff1a))
-                                            .text_color(theme::text_primary())
-                                            .text_size(px(10.0))
-                                            .child(badge.text.clone())
-                                    }
-                                },
-                            ))
-                        })
-                        .child(
-                            div()
-                                .text_color(theme::accent())
-                                .text_size(px(12.0))
-                                .font_weight(gpui::FontWeight::BOLD)
-                                .child(message.author.display_name.clone()),
-                        )
-                        .when(settings.show_timestamp, |el| {
-                            el.child(
-                                div()
-                                    .text_size(px(9.0))
-                                    .text_color(theme::text_muted())
-                                    .child(message.timestamp.clone()),
-                            )
-                        }),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .min_w(px(0.0))
-                        .text_size(px(settings.font_size as f32))
-                        .text_color(theme::text_primary())
-                        .flex()
-                        .flex_row()
-                        .flex_wrap()
-                        .items_center()
-                        .gap(px(2.0))
-                        .children(render_message_parts(message, is_compact)),
-                ),
-        )
-        .into_any_element()
-}
-
-fn render_message_parts(
-    message: &crate::protocol::types::NormalizedChatMessage,
-    is_compact: bool,
-) -> Vec<gpui::AnyElement> {
-    build_message_segments(message, is_compact)
-        .into_iter()
-        .map(|part| match part {
-            SelectableMessagePart::Text { text, is_link, .. } => div()
-                .text_color(if is_link {
-                    theme::accent()
-                } else {
-                    theme::text_primary()
-                })
-                .child(text)
-                .into_any_element(),
-            SelectableMessagePart::Emote {
-                emote, is_compact, ..
-            } => {
-                let size = if is_compact { 18.0 } else { 24.0 };
-                div()
-                    .h(px(size))
-                    .child(
-                        img(ImageSource::from(emote.image_url))
-                            .h(px(size))
-                            .w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
-                            .object_fit(ObjectFit::Contain),
-                    )
-                    .into_any_element()
-            }
-        })
-        .collect()
+    message_row(
+        message,
+        settings,
+        &[],
+        window,
+        cx,
+        MessageRowOptions::watched(),
+    )
 }
 
 fn watched_composer(

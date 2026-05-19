@@ -66,6 +66,8 @@ pub(crate) fn panel(
                         state,
                         props.state_entity.clone(),
                         &props.watched_composer_inputs,
+                        window,
+                        cx,
                     )
                     .mt(px(40.0))
                     .into_any_element()

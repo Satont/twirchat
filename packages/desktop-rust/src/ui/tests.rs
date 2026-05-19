@@ -97,6 +97,22 @@ fn gpui_images_use_loading_and_fallback_contracts() {
 }
 
 #[test]
+fn animated_emote_component_drives_unfocused_redraw_contract() {
+    let animated_emote_rs = fs::read_to_string("src/ui/components/animated_emote.rs")
+        .expect("should read animated_emote.rs");
+    let selectable_message_rs = fs::read_to_string("src/ui/components/selectable_message.rs")
+        .expect("should read selectable_message.rs");
+    let watched_layout_rs = fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+
+    assert!(animated_emote_rs.contains("window.request_animation_frame()"));
+    assert!(animated_emote_rs.contains("ImageSource::Render"));
+    assert!(animated_emote_rs.contains("animated_emote_cache"));
+    assert!(selectable_message_rs.contains("animated_emote("));
+    assert!(watched_layout_rs.contains("MessageRowOptions::watched()"));
+}
+
+#[test]
 fn chat_platform_icons_and_badges_match_parity_contract() {
     let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
     let adapter_rs =

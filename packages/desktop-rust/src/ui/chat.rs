@@ -1,6 +1,6 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
-    Account, AppSettings, ChatMessageType, ChatTheme, NormalizedChatMessage, Platform,
+    Account, AppSettings, ChatMessageType, ChatTheme, Emote, NormalizedChatMessage, Platform,
     PlatformStatus,
 };
 use crate::ui::components::input::Input;
@@ -56,8 +56,15 @@ pub(crate) fn panel(
                 .vertical_scrollbar_for(props.scroll_ui.list_state, window, cx)
                 .child(
                     list(props.scroll_ui.list_state.clone(), move |ix, window, cx| {
-                        message_row(&messages[ix], &settings, &accounts, window, cx)
-                            .into_any_element()
+                        message_row(
+                            &messages[ix],
+                            &settings,
+                            &accounts,
+                            window,
+                            cx,
+                            MessageRowOptions::home(),
+                        )
+                        .into_any_element()
                     })
                     .with_sizing_behavior(ListSizingBehavior::Auto)
                     .size_full(),
@@ -962,12 +969,60 @@ fn add_channel_placeholder(platform: Platform) -> &'static str {
 }
 
 #[allow(dead_code)]
-fn message_row(
+pub(crate) struct MessageRowOptions {
+    show_platform_stripe: bool,
+    show_platform_icon: bool,
+    use_account_avatar_fallback: bool,
+    use_author_fallback: bool,
+}
+
+impl MessageRowOptions {
+    pub(crate) const fn home() -> Self {
+        Self {
+            show_platform_stripe: true,
+            show_platform_icon: true,
+            use_account_avatar_fallback: true,
+            use_author_fallback: true,
+        }
+    }
+
+    pub(crate) const fn watched() -> Self {
+        Self {
+            show_platform_stripe: false,
+            show_platform_icon: false,
+            use_account_avatar_fallback: false,
+            use_author_fallback: false,
+        }
+    }
+}
+
+fn author_label_text(message: &NormalizedChatMessage, use_fallback: bool) -> String {
+    let display_name = message.author.display_name.trim();
+    if !display_name.is_empty() {
+        return display_name.to_string();
+    }
+
+    if use_fallback {
+        if let Some(username) = &message.author.username {
+            let username = username.trim();
+            if !username.is_empty() {
+                return username.to_string();
+            }
+        }
+
+        return message.author.id.clone();
+    }
+
+    display_name.to_string()
+}
+
+pub(crate) fn message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
     accounts: &[Account],
     window: &mut Window,
     cx: &mut App,
+    options: MessageRowOptions,
 ) -> AnyElement {
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
@@ -1037,40 +1092,30 @@ fn message_row(
         .gap(px(8.0))
         .relative()
         .hover(|s| s.bg(rgba(0xffffff06))) // 0.025 * 255 = 6.375
-        .when(settings.show_platform_color_stripe, |el| {
-            el.child(
-                div()
-                    .absolute()
-                    .left(px(0.0))
-                    .top(px(4.0))
-                    .bottom(px(4.0))
-                    .w(px(2.0))
-                    .rounded_sm()
-                    .bg(theme::platform_color(to_model_platform(message.platform))),
-            )
-        })
+        .when(
+            settings.show_platform_color_stripe && options.show_platform_stripe,
+            |el| {
+                el.child(
+                    div()
+                        .absolute()
+                        .left(px(0.0))
+                        .top(px(4.0))
+                        .bottom(px(4.0))
+                        .w(px(2.0))
+                        .rounded_sm()
+                        .bg(theme::platform_color(to_model_platform(message.platform))),
+                )
+            },
+        )
         .when(settings.show_avatars, |el| {
-            let avatar_url = message
-                .author
-                .avatar_url
-                .clone()
-                .or_else(|| account_avatar_for_message(message, accounts));
-            let fallback_name = {
-                let dn = message.author.display_name.trim();
-                if !dn.is_empty() {
-                    dn
-                } else if let Some(un) = &message.author.username {
-                    let un = un.trim();
-                    if !un.is_empty() {
-                        un
-                    } else {
-                        &message.author.id
-                    }
+            let avatar_url = message.author.avatar_url.clone().or_else(|| {
+                if options.use_account_avatar_fallback {
+                    account_avatar_for_message(message, accounts)
                 } else {
-                    &message.author.id
+                    None
                 }
-            };
-            let fallback = fallback_name
+            });
+            let fallback = author_label_text(message, options.use_author_fallback)
                 .chars()
                 .next()
                 .unwrap_or('?')
@@ -1127,15 +1172,18 @@ fn message_row(
                         .items_center()
                         .gap(px(5.0))
                         .flex_wrap()
-                        .when(settings.show_platform_icon, |el| {
-                            el.child(
-                                PlatformIcon::new(to_model_platform(message.platform))
-                                    .size(px(12.0))
-                                    .color(theme::platform_color(to_model_platform(
-                                        message.platform,
-                                    ))),
-                            )
-                        })
+                        .when(
+                            settings.show_platform_icon && options.show_platform_icon,
+                            |el| {
+                                el.child(
+                                    PlatformIcon::new(to_model_platform(message.platform))
+                                        .size(px(12.0))
+                                        .color(theme::platform_color(to_model_platform(
+                                            message.platform,
+                                        ))),
+                                )
+                            },
+                        )
                         .when(settings.show_badges, |el| {
                             el.children(message.author.badges.iter().enumerate().map(
                                 |(index, badge)| {
@@ -1197,21 +1245,7 @@ fn message_row(
                                 .text_color(theme::accent())
                                 .text_size(px(12.0))
                                 .font_weight(gpui::FontWeight::BOLD)
-                                .child({
-                                    let dn = message.author.display_name.trim();
-                                    if !dn.is_empty() {
-                                        dn.to_string()
-                                    } else if let Some(un) = &message.author.username {
-                                        let un = un.trim();
-                                        if !un.is_empty() {
-                                            un.to_string()
-                                        } else {
-                                            message.author.id.clone()
-                                        }
-                                    } else {
-                                        message.author.id.clone()
-                                    }
-                                }),
+                                .child(author_label_text(message, options.use_author_fallback)),
                         )
                         .when(settings.show_timestamp, |el| {
                             el.child(
@@ -1431,18 +1465,31 @@ fn push_text_segment_with_range(
         return;
     }
 
-    if !is_link
-        && let Some(TextSegmentWithRange {
-            text: existing,
-            is_link: false,
-            ..
-        }) = parts.last_mut()
-    {
-        existing.push_str(&text);
+    if is_link {
+        parts.push(TextSegmentWithRange { text, is_link });
         return;
     }
 
-    parts.push(TextSegmentWithRange { text, is_link });
+    let mut segment_start = 0;
+    let mut previous_is_whitespace = text.chars().next().is_some_and(char::is_whitespace);
+
+    for (index, ch) in text.char_indices().skip(1) {
+        let is_whitespace = ch.is_whitespace();
+        if previous_is_whitespace && !is_whitespace {
+            parts.push(TextSegmentWithRange {
+                text: text[segment_start..index].to_string(),
+                is_link: false,
+            });
+            segment_start = index;
+        }
+
+        previous_is_whitespace = is_whitespace;
+    }
+
+    parts.push(TextSegmentWithRange {
+        text: text[segment_start..].to_string(),
+        is_link: false,
+    });
 }
 
 fn char_index_to_byte_offset(text: &str, char_index: usize) -> Option<usize> {
@@ -1654,32 +1701,183 @@ fn popover_btn(
         .on_mouse_down(gpui::MouseButton::Left, on_click)
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum TextSegment {
+    Text(String),
+    Link(String),
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum MessagePart {
+    Text(String),
+    Link(String),
+    Emote(Emote),
+}
+
+#[allow(dead_code)]
+pub(crate) fn build_text_segments(text: &str) -> Vec<TextSegment> {
+    let mut parts = Vec::new();
+    let mut cursor = 0;
+    let mut pending_text = String::new();
+
+    while let Some(start) = find_next_url_start(text, cursor) {
+        let end = find_url_end(text, start);
+        let candidate = &text[start..end];
+        let trimmed_len = trim_trailing_link_punctuation(candidate);
+
+        if cursor < start
+            && let Some(content) = text.get(cursor..start)
+        {
+            let mut merged = core::mem::take(&mut pending_text);
+            merged.push_str(content);
+            parts.push(TextSegment::Text(merged));
+        }
+
+        let link_text = &candidate[..trimmed_len];
+        if is_valid_http_link(link_text) {
+            parts.push(TextSegment::Link(link_text.to_string()));
+        } else {
+            parts.push(TextSegment::Text(link_text.to_string()));
+        }
+
+        if trimmed_len < candidate.len()
+            && let Some(content) = candidate.get(trimmed_len..)
+        {
+            pending_text.push_str(content);
+        }
+
+        cursor = end;
+    }
+
+    if cursor < text.len()
+        && let Some(content) = text.get(cursor..)
+    {
+        let mut merged = core::mem::take(&mut pending_text);
+        merged.push_str(content);
+        parts.push(TextSegment::Text(merged));
+    }
+
+    if !pending_text.is_empty() {
+        parts.push(TextSegment::Text(pending_text));
+    }
+
+    if parts.is_empty() {
+        parts.push(TextSegment::Text(text.to_string()));
+    }
+
+    parts
+}
+
+#[allow(dead_code)]
+pub(crate) fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
+    if message.emotes.is_empty() {
+        return build_text_segments(&message.text)
+            .into_iter()
+            .map(|segment| match segment {
+                TextSegment::Text(text) => MessagePart::Text(text),
+                TextSegment::Link(text) => MessagePart::Link(text),
+            })
+            .collect();
+    }
+
+    let mut ranges = Vec::new();
+    for emote in &message.emotes {
+        for position in &emote.positions {
+            let Some((start, end)) = normalize_emote_range(
+                &message.text,
+                position.start as usize,
+                position.end as usize,
+            ) else {
+                continue;
+            };
+            ranges.push((start, end, emote.clone()));
+        }
+    }
+    ranges.sort_by_key(|(start, _, _)| *start);
+
+    let mut parts = Vec::new();
+    let mut index = 0;
+    for (start, end, emote) in ranges {
+        if start < index || start > message.text.len() {
+            continue;
+        }
+
+        let end = end.min(message.text.len());
+        if index < start
+            && let Some(text) = message.text.get(index..start)
+        {
+            parts.extend(
+                build_text_segments(text)
+                    .into_iter()
+                    .map(|segment| match segment {
+                        TextSegment::Text(text) => MessagePart::Text(text),
+                        TextSegment::Link(text) => MessagePart::Link(text),
+                    }),
+            );
+        }
+
+        parts.push(MessagePart::Emote(emote));
+        index = end;
+    }
+
+    if index < message.text.len()
+        && let Some(text) = message.text.get(index..)
+    {
+        parts.extend(
+            build_text_segments(text)
+                .into_iter()
+                .map(|segment| match segment {
+                    TextSegment::Text(text) => MessagePart::Text(text),
+                    TextSegment::Link(text) => MessagePart::Link(text),
+                }),
+        );
+    }
+
+    if parts.is_empty() {
+        parts.extend(
+            build_text_segments(&message.text)
+                .into_iter()
+                .map(|segment| match segment {
+                    TextSegment::Text(text) => MessagePart::Text(text),
+                    TextSegment::Link(text) => MessagePart::Link(text),
+                }),
+        );
+    }
+
+    parts
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MessagePart, TextSegment, build_message_parts, build_text_segments};
+    use super::SelectableMessagePart;
     use crate::protocol::types::{
         ChatAuthor, ChatMessageType, Emote, EmotePosition, NormalizedChatMessage, Platform,
     };
 
     #[test]
     fn build_text_segments_extracts_links_without_swallowing_punctuation() {
-        let parts = build_text_segments("go https://example.com, now");
+        let parts = super::build_text_segments("go https://example.com, now");
 
         assert_eq!(parts.len(), 3);
-        assert!(matches!(&parts[0], TextSegment::Text(text) if text == "go "));
+        assert!(matches!(&parts[0], super::TextSegment::Text(text) if text == "go "));
         assert!(matches!(
             &parts[1],
-            TextSegment::Link(text) if text == "https://example.com"
+            super::TextSegment::Link(text) if text == "https://example.com"
         ));
-        assert!(matches!(&parts[2], TextSegment::Text(text) if text == ", now"));
+        assert!(matches!(&parts[2], super::TextSegment::Text(text) if text == ", now"));
     }
 
     #[test]
     fn build_text_segments_keeps_plain_text_without_links() {
-        let parts = build_text_segments("hello world");
+        let parts = super::build_text_segments("hello world");
 
         assert_eq!(parts.len(), 1);
-        assert!(matches!(&parts[0], TextSegment::Text(text) if text == "hello world"));
+        assert!(matches!(
+            &parts[0],
+            super::TextSegment::Text(text) if text == "hello world"
+        ));
     }
 
     #[test]
@@ -1703,11 +1901,14 @@ mod tests {
             reply: None,
         };
 
-        let parts = build_message_parts(&message);
+        let parts = super::build_message_parts(&message);
 
         assert_eq!(parts.len(), 2);
-        assert!(matches!(&parts[0], MessagePart::Text(text) if text == "Tg: "));
-        assert!(matches!(&parts[1], MessagePart::Link(text) if text == "https://t.me/satontdev"));
+        assert!(matches!(&parts[0], super::MessagePart::Text(text) if text == "Tg: "));
+        assert!(matches!(
+            &parts[1],
+            super::MessagePart::Link(text) if text == "https://t.me/satontdev"
+        ));
     }
 
     #[test]
@@ -1737,18 +1938,18 @@ mod tests {
             reply: None,
         };
 
-        let parts = build_message_parts(&message);
+        let parts = super::build_message_parts(&message);
 
         assert_eq!(parts.len(), 4);
-        assert!(matches!(&parts[0], MessagePart::Text(text) if text == "А "));
-        assert!(matches!(&parts[1], MessagePart::Emote(emote) if emote.name == "che"));
+        assert!(matches!(&parts[0], super::MessagePart::Text(text) if text == "А "));
+        assert!(matches!(&parts[1], super::MessagePart::Emote(emote) if emote.name == "che"));
         assert!(matches!(
             &parts[2],
-            MessagePart::Text(text) if text == " они так и не пофиксили эту хуйню? "
+            super::MessagePart::Text(text) if text == " они так и не пофиксили эту хуйню? "
         ));
         assert!(matches!(
             &parts[3],
-            MessagePart::Link(text) if text == "https://al4.dev/6wYTrB"
+            super::MessagePart::Link(text) if text == "https://al4.dev/6wYTrB"
         ));
     }
 
@@ -1779,18 +1980,60 @@ mod tests {
             reply: None,
         };
 
-        let parts = build_message_parts(&message);
+        let parts = super::build_message_parts(&message);
 
         assert_eq!(parts.len(), 4);
-        assert!(matches!(&parts[0], MessagePart::Text(text) if text == "А "));
-        assert!(matches!(&parts[1], MessagePart::Emote(emote) if emote.name == "che"));
+        assert!(matches!(&parts[0], super::MessagePart::Text(text) if text == "А "));
+        assert!(matches!(&parts[1], super::MessagePart::Emote(emote) if emote.name == "che"));
         assert!(matches!(
             &parts[2],
-            MessagePart::Text(text) if text == " они так и не пофиксили эту хуйню? "
+            super::MessagePart::Text(text) if text == " они так и не пофиксили эту хуйню? "
         ));
         assert!(matches!(
             &parts[3],
-            MessagePart::Link(text) if text == "https://al4.dev/6wYTrB"
+            super::MessagePart::Link(text) if text == "https://al4.dev/6wYTrB"
+        ));
+    }
+
+    #[test]
+    fn build_message_segments_splits_plain_text_for_wrapping() {
+        let message = NormalizedChatMessage {
+            id: "message-3".into(),
+            platform: Platform::Kick,
+            channel_id: "channel-1".into(),
+            author: ChatAuthor {
+                id: "author-1".into(),
+                username: Some("satont".into()),
+                display_name: "Satont".into(),
+                color: None,
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text: "hello world".into(),
+            emotes: Vec::new(),
+            timestamp: "2026-05-18T21:08:48.000Z".into(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        };
+
+        let parts = super::build_message_segments(&message, false);
+
+        assert_eq!(parts.len(), 2);
+        assert!(matches!(
+            &parts[0],
+            SelectableMessagePart::Text {
+                text,
+                source_range,
+                is_link: false,
+            } if text == "hello " && source_range.start == 0 && source_range.end == 6
+        ));
+        assert!(matches!(
+            &parts[1],
+            SelectableMessagePart::Text {
+                text,
+                source_range,
+                is_link: false,
+            } if text == "world" && source_range.start == 6 && source_range.end == 11
         ));
     }
 }
