@@ -21,7 +21,6 @@ pub(crate) struct ChatScrollUi<'a> {
     pub list_state: &'a ListState,
     pub paused: bool,
 }
-
 pub(crate) struct ChatPanelProps<'a> {
     pub state_entity: Entity<AppState>,
     pub composer_input: Entity<Input>,
@@ -169,270 +168,35 @@ fn header(message_count: usize, state: &AppState, state_entity: Entity<AppState>
                                 .relative()
                                 .child(
                                     panel_action_btn("⚙", true)
-                                        .bg(if state.chat_appearance_popover_open {
-                                            gpui::rgba(0x2a2a33ff)
-                                        } else {
-                                            gpui::rgba(0x00000000)
-                                        })
+                                        .bg(
+                                            if state.chat_appearance_popover_open.as_deref()
+                                                == Some("home")
+                                            {
+                                                gpui::rgba(0x2a2a33ff)
+                                            } else {
+                                                gpui::rgba(0x00000000)
+                                            },
+                                        )
                                         .on_click({
                                             let state_entity = state_entity.clone();
                                             move |_event, _window, cx| {
                                                 eprintln!("[ui/chat] appearance popover clicked");
                                                 state_entity.update(cx, |state, cx| {
-                                                    state.toggle_chat_appearance_popover();
+                                                    state.toggle_chat_appearance_popover("home");
                                                     cx.notify();
                                                 });
                                             }
                                         }),
                                 )
-                                .when(state.chat_appearance_popover_open, |el| {
-                                    let settings = state.settings().clone();
-                                    el.child(
-                                        div()
-                                            .absolute()
-                                            .top(px(32.0))
-                                            .right(px(0.0))
-                                            .w(px(240.0))
-                                            .bg(theme::surface())
-                                            .border_1()
-                                            .border_color(theme::border())
-                                            .rounded_lg()
-                                            .shadow_md()
-                                            .p(px(8.0))
-                                            .flex()
-                                            .flex_col()
-                                            .gap(px(4.0))
-                                            .child(
-                                                div()
-                                                    .text_size(px(14.0))
-                                                    .font_weight(gpui::FontWeight::BOLD)
-                                                    .text_color(theme::text_primary())
-                                                    .child("Appearance") // ChatAppearancePopover
-                                                    .mb(px(4.0)),
-                                            )
-                                            .child(popover_row(
-                                                "Density",
-                                                div()
-                                                    .flex()
-                                                    .flex_row()
-                                                    .border_1()
-                                                    .border_color(theme::border())
-                                                    .rounded_md()
-                                                    .overflow_hidden()
-                                                    .child(
-                                                        div()
-                                                            .px(px(8.0))
-                                                            .py(px(2.0))
-                                                            .text_size(px(12.0))
-                                                            .bg(
-                                                                if settings.chat_theme
-                                                                    == ChatTheme::Modern
-                                                                {
-                                                                    theme::surface_2()
-                                                                } else {
-                                                                    gpui::rgba(0x00000000)
-                                                                },
-                                                            )
-                                                            .text_color(
-                                                                if settings.chat_theme
-                                                                    == ChatTheme::Modern
-                                                                {
-                                                                    theme::text_primary()
-                                                                } else {
-                                                                    theme::text_muted()
-                                                                },
-                                                            )
-                                                            .cursor_pointer()
-                                                            .child("Modern")
-                                                            .on_mouse_down(
-                                                                gpui::MouseButton::Left,
-                                                                {
-                                                                    let state_entity =
-                                                                        state_entity.clone();
-                                                                    move |_, _, cx| {
-                                                                        state_entity.set_chat_theme(
-                                                                            cx,
-                                                                            ChatTheme::Modern,
-                                                                        )
-                                                                    }
-                                                                },
-                                                            ),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .px(px(8.0))
-                                                            .py(px(2.0))
-                                                            .text_size(px(12.0))
-                                                            .bg(
-                                                                if settings.chat_theme
-                                                                    == ChatTheme::Compact
-                                                                {
-                                                                    theme::surface_2()
-                                                                } else {
-                                                                    gpui::rgba(0x00000000)
-                                                                },
-                                                            )
-                                                            .text_color(
-                                                                if settings.chat_theme
-                                                                    == ChatTheme::Compact
-                                                                {
-                                                                    theme::text_primary()
-                                                                } else {
-                                                                    theme::text_muted()
-                                                                },
-                                                            )
-                                                            .cursor_pointer()
-                                                            .child("Compact")
-                                                            .on_mouse_down(
-                                                                gpui::MouseButton::Left,
-                                                                {
-                                                                    let state_entity =
-                                                                        state_entity.clone();
-                                                                    move |_, _, cx| {
-                                                                        state_entity.set_chat_theme(
-                                                                            cx,
-                                                                            ChatTheme::Compact,
-                                                                        )
-                                                                    }
-                                                                },
-                                                            ),
-                                                    ),
-                                            ))
-                                            .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                                            .child(popover_row(
-                                                "Font Size",
-                                                div()
-                                                    .flex()
-                                                    .flex_row()
-                                                    .items_center()
-                                                    .gap(px(8.0))
-                                                    .child(
-                                                        div()
-                                                            .w(px(20.0))
-                                                            .h(px(20.0))
-                                                            .rounded_sm()
-                                                            .bg(theme::surface_2())
-                                                            .flex()
-                                                            .items_center()
-                                                            .justify_center()
-                                                            .text_color(theme::text_primary())
-                                                            .cursor_pointer()
-                                                            .child("-")
-                                                            .on_mouse_down(
-                                                                gpui::MouseButton::Left,
-                                                                {
-                                                                    let state_entity =
-                                                                        state_entity.clone();
-                                                                    let fs = settings.font_size;
-                                                                    move |_, _, cx| {
-                                                                        state_entity.set_font_size(
-                                                                            cx,
-                                                                            (fs - 1.0).max(10.0),
-                                                                        )
-                                                                    }
-                                                                },
-                                                            ),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(12.0))
-                                                            .text_color(theme::text_primary())
-                                                            .child(format!(
-                                                                "{}px",
-                                                                settings.font_size
-                                                            )),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .w(px(20.0))
-                                                            .h(px(20.0))
-                                                            .rounded_sm()
-                                                            .bg(theme::surface_2())
-                                                            .flex()
-                                                            .items_center()
-                                                            .justify_center()
-                                                            .text_color(theme::text_primary())
-                                                            .cursor_pointer()
-                                                            .child("+")
-                                                            .on_mouse_down(
-                                                                gpui::MouseButton::Left,
-                                                                {
-                                                                    let state_entity =
-                                                                        state_entity.clone();
-                                                                    let fs = settings.font_size;
-                                                                    move |_, _, cx| {
-                                                                        state_entity.set_font_size(
-                                                                            cx,
-                                                                            (fs + 1.0).min(30.0),
-                                                                        )
-                                                                    }
-                                                                },
-                                                            ),
-                                                    ),
-                                            ))
-                                            .child(div().w_full().h(px(1.0)).bg(theme::border()))
-                                            .child(popover_row(
-                                                "Show Avatars",
-                                                Switch::new(settings.show_avatars).on_click({
-                                                    let state_entity = state_entity.clone();
-                                                    let current = settings.show_avatars;
-                                                    move |_, _, cx| {
-                                                        state_entity.set_show_avatars(cx, !current)
-                                                    }
-                                                }),
-                                            ))
-                                            .child(popover_row(
-                                                "Show Badges",
-                                                Switch::new(settings.show_badges).on_click({
-                                                    let state_entity = state_entity.clone();
-                                                    let current = settings.show_badges;
-                                                    move |_, _, cx| {
-                                                        state_entity.set_show_badges(cx, !current)
-                                                    }
-                                                }),
-                                            ))
-                                            .child(popover_row(
-                                                "Platform Icon",
-                                                Switch::new(settings.show_platform_icon).on_click(
-                                                    {
-                                                        let state_entity = state_entity.clone();
-                                                        let current = settings.show_platform_icon;
-                                                        move |_, _, cx| {
-                                                            state_entity.set_show_platform_icon(
-                                                                cx, !current,
-                                                            )
-                                                        }
-                                                    },
-                                                ),
-                                            ))
-                                            .child(popover_row(
-                                                "Timestamp",
-                                                Switch::new(settings.show_timestamp).on_click({
-                                                    let state_entity = state_entity.clone();
-                                                    let current = settings.show_timestamp;
-                                                    move |_, _, cx| {
-                                                        state_entity
-                                                            .set_show_timestamp(cx, !current)
-                                                    }
-                                                }),
-                                            ))
-                                            .child(popover_row(
-                                                "Platform Stripe",
-                                                Switch::new(settings.show_platform_color_stripe)
-                                                    .on_click({
-                                                        let state_entity = state_entity.clone();
-                                                        let current =
-                                                            settings.show_platform_color_stripe;
-                                                        move |_, _, cx| {
-                                                            state_entity
-                                                                .set_show_platform_color_stripe(
-                                                                    cx, !current,
-                                                                )
-                                                        }
-                                                    }),
-                                            )),
-                                    )
-                                }),
+                                .when(
+                                    state.chat_appearance_popover_open.as_deref() == Some("home"),
+                                    |el| {
+                                        el.child(render_appearance_popover(
+                                            state_entity.clone(),
+                                            state.settings().clone(),
+                                        ))
+                                    },
+                                ),
                         )
                         .child(
                             div()
@@ -1895,6 +1659,180 @@ pub(crate) fn build_message_parts(message: &NormalizedChatMessage) -> Vec<Messag
     }
 
     parts
+}
+
+pub fn render_appearance_popover(
+    state_entity: Entity<crate::app_state::AppState>,
+    settings: crate::protocol::AppSettings,
+) -> impl IntoElement {
+    div()
+        .absolute()
+        .top(px(32.0))
+        .right(px(0.0))
+        .w(px(240.0))
+        .bg(theme::surface())
+        .border_1()
+        .border_color(theme::border())
+        .rounded_lg()
+        .shadow_md()
+        .p(px(8.0))
+        .flex()
+        .flex_col()
+        .gap(px(4.0))
+        .child(
+            div()
+                .text_size(px(14.0))
+                .font_weight(gpui::FontWeight::BOLD)
+                .text_color(theme::text_primary())
+                .child("Appearance")
+                .mb(px(4.0)),
+        )
+        .child(popover_row(
+            "Density",
+            div()
+                .flex()
+                .flex_row()
+                .border_1()
+                .border_color(theme::border())
+                .rounded_md()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .px(px(8.0))
+                        .py(px(2.0))
+                        .text_size(px(12.0))
+                        .bg(if settings.chat_theme == ChatTheme::Modern {
+                            theme::surface_2()
+                        } else {
+                            gpui::rgba(0x00000000)
+                        })
+                        .text_color(if settings.chat_theme == ChatTheme::Modern {
+                            theme::text_primary()
+                        } else {
+                            theme::text_muted()
+                        })
+                        .cursor_pointer()
+                        .child("Modern")
+                        .on_mouse_down(gpui::MouseButton::Left, {
+                            let state_entity = state_entity.clone();
+                            move |_, _, cx| state_entity.set_chat_theme(cx, ChatTheme::Modern)
+                        }),
+                )
+                .child(
+                    div()
+                        .px(px(8.0))
+                        .py(px(2.0))
+                        .text_size(px(12.0))
+                        .bg(if settings.chat_theme == ChatTheme::Compact {
+                            theme::surface_2()
+                        } else {
+                            gpui::rgba(0x00000000)
+                        })
+                        .text_color(if settings.chat_theme == ChatTheme::Compact {
+                            theme::text_primary()
+                        } else {
+                            theme::text_muted()
+                        })
+                        .cursor_pointer()
+                        .child("Compact")
+                        .on_mouse_down(gpui::MouseButton::Left, {
+                            let state_entity = state_entity.clone();
+                            move |_, _, cx| state_entity.set_chat_theme(cx, ChatTheme::Compact)
+                        }),
+                ),
+        ))
+        .child(div().w_full().h(px(1.0)).bg(theme::border()))
+        .child(popover_row(
+            "Font Size",
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .w(px(20.0))
+                        .h(px(20.0))
+                        .rounded_sm()
+                        .bg(theme::surface_2())
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_color(theme::text_primary())
+                        .cursor_pointer()
+                        .child("-")
+                        .on_mouse_down(gpui::MouseButton::Left, {
+                            let state_entity = state_entity.clone();
+                            let fs = settings.font_size;
+                            move |_, _, cx| state_entity.set_font_size(cx, (fs - 1.0).max(10.0))
+                        }),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme::text_primary())
+                        .child(format!("{}px", settings.font_size)),
+                )
+                .child(
+                    div()
+                        .w(px(20.0))
+                        .h(px(20.0))
+                        .rounded_sm()
+                        .bg(theme::surface_2())
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_color(theme::text_primary())
+                        .cursor_pointer()
+                        .child("+")
+                        .on_mouse_down(gpui::MouseButton::Left, {
+                            let state_entity = state_entity.clone();
+                            let fs = settings.font_size;
+                            move |_, _, cx| state_entity.set_font_size(cx, (fs + 1.0).min(30.0))
+                        }),
+                ),
+        ))
+        .child(div().w_full().h(px(1.0)).bg(theme::border()))
+        .child(popover_row(
+            "Show Avatars",
+            Switch::new(settings.show_avatars).on_click({
+                let state_entity = state_entity.clone();
+                let current = settings.show_avatars;
+                move |_, _, cx| state_entity.set_show_avatars(cx, !current)
+            }),
+        ))
+        .child(popover_row(
+            "Show Badges",
+            Switch::new(settings.show_badges).on_click({
+                let state_entity = state_entity.clone();
+                let current = settings.show_badges;
+                move |_, _, cx| state_entity.set_show_badges(cx, !current)
+            }),
+        ))
+        .child(popover_row(
+            "Platform Icon",
+            Switch::new(settings.show_platform_icon).on_click({
+                let state_entity = state_entity.clone();
+                let current = settings.show_platform_icon;
+                move |_, _, cx| state_entity.set_show_platform_icon(cx, !current)
+            }),
+        ))
+        .child(popover_row(
+            "Timestamp",
+            Switch::new(settings.show_timestamp).on_click({
+                let state_entity = state_entity.clone();
+                let current = settings.show_timestamp;
+                move |_, _, cx| state_entity.set_show_timestamp(cx, !current)
+            }),
+        ))
+        .child(popover_row(
+            "Platform Stripe",
+            Switch::new(settings.show_platform_color_stripe).on_click({
+                let state_entity = state_entity.clone();
+                let current = settings.show_platform_color_stripe;
+                move |_, _, cx| state_entity.set_show_platform_color_stripe(cx, !current)
+            }),
+        ))
 }
 
 #[cfg(test)]

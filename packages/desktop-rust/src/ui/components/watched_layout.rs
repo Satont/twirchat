@@ -85,6 +85,7 @@ fn render_node(
                 PanelContent::Watched { channel_id } => watched_panel(
                     state,
                     state_entity,
+                    id,
                     channel_id,
                     watched_composer_inputs.get(channel_id).cloned(),
                     window,
@@ -145,6 +146,7 @@ fn render_node(
 fn watched_panel(
     state: &AppState,
     state_entity: Entity<AppState>,
+    panel_id: &str,
     channel_id: &str,
     composer_input: Option<Entity<Input>>,
     window: &mut gpui::Window,
@@ -249,6 +251,41 @@ fn watched_panel(
                                     .child(label),
                             )
                         })
+                        .child(
+                            div()
+                                .relative()
+                                .child(
+                                    action_button("⚙")
+                                        .bg(
+                                            if state.chat_appearance_popover_open.as_deref()
+                                                == Some(panel_id)
+                                            {
+                                                rgba(0x2a2a33ff)
+                                            } else {
+                                                rgba(0x00000000)
+                                            },
+                                        )
+                                        .on_click({
+                                            let state_entity = state_entity.clone();
+                                            let panel_id = panel_id.to_string();
+                                            move |_event, _window, cx| {
+                                                state_entity.update(cx, |state, cx| {
+                                                    state.toggle_chat_appearance_popover(&panel_id);
+                                                    cx.notify();
+                                                });
+                                            }
+                                        }),
+                                )
+                                .when(
+                                    state.chat_appearance_popover_open.as_deref() == Some(panel_id),
+                                    |el| {
+                                        el.child(crate::ui::chat::render_appearance_popover(
+                                            state_entity.clone(),
+                                            settings.clone(),
+                                        ))
+                                    },
+                                ),
+                        )
                         .child(action_button("+").on_click({
                             let state_entity = state_entity.clone();
                             move |_event, _window, cx| {

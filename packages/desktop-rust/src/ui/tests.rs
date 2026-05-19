@@ -183,3 +183,12 @@ fn gpui_http_client_is_wired_for_remote_avatars() {
     // Ensure the correct Zed-provided crate is declared
     assert!(cargo_toml.contains("reqwest_client"));
 }
+
+#[test]
+fn watched_tab_header_has_appearance_popover_contract() {
+    let watched_layout_rs = std::fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+
+    assert!(watched_layout_rs.contains("toggle_chat_appearance_popover"));
+    assert!(watched_layout_rs.contains("render_appearance_popover"));
+}

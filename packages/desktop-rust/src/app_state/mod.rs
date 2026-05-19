@@ -73,7 +73,7 @@ pub struct AppState {
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
     pub events: Vec<crate::protocol::types::NormalizedEvent>,
     hotkey_manager: HotkeyManager,
-    pub chat_appearance_popover_open: bool,
+    pub chat_appearance_popover_open: Option<String>,
     pub chat_add_menu_open: bool,
     pub chat_options_menu_open: bool,
     pub tab_add_menu_open: bool,
@@ -115,7 +115,7 @@ impl Default for AppState {
             watched_layouts: BTreeMap::new(),
             events: vec![],
             hotkey_manager: HotkeyManager::new(),
-            chat_appearance_popover_open: false,
+            chat_appearance_popover_open: None,
             chat_add_menu_open: false,
             chat_options_menu_open: false,
             tab_add_menu_open: false,
@@ -1107,8 +1107,12 @@ impl AppState {
         self.runtime_errors.push(error.into());
     }
 
-    pub fn toggle_chat_appearance_popover(&mut self) {
-        self.chat_appearance_popover_open = !self.chat_appearance_popover_open;
+    pub fn toggle_chat_appearance_popover(&mut self, target: &str) {
+        if self.chat_appearance_popover_open.as_deref() == Some(target) {
+            self.chat_appearance_popover_open = None;
+        } else {
+            self.chat_appearance_popover_open = Some(target.to_string());
+        }
     }
 
     pub fn toggle_chat_add_menu(&mut self) {
@@ -1589,7 +1593,7 @@ pub trait AppStateActions {
     fn set_overlay_animation(&self, app: &mut App, animation: OverlayAnimation);
     fn set_overlay_position(&self, app: &mut App, position: OverlayPosition);
     fn set_overlay_port(&self, app: &mut App, port: u16);
-    fn toggle_chat_appearance_popover(&self, app: &mut App);
+    fn toggle_chat_appearance_popover(&self, app: &mut App, target: &str);
     fn toggle_chat_add_menu(&self, app: &mut App);
     fn toggle_chat_options_menu(&self, app: &mut App);
     fn open_add_channel_modal(&self, app: &mut App);
@@ -1823,9 +1827,9 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
-    fn toggle_chat_appearance_popover(&self, app: &mut App) {
+    fn toggle_chat_appearance_popover(&self, app: &mut App, target: &str) {
         self.update(app, |state, cx| {
-            state.toggle_chat_appearance_popover();
+            state.toggle_chat_appearance_popover(target);
             cx.notify();
         });
     }
