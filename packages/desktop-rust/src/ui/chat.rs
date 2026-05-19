@@ -1,6 +1,6 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
-    Account, AppSettings, ChatMessageType, ChatTheme, Emote, NormalizedChatMessage, Platform,
+    Account, AppSettings, ChatMessageType, ChatTheme, NormalizedChatMessage, Platform,
     PlatformStatus,
 };
 use crate::ui::components::input::Input;
@@ -968,7 +968,6 @@ fn add_channel_placeholder(platform: Platform) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) struct MessageRowOptions {
     show_platform_stripe: bool,
     show_platform_icon: bool,
@@ -1701,22 +1700,22 @@ fn popover_btn(
         .on_mouse_down(gpui::MouseButton::Left, on_click)
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TextSegment {
     Text(String),
     Link(String),
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum MessagePart {
     Text(String),
     Link(String),
-    Emote(Emote),
+    Emote(crate::protocol::types::Emote),
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn build_text_segments(text: &str) -> Vec<TextSegment> {
     let mut parts = Vec::new();
     let mut cursor = 0;
@@ -1770,7 +1769,7 @@ pub(crate) fn build_text_segments(text: &str) -> Vec<TextSegment> {
     parts
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn build_message_parts(message: &NormalizedChatMessage) -> Vec<MessagePart> {
     if message.emotes.is_empty() {
         return build_text_segments(&message.text)
