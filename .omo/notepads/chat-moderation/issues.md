@@ -1,6 +1,7 @@
 # Chat Moderation Plan — Issues / Gotchas
 
 ## Known Gotchas (pre-research from plan)
+
 - Twitch `broadcaster_id` is NUMERIC but `channelId` is a login string → must fetch from `/helix/users?login=`
 - Kick timeout uses MINUTES, not seconds — convert: `Math.round(durationSeconds / 60)`
 - OAuth scopes are in `packages/backend/src/auth/` NOT `packages/desktop/src/auth/`

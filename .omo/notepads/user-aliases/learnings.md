@@ -1,6 +1,7 @@
 # Learnings — user-aliases
 
 ## Project Conventions
+
 - Aliases keyed by (platform, platform_user_id) — stable across username changes
 - bun:sqlite queries — raw SQL in store files, never in views/
 - Pinia setup stores in `src/views/main/stores/`

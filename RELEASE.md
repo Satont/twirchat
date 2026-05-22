@@ -13,9 +13,9 @@ The release pipeline is fully automated via GitHub Actions and triggers on:
 
 ### Desktop Application
 
-- **Linux**: x64 and ARM64 binaries + AppImage
-- **macOS**: ARM64 (Apple Silicon) and x64 (Intel) binaries
-- **Windows**: x64 binary
+- **Linux**: x64 AppImage (Velopack)
+- **macOS**: Universal .zip (Velopack)
+- **Windows**: x64 Setup .exe (Velopack)
 
 ### Backend
 
@@ -50,9 +50,10 @@ git push origin v1.0.0
 The workflow will automatically:
 
 1. Generate changelog from commits
-2. Build desktop apps for all platforms
-3. Build backend binary and Docker image
-4. Create GitHub Release with all artifacts
+2. Build desktop-rust apps for Linux, Windows, and macOS
+3. Create GitHub Release for backend and initial release metadata
+4. Publish Velopack packages for each desktop channel (linux, win, osx)
+5. Build backend binary and Docker image
 
 ### Method 2: Manual Trigger
 
@@ -120,19 +121,19 @@ Caddy will automatically:
 
 ## Local Build
 
-### Desktop
+### Desktop (Native Rust)
 
 ```bash
-cd packages/desktop
+cd packages/desktop-rust
 
 # Development
-bun run dev
+cargo run
 
-# Production build for current platform
-bun run build:prod
+# Production build
+cargo build --release
 
-# Cross-compile for specific platforms
-bunx electrobun build --env=stable --targets=linux-x64,macos-arm64
+# Verify packaging assets
+cargo test packaging_artifact_contains_required_assets
 ```
 
 ### Backend
@@ -150,14 +151,15 @@ bun run build:prod
 docker build -t twirchat-backend .
 ```
 
-## AppImage (Linux)
+## Desktop Updates (Velopack)
 
-The Linux build automatically creates an AppImage for easy distribution:
+The desktop application uses Velopack for distribution and automatic updates:
 
-- Self-contained executable
-- Works on most Linux distributions
-- No installation required
-- Automatic updates via zsync
+- **Self-contained**: Desktop artifacts are bundled with all required views and assets.
+- **Automatic Updates**: The app checks for updates on startup using the Velopack feed.
+- **Stable Only**: Only stable version tags (vX.Y.Z) trigger a full Velopack release. Prerelease, beta, and nightly tags are currently out of scope and rejected by the release contract.
+- **No Signing**: Current releases are unsigned and do not include Apple notarization or Windows code signing.
+- **Channels**: Stable updates are provided through `linux`, `win`, and `osx` feeds.
 
 ## Troubleshooting
 

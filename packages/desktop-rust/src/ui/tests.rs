@@ -20,6 +20,8 @@ fn ui_platform_icons_have_svg_sources() {
 #[test]
 fn visual_chat_page_matches_vue_reference() {
     let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let selectable_message_rs = fs::read_to_string("src/ui/components/selectable_message.rs")
+        .expect("should read selectable_message.rs");
 
     // Header
     assert!(chat_rs.contains("LIVE CHAT"));
@@ -30,7 +32,7 @@ fn visual_chat_page_matches_vue_reference() {
     assert!(chat_rs.contains("message_row"));
     assert!(chat_rs.contains("avatar-{}"));
     assert!(chat_rs.contains("badge-{}-{}-{}"));
-    assert!(chat_rs.contains("emote-{}-{}-{}"));
+    assert!(selectable_message_rs.contains("emote-{}-{}-{}"));
     assert!(chat_rs.contains("ChatMessageType::System"));
     assert!(chat_rs.contains("rgba(0xffffff06)")); // Hover
     assert!(chat_rs.contains("theme::platform_color(to_model_platform(message.platform))")); // Stripe
@@ -48,11 +50,11 @@ fn visual_chat_page_matches_vue_reference() {
 
 #[test]
 fn chat_input_keyboard_contract() {
-    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
     let input_rs = fs::read_to_string("src/ui/components/input.rs").expect("should read input.rs");
 
-    assert!(app_rs.contains("Enter ↵ to send"));
-    assert!(app_rs.contains("Shift+Enter for newline"));
+    assert!(chat_rs.contains("Enter ↵ to send"));
+    assert!(chat_rs.contains("Shift+Enter for newline"));
     assert!(input_rs.contains("impl EntityInputHandler for Input"));
     assert!(input_rs.contains("window.handle_input"));
     assert!(input_rs.contains("ctrl-a"));
@@ -71,10 +73,10 @@ fn scrollable_sections_reserve_visible_scrollbar_space() {
     let settings_rs = fs::read_to_string("src/ui/settings.rs").expect("should read settings.rs");
     let platforms_rs = fs::read_to_string("src/ui/platforms.rs").expect("should read platforms.rs");
 
-    assert!(chat_rs.contains("vertical_scrollbar_for(props.scroll_ui.handle, window, cx)"));
+    assert!(chat_rs.contains("vertical_scrollbar_for(props.scroll_ui.list_state, window, cx)"));
     assert!(settings_rs.contains("vertical_scrollbar_for(scroll_handle, window, cx)"));
     assert!(platforms_rs.contains("vertical_scrollbar_for(scroll_handle, window, cx)"));
-    assert!(chat_rs.contains("track_scroll(props.scroll_ui.handle)"));
+    assert!(chat_rs.contains("ChatScrollUi"));
     assert!(settings_rs.contains("track_scroll(scroll_handle)"));
     assert!(platforms_rs.contains("track_scroll(scroll_handle)"));
     assert!(platforms_rs.contains("platforms-scroll"));
@@ -135,7 +137,7 @@ fn chat_section_routes_home_and_watched_tabs() {
     assert!(content_rs.contains("chat::panel("));
     assert!(content_rs.contains("state.active_channel_tab_id() == \"home\""));
     assert!(content_rs.contains("watched_layout::tab_panel"));
-    assert!(tabs_rs.contains("state\n            .watched_channels"));
+    assert!(tabs_rs.contains("state\n            .visible_watched_channels()"));
 }
 
 #[test]
@@ -153,8 +155,8 @@ fn watched_tab_header_has_pane_add_contract() {
     let watched_layout_rs = fs::read_to_string("src/ui/components/watched_layout.rs")
         .expect("should read watched_layout.rs");
 
-    assert!(watched_layout_rs.contains("toggle_chat_add_menu"));
-    assert!(watched_layout_rs.contains("Add chat pane (Split)"));
+    assert!(watched_layout_rs.contains("add_chat_pane_for_active_tab"));
+    assert!(watched_layout_rs.contains("open_add_channel_modal_for_panel"));
     assert!(watched_layout_rs.contains("PanelContent::Empty"));
 }
 

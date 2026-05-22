@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use twirchat_desktop_rust::runtime::{
     AssetKind, PackagingVerificationError, PackagingVerificationStatus, TwirChatPackagingSpec,
+    VelopackPlanInput, plan_velopack_commands, render_velopack_simulation,
     verify_packaging_artifact,
 };
 
@@ -69,6 +70,25 @@ fn packaging_missing_overlay_asset_fails() -> Result<(), Box<dyn std::error::Err
     )?;
 
     println!("missing overlay index failed packaging verification as expected");
+    Ok(())
+}
+
+#[test]
+fn velopack_upload_plan_merges_into_existing_github_release()
+-> Result<(), Box<dyn std::error::Error>> {
+    let plan = plan_velopack_commands(VelopackPlanInput {
+        tag: "v1.2.3",
+        repository_url: "https://github.com/Satont/twirchat",
+        artifact_root: Path::new("artifacts"),
+        first_release: false,
+        existing_assets: &[],
+    })?;
+    let simulation = render_velopack_simulation(&plan);
+
+    assert!(simulation.contains("vpk upload github --repoUrl https://github.com/Satont/twirchat --publish --merge --tag v1.2.3 --channel linux --outputDir artifacts/velopack/linux"));
+    assert!(simulation.contains("vpk upload github --repoUrl https://github.com/Satont/twirchat --publish --merge --tag v1.2.3 --channel win --outputDir artifacts/velopack/win"));
+    assert!(simulation.contains("vpk upload github --repoUrl https://github.com/Satont/twirchat --publish --merge --tag v1.2.3 --channel osx --outputDir artifacts/velopack/osx"));
+
     Ok(())
 }
 

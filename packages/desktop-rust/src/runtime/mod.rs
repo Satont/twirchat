@@ -18,10 +18,14 @@ pub use config::{
 };
 pub use packaging::{
     AssetKind, AssetRequirement, PackagingAppMetadata, PackagingVerificationError,
-    PackagingVerificationReport, PackagingVerificationStatus, TwirChatPackagingSpec,
-    verify_packaging_artifact,
+    PackagingVerificationReport, PackagingVerificationStatus, ReleaseTagError,
+    TwirChatPackagingSpec, VelopackCommandPlan, VelopackCommandPlanError, VelopackPlanInput,
+    VelopackPlatformChannel, VelopackReleaseContract, VelopackTargetCommandPlan,
+    VelopackValidatedRelease, plan_velopack_commands, render_velopack_simulation,
+    validate_velopack_release_tag, verify_packaging_artifact,
 };
 pub use update::{
-    UPDATE_CHECK_INTERVAL, UpdateEvent, UpdateRuntime, UpdateState, UpdateStatus,
-    UpdateStatusSnapshot,
+    UPDATE_CHECK_INTERVAL, UpdateCheckMode, UpdateCheckReport, UpdateCheckRequest, UpdateEvent,
+    UpdateRuntime, UpdateState, UpdateStatus, UpdateStatusSnapshot, VelopackRuntimeStatus,
+    run_velopack_startup,
 };

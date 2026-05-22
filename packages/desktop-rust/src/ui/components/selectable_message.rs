@@ -5,7 +5,7 @@ use crate::ui::components::animated_emote;
 use crate::ui::theme;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId, Entity,
-    FocusHandle, Focusable, Global, GlobalElementId, HighlightStyle, Hitbox, HitboxBehavior,
+    FocusHandle, Focusable, Font, Global, GlobalElementId, HighlightStyle, Hitbox, HitboxBehavior,
     IntoElement, KeyBinding, LayoutId, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad,
     Pixels, SharedString, StyledText, TextLayout, UnderlineStyle, Window, actions, div, fill,
     point, prelude::*, px, rgba,
@@ -56,6 +56,7 @@ pub struct SelectableMessage {
     is_selecting: bool,
     mouse_down_index: Option<usize>,
     font_size: f32,
+    font: Font,
     link_ranges: Vec<Range<usize>>,
 }
 
@@ -65,6 +66,7 @@ impl SelectableMessage {
         source_text: impl Into<SharedString>,
         parts: Vec<SelectableMessagePart>,
         font_size: f32,
+        font: Font,
         cx: &mut Context<Self>,
     ) -> Self {
         let message_id = message_id.into();
@@ -95,6 +97,7 @@ impl SelectableMessage {
             is_selecting: false,
             mouse_down_index: None,
             font_size,
+            font,
             link_ranges,
         }
     }
@@ -104,16 +107,18 @@ impl SelectableMessage {
         source_text: impl Into<SharedString>,
         parts: Vec<SelectableMessagePart>,
         font_size: f32,
+        font: Font,
         cx: &mut Context<Self>,
     ) {
         let source_text = source_text.into();
-        if self.source_text == source_text && self.font_size == font_size {
+        if self.source_text == source_text && self.font_size == font_size && self.font == font {
             return;
         }
 
         self.source_text = source_text;
         self.parts = parts;
         self.font_size = font_size;
+        self.font = font;
         self.link_ranges = self
             .parts
             .iter()
@@ -299,6 +304,7 @@ impl Render for SelectableMessage {
             .flex_wrap()
             .items_center()
             .whitespace_normal()
+            .font(self.font.clone())
             .text_size(px(self.font_size))
             .text_color(theme::text_primary())
             .on_action(cx.listener(Self::on_copy))

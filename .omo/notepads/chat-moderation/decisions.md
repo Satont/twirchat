@@ -1,6 +1,7 @@
 # Chat Moderation Plan — Decisions
 
 ## Architecture Decisions (from plan)
+
 - `getModerationRole` is LOCAL ONLY — derives from `AccountStore.findByPlatform()`, no network calls
 - Moderation methods are OPTIONAL on `BasePlatformAdapter` (not abstract) — YouTube adapter untouched
 - `moderateMessage` uses discriminated union: `ban | timeout | delete` (NOT separate RPCs)

@@ -1,6 +1,7 @@
 # Emote Picker — Issues & Gotchas
 
 ## Known Pitfalls (from plan research)
+
 1. SevenTVEmote has `.alias` not `.label` — map to `{ ...emote, label: emote.alias }` before fuzzyFilter
 2. replaceToken silently drops insertion when no `:token` active — MUST use two-branch logic
 3. VGrid needs FIXED height container (not max-height) for scroll container detection

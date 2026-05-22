@@ -4,9 +4,9 @@ use crate::protocol::types::Platform;
 use crate::runtime::AppRuntime;
 use crate::services::{BackendWsEvent, ServiceEvent};
 
-use crate::ui::chat::ChatScrollUi;
 use crate::ui::components::input::Input;
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
+use crate::ui::{chat::ChatScrollUi, theme};
 use gpui::{
     App, Context, Entity, FocusHandle, Focusable, FollowMode, KeystrokeEvent, ListAlignment,
     ListState, Render, ScrollHandle, Subscription, Task, Window, div, prelude::*, px, retain_all,
@@ -396,7 +396,7 @@ impl TwirChatApp {
 
     fn handle_tab_selector_keystroke(&mut self, event: &KeystrokeEvent, cx: &mut Context<Self>) {
         let items = fuzzy_filter_tab_items(
-            &content::tab_items(&self.state.read(cx)),
+            content::tab_items(self.state.read(cx)).as_slice(),
             self.tab_selector_input.read(cx).text(),
         );
 
@@ -641,6 +641,7 @@ impl Render for TwirChatApp {
         div()
             .image_cache(retain_all("twirchat-images"))
             .id("app-shell")
+            .font(theme::app_font(state.settings().font_family))
             .relative()
             .size_full()
             .bg(rgb(0x0f0f11)) // Match Vue body/app background

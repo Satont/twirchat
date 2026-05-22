@@ -1,7 +1,7 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
-    Account, AppSettings, ChatMessageType, ChatTheme, NormalizedChatMessage, Platform,
-    PlatformStatus,
+    Account, AppSettings, ChatMessageType, ChatTheme, FontFamilyChoice, NormalizedChatMessage,
+    Platform, PlatformStatus,
 };
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
@@ -373,6 +373,16 @@ fn composer(
                             }
                         }),
                 ),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .justify_between()
+                .text_size(px(11.0))
+                .text_color(theme::text_muted())
+                .child("Enter ↵ to send")
+                .child("Shift+Enter for newline"),
         )
 }
 
@@ -776,6 +786,21 @@ impl MessageRowOptions {
     }
 }
 
+#[derive(Clone, Copy)]
+struct MessageTypography {
+    font_size: f32,
+    font_family: FontFamilyChoice,
+}
+
+impl MessageTypography {
+    fn from_settings(settings: &AppSettings) -> Self {
+        Self {
+            font_size: settings.font_size as f32,
+            font_family: settings.font_family,
+        }
+    }
+}
+
 fn author_label_text(message: &NormalizedChatMessage, use_fallback: bool) -> String {
     let display_name = message.author.display_name.trim();
     if !display_name.is_empty() {
@@ -804,7 +829,7 @@ fn compact_message_row(
     cx: &mut App,
     options: MessageRowOptions,
 ) -> AnyElement {
-    let font_size = settings.font_size as f32;
+    let typography = MessageTypography::from_settings(settings);
     let mut custom_parts = Vec::new();
 
     if settings.show_timestamp {
@@ -964,19 +989,20 @@ fn compact_message_row(
                 .flex_1()
                 .w_full()
                 .min_w(px(0.0))
-                .text_size(px(font_size))
+                .text_size(px(typography.font_size))
                 .text_color(theme::text_primary())
                 .flex()
                 .flex_row()
                 .flex_wrap()
                 .items_center()
                 .whitespace_normal()
+                .font(theme::app_font(typography.font_family))
                 .child(selectable_message(
                     scoped_message_id.clone(),
                     scoped_message_id,
                     message,
                     parts,
-                    font_size,
+                    typography,
                     window,
                     cx,
                 )),
@@ -994,6 +1020,7 @@ pub(crate) fn message_row(
 ) -> AnyElement {
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
+    let typography = MessageTypography::from_settings(settings);
     let v_pad = if is_compact { 1.0 } else { 2.0 };
 
     if message.message_type == ChatMessageType::System {
@@ -1023,8 +1050,9 @@ pub(crate) fn message_row(
             .child(
                 div()
                     .flex_1()
-                    .text_size(px(settings.font_size as f32))
+                    .text_size(px(typography.font_size))
                     .text_color(theme::text_muted())
+                    .font(theme::app_font(typography.font_family))
                     .child(selectable_message(
                         options.selectable_key(&message.id),
                         options.selectable_key(&message.id),
@@ -1034,7 +1062,7 @@ pub(crate) fn message_row(
                             source_range: 0..message.text.len(),
                             is_link: false,
                         }],
-                        settings.font_size as f32,
+                        typography,
                         window,
                         cx,
                     )),
@@ -1226,12 +1254,7 @@ pub(crate) fn message_row(
                         }),
                 )
                 .child(message_text_with_emotes(
-                    message,
-                    settings.font_size as f32,
-                    is_compact,
-                    options,
-                    window,
-                    cx,
+                    message, typography, is_compact, options, window, cx,
                 )),
         )
         .into_any_element()
@@ -1239,7 +1262,7 @@ pub(crate) fn message_row(
 
 fn message_text_with_emotes(
     message: &NormalizedChatMessage,
-    font_size: f32,
+    typography: MessageTypography,
     is_compact: bool,
     options: MessageRowOptions,
     window: &mut Window,
@@ -1269,19 +1292,20 @@ fn message_text_with_emotes(
     div()
         .w_full()
         .min_w(px(0.0))
-        .text_size(px(font_size))
+        .text_size(px(typography.font_size))
         .text_color(theme::text_primary())
         .flex()
         .flex_row()
         .flex_wrap()
         .items_center()
         .whitespace_normal()
+        .font(theme::app_font(typography.font_family))
         .child(selectable_message(
             scoped_message_id.clone(),
             scoped_message_id,
             message,
             segments,
-            font_size,
+            typography,
             window,
             cx,
         ))
@@ -1292,27 +1316,31 @@ fn selectable_message(
     selection_id: String,
     message: &NormalizedChatMessage,
     parts: Vec<SelectableMessagePart>,
-    font_size: f32,
+    typography: MessageTypography,
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<SelectableMessage> {
+    let font = theme::app_font(typography.font_family);
     let selectable = window.use_keyed_state(id, cx, {
         let message_id = selection_id;
         let text = message.text.clone();
         let parts = parts.clone();
+        let font = font.clone();
+        let font_size = typography.font_size;
         move |_, cx| {
             SelectableMessage::new(
                 message_id.clone(),
                 text.clone(),
                 parts.clone(),
                 font_size,
+                font.clone(),
                 cx,
             )
         }
     });
 
     selectable.update(cx, |selectable, cx| {
-        selectable.set_content(message.text.clone(), parts, font_size, cx)
+        selectable.set_content(message.text.clone(), parts, typography.font_size, font, cx)
     });
 
     selectable

@@ -920,58 +920,6 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{KickChatMessage, KickChatMessageKind, normalize_reply};
-
-    #[test]
-    fn kick_reply_payload_accepts_numeric_original_sender_id() {
-        let raw = r#"{
-            \"id\": \"msg-1\",
-            \"chatroom_id\": 3124040,
-            \"content\": \"reply body\",
-            \"type\": \"reply\",
-            \"created_at\": \"2026-05-19T20:38:27+00:00\",
-            \"sender\": {
-                \"id\": 1,
-                \"username\": \"sender\",
-                \"slug\": \"sender\",
-                \"identity\": { \"color\": null, \"badges\": [] },
-                \"profile_picture\": null
-            },
-            \"metadata\": {
-                \"original_sender\": {
-                    \"id\": 103024073,
-                    \"username\": \"j0yc\"
-                },
-                \"original_message\": {
-                    \"id\": \"parent-1\",
-                    \"content\": \"parent text\"
-                }
-            }
-        }"#;
-
-        let message: KickChatMessage =
-            serde_json::from_str(raw).expect("reply payload should parse");
-        assert_eq!(
-            message
-                .metadata
-                .as_ref()
-                .unwrap()
-                .original_sender
-                .as_ref()
-                .unwrap()
-                .id,
-            "103024073"
-        );
-
-        let reply = normalize_reply(KickChatMessageKind::Reply, message.metadata)
-            .expect("reply metadata should normalize");
-        assert_eq!(reply.parent_author.id, "103024073");
-        assert_eq!(reply.parent_message_id, "parent-1");
-    }
-}
-
 fn parse_kick_emotes(content: &str) -> (String, Vec<Emote>) {
     let mut clean = String::new();
     let mut emotes = Vec::new();
@@ -1093,4 +1041,56 @@ fn to_u32_or_max(value: usize) -> u32 {
 
 fn storage_error(error: crate::storage::StorageError) -> PlatformError {
     PlatformError::new(Platform::Kick, error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{KickChatMessage, KickChatMessageKind, normalize_reply};
+
+    #[test]
+    fn kick_reply_payload_accepts_numeric_original_sender_id() {
+        let raw = r#"{
+            "id": "msg-1",
+            "chatroom_id": 3124040,
+            "content": "reply body",
+            "type": "reply",
+            "created_at": "2026-05-19T20:38:27+00:00",
+            "sender": {
+                "id": 1,
+                "username": "sender",
+                "slug": "sender",
+                "identity": { "color": null, "badges": [] },
+                "profile_picture": null
+            },
+            "metadata": {
+                "original_sender": {
+                    "id": 103024073,
+                    "username": "j0yc"
+                },
+                "original_message": {
+                    "id": "parent-1",
+                    "content": "parent text"
+                }
+            }
+        }"#;
+
+        let message: KickChatMessage =
+            serde_json::from_str(raw).expect("reply payload should parse");
+        assert_eq!(
+            message
+                .metadata
+                .as_ref()
+                .unwrap()
+                .original_sender
+                .as_ref()
+                .unwrap()
+                .id,
+            "103024073"
+        );
+
+        let reply = normalize_reply(KickChatMessageKind::Reply, message.metadata)
+            .expect("reply metadata should normalize");
+        assert_eq!(reply.parent_author.id, "103024073");
+        assert_eq!(reply.parent_message_id, "parent-1");
+    }
 }

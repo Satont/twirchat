@@ -1,6 +1,7 @@
 # Emote Picker — Decisions
 
 ## Architecture Decisions
+
 - EmotePicker.vue is a PURE DISPLAY COMPONENT (no Popover primitives)
   - PopoverRoot/Trigger/Content live in ChatInput.vue
   - EmotePicker receives platform + channelId props, emits 'select' with alias

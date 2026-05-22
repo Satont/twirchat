@@ -737,6 +737,7 @@ impl AppState {
                         "[backend/live] app_state accepted {:?} message id={} channel={}",
                         message.platform, message.id, message.channel_id
                     );
+                    backfill_badge_images(&mut self.messages, &message);
                     self.messages.push(message);
                 }
             }
@@ -1504,6 +1505,25 @@ struct HomeChannelTarget {
 
 fn home_channel_target_id(platform: Platform, channel_login: &str) -> String {
     format!("{platform:?}:{}", channel_login.to_lowercase())
+}
+
+fn backfill_badge_images(messages: &mut [NormalizedChatMessage], source: &NormalizedChatMessage) {
+    for source_badge in source
+        .author
+        .badges
+        .iter()
+        .filter(|badge| badge.image_url.is_some())
+    {
+        for message in messages.iter_mut().filter(|message| {
+            message.platform == source.platform && message.channel_id == source.channel_id
+        }) {
+            for badge in &mut message.author.badges {
+                if badge.id == source_badge.id && badge.image_url.is_none() {
+                    badge.image_url = source_badge.image_url.clone();
+                }
+            }
+        }
+    }
 }
 
 fn map_backend_seven_tv_emote(emote: crate::protocol::messages::SevenTvEmote) -> SevenTvEmote {

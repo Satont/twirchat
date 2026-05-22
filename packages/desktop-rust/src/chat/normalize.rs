@@ -86,15 +86,16 @@ fn strip_timezone_offset(time: &str) -> (&str, i32) {
         let sign_pos = time.len() - 6;
         let candidate = &time[sign_pos..];
         let sign = candidate.as_bytes()[0];
-        if (sign == b'+' || sign == b'-') && candidate.as_bytes()[3] == b':' {
-            if let (Ok(h), Ok(m)) = (
+        if (sign == b'+' || sign == b'-')
+            && candidate.as_bytes()[3] == b':'
+            && let (Ok(h), Ok(m)) = (
                 candidate[1..3].parse::<i32>(),
                 candidate[4..6].parse::<i32>(),
-            ) {
-                let offset = h * 60 + m;
-                let offset = if sign == b'-' { -offset } else { offset };
-                return (&time[..sign_pos], offset);
-            }
+            )
+        {
+            let offset = h * 60 + m;
+            let offset = if sign == b'-' { -offset } else { offset };
+            return (&time[..sign_pos], offset);
         }
     }
     (time, 0)

@@ -15,12 +15,18 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   changelog:
     name: Generate Changelog
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      pack_version: ${{ steps.version.outputs.pack_version }}
+      is_stable_tag: ${{ steps.version.outputs.is_stable_tag }}
       release_notes: ${{ steps.changelog.outputs.clean_changelog }}
     steps:
       - name: Checkout
@@ -37,15 +43,25 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
+
+          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_stable_tag=true" >> $GITHUB_OUTPUT
+            echo "pack_version=${VERSION#v}" >> $GITHUB_OUTPUT
+          else
+            echo "is_stable_tag=false" >> $GITHUB_OUTPUT
+            echo "pack_version=" >> $GITHUB_OUTPUT
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
+          echo "Stable tag: $([[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && echo true || echo false)"
 
       - name: Generate Changelog
         id: changelog
         uses: TriPSs/conventional-changelog-action@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-file: './packages/desktop/package.json'
+          version-file: './packages/backend/package.json'
           version-path: 'version'
           skip-version-file: true
           skip-commit: true
@@ -90,20 +106,30 @@ jobs:
           path: packages/desktop/dist/**
           if-no-files-found: error
 
-  build-desktop:
-    name: Build Desktop (${{ matrix.target }})
+  build-desktop-rust:
+    name: Build Desktop Rust (${{ matrix.target }})
     needs: [changelog, build-views]
     runs-on: ${{ matrix.os }}
+    if: needs.changelog.outputs.is_stable_tag == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: linux-x64
+            channel: linux
+            artifact_dir: desktop-linux-x64
+            binary_name: twirchat
           - os: macos-latest
-            target: macos-arm64
+            target: macos-universal
+            channel: osx
+            artifact_dir: desktop-macos-universal
+            binary_name: TwirChat.app
           - os: windows-latest
             target: win-x64
+            channel: win
+            artifact_dir: desktop-win-x64
+            binary_name: twirchat.exe
 
     steps:
       - name: Checkout
@@ -115,6 +141,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -131,25 +160,57 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: desktop-views
-          path: packages/desktop/dist
+          path: packages/desktop-rust/release-assets/dist
 
-      - name: Build Electrobun
-        working-directory: packages/desktop
-        env:
-          NODE_ENV: production
-          CHATRIX_BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          CHATRIX_BACKEND_WS_URL: ${{ secrets.BACKEND_WS_URL }}
-        run: bunx electrobun build --env=stable
+      - name: Build Rust desktop
+        if: matrix.target != 'macos-universal'
+        shell: bash
+        run: cargo build --manifest-path packages/desktop-rust/Cargo.toml --release
 
-      - name: Copy Linux installer script
+      - name: Build macOS universal Rust desktop
+        if: matrix.target == 'macos-universal'
+        shell: bash
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --target x86_64-apple-darwin
+          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --target aarch64-apple-darwin
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create \
+            target/x86_64-apple-darwin/release/twirchat-desktop-rust \
+            target/aarch64-apple-darwin/release/twirchat-desktop-rust \
+            -output target/universal-apple-darwin/release/twirchat-desktop-rust
+          lipo -info target/universal-apple-darwin/release/twirchat-desktop-rust
+
+      - name: Prepare Linux Velopack app artifact
         if: matrix.target == 'linux-x64'
-        run: cp scripts/install-linux.sh packages/desktop/artifacts/install-linux.sh
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ matrix.artifact_dir }}
+          cp target/release/twirchat-desktop-rust artifacts/${{ matrix.artifact_dir }}/twirchat
+          cp -R packages/desktop-rust/release-assets/dist artifacts/${{ matrix.artifact_dir }}/dist
 
-      - name: Upload artifacts
+      - name: Prepare Windows Velopack app artifact
+        if: matrix.target == 'win-x64'
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ matrix.artifact_dir }}
+          cp target/release/twirchat-desktop-rust.exe artifacts/${{ matrix.artifact_dir }}/twirchat.exe
+          cp -R packages/desktop-rust/release-assets/dist artifacts/${{ matrix.artifact_dir }}/dist
+
+      - name: Prepare macOS Velopack app artifact
+        if: matrix.target == 'macos-universal'
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS
+          cp target/universal-apple-darwin/release/twirchat-desktop-rust \
+            artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS/TwirChat
+          cp -R packages/desktop-rust/release-assets/dist artifacts/${{ matrix.artifact_dir }}/dist
+
+      - name: Upload desktop-rust app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.target }}
-          path: packages/desktop/artifacts/**
+          name: desktop-rust-${{ matrix.target }}
+          path: artifacts/${{ matrix.artifact_dir }}/**
           if-no-files-found: error
 
   build-backend:
@@ -188,14 +249,15 @@ jobs:
 
   release:
     name: Create Release
-    needs: [changelog, build-desktop, build-backend]
+    needs: [changelog, build-backend]
     runs-on: ubuntu-latest
+    if: needs.changelog.outputs.is_stable_tag == 'true'
     steps:
-      - name: Download all artifacts
+      - name: Download backend artifact
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          name: backend-linux-x64
+          path: artifacts/backend
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -204,17 +266,115 @@ jobs:
           name: Release ${{ needs.changelog.outputs.version }}
           body: ${{ needs.changelog.outputs.release_notes }}
           draft: false
-          prerelease: ${{ contains(needs.changelog.outputs.version, 'alpha') || contains(needs.changelog.outputs.version, 'beta') || contains(needs.changelog.outputs.version, 'rc') }}
+          prerelease: false
           files: |
-            artifacts/**
+            artifacts/backend/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-desktop-rust:
+    name: Publish Desktop Rust Velopack (${{ matrix.target }})
+    needs: [changelog, build-desktop-rust, release]
+    runs-on: ubuntu-latest
+    if: needs.changelog.outputs.is_stable_tag == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            channel: linux
+            artifact_dir: desktop-linux-x64
+            main_exe: twirchat
+          - target: win-x64
+            channel: win
+            artifact_dir: desktop-win-x64
+            main_exe: twirchat.exe
+          - target: macos-universal
+            channel: osx
+            artifact_dir: desktop-macos-universal
+            main_exe: TwirChat.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Velopack CLI
+        shell: bash
+        run: dotnet tool install --global vpk
+
+      - name: Download desktop-rust app artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-rust-${{ matrix.target }}
+          path: artifacts/${{ matrix.artifact_dir }}
+
+      - name: Collect existing Velopack feed assets
+        id: release_assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.changelog.outputs.version }}
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          FEED_ASSET="releases.${CHANNEL}.json"
+          EXISTING_ASSETS="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' \
+            | grep -Fx "$FEED_ASSET" \
+            | paste -sd, - \
+            || true)"
+          echo "existing_assets=$EXISTING_ASSETS" >> "$GITHUB_OUTPUT"
+          echo "Existing Velopack feed assets for $CHANNEL: ${EXISTING_ASSETS:-none}"
+
+      - name: Preflight Velopack commands
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.changelog.outputs.version }}
+          REPO_URL: https://github.com/${{ github.repository }}
+          EXISTING_ASSETS: ${{ steps.release_assets.outputs.existing_assets }}
+        run: |
+          PLAN_ARGS=(
+            velopack-plan "$RELEASE_TAG"
+            --repo-url "$REPO_URL"
+            --artifact-root artifacts
+          )
+          if [ -n "$EXISTING_ASSETS" ]; then
+            PLAN_ARGS+=(--existing-assets "$EXISTING_ASSETS")
+          fi
+          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
+            "${PLAN_ARGS[@]}"
+
+      - name: Publish Velopack package
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.changelog.outputs.version }}
+          PACK_VERSION: ${{ needs.changelog.outputs.pack_version }}
+          REPO_URL: https://github.com/${{ github.repository }}
+          CHANNEL: ${{ matrix.channel }}
+          APP_ARTIFACT_DIR: artifacts/${{ matrix.artifact_dir }}
+          PACKAGE_OUTPUT_DIR: artifacts/velopack/${{ matrix.channel }}
+          MAIN_EXE: ${{ matrix.main_exe }}
+        run: |
+          mkdir -p "$PACKAGE_OUTPUT_DIR"
+          if ! vpk download github --repoUrl "$REPO_URL" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"; then
+            echo "No previous Velopack feed found for $CHANNEL; continuing as first release"
+          fi
+          vpk pack -u dev.twirchat.app -v "$PACK_VERSION" --packDir "$APP_ARTIFACT_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
+          vpk upload github --repoUrl "$REPO_URL" --publish --merge --tag "$RELEASE_TAG" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
 
   push-docker:
     name: Push Docker to Registry
     needs: [changelog, build-backend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && needs.changelog.outputs.is_stable_tag == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4

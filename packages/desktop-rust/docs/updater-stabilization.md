@@ -11,32 +11,27 @@ desktop UI:
 - skipped-hash suppression for already skipped updates
 - serialized update status payloads for UI/service boundaries
 
-This is state/toast parity only. The native Rust desktop does not yet own a complete updater pipeline
-that checks GitHub releases, downloads artifacts, validates signatures or hashes, applies an update,
-replaces the running app, and relaunches.
+The native Rust desktop now initializes Velopack during startup and can check configured Velopack feeds
+for packaged builds. Download, apply, replace, and relaunch actions remain outside the current release
+contract.
 
 ## Packaging stabilization added in Task 25
 
-`src/runtime/packaging.rs` records the package asset contract that a future native updater/installer must
-preserve. It intentionally mirrors `packages/desktop/electrobun.config.ts`:
+`src/runtime/packaging.rs` records the package asset contract that the native Velopack release path must
+preserve. It keeps the existing Vite-built desktop assets as package inputs:
 
 - overlay HTML and bundled assets are required at `views/overlay/`
 - main-window HTML and bundled assets are required at `views/main/`
 - font assets are required at `views/fonts/`
 - Linux, Windows, and macOS icon assets remain required under `assets/`
 - app identity stays aligned with `TwirChat` / `dev.twirchat.app`
-- release download assumptions stay aligned with the existing GitHub release base URL
+- Velopack release identity stays `dev.twirchat.app`
 
 The packaging tests produce evidence files for both the passing artifact contract and the expected
 failure mode when a required overlay asset is absent.
 
-## Remaining stabilization checklist
+## Remaining updater stabilization checklist
 
-- Define the native Rust package layout and installer targets per OS.
-- Decide whether the Rust package consumes the existing Vite-built `packages/desktop/dist` assets or
-  moves those assets behind a shared build step.
-- Add native release artifact generation and checksums/signatures.
-- Implement release discovery against the GitHub release channel.
 - Implement download, resume/retry, integrity validation, and local cache handling.
 - Implement safe apply/relaunch behavior for Linux, Windows, and macOS.
 - Wire updater commands to the native service implementation instead of state-only transitions.

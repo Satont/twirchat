@@ -4,8 +4,77 @@ use crate::services::commands::UpdateStateCommand;
 use crate::services::events::UpdateStateEvent;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use velopack::{UpdateCheck, UpdateManager, UpdateOptions, VelopackApp, sources::AutoSource};
 
 pub const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
+
+pub fn run_velopack_startup() {
+    VelopackApp::build().set_auto_apply_on_startup(true).run();
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UpdateCheckMode {
+    Packaged,
+    Unpackaged,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateCheckRequest {
+    pub mode: UpdateCheckMode,
+    pub feed: Option<String>,
+}
+
+impl UpdateCheckRequest {
+    pub fn packaged(feed: Option<String>) -> Self {
+        Self {
+            mode: UpdateCheckMode::Packaged,
+            feed,
+        }
+    }
+
+    pub fn unpackaged(feed: Option<String>) -> Self {
+        Self {
+            mode: UpdateCheckMode::Unpackaged,
+            feed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum VelopackRuntimeStatus {
+    Packaged,
+    Unpackaged,
+    NoFeed,
+    NoUpdate,
+    UpdateAvailable,
+    Offline,
+    Error,
+}
+
+impl VelopackRuntimeStatus {
+    pub fn is_recoverable(self) -> bool {
+        matches!(
+            self,
+            Self::Unpackaged | Self::NoFeed | Self::NoUpdate | Self::Offline
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheckReport {
+    pub runtime_status: VelopackRuntimeStatus,
+    pub update_status: String,
+    pub message: String,
+    pub feed: Option<String>,
+    pub channel: Option<String>,
+    pub current_version: Option<String>,
+    pub available_version: Option<String>,
+    pub package_id: Option<String>,
+    pub recoverable: bool,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -290,6 +359,196 @@ impl UpdateRuntime {
     pub fn state(&self) -> &UpdateState {
         &self.state
     }
+
+    pub fn check_for_updates(&mut self, request: &UpdateCheckRequest) -> UpdateCheckReport {
+        let report = check_velopack_updates(request);
+        let event = report.to_event();
+        let _ = self.dispatch(event);
+        report
+    }
+}
+
+impl UpdateCheckReport {
+    fn new(
+        runtime_status: VelopackRuntimeStatus,
+        update_status: UpdateStatus,
+        message: String,
+        request: &UpdateCheckRequest,
+    ) -> Self {
+        Self {
+            runtime_status,
+            update_status: update_status.as_str().to_string(),
+            message,
+            feed: request.feed.clone(),
+            channel: request.feed.as_deref().map(update_channel_from_feed),
+            current_version: None,
+            available_version: None,
+            package_id: None,
+            recoverable: runtime_status.is_recoverable(),
+        }
+    }
+
+    fn with_manager(mut self, manager: &UpdateManager) -> Self {
+        self.current_version = Some(manager.get_current_version_as_string());
+        self.package_id = Some(manager.get_app_id());
+        self
+    }
+
+    fn with_available_version(mut self, version: String) -> Self {
+        self.available_version = Some(version);
+        self
+    }
+
+    fn to_event(&self) -> UpdateEvent {
+        match self.runtime_status {
+            VelopackRuntimeStatus::UpdateAvailable => UpdateEvent::UpdateAvailable {
+                version: self.available_version.clone(),
+                hash: None,
+            },
+            VelopackRuntimeStatus::Error | VelopackRuntimeStatus::Offline => UpdateEvent::Error {
+                message: self.message.clone(),
+            },
+            _ => UpdateEvent::Status {
+                status: UpdateStatus::NoUpdate,
+                message: self.message.clone(),
+                progress: None,
+                hash: None,
+            },
+        }
+    }
+}
+
+fn check_velopack_updates(request: &UpdateCheckRequest) -> UpdateCheckReport {
+    if request.mode == UpdateCheckMode::Unpackaged {
+        return UpdateCheckReport::new(
+            VelopackRuntimeStatus::Unpackaged,
+            UpdateStatus::NoUpdate,
+            "Update check skipped: application is not packaged by Velopack".to_string(),
+            request,
+        );
+    }
+
+    let Some(feed) = request
+        .feed
+        .as_deref()
+        .filter(|feed| !feed.trim().is_empty())
+    else {
+        return UpdateCheckReport::new(
+            VelopackRuntimeStatus::NoFeed,
+            UpdateStatus::NoUpdate,
+            "Update check skipped: no Velopack feed configured".to_string(),
+            request,
+        );
+    };
+
+    let source = AutoSource::new(&update_source_base(feed));
+    let options = UpdateOptions {
+        ExplicitChannel: Some(update_channel_from_feed(feed)),
+        ..UpdateOptions::default()
+    };
+
+    let manager = match UpdateManager::new(source, Some(options), None) {
+        Ok(manager) => manager,
+        Err(error) if is_not_installed_error(&error) => {
+            return UpdateCheckReport::new(
+                VelopackRuntimeStatus::Unpackaged,
+                UpdateStatus::NoUpdate,
+                format!("Update check skipped: {error}"),
+                request,
+            );
+        }
+        Err(error) => {
+            return UpdateCheckReport::new(
+                VelopackRuntimeStatus::Error,
+                UpdateStatus::Error,
+                format!("Update check unavailable: {error}"),
+                request,
+            );
+        }
+    };
+
+    match manager.check_for_updates() {
+        Ok(UpdateCheck::UpdateAvailable(update)) => UpdateCheckReport::new(
+            VelopackRuntimeStatus::UpdateAvailable,
+            UpdateStatus::UpdateAvailable,
+            format!("Update available: {}", update.TargetFullRelease.Version),
+            request,
+        )
+        .with_manager(&manager)
+        .with_available_version(update.TargetFullRelease.Version),
+        Ok(UpdateCheck::NoUpdateAvailable) => UpdateCheckReport::new(
+            VelopackRuntimeStatus::NoUpdate,
+            UpdateStatus::NoUpdate,
+            "No updates available".to_string(),
+            request,
+        )
+        .with_manager(&manager),
+        Ok(UpdateCheck::RemoteIsEmpty) => UpdateCheckReport::new(
+            VelopackRuntimeStatus::NoFeed,
+            UpdateStatus::NoUpdate,
+            "Update feed has no releases".to_string(),
+            request,
+        )
+        .with_manager(&manager),
+        Err(error) if is_offline_error(&error) => UpdateCheckReport::new(
+            VelopackRuntimeStatus::Offline,
+            UpdateStatus::Error,
+            format!("Update check could not reach feed: {error}"),
+            request,
+        )
+        .with_manager(&manager),
+        Err(error) => UpdateCheckReport::new(
+            VelopackRuntimeStatus::Error,
+            UpdateStatus::Error,
+            format!("Update check failed: {error}"),
+            request,
+        )
+        .with_manager(&manager),
+    }
+}
+
+fn update_source_base(feed: &str) -> String {
+    let trimmed = feed.trim().trim_end_matches('/');
+    if !trimmed.contains("/releases.") || !trimmed.ends_with(".json") {
+        return trimmed.to_string();
+    }
+
+    trimmed
+        .rsplit_once('/')
+        .map_or_else(|| trimmed.to_string(), |(base, _)| base.to_string())
+}
+
+fn update_channel_from_feed(feed: &str) -> String {
+    let Some(file_name) = feed.trim().trim_end_matches('/').rsplit('/').next() else {
+        return default_update_channel().to_string();
+    };
+    let Some(channel) = file_name
+        .strip_prefix("releases.")
+        .and_then(|name| name.strip_suffix(".json"))
+        .filter(|channel| !channel.is_empty())
+    else {
+        return default_update_channel().to_string();
+    };
+
+    channel.to_string()
+}
+
+fn default_update_channel() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "win"
+    } else if cfg!(target_os = "macos") {
+        "osx"
+    } else {
+        "linux"
+    }
+}
+
+fn is_not_installed_error(error: &velopack::Error) -> bool {
+    matches!(error, velopack::Error::NotInstalled(_))
+}
+
+fn is_offline_error(error: &velopack::Error) -> bool {
+    matches!(error, velopack::Error::Network(_) | velopack::Error::Io(_))
 }
 
 fn should_show_status(status: UpdateStatus) -> bool {

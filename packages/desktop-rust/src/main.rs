@@ -10,6 +10,8 @@ use twirchat_desktop_rust::ui::components::selectable_message;
 use twirchat_desktop_rust::ui::components::selectable_text;
 
 fn main() -> ExitCode {
+    twirchat_desktop_rust::runtime::run_velopack_startup();
+
     let smoke_exit_after_first_frame =
         env::args().any(|arg| arg == "--smoke-exit-after-first-frame");
 
@@ -33,6 +35,9 @@ fn main() -> ExitCode {
 
         move |cx: &mut App| {
             theme::init(theme::LoadThemes::JustBase, cx);
+            if let Err(error) = twirchat_desktop_rust::ui::theme::load_app_fonts(cx) {
+                eprintln!("failed to load bundled app fonts: {error}");
+            }
             match reqwest_client::ReqwestClient::proxy_and_user_agent(None, "TwirChat/0.1.0") {
                 Ok(http_client) => {
                     cx.set_http_client(std::sync::Arc::new(http_client));

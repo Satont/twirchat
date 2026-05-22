@@ -1,19 +1,23 @@
 # Desktop Rust GPUI Parity Migration
 
 ## TL;DR
+
 > **Summary**: Replace TwirChat's Electrobun + Vue desktop runtime with a full native Rust + GPUI desktop in `packages/desktop-rust`, preserving one-to-one functionality and exact UI parity from `packages/desktop`. Keep the OBS overlay as a Vue/browser-served sublayer, but move its runtime communication to Rust WebSocket services and add delivery/build integration.
 > **Deliverables**:
+>
 > - Rust-native desktop runtime: storage, OAuth, platform adapters, backend WS, overlay WS, watched channels, chat aggregation/history, settings/hotkeys.
 > - GPUI main window matching Vue UI: shell, chat, events, platforms, settings, watched split layouts, dialogs, popovers, autocomplete, emote picker, user card/history.
 > - Vue overlay sublayer served/delivered by Rust with existing OBS URL/query behavior preserved.
 > - Fixture, protocol, storage, visual, performance, and agent QA evidence.
 > - Automatic conventional commits after every accepted implementation slice.
-> **Effort**: XL
-> **Parallel**: YES - 7 waves
-> **Critical Path**: Task 1 → Task 2 → Task 3/4/5 → Task 6/7/8/9 → UI/runtime parity tasks → Task 24 → Task 25 → Final Verification
+>   **Effort**: XL
+>   **Parallel**: YES - 7 waves
+>   **Critical Path**: Task 1 → Task 2 → Task 3/4/5 → Task 6/7/8/9 → UI/runtime parity tasks → Task 24 → Task 25 → Final Verification
 
 ## Context
+
 ### Original Request
+
 - Existing desktop app: `packages/desktop/` Electrobun + Vue.
 - Prototype replacement: `packages/desktop-rust/` Rust + GPUI.
 - Create a plan to port everything one-to-one: hidden pages, popups, behaviors, settings, and exact UI.
@@ -24,6 +28,7 @@
 - Automatically commit every accepted implementation phase/slice so progress is not lost.
 
 ### Interview Summary
+
 - Runtime decision: full native Rust desktop services; no temporary Bun desktop sidecar.
 - Architecture decision: `packages/desktop-rust` has no internal webview or Electrobun-style RPC boundary. GPUI UI and desktop runtime live in one native process; shared/RPC contracts remain only for backend/overlay/external boundaries or parity/reference checks.
 - Overlay decision: OBS overlay remains Vue/browser-served, but Rust owns the WebSocket/backend delivery layer and build packaging path.
@@ -32,6 +37,7 @@
 - Commit decision: every green, independently verifiable slice gets an automatic conventional commit.
 
 ### Metis Review (gaps addressed)
+
 - Added a parity-contract freeze before implementation.
 - Added commit guardrails: commit only after format/lint/type/test/QA pass; include task/wave ID in commit message.
 - Added explicit storage/token compatibility, overlay ownership, startup/shutdown lifecycle, visual parity, and platform capability gates.
@@ -39,10 +45,13 @@
 - Required agent-executable acceptance criteria and evidence files; no user manual QA.
 
 ## Work Objectives
+
 ### Core Objective
+
 Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacement for the current desktop application while keeping `packages/desktop` as the canonical behavioral and visual reference until parity is proven.
 
 ### Deliverables
+
 - `feat/refactor-desktop-gpui` branch created without worktree.
 - Machine-readable parity matrix covering Vue components, stores, RPC, settings, hotkeys, platform features, overlay protocol, and failure states.
 - Rust architecture split for GPUI UI, app state, async services, storage, protocol, platform adapters, overlay bridge, and tests.
@@ -57,6 +66,7 @@ Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacemen
 - Conventional commits after every accepted task.
 
 ### Definition of Done (verifiable conditions with commands)
+
 - Branch check: `git branch --show-current` outputs `feat/refactor-desktop-gpui`.
 - Rust formatting: `cargo fmt --manifest-path packages/desktop-rust/Cargo.toml --check` exits 0.
 - Rust linting: `cargo clippy --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features -- -D warnings` exits 0.
@@ -70,6 +80,7 @@ Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacemen
 - Git state: `git status --short` has no uncommitted implementation changes after every committed task.
 
 ### Must Have
+
 - Vue desktop behavior in `packages/desktop` is canonical until Rust parity is proven.
 - No UX redesign, no renamed pages, no removed behavior.
 - All hidden states are covered: empty, loading, error, hover, focused, selected, modal, popover, autocomplete, drag/drop, split panes, reconnect, auth failure.
@@ -81,6 +92,7 @@ Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacemen
 - Every accepted slice is committed automatically.
 
 ### Must NOT Have (guardrails, AI slop patterns, scope boundaries)
+
 - MUST NOT use a git worktree.
 - MUST NOT introduce a temporary Bun desktop sidecar for runtime services.
 - MUST NOT keep or introduce an internal webview/RPC runtime layer inside `packages/desktop-rust`; no Electrobun-style `BunRequests`/`WebviewMessages` transport for the native GPUI app.
@@ -93,7 +105,9 @@ Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacemen
 - MUST NOT drop GPUI `Task`s/subscriptions silently; store or detach with logging.
 
 ## Verification Strategy
+
 > ZERO HUMAN INTERVENTION - all verification is agent-executed.
+
 - Test decision: tests-after. Each implementation task adds or updates tests after the slice is implemented.
 - Rust framework: `cargo test`, `cargo clippy`, fixture tests, snapshot/screenshot harness added under `packages/desktop-rust/tests/` and/or crate test modules.
 - Vue overlay framework: existing `bun run --cwd packages/desktop build:views` and targeted overlay smoke scripts added by tasks.
@@ -102,7 +116,9 @@ Ship `packages/desktop-rust` as a functionally equivalent Rust + GPUI replacemen
 - Commit policy: each task runs its verification gate before `git add` and `git commit`.
 
 ## Execution Strategy
+
 ### Parallel Execution Waves
+
 > Target: 5-8 tasks per wave. <3 per wave (except final) = under-splitting.
 > Extract shared dependencies as Wave-1 tasks for max parallelism.
 
@@ -115,6 +131,7 @@ Wave 6: Task 25 packaging/updater stabilization plan execution after core parity
 Wave 7: Final Verification Wave F1-F4.
 
 ### Dependency Matrix (full, all tasks)
+
 - Task 1 blocks every task.
 - Task 2 blocks Tasks 3-25.
 - Task 3 blocks Tasks 6-25.
@@ -137,6 +154,7 @@ Wave 7: Final Verification Wave F1-F4.
 - Task 25 blocks Final Verification only for post-stabilization packaging/updater acceptance.
 
 ### Agent Dispatch Summary (wave → task count → categories)
+
 - Wave 1 → 5 tasks → deep, quick, ultrabrain.
 - Wave 2 → 5 tasks → deep, ultrabrain.
 - Wave 3 → 5 tasks → deep, ultrabrain.
@@ -146,6 +164,7 @@ Wave 7: Final Verification Wave F1-F4.
 - Wave 7 → 4 final review tasks → oracle, unspecified-high, unspecified-high, deep.
 
 ## TODOs
+
 > Implementation + Test = ONE task. Never separate.
 > EVERY task MUST have: Agent Profile + Parallelization + QA Scenarios.
 
@@ -173,6 +192,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `bun run --cwd packages/desktop typecheck` exits 0 or records the exact pre-existing failure in `.sisyphus/evidence/task-1-vue-baseline.md`.
 
   **QA Scenarios**:
+
   ```
   Scenario: Branch is correct and no worktree is used
     Tool: Bash
@@ -219,6 +239,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Matrix contains explicit `in_scope`, `deferred_packaging_updater`, or `removed_with_reason` status for every row; `removed_with_reason` count is 0 unless backed by an explicit user requirement.
 
   **QA Scenarios**:
+
   ```
   Scenario: Matrix covers visible and hidden UI surfaces
     Tool: Bash
@@ -262,6 +283,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Refactored prototype still launches
     Tool: Bash
@@ -303,6 +325,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo clippy --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features -- -D warnings` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Known TypeScript-shaped message decodes in Rust
     Tool: Bash
@@ -346,6 +369,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Fixture DB tests assert accounts, settings, aliases, watched channels, layouts, chat history, client secret, and token states.
 
   **QA Scenarios**:
+
   ```
   Scenario: Existing desktop DB opens without data loss
     Tool: Bash
@@ -387,6 +411,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Clippy has no `let_underscore_future`, no silent `Result` discard, and no production `unwrap()`.
 
   **QA Scenarios**:
+
   ```
   Scenario: Services start and stop cleanly
     Tool: Bash
@@ -427,6 +452,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Evidence includes handled variant counts equal to protocol fixture counts.
 
   **QA Scenarios**:
+
   ```
   Scenario: Mock backend sends all known messages
     Tool: Bash
@@ -468,6 +494,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml overlay_server_serves_vue_assets -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Overlay browser asset route works
     Tool: Bash
@@ -509,6 +536,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] External browser open is abstracted behind a trait with test fake; production errors surface as service events.
 
   **QA Scenarios**:
+
   ```
   Scenario: OAuth callback success stores account
     Tool: Bash
@@ -551,6 +579,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml chat_burst_preserves_order_and_dedupe -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Chat fixture replay matches expected normalized output
     Tool: Bash
@@ -591,6 +620,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Failure tests cover auth expired, network timeout, rate limit, send failure, malformed message.
 
   **QA Scenarios**:
+
   ```
   Scenario: Twitch mock adapter full flow
     Tool: Bash
@@ -631,6 +661,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Failure tests cover auth expired, stream disconnect, malformed event, reconnect/resubscribe.
 
   **QA Scenarios**:
+
   ```
   Scenario: YouTube mock stream receives chat without polling
     Tool: Bash
@@ -670,6 +701,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Failure tests cover auth failure, chatroom lookup missing, send failure, reconnect, malformed event.
 
   **QA Scenarios**:
+
   ```
   Scenario: Kick mock adapter full flow
     Tool: Bash
@@ -709,6 +741,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Layout tests cover split, remove, assign, reorder, restore, max 8 panels, and invalid persisted layout recovery.
 
   **QA Scenarios**:
+
   ```
   Scenario: Watched channel manager starts and stops adapter tasks
     Tool: Bash
@@ -747,6 +780,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml runtime_update_state_transitions -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Update state emits toast-compatible events
     Tool: Bash
@@ -791,6 +825,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml ui_tokens_match_vue_sources -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: GPUI tokens match Vue theme values
     Tool: Bash
@@ -833,6 +868,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Keyboard navigation/focus tests for nav and toast actions pass.
 
   **QA Scenarios**:
+
   ```
   Scenario: Main shell screenshot matches Vue reference
     Tool: Bash
@@ -876,6 +912,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml chat_input_keyboard_contract -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Chat page visual parity with fixture messages
     Tool: Bash
@@ -919,6 +956,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml visual_user_card_and_popovers_match_vue -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: User card and history visual parity
     Tool: Bash
@@ -962,6 +1000,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml watched_layout_interaction_contract -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Watched split layout visual parity
     Tool: Bash
@@ -1002,6 +1041,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml platforms_actions_contract -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Platforms page visual parity
     Tool: Bash
@@ -1043,6 +1083,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml settings_hotkeys_overlay_contract -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Settings page visual parity
     Tool: Bash
@@ -1083,6 +1124,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml events_feed_ordering_contract -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Events page visual parity
     Tool: Bash
@@ -1123,6 +1165,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] Visual diff thresholds are documented in `packages/desktop-rust/tests/visual/README.md` with no human approval requirement.
 
   **QA Scenarios**:
+
   ```
   Scenario: Full parity suite passes
     Tool: Bash
@@ -1164,6 +1207,7 @@ Wave 7: Final Verification Wave F1-F4.
   - [ ] If updater pipeline is not fully implemented, `packages/desktop-rust/docs/updater-stabilization.md` records exact remaining steps and parity risks; update-toast UI remains functional through Task 15/17 implementation.
 
   **QA Scenarios**:
+
   ```
   Scenario: Packaging artifact contains Rust app and overlay assets
     Tool: Bash
@@ -1181,15 +1225,18 @@ Wave 7: Final Verification Wave F1-F4.
   **Commit**: YES | Message: `chore(release): task-25 add rust desktop packaging stabilization` | Files: [`packages/desktop-rust/README.md`, `packages/desktop-rust/docs/`, `packages/desktop-rust/build.rs`, `packages/desktop-rust/Cargo.toml`, `package.json`, `.sisyphus/evidence/task-25-*`]
 
 ## Final Verification Wave (MANDATORY — after ALL implementation tasks)
+
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
 > **Never mark F1-F4 as checked before getting user's okay.** Rejection or user feedback -> fix -> re-run -> present again -> wait for okay.
+
 - [ ] F1. Plan Compliance Audit — oracle
 - [ ] F2. Code Quality Review — unspecified-high
 - [ ] F3. Real Manual QA — unspecified-high (+ screenshot/fixture harness; Playwright only for overlay browser surface)
 - [ ] F4. Scope Fidelity Check — deep
 
 ### Final Verification QA Scenarios
+
 ```
 Scenario: F1 Plan Compliance Audit approves completed branch state
   Tool: oracle
@@ -1217,6 +1264,7 @@ Scenario: F4 Scope Fidelity Check confirms no forbidden drift
 ```
 
 ## Commit Strategy
+
 - Before implementation: create/switch branch with `git checkout -b feat/refactor-desktop-gpui` if it does not exist, otherwise `git checkout feat/refactor-desktop-gpui`.
 - Never use `worktree` commands.
 - Commit after each accepted task, not after broken intermediate edits.
@@ -1245,6 +1293,7 @@ Scenario: F4 Scope Fidelity Check confirms no forbidden drift
 - Do not commit `.env`, real databases, generated secrets, credentials, or unrelated user changes.
 
 ## Success Criteria
+
 - All TODO tasks are checked only after their acceptance criteria, QA scenarios, evidence, and commits complete.
 - Final verification agents F1-F4 all approve.
 - User explicitly approves final verification results.

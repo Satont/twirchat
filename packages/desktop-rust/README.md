@@ -6,9 +6,10 @@ GPUI shell for the native Rust desktop UI.
 
 - Native GPUI desktop shell with Rust-side runtime state for settings, overlay serving, update toast state,
   and packaging verification.
-- The production packaging truth still comes from `packages/desktop/electrobun.config.ts` until a full
-  native release pipeline exists.
-- Rust currently has update toast/state parity, not a full native updater pipeline.
+- Production desktop releases are published from `packages/desktop-rust` through the Velopack release
+  contract in `src/runtime/packaging.rs`.
+- The Rust runtime initializes Velopack at startup and performs safe update checks for packaged builds;
+  download/apply/relaunch behavior remains outside the current release contract.
 
 ## Run
 
@@ -62,8 +63,39 @@ bun run package:desktop-rust:verify
 The tests write evidence to `.sisyphus/evidence/task-25-packaging-assets.json` and
 `.sisyphus/evidence/task-25-packaging-error.json`.
 
-## Intentional first-pass simplifications
+## Velopack release contract
 
-- Full native updater download/apply/relaunch pipeline is not implemented yet.
-- Native release packaging still needs an installer/bundle stage; the current Rust layer verifies the
-  asset contract expected by that stage.
+The native Rust Velopack release contract is deterministic and lives in
+`src/runtime/packaging.rs`:
+
+- Package ID is `dev.twirchat.app`, matching the preserved `TwirChat` app metadata from the
+  Electrobun desktop package and Rust packaging verifier.
+- Stable release tags only match `^v[0-9]+\.[0-9]+\.[0-9]+$`.
+- `packVersion` strips the leading `v` from a stable tag, so `v1.2.3` becomes `1.2.3`.
+- Platform channels are `linux`, `win`, and `osx`.
+- Architecture matrix is Linux x64, Windows x64, and macOS universal.
+- The first stable tag creates the initial Velopack feed for every platform channel.
+- Rerunning an already-published stable tag must fail rather than overwrite release assets or feeds.
+- Signing and notarization are not part of the current contract.
+- Prerelease channels are not supported; beta, nightly, prerelease, and unprefixed semver tags are
+  rejected.
+
+Print or validate the executable contract with:
+
+```sh
+cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- v1.2.3
+```
+
+Invalid tags fail with a non-zero exit code:
+
+```sh
+cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- v1.2.3-beta.1
+cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- 1.2.3
+```
+
+## Current updater boundaries
+
+- Startup initialization and update-feed checks are implemented in `src/runtime/update.rs` and are safe
+  no-ops for dev, unpackaged, offline, and no-feed states.
+- The current contract publishes stable Velopack packages and feeds; in-app download, apply, and
+  relaunch actions are not part of this release pass.
