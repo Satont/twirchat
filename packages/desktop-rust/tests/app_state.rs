@@ -629,6 +629,57 @@ fn user_command_opens_user_card_and_suppresses_send() {
 }
 
 #[test]
+fn app_state_loads_aliases_and_updates_open_user_card_alias()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage =
+        twirchat_desktop_rust::storage::Storage::open(&temp.path().join("aliases.sqlite"))?;
+    storage
+        .user_aliases()
+        .upsert(Platform::Twitch, "viewer-1", "Friendly Alias")?;
+
+    let mut state = twirchat_desktop_rust::app_state::AppState::from_storage(&storage);
+    let message = user_message(
+        "msg-1",
+        Platform::Twitch,
+        "channel-home",
+        "viewer-1",
+        Some("viewerone"),
+        "Viewer One",
+        "1000",
+    );
+
+    assert_eq!(state.alias_for_message(&message), Some("Friendly Alias"));
+    let target = state.user_card_target_for_message(&message);
+    assert_eq!(target.current_alias.as_deref(), Some("Friendly Alias"));
+
+    state.open_user_card(target);
+    state.set_user_alias(&storage, Platform::Twitch, "viewer-1", "New Alias")?;
+    assert_eq!(state.alias_for_message(&message), Some("New Alias"));
+    assert_eq!(
+        state
+            .user_card
+            .target
+            .as_ref()
+            .and_then(|target| target.current_alias.as_deref()),
+        Some("New Alias"),
+    );
+
+    state.set_user_alias(&storage, Platform::Twitch, "viewer-1", "   ")?;
+    assert_eq!(state.alias_for_message(&message), None);
+    assert_eq!(
+        state
+            .user_card
+            .target
+            .as_ref()
+            .and_then(|target| target.current_alias.as_deref()),
+        None,
+    );
+
+    Ok(())
+}
+
+#[test]
 fn user_command_records_feedback_when_no_user_matches() {
     let mut state = twirchat_desktop_rust::app_state::AppState::default();
 

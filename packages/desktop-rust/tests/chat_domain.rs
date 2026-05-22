@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 use twirchat_desktop_rust::chat::{
     AliasBook, ChatAggregator, ChatReplayItem, IngestOutcome, SevenTvCatalog, SevenTvEmote,
-    insert_live_message, merge_older_page, sort_messages,
+    fuzzy_filter_mentions, insert_live_message, mention_suggestions, merge_older_page,
+    parse_mention_token, replace_mention_token, sort_messages,
 };
 use twirchat_desktop_rust::protocol::{
     Badge, ChatAuthor, ChatMessageType, Emote, EmotePosition, EventUser, NormalizedChatMessage,
@@ -316,6 +317,52 @@ fn chat_burst_performance() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+#[test]
+fn mention_autocomplete_uses_alias_labels_but_inserts_original_display_names() {
+    let messages = [
+        make_message(
+            "msg-1".to_string(),
+            Platform::Twitch,
+            "channel".to_string(),
+            "user-1".to_string(),
+            "Twitch User".to_string(),
+            1,
+        ),
+        make_message(
+            "msg-2".to_string(),
+            Platform::Twitch,
+            "channel".to_string(),
+            "user-2".to_string(),
+            "Another Viewer".to_string(),
+            2,
+        ),
+    ];
+    let aliases = AliasBook::from_aliases([UserAlias {
+        platform: Platform::Twitch,
+        platform_user_id: "user-1".to_string(),
+        alias: "Friendly Alias".to_string(),
+        created_at: 1,
+        updated_at: 1,
+    }]);
+
+    let suggestions = mention_suggestions(messages.iter().rev(), &aliases);
+    let filtered = fuzzy_filter_mentions(&suggestions, "fr", 15);
+
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].label, "Friendly Alias");
+    assert_eq!(filtered[0].insert_label, "Twitch User");
+    assert_eq!(filtered[0].current_alias.as_deref(), Some("Friendly Alias"));
+
+    let token = parse_mention_token("hello @fr").expect("mention token should parse");
+    assert_eq!(token.query, "fr");
+    assert_eq!(
+        replace_mention_token("hello @fr", &token, &filtered[0]),
+        "hello @Twitch User "
+    );
+    assert!(parse_mention_token("hello @fr ").is_none());
+    assert!(parse_mention_token("@").is_none());
 }
 
 fn make_message(

@@ -7,17 +7,22 @@ describe('user card metadata', () => {
     global.fetch = fetch
   })
 
-  it('returns unsupported Kick metadata', async () => {
+  it('returns graceful Kick metadata unavailable state when numeric IDs are missing', async () => {
+    global.fetch = mock(async (input: string | URL | Request) => {
+      throw new Error(`Unexpected fetch: ${String(input)}`)
+    }) as unknown as typeof global.fetch
+
     const metadata = await fetchUserCardMetadata({
       platform: 'kick',
       platformUserId: 'user-1',
-      channelId: '123',
     })
 
     expect(metadata.platform).toBe('kick')
     expect(metadata.accountAge.status).toBe('unsupported')
     expect(metadata.followAge.status).toBe('unavailable')
+    expect(metadata.followAge.message).toContain('channel and user IDs')
     expect(metadata.subscriptionDuration.status).toBe('unavailable')
+    expect(metadata.subscriptionDuration.message).toContain('channel and user IDs')
     expect(metadata.subAge.status).toBe('unavailable')
   })
 
@@ -80,18 +85,18 @@ describe('user card metadata', () => {
     expect(metadata.subAge.status).toBe('unsupported')
   })
 
-  it('maps Kick follow and subscription data from unofficial channel user endpoint', async () => {
+  it('maps Kick follow and subscription data from numeric channel user identity endpoint', async () => {
     global.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
 
-      if (url === 'https://kick.com/api/v2/channels/satont/users/jopyle4ka') {
+      if (url === 'https://kick.com/api/v2/channels/123/users/35676191/identity') {
         return Response.json({
           id: 35676191,
           username: 'jopyle4ka',
-          slug: 'jopyle4ka',
-          profile_pic: 'https://files.kick.com/example.webp',
+          role: 'subscriber',
+          badges: [],
           following_since: '2024-06-11T18:39:20.000000Z',
-          subscribed_for: 3,
+          subscribed_since: '2025-01-02T03:04:05.000000Z',
         })
       }
 
@@ -102,6 +107,7 @@ describe('user card metadata', () => {
       platform: 'kick',
       platformUserId: '35676191',
       username: 'jopyle4ka',
+      channelId: '123',
       channelSlug: 'satont',
     })
 
@@ -110,7 +116,68 @@ describe('user card metadata', () => {
     expect(metadata.followAge.followedAt).toBe('2024-06-11T18:39:20.000000Z')
     expect(metadata.subscriptionDuration.status).toBe('available')
     expect(metadata.subscriptionDuration.currentlySubscribed).toBe(true)
-    expect(metadata.subAge.status).toBe('available')
-    expect(metadata.subAge.months).toBe(3)
+    expect(metadata.subscriptionDuration.message).toContain('2025-01-02T03:04:05.000000Z')
+    expect(metadata.subAge.status).toBe('unavailable')
+    expect(metadata.subAge.months).toBeNull()
+  })
+
+  it('reports Kick follow metadata as unavailable when following_since is missing', async () => {
+    global.fetch = mock(async (input: string | URL | Request) => {
+      const url = String(input)
+
+      if (url === 'https://kick.com/api/v2/channels/123/users/35676191/identity') {
+        return Response.json({
+          id: 35676191,
+          username: 'jopyle4ka',
+          role: 'subscriber',
+          badges: [],
+          subscribed_since: '2025-01-02T03:04:05.000000Z',
+        })
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as unknown as typeof global.fetch
+
+    const metadata = await fetchUserCardMetadata({
+      platform: 'kick',
+      platformUserId: '35676191',
+      channelId: '123',
+    })
+
+    expect(metadata.followAge.status).toBe('unavailable')
+    expect(metadata.followAge.message).toBe(
+      'Unable to verify Kick follow status from identity metadata.',
+    )
+    expect(metadata.subscriptionDuration.status).toBe('available')
+    expect(metadata.subscriptionDuration.currentlySubscribed).toBe(true)
+  })
+
+  it('reports Kick identity lookup status when the numeric endpoint fails', async () => {
+    global.fetch = mock(async (input: string | URL | Request) => {
+      const url = String(input)
+
+      if (url === 'https://kick.com/api/v2/channels/123/users/35676191/identity') {
+        return new Response(null, { status: 404 })
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as unknown as typeof global.fetch
+
+    const metadata = await fetchUserCardMetadata({
+      platform: 'kick',
+      platformUserId: '35676191',
+      channelId: '123',
+    })
+
+    expect(metadata.followAge.status).toBe('unavailable')
+    expect(metadata.followAge.message).toBe(
+      'Unable to verify Kick follow status from identity metadata (404).',
+    )
+    expect(metadata.subscriptionDuration.message).toBe(
+      'Unable to verify Kick follow status from identity metadata (404).',
+    )
+    expect(metadata.subAge.message).toBe(
+      'Unable to verify Kick follow status from identity metadata (404).',
+    )
   })
 })

@@ -1,21 +1,25 @@
 # Desktop Rust User History Modal Restoration
 
 ## TL;DR
+
 > **Summary**: Restore the old desktop user-card/history modal in `packages/desktop-rust` with parity plus bounded polish. Use the existing Rust protocol/storage parity, add TDD coverage first, then wire GPUI state, async loading, chat triggers, and `/user` command support.
 > **Deliverables**:
+>
 > - Rust GPUI user-card modal with avatar, platform identity, alias display, Twitch/Kick metadata, and paginated local message history.
 > - Right-click user-card trigger from chat rows and `/user <name>` command parity.
 > - TDD tests for storage/protocol identity scoping, metadata mapping, modal state, triggers, stale async results, and smoke startup.
-> **Effort**: Medium
-> **Parallel**: YES - 4 waves
-> **Critical Path**: Task 1 -> Task 2 -> Task 4 -> Task 6 -> Final Verification
+>   **Effort**: Medium
+>   **Parallel**: YES - 4 waves
+>   **Critical Path**: Task 1 -> Task 2 -> Task 4 -> Task 6 -> Final Verification
 
 ## Context
 
 ### Original Request
+
 User reported that during the desktop application rewrite to Rust, the modal with user message history was lost. The old modal showed avatar, subscription timing/details, and message history. User asked to inspect the old desktop implementation and create a plan for adding this to `desktop-rust`.
 
 ### Interview Summary
+
 - Scope: **Parity + polish**.
 - Required platform metadata support: **Kick and Twitch**.
 - Test strategy: **TDD**.
@@ -23,21 +27,25 @@ User reported that during the desktop application rewrite to Rust, the modal wit
 - Behavior source of truth: old Vue desktop implementation.
 
 ### Metis Review (gaps addressed)
+
 - Define exact interaction parity, identity scoping, metadata fields, pagination, async stale-result handling, and executable acceptance criteria.
 - Avoid scope creep into generic profile/moderation/account refactors.
 - Use old Vue behavior as UX reference but implement idiomatic Rust/GPUI state and async patterns.
 - Do not introduce browser E2E tooling; use existing Rust tests, UI contract tests, and smoke run.
 
 ### Oracle Review
+
 - Phase 1 verdict: `VERDICT: GO`.
 - Directives incorporated: split into TDD slices, pin exact Rust files, make `/user` and right-click parity requirements, keep click-on-author/avatar as optional polish only if old behavior confirms it, exclude YouTube metadata beyond graceful fallback.
 
 ## Work Objectives
 
 ### Core Objective
+
 Restore old desktop user-card/history modal behavior in `desktop-rust` without changing unrelated chat, storage, backend, or account architecture.
 
 ### Deliverables
+
 - Tests that fail before implementation and pass after implementation for:
   - user history pagination and identity scoping,
   - metadata serialization/mapping for Twitch and Kick,
@@ -50,6 +58,7 @@ Restore old desktop user-card/history modal behavior in `desktop-rust` without c
 - `/user <display-or-login-or-id>` composer command interception in `AppState::queue_composer_send()` or the closest existing command parsing boundary.
 
 ### Definition of Done (verifiable conditions with commands)
+
 - `cargo fmt --manifest-path packages/desktop-rust/Cargo.toml --check` exits 0.
 - `cargo check --manifest-path packages/desktop-rust/Cargo.toml` exits 0.
 - `cargo clippy --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features -- -D warnings` exits 0.
@@ -58,6 +67,7 @@ Restore old desktop user-card/history modal behavior in `desktop-rust` without c
 - `cargo run --manifest-path packages/desktop-rust/Cargo.toml -- --smoke-exit-after-first-frame` exits 0 with no panic.
 
 ### Must Have
+
 - Old Vue parity references:
   - `packages/desktop/src/views/main/components/UserContextMenu.vue:22-47` right-click opens `UserCardDialog`.
   - `packages/desktop/src/views/main/components/UserCardDialog.vue:37-44` loads metadata when open.
@@ -79,6 +89,7 @@ Restore old desktop user-card/history modal behavior in `desktop-rust` without c
   - `packages/desktop-rust/src/app_state/mod.rs:1242-1271` composer send boundary for `/user` interception.
 
 ### Must NOT Have
+
 - No generic profile service beyond this user-card modal.
 - No moderation actions, bans/timeouts, account-management changes, or unrelated chat rendering refactors.
 - No storage schema migration unless a failing test proves current fields cannot support parity.
@@ -88,7 +99,9 @@ Restore old desktop user-card/history modal behavior in `desktop-rust` without c
 - No silent metadata/history errors; surface empty/error/retry states in modal and log where appropriate.
 
 ## Verification Strategy
+
 > ZERO HUMAN INTERVENTION - all verification is agent-executed.
+
 - Test decision: **TDD** with existing Rust `cargo test` framework.
 - QA policy: Every task has agent-executed scenarios.
 - Evidence: `.omo/evidence/task-{N}-{slug}.json` or `.omo/evidence/task-{N}-{slug}.txt`.
@@ -98,6 +111,7 @@ Restore old desktop user-card/history modal behavior in `desktop-rust` without c
 ## Execution Strategy
 
 ### Parallel Execution Waves
+
 > Target: 5-8 tasks per wave. This feature has fewer total tasks due tight file coupling; Wave 2 is the main parallel wave after contracts are established.
 > Extract shared dependencies as Wave-1 tasks for max parallelism.
 
@@ -107,6 +121,7 @@ Wave 3: Task 5 (chat trigger wiring) and Task 6 (async load integration) after T
 Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
 
 ### Dependency Matrix (full, all tasks)
+
 - Task 1: blocks Tasks 2-8.
 - Task 2: blocked by Task 1; blocks Tasks 6-8.
 - Task 3: blocked by Task 1; blocks Tasks 5-8.
@@ -117,12 +132,14 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
 - Task 8: blocked by Tasks 1-7.
 
 ### Agent Dispatch Summary (wave → task count → categories)
+
 - Wave 1 → 1 task → `unspecified-high` with `rust-best-practices`.
 - Wave 2 → 3 tasks → `unspecified-high`, `quick`, `visual-engineering` with `gpui`/`rust-best-practices`.
 - Wave 3 → 3 tasks → `visual-engineering`, `unspecified-high`, `visual-engineering` with `gpui`.
 - Wave 4 → 1 task → `unspecified-high`.
 
 ## TODOs
+
 > Implementation + Test = ONE task. Never separate.
 > EVERY task MUST have: Agent Profile + Parallelization + QA Scenarios.
 
@@ -162,6 +179,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `cargo check --manifest-path packages/desktop-rust/Cargo.toml` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: History pagination fixture proves newest-first cursor behavior
     Tool: Bash
@@ -218,6 +236,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `cargo check --manifest-path packages/desktop-rust/Cargo.toml` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Twitch metadata request includes broadcaster auth when available
     Tool: Bash
@@ -275,6 +294,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `/user TestViewer` is covered by tests and never queues `DesktopToBackendMessage::SendMessage`.
 
   **QA Scenarios**:
+
   ```
   Scenario: /user opens most recent matching user card
     Tool: Bash
@@ -330,6 +350,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `cargo check --manifest-path packages/desktop-rust/Cargo.toml` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Modal contract contains old Vue parity sections
     Tool: Bash
@@ -384,6 +405,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features compact_chat_uses_distinct_layout_without_avatar_branch -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Right-click author opens modal target
     Tool: Bash
@@ -445,6 +467,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `cargo run --manifest-path packages/desktop-rust/Cargo.toml -- --smoke-exit-after-first-frame` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Stale metadata result is ignored after opening another user
     Tool: Bash
@@ -508,6 +531,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features user_card_load_older -- --nocapture` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Metadata API error shows Retry, not empty state
     Tool: Bash
@@ -562,6 +586,7 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   - [ ] `cargo run --manifest-path packages/desktop-rust/Cargo.toml -- --smoke-exit-after-first-frame` exits 0.
 
   **QA Scenarios**:
+
   ```
   Scenario: Full Rust verification passes
     Tool: Bash
@@ -579,20 +604,24 @@ Wave 4: Task 8 (full verification/evidence consolidation) after Tasks 5-7
   **Commit**: NO | Message: `feat(desktop-rust): restore user history modal` | Files: all changed `packages/desktop-rust/**` feature/test files
 
 ## Final Verification Wave (MANDATORY — after ALL implementation tasks)
+
 > 4 review agents run in PARALLEL. ALL must APPROVE using agent-executed review, command output, and evidence files. Present consolidated results to user and get explicit "okay" before completing the workflow handoff.
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
 > **Never mark F1-F4 as checked before getting user's okay.** Rejection or user feedback -> fix -> re-run -> present again -> wait for okay.
+
 - [x] F1. Plan Compliance Audit — oracle
 - [x] F2. Code Quality Review — unspecified-high
 - [x] F3. Agent-Run Smoke/Contract QA — unspecified-high (`cargo test --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features` + `cargo run --manifest-path packages/desktop-rust/Cargo.toml -- --smoke-exit-after-first-frame`; no Playwright because none exists)
 - [x] F4. Scope Fidelity Check — deep
 
 ## Commit Strategy
+
 - Default: do not commit unless user explicitly asks.
 - If committing is requested, use one atomic commit after verification: `feat(desktop-rust): restore user history modal`.
 - Include only files under `packages/desktop-rust/**` unless a verified protocol mismatch requires backend/shared changes.
 
 ## Success Criteria
+
 - User can open a user-card modal from chat rows via right-click and via `/user <name>`.
 - Modal displays avatar/fallback, platform identity, alias if present, Twitch/Kick account/follow/subscription metadata, and local message history.
 - History is scoped by platform + author id and does not leak across Kick/Twitch even with same display names.

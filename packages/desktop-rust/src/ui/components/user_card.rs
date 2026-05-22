@@ -1,4 +1,5 @@
 use crate::models::Platform;
+use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::theme;
 use gpui::prelude::*;
@@ -39,6 +40,7 @@ pub enum HistoryState {
 }
 
 type WindowAppCallback = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
+type AliasSaveCallback = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
 pub struct UserCard {
@@ -48,6 +50,7 @@ pub struct UserCard {
     pub username: Option<SharedString>,
     pub avatar_url: Option<SharedString>,
     pub current_alias: Option<SharedString>,
+    pub alias_input: Option<Entity<Input>>,
 
     pub metadata_state: MetadataState,
     pub history_state: HistoryState,
@@ -55,6 +58,8 @@ pub struct UserCard {
     pub on_refresh_metadata: Option<WindowAppCallback>,
     pub on_refresh_history: Option<WindowAppCallback>,
     pub on_load_older: Option<WindowAppCallback>,
+    pub on_save_alias: Option<AliasSaveCallback>,
+    pub on_remove_alias: Option<WindowAppCallback>,
 }
 
 impl UserCard {
@@ -70,11 +75,14 @@ impl UserCard {
             username: None,
             avatar_url: None,
             current_alias: None,
+            alias_input: None,
             metadata_state: MetadataState::Unsupported,
             history_state: HistoryState::Empty,
             on_refresh_metadata: None,
             on_refresh_history: None,
             on_load_older: None,
+            on_save_alias: None,
+            on_remove_alias: None,
         }
     }
 
@@ -90,6 +98,21 @@ impl UserCard {
 
     pub fn current_alias(mut self, alias: impl Into<SharedString>) -> Self {
         self.current_alias = Some(alias.into());
+        self
+    }
+
+    pub fn alias_input(mut self, input: Entity<Input>) -> Self {
+        self.alias_input = Some(input);
+        self
+    }
+
+    pub fn on_save_alias(mut self, cb: impl Fn(String, &mut Window, &mut App) + 'static) -> Self {
+        self.on_save_alias = Some(Rc::new(cb));
+        self
+    }
+
+    pub fn on_remove_alias(mut self, cb: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_remove_alias = Some(Rc::new(cb));
         self
     }
 
@@ -249,6 +272,113 @@ impl UserCard {
                             .child(handle),
                     )
                     .child(badges),
+            )
+    }
+
+    fn render_alias_editor(&self) -> impl IntoElement {
+        let save_cb = self.on_save_alias.clone();
+        let remove_cb = self.on_remove_alias.clone();
+        let alias_input = self.alias_input.clone();
+        let reset_input = self.alias_input.clone();
+        let current_alias = self
+            .current_alias
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+
+        div()
+            .id("user-card-alias-editor")
+            .mb(px(18.0))
+            .p(px(14.0))
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(rgba(0xffffff14))
+            .bg(rgba(0x00000029))
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            .child(
+                div()
+                    .text_size(px(14.0))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(rgba(0xe2e2e8ff))
+                    .child("User alias"),
+            )
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(rgba(0x8b8b99ff))
+                    .child("Aliases change only local display names and mention suggestions."),
+            )
+            .when_some(alias_input, |editor, input| {
+                editor.child(div().id("user-card-alias-input").w_full().child(input))
+            })
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .id("user-card-save-alias")
+                            .cursor_pointer()
+                            .rounded(px(6.0))
+                            .bg(rgba(0x7c3aedff))
+                            .text_color(rgba(0xffffffff))
+                            .py(px(7.0))
+                            .px(px(10.0))
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::BOLD)
+                            .child("Save alias")
+                            .on_click({
+                                let input = self.alias_input.clone();
+                                move |_event, window, app| {
+                                    let Some(input) = input.as_ref() else {
+                                        return;
+                                    };
+                                    let alias = input.read(app).text().to_string();
+                                    if let Some(cb) = &save_cb {
+                                        cb(alias, window, app);
+                                    }
+                                }
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("user-card-close-alias")
+                            .cursor_pointer()
+                            .rounded(px(6.0))
+                            .bg(rgba(0xffffff14))
+                            .text_color(rgba(0xe2e2e8ff))
+                            .py(px(7.0))
+                            .px(px(10.0))
+                            .text_size(px(12.0))
+                            .child("Reset")
+                            .on_click(move |_event, _window, app| {
+                                if let Some(input) = reset_input.as_ref() {
+                                    input.update(app, |input, cx| {
+                                        input.set_text(current_alias.clone(), cx);
+                                    });
+                                }
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("user-card-remove-alias")
+                            .cursor_pointer()
+                            .rounded(px(6.0))
+                            .bg(rgba(0xffffff0f))
+                            .text_color(rgba(0xfca5a5ff))
+                            .py(px(7.0))
+                            .px(px(10.0))
+                            .text_size(px(12.0))
+                            .child("Remove")
+                            .on_click(move |_event, window, app| {
+                                if let Some(cb) = &remove_cb {
+                                    cb(window, app);
+                                }
+                            }),
+                    ),
             )
     }
 
@@ -567,8 +697,8 @@ impl UserCard {
                     .id("user-card-history-scroll")
                     .flex()
                     .flex_col()
-                    .h(px(360.0))
-                    .overflow_y_scroll();
+                    .flex_1()
+                    .min_h_0();
                 let total = messages.len();
                 for (i, msg) in messages.iter().enumerate() {
                     let mut row = div()
@@ -603,8 +733,10 @@ impl RenderOnce for UserCard {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         div()
             .id("user-card-modal")
-            .w(px(760.0))
-            .max_h(px(820.0))
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .h_full()
             .bg(rgba(0x2a2a35ff)) // var(--c-bg-2, #2a2a35)
             .border_1()
             .border_color(rgba(0x3a3a45ff))
@@ -616,9 +748,14 @@ impl RenderOnce for UserCard {
             .child(self.render_header())
             .child(
                 div()
+                    .id("user-card-body-scroll")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
                     .p(px(20.0))
                     .flex()
                     .flex_col()
+                    .child(self.render_alias_editor())
                     .child(self.render_metadata())
                     .child(self.render_history()),
             )

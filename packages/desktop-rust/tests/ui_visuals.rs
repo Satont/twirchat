@@ -25,6 +25,28 @@ fn visual_user_card_and_popovers_match_vue() {
 }
 
 #[test]
+fn visual_user_card_responsiveness() {
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
+    let user_card_rs =
+        fs::read_to_string("src/ui/components/user_card.rs").expect("should read user_card.rs");
+
+    assert!(app_rs.contains(".p(px(24.0))"));
+    assert!(app_rs.contains(".max_w(px(760.0))"));
+    assert!(app_rs.contains(".max_h(px(820.0))"));
+    assert!(app_rs.contains(".h_full()"));
+    assert!(app_rs.contains(".overflow_hidden()"));
+
+    assert!(user_card_rs.contains(".w_full()"));
+    assert!(user_card_rs.contains(".h_full()"));
+    assert!(user_card_rs.contains(".flex_1()"));
+    assert!(user_card_rs.contains(".min_h_0()"));
+
+    assert!(!user_card_rs.contains(".h(px(360.0))"));
+    assert!(user_card_rs.contains("user-card-body-scroll"));
+    assert!(user_card_rs.contains(".overflow_y_scroll()"));
+}
+
+#[test]
 fn modal_focus_and_escape_contract() {
     let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
 
@@ -107,4 +129,27 @@ fn assert_no_user_card_service_call_inside_this_update(app_rs: &str, call: &str)
         );
         search_start = start + "this.update(cx, |this, _cx|".len();
     }
+}
+
+#[test]
+fn alias_editor_and_mention_autocomplete_source_contract() {
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let user_card_rs =
+        fs::read_to_string("src/ui/components/user_card.rs").expect("should read user_card.rs");
+    let popup_rs = fs::read_to_string("src/ui/components/autocomplete_popup.rs")
+        .expect("should read autocomplete_popup.rs");
+
+    assert!(user_card_rs.contains("user-card-alias-editor"));
+    assert!(user_card_rs.contains("user-card-alias-input"));
+    assert!(user_card_rs.contains("user-card-save-alias"));
+    assert!(user_card_rs.contains("user-card-remove-alias"));
+    assert!(app_rs.contains("fn save_user_alias"));
+    assert!(app_rs.contains("fn remove_user_alias"));
+
+    assert!(popup_rs.contains("mention-autocomplete-popup"));
+    assert!(popup_rs.contains("mention-autocomplete-item-"));
+    assert!(chat_rs.contains("MentionAutocompletePopup::new"));
+    assert!(app_rs.contains("parse_mention_token"));
+    assert!(app_rs.contains("replace_mention_token"));
 }

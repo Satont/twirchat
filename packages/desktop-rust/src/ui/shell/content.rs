@@ -1,5 +1,5 @@
 use crate::app_state::{AppState, MainSection};
-use crate::ui::chat::{ChatPanelProps, ChatScrollUi};
+use crate::ui::chat::{ChatPanelProps, ChatScrollUi, MentionAutocompleteUi};
 use crate::ui::components::input::Input;
 use crate::ui::components::watched_layout;
 use crate::ui::shell::app::TwirChatApp;
@@ -22,6 +22,8 @@ pub(crate) struct ContentPanelProps<'a> {
     pub watched_composer_inputs: BTreeMap<String, Entity<Input>>,
     pub hotkey_capture_focus: FocusHandle,
     pub composer_text: String,
+    pub home_mention_autocomplete: Option<MentionAutocompleteUi>,
+    pub watched_mention_autocomplete: BTreeMap<String, MentionAutocompleteUi>,
     pub scroll_ui: SectionScrollUi<'a>,
 }
 
@@ -54,6 +56,7 @@ pub(crate) fn panel(
                             state_entity: props.state_entity.clone(),
                             composer_input: props.composer_input,
                             composer_text: props.composer_text,
+                            mention_autocomplete: props.home_mention_autocomplete,
                             scroll_ui: props.scroll_ui.chat,
                         },
                         window,
@@ -66,6 +69,7 @@ pub(crate) fn panel(
                         state,
                         props.state_entity.clone(),
                         &props.watched_composer_inputs,
+                        &props.watched_mention_autocomplete,
                         window,
                         cx,
                     )

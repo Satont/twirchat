@@ -116,3 +116,55 @@
 ## 2026-05-22 Scope cleanup after metadata auth retry
 
 - Removed unrelated stream-status/live-viewer worktree changes from the metadata auth retry: restored `app_state/mod.rs`, `services/mod.rs`, `ui/chat.rs`, and `ui/shell/app.rs` to HEAD, and deleted untracked stream-status patch/test/service files. The preserved diff is limited to user-card visual polish, runtime secret hydration/tests, and notepad notes.
+
+## 2026-05-23 Kick user-card metadata endpoint correction
+
+- Backend Kick user-card metadata must use `https://kick.com/api/v2/channels/{channel_id}/users/{user_id}/identity` with numeric broadcaster/user IDs; the older slug/username path `/api/v2/channels/{channelSlug}/users/{username}` returns false 404s for follow/sub metadata.
+- The identity response maps `following_since` to follow age and `subscribed_since` (or equivalent subscription timestamp fields) to current subscription state; Kick account age and sub-age months remain unsupported.
+
+## 2026-05-23 Verification cleanup
+
+- Restored `bun.lock` to the pre-verification state; the only prior drift was package-tooling version churn from `bun install`.
+- Backend verification from `packages/backend` passed for `bun run typecheck` and the scoped Kick metadata test with dummy env values.
+- Root lint reported only pre-existing warnings outside the backend files; no new backend errors were introduced.
+
+## 2026-05-23 Kick follow-age research
+
+- Public Kick docs do **not** document a dedicated identity endpoint; the docs only mention `identity` as a chat-sender field (`username_color`, `badges`) and `channel.followed` as the follow event, not follow-age metadata.
+- Public Kick v2 endpoint indexes do list `GET /api/v2/channels/{channelId}/users/{userId}/identity` and a related internal `.../chatroom/users/{userId}/identity` route, but I found no public source proving the endpoint is anonymous.
+- The most consistent field name for follow age is `following_since` (flat field). `subscribed_since` / `subscription_since` / `subscription_started_at` are plausible subscription fields. `followed_at` is used by follow-event payloads, not by Kick viewer identity examples.
+- A public Kick bot example fetches viewer info with **cookies + auth token + XSRF**, and its moderator docs say `following_since` comes from `get_viewer_info()`; that strongly suggests the current anonymous backend fetch can return a partial object or false "not following" state.
+- Confidence: field names high; auth requirement and exact channel-id semantics medium. Safe fallback: keep `following_since`, but treat missing data/401/403 as "unable to verify follow status" unless we can forward an authenticated Kick session.
+
+## 2026-05-23 Kick followAge fallback fix
+
+- `packages/backend/src/api/user-card-metadata.ts` now keeps the Kick identity endpoint and `following_since` success mapping, but missing `following_since` falls back to an unavailable "unable to verify Kick follow status" message instead of a definitive not-following claim.
+- Non-ok Kick identity responses now use the same follow-verification message for followAge, which matches the unauthenticated/partial-data limitation without changing subscription handling.
+
+## 2026-05-22 Task: task-4-user-card-responsiveness
+
+- `user-card-modal` responsiveness required adding `.w_full().max_w(...)` and `.h_full().max_h(...)` so it respects smaller app windows.
+- The content body holding metadata and history uses `.flex_1().min_h_0().overflow_y_scroll()` to scroll internally when height is constrained.
+- The history list (`user-card-history-scroll`) replaced its fixed `.h(px(360.0)).overflow_y_scroll()` with `.flex_1().min_h_0()`, letting the modal's main body scroll area handle overflow instead of having nested scrollbars or clipping.
+- Added `visual_user_card_responsiveness` test to enforce these GPUI layout methods on `UserCard`.
+
+## 2026-05-22 Task: task-4-user-card-responsiveness-retry
+
+- The initial attempt failed because `.h_full()` on `user_card.rs` was inside a size-less relative wrapper in `app.rs` (`div().relative()`), rendering the constraint ineffective.
+- The parent overlay in `app.rs` needs explicit bounds to properly constrain the modal. Added `p(px(24.0))` to the absolute overlay and `max_w(px(760.0)).max_h(px(820.0))` to the relative container.
+- Inside `user_card.rs`, removed `.max_w`, `.max_h`, and `.h_full()`. It now uses `.w_full()` to fill the constrained relative container, but hugs its own height. If the content exceeds the constraints, the internal `.flex_1().min_h_0().overflow_y_scroll()` correctly enables scrolling.
+- Accidental `chat_domain.rs` modifications and root scratch files were identified as scope creep and cleanly reverted to `HEAD`.
+- Source-contract tests now assert the presence of padding and bounds on the overlay wrapper, guaranteeing the sizing logic relies on true screen boundaries.
+
+## 2026-05-23 Modal Responsiveness Fix
+- `user_card.rs`: The `.h(px(360.0))` was successfully removed, and the `UserCard` now features `.flex_1().min_h_0().w_full().h_full()` on its root GPUI element. This is essential for forcing it to shrink when constrained by an outer app shell container, instead of expanding to the unlimited intrinsic height of its metadata and history children.
+- `app.rs`: The `render_user_card_modal` overlay layout now enforces constraints correctly. The modal wrapper acts as a bounds container: it uses `.w_full().h_full().max_w(px(760.0)).max_h(px(820.0)).overflow_hidden()`. Removing `.flex().flex_col()` from this wrapper simplified the block layout, ensuring the child `UserCard` inherits the precise bounded dimensions from the padded background overlay.
+- `chat_domain.rs`, `storage.rs`, and `app_state.rs` scope creeps from a previous step had been erroneously staged; they were successfully cleared via `git reset HEAD` and `git checkout --`.
+- `tests/ui_visuals.rs` was updated to explicitly enforce the layout invariants on the `UserCard` (must contain `flex_1` and `min_h_0`) and the app overlay wrapper bounds, guarding against regressions that would break height constraints or scroll capability.
+
+### Rust UI modal scroll constraint
+- To make a modal properly scrollable and responsive in GPUI without clipping:
+  - The outer overlay needs padding (`p(px(24.0))`).
+  - The inner wrapper needs to constraint height via `.flex().flex_col().w_full().h_full().max_w(...).max_h(...)` and `overflow_hidden()`.
+  - The inner content modal needs to expand via `.flex_1().min_h_0().w_full().h_full()`.
+  - The inner scrolling body must be `overflow_y_scroll()` with `flex_1().min_h_0()`, avoiding fixed heights on its lists like `h(px(360.0))` so it naturally fills the wrapper.

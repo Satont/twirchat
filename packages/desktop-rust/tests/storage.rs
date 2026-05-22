@@ -117,6 +117,30 @@ fn storage_reads_vue_fixture_db() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn user_alias_store_upserts_updates_and_removes_aliases() -> Result<(), Box<dyn std::error::Error>>
+{
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("user-aliases.sqlite");
+    let storage = Storage::open(&db_path)?;
+
+    storage
+        .user_aliases()
+        .upsert(Platform::Twitch, "user-1", "First Alias")?;
+    storage
+        .user_aliases()
+        .upsert(Platform::Twitch, "user-1", "Updated Alias")?;
+
+    let aliases = storage.user_aliases().find_all()?;
+    assert_eq!(aliases.len(), 1);
+    assert_eq!(aliases[0].alias, "Updated Alias");
+
+    storage.user_aliases().remove(Platform::Twitch, "user-1")?;
+    assert!(storage.user_aliases().find_all()?.is_empty());
+
+    Ok(())
+}
+
+#[test]
 fn user_card_history_scopes_by_platform_and_author_id() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let db_path = temp.path().join("user-card-history-scope.sqlite");

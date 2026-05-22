@@ -1,6 +1,10 @@
 use crate::app_state::{
     AppState, MainSection, UserCardHistoryPage, UserCardHistoryRequest, UserCardLoadState,
 };
+use crate::chat::{
+    MentionSuggestion, ParsedMentionToken, fuzzy_filter_mentions, mention_suggestions,
+    parse_mention_token, replace_mention_token,
+};
 use crate::hotkeys::matches_hotkey;
 use crate::models::Platform as UiPlatform;
 use crate::protocol::messages::{
@@ -17,7 +21,10 @@ use crate::ui::components::user_card::{
     HistoryMessage, HistoryState, MetadataState, UserCard, UserCardMetadata,
 };
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
-use crate::ui::{chat::ChatScrollUi, theme};
+use crate::ui::{
+    chat::{ChatScrollUi, MentionAutocompleteUi},
+    theme,
+};
 use gpui::{
     App, Context, Entity, FocusHandle, Focusable, FollowMode, KeystrokeEvent, ListAlignment,
     ListState, Render, ScrollHandle, Subscription, Task, Window, div, prelude::*, px, retain_all,
@@ -29,6 +36,7 @@ use std::time::Duration;
 pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
     composer_input: Entity<Input>,
+    user_card_alias_input: Entity<Input>,
     add_channel_input: Entity<Input>,
     tab_selector_input: Entity<Input>,
     watched_composer_inputs: BTreeMap<String, Entity<Input>>,
@@ -40,6 +48,9 @@ pub struct TwirChatApp {
     _user_card_history_task: Option<Task<()>>,
     _user_card_metadata_task: Option<Task<()>>,
     user_card_load_generation: Option<u64>,
+    mention_selected_index: usize,
+    mention_last_context: String,
+    mention_dismissed_context: Option<String>,
     chat_list_state: ListState,
     settings_scroll_handle: ScrollHandle,
     platforms_scroll_handle: ScrollHandle,
@@ -49,6 +60,19 @@ pub struct TwirChatApp {
     tab_selector_selected_index: usize,
     last_tab_selector_query: String,
     _keystroke_subscription: Subscription,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MentionComposerTarget {
+    Home,
+    Watched(String),
+}
+
+struct ActiveMentionAutocomplete {
+    target: MentionComposerTarget,
+    context_id: String,
+    token: ParsedMentionToken,
+    suggestions: Vec<MentionSuggestion>,
 }
 
 impl TwirChatApp {
@@ -67,12 +91,15 @@ impl TwirChatApp {
         };
         let state = cx.new(|_| initial_state);
         let composer_input = cx.new(|cx| Input::new("Send a message...", cx).with_clear_on_copy());
+        let user_card_alias_input = cx.new(|cx| Input::new("Local alias", cx));
         let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
         let tab_selector_input = cx.new(|cx| Input::new("Switch to tab...", cx));
         let hotkey_capture_focus = cx.focus_handle();
         let tab_selector_focus = cx.focus_handle();
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         cx.observe(&composer_input, |_, _, cx| cx.notify()).detach();
+        cx.observe(&user_card_alias_input, |_, _, cx| cx.notify())
+            .detach();
         cx.observe(&add_channel_input, |_, _, cx| cx.notify())
             .detach();
         cx.observe(&tab_selector_input, |_, _, cx| cx.notify())
@@ -147,6 +174,7 @@ impl TwirChatApp {
         Self {
             state,
             composer_input,
+            user_card_alias_input,
             add_channel_input,
             tab_selector_input,
             watched_composer_inputs: BTreeMap::new(),
@@ -158,6 +186,9 @@ impl TwirChatApp {
             _user_card_history_task: None,
             _user_card_metadata_task: None,
             user_card_load_generation: None,
+            mention_selected_index: 0,
+            mention_last_context: String::new(),
+            mention_dismissed_context: None,
             chat_list_state,
             settings_scroll_handle: ScrollHandle::new(),
             platforms_scroll_handle: ScrollHandle::new(),
@@ -520,6 +551,236 @@ impl TwirChatApp {
         }
     }
 
+    fn sync_mention_selection(&mut self, active: &ActiveMentionAutocomplete) {
+        if self.mention_last_context != active.context_id {
+            self.mention_last_context = active.context_id.clone();
+            self.mention_selected_index = 0;
+            return;
+        }
+
+        if active.suggestions.is_empty() {
+            self.mention_selected_index = 0;
+        } else {
+            self.mention_selected_index = self
+                .mention_selected_index
+                .min(active.suggestions.len().saturating_sub(1));
+        }
+    }
+
+    fn active_mention_autocomplete(
+        &self,
+        state: &AppState,
+        window: &Window,
+        cx: &App,
+    ) -> Option<ActiveMentionAutocomplete> {
+        let (target, text) = self.focused_mention_input_text(window, cx)?;
+        let token = parse_mention_token(&text)?;
+        let context_id = mention_context_id(&target, &token.query);
+        if self.mention_dismissed_context.as_deref() == Some(context_id.as_str()) {
+            return None;
+        }
+
+        let messages = mention_source_messages(state, &target);
+        let candidates = mention_suggestions(messages, state.aliases());
+        let suggestions = fuzzy_filter_mentions(&candidates, &token.query, 15);
+        if suggestions.is_empty() {
+            return None;
+        }
+
+        Some(ActiveMentionAutocomplete {
+            target,
+            context_id,
+            token,
+            suggestions,
+        })
+    }
+
+    fn focused_mention_input_text(
+        &self,
+        window: &Window,
+        cx: &App,
+    ) -> Option<(MentionComposerTarget, String)> {
+        let home_focused = self
+            .composer_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window);
+        if home_focused {
+            return Some((
+                MentionComposerTarget::Home,
+                self.composer_input.read(cx).text().to_string(),
+            ));
+        }
+
+        for (channel_id, input) in &self.watched_composer_inputs {
+            if input.read(cx).focus_handle(cx).is_focused(window) {
+                return Some((
+                    MentionComposerTarget::Watched(channel_id.clone()),
+                    input.read(cx).text().to_string(),
+                ));
+            }
+        }
+
+        None
+    }
+
+    fn input_for_mention_target(&self, target: &MentionComposerTarget) -> Option<Entity<Input>> {
+        match target {
+            MentionComposerTarget::Home => Some(self.composer_input.clone()),
+            MentionComposerTarget::Watched(channel_id) => {
+                self.watched_composer_inputs.get(channel_id).cloned()
+            }
+        }
+    }
+
+    pub(crate) fn select_mention_suggestion(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let state = self.state.read(cx).clone();
+        let Some(active) = self.active_mention_autocomplete(&state, window, cx) else {
+            return;
+        };
+        let Some(suggestion) = active
+            .suggestions
+            .get(index.min(active.suggestions.len().saturating_sub(1)))
+            .cloned()
+        else {
+            return;
+        };
+        let Some(input) = self.input_for_mention_target(&active.target) else {
+            return;
+        };
+
+        let next_text = replace_mention_token(input.read(cx).text(), &active.token, &suggestion);
+        input.update(cx, |input, cx| input.set_text(next_text, cx));
+        let focus = input.read(cx).focus_handle(cx);
+        window.focus(&focus, cx);
+        self.mention_selected_index = 0;
+        self.mention_last_context.clear();
+        self.mention_dismissed_context = None;
+        cx.notify();
+    }
+
+    fn handle_mention_keystroke(
+        &mut self,
+        event: &KeystrokeEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let state = self.state.read(cx).clone();
+        let Some(active) = self.active_mention_autocomplete(&state, window, cx) else {
+            return false;
+        };
+        self.sync_mention_selection(&active);
+
+        match event.keystroke.key.as_str() {
+            "escape" => {
+                self.mention_dismissed_context = Some(active.context_id);
+                cx.stop_propagation();
+                cx.notify();
+                true
+            }
+            "down" | "arrowdown" => {
+                self.mention_selected_index =
+                    (self.mention_selected_index + 1) % active.suggestions.len();
+                cx.stop_propagation();
+                cx.notify();
+                true
+            }
+            "up" | "arrowup" => {
+                self.mention_selected_index = if self.mention_selected_index == 0 {
+                    active.suggestions.len().saturating_sub(1)
+                } else {
+                    self.mention_selected_index - 1
+                };
+                cx.stop_propagation();
+                cx.notify();
+                true
+            }
+            "enter" | "tab" => {
+                self.select_mention_suggestion(self.mention_selected_index, window, cx);
+                cx.stop_propagation();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn save_user_alias(
+        &mut self,
+        platform: Platform,
+        platform_user_id: String,
+        alias: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(runtime) = &self.runtime else {
+            self.state.update(cx, |state, cx| {
+                state
+                    .record_runtime_failure("cannot save alias before runtime startup".to_string());
+                cx.notify();
+            });
+            return;
+        };
+
+        let saved = self.state.update(cx, |state, cx| {
+            let saved = match state.set_user_alias(
+                runtime.storage(),
+                platform,
+                &platform_user_id,
+                &alias,
+            ) {
+                Ok(saved) => saved,
+                Err(error) => {
+                    state.record_runtime_failure(error.to_string());
+                    false
+                }
+            };
+            cx.notify();
+            saved
+        });
+        if saved {
+            self.close_user_card(cx);
+        }
+    }
+
+    fn remove_user_alias(
+        &mut self,
+        platform: Platform,
+        platform_user_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(runtime) = &self.runtime else {
+            self.state.update(cx, |state, cx| {
+                state.record_runtime_failure(
+                    "cannot remove alias before runtime startup".to_string(),
+                );
+                cx.notify();
+            });
+            return;
+        };
+
+        let removed = self.state.update(cx, |state, cx| {
+            let removed =
+                match state.remove_user_alias(runtime.storage(), platform, &platform_user_id) {
+                    Ok(removed) => removed,
+                    Err(error) => {
+                        state.record_runtime_failure(error.to_string());
+                        false
+                    }
+                };
+            cx.notify();
+            removed
+        });
+        if removed {
+            self.user_card_alias_input
+                .update(cx, |input, cx| input.clear(cx));
+            self.close_user_card(cx);
+        }
+    }
+
     fn shortcuts_blocked(&self, window: &Window, cx: &App) -> bool {
         if self.hotkey_capture_focus.is_focused(window) {
             return true;
@@ -545,6 +806,10 @@ impl TwirChatApp {
 
         if self.tab_selector_open {
             self.handle_tab_selector_keystroke(event, cx);
+            return;
+        }
+
+        if self.handle_mention_keystroke(event, window, cx) {
             return;
         }
 
@@ -674,7 +939,9 @@ impl TwirChatApp {
         let close_entity = app_entity.clone();
         let refresh_metadata_entity = app_entity.clone();
         let refresh_history_entity = app_entity.clone();
-        let load_older_entity = app_entity;
+        let load_older_entity = app_entity.clone();
+        let save_alias_entity = app_entity.clone();
+        let remove_alias_entity = app_entity;
 
         let mut card = UserCard::new(
             user_card_platform(target.platform),
@@ -694,7 +961,24 @@ impl TwirChatApp {
             card = card.current_alias(current_alias.clone());
         }
 
+        let alias_platform = target.platform;
+        let save_alias_user_id = target.platform_user_id.clone();
+        let remove_alias_user_id = target.platform_user_id.clone();
+
         card = card
+            .alias_input(self.user_card_alias_input.clone())
+            .on_save_alias(move |alias, _window, app| {
+                let user_id = save_alias_user_id.clone();
+                save_alias_entity.update(app, |this, cx| {
+                    this.save_user_alias(alias_platform, user_id, alias, cx);
+                });
+            })
+            .on_remove_alias(move |_window, app| {
+                let user_id = remove_alias_user_id.clone();
+                remove_alias_entity.update(app, |this, cx| {
+                    this.remove_user_alias(alias_platform, user_id, cx);
+                });
+            })
             .on_refresh_metadata(move |_window, app| {
                 refresh_metadata_entity.update(app, |this, cx| {
                     this.refresh_user_card_metadata(cx);
@@ -718,30 +1002,41 @@ impl TwirChatApp {
             .bottom(px(0.0))
             .left(px(0.0))
             .bg(gpui::rgba(0x00000099))
+            .p(px(24.0))
             .flex()
             .items_center()
             .justify_center()
             .child(
-                div().relative().child(card).child(
-                    div()
-                        .id("user-card-close")
-                        .absolute()
-                        .top(px(12.0))
-                        .right(px(12.0))
-                        .cursor_pointer()
-                        .rounded(px(14.0))
-                        .bg(gpui::rgba(0x00000066))
-                        .text_color(crate::ui::theme::text_primary())
-                        .text_size(px(14.0))
-                        .px(px(9.0))
-                        .py(px(5.0))
-                        .child("Close")
-                        .on_click(move |_event, _window, app| {
-                            close_entity.update(app, |this, cx| {
-                                this.close_user_card(cx);
-                            });
-                        }),
-                ),
+                div()
+                    .relative()
+                    .flex()
+                    .flex_col()
+                    .w_full()
+                    .h_full()
+                    .max_w(px(760.0))
+                    .max_h(px(820.0))
+                    .overflow_hidden()
+                    .child(card)
+                    .child(
+                        div()
+                            .id("user-card-close")
+                            .absolute()
+                            .top(px(12.0))
+                            .right(px(12.0))
+                            .cursor_pointer()
+                            .rounded(px(14.0))
+                            .bg(gpui::rgba(0x00000066))
+                            .text_color(crate::ui::theme::text_primary())
+                            .text_size(px(14.0))
+                            .px(px(9.0))
+                            .py(px(5.0))
+                            .child("Close")
+                            .on_click(move |_event, _window, app| {
+                                close_entity.update(app, |this, cx| {
+                                    this.close_user_card(cx);
+                                });
+                            }),
+                    ),
             )
             .into_any_element()
     }
@@ -946,6 +1241,14 @@ impl Render for TwirChatApp {
             let generation = state.user_card.generation;
             if self.user_card_load_generation != Some(generation) {
                 self.user_card_load_generation = Some(generation);
+                let alias_text = state
+                    .user_card
+                    .target
+                    .as_ref()
+                    .and_then(|target| target.current_alias.clone())
+                    .unwrap_or_default();
+                self.user_card_alias_input
+                    .update(cx, |input, cx| input.set_text(alias_text, cx));
                 self.start_user_card_loads(cx);
             }
         } else {
@@ -959,6 +1262,29 @@ impl Render for TwirChatApp {
             }
         }
         self.last_chat_message_count = state.messages.len();
+
+        let active_mention = self.active_mention_autocomplete(&state, window, cx);
+        let mut home_mention_autocomplete = None;
+        let mut watched_mention_autocomplete = BTreeMap::new();
+        if let Some(active) = active_mention {
+            self.sync_mention_selection(&active);
+            let selected_index = self
+                .mention_selected_index
+                .min(active.suggestions.len().saturating_sub(1));
+            let autocomplete = MentionAutocompleteUi {
+                suggestions: active.suggestions,
+                selected_index,
+            };
+            match active.target {
+                MentionComposerTarget::Home => home_mention_autocomplete = Some(autocomplete),
+                MentionComposerTarget::Watched(channel_id) => {
+                    watched_mention_autocomplete.insert(channel_id, autocomplete);
+                }
+            }
+        } else {
+            self.mention_last_context.clear();
+            self.mention_selected_index = 0;
+        }
 
         div()
             .image_cache(retain_all("twirchat-images"))
@@ -988,6 +1314,8 @@ impl Render for TwirChatApp {
                             watched_composer_inputs: self.watched_composer_inputs.clone(),
                             hotkey_capture_focus: self.hotkey_capture_focus.clone(),
                             composer_text,
+                            home_mention_autocomplete,
+                            watched_mention_autocomplete,
                             scroll_ui: content::SectionScrollUi {
                                 chat: ChatScrollUi {
                                     list_state: &self.chat_list_state,
@@ -1010,6 +1338,34 @@ impl Render for TwirChatApp {
             .child(UpdateToast::new(self.state.clone()))
     }
 }
+fn mention_context_id(target: &MentionComposerTarget, query: &str) -> String {
+    match target {
+        MentionComposerTarget::Home => format!("home:{query}"),
+        MentionComposerTarget::Watched(channel_id) => format!("watched:{channel_id}:{query}"),
+    }
+}
+
+fn mention_source_messages<'a>(
+    state: &'a AppState,
+    target: &MentionComposerTarget,
+) -> Vec<&'a crate::protocol::types::NormalizedChatMessage> {
+    match target {
+        MentionComposerTarget::Home => state.messages.iter().rev().collect(),
+        MentionComposerTarget::Watched(channel_id) => state
+            .watched_channel_messages
+            .get(channel_id)
+            .map(|messages| messages.iter().rev().collect())
+            .unwrap_or_else(|| {
+                state
+                    .messages
+                    .iter()
+                    .rev()
+                    .filter(|message| message.channel_id == channel_id.as_str())
+                    .collect()
+            }),
+    }
+}
+
 fn metadata_platform(platform: Platform) -> Option<UserCardMetadataPlatform> {
     match platform {
         Platform::Twitch => Some(UserCardMetadataPlatform::Twitch),

@@ -1,8 +1,10 @@
 use crate::app_state::{AppState, AppStateActions};
+use crate::chat::{MentionSuggestion, apply_alias};
 use crate::protocol::types::{
     Account, AppSettings, ChatMessageType, ChatTheme, FontFamilyChoice, NormalizedChatMessage,
     Platform, PlatformStatus,
 };
+use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::selectable_message::{SelectableMessage, SelectableMessagePart};
@@ -22,10 +24,17 @@ pub(crate) struct ChatScrollUi<'a> {
     pub list_state: &'a ListState,
     pub paused: bool,
 }
+
+#[derive(Clone)]
+pub(crate) struct MentionAutocompleteUi {
+    pub suggestions: Vec<MentionSuggestion>,
+    pub selected_index: usize,
+}
 pub(crate) struct ChatPanelProps<'a> {
     pub state_entity: Entity<AppState>,
     pub composer_input: Entity<Input>,
     pub composer_text: String,
+    pub mention_autocomplete: Option<MentionAutocompleteUi>,
     pub scroll_ui: ChatScrollUi<'a>,
 }
 
@@ -77,6 +86,8 @@ pub(crate) fn panel(
             props.state_entity.clone(),
             props.composer_input,
             props.composer_text,
+            props.mention_autocomplete,
+            cx.entity(),
         ))
         .when(props.scroll_ui.paused, |el| {
             let list_state = props.scroll_ui.list_state.clone();
@@ -277,6 +288,8 @@ fn composer(
     state_entity: Entity<AppState>,
     composer_input: Entity<Input>,
     composer_text: String,
+    mention_autocomplete: Option<MentionAutocompleteUi>,
+    app_entity: Entity<TwirChatApp>,
 ) -> Div {
     let home_targets = home_chat_targets(state);
     let can_send = !composer_text.trim().is_empty()
@@ -327,9 +340,26 @@ fn composer(
                         .bg(theme::surface_2())
                         .border_1()
                         .border_color(theme::border())
+                        .relative()
                         .flex()
                         .items_center()
-                        .child(composer_input.clone()),
+                        .child(composer_input.clone())
+                        .when_some(mention_autocomplete, |input_box, autocomplete| {
+                            input_box.child(
+                                MentionAutocompletePopup::new(
+                                    autocomplete.suggestions,
+                                    autocomplete.selected_index,
+                                )
+                                .on_select({
+                                    let app_entity = app_entity.clone();
+                                    move |index, window, app| {
+                                        app_entity.update(app, |this, cx| {
+                                            this.select_mention_suggestion(index, window, cx);
+                                        });
+                                    }
+                                }),
+                            )
+                        }),
                 )
                 .child(
                     div()
@@ -926,7 +956,11 @@ impl MessageRowOptions {
     }
 }
 
-#[derive(Clone, Copy)]
+struct RowMessages {
+    display: NormalizedChatMessage,
+    target: NormalizedChatMessage,
+}
+
 struct MessageTypography {
     font_size: f32,
     font_family: FontFamilyChoice,
@@ -961,8 +995,20 @@ fn author_label_text(message: &NormalizedChatMessage, use_fallback: bool) -> Str
     display_name.to_string()
 }
 
-fn compact_message_row(
+fn aliased_row_message(
     message: &NormalizedChatMessage,
+    state_entity: &Entity<AppState>,
+    cx: &mut App,
+) -> NormalizedChatMessage {
+    let alias = state_entity
+        .read(cx)
+        .alias_for_message(message)
+        .map(str::to_string);
+    apply_alias(message, alias.as_deref()).message
+}
+
+fn compact_message_row(
+    messages: &RowMessages,
     settings: &AppSettings,
     _accounts: &[Account],
     state_entity: Entity<AppState>,
@@ -970,6 +1016,8 @@ fn compact_message_row(
     cx: &mut App,
     options: MessageRowOptions,
 ) -> AnyElement {
+    let message = &messages.display;
+    let target_message = messages.target.clone();
     let typography = MessageTypography::from_settings(settings);
     let mut custom_parts = Vec::new();
 
@@ -1063,7 +1111,7 @@ fn compact_message_row(
         author_label_text(message, options.use_author_fallback)
     );
     let state_entity_for_compact = state_entity.clone();
-    let message_for_compact = message.clone();
+    let message_for_compact = target_message.clone();
     custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
         move |_win, _cx| {
             let state_entity = state_entity_for_compact.clone();
@@ -1231,9 +1279,15 @@ pub(crate) fn message_row(
             .into_any_element();
     }
 
+    let row_messages = RowMessages {
+        display: aliased_row_message(message, &state_entity, cx),
+        target: message.clone(),
+    };
+    let message = &row_messages.display;
+
     if is_compact {
         return compact_message_row(
-            message,
+            &row_messages,
             settings,
             accounts,
             state_entity.clone(),
@@ -1295,7 +1349,7 @@ pub(crate) fn message_row(
                     .overflow_hidden()
                     .on_mouse_down(gpui::MouseButton::Right, {
                         let state_entity = state_entity.clone();
-                        let message = message.clone();
+                        let message = row_messages.target.clone();
                         move |_, _window, cx| {
                             state_entity.update(cx, |state, cx| {
                                 let target = state.user_card_target_for_message(&message);
@@ -1416,7 +1470,7 @@ pub(crate) fn message_row(
                                 .font_weight(gpui::FontWeight::BOLD)
                                 .on_mouse_down(gpui::MouseButton::Right, {
                                     let state_entity = state_entity.clone();
-                                    let message = message.clone();
+                                    let message = row_messages.target.clone();
                                     move |_, _window, cx| {
                                         state_entity.update(cx, |state, cx| {
                                             let target =

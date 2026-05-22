@@ -1,6 +1,6 @@
 pub mod mock_data;
 
-use crate::chat::{SevenTvCatalog, SevenTvEmote, enrich_message_with_seven_tv};
+use crate::chat::{AliasBook, SevenTvCatalog, SevenTvEmote, enrich_message_with_seven_tv};
 use crate::hotkeys::{HotkeyAction, HotkeyManager};
 use crate::protocol::messages::{ChannelStatus, ChannelStatusRequest, LiveStatusPlatform};
 use crate::protocol::types::{
@@ -142,6 +142,7 @@ pub struct AppState {
     pub settings: SettingsManager,
     pub platforms_panel: crate::ui::platforms::PlatformsPanel,
     pub messages: Vec<NormalizedChatMessage>,
+    aliases: AliasBook,
     seven_tv_catalog: SevenTvCatalog,
     pub watched_channels: Vec<WatchedChannel>,
     home_channel_statuses: BTreeMap<String, ChannelStatus>,
@@ -186,6 +187,7 @@ impl Default for AppState {
             settings: SettingsManager::new(default_app_settings()),
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
             messages: vec![],
+            aliases: AliasBook::default(),
             seven_tv_catalog: SevenTvCatalog::new(),
             watched_channels: vec![],
             home_channel_statuses: BTreeMap::new(),
@@ -227,6 +229,9 @@ impl AppState {
     fn load_storage_snapshot(&mut self, storage: &Storage) {
         if let Ok(messages) = storage.messages().get_recent(Some(50)) {
             self.messages = messages;
+        }
+        if let Ok(aliases) = storage.user_aliases().find_all() {
+            self.aliases = AliasBook::from_aliases(aliases);
         }
         if let Ok(settings) = storage.settings().get_app_settings() {
             self.settings = SettingsManager::new(settings);
@@ -312,6 +317,18 @@ impl AppState {
 
     pub fn settings(&self) -> &AppSettings {
         self.settings.settings()
+    }
+
+    pub fn aliases(&self) -> &AliasBook {
+        &self.aliases
+    }
+
+    pub fn alias_for_user(&self, platform: Platform, platform_user_id: &str) -> Option<&str> {
+        self.aliases.get(platform, platform_user_id)
+    }
+
+    pub fn alias_for_message(&self, message: &NormalizedChatMessage) -> Option<&str> {
+        self.alias_for_user(message.platform, &message.author.id)
     }
 
     pub fn runtime_status(&self) -> RuntimeStatus {
@@ -1595,6 +1612,47 @@ impl AppState {
             })
     }
 
+    pub fn set_user_alias(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+        platform_user_id: &str,
+        alias: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        let alias = alias.trim();
+        if platform_user_id.is_empty() {
+            return Ok(false);
+        }
+
+        if alias.is_empty() {
+            return self.remove_user_alias(storage, platform, platform_user_id);
+        }
+
+        storage
+            .user_aliases()
+            .upsert(platform, platform_user_id, alias)?;
+        self.aliases
+            .set(platform, platform_user_id.to_string(), alias.to_string());
+        self.update_open_user_card_alias(platform, platform_user_id);
+        Ok(true)
+    }
+
+    pub fn remove_user_alias(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+        platform_user_id: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        if platform_user_id.is_empty() {
+            return Ok(false);
+        }
+
+        storage.user_aliases().remove(platform, platform_user_id)?;
+        self.aliases.remove(platform, platform_user_id);
+        self.update_open_user_card_alias(platform, platform_user_id);
+        Ok(true)
+    }
+
     pub fn remove_chat_pane_for_active_tab(
         &mut self,
         storage: &Storage,
@@ -1820,7 +1878,7 @@ impl AppState {
             display_name: message.author.display_name.clone(),
             username: message.author.username.clone(),
             avatar_url: message.author.avatar_url.clone(),
-            current_alias: None,
+            current_alias: self.alias_for_message(message).map(str::to_string),
         }
     }
 
@@ -1852,6 +1910,18 @@ impl AppState {
                     .map(|account| account.username.clone())
             })
             .unwrap_or_else(|| message.channel_id.clone())
+    }
+
+    fn update_open_user_card_alias(&mut self, platform: Platform, platform_user_id: &str) {
+        let current_alias = self
+            .alias_for_user(platform, platform_user_id)
+            .map(str::to_string);
+        let Some(target) = self.user_card.target.as_mut() else {
+            return;
+        };
+        if target.platform == platform && target.platform_user_id == platform_user_id {
+            target.current_alias = current_alias;
+        }
     }
 
     fn home_channel_targets(&self) -> Vec<HomeChannelTarget> {
@@ -2054,6 +2124,14 @@ pub trait AppStateActions {
         generation: u64,
         result: Result<crate::protocol::messages::UserCardMetadataResponse, String>,
     ) -> bool;
+    fn set_user_alias(
+        &self,
+        app: &mut App,
+        platform: Platform,
+        platform_user_id: &str,
+        alias: &str,
+    );
+    fn remove_user_alias(&self, app: &mut App, platform: Platform, platform_user_id: &str);
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str);
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
     fn remove_chat_pane_for_active_tab(&self, app: &mut App, panel_id: &str);
@@ -2452,6 +2530,46 @@ impl AppStateActions for Entity<AppState> {
             cx.notify();
             applied
         })
+    }
+
+    fn set_user_alias(
+        &self,
+        app: &mut App,
+        platform: Platform,
+        platform_user_id: &str,
+        alias: &str,
+    ) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) =
+                        state.set_user_alias(&storage, platform, platform_user_id, alias)
+                    {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn remove_user_alias(&self, app: &mut App, platform: Platform, platform_user_id: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) =
+                        state.remove_user_alias(&storage, platform, platform_user_id)
+                    {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
     }
 
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str) {

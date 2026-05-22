@@ -3,17 +3,25 @@ use crate::protocol::types::{
     LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection, WatchedChannel,
     WatchedChannelsLayout,
 };
-use crate::ui::chat::{MessageRowOptions, message_row};
+use crate::ui::chat::{MentionAutocompleteUi, MessageRowOptions, message_row};
+use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
 use crate::ui::components::input::Input;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{Div, Entity, Stateful, div, prelude::*, px, rgb, rgba};
 use std::collections::BTreeMap;
 
-pub fn tab_panel(
+#[derive(Clone)]
+struct WatchedComposerUi {
+    input: Option<Entity<Input>>,
+    autocomplete: Option<MentionAutocompleteUi>,
+}
+
+pub(crate) fn tab_panel(
     state: &AppState,
     state_entity: Entity<AppState>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+    watched_mention_autocomplete: &BTreeMap<String, MentionAutocompleteUi>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
@@ -36,6 +44,7 @@ pub fn tab_panel(
             state,
             state_entity,
             watched_composer_inputs,
+            watched_mention_autocomplete,
             window,
             cx,
         ))
@@ -46,6 +55,7 @@ fn render_layout(
     state: &AppState,
     state_entity: Entity<AppState>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+    watched_mention_autocomplete: &BTreeMap<String, MentionAutocompleteUi>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
@@ -60,6 +70,7 @@ fn render_layout(
             state,
             state_entity,
             watched_composer_inputs,
+            watched_mention_autocomplete,
             window,
             cx,
         ))
@@ -70,6 +81,7 @@ fn render_node(
     state: &AppState,
     state_entity: Entity<AppState>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
+    watched_mention_autocomplete: &BTreeMap<String, MentionAutocompleteUi>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Stateful<Div> {
@@ -87,7 +99,10 @@ fn render_node(
                     state_entity,
                     id,
                     channel_id,
-                    watched_composer_inputs.get(channel_id).cloned(),
+                    WatchedComposerUi {
+                        input: watched_composer_inputs.get(channel_id).cloned(),
+                        autocomplete: watched_mention_autocomplete.get(channel_id).cloned(),
+                    },
                     window,
                     cx,
                 ),
@@ -133,6 +148,7 @@ fn render_node(
                     state,
                     state_entity.clone(),
                     watched_composer_inputs,
+                    watched_mention_autocomplete,
                     window,
                     cx,
                 ));
@@ -148,7 +164,7 @@ fn watched_panel(
     state_entity: Entity<AppState>,
     panel_id: &str,
     channel_id: &str,
-    composer_input: Option<Entity<Input>>,
+    composer: WatchedComposerUi,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
@@ -335,11 +351,13 @@ fn watched_panel(
                         .collect::<Vec<_>>()
                 }),
         )
-        .when_some(composer_input, |panel, composer_input| {
+        .when_some(composer.input, |panel, composer_input| {
             panel.child(watched_composer(
                 state_entity,
                 channel_id.to_string(),
                 composer_input,
+                composer.autocomplete,
+                cx.entity(),
             ))
         })
 }
@@ -472,6 +490,8 @@ fn watched_composer(
     state_entity: Entity<AppState>,
     channel_id: String,
     composer_input: Entity<Input>,
+    mention_autocomplete: Option<MentionAutocompleteUi>,
+    app_entity: Entity<TwirChatApp>,
 ) -> Div {
     div()
         .w_full()
@@ -492,9 +512,26 @@ fn watched_composer(
                 .bg(theme::surface_2())
                 .border_1()
                 .border_color(theme::border())
+                .relative()
                 .flex()
                 .items_center()
-                .child(composer_input.clone()),
+                .child(composer_input.clone())
+                .when_some(mention_autocomplete, |input_box, autocomplete| {
+                    input_box.child(
+                        MentionAutocompletePopup::new(
+                            autocomplete.suggestions,
+                            autocomplete.selected_index,
+                        )
+                        .on_select({
+                            let app_entity = app_entity.clone();
+                            move |index, window, app| {
+                                app_entity.update(app, |this, cx| {
+                                    this.select_mention_suggestion(index, window, cx);
+                                });
+                            }
+                        }),
+                    )
+                }),
         )
         .child(
             div()

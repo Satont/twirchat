@@ -2,6 +2,7 @@
 
 pub mod aggregate;
 pub mod alias;
+pub mod autocomplete;
 pub mod history;
 pub mod normalize;
 
@@ -10,6 +11,10 @@ pub use aggregate::{
     enrich_message_with_seven_tv, merge_seven_tv_emotes,
 };
 pub use alias::{AliasBook, apply_alias, apply_aliases};
+pub use autocomplete::{
+    MentionSuggestion, ParsedMentionToken, fuzzy_filter_mentions, mention_suggestions,
+    parse_mention_token, replace_mention_token,
+};
 pub use history::{compare_messages, insert_live_message, merge_older_page, sort_messages};
 pub use normalize::{
     NormalizedChatItem, message_timestamp_millis, normalize_event, normalize_message,

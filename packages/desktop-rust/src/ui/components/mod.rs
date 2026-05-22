@@ -1,4 +1,5 @@
 pub mod animated_emote;
+pub mod autocomplete_popup;
 pub mod button;
 pub mod card;
 pub mod chip;
@@ -15,6 +16,7 @@ pub mod tabs;
 pub mod tooltip;
 
 pub use animated_emote::*;
+pub use autocomplete_popup::*;
 pub use button::*;
 pub use card::*;
 pub use chip::*;
@@ -30,4 +32,3 @@ pub use tooltip::*;
 pub mod user_card;
 pub mod watched_layout;
 pub use user_card::*;
-pub use watched_layout::*;
