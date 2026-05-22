@@ -8,6 +8,7 @@ pub mod backend_ws;
 pub mod bus;
 pub mod commands;
 pub mod events;
+pub mod stream_status;
 pub mod supervisor;
 pub mod user_card;
 pub mod watched_channels;
@@ -19,6 +20,7 @@ pub use bus::{
 };
 pub use commands::*;
 pub use events::*;
+pub use stream_status::*;
 pub use supervisor::*;
 pub use user_card::*;
 pub use watched_channels::*;

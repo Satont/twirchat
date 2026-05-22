@@ -3,12 +3,13 @@ import { handleUpdateStream } from '../api/update-stream.ts'
 import { handleSearchCategories } from '../api/search-categories.ts'
 import { handleTwitchBadges } from '../api/twitch-badges.ts'
 import { fetchTwitchUserById } from '../api/twitch-users.ts'
-import { handleChannelsStatus } from '../api/channels-status.ts'
+import { handleChannelsStatus, InvalidChannelsStatusRequestError } from '../api/channels-status.ts'
 import { handleKickChatroom } from '../api/kick-chatroom.ts'
 import { json, requireClient } from './utils.ts'
 import { logger } from '@twirchat/shared/logger'
 
 const log = logger('routes')
+const MAX_ERROR_LOG_LENGTH = 300
 
 export const streamRoutes = {
   '/api/channels-status': {
@@ -19,8 +20,12 @@ export const streamRoutes = {
         const result = await handleChannelsStatus(req)
         return json(result)
       } catch (err) {
-        log.error('channels-status failed', { err: String(err) })
-        return json({ error: String(err) }, 500)
+        if (err instanceof InvalidChannelsStatusRequestError) {
+          return json({ error: err.message }, 400)
+        }
+
+        log.error('channels-status failed', { err: String(err).slice(0, MAX_ERROR_LOG_LENGTH) })
+        return json({ error: 'channels-status failed' }, 500)
       }
     },
   },

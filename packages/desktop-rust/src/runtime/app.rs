@@ -88,8 +88,15 @@ impl UserCardRuntimeLoader {
 
 impl AppRuntime {
     pub fn start(input: RuntimeConfigInput) -> Result<Self, AppRuntimeError> {
-        let config = RuntimeConfig::new(input);
+        let hydrate_client_secret = input.client_secret.is_none();
+        let mut config = RuntimeConfig::new(input);
         let storage = Storage::open_or_recover(config.db_path())?;
+        if hydrate_client_secret {
+            config.apply(RuntimeConfigInput {
+                client_secret: Some(storage.client_identity().get_client_secret()?),
+                ..Default::default()
+            });
+        }
         let service_config = ServiceRuntimeConfig::default()
             .with_backend_ws(BackendWsConfig::new(
                 config.backend_ws_url(),

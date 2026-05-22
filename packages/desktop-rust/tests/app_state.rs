@@ -7,8 +7,9 @@ use twirchat_desktop_rust::app_state::{
 };
 use twirchat_desktop_rust::protocol::rpc::UserChatHistoryCursor;
 use twirchat_desktop_rust::protocol::{
-    BackendToDesktopMessage, Badge, ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform,
-    PlatformStatus, PlatformStatusInfo, PlatformStatusMode, SevenTvEmote, WatchedChannel,
+    Account, BackendToDesktopMessage, Badge, ChannelStatus, ChatAuthor, ChatMessageType,
+    LiveStatusPlatform, NormalizedChatMessage, Platform, PlatformStatus, PlatformStatusInfo,
+    PlatformStatusMode, SevenTvEmote, WatchedChannel,
 };
 
 #[test]
@@ -38,6 +39,77 @@ fn user_card_modal_state_is_closed_by_default() {
     assert!(!state.user_card.has_more);
     assert_eq!(state.user_card.next_cursor, None);
     assert_eq!(state.user_card.generation, 0);
+}
+
+#[test]
+fn home_channel_status_requests_match_vue_stream_status_scope() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.platforms_panel.accounts = vec![
+        account("twitch-account", Platform::Twitch, "123", "FixtureStreamer"),
+        account("kick-account", Platform::Kick, "456", "KickOne"),
+        account("youtube-account", Platform::Youtube, "789", "TubeOne"),
+    ];
+    state.watched_channels = vec![
+        watched_channel("watched-duplicate", Platform::Twitch, "fixturestreamer"),
+        watched_channel("watched-kick", Platform::Kick, "OtherKick"),
+        watched_channel("watched-youtube", Platform::Youtube, "TubeTwo"),
+    ];
+
+    let requests = state.home_channel_status_requests();
+
+    assert_eq!(requests.len(), 3);
+    assert!(requests.iter().any(|request| {
+        request.platform == LiveStatusPlatform::Twitch
+            && request.channel_login == "FixtureStreamer"
+            && request.channel_id.as_deref() == Some("123")
+    }));
+    assert!(requests.iter().any(|request| {
+        request.platform == LiveStatusPlatform::Kick
+            && request.channel_login == "KickOne"
+            && request.channel_id.as_deref() == Some("456")
+    }));
+    assert!(requests.iter().any(|request| {
+        request.platform == LiveStatusPlatform::Kick
+            && request.channel_login == "OtherKick"
+            && request.channel_id.is_none()
+    }));
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request.channel_login == "TubeOne")
+    );
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request.channel_login == "TubeTwo")
+    );
+}
+
+#[test]
+fn home_channel_statuses_are_applied_case_insensitively() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+
+    state.apply_home_channel_statuses(vec![ChannelStatus {
+        platform: LiveStatusPlatform::Twitch,
+        channel_login: "fixturestreamer".to_string(),
+        is_live: true,
+        title: "Test Stream".to_string(),
+        category_name: Some("Just Chatting".to_string()),
+        viewer_count: Some(1_234),
+    }]);
+
+    let status = state
+        .home_channel_status(Platform::Twitch, "FixtureStreamer")
+        .expect("status should be keyed by platform and lower-case login");
+    assert!(status.is_live);
+    assert_eq!(status.title, "Test Stream");
+    assert_eq!(status.category_name.as_deref(), Some("Just Chatting"));
+    assert_eq!(status.viewer_count, Some(1_234));
+    assert!(
+        state
+            .home_channel_status(Platform::Youtube, "FixtureStreamer")
+            .is_none()
+    );
 }
 
 #[test]
@@ -674,6 +746,20 @@ fn watched_channel(id: &str, platform: Platform, channel_slug: &str) -> WatchedC
         channel_slug: channel_slug.to_string(),
         display_name: channel_slug.to_string(),
         created_at: 1,
+    }
+}
+
+fn account(id: &str, platform: Platform, platform_user_id: &str, username: &str) -> Account {
+    Account {
+        id: id.to_string(),
+        platform,
+        platform_user_id: platform_user_id.to_string(),
+        username: username.to_string(),
+        display_name: username.to_string(),
+        avatar_url: None,
+        scopes: Vec::new(),
+        created_at: 1,
+        updated_at: 1,
     }
 }
 

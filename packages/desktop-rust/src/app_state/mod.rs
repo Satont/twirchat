@@ -2,6 +2,7 @@ pub mod mock_data;
 
 use crate::chat::{SevenTvCatalog, SevenTvEmote, enrich_message_with_seven_tv};
 use crate::hotkeys::{HotkeyAction, HotkeyManager};
+use crate::protocol::messages::{ChannelStatus, ChannelStatusRequest, LiveStatusPlatform};
 use crate::protocol::types::{
     Account, AppSettings, AppTheme, Badge, ChatAuthor, ChatMessageType, ChatTheme,
     FontFamilyChoice, LayoutNode, NormalizedChatMessage, OverlayAnimation, OverlayConfig,
@@ -143,6 +144,7 @@ pub struct AppState {
     pub messages: Vec<NormalizedChatMessage>,
     seven_tv_catalog: SevenTvCatalog,
     pub watched_channels: Vec<WatchedChannel>,
+    home_channel_statuses: BTreeMap<String, ChannelStatus>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_channel_messages: BTreeMap<String, Vec<NormalizedChatMessage>>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
@@ -186,6 +188,7 @@ impl Default for AppState {
             messages: vec![],
             seven_tv_catalog: SevenTvCatalog::new(),
             watched_channels: vec![],
+            home_channel_statuses: BTreeMap::new(),
             watched_channel_statuses: BTreeMap::new(),
             watched_channel_messages: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
@@ -340,6 +343,59 @@ impl AppState {
             .iter()
             .filter(|channel| !self.is_home_account_channel(channel))
             .collect()
+    }
+
+    pub fn home_channel_status_requests(&self) -> Vec<ChannelStatusRequest> {
+        let mut requests = Vec::new();
+        let mut seen = BTreeSet::new();
+
+        for account in &self.platforms_panel.accounts {
+            let Some(platform) = live_status_platform(account.platform) else {
+                continue;
+            };
+            push_home_channel_status_request(
+                &mut requests,
+                &mut seen,
+                platform,
+                &account.username,
+                (!account.platform_user_id.is_empty()).then(|| account.platform_user_id.clone()),
+            );
+        }
+
+        for channel in &self.watched_channels {
+            let Some(platform) = live_status_platform(channel.platform) else {
+                continue;
+            };
+            push_home_channel_status_request(
+                &mut requests,
+                &mut seen,
+                platform,
+                &channel.channel_slug,
+                None,
+            );
+        }
+
+        requests
+    }
+
+    pub fn apply_home_channel_statuses(&mut self, statuses: Vec<ChannelStatus>) {
+        for status in statuses {
+            self.home_channel_statuses.insert(
+                home_channel_status_key(status.platform, &status.channel_login),
+                status,
+            );
+        }
+    }
+
+    pub fn home_channel_status(
+        &self,
+        platform: Platform,
+        channel_login: &str,
+    ) -> Option<&ChannelStatus> {
+        live_status_platform(platform).and_then(|platform| {
+            self.home_channel_statuses
+                .get(&home_channel_status_key(platform, channel_login))
+        })
     }
 
     pub fn add_chat_pane_for_active_tab(
@@ -2665,6 +2721,53 @@ fn format_platform_label(platform: Platform) -> &'static str {
         Platform::Youtube => "YouTube",
         Platform::Kick => "Kick",
     }
+}
+
+fn live_status_platform(platform: Platform) -> Option<LiveStatusPlatform> {
+    match platform {
+        Platform::Twitch => Some(LiveStatusPlatform::Twitch),
+        Platform::Kick => Some(LiveStatusPlatform::Kick),
+        Platform::Youtube => None,
+    }
+}
+
+fn home_channel_status_key(platform: LiveStatusPlatform, channel_login: &str) -> String {
+    format!(
+        "{}:{}",
+        live_status_platform_key(platform),
+        channel_login.to_lowercase()
+    )
+}
+
+fn live_status_platform_key(platform: LiveStatusPlatform) -> &'static str {
+    match platform {
+        LiveStatusPlatform::Twitch => "twitch",
+        LiveStatusPlatform::Kick => "kick",
+    }
+}
+
+fn push_home_channel_status_request(
+    requests: &mut Vec<ChannelStatusRequest>,
+    seen: &mut BTreeSet<String>,
+    platform: LiveStatusPlatform,
+    channel_login: &str,
+    channel_id: Option<String>,
+) {
+    let channel_login = channel_login.trim();
+    if channel_login.is_empty() {
+        return;
+    }
+
+    if !seen.insert(home_channel_status_key(platform, channel_login)) {
+        return;
+    }
+
+    requests.push(ChannelStatusRequest {
+        platform,
+        channel_login: channel_login.to_string(),
+        channel_id,
+        user_access_token: None,
+    });
 }
 
 fn normalize_user_lookup(value: &str) -> String {

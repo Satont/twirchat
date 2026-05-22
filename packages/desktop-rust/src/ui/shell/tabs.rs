@@ -2,6 +2,7 @@ use crate::app_state::{AppState, AppStateActions};
 use crate::models::Platform as ModelPlatform;
 use crate::protocol::types::Platform;
 use crate::ui::components::input::Input;
+use crate::ui::shared::format_compact_viewers;
 use crate::ui::theme;
 use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px};
 
@@ -10,6 +11,8 @@ pub(crate) struct TabItem {
     pub id: String,
     pub label: String,
     pub platform: Option<Platform>,
+    pub is_live: bool,
+    pub viewer_count: Option<u64>,
 }
 
 pub(crate) fn items(state: &AppState) -> Vec<TabItem> {
@@ -17,17 +20,19 @@ pub(crate) fn items(state: &AppState) -> Vec<TabItem> {
         id: "home".to_string(),
         label: "Home".to_string(),
         platform: None,
+        is_live: false,
+        viewer_count: None,
     }];
-    tabs.extend(
-        state
-            .visible_watched_channels()
-            .into_iter()
-            .map(|channel| TabItem {
-                id: channel.id.clone(),
-                label: channel.display_name.clone(),
-                platform: Some(channel.platform),
-            }),
-    );
+    tabs.extend(state.visible_watched_channels().into_iter().map(|channel| {
+        let status = state.home_channel_status(channel.platform, &channel.channel_slug);
+        TabItem {
+            id: channel.id.clone(),
+            label: channel.display_name.clone(),
+            platform: Some(channel.platform),
+            is_live: status.is_some_and(|status| status.is_live),
+            viewer_count: status.and_then(|status| status.viewer_count),
+        }
+    }));
     tabs
 }
 
@@ -56,6 +61,8 @@ pub(crate) fn bar(
             let id = tab.id.clone();
             let label = tab.label.clone();
             let platform = tab.platform;
+            let is_live = tab.is_live;
+            let viewer_count = tab.viewer_count;
             let is_active = id == active_id;
             let tab_id = id.clone();
             let accent = tab_accent(platform);
@@ -104,10 +111,21 @@ pub(crate) fn bar(
                             },
                         )
                         .gap(px(6.0))
-                        .when(is_active && platform.is_some(), |this| {
+                        .when((is_active || is_live) && platform.is_some(), |this| {
                             this.child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(accent))
                         })
-                        .child(label),
+                        .child(label)
+                        .when_some(viewer_count.filter(|_| is_live), |this, viewer_count| {
+                            this.child(
+                                div()
+                                    .px(px(5.0))
+                                    .py(px(1.0))
+                                    .rounded_full()
+                                    .bg(gpui::rgba(0xffffff14))
+                                    .text_size(px(10.0))
+                                    .child(format_compact_viewers(viewer_count)),
+                            )
+                        }),
                 )
                 .when(!is_home, |wrapper| {
                     let state_entity = tabs_state_entity.clone();

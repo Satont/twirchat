@@ -26,6 +26,10 @@ fn visual_chat_page_matches_vue_reference() {
     // Header
     assert!(chat_rs.contains("LIVE CHAT"));
     assert!(chat_rs.contains("header_chip"));
+    assert!(chat_rs.contains("HomeChipTooltip"));
+    assert!(chat_rs.contains("format_compact_viewers"));
+    assert!(chat_rs.contains("format_exact_viewers"));
+    assert!(chat_rs.contains("Viewers"));
     assert!(chat_rs.contains("messages"));
 
     // Message List (Modern)
@@ -137,7 +141,7 @@ fn chat_section_routes_home_and_watched_tabs() {
     assert!(content_rs.contains("chat::panel("));
     assert!(content_rs.contains("state.active_channel_tab_id() == \"home\""));
     assert!(content_rs.contains("watched_layout::tab_panel"));
-    assert!(tabs_rs.contains("state\n            .visible_watched_channels()"));
+    assert!(tabs_rs.contains(".visible_watched_channels()"));
 }
 
 #[test]

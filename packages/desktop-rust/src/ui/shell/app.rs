@@ -10,7 +10,7 @@ use crate::protocol::messages::{
 use crate::protocol::rpc::{GetUserChatHistoryParams, UserChatHistoryPage};
 use crate::protocol::types::Platform;
 use crate::runtime::{AppRuntime, UserCardRuntimeLoader};
-use crate::services::{BackendWsEvent, ServiceEvent};
+use crate::services::{BackendWsEvent, ServiceEvent, fetch_channels_status};
 
 use crate::ui::components::input::Input;
 use crate::ui::components::user_card::{
@@ -36,6 +36,7 @@ pub struct TwirChatApp {
     tab_selector_focus: FocusHandle,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
+    _stream_status_task: Option<Task<()>>,
     _user_card_history_task: Option<Task<()>>,
     _user_card_metadata_task: Option<Task<()>>,
     user_card_load_generation: Option<u64>,
@@ -94,6 +95,51 @@ impl TwirChatApp {
                 }
             })
         });
+        let stream_status_task = runtime.as_ref().map(|runtime| {
+            let config = runtime.config().clone();
+            cx.spawn(async move |this, cx| {
+                loop {
+                    let requests = match this.update(cx, |this, cx| {
+                        this.state.read(cx).home_channel_status_requests()
+                    }) {
+                        Ok(requests) => requests,
+                        Err(_) => break,
+                    };
+
+                    if !requests.is_empty() {
+                        let config = config.clone();
+                        let result = cx
+                            .background_executor()
+                            .spawn(async move { fetch_channels_status(&config, requests) })
+                            .await;
+
+                        match result {
+                            Ok(response) => {
+                                if this
+                                    .update(cx, |this, cx| {
+                                        this.state.update(cx, |state, cx| {
+                                            state.apply_home_channel_statuses(response.channels);
+                                            cx.notify();
+                                        });
+                                        cx.notify();
+                                    })
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Err(error) => {
+                                eprintln!("[stream-status] channel status refresh failed: {error}");
+                            }
+                        }
+                    }
+
+                    cx.background_executor()
+                        .timer(Duration::from_secs(30))
+                        .await;
+                }
+            })
+        });
 
         let chat_list_state = ListState::new(0, ListAlignment::Bottom, px(2048.));
         chat_list_state.set_follow_mode(FollowMode::Tail);
@@ -108,6 +154,7 @@ impl TwirChatApp {
             tab_selector_focus,
             runtime,
             _runtime_poll_task: runtime_poll_task,
+            _stream_status_task: stream_status_task,
             _user_card_history_task: None,
             _user_card_metadata_task: None,
             user_card_load_generation: None,

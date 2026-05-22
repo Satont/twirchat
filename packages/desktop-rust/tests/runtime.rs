@@ -1,10 +1,17 @@
 use serde_json::json;
 use std::fs;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::Duration;
+use twirchat_desktop_rust::protocol::messages::{
+    UserCardFieldStatus, UserCardMetadataPlatform, UserCardMetadataRequest,
+};
 use twirchat_desktop_rust::protocol::rpc::OpenExternalUrlParams;
 use twirchat_desktop_rust::runtime::browser::{ExternalOpenError, open_external_url};
 use twirchat_desktop_rust::runtime::{
-    ExternalOpenResult, ExternalOpener, RuntimeConfig, RuntimeConfigInput, UpdateEvent,
+    AppRuntime, ExternalOpenResult, ExternalOpener, RuntimeConfig, RuntimeConfigInput, UpdateEvent,
     UpdateRuntime, UpdateState, UpdateStatus,
 };
 use twirchat_desktop_rust::services::commands::UpdateStateCommand;
@@ -142,6 +149,101 @@ fn runtime_open_external_failure_reports_error() -> Result<(), Box<dyn std::erro
             "url": valid_url.url,
         }),
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn app_runtime_user_card_loader_sends_persisted_client_secret()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("runtime-user-card-secret.sqlite");
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let backend_url = format!("http://{}", listener.local_addr()?);
+    let (secret_tx, secret_rx) = mpsc::channel();
+
+    let server = std::thread::spawn(move || -> std::io::Result<()> {
+        let (mut stream, _) = listener.accept()?;
+        let mut reader = BufReader::new(stream.try_clone()?);
+        let mut client_secret = None;
+        let mut content_length = 0usize;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line)?;
+            let header = line.trim_end_matches(['\r', '\n']);
+            if header.is_empty() {
+                break;
+            }
+            if let Some((name, value)) = header.split_once(':') {
+                if name.eq_ignore_ascii_case("x-client-secret") {
+                    client_secret = Some(value.trim().to_string());
+                } else if name.eq_ignore_ascii_case("content-length") {
+                    content_length = value.trim().parse().unwrap_or_default();
+                }
+            }
+        }
+        if content_length > 0 {
+            let mut body = vec![0; content_length];
+            reader.read_exact(&mut body)?;
+        }
+        secret_tx
+            .send(client_secret)
+            .map_err(std::io::Error::other)?;
+
+        let response_body = json!({
+            "platform": "kick",
+            "platformUserId": "viewer-1",
+            "fetchedAt": 1,
+            "accountAge": { "status": "unsupported", "createdAt": null },
+            "followAge": { "status": "unsupported", "followedAt": null },
+            "subscriptionDuration": {
+                "status": "unsupported",
+                "currentlySubscribed": null
+            },
+            "subAge": { "status": "unsupported", "months": null }
+        })
+        .to_string();
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            response_body.len(),
+            response_body
+        )?;
+        Ok(())
+    });
+
+    let runtime = AppRuntime::start(RuntimeConfigInput {
+        backend_url: Some(backend_url),
+        backend_ws_url: Some("ws://127.0.0.1:9/ws".to_string()),
+        db_path: Some(db_path),
+        ..Default::default()
+    })?;
+    let persisted_secret = runtime.storage().client_identity().get_client_secret()?;
+    assert_eq!(runtime.config().client_secret(), persisted_secret);
+
+    let response =
+        runtime
+            .user_card_loader()
+            .fetch_user_card_metadata(UserCardMetadataRequest {
+                platform: UserCardMetadataPlatform::Kick,
+                platform_user_id: "viewer-1".to_string(),
+                username: Some("viewer".to_string()),
+                channel_id: Some("channel-1".to_string()),
+                channel_slug: Some("channel".to_string()),
+            })?;
+
+    assert_eq!(response.platform, UserCardMetadataPlatform::Kick);
+    assert_eq!(
+        response.account_age.status,
+        UserCardFieldStatus::Unsupported
+    );
+    assert_eq!(
+        secret_rx.recv_timeout(Duration::from_secs(5))?,
+        Some(persisted_secret)
+    );
+    server
+        .join()
+        .map_err(|_| "metadata test server panicked")??;
 
     Ok(())
 }

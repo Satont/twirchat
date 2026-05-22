@@ -133,13 +133,13 @@ impl UserCard {
                 .object_fit(ObjectFit::Cover)
                 .w(px(72.0))
                 .h(px(72.0))
-                .rounded(px(18.0))
+                .rounded(px(12.0))
                 .bg(rgba(0xffffff14)) // rgba(255, 255, 255, 0.08)
                 .with_loading(move || {
                     div()
                         .w(px(72.0))
                         .h(px(72.0))
-                        .rounded(px(18.0))
+                        .rounded(px(12.0))
                         .bg(rgba(0xffffff14))
                         .into_any_element()
                 })
@@ -147,7 +147,7 @@ impl UserCard {
                     div()
                         .w(px(72.0))
                         .h(px(72.0))
-                        .rounded(px(18.0))
+                        .rounded(px(12.0))
                         .bg(rgba(0xffffff14))
                         .flex()
                         .items_center()
@@ -163,7 +163,7 @@ impl UserCard {
             div()
                 .w(px(72.0))
                 .h(px(72.0))
-                .rounded(px(18.0))
+                .rounded(px(12.0))
                 .bg(rgba(0xffffff14))
                 .flex()
                 .items_center()
@@ -209,13 +209,16 @@ impl UserCard {
             .clone()
             .unwrap_or_else(|| self.platform_user_id.clone());
 
+        let mut header_bg = theme::platform_color(self.platform);
+        header_bg.a = 0.15;
+
         div()
             .flex()
             .flex_row()
             .gap(px(16.0))
             .p(px(20.0))
             // bg needs gradient eventually, for now use fallback bg
-            .bg(theme::platform_color(self.platform))
+            .bg(header_bg)
             .border_b_1()
             .border_color(rgba(0xffffff14))
             .child(div().flex_shrink_0().child(avatar))
@@ -304,7 +307,7 @@ impl UserCard {
                 .text_color(rgba(0x8b8b99ff))
                 .border_1()
                 .border_color(rgba(0xffffff0f))
-                .rounded(px(10.0))
+                .rounded(px(8.0))
                 .bg(rgba(0x00000029))
                 .child("Metadata is not supported for this platform yet.")
                 .into_any_element(),
@@ -319,7 +322,7 @@ impl UserCard {
                 .text_color(rgba(0x8b8b99ff))
                 .border_1()
                 .border_color(rgba(0xffffff0f))
-                .rounded(px(10.0))
+                .rounded(px(8.0))
                 .bg(rgba(0x00000029))
                 .child("Loading metadata…")
                 .into_any_element(),
@@ -338,7 +341,7 @@ impl UserCard {
                     .text_color(rgba(0xfca5a5ff))
                     .border_1()
                     .border_color(rgba(0xffffff0f))
-                    .rounded(px(10.0))
+                    .rounded(px(8.0))
                     .bg(rgba(0x00000029))
                     .child(err.clone())
                     .child(
@@ -377,7 +380,7 @@ impl UserCard {
                             .p(px(12.0))
                             .border_1()
                             .border_color(rgba(0xffffff0f))
-                            .rounded(px(10.0))
+                            .rounded(px(8.0))
                             .bg(rgba(0x00000029))
                             .child(
                                 div()
@@ -460,7 +463,7 @@ impl UserCard {
                 .text_color(rgba(0x8b8b99ff))
                 .border_1()
                 .border_color(rgba(0xffffff0f))
-                .rounded(px(10.0))
+                .rounded(px(8.0))
                 .bg(rgba(0x00000029))
                 .child("Loading messages…")
                 .into_any_element(),
@@ -479,7 +482,7 @@ impl UserCard {
                     .text_color(rgba(0xfca5a5ff))
                     .border_1()
                     .border_color(rgba(0xffffff0f))
-                    .rounded(px(10.0))
+                    .rounded(px(8.0))
                     .bg(rgba(0x00000029))
                     .child(err.clone())
                     .child(
@@ -512,7 +515,7 @@ impl UserCard {
                 .text_color(rgba(0x8b8b99ff))
                 .border_1()
                 .border_color(rgba(0xffffff0f))
-                .rounded(px(10.0))
+                .rounded(px(8.0))
                 .bg(rgba(0x00000029))
                 .child("No stored messages for this user yet.")
                 .into_any_element(),
@@ -524,7 +527,7 @@ impl UserCard {
                 let mut list = div()
                     .border_1()
                     .border_color(rgba(0xffffff0f))
-                    .rounded(px(10.0))
+                    .rounded(px(8.0))
                     .bg(rgba(0x00000029))
                     .flex()
                     .flex_col()
@@ -566,13 +569,19 @@ impl UserCard {
                     .flex_col()
                     .h(px(360.0))
                     .overflow_y_scroll();
-                for msg in messages {
-                    msg_list = msg_list.child(
-                        div()
-                            .p(px(8.0))
-                            .text_color(rgba(0xe2e2e8ff))
-                            .child(msg.content.clone()),
-                    );
+                let total = messages.len();
+                for (i, msg) in messages.iter().enumerate() {
+                    let mut row = div()
+                        .p(px(12.0))
+                        .text_size(px(13.0))
+                        .line_height(relative(1.4))
+                        .text_color(rgba(0xe2e2e8ff));
+
+                    if i < total - 1 {
+                        row = row.border_b_1().border_color(rgba(0xffffff0a));
+                    }
+
+                    msg_list = msg_list.child(row.child(msg.content.clone()));
                 }
 
                 list.child(msg_list).into_any_element()
@@ -599,7 +608,8 @@ impl RenderOnce for UserCard {
             .bg(rgba(0x2a2a35ff)) // var(--c-bg-2, #2a2a35)
             .border_1()
             .border_color(rgba(0x3a3a45ff))
-            .rounded(px(8.0))
+            .rounded(px(12.0))
+            .overflow_hidden()
             .shadow_lg()
             .flex()
             .flex_col()

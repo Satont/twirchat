@@ -27,6 +27,22 @@ import { logger } from '@twirchat/shared/logger'
 import type { ChannelStatus, ChannelStatusRequest, ChannelsStatusResponse } from '@twirchat/shared'
 
 const log = logger('channels-status')
+const MAX_REQUEST_BODY_BYTES = 64 * 1024
+const MAX_CHANNELS = 100
+const MAX_CHANNEL_LOGIN_LENGTH = 100
+const MAX_CHANNEL_ID_LENGTH = 128
+const MAX_USER_ACCESS_TOKEN_LENGTH = 4096
+const KICK_CHANNEL_FETCH_CONCURRENCY = 5
+const MAX_UPSTREAM_LOG_BODY_LENGTH = 300
+const textEncoder = new TextEncoder()
+
+export class InvalidChannelsStatusRequestError extends Error {
+  constructor(message: string) {
+    super(`Invalid request: ${message}`)
+    Object.setPrototypeOf(this, new.target.prototype)
+    this.name = 'InvalidChannelsStatusRequestError'
+  }
+}
 
 // ----------------------------------------------------------------
 // Twitch bulk fetch
@@ -93,7 +109,7 @@ async function fetchTwitchChannelsStatus(
         loginToId.set(login, id)
       }
     } catch (error) {
-      log.warn('Twitch /helix/users failed', { error: String(error) })
+      log.warn('Twitch /helix/users failed', { error: truncateUpstreamLogBody(String(error)) })
       return normalizedChannels.map((channel) => ({
         channelLogin: channel.normalizedLogin ?? channel.originalLogin.toLowerCase(),
         isLive: false,
@@ -144,7 +160,10 @@ async function fetchTwitchChannelsStatus(
     }
   } else {
     const body = await streamsRes.text()
-    log.warn('Twitch /helix/streams failed', { body, status: streamsRes.status })
+    log.warn('Twitch /helix/streams failed', {
+      body: truncateUpstreamLogBody(body),
+      status: streamsRes.status,
+    })
   }
 
   if (channelsRes.ok) {
@@ -154,7 +173,10 @@ async function fetchTwitchChannelsStatus(
     }
   } else {
     const body = await channelsRes.text()
-    log.warn('Twitch /helix/channels failed', { body, status: channelsRes.status })
+    log.warn('Twitch /helix/channels failed', {
+      body: truncateUpstreamLogBody(body),
+      status: channelsRes.status,
+    })
   }
 
   return normalizedChannels.map((channel) => {
@@ -194,9 +216,10 @@ async function fetchTwitchChannelsStatus(
 // Kick — one request per channel (no bulk API)
 // ----------------------------------------------------------------
 
-async function fetchKickChannelStatus(channel: ChannelStatusRequest): Promise<ChannelStatus> {
-  const token = await getKickAppToken()
-
+async function fetchKickChannelStatus(
+  channel: ChannelStatusRequest,
+  token: string,
+): Promise<ChannelStatus> {
   const res = await fetch(
     `https://api.kick.com/public/v1/channels?slug=${encodeURIComponent(channel.channelLogin)}`,
     {
@@ -240,26 +263,172 @@ async function fetchKickChannelStatus(channel: ChannelStatusRequest): Promise<Ch
   }
 }
 
+async function fetchKickChannelsStatus(channels: ChannelStatusRequest[]): Promise<ChannelStatus[]> {
+  if (channels.length === 0) {
+    return []
+  }
+
+  const token = await getKickAppToken()
+  return mapWithConcurrency(channels, KICK_CHANNEL_FETCH_CONCURRENCY, (channel) =>
+    fetchKickChannelStatus(channel, token),
+  )
+}
+
+async function mapWithConcurrency<T, U>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<U>,
+): Promise<U[]> {
+  if (items.length === 0) {
+    return []
+  }
+
+  const results = new Array<U>(items.length)
+  let nextIndex = 0
+
+  const runWorker = async (): Promise<void> => {
+    const currentIndex = nextIndex
+    if (currentIndex >= items.length) {
+      return
+    }
+
+    nextIndex += 1
+    const currentItem = items[currentIndex] as T
+    results[currentIndex] = await mapper(currentItem, currentIndex)
+    await runWorker()
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, runWorker)
+
+  await Promise.all(workers)
+  return results
+}
+
+function truncateUpstreamLogBody(body: string): string {
+  return body.slice(0, MAX_UPSTREAM_LOG_BODY_LENGTH)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+async function parseChannelsStatusBody(req: Request): Promise<unknown> {
+  const contentLength = req.headers.get('Content-Length')
+  if (contentLength) {
+    const bodyBytes = Number(contentLength)
+    if (!Number.isFinite(bodyBytes) || bodyBytes > MAX_REQUEST_BODY_BYTES) {
+      throw new InvalidChannelsStatusRequestError('body is too large')
+    }
+  }
+
+  const text = await req.text()
+  if (textEncoder.encode(text).byteLength > MAX_REQUEST_BODY_BYTES) {
+    throw new InvalidChannelsStatusRequestError('body is too large')
+  }
+
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    throw new InvalidChannelsStatusRequestError('body must be valid JSON')
+  }
+}
+
+function validateOptionalString(
+  value: unknown,
+  fieldName: string,
+  maxLength: number,
+): string | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (typeof value !== 'string') {
+    throw new InvalidChannelsStatusRequestError(`${fieldName} must be a string`)
+  }
+
+  if (value.length > maxLength) {
+    throw new InvalidChannelsStatusRequestError(`${fieldName} is too long`)
+  }
+
+  return value.length > 0 ? value : undefined
+}
+
+function validateChannelStatusRequest(value: unknown, index: number): ChannelStatusRequest {
+  if (!isRecord(value)) {
+    throw new InvalidChannelsStatusRequestError(`channels[${index}] must be an object`)
+  }
+
+  const { platform } = value
+  if (platform !== 'twitch' && platform !== 'kick') {
+    throw new InvalidChannelsStatusRequestError(`channels[${index}].platform is unsupported`)
+  }
+
+  const channelLogin = validateOptionalString(
+    value.channelLogin,
+    `channels[${index}].channelLogin`,
+    MAX_CHANNEL_LOGIN_LENGTH,
+  )
+  if (!channelLogin || channelLogin.trim().length === 0) {
+    throw new InvalidChannelsStatusRequestError(`channels[${index}].channelLogin is required`)
+  }
+
+  const channelId = validateOptionalString(
+    value.channelId,
+    `channels[${index}].channelId`,
+    MAX_CHANNEL_ID_LENGTH,
+  )
+  const userAccessToken = validateOptionalString(
+    value.userAccessToken,
+    `channels[${index}].userAccessToken`,
+    MAX_USER_ACCESS_TOKEN_LENGTH,
+  )
+
+  return {
+    channelId,
+    channelLogin,
+    platform,
+    userAccessToken,
+  }
+}
+
 // ----------------------------------------------------------------
 // Public handler
 // ----------------------------------------------------------------
 
 export async function handleChannelsStatus(req: Request): Promise<ChannelsStatusResponse> {
-  const body = (await req.json()) as { channels?: ChannelStatusRequest[] }
-  const channels = body.channels ?? []
+  const body = await parseChannelsStatusBody(req)
+  if (!isRecord(body)) {
+    throw new InvalidChannelsStatusRequestError('body must be an object')
+  }
 
-  if (channels.length === 0) {
+  const channels = body.channels
+
+  if (channels === undefined) {
+    return { channels: [] }
+  }
+
+  if (!Array.isArray(channels)) {
+    throw new InvalidChannelsStatusRequestError('channels must be an array')
+  }
+
+  if (channels.length > MAX_CHANNELS) {
+    throw new InvalidChannelsStatusRequestError(`channels cannot exceed ${MAX_CHANNELS}`)
+  }
+
+  const channelRequests = channels.map(validateChannelStatusRequest)
+
+  if (channelRequests.length === 0) {
     return { channels: [] }
   }
 
   // Split by platform
-  const twitchChannels = channels.filter((c) => c.platform === 'twitch')
-  const kickChannels = channels.filter((c) => c.platform === 'kick')
+  const twitchChannels = channelRequests.filter((c) => c.platform === 'twitch')
+  const kickChannels = channelRequests.filter((c) => c.platform === 'kick')
 
   // Run platform groups in parallel; within Kick run each channel in parallel too
   const [twitchResults, kickResults] = await Promise.all([
     fetchTwitchChannelsStatus(twitchChannels),
-    Promise.all(kickChannels.map(fetchKickChannelStatus)),
+    fetchKickChannelsStatus(kickChannels),
   ])
 
   const result = [...twitchResults, ...kickResults]

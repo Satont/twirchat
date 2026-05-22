@@ -7,11 +7,12 @@ use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::selectable_message::{SelectableMessage, SelectableMessagePart};
 use crate::ui::components::switch::Switch;
+use crate::ui::shared::{format_compact_viewers, format_exact_viewers};
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
     AnyElement, App, Context, Div, Entity, FollowMode, ImageSource, ListSizingBehavior, ListState,
-    ObjectFit, Stateful, Window, div, img, list, prelude::*, px, rgb, rgba,
+    ObjectFit, Render, Stateful, Window, div, img, list, prelude::*, px, relative, rgb, rgba,
 };
 use std::path::Path;
 use ui::WithScrollbar;
@@ -116,7 +117,7 @@ pub(crate) fn panel(
 
 fn header(message_count: usize, state: &AppState, state_entity: Entity<AppState>) -> Div {
     let message_count_text = format!("{} messages", message_count);
-    let home_targets = home_chat_targets(state);
+    let home_targets = stream_status_header_targets(state);
 
     div()
         .w_full()
@@ -443,15 +444,20 @@ fn status_chip(
         )
 }
 
-fn header_chip(chip: &HomeChatTarget) -> Div {
+fn header_chip(chip: &HomeChatTarget) -> impl IntoElement {
+    let is_live = chip.is_live;
+    let color = theme::platform_color(to_model_platform(chip.platform));
+    let tooltip_chip = chip.clone();
+
     div()
+        .id(format!("home-header-chip-{}", chip.id))
         .rounded_full()
         .px(px(8.0))
         .py(px(3.0))
         .bg(theme::surface_2())
         .border_1()
-        .border_color(theme::border())
-        .text_color(if true {
+        .border_color(if is_live { color } else { theme::border() })
+        .text_color(if is_live {
             theme::text_primary()
         } else {
             theme::text_muted()
@@ -462,8 +468,8 @@ fn header_chip(chip: &HomeChatTarget) -> Div {
         .flex_row()
         .items_center()
         .gap(px(5.0))
-        .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(if true {
-            theme::platform_color(to_model_platform(chip.platform))
+        .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(if is_live {
+            color
         } else {
             rgb(0x666666)
         }))
@@ -471,15 +477,131 @@ fn header_chip(chip: &HomeChatTarget) -> Div {
             div()
                 .max_w(px(100.0))
                 .overflow_hidden()
-                .child(chip.display_name.clone()),
+                .child(chip.channel_login.clone()),
         )
+        .when_some(
+            chip.viewer_count.filter(|_| is_live),
+            |chip, viewer_count| {
+                chip.child(
+                    div()
+                        .px(px(5.0))
+                        .py(px(1.0))
+                        .rounded_full()
+                        .bg(rgba(0xffffff14))
+                        .text_color(theme::text_primary())
+                        .text_size(px(10.0))
+                        .child(format_compact_viewers(viewer_count)),
+                )
+            },
+        )
+        .tooltip(move |_window, cx| {
+            cx.new(|_| HomeChipTooltip {
+                chip: tooltip_chip.clone(),
+            })
+            .into()
+        })
+}
+
+struct HomeChipTooltip {
+    chip: HomeChatTarget,
+}
+
+impl Render for HomeChipTooltip {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        header_chip_tooltip(&self.chip)
+    }
+}
+
+fn header_chip_tooltip(chip: &HomeChatTarget) -> Div {
+    let color = theme::platform_color(to_model_platform(chip.platform));
+    div()
+        .min_w(px(190.0))
+        .max_w(px(270.0))
+        .rounded_lg()
+        .border_1()
+        .border_color(theme::border())
+        .bg(theme::surface())
+        .shadow_lg()
+        .p(px(10.0))
+        .flex()
+        .flex_col()
+        .gap(px(4.0))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .gap(px(16.0))
+                .child(
+                    div()
+                        .text_color(color)
+                        .text_size(px(11.0))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child(platform_label(chip.platform)),
+                )
+                .child(
+                    div()
+                        .text_color(if chip.is_live {
+                            rgb(0x4ade80)
+                        } else {
+                            theme::text_muted()
+                        })
+                        .text_size(px(10.0))
+                        .font_weight(gpui::FontWeight::BOLD)
+                        .child(if chip.is_live { "LIVE" } else { "Offline" }),
+                ),
+        )
+        .when(!chip.title.is_empty(), |tooltip| {
+            tooltip.child(
+                div()
+                    .text_color(theme::text_primary())
+                    .text_size(px(13.0))
+                    .line_height(relative(1.4))
+                    .child(chip.title.clone()),
+            )
+        })
+        .when_some(chip.category_name.clone(), |tooltip, category_name| {
+            tooltip.child(header_chip_tooltip_row("Category", category_name))
+        })
+        .when_some(
+            chip.viewer_count.filter(|_| chip.is_live),
+            |tooltip, viewer_count| {
+                tooltip.child(header_chip_tooltip_row(
+                    "Viewers",
+                    format_exact_viewers(viewer_count),
+                ))
+            },
+        )
+}
+
+fn header_chip_tooltip_row(label: &'static str, value: String) -> Div {
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .text_size(px(11.0))
+        .text_color(theme::text_muted())
+        .child(
+            div()
+                .text_size(px(10.0))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .child(label),
+        )
+        .child(value)
 }
 
 #[derive(Clone)]
 struct HomeChatTarget {
     id: String,
     platform: Platform,
+    channel_login: String,
     display_name: String,
+    is_live: bool,
+    title: String,
+    category_name: Option<String>,
+    viewer_count: Option<u64>,
 }
 
 fn home_chat_targets(state: &AppState) -> Vec<HomeChatTarget> {
@@ -507,14 +629,30 @@ fn home_chat_targets(state: &AppState) -> Vec<HomeChatTarget> {
             .map(|account| account.display_name.clone())
             .unwrap_or_else(|| channel_login.clone());
 
+        let stream_status = state.home_channel_status(status.platform, channel_login);
+
         targets.push(HomeChatTarget {
             id: format!("{:?}:{}", status.platform, channel_login.to_lowercase()),
             platform: status.platform,
+            channel_login: channel_login.clone(),
             display_name,
+            is_live: stream_status.is_some_and(|status| status.is_live),
+            title: stream_status
+                .map(|status| status.title.clone())
+                .unwrap_or_default(),
+            category_name: stream_status.and_then(|status| status.category_name.clone()),
+            viewer_count: stream_status.and_then(|status| status.viewer_count),
         });
     }
 
     targets
+}
+
+fn stream_status_header_targets(state: &AppState) -> Vec<HomeChatTarget> {
+    home_chat_targets(state)
+        .into_iter()
+        .filter(|target| matches!(target.platform, Platform::Twitch | Platform::Kick))
+        .collect()
 }
 
 pub(crate) fn add_channel_modal(
@@ -2123,9 +2261,51 @@ pub fn render_appearance_popover(
 #[cfg(test)]
 mod tests {
     use super::SelectableMessagePart;
+    use crate::app_state::AppState;
     use crate::protocol::types::{
         ChatAuthor, ChatMessageType, Emote, EmotePosition, NormalizedChatMessage, Platform,
+        PlatformStatus, PlatformStatusInfo, PlatformStatusMode,
     };
+
+    #[test]
+    fn stream_status_header_targets_skip_youtube() {
+        let mut state = AppState::default();
+        for (platform, channel_login) in [
+            (Platform::Twitch, "fixturestreamer"),
+            (Platform::Youtube, "tubeone"),
+            (Platform::Kick, "kickone"),
+        ] {
+            state.platforms_panel.statuses.insert(
+                platform,
+                PlatformStatusInfo {
+                    platform,
+                    status: PlatformStatus::Connected,
+                    error: None,
+                    mode: PlatformStatusMode::Authenticated,
+                    channel_login: Some(channel_login.to_string()),
+                },
+            );
+        }
+
+        let targets = super::stream_status_header_targets(&state);
+
+        assert_eq!(targets.len(), 2);
+        assert!(
+            targets
+                .iter()
+                .any(|target| target.platform == Platform::Twitch)
+        );
+        assert!(
+            targets
+                .iter()
+                .any(|target| target.platform == Platform::Kick)
+        );
+        assert!(
+            !targets
+                .iter()
+                .any(|target| target.platform == Platform::Youtube)
+        );
+    }
 
     #[test]
     fn build_text_segments_extracts_links_without_swallowing_punctuation() {
