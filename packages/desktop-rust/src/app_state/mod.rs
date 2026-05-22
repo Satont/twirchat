@@ -53,6 +53,81 @@ pub enum RuntimeStatus {
     Failed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserCardTarget {
+    pub platform: Platform,
+    pub platform_user_id: String,
+    pub channel_id: String,
+    pub channel_slug: String,
+    pub display_name: String,
+    pub username: Option<String>,
+    pub avatar_url: Option<String>,
+    pub current_alias: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UserCardLoadState<T> {
+    Idle,
+    Loading { generation: u64 },
+    Loaded { generation: u64, value: T },
+    Error { generation: u64, error: String },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UserCardHistoryPage {
+    pub messages: Vec<NormalizedChatMessage>,
+    pub has_more: bool,
+    pub next_cursor: Option<crate::protocol::rpc::UserChatHistoryCursor>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserCardHistoryRequestKind {
+    Initial,
+    Older,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserCardHistoryRequest {
+    pub generation: u64,
+    pub request_id: u64,
+    pub kind: UserCardHistoryRequestKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UserCardModalState {
+    pub open: bool,
+    pub target: Option<UserCardTarget>,
+    pub history: UserCardLoadState<Vec<NormalizedChatMessage>>,
+    pub metadata: UserCardLoadState<crate::protocol::messages::UserCardMetadataResponse>,
+    pub has_more: bool,
+    pub next_cursor: Option<crate::protocol::rpc::UserChatHistoryCursor>,
+    pub loading_older: bool,
+    pub generation: u64,
+    history_request_id: u64,
+    active_history_request_id: Option<u64>,
+}
+
+impl UserCardModalState {
+    fn closed() -> Self {
+        Self::closed_with_generation(0)
+    }
+
+    fn closed_with_generation(generation: u64) -> Self {
+        Self {
+            open: false,
+            target: None,
+            history: UserCardLoadState::Idle,
+            metadata: UserCardLoadState::Idle,
+            has_more: false,
+            next_cursor: None,
+            loading_older: false,
+            generation,
+            history_request_id: 0,
+            active_history_request_id: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AppState {
     active_section: MainSection,
@@ -77,6 +152,7 @@ pub struct AppState {
     pub chat_add_menu_open: bool,
     pub chat_options_menu_open: bool,
     pub tab_add_menu_open: bool,
+    pub user_card: UserCardModalState,
     panel_assignment_target: Option<String>,
     pub add_channel_platform: Platform,
     pub composer_disabled_channel_ids: BTreeSet<String>,
@@ -119,6 +195,7 @@ impl Default for AppState {
             chat_add_menu_open: false,
             chat_options_menu_open: false,
             tab_add_menu_open: false,
+            user_card: UserCardModalState::closed(),
             panel_assignment_target: None,
             add_channel_platform: Platform::Twitch,
             composer_disabled_channel_ids: BTreeSet::new(),
@@ -1245,6 +1322,26 @@ impl AppState {
             return false;
         }
 
+        if let Some(command) = text.strip_prefix('/') {
+            let mut parts = command.splitn(2, char::is_whitespace);
+            let Some(keyword) = parts.next() else {
+                return false;
+            };
+            if keyword.eq_ignore_ascii_case("user") {
+                let query = parts.next().map(str::trim).unwrap_or("");
+                if query.is_empty() {
+                    return false;
+                }
+
+                if let Some(target) = self.resolve_user_card_target(query) {
+                    self.open_user_card(target);
+                    return true;
+                }
+                self.record_runtime_failure(format!("No recent chat user matched /user {query}"));
+                return true;
+            }
+        }
+
         let mut queued = false;
         for target in self.home_channel_targets() {
             if self.composer_disabled_channel_ids.contains(&target.id) {
@@ -1287,6 +1384,159 @@ impl AppState {
                 text: text.to_string(),
             });
         true
+    }
+
+    pub fn open_user_card(&mut self, target: UserCardTarget) -> u64 {
+        self.user_card.generation = self.user_card.generation.saturating_add(1);
+        self.user_card.open = true;
+        self.user_card.target = Some(target);
+        self.user_card.history = UserCardLoadState::Idle;
+        self.user_card.metadata = UserCardLoadState::Idle;
+        self.user_card.has_more = false;
+        self.user_card.next_cursor = None;
+        self.user_card.loading_older = false;
+        self.user_card.active_history_request_id = None;
+        self.user_card.generation
+    }
+
+    pub fn close_user_card(&mut self) -> u64 {
+        let generation = self.user_card.generation.saturating_add(1);
+        self.user_card = UserCardModalState::closed_with_generation(generation);
+        self.user_card.generation
+    }
+
+    pub fn start_user_card_history_load(&mut self) -> Option<UserCardHistoryRequest> {
+        if !self.user_card.open || self.user_card.target.is_none() {
+            return None;
+        }
+
+        let generation = self.user_card.generation;
+        let request_id = self.next_user_card_history_request_id();
+        self.user_card.history = UserCardLoadState::Loading { generation };
+        self.user_card.loading_older = false;
+        self.user_card.active_history_request_id = Some(request_id);
+        Some(UserCardHistoryRequest {
+            generation,
+            request_id,
+            kind: UserCardHistoryRequestKind::Initial,
+        })
+    }
+
+    pub fn start_user_card_older_history_load(&mut self) -> Option<UserCardHistoryRequest> {
+        if !self.user_card.open
+            || self.user_card.target.is_none()
+            || !self.user_card.has_more
+            || self.user_card.next_cursor.is_none()
+            || self.user_card.loading_older
+        {
+            return None;
+        }
+
+        let generation = self.user_card.generation;
+        let request_id = self.next_user_card_history_request_id();
+        self.user_card.loading_older = true;
+        self.user_card.active_history_request_id = Some(request_id);
+        Some(UserCardHistoryRequest {
+            generation,
+            request_id,
+            kind: UserCardHistoryRequestKind::Older,
+        })
+    }
+
+    pub fn apply_user_card_history_result(
+        &mut self,
+        request: UserCardHistoryRequest,
+        result: Result<UserCardHistoryPage, String>,
+    ) -> bool {
+        if !self.user_card.open
+            || self.user_card.generation != request.generation
+            || self.user_card.active_history_request_id != Some(request.request_id)
+        {
+            return false;
+        }
+
+        match result {
+            Ok(page) => {
+                let mut messages = page.messages;
+                if request.kind == UserCardHistoryRequestKind::Older
+                    && let UserCardLoadState::Loaded { value, .. } = &self.user_card.history
+                {
+                    messages.extend(value.iter().cloned());
+                }
+                self.user_card.history = UserCardLoadState::Loaded {
+                    generation: request.generation,
+                    value: messages,
+                };
+                self.user_card.has_more = page.has_more;
+                self.user_card.next_cursor = page.next_cursor;
+            }
+            Err(error) => {
+                self.user_card.history = UserCardLoadState::Error {
+                    generation: request.generation,
+                    error,
+                };
+            }
+        }
+        self.user_card.loading_older = false;
+        self.user_card.active_history_request_id = None;
+
+        true
+    }
+
+    fn next_user_card_history_request_id(&mut self) -> u64 {
+        self.user_card.history_request_id = self.user_card.history_request_id.saturating_add(1);
+        self.user_card.history_request_id
+    }
+
+    pub fn start_user_card_metadata_load(&mut self) -> Option<u64> {
+        if !self.user_card.open || self.user_card.target.is_none() {
+            return None;
+        }
+
+        let generation = self.user_card.generation;
+        self.user_card.metadata = UserCardLoadState::Loading { generation };
+        Some(generation)
+    }
+
+    pub fn apply_user_card_metadata_result(
+        &mut self,
+        generation: u64,
+        result: Result<crate::protocol::messages::UserCardMetadataResponse, String>,
+    ) -> bool {
+        if !self.user_card.open || self.user_card.generation != generation {
+            return false;
+        }
+
+        match result {
+            Ok(metadata) => {
+                self.user_card.metadata = UserCardLoadState::Loaded {
+                    generation,
+                    value: metadata,
+                };
+            }
+            Err(error) => {
+                self.user_card.metadata = UserCardLoadState::Error { generation, error };
+            }
+        }
+
+        true
+    }
+
+    pub fn resolve_user_card_target(&self, query: &str) -> Option<UserCardTarget> {
+        let id_query = query.trim().trim_start_matches('@');
+        if id_query.is_empty() {
+            return None;
+        }
+
+        let messages = self.active_user_card_messages();
+        self.resolve_user_card_target_in_messages(messages, id_query)
+            .or_else(|| {
+                if self.active_channel_tab_id == "home" {
+                    None
+                } else {
+                    self.resolve_user_card_target_in_messages(&self.messages, id_query)
+                }
+            })
     }
 
     pub fn remove_chat_pane_for_active_tab(
@@ -1445,6 +1695,107 @@ impl AppState {
             .iter()
             .find(|channel| channel.id == channel_id)
             .is_some_and(|channel| self.is_home_account_channel(channel))
+    }
+
+    fn active_user_card_messages(&self) -> &[NormalizedChatMessage] {
+        if self.active_channel_tab_id == "home" {
+            &self.messages
+        } else {
+            self.watched_channel_messages
+                .get(&self.active_channel_tab_id)
+                .map(Vec::as_slice)
+                .unwrap_or(&self.messages)
+        }
+    }
+
+    fn resolve_user_card_target_in_messages(
+        &self,
+        messages: &[NormalizedChatMessage],
+        query: &str,
+    ) -> Option<UserCardTarget> {
+        let normalized_query = normalize_user_lookup(query);
+        if normalized_query.is_empty() {
+            return None;
+        }
+
+        self.resolve_user_card_message_by(
+            messages,
+            |message| message.author.id == query,
+            |message| {
+                normalize_user_lookup(message.author.username.as_deref().unwrap_or(""))
+                    == normalized_query
+            },
+            |message| normalize_user_lookup(&message.author.display_name) == normalized_query,
+        )
+        .map(|message| self.user_card_target_for_message(message))
+    }
+
+    fn resolve_user_card_message_by<'a, IdMatch, UsernameMatch, DisplayMatch>(
+        &self,
+        messages: &'a [NormalizedChatMessage],
+        id_match: IdMatch,
+        username_match: UsernameMatch,
+        display_match: DisplayMatch,
+    ) -> Option<&'a NormalizedChatMessage>
+    where
+        IdMatch: Fn(&NormalizedChatMessage) -> bool,
+        UsernameMatch: Fn(&NormalizedChatMessage) -> bool,
+        DisplayMatch: Fn(&NormalizedChatMessage) -> bool,
+    {
+        messages
+            .iter()
+            .rev()
+            .find(|message| id_match(message))
+            .or_else(|| {
+                messages
+                    .iter()
+                    .rev()
+                    .find(|message| username_match(message))
+            })
+            .or_else(|| messages.iter().rev().find(|message| display_match(message)))
+    }
+
+    pub fn user_card_target_for_message(&self, message: &NormalizedChatMessage) -> UserCardTarget {
+        UserCardTarget {
+            platform: message.platform,
+            platform_user_id: message.author.id.clone(),
+            channel_id: message.channel_id.clone(),
+            channel_slug: self.user_card_channel_slug(message),
+            display_name: message.author.display_name.clone(),
+            username: message.author.username.clone(),
+            avatar_url: message.author.avatar_url.clone(),
+            current_alias: None,
+        }
+    }
+
+    pub fn user_card_channel_slug(&self, message: &NormalizedChatMessage) -> String {
+        self.watched_channels
+            .iter()
+            .find(|channel| channel.id == message.channel_id)
+            .map(|channel| channel.channel_slug.clone())
+            .or_else(|| {
+                self.platforms_panel
+                    .statuses
+                    .values()
+                    .find(|status| {
+                        status.platform == message.platform
+                            && status.channel_login.as_deref().is_some_and(|login| {
+                                login.eq_ignore_ascii_case(&message.channel_id)
+                            })
+                    })
+                    .and_then(|status| status.channel_login.clone())
+            })
+            .or_else(|| {
+                self.platforms_panel
+                    .accounts
+                    .iter()
+                    .find(|account| {
+                        account.platform == message.platform
+                            && account.username.eq_ignore_ascii_case(&message.channel_id)
+                    })
+                    .map(|account| account.username.clone())
+            })
+            .unwrap_or_else(|| message.channel_id.clone())
     }
 
     fn home_channel_targets(&self) -> Vec<HomeChannelTarget> {
@@ -1631,6 +1982,22 @@ pub trait AppStateActions {
     fn remove_watched_channel(&self, app: &mut App, channel_id: &str);
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool;
     fn queue_watched_channel_send(&self, app: &mut App, channel_id: &str, text: &str) -> bool;
+    fn open_user_card(&self, app: &mut App, target: UserCardTarget);
+    fn close_user_card(&self, app: &mut App);
+    fn start_user_card_history_load(&self, app: &mut App) -> Option<UserCardHistoryRequest>;
+    fn apply_user_card_history_result(
+        &self,
+        app: &mut App,
+        request: UserCardHistoryRequest,
+        result: Result<UserCardHistoryPage, String>,
+    ) -> bool;
+    fn start_user_card_metadata_load(&self, app: &mut App) -> Option<u64>;
+    fn apply_user_card_metadata_result(
+        &self,
+        app: &mut App,
+        generation: u64,
+        result: Result<crate::protocol::messages::UserCardMetadataResponse, String>,
+    ) -> bool;
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str);
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
     fn remove_chat_pane_for_active_tab(&self, app: &mut App, panel_id: &str);
@@ -1975,6 +2342,62 @@ impl AppStateActions for Entity<AppState> {
         })
     }
 
+    fn open_user_card(&self, app: &mut App, target: UserCardTarget) {
+        self.update(app, |state, cx| {
+            state.open_user_card(target);
+            cx.notify();
+        });
+    }
+
+    fn close_user_card(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.close_user_card();
+            cx.notify();
+        });
+    }
+
+    fn start_user_card_history_load(&self, app: &mut App) -> Option<UserCardHistoryRequest> {
+        self.update(app, |state, cx| {
+            let request = state.start_user_card_history_load();
+            cx.notify();
+            request
+        })
+    }
+
+    fn apply_user_card_history_result(
+        &self,
+        app: &mut App,
+        request: UserCardHistoryRequest,
+        result: Result<UserCardHistoryPage, String>,
+    ) -> bool {
+        self.update(app, |state, cx| {
+            let applied = state.apply_user_card_history_result(request, result);
+            cx.notify();
+            applied
+        })
+    }
+
+    fn start_user_card_metadata_load(&self, app: &mut App) -> Option<u64> {
+        self.update(app, |state, cx| {
+            let generation = state.start_user_card_metadata_load();
+            cx.notify();
+            generation
+        })
+    }
+
+    fn apply_user_card_metadata_result(
+        &self,
+        app: &mut App,
+        generation: u64,
+        result: Result<crate::protocol::messages::UserCardMetadataResponse, String>,
+    ) -> bool {
+        self.update(app, |state, cx| {
+            let applied = state.apply_user_card_metadata_result(generation, result);
+            cx.notify();
+            applied
+        })
+    }
+
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str) {
         self.update(app, |state, cx| {
             state.toggle_composer_channel(channel_id);
@@ -2242,6 +2665,10 @@ fn format_platform_label(platform: Platform) -> &'static str {
         Platform::Youtube => "YouTube",
         Platform::Kick => "Kick",
     }
+}
+
+fn normalize_user_lookup(value: &str) -> String {
+    value.trim().trim_start_matches('@').to_ascii_lowercase()
 }
 
 #[cfg(test)]

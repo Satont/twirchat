@@ -1,9 +1,12 @@
+use crate::protocol::messages::{UserCardMetadataRequest, UserCardMetadataResponse};
+use crate::protocol::rpc::{GetUserChatHistoryParams, UserChatHistoryPage};
 use crate::protocol::types::Platform;
 use crate::runtime::{RuntimeConfig, RuntimeConfigInput};
 use crate::services::{
     BackendWsCommand, BackendWsConfig, BusReceiver, ServiceCommand, ServiceEvent, ServiceKind,
     ServiceResult, ServiceRuntimeConfig, ServiceSupervisor, WatchedChannelsCommand,
 };
+use crate::services::{UserCardServiceError, fetch_user_card_metadata, get_user_chat_history};
 use crate::storage::{Storage, StorageError};
 use std::error::Error;
 use std::fmt;
@@ -12,6 +15,7 @@ use std::fmt;
 pub enum AppRuntimeError {
     Storage(StorageError),
     Service(crate::services::ServiceError),
+    UserCard(UserCardServiceError),
 }
 
 impl fmt::Display for AppRuntimeError {
@@ -19,6 +23,7 @@ impl fmt::Display for AppRuntimeError {
         match self {
             Self::Storage(source) => write!(f, "failed to initialize app storage: {source}"),
             Self::Service(source) => write!(f, "failed to initialize app services: {source}"),
+            Self::UserCard(source) => write!(f, "failed to load user-card data: {source}"),
         }
     }
 }
@@ -28,6 +33,7 @@ impl Error for AppRuntimeError {
         match self {
             Self::Storage(source) => Some(source),
             Self::Service(source) => Some(source),
+            Self::UserCard(source) => Some(source),
         }
     }
 }
@@ -44,11 +50,40 @@ impl From<crate::services::ServiceError> for AppRuntimeError {
     }
 }
 
+impl From<UserCardServiceError> for AppRuntimeError {
+    fn from(value: UserCardServiceError) -> Self {
+        Self::UserCard(value)
+    }
+}
+
 pub struct AppRuntime {
     config: RuntimeConfig,
     storage: Storage,
     supervisor: ServiceSupervisor,
     events: BusReceiver<ServiceEvent>,
+}
+
+#[derive(Clone)]
+pub struct UserCardRuntimeLoader {
+    config: RuntimeConfig,
+}
+
+impl UserCardRuntimeLoader {
+    pub fn load_user_chat_history(
+        &self,
+        params: GetUserChatHistoryParams,
+    ) -> Result<UserChatHistoryPage, AppRuntimeError> {
+        let storage = Storage::open_or_recover(self.config.db_path())?;
+        Ok(get_user_chat_history(&storage, params)?)
+    }
+
+    pub fn fetch_user_card_metadata(
+        &self,
+        request: UserCardMetadataRequest,
+    ) -> Result<UserCardMetadataResponse, AppRuntimeError> {
+        let storage = Storage::open_or_recover(self.config.db_path())?;
+        Ok(fetch_user_card_metadata(&storage, &self.config, request)?)
+    }
 }
 
 impl AppRuntime {
@@ -88,6 +123,12 @@ impl AppRuntime {
 
     pub fn config(&self) -> &RuntimeConfig {
         &self.config
+    }
+
+    pub fn user_card_loader(&self) -> UserCardRuntimeLoader {
+        UserCardRuntimeLoader {
+            config: self.config.clone(),
+        }
     }
 
     pub fn drain_events(&self) -> Vec<ServiceEvent> {
@@ -155,6 +196,24 @@ impl AppRuntime {
             ServiceKind::BackendWs,
             ServiceCommand::BackendWs(BackendWsCommand::SendMessage { message }),
         )
+    }
+
+    pub fn load_user_chat_history(
+        &self,
+        params: GetUserChatHistoryParams,
+    ) -> Result<UserChatHistoryPage, AppRuntimeError> {
+        Ok(get_user_chat_history(&self.storage, params)?)
+    }
+
+    pub fn fetch_user_card_metadata(
+        &self,
+        request: UserCardMetadataRequest,
+    ) -> Result<UserCardMetadataResponse, AppRuntimeError> {
+        Ok(fetch_user_card_metadata(
+            &self.storage,
+            &self.config,
+            request,
+        )?)
     }
 }
 

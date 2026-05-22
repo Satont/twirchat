@@ -29,3 +29,5 @@ pub use tabs::*;
 pub use tooltip::*;
 pub mod user_card;
 pub mod watched_layout;
+pub use user_card::*;
+pub use watched_layout::*;

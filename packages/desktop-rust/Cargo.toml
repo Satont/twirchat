@@ -3,6 +3,7 @@ name = "twirchat-desktop-rust"
 version = "0.1.0"
 edition = "2024"
 publish = false
+default-run = "twirchat-desktop-rust"
 
 [dependencies]
 reqwest_client = { git = "https://github.com/zed-industries/zed", rev = "8bdd78e023805bdc1f8cae6dea79ef097cc49f46" }

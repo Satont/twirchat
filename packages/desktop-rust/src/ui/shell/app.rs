@@ -1,10 +1,21 @@
-use crate::app_state::{AppState, MainSection};
+use crate::app_state::{
+    AppState, MainSection, UserCardHistoryPage, UserCardHistoryRequest, UserCardLoadState,
+};
 use crate::hotkeys::matches_hotkey;
+use crate::models::Platform as UiPlatform;
+use crate::protocol::messages::{
+    UserCardFieldStatus, UserCardMetadataPlatform, UserCardMetadataRequest,
+    UserCardMetadataResponse,
+};
+use crate::protocol::rpc::{GetUserChatHistoryParams, UserChatHistoryPage};
 use crate::protocol::types::Platform;
-use crate::runtime::AppRuntime;
+use crate::runtime::{AppRuntime, UserCardRuntimeLoader};
 use crate::services::{BackendWsEvent, ServiceEvent};
 
 use crate::ui::components::input::Input;
+use crate::ui::components::user_card::{
+    HistoryMessage, HistoryState, MetadataState, UserCard, UserCardMetadata,
+};
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
 use crate::ui::{chat::ChatScrollUi, theme};
 use gpui::{
@@ -25,6 +36,9 @@ pub struct TwirChatApp {
     tab_selector_focus: FocusHandle,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
+    _user_card_history_task: Option<Task<()>>,
+    _user_card_metadata_task: Option<Task<()>>,
+    user_card_load_generation: Option<u64>,
     chat_list_state: ListState,
     settings_scroll_handle: ScrollHandle,
     platforms_scroll_handle: ScrollHandle,
@@ -94,6 +108,9 @@ impl TwirChatApp {
             tab_selector_focus,
             runtime,
             _runtime_poll_task: runtime_poll_task,
+            _user_card_history_task: None,
+            _user_card_metadata_task: None,
+            user_card_load_generation: None,
             chat_list_state,
             settings_scroll_handle: ScrollHandle::new(),
             platforms_scroll_handle: ScrollHandle::new(),
@@ -207,6 +224,167 @@ impl TwirChatApp {
         }
     }
 
+    fn start_user_card_loads(&mut self, cx: &mut Context<Self>) {
+        self.refresh_user_card_metadata(cx);
+        self.refresh_user_card_history(cx);
+    }
+
+    fn refresh_user_card_metadata(&mut self, cx: &mut Context<Self>) {
+        let Some(target) = self
+            .state
+            .update(cx, |state, _cx| state.user_card.target.clone())
+        else {
+            return;
+        };
+        let Some(platform) = metadata_platform(target.platform) else {
+            return;
+        };
+
+        let Some(generation) = self.state.update(cx, |state, cx| {
+            let generation = state.start_user_card_metadata_load()?;
+            cx.notify();
+            Some(generation)
+        }) else {
+            return;
+        };
+
+        let request = UserCardMetadataRequest {
+            platform,
+            platform_user_id: target.platform_user_id,
+            username: target.username,
+            channel_id: Some(target.channel_id),
+            channel_slug: Some(target.channel_slug),
+        };
+        let Some(loader) = self.runtime.as_ref().map(AppRuntime::user_card_loader) else {
+            self.state.update(cx, |state, cx| {
+                state.apply_user_card_metadata_result(
+                    generation,
+                    Err("runtime is not available".to_string()),
+                );
+                cx.notify();
+            });
+            return;
+        };
+
+        self._user_card_metadata_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    loader
+                        .fetch_user_card_metadata(request)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+
+            let _ = this.update(cx, |this, cx| {
+                this.state.update(cx, |state, cx| {
+                    state.apply_user_card_metadata_result(generation, result);
+                    cx.notify();
+                });
+                this._user_card_metadata_task = None;
+                cx.notify();
+            });
+        }));
+    }
+
+    fn refresh_user_card_history(&mut self, cx: &mut Context<Self>) {
+        let Some((request, target)) = self.state.update(cx, |state, cx| {
+            let target = state.user_card.target.clone()?;
+            let request = state.start_user_card_history_load()?;
+            cx.notify();
+            Some((request, target))
+        }) else {
+            return;
+        };
+
+        self.start_user_card_history_task(
+            self.runtime.as_ref().map(AppRuntime::user_card_loader),
+            request,
+            GetUserChatHistoryParams {
+                platform: target.platform,
+                platform_user_id: target.platform_user_id,
+                limit: Some(50),
+                cursor: None,
+            },
+            cx,
+        );
+    }
+
+    fn load_older_user_card_history(&mut self, cx: &mut Context<Self>) {
+        let Some((request, target, cursor)) = self.state.update(cx, |state, cx| {
+            let target = state.user_card.target.clone()?;
+            let cursor = state.user_card.next_cursor.clone()?;
+            let request = state.start_user_card_older_history_load()?;
+            cx.notify();
+            Some((request, target, cursor))
+        }) else {
+            return;
+        };
+
+        self.start_user_card_history_task(
+            self.runtime.as_ref().map(AppRuntime::user_card_loader),
+            request,
+            GetUserChatHistoryParams {
+                platform: target.platform,
+                platform_user_id: target.platform_user_id,
+                limit: Some(50),
+                cursor: Some(cursor),
+            },
+            cx,
+        );
+    }
+
+    fn start_user_card_history_task(
+        &mut self,
+        loader: Option<UserCardRuntimeLoader>,
+        request: UserCardHistoryRequest,
+        params: GetUserChatHistoryParams,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(loader) = loader else {
+            self.state.update(cx, |state, cx| {
+                state.apply_user_card_history_result(
+                    request,
+                    Err("runtime is not available".to_string()),
+                );
+                cx.notify();
+            });
+            return;
+        };
+
+        self._user_card_history_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    loader
+                        .load_user_chat_history(params)
+                        .map(user_card_history_page_from_protocol)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+
+            let _ = this.update(cx, |this, cx| {
+                this.state.update(cx, |state, cx| {
+                    state.apply_user_card_history_result(request, result);
+                    cx.notify();
+                });
+                this._user_card_history_task = None;
+                cx.notify();
+            });
+        }));
+    }
+
+    fn close_user_card(&mut self, cx: &mut Context<Self>) {
+        self._user_card_history_task = None;
+        self._user_card_metadata_task = None;
+        self.user_card_load_generation = None;
+        self.state.update(cx, |state, cx| {
+            state.close_user_card();
+            cx.notify();
+        });
+        cx.notify();
+    }
+
     fn flush_composer_submit(&self, cx: &mut Context<Self>) {
         let submit_text = self.composer_input.update(cx, |input, _cx| {
             input
@@ -312,6 +490,12 @@ impl TwirChatApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if event.keystroke.key.as_str() == "escape" && self.state.read(cx).user_card.open {
+            self.close_user_card(cx);
+            cx.stop_propagation();
+            return;
+        }
+
         if self.tab_selector_open {
             self.handle_tab_selector_keystroke(event, cx);
             return;
@@ -432,6 +616,87 @@ impl TwirChatApp {
             }
             _ => {}
         }
+    }
+
+    fn render_user_card_modal(&self, state: &AppState, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let Some(target) = &state.user_card.target else {
+            return div().into_any_element();
+        };
+
+        let app_entity = cx.entity();
+        let close_entity = app_entity.clone();
+        let refresh_metadata_entity = app_entity.clone();
+        let refresh_history_entity = app_entity.clone();
+        let load_older_entity = app_entity;
+
+        let mut card = UserCard::new(
+            user_card_platform(target.platform),
+            target.platform_user_id.clone(),
+            target.display_name.clone(),
+        )
+        .metadata_state(metadata_state_from_app_state(&state.user_card.metadata))
+        .history_state(history_state_from_app_state(state));
+
+        if let Some(username) = &target.username {
+            card = card.username(username.clone());
+        }
+        if let Some(avatar_url) = &target.avatar_url {
+            card = card.avatar_url(avatar_url.clone());
+        }
+        if let Some(current_alias) = &target.current_alias {
+            card = card.current_alias(current_alias.clone());
+        }
+
+        card = card
+            .on_refresh_metadata(move |_window, app| {
+                refresh_metadata_entity.update(app, |this, cx| {
+                    this.refresh_user_card_metadata(cx);
+                });
+            })
+            .on_refresh_history(move |_window, app| {
+                refresh_history_entity.update(app, |this, cx| {
+                    this.refresh_user_card_history(cx);
+                });
+            })
+            .on_load_older(move |_window, app| {
+                load_older_entity.update(app, |this, cx| {
+                    this.load_older_user_card_history(cx);
+                });
+            });
+
+        div()
+            .absolute()
+            .top(px(0.0))
+            .right(px(0.0))
+            .bottom(px(0.0))
+            .left(px(0.0))
+            .bg(gpui::rgba(0x00000099))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div().relative().child(card).child(
+                    div()
+                        .id("user-card-close")
+                        .absolute()
+                        .top(px(12.0))
+                        .right(px(12.0))
+                        .cursor_pointer()
+                        .rounded(px(14.0))
+                        .bg(gpui::rgba(0x00000066))
+                        .text_color(crate::ui::theme::text_primary())
+                        .text_size(px(14.0))
+                        .px(px(9.0))
+                        .py(px(5.0))
+                        .child("Close")
+                        .on_click(move |_event, _window, app| {
+                            close_entity.update(app, |this, cx| {
+                                this.close_user_card(cx);
+                            });
+                        }),
+                ),
+            )
+            .into_any_element()
     }
 
     fn render_tab_selector_modal(
@@ -630,6 +895,16 @@ impl Render for TwirChatApp {
             self.tab_selector_selected_index = 0;
         }
 
+        if state.user_card.open {
+            let generation = state.user_card.generation;
+            if self.user_card_load_generation != Some(generation) {
+                self.user_card_load_generation = Some(generation);
+                self.start_user_card_loads(cx);
+            }
+        } else {
+            self.user_card_load_generation = None;
+        }
+
         if state.messages.len() != self.last_chat_message_count {
             self.chat_list_state.reset(state.messages.len());
             if was_following_tail {
@@ -679,9 +954,179 @@ impl Render for TwirChatApp {
                         cx,
                     )),
             )
+            .when(state.user_card.open, |el| {
+                el.child(self.render_user_card_modal(&state, cx))
+            })
             .when(self.tab_selector_open, |el| {
                 el.child(self.render_tab_selector_modal(&state, cx))
             })
             .child(UpdateToast::new(self.state.clone()))
+    }
+}
+fn metadata_platform(platform: Platform) -> Option<UserCardMetadataPlatform> {
+    match platform {
+        Platform::Twitch => Some(UserCardMetadataPlatform::Twitch),
+        Platform::Kick => Some(UserCardMetadataPlatform::Kick),
+        Platform::Youtube => None,
+    }
+}
+
+fn user_card_platform(platform: Platform) -> UiPlatform {
+    match platform {
+        Platform::Twitch => UiPlatform::Twitch,
+        Platform::Youtube => UiPlatform::YouTube,
+        Platform::Kick => UiPlatform::Kick,
+    }
+}
+
+fn user_card_history_page_from_protocol(page: UserChatHistoryPage) -> UserCardHistoryPage {
+    UserCardHistoryPage {
+        messages: page.messages,
+        has_more: page.has_more,
+        next_cursor: page.next_cursor,
+    }
+}
+
+pub fn metadata_state_from_app_state(
+    state: &UserCardLoadState<UserCardMetadataResponse>,
+) -> MetadataState {
+    match state {
+        UserCardLoadState::Idle => MetadataState::Unsupported,
+        UserCardLoadState::Loading { .. } => MetadataState::Loading,
+        UserCardLoadState::Error { error, .. } => MetadataState::Error(error.clone().into()),
+        UserCardLoadState::Loaded { value, .. } => MetadataState::Loaded(UserCardMetadata {
+            account_age: account_age_text(value).into(),
+            follow_age: follow_age_text(value).into(),
+            subscription_duration: subscription_duration_text(value).into(),
+            sub_age: sub_age_text(value).into(),
+        }),
+    }
+}
+
+pub fn history_state_from_app_state(state: &AppState) -> HistoryState {
+    match &state.user_card.history {
+        UserCardLoadState::Idle => HistoryState::Empty,
+        UserCardLoadState::Loading { .. } => HistoryState::LoadingInitial,
+        UserCardLoadState::Error { error, .. } => HistoryState::Error(error.clone().into()),
+        UserCardLoadState::Loaded { value, .. } if value.is_empty() => HistoryState::Empty,
+        UserCardLoadState::Loaded { value, .. } => HistoryState::Loaded {
+            messages: value
+                .iter()
+                .map(|message| HistoryMessage {
+                    content: message.text.clone().into(),
+                })
+                .collect(),
+            loading_older: state.user_card.loading_older,
+            has_more: state.user_card.has_more,
+        },
+    }
+}
+
+pub fn account_age_text(metadata: &UserCardMetadataResponse) -> String {
+    if let Some(created_at) = metadata.account_age.created_at.as_deref() {
+        return format!("Created {}", created_at);
+    }
+    metadata_field_text(
+        metadata.account_age.status,
+        None,
+        metadata.account_age.message.as_deref(),
+    )
+}
+
+pub fn follow_age_text(metadata: &UserCardMetadataResponse) -> String {
+    if let Some(followed_at) = metadata.follow_age.followed_at.as_deref() {
+        if let Some(msg) = metadata.follow_age.message.as_deref() {
+            return format!("Following since {} · {}", followed_at, msg);
+        } else {
+            return format!("Following since {}", followed_at);
+        }
+    }
+    metadata_field_text(
+        metadata.follow_age.status,
+        None,
+        metadata.follow_age.message.as_deref(),
+    )
+}
+
+pub fn subscription_duration_text(metadata: &UserCardMetadataResponse) -> String {
+    match metadata.subscription_duration.status {
+        UserCardFieldStatus::Available => match metadata.subscription_duration.currently_subscribed
+        {
+            Some(true) => {
+                let mut text = "Currently subscribed".to_string();
+                if let Some(tier) = metadata.subscription_duration.tier.as_deref() {
+                    text = format!("{} · Tier {}", text, tier);
+                }
+                if let Some(true) = metadata.subscription_duration.is_gift {
+                    if let Some(gifter) = metadata
+                        .subscription_duration
+                        .gifter_display_name
+                        .as_deref()
+                    {
+                        text = format!("{} · Gifted by {}", text, gifter);
+                    } else {
+                        text = format!("{} · Gifted", text);
+                    }
+                }
+                if let Some(msg) = metadata.subscription_duration.message.as_deref() {
+                    text = format!("{} · {}", text, msg);
+                }
+                text
+            }
+            Some(false) => {
+                if let Some(msg) = metadata.subscription_duration.message.as_deref() {
+                    msg.to_string()
+                } else {
+                    "Not currently subscribed".to_string()
+                }
+            }
+            None => metadata
+                .subscription_duration
+                .message
+                .clone()
+                .unwrap_or_else(|| "Available".to_string()),
+        },
+        status => metadata_field_text(
+            status,
+            None,
+            metadata.subscription_duration.message.as_deref(),
+        ),
+    }
+}
+
+pub fn sub_age_text(metadata: &UserCardMetadataResponse) -> String {
+    if let Some(months) = metadata.sub_age.months {
+        let suffix = if months == 1 { "month" } else { "months" };
+        let mut text = format!("{} {}", months, suffix);
+        if let Some(msg) = metadata.sub_age.message.as_deref() {
+            text = format!("{} · {}", text, msg);
+        }
+        return text;
+    }
+
+    metadata_field_text(
+        metadata.sub_age.status,
+        None,
+        metadata.sub_age.message.as_deref(),
+    )
+}
+
+pub(crate) fn metadata_field_text(
+    status: UserCardFieldStatus,
+    value: Option<&str>,
+    message: Option<&str>,
+) -> String {
+    message
+        .or(value)
+        .map(str::to_string)
+        .unwrap_or_else(|| metadata_status_text(status).to_string())
+}
+
+fn metadata_status_text(status: UserCardFieldStatus) -> &'static str {
+    match status {
+        UserCardFieldStatus::Available => "Available",
+        UserCardFieldStatus::Unavailable => "Unavailable",
+        UserCardFieldStatus::Unsupported => "Unsupported",
+        UserCardFieldStatus::MissingPermission => "Missing permission",
     }
 }

@@ -9,7 +9,7 @@ pub mod config;
 pub mod packaging;
 pub mod update;
 
-pub use app::{AppRuntime, AppRuntimeError};
+pub use app::{AppRuntime, AppRuntimeError, UserCardRuntimeLoader};
 pub use browser::{ExternalOpenError, ExternalOpenResult, ExternalOpener, SystemExternalOpener};
 pub use config::{
     AUTH_CALLBACK_BASE, BackendRequestConfig, DEFAULT_AUTH_SERVER_PORT, DEFAULT_BACKEND_URL,

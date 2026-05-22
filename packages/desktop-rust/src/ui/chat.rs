@@ -53,12 +53,14 @@ pub(crate) fn panel(
                 .min_h(px(0.0))
                 .mt(px(40.0))
                 .vertical_scrollbar_for(props.scroll_ui.list_state, window, cx)
-                .child(
+                .child({
+                    let state_entity = props.state_entity.clone();
                     list(props.scroll_ui.list_state.clone(), move |ix, window, cx| {
                         message_row(
                             &messages[ix],
                             &settings,
                             &accounts,
+                            state_entity.clone(),
                             window,
                             cx,
                             MessageRowOptions::home(),
@@ -66,8 +68,8 @@ pub(crate) fn panel(
                         .into_any_element()
                     })
                     .with_sizing_behavior(ListSizingBehavior::Auto)
-                    .size_full(),
-                ),
+                    .size_full()
+                }),
         )
         .child(composer(
             state,
@@ -825,6 +827,7 @@ fn compact_message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
     _accounts: &[Account],
+    state_entity: Entity<AppState>,
     window: &mut Window,
     cx: &mut App,
     options: MessageRowOptions,
@@ -921,12 +924,23 @@ fn compact_message_row(
         "{}:",
         author_label_text(message, options.use_author_fallback)
     );
+    let state_entity_for_compact = state_entity.clone();
+    let message_for_compact = message.clone();
     custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
         move |_win, _cx| {
+            let state_entity = state_entity_for_compact.clone();
+            let message = message_for_compact.clone();
             div()
                 .text_color(theme::accent())
                 .text_size(px(12.0))
                 .font_weight(gpui::FontWeight::BOLD)
+                .on_mouse_down(gpui::MouseButton::Right, move |_, _window, cx| {
+                    state_entity.update(cx, |state, cx| {
+                        let target = state.user_card_target_for_message(&message);
+                        state.open_user_card(target);
+                        cx.notify();
+                    });
+                })
                 .child(author_text.clone())
                 .into_any_element()
         },
@@ -1014,6 +1028,7 @@ pub(crate) fn message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
     accounts: &[Account],
+    state_entity: Entity<AppState>,
     window: &mut Window,
     cx: &mut App,
     options: MessageRowOptions,
@@ -1079,7 +1094,15 @@ pub(crate) fn message_row(
     }
 
     if is_compact {
-        return compact_message_row(message, settings, accounts, window, cx, options);
+        return compact_message_row(
+            message,
+            settings,
+            accounts,
+            state_entity.clone(),
+            window,
+            cx,
+            options,
+        );
     }
 
     div()
@@ -1132,6 +1155,17 @@ pub(crate) fn message_row(
                     .text_size(px(if is_compact { 9.0 } else { 10.0 }))
                     .font_weight(gpui::FontWeight::BOLD)
                     .overflow_hidden()
+                    .on_mouse_down(gpui::MouseButton::Right, {
+                        let state_entity = state_entity.clone();
+                        let message = message.clone();
+                        move |_, _window, cx| {
+                            state_entity.update(cx, |state, cx| {
+                                let target = state.user_card_target_for_message(&message);
+                                state.open_user_card(target);
+                                cx.notify();
+                            });
+                        }
+                    })
                     .when_some(avatar_url.clone(), |avatar, url| {
                         avatar.child(
                             img(ImageSource::from(url))
@@ -1242,6 +1276,18 @@ pub(crate) fn message_row(
                                 .text_color(theme::accent())
                                 .text_size(px(12.0))
                                 .font_weight(gpui::FontWeight::BOLD)
+                                .on_mouse_down(gpui::MouseButton::Right, {
+                                    let state_entity = state_entity.clone();
+                                    let message = message.clone();
+                                    move |_, _window, cx| {
+                                        state_entity.update(cx, |state, cx| {
+                                            let target =
+                                                state.user_card_target_for_message(&message);
+                                            state.open_user_card(target);
+                                            cx.notify();
+                                        });
+                                    }
+                                })
                                 .child(author_label_text(message, options.use_author_fallback)),
                         )
                         .when(settings.show_timestamp, |el| {

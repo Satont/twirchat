@@ -259,3 +259,34 @@ fn compact_chat_uses_distinct_layout_without_avatar_branch() {
 
     assert!(compact_body.contains("SelectableMessagePart::Custom"));
 }
+
+#[test]
+fn user_card_right_click_trigger() {
+    let chat_rs = std::fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+
+    // Modern avatar right-click
+    assert!(chat_rs.contains("avatar_url.clone()"));
+    assert!(chat_rs.contains("gpui::MouseButton::Right"));
+    assert!(chat_rs.contains("state.open_user_card"));
+
+    // Modern label right-click
+    assert!(chat_rs.contains("author_label_text"));
+    assert!(chat_rs.contains("gpui::MouseButton::Right"));
+
+    // Compact label right-click
+    let compact_fn_start = chat_rs.find("fn compact_message_row").unwrap();
+    let message_fn_start = chat_rs.find("pub(crate) fn message_row").unwrap();
+    let compact_body = &chat_rs[compact_fn_start..message_fn_start];
+    assert!(compact_body.contains("SelectableMessagePart::Custom"));
+    assert!(compact_body.contains("gpui::MouseButton::Right"));
+    assert!(compact_body.contains("state.open_user_card"));
+
+    // System messages exclude user card logic
+    let message_fn_body = &chat_rs[message_fn_start..];
+    let system_check = message_fn_body
+        .find("if message.message_type == ChatMessageType::System")
+        .unwrap();
+    let early_return = message_fn_body[system_check..].find("return").unwrap();
+    let system_block = &message_fn_body[system_check..system_check + early_return + 50];
+    assert!(!system_block.contains("gpui::MouseButton::Right"));
+}

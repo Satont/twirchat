@@ -4,6 +4,7 @@ use std::cell::Cell;
 use std::env;
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::time::Duration;
 use twirchat_desktop_rust::app::TwirChatApp;
 use twirchat_desktop_rust::ui::components::input;
 use twirchat_desktop_rust::ui::components::selectable_message;
@@ -68,6 +69,10 @@ fn main() -> ExitCode {
                         println!(
                             "gpui window opened; smoke mode requested immediate shutdown before interactive QA"
                         );
+                        std::thread::spawn(|| {
+                            std::thread::sleep(Duration::from_millis(50));
+                            std::process::exit(0);
+                        });
                         cx.quit();
                     }
                 }

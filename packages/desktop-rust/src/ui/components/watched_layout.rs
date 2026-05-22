@@ -1,7 +1,7 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::protocol::types::{
-    AppSettings, LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection,
-    WatchedChannel, WatchedChannelsLayout,
+    LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection, WatchedChannel,
+    WatchedChannelsLayout,
 };
 use crate::ui::chat::{MessageRowOptions, message_row};
 use crate::ui::components::input::Input;
@@ -323,7 +323,15 @@ fn watched_panel(
                 } else {
                     messages
                         .into_iter()
-                        .map(|message| watched_message_row(&message, &settings, window, cx))
+                        .map(|message| {
+                            watched_message_row(
+                                &message,
+                                &settings,
+                                state_entity.clone(),
+                                window,
+                                cx,
+                            )
+                        })
                         .collect::<Vec<_>>()
                 }),
         )
@@ -444,14 +452,16 @@ fn collect_panel_messages(
 
 fn watched_message_row(
     message: &crate::protocol::types::NormalizedChatMessage,
-    settings: &AppSettings,
+    settings: &crate::protocol::types::AppSettings,
+    state_entity: gpui::Entity<crate::app_state::AppState>,
     window: &mut gpui::Window,
-    cx: &mut gpui::Context<TwirChatApp>,
+    cx: &mut gpui::Context<crate::app::TwirChatApp>,
 ) -> gpui::AnyElement {
     message_row(
         message,
         settings,
         &[],
+        state_entity,
         window,
         cx,
         MessageRowOptions::watched(),
