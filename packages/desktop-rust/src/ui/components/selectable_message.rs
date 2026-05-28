@@ -323,6 +323,7 @@ struct SelectableTextPartElement {
     text: StyledText,
     source_range: Range<usize>,
     local_text: SharedString,
+    is_link: bool,
 }
 
 impl SelectableTextPartElement {
@@ -355,6 +356,7 @@ impl SelectableTextPartElement {
             text: styled,
             source_range,
             local_text: text,
+            is_link,
         }
     }
 }
@@ -413,6 +415,15 @@ impl Element for SelectableTextPartElement {
         window: &mut Window,
         cx: &mut App,
     ) {
+        window.set_cursor_style(
+            if self.is_link {
+                CursorStyle::PointingHand
+            } else {
+                CursorStyle::IBeam
+            },
+            hitbox,
+        );
+
         let state = self.state.read(cx);
         let selected_range = state.selected_range.clone();
         let focus_handle = state.focus_handle.clone();

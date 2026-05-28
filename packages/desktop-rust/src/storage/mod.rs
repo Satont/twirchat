@@ -100,13 +100,11 @@ impl Storage {
     pub fn open_or_recover(path: &Path) -> StorageResult<Self> {
         match Self::open(path) {
             Ok(storage) => Ok(storage),
-            Err(_) => {
-                if path.exists() {
-                    let corrupt_path = path.with_extension("corrupt");
-                    fs::rename(path, corrupt_path)?;
-                }
+            Err(error) if path.exists() && is_recoverable_corruption(&error) => {
+                fs::rename(path, corrupt_backup_path(path))?;
                 Self::open(path)
             }
+            Err(error) => Err(error),
         }
     }
 
@@ -149,6 +147,32 @@ impl Storage {
     pub fn user_aliases(&self) -> UserAliasStore<'_> {
         UserAliasStore::new(&self.conn)
     }
+}
+
+fn is_recoverable_corruption(error: &StorageError) -> bool {
+    let StorageError::Db(DbError::Sqlite(message)) = error else {
+        return false;
+    };
+
+    let message = message.to_lowercase();
+    message.contains("file is not a database")
+        || message.contains("database disk image is malformed")
+}
+
+fn corrupt_backup_path(path: &Path) -> std::path::PathBuf {
+    let base = path.with_extension("corrupt");
+    if !base.exists() {
+        return base;
+    }
+
+    for index in 1.. {
+        let candidate = path.with_extension(format!("corrupt.{index}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    unreachable!("unbounded corrupt backup suffix search should always return")
 }
 
 pub fn migrate(conn: &Connection) -> StorageResult<()> {

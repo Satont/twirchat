@@ -153,3 +153,20 @@ fn alias_editor_and_mention_autocomplete_source_contract() {
     assert!(app_rs.contains("parse_mention_token"));
     assert!(app_rs.contains("replace_mention_token"));
 }
+
+#[test]
+fn watched_mention_autocomplete_matches_visible_panel_fallback_scope() {
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
+    let watched_layout_rs = fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+
+    assert!(watched_layout_rs.contains("message.platform == channel.platform"));
+    assert!(watched_layout_rs.contains("message.channel_id == channel.id"));
+    assert!(watched_layout_rs.contains("eq_ignore_ascii_case(&channel.channel_slug)"));
+
+    assert!(app_rs.contains("message.platform == channel.platform"));
+    assert!(app_rs.contains("message.channel_id == channel.id"));
+    assert!(app_rs.contains("eq_ignore_ascii_case(&channel.channel_slug)"));
+    assert!(app_rs.contains("user_card_alias_input"));
+    assert!(app_rs.contains("is_focused(window)"));
+}

@@ -790,6 +790,11 @@ impl TwirChatApp {
             .read(cx)
             .focus_handle(cx)
             .is_focused(window)
+            || self
+                .user_card_alias_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
     }
 
     fn observe_keystrokes(
@@ -1357,11 +1362,24 @@ fn mention_source_messages<'a>(
             .map(|messages| messages.iter().rev().collect())
             .unwrap_or_else(|| {
                 state
-                    .messages
+                    .watched_channels
                     .iter()
-                    .rev()
-                    .filter(|message| message.channel_id == channel_id.as_str())
-                    .collect()
+                    .find(|channel| channel.id == *channel_id)
+                    .map(|channel| {
+                        state
+                            .messages
+                            .iter()
+                            .rev()
+                            .filter(|message| {
+                                message.platform == channel.platform
+                                    && (message.channel_id == channel.id
+                                        || message
+                                            .channel_id
+                                            .eq_ignore_ascii_case(&channel.channel_slug))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
             }),
     }
 }

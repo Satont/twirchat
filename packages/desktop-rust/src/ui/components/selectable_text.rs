@@ -214,6 +214,11 @@ struct SelectableTextElement {
     state: Entity<SelectableText>,
 }
 
+struct SelectableTextPrepaintState {
+    hitbox: Hitbox,
+    link_hitboxes: Vec<Hitbox>,
+}
+
 impl IntoElement for SelectableTextElement {
     type Element = Self;
 
@@ -224,7 +229,7 @@ impl IntoElement for SelectableTextElement {
 
 impl Element for SelectableTextElement {
     type RequestLayoutState = ();
-    type PrepaintState = Hitbox;
+    type PrepaintState = SelectableTextPrepaintState;
 
     fn id(&self) -> Option<ElementId> {
         None
@@ -258,7 +263,23 @@ impl Element for SelectableTextElement {
         let measured_layout = self.text.layout().clone();
         self.state
             .update(cx, |state, _cx| state.layout = Some(measured_layout));
-        window.insert_hitbox(bounds, HitboxBehavior::Normal)
+        let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+
+        let mut link_hitboxes = Vec::new();
+        let state = self.state.read(cx);
+        if let Some(layout) = state.layout.as_ref() {
+            for range in &state.link_ranges {
+                for quad in selection_quads(layout, &state.text, range) {
+                    let link_hitbox = window.insert_hitbox(quad.bounds, HitboxBehavior::Normal);
+                    link_hitboxes.push(link_hitbox);
+                }
+            }
+        }
+
+        SelectableTextPrepaintState {
+            hitbox,
+            link_hitboxes,
+        }
     }
 
     fn paint(
@@ -271,6 +292,11 @@ impl Element for SelectableTextElement {
         window: &mut Window,
         cx: &mut App,
     ) {
+        window.set_cursor_style(CursorStyle::IBeam, &hitbox.hitbox);
+        for link_hitbox in &hitbox.link_hitboxes {
+            window.set_cursor_style(CursorStyle::PointingHand, link_hitbox);
+        }
+
         let state = self.state.read(cx);
         let focus_handle = state.focus_handle.clone();
         let selected_range = state.selected_range.clone();
@@ -286,7 +312,7 @@ impl Element for SelectableTextElement {
 
         let selection_entity = self.state.clone();
         let selection_layout = measured_layout.clone();
-        let selection_hitbox = hitbox.clone();
+        let selection_hitbox = hitbox.hitbox.clone();
         let selection_focus = focus_handle.clone();
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if phase != DispatchPhase::Bubble || !selection_hitbox.is_hovered(window) {

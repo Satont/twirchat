@@ -301,121 +301,128 @@ fn composer(
         .w_full()
         .h(px(104.0))
         .min_h(px(82.0))
-        .bg(theme::surface())
-        .border_t_1()
-        .border_color(theme::border())
-        .pt(px(6.0))
-        .px(px(12.0))
-        .pb(px(8.0))
-        .flex()
-        .flex_col()
-        .gap(px(6.0))
+        .relative()
         .child(
             div()
-                .flex()
-                .flex_row()
-                .flex_wrap()
-                .gap(px(6.0))
-                .children(home_targets.iter().map({
-                    let state_entity = state_entity.clone();
-                    move |chip| {
-                        let enabled = !state.composer_disabled_channel_ids.contains(&chip.id);
-                        status_chip(chip, enabled, state_entity.clone())
-                    }
-                })),
+                .absolute()
+                .size_full()
+                .bg(theme::surface())
+                .border_t_1()
+                .border_color(theme::border()),
         )
         .child(
             div()
+                .size_full()
+                .pt(px(6.0))
+                .px(px(12.0))
+                .pb(px(8.0))
                 .flex()
-                .flex_row()
-                .min_w(px(0.0))
-                .items_end()
-                .gap(px(8.0))
+                .flex_col()
+                .gap(px(6.0))
+                .child(div().flex().flex_row().flex_wrap().gap(px(6.0)).children(
+                    home_targets.iter().map({
+                        let state_entity = state_entity.clone();
+                        move |chip| {
+                            let enabled = !state.composer_disabled_channel_ids.contains(&chip.id);
+                            status_chip(chip, enabled, state_entity.clone())
+                        }
+                    }),
+                ))
                 .child(
                     div()
-                        .flex_1()
-                        .min_w(px(0.0))
-                        .max_h(px(120.0))
-                        .rounded_lg()
-                        .bg(theme::surface_2())
-                        .border_1()
-                        .border_color(theme::border())
-                        .relative()
                         .flex()
-                        .items_center()
-                        .child(composer_input.clone())
-                        .when_some(mention_autocomplete, |input_box, autocomplete| {
-                            input_box.child(
-                                MentionAutocompletePopup::new(
-                                    autocomplete.suggestions,
-                                    autocomplete.selected_index,
-                                )
-                                .on_select({
-                                    let app_entity = app_entity.clone();
-                                    move |index, window, app| {
-                                        app_entity.update(app, |this, cx| {
-                                            this.select_mention_suggestion(index, window, cx);
-                                        });
+                        .flex_row()
+                        .min_w(px(0.0))
+                        .items_end()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.0))
+                                .max_h(px(120.0))
+                                .rounded_lg()
+                                .bg(theme::surface_2())
+                                .border_1()
+                                .border_color(theme::border())
+                                .relative()
+                                .flex()
+                                .items_center()
+                                .child(composer_input.clone())
+                                .when_some(mention_autocomplete, |input_box, autocomplete| {
+                                    input_box.child(
+                                        MentionAutocompletePopup::new(
+                                            autocomplete.suggestions,
+                                            autocomplete.selected_index,
+                                        )
+                                        .on_select({
+                                            let app_entity = app_entity.clone();
+                                            move |index, window, app| {
+                                                app_entity.update(app, |this, cx| {
+                                                    this.select_mention_suggestion(
+                                                        index, window, cx,
+                                                    );
+                                                });
+                                            }
+                                        }),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .w(px(32.0))
+                                .h(px(32.0))
+                                .rounded_lg()
+                                .text_color(theme::text_muted())
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .hover(|s| s.bg(rgb(0x2a2a33)).text_color(theme::text_primary()))
+                                .child("☺"),
+                        )
+                        .child(
+                            div()
+                                .w(px(36.0))
+                                .h(px(36.0))
+                                .rounded_lg()
+                                .bg(if can_send {
+                                    theme::accent_strong()
+                                } else {
+                                    theme::surface_2()
+                                })
+                                .text_color(if can_send {
+                                    theme::text_primary()
+                                } else {
+                                    theme::text_muted()
+                                })
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(can_send, |button| {
+                                    button.cursor_pointer().hover(|s| s.bg(rgb(0x6d28d9)))
+                                })
+                                .child("➤")
+                                .on_mouse_down(gpui::MouseButton::Left, {
+                                    let state_entity = state_entity.clone();
+                                    let composer_input = composer_input.clone();
+                                    move |_, _, app| {
+                                        let text = composer_input.read(app).text().to_string();
+                                        if state_entity.queue_composer_send(app, &text) {
+                                            composer_input.update(app, |input, cx| input.clear(cx));
+                                        }
                                     }
                                 }),
-                            )
-                        }),
+                        ),
                 )
                 .child(
                     div()
-                        .w(px(32.0))
-                        .h(px(32.0))
-                        .rounded_lg()
+                        .flex()
+                        .flex_row()
+                        .justify_between()
+                        .text_size(px(11.0))
                         .text_color(theme::text_muted())
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .hover(|s| s.bg(rgb(0x2a2a33)).text_color(theme::text_primary()))
-                        .child("☺"),
-                )
-                .child(
-                    div()
-                        .w(px(36.0))
-                        .h(px(36.0))
-                        .rounded_lg()
-                        .bg(if can_send {
-                            theme::accent_strong()
-                        } else {
-                            theme::surface_2()
-                        })
-                        .text_color(if can_send {
-                            theme::text_primary()
-                        } else {
-                            theme::text_muted()
-                        })
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(can_send, |button| {
-                            button.cursor_pointer().hover(|s| s.bg(rgb(0x6d28d9)))
-                        })
-                        .child("➤")
-                        .on_mouse_down(gpui::MouseButton::Left, {
-                            let state_entity = state_entity.clone();
-                            let composer_input = composer_input.clone();
-                            move |_, _, app| {
-                                let text = composer_input.read(app).text().to_string();
-                                if state_entity.queue_composer_send(app, &text) {
-                                    composer_input.update(app, |input, cx| input.clear(cx));
-                                }
-                            }
-                        }),
+                        .child("Enter ↵ to send")
+                        .child("Shift+Enter for newline"),
                 ),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .justify_between()
-                .text_size(px(11.0))
-                .text_color(theme::text_muted())
-                .child("Enter ↵ to send")
-                .child("Shift+Enter for newline"),
         )
 }
 

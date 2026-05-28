@@ -321,24 +321,27 @@ fn chat_burst_performance() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn mention_autocomplete_uses_alias_labels_but_inserts_original_display_names() {
-    let messages = [
-        make_message(
-            "msg-1".to_string(),
-            Platform::Twitch,
-            "channel".to_string(),
-            "user-1".to_string(),
-            "Twitch User".to_string(),
-            1,
-        ),
-        make_message(
-            "msg-2".to_string(),
-            Platform::Twitch,
-            "channel".to_string(),
-            "user-2".to_string(),
-            "Another Viewer".to_string(),
-            2,
-        ),
-    ];
+    let mut msg1 = make_message(
+        "msg-1".to_string(),
+        Platform::Twitch,
+        "channel".to_string(),
+        "user-1".to_string(),
+        "Twitch User".to_string(),
+        1,
+    );
+    msg1.author.username = Some("real_twitch_user".to_string());
+
+    let mut msg2 = make_message(
+        "msg-2".to_string(),
+        Platform::Twitch,
+        "channel".to_string(),
+        "user-2".to_string(),
+        "Another Viewer".to_string(),
+        2,
+    );
+    msg2.author.username = Some("another_viewer_login".to_string());
+
+    let messages = [msg1, msg2];
     let aliases = AliasBook::from_aliases([UserAlias {
         platform: Platform::Twitch,
         platform_user_id: "user-1".to_string(),
@@ -348,17 +351,38 @@ fn mention_autocomplete_uses_alias_labels_but_inserts_original_display_names() {
     }]);
 
     let suggestions = mention_suggestions(messages.iter().rev(), &aliases);
-    let filtered = fuzzy_filter_mentions(&suggestions, "fr", 15);
+    let filtered_by_alias = fuzzy_filter_mentions(&suggestions, "fr", 15);
 
-    assert_eq!(filtered.len(), 1);
-    assert_eq!(filtered[0].label, "Friendly Alias");
-    assert_eq!(filtered[0].insert_label, "Twitch User");
-    assert_eq!(filtered[0].current_alias.as_deref(), Some("Friendly Alias"));
+    assert_eq!(filtered_by_alias.len(), 1);
+    assert_eq!(filtered_by_alias[0].label, "Friendly Alias");
+    assert_eq!(filtered_by_alias[0].insert_label, "Twitch User");
+    assert_eq!(
+        filtered_by_alias[0].current_alias.as_deref(),
+        Some("Friendly Alias")
+    );
+
+    let filtered_by_original = fuzzy_filter_mentions(&suggestions, "twitch", 15);
+    assert_eq!(
+        filtered_by_original.len(),
+        1,
+        "Should match original display name"
+    );
+    assert_eq!(filtered_by_original[0].label, "Friendly Alias");
+    assert_eq!(filtered_by_original[0].insert_label, "Twitch User");
+
+    let filtered_by_username = fuzzy_filter_mentions(&suggestions, "real_twitch", 15);
+    assert_eq!(
+        filtered_by_username.len(),
+        1,
+        "Should match specific user's username"
+    );
+    assert_eq!(filtered_by_username[0].label, "Friendly Alias");
+    assert_eq!(filtered_by_username[0].insert_label, "Twitch User");
 
     let token = parse_mention_token("hello @fr").expect("mention token should parse");
     assert_eq!(token.query, "fr");
     assert_eq!(
-        replace_mention_token("hello @fr", &token, &filtered[0]),
+        replace_mention_token("hello @fr", &token, &filtered_by_alias[0]),
         "hello @Twitch User "
     );
     assert!(parse_mention_token("hello @fr ").is_none());

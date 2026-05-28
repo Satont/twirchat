@@ -168,3 +168,10 @@
   - The inner wrapper needs to constraint height via `.flex().flex_col().w_full().h_full().max_w(...).max_h(...)` and `overflow_hidden()`.
   - The inner content modal needs to expand via `.flex_1().min_h_0().w_full().h_full()`.
   - The inner scrolling body must be `overflow_y_scroll()` with `flex_1().min_h_0()`, avoiding fixed heights on its lists like `h(px(360.0))` so it naturally fills the wrapper.
+
+### Mention Autocomplete Visuals & Matching
+- Mention autocomplete was visually crossed by the composer's top border because GPUI overlays nested inside a parent with borders render behind the parent's border when overflowing. Solved by separating the background/border into an absolute sibling that renders first.
+- To support both alias and original nickname autocomplete simultaneously, `fuzzy_filter_mentions` was updated to test `label` (which holds the alias), `display_name`, and `username`, selecting the best rank from any matched string. The insertion logic naturally inserts the original label preserving consistency with existing logic.
+- Verified and finalized the autocomplete border visibility fix by using a `.absolute().size_full()` sibling trick.
+- The `fuzzy_filter_mentions` logic has been verified to return a single matching record per user regardless of how many fallback fields (alias, display name, username) matched, thanks to iter processing.
+- The selectable text/message scope creep files were correctly reset to HEAD.

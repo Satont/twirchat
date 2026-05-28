@@ -5,6 +5,7 @@ use twirchat_desktop_rust::protocol::types::{
     ChatAuthor, ChatMessageType, LayoutNode, NormalizedChatMessage, PanelContent, Platform,
 };
 use twirchat_desktop_rust::runtime::DEFAULT_OVERLAY_SERVER_PORT;
+use twirchat_desktop_rust::storage::accounts::UpsertAccount;
 use twirchat_desktop_rust::storage::crypto;
 use twirchat_desktop_rust::storage::{Storage, TokenState};
 
@@ -237,6 +238,52 @@ fn user_card_history_pages_newest_window_in_display_order() -> Result<(), Box<dy
 }
 
 #[test]
+fn storage_snapshot_survives_reopen() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("restart-persistence.sqlite");
+
+    {
+        let storage = Storage::open_or_recover(&db_path)?;
+        storage.accounts().upsert(UpsertAccount {
+            id: "twitch:streamer-1",
+            platform: Platform::Twitch,
+            platform_user_id: "streamer-1",
+            username: "fixturestreamer",
+            display_name: "Fixture Streamer",
+            avatar_url: None,
+            access_token: "access-token",
+            refresh_token: Some("refresh-token"),
+            expires_at: None,
+            scopes: &[],
+        })?;
+        storage
+            .settings()
+            .set_tab_channel_ids(&["wc-twitch".to_string()])?;
+        storage.messages().save(&user_card_history_message(
+            "restart-message".to_string(),
+            Platform::Twitch,
+            "streamer-1",
+            "viewer-1",
+            "viewer",
+            "Viewer",
+            1_700_000_001,
+        ))?;
+    }
+
+    let storage = Storage::open_or_recover(&db_path)?;
+
+    assert_eq!(storage.accounts().find_all()?.len(), 1);
+    assert_eq!(
+        storage.settings().get_tab_channel_ids()?.as_deref(),
+        Some(&["wc-twitch".to_string()][..])
+    );
+    assert_eq!(storage.messages().get_recent(Some(10))?.len(), 1);
+    assert!(!db_path.with_extension("corrupt").exists());
+
+    Ok(())
+}
+
+#[test]
 fn storage_corrupt_db_recovers_safely() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let db_path = temp.path().join("corrupt.sqlite");
@@ -250,6 +297,24 @@ fn storage_corrupt_db_recovers_safely() -> Result<(), Box<dyn std::error::Error>
         storage.settings().get_app_settings()?.overlay.port,
         DEFAULT_OVERLAY_SERVER_PORT
     );
+
+    Ok(())
+}
+
+#[test]
+fn storage_open_or_recover_preserves_db_on_non_corruption_errors()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("not-a-file.sqlite");
+    fs::create_dir(&db_path)?;
+    fs::write(db_path.join("marker"), "preserve me")?;
+
+    let result = Storage::open_or_recover(&db_path);
+
+    assert!(result.is_err());
+    assert!(db_path.is_dir());
+    assert_eq!(fs::read_to_string(db_path.join("marker"))?, "preserve me");
+    assert!(!db_path.with_extension("corrupt").exists());
 
     Ok(())
 }

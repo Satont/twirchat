@@ -115,23 +115,39 @@ pub fn fuzzy_filter_mentions(
     let mut matches = suggestions
         .iter()
         .filter_map(|suggestion| {
-            let label = suggestion.label.to_lowercase();
-            let mut query_chars = query.chars();
-            let mut current = query_chars.next()?;
+            let targets = [
+                Some(suggestion.label.as_str()),
+                Some(suggestion.display_name.as_str()),
+                suggestion.username.as_deref(),
+            ];
 
-            for ch in label.chars() {
-                if ch == current {
-                    match query_chars.next() {
-                        Some(next) => current = next,
-                        None => {
-                            let rank = label.find(first_char).unwrap_or(usize::MAX);
-                            return Some((rank, suggestion.clone()));
+            let mut best_rank = None;
+
+            for target in targets.into_iter().flatten() {
+                let target_lower = target.to_lowercase();
+                let mut query_chars = query.chars();
+                let mut current = query_chars.next()?;
+
+                let mut matched_all = false;
+                for ch in target_lower.chars() {
+                    if ch == current {
+                        match query_chars.next() {
+                            Some(next) => current = next,
+                            None => {
+                                matched_all = true;
+                                break;
+                            }
                         }
                     }
                 }
+
+                if matched_all {
+                    let rank = target_lower.find(first_char).unwrap_or(usize::MAX);
+                    best_rank = Some(best_rank.map_or(rank, |r| std::cmp::min(r, rank)));
+                }
             }
 
-            None
+            best_rank.map(|rank| (rank, suggestion.clone()))
         })
         .collect::<Vec<_>>();
 

@@ -496,62 +496,84 @@ fn watched_composer(
     div()
         .w_full()
         .h(px(58.0))
-        .border_t_1()
-        .border_color(theme::border())
-        .px(px(10.0))
-        .py(px(10.0))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(8.0))
+        .relative()
         .child(
             div()
-                .flex_1()
-                .min_w(px(0.0))
-                .rounded_md()
-                .bg(theme::surface_2())
-                .border_1()
-                .border_color(theme::border())
-                .relative()
-                .flex()
-                .items_center()
-                .child(composer_input.clone())
-                .when_some(mention_autocomplete, |input_box, autocomplete| {
-                    input_box.child(
-                        MentionAutocompletePopup::new(
-                            autocomplete.suggestions,
-                            autocomplete.selected_index,
-                        )
-                        .on_select({
-                            let app_entity = app_entity.clone();
-                            move |index, window, app| {
-                                app_entity.update(app, |this, cx| {
-                                    this.select_mention_suggestion(index, window, cx);
-                                });
-                            }
-                        }),
-                    )
-                }),
+                .absolute()
+                .size_full()
+                .border_t_1()
+                .border_color(theme::border()),
         )
         .child(
             div()
-                .w(px(36.0))
-                .h(px(36.0))
-                .rounded_md()
-                .bg(theme::accent_strong())
-                .text_color(theme::text_primary())
+                .size_full()
+                .px(px(10.0))
+                .py(px(10.0))
                 .flex()
-                .items_center()
+                .flex_col()
                 .justify_center()
-                .cursor_pointer()
-                .hover(|s| s.bg(rgb(0x6d28d9)))
-                .child("➤")
-                .on_mouse_down(gpui::MouseButton::Left, move |_, _, app| {
-                    let text = composer_input.read(app).text().to_string();
-                    if state_entity.queue_watched_channel_send(app, &channel_id, &text) {
-                        composer_input.update(app, |input, cx| input.clear(cx));
-                    }
-                }),
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.0))
+                                .rounded_md()
+                                .bg(theme::surface_2())
+                                .border_1()
+                                .border_color(theme::border())
+                                .relative()
+                                .flex()
+                                .items_center()
+                                .child(composer_input.clone())
+                                .when_some(mention_autocomplete, |input_box, autocomplete| {
+                                    input_box.child(
+                                        MentionAutocompletePopup::new(
+                                            autocomplete.suggestions,
+                                            autocomplete.selected_index,
+                                        )
+                                        .on_select({
+                                            let app_entity = app_entity.clone();
+                                            move |index, window, app| {
+                                                app_entity.update(app, |this, cx| {
+                                                    this.select_mention_suggestion(
+                                                        index, window, cx,
+                                                    );
+                                                });
+                                            }
+                                        }),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .w(px(36.0))
+                                .h(px(36.0))
+                                .rounded_md()
+                                .bg(theme::accent_strong())
+                                .text_color(theme::text_primary())
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_pointer()
+                                .hover(|s| s.bg(rgb(0x6d28d9)))
+                                .child("➤")
+                                .on_mouse_down(gpui::MouseButton::Left, move |_, _, app| {
+                                    let text = composer_input.read(app).text().to_string();
+                                    if state_entity.queue_watched_channel_send(
+                                        app,
+                                        &channel_id,
+                                        &text,
+                                    ) {
+                                        composer_input.update(app, |input, cx| input.clear(cx));
+                                    }
+                                }),
+                        ),
+                ),
         )
 }
 
