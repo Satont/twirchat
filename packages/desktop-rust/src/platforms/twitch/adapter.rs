@@ -61,6 +61,7 @@ pub struct TwitchChatMessage {
     pub username: String,
     pub display_name: String,
     pub color: Option<String>,
+    pub avatar_url: Option<String>,
     pub text: String,
     pub timestamp: String,
     pub badges: Vec<(String, String)>,
@@ -322,17 +323,23 @@ impl<C: TwitchChatClient> TwitchAdapter<'_, C> {
                 }
             })
             .collect();
-        let emotes = message
-            .emotes
-            .into_iter()
-            .map(|emote| Emote {
-                id: emote.id.clone(),
-                name: emote.name,
-                image_url: twitch_emote_url(&emote.id),
-                positions: vec![EmotePosition {
+        let mut grouped_emotes = BTreeMap::<(String, String), Vec<EmotePosition>>::new();
+        for emote in message.emotes {
+            grouped_emotes
+                .entry((emote.id, emote.name))
+                .or_default()
+                .push(EmotePosition {
                     start: emote.start,
                     end: emote.end,
-                }],
+                });
+        }
+        let emotes = grouped_emotes
+            .into_iter()
+            .map(|((id, name), positions)| Emote {
+                image_url: twitch_emote_url(&id),
+                id,
+                name,
+                positions,
                 aspect_ratio: None,
             })
             .collect();
@@ -346,7 +353,7 @@ impl<C: TwitchChatClient> TwitchAdapter<'_, C> {
                 username: Some(message.username),
                 display_name: message.display_name,
                 color: message.color,
-                avatar_url: None,
+                avatar_url: message.avatar_url,
                 badges,
             },
             text: message.text,

@@ -31,6 +31,7 @@ fn twitch_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error
         username: "viewerlogin".into(),
         display_name: "Viewer Login".into(),
         color: Some("#9146ff".into()),
+        avatar_url: Some("https://static-cdn.jtvnw.net/jtv_user_pictures/viewer.png".into()),
         text: "Kappa hello".into(),
         timestamp: "1700000000".into(),
         badges: vec![
@@ -108,6 +109,10 @@ fn twitch_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error
         .find(|message| message.id == "msg-live")
         .ok_or("live message missing")?;
     assert_eq!(live_message.channel_id, "fixturestreamer");
+    assert_eq!(
+        live_message.author.avatar_url.as_deref(),
+        Some("https://static-cdn.jtvnw.net/jtv_user_pictures/viewer.png")
+    );
     assert_eq!(live_message.author.badges.len(), 2);
     assert_eq!(
         live_message.author.badges[0].image_url.as_deref(),
@@ -148,6 +153,76 @@ fn twitch_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error
             "localEchoReply": reply.parent_message_id
         }),
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn twitch_adapter_preserves_repeated_emotes_and_overlay_parts()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("twitch-repeated-emotes.sqlite"))?;
+    let mut client = MockTwitchClient::new().with_badge(
+        "broadcaster/1",
+        "https://static-cdn.jtvnw.net/badges/v1/broadcaster/1",
+    );
+    client.push_message(TwitchChatMessage {
+        id: "msg-repeated".into(),
+        channel: "#FixtureStreamer".into(),
+        user_id: "viewer-2".into(),
+        username: "viewerlogin".into(),
+        display_name: "Viewer Login".into(),
+        color: Some("#9146ff".into()),
+        avatar_url: Some("https://static-cdn.jtvnw.net/jtv_user_pictures/viewer-2.png".into()),
+        text: "Kappa hello Kappa".into(),
+        timestamp: "1700000001".into(),
+        badges: vec![("broadcaster".into(), "1".into())],
+        emotes: vec![
+            TwitchEmoteSpan {
+                id: "25".into(),
+                name: "Kappa".into(),
+                start: 0,
+                end: 4,
+            },
+            TwitchEmoteSpan {
+                id: "25".into(),
+                name: "Kappa".into(),
+                start: 12,
+                end: 16,
+            },
+        ],
+        is_action: false,
+        reply: None,
+        bits: None,
+    });
+
+    let mut adapter = TwitchAdapter::new(&storage, client);
+    let mut sink = CapturingSink::default();
+
+    adapter.connect("FixtureStreamer", &mut sink)?;
+    adapter.poll(&mut sink)?;
+
+    let message = sink
+        .messages()
+        .into_iter()
+        .find(|message| message.id == "msg-repeated")
+        .ok_or("repeated emote message missing")?;
+    assert_eq!(message.emotes.len(), 1);
+    assert_eq!(message.emotes[0].positions[0].start, 0);
+    assert_eq!(message.emotes[0].positions[1].start, 12);
+    assert_eq!(
+        message.author.badges[0].image_url.as_deref(),
+        Some("https://static-cdn.jtvnw.net/badges/v1/broadcaster/1")
+    );
+
+    let overlay =
+        twirchat_desktop_rust::overlay::OverlayMessage::from_chat_message(message.clone());
+    let value = serde_json::to_value(overlay)?;
+    assert_eq!(value["type"], "chat_message");
+    assert_eq!(value["data"]["parts"].as_array().map(Vec::len), Some(3));
+    assert_eq!(value["data"]["parts"][0]["type"], "emote");
+    assert_eq!(value["data"]["parts"][1]["content"], " hello ");
+    assert_eq!(value["data"]["parts"][2]["type"], "emote");
 
     Ok(())
 }

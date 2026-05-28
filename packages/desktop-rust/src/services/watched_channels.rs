@@ -186,6 +186,23 @@ impl WatchedChannelsRuntimeError {
             message: error.message,
         }
     }
+
+    fn platform_hint(&self) -> Platform {
+        match self {
+            Self::Adapter { platform, .. } | Self::AdapterFactory { platform, .. } => *platform,
+            Self::Storage(_) | Self::ChannelNotFound { .. } => Platform::Twitch,
+        }
+    }
+
+    fn channel_id_hint(&self) -> String {
+        match self {
+            Self::Adapter { channel_id, .. } | Self::ChannelNotFound { channel_id } => {
+                channel_id.clone()
+            }
+            Self::AdapterFactory { channel_slug, .. } => channel_slug.clone(),
+            Self::Storage(_) => String::new(),
+        }
+    }
 }
 
 impl fmt::Display for WatchedChannelsRuntimeError {
@@ -244,7 +261,7 @@ pub fn run_watched_channels_service(
     events: BusSender<ServiceEvent>,
 ) -> ServiceStopReport {
     eprintln!(
-        "[watched/live] starting watched-channels service: Kick uses real client, Twitch/YouTube still use mock clients"
+        "[watched/live] starting watched-channels service: Twitch/Kick use real clients, YouTube still uses mock client"
     );
     let storage = match Storage::open_or_recover(&storage_path) {
         Ok(storage) => storage,
@@ -267,7 +284,13 @@ pub fn run_watched_channels_service(
     let mut runtime = WatchedChannelsRuntime::new(&storage, |channel| match channel.platform {
         Platform::Twitch => Ok(Box::new(TwitchAdapter::new(
             &storage,
-            crate::platforms::twitch::MockTwitchClient::new(),
+            crate::platforms::twitch::RealTwitchClient::new(&storage).map_err(|error| {
+                WatchedChannelsRuntimeError::adapter_factory(
+                    Platform::Twitch,
+                    channel.channel_slug.clone(),
+                    error.message,
+                )
+            })?,
         )) as Box<dyn WatchedChannelAdapter>),
         Platform::Kick => Ok(Box::new(KickAdapter::new(
             &storage,
@@ -300,7 +323,12 @@ pub fn run_watched_channels_service(
 
         if let Err(error) = runtime.poll_all() {
             eprintln!("[watched/live] poll_all failed: {error}");
-            publish_runtime_error(&events, String::new(), Platform::Kick, error.to_string());
+            publish_runtime_error(
+                &events,
+                error.channel_id_hint(),
+                error.platform_hint(),
+                error.to_string(),
+            );
         }
         publish_runtime_events(&events, &mut runtime);
 
@@ -383,7 +411,12 @@ fn handle_watched_command(
 
     if let Err(error) = result {
         eprintln!("[watched/live] command failed: {error}");
-        publish_runtime_error(events, String::new(), Platform::Kick, error.to_string());
+        publish_runtime_error(
+            events,
+            error.channel_id_hint(),
+            error.platform_hint(),
+            error.to_string(),
+        );
     }
 }
 

@@ -134,6 +134,19 @@ fn chat_platform_icons_and_badges_match_parity_contract() {
 }
 
 #[test]
+fn watched_channels_live_twitch_uses_real_client_contract() {
+    let watched_channels_rs = fs::read_to_string("src/services/watched_channels.rs")
+        .expect("should read watched_channels.rs");
+    let twitch_mod_rs =
+        fs::read_to_string("src/platforms/twitch/mod.rs").expect("should read twitch mod.rs");
+
+    assert!(twitch_mod_rs.contains("RealTwitchClient"));
+    assert!(watched_channels_rs.contains("RealTwitchClient::new(&storage)"));
+    assert!(!watched_channels_rs.contains("Twitch/YouTube still use mock clients"));
+    assert!(!watched_channels_rs.contains("crate::platforms::twitch::MockTwitchClient::new()"));
+}
+
+#[test]
 fn chat_section_routes_home_and_watched_tabs() {
     let content_rs = fs::read_to_string("src/ui/shell/content.rs").expect("should read content.rs");
     let tabs_rs = fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");

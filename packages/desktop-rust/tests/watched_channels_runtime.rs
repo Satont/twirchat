@@ -224,6 +224,41 @@ fn watched_channels_reconnects_and_resubscribes() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+#[test]
+fn watched_channels_runtime_preserves_twitch_platform_on_poll_error()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("watched-twitch-error.sqlite"))?;
+    let harness = AdapterHarness::default();
+    let mut runtime = runtime_with_harness(&storage, harness.clone(), 200);
+
+    let twitch = runtime.add_channel(Platform::Twitch, "FixtureStreamer", Some("Fixture"))?;
+    harness.set_poll_error(
+        Platform::Twitch,
+        "fixturestreamer",
+        "synthetic Twitch poll failure",
+    );
+
+    let error = runtime
+        .poll_channel(&twitch.id)
+        .expect_err("Twitch poll failure should propagate");
+
+    match error {
+        twirchat_desktop_rust::services::WatchedChannelsRuntimeError::Adapter {
+            platform,
+            channel_id,
+            message,
+        } => {
+            assert_eq!(platform, Platform::Twitch);
+            assert_eq!(channel_id, twitch.id);
+            assert!(message.contains("synthetic Twitch poll failure"));
+        }
+        other => return Err(format!("expected Twitch adapter error, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
 fn runtime_with_harness<'a>(
     storage: &'a Storage,
     harness: AdapterHarness,
@@ -260,6 +295,10 @@ impl AdapterHarness {
         self.record_mut(platform, channel_slug).seven_tv_channel_id = Some(channel_id.to_string());
     }
 
+    fn set_poll_error(&self, platform: Platform, channel_slug: &str, message: &str) {
+        self.record_mut(platform, channel_slug).poll_error = Some(message.to_string());
+    }
+
     fn snapshot(&self, platform: Platform, channel_slug: &str) -> Option<AdapterRecord> {
         self.records
             .borrow()
@@ -286,6 +325,7 @@ struct AdapterRecord {
     sent_messages: Vec<SentMessage>,
     events: VecDeque<PlatformEvent>,
     seven_tv_channel_id: Option<String>,
+    poll_error: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -361,6 +401,17 @@ impl WatchedChannelAdapter for RecordingAdapter {
     }
 
     fn poll(&mut self, sink: &mut dyn PlatformEventSink) -> PlatformResult<()> {
+        if let Some(message) = self
+            .harness
+            .record_mut(self.platform, &self.channel_slug)
+            .poll_error
+            .take()
+        {
+            return Err(twirchat_desktop_rust::platforms::PlatformError::new(
+                self.platform,
+                message,
+            ));
+        }
         let events = self
             .harness
             .record_mut(self.platform, &self.channel_slug)
