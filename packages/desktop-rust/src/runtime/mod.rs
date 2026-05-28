@@ -9,6 +9,7 @@ pub mod config;
 pub mod packaging;
 pub mod update;
 
+pub use crate::services::commands::UpdateCheckSource;
 pub use app::{AppRuntime, AppRuntimeError, UserCardRuntimeLoader};
 pub use browser::{ExternalOpenError, ExternalOpenResult, ExternalOpener, SystemExternalOpener};
 pub use config::{
@@ -25,7 +26,8 @@ pub use packaging::{
     validate_velopack_release_tag, verify_packaging_artifact,
 };
 pub use update::{
-    UPDATE_CHECK_INTERVAL, UpdateCheckMode, UpdateCheckReport, UpdateCheckRequest, UpdateEvent,
-    UpdateRuntime, UpdateState, UpdateStatus, UpdateStatusSnapshot, VelopackRuntimeStatus,
-    run_velopack_startup,
+    AvailableUpdate, STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER, UPDATE_CHECK_INTERVAL,
+    UpdateCheckMode, UpdateCheckReport, UpdateCheckRequest, UpdateEngine, UpdateEngineError,
+    UpdateEvent, UpdateRuntime, UpdateState, UpdateStatus, UpdateStatusSnapshot,
+    VelopackRuntimeStatus, VelopackUpdateEngine, default_update_feed_url, run_velopack_startup,
 };

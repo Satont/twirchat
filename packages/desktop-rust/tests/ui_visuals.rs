@@ -99,7 +99,7 @@ fn modal_focus_and_escape_contract() {
         .find("self.render_tab_selector_modal(&state, cx)")
         .expect("shell should keep rendering the tab selector modal");
     let toast_layer = app_rs
-        .find("UpdateToast::new(self.state.clone())")
+        .find("UpdateToast::new(self.state.clone(), cx.entity())")
         .expect("shell should keep rendering the update toast");
     assert!(user_card_layer < tab_selector_layer);
     assert!(user_card_layer < toast_layer);
@@ -263,6 +263,9 @@ fn chat_message_row_hover_actions_match_vue_contract() {
     assert!(chat_rs.contains("message-reply-action"));
     assert!(chat_rs.contains("message-copy-action"));
     assert!(chat_rs.contains("ClipboardItem::new_string"));
+    assert!(chat_rs.contains("can_start_reply_from_message"));
+    assert!(chat_rs.contains("Platform::Twitch | Platform::Kick"));
+    assert!(chat_rs.contains("window.focus(&focus_handle, cx)"));
     assert!(chat_rs.contains("row_actions_visible"));
     assert!(chat_rs.contains("set_message_actions_hovered"));
     assert!(chat_rs.contains(".on_hover({"));

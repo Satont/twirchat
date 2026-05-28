@@ -43,6 +43,7 @@ fn visual_update_toast_states() {
         hash: Some("abcd".to_string()),
         skipped_hash: None,
         auto_check_updates: true,
+        auto_dismiss_after_ms: None,
     });
     let toast = state.update_state();
     assert!(toast.show);
@@ -62,6 +63,7 @@ fn visual_update_toast_states() {
         hash: None,
         skipped_hash: None,
         auto_check_updates: true,
+        auto_dismiss_after_ms: None,
     });
     assert_eq!(state.update_state().progress, Some(42.0));
 
@@ -74,6 +76,7 @@ fn visual_update_toast_states() {
         hash: Some("abcd".to_string()),
         skipped_hash: None,
         auto_check_updates: true,
+        auto_dismiss_after_ms: None,
     });
     assert_eq!(
         state.update_state().status.as_deref(),

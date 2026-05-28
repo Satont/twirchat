@@ -14,7 +14,7 @@ use crate::ui::shared::{format_compact_viewers, format_exact_viewers};
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    AnyElement, App, ClipboardItem, Context, Div, Entity, FollowMode, ImageSource,
+    AnyElement, App, ClipboardItem, Context, Div, Entity, Focusable, FollowMode, ImageSource,
     ListSizingBehavior, ListState, ObjectFit, Render, Stateful, Window, div, img, list, prelude::*,
     px, relative, rgb, rgba,
 };
@@ -98,15 +98,18 @@ pub(crate) fn panel(
                 .vertical_scrollbar_for(props.scroll_ui.list_state, window, cx)
                 .child({
                     let state_entity = props.state_entity.clone();
+                    let composer_input = props.composer_input.clone();
                     list(props.scroll_ui.list_state.clone(), move |ix, window, cx| {
                         outgoing_message_row(
                             &messages[ix],
                             &settings,
                             &accounts,
-                            state_entity.clone(),
                             window,
                             cx,
-                            MessageRowOptions::home(),
+                            MessageRowContext::home(
+                                state_entity.clone(),
+                                Some(composer_input.clone()),
+                            ),
                         )
                         .into_any_element()
                     })
@@ -1032,6 +1035,37 @@ pub(crate) struct MessageRowOptions {
     use_author_fallback: bool,
 }
 
+#[derive(Clone)]
+pub(crate) struct MessageRowContext {
+    state_entity: Entity<AppState>,
+    reply_focus_input: Option<Entity<Input>>,
+    options: MessageRowOptions,
+}
+
+impl MessageRowContext {
+    pub(crate) fn home(
+        state_entity: Entity<AppState>,
+        reply_focus_input: Option<Entity<Input>>,
+    ) -> Self {
+        Self {
+            state_entity,
+            reply_focus_input,
+            options: MessageRowOptions::home(),
+        }
+    }
+
+    pub(crate) fn watched(
+        state_entity: Entity<AppState>,
+        reply_focus_input: Option<Entity<Input>>,
+    ) -> Self {
+        Self {
+            state_entity,
+            reply_focus_input,
+            options: MessageRowOptions::watched(),
+        }
+    }
+}
+
 impl MessageRowOptions {
     pub(crate) const fn home() -> Self {
         Self {
@@ -1356,6 +1390,10 @@ fn message_row_background(
     shows_reply_preview(message).then(|| rgba(0xa78bfa1f))
 }
 
+fn can_start_reply_from_message(message: &NormalizedChatMessage) -> bool {
+    matches!(message.platform, Platform::Twitch | Platform::Kick)
+}
+
 fn reply_preview(
     message: &NormalizedChatMessage,
     typography: MessageTypography,
@@ -1421,7 +1459,9 @@ fn aliased_row_message(
 fn message_row_actions(
     message: NormalizedChatMessage,
     state_entity: Entity<AppState>,
+    reply_focus_input: Option<Entity<Input>>,
     options: MessageRowOptions,
+    can_reply: bool,
 ) -> Stateful<Div> {
     let reply_message = message.clone();
     let reply_channel_id = message.channel_id.clone();
@@ -1445,23 +1485,29 @@ fn message_row_actions(
         .border_color(theme::border())
         .px(px(3.0))
         .py(px(2.0))
-        .child(
-            message_action_button("message-reply-action", "↩").on_mouse_down(
-                gpui::MouseButton::Left,
-                move |_event, _window, cx| {
-                    let message = reply_message.clone();
-                    let channel_id = reply_channel_id.clone();
-                    state_entity.update(cx, |state, cx| {
-                        if options.surface_scope == "watched" {
-                            state.set_watched_reply_target(channel_id, message);
-                        } else {
-                            state.set_home_reply_target(message);
+        .when(can_reply, |actions| {
+            actions.child(
+                message_action_button("message-reply-action", "↩").on_mouse_down(
+                    gpui::MouseButton::Left,
+                    move |_event, window, cx| {
+                        let message = reply_message.clone();
+                        let channel_id = reply_channel_id.clone();
+                        state_entity.update(cx, |state, cx| {
+                            if options.surface_scope == "watched" {
+                                state.set_watched_reply_target(channel_id, message);
+                            } else {
+                                state.set_home_reply_target(message);
+                            }
+                            cx.notify();
+                        });
+                        if let Some(input) = reply_focus_input.as_ref() {
+                            let focus_handle = input.read(cx).focus_handle(cx);
+                            window.focus(&focus_handle, cx);
                         }
-                        cx.notify();
-                    });
-                },
-            ),
-        )
+                    },
+                ),
+            )
+        })
         .child(
             message_action_button("message-copy-action", "⧉").on_mouse_down(
                 gpui::MouseButton::Left,
@@ -1492,17 +1538,19 @@ fn compact_message_row(
     messages: &RowMessages,
     settings: &AppSettings,
     accounts: &[Account],
-    state_entity: Entity<AppState>,
     window: &mut Window,
     cx: &mut App,
-    options: MessageRowOptions,
+    row_context: MessageRowContext,
 ) -> AnyElement {
     let message = &messages.display;
     let target_message = messages.target.clone();
+    let state_entity = row_context.state_entity.clone();
+    let options = row_context.options;
     let typography = MessageTypography::from_settings(settings);
     let row_background = message_row_background(message, settings, accounts);
     let row_id = options.message_row_id(&message.id);
     let row_actions_visible = state_entity.read(cx).message_actions_visible_for(&row_id);
+    let can_reply = can_start_reply_from_message(&target_message);
     let mut custom_parts = Vec::new();
 
     if settings.show_timestamp {
@@ -1698,7 +1746,9 @@ fn compact_message_row(
             row.child(message_row_actions(
                 target_message,
                 state_entity.clone(),
+                row_context.reply_focus_input.clone(),
                 options,
+                can_reply,
             ))
         })
         .child(
@@ -1731,11 +1781,12 @@ pub(crate) fn message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
     accounts: &[Account],
-    state_entity: Entity<AppState>,
     window: &mut Window,
     cx: &mut App,
-    options: MessageRowOptions,
+    row_context: MessageRowContext,
 ) -> AnyElement {
+    let state_entity = row_context.state_entity.clone();
+    let options = row_context.options;
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
     let typography = MessageTypography::from_settings(settings);
@@ -1814,17 +1865,10 @@ pub(crate) fn message_row(
     let row_background = message_row_background(message, settings, accounts);
     let row_id = options.message_row_id(&message.id);
     let row_actions_visible = state_entity.read(cx).message_actions_visible_for(&row_id);
+    let can_reply = can_start_reply_from_message(&row_messages.target);
 
     if is_compact {
-        return compact_message_row(
-            &row_messages,
-            settings,
-            accounts,
-            state_entity.clone(),
-            window,
-            cx,
-            options,
-        );
+        return compact_message_row(&row_messages, settings, accounts, window, cx, row_context);
     }
 
     div()
@@ -1865,7 +1909,9 @@ pub(crate) fn message_row(
             row.child(message_row_actions(
                 row_messages.target.clone(),
                 state_entity.clone(),
+                row_context.reply_focus_input.clone(),
                 options,
+                can_reply,
             ))
         })
         .when(settings.show_avatars, |el| {
@@ -2053,21 +2099,15 @@ fn outgoing_message_row(
     message: &NormalizedChatMessage,
     settings: &AppSettings,
     accounts: &[Account],
-    state_entity: Entity<AppState>,
     window: &mut Window,
     cx: &mut App,
-    options: MessageRowOptions,
+    row_context: MessageRowContext,
 ) -> AnyElement {
-    let status = state_entity.read(cx).outgoing_message_status(&message.id);
-    let row = message_row(
-        message,
-        settings,
-        accounts,
-        state_entity,
-        window,
-        cx,
-        options,
-    );
+    let status = row_context
+        .state_entity
+        .read(cx)
+        .outgoing_message_status(&message.id);
+    let row = message_row(message, settings, accounts, window, cx, row_context);
 
     match status {
         Some(OutgoingChatMessageStatus::Pending) => div()

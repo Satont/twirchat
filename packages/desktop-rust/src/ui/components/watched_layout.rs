@@ -3,7 +3,7 @@ use crate::protocol::types::{
     LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection, WatchedChannel,
     WatchedChannelsLayout,
 };
-use crate::ui::chat::{MentionAutocompleteUi, MessageRowOptions, composer_reply_bar, message_row};
+use crate::ui::chat::{MentionAutocompleteUi, MessageRowContext, composer_reply_bar, message_row};
 use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
 use crate::ui::components::input::Input;
 use crate::ui::shell::app::TwirChatApp;
@@ -331,6 +331,7 @@ fn watched_panel(
                             .into_any_element(),
                     ]
                 } else {
+                    let reply_focus_input = composer.input.clone();
                     messages
                         .into_iter()
                         .map(|message| {
@@ -338,9 +339,10 @@ fn watched_panel(
                                 &message,
                                 &settings,
                                 &accounts,
-                                state_entity.clone(),
+                                reply_focus_input.clone(),
                                 window,
                                 cx,
+                                state_entity.clone(),
                             )
                         })
                         .collect::<Vec<_>>()
@@ -468,19 +470,19 @@ fn watched_message_row(
     message: &crate::protocol::types::NormalizedChatMessage,
     settings: &crate::protocol::types::AppSettings,
     accounts: &[crate::protocol::types::Account],
-    state_entity: gpui::Entity<crate::app_state::AppState>,
+    reply_focus_input: Option<Entity<Input>>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<crate::app::TwirChatApp>,
+    state_entity: gpui::Entity<crate::app_state::AppState>,
 ) -> gpui::AnyElement {
     let status = state_entity.read(cx).outgoing_message_status(&message.id);
     let row = message_row(
         message,
         settings,
         accounts,
-        state_entity,
         window,
         cx,
-        MessageRowOptions::watched(),
+        MessageRowContext::watched(state_entity, reply_focus_input),
     );
 
     match status {

@@ -107,9 +107,15 @@ pub enum SettingsCommand {
     ResetKey { key: String },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateCheckSource {
+    Startup,
+    Periodic,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateStateCommand {
-    CheckForUpdates,
+    CheckForUpdates { source: UpdateCheckSource },
     DownloadUpdate,
     ApplyUpdate,
     SkipUpdate { hash: String },

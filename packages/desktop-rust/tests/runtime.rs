@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 use twirchat_desktop_rust::protocol::messages::{
@@ -11,8 +12,10 @@ use twirchat_desktop_rust::protocol::messages::{
 use twirchat_desktop_rust::protocol::rpc::OpenExternalUrlParams;
 use twirchat_desktop_rust::runtime::browser::{ExternalOpenError, open_external_url};
 use twirchat_desktop_rust::runtime::{
-    AppRuntime, ExternalOpenResult, ExternalOpener, RuntimeConfig, RuntimeConfigInput, UpdateEvent,
-    UpdateRuntime, UpdateState, UpdateStatus,
+    AppRuntime, AvailableUpdate, ExternalOpenResult, ExternalOpener, RuntimeConfig,
+    RuntimeConfigInput, STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER, UpdateCheckMode,
+    UpdateCheckRequest, UpdateCheckSource, UpdateEngine, UpdateEngineError, UpdateEvent,
+    UpdateRuntime, UpdateState, UpdateStatus, default_update_feed_url,
 };
 use twirchat_desktop_rust::services::commands::UpdateStateCommand;
 
@@ -20,7 +23,9 @@ use twirchat_desktop_rust::services::commands::UpdateStateCommand;
 fn runtime_update_state_transitions() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = UpdateRuntime::new(UpdateState::default());
     let checking = runtime
-        .dispatch(UpdateEvent::Command(UpdateStateCommand::CheckForUpdates))
+        .dispatch(UpdateEvent::Command(UpdateStateCommand::CheckForUpdates {
+            source: UpdateCheckSource::Startup,
+        }))
         .ok_or("checking payload missing")?;
     assert_eq!(checking.status, "checking");
 
@@ -112,6 +117,160 @@ fn runtime_update_state_transitions() -> Result<(), Box<dyn std::error::Error>> 
     )?;
 
     Ok(())
+}
+
+#[test]
+fn runtime_update_service_commands_use_engine() -> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime = UpdateRuntime::with_engine(
+        UpdateState::default(),
+        twirchat_desktop_rust::runtime::UpdateCheckRequest::packaged(Some(
+            "https://updates.example/releases.linux.json".to_string(),
+        )),
+        Arc::new(MockUpdateEngine),
+    );
+
+    runtime.dispatch_command(UpdateStateCommand::CheckForUpdates {
+        source: UpdateCheckSource::Startup,
+    });
+    assert_eq!(
+        runtime.snapshot().status.as_deref(),
+        Some("update-available")
+    );
+    assert_eq!(runtime.snapshot().hash.as_deref(), Some("hash-abc"));
+
+    runtime.dispatch_command(UpdateStateCommand::DownloadUpdate);
+    assert_eq!(
+        runtime.snapshot().status.as_deref(),
+        Some("download-complete")
+    );
+
+    runtime.dispatch_command(UpdateStateCommand::SkipUpdate {
+        hash: "hash-abc".to_string(),
+    });
+    runtime.dispatch_command(UpdateStateCommand::CheckForUpdates {
+        source: UpdateCheckSource::Periodic,
+    });
+    assert_eq!(
+        runtime.snapshot().status.as_deref(),
+        Some("download-complete")
+    );
+
+    runtime.dispatch_command(UpdateStateCommand::ApplyUpdate);
+    assert_eq!(runtime.snapshot().status.as_deref(), Some("complete"));
+
+    Ok(())
+}
+
+#[test]
+fn startup_no_update_is_visible_and_auto_dismissable() {
+    let mut runtime = UpdateRuntime::with_engine(
+        UpdateState::default(),
+        UpdateCheckRequest::packaged(Some(
+            "https://updates.example/releases.linux.json".to_string(),
+        )),
+        Arc::new(NoUpdateEngine),
+    );
+
+    runtime.dispatch_command(UpdateStateCommand::CheckForUpdates {
+        source: UpdateCheckSource::Startup,
+    });
+
+    let snapshot = runtime.snapshot();
+    assert!(snapshot.show);
+    assert_eq!(snapshot.status.as_deref(), Some("no-update"));
+    assert_eq!(
+        snapshot.auto_dismiss_after_ms,
+        Some(STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER.as_millis() as u64)
+    );
+}
+
+#[test]
+fn periodic_no_update_stays_hidden_without_replacing_actionable_toast() {
+    let mut runtime = UpdateRuntime::with_engine(
+        UpdateState::default(),
+        UpdateCheckRequest::packaged(Some(
+            "https://updates.example/releases.linux.json".to_string(),
+        )),
+        Arc::new(NoUpdateEngine),
+    );
+
+    runtime.dispatch_command(UpdateStateCommand::CheckForUpdates {
+        source: UpdateCheckSource::Periodic,
+    });
+    assert!(!runtime.snapshot().show);
+    assert!(runtime.snapshot().status.is_none());
+
+    let _ = runtime.dispatch(UpdateEvent::UpdateAvailable {
+        version: Some("1.2.3".to_string()),
+        hash: Some("hash-abc".to_string()),
+    });
+    runtime.dispatch_command(UpdateStateCommand::CheckForUpdates {
+        source: UpdateCheckSource::Periodic,
+    });
+
+    let snapshot = runtime.snapshot();
+    assert!(snapshot.show);
+    assert_eq!(snapshot.status.as_deref(), Some("update-available"));
+    assert_eq!(snapshot.auto_dismiss_after_ms, None);
+}
+
+#[test]
+fn update_available_and_download_states_do_not_auto_dismiss() {
+    let mut runtime = UpdateRuntime::new(UpdateState::default());
+
+    let _ = runtime.dispatch(UpdateEvent::UpdateAvailable {
+        version: Some("1.2.3".to_string()),
+        hash: Some("hash-abc".to_string()),
+    });
+    assert_eq!(runtime.snapshot().auto_dismiss_after_ms, None);
+
+    let _ = runtime.dispatch(UpdateEvent::Status {
+        status: UpdateStatus::DownloadComplete,
+        message: "Download complete".to_string(),
+        progress: Some(100.0),
+        hash: Some("hash-abc".to_string()),
+    });
+    assert_eq!(runtime.snapshot().auto_dismiss_after_ms, None);
+}
+
+#[test]
+fn runtime_default_feed_points_to_platform_stable_velopack_feed() {
+    let feed = default_update_feed_url();
+    let expected_channel = if cfg!(target_os = "windows") {
+        "win"
+    } else if cfg!(target_os = "macos") {
+        "osx"
+    } else {
+        "linux"
+    };
+
+    assert_eq!(
+        feed,
+        format!(
+            "https://github.com/Satont/twirchat/releases/latest/download/releases.{expected_channel}.json"
+        )
+    );
+}
+
+#[test]
+fn runtime_default_feed_channel_parsing_stays_compatible() {
+    let feed = default_update_feed_url();
+    let request = UpdateCheckRequest {
+        mode: UpdateCheckMode::Unpackaged,
+        feed: Some(feed),
+    };
+
+    let mut runtime = UpdateRuntime::new(UpdateState::default());
+    let report = runtime.check_for_updates(&request);
+    let expected_channel = if cfg!(target_os = "windows") {
+        "win"
+    } else if cfg!(target_os = "macos") {
+        "osx"
+    } else {
+        "linux"
+    };
+
+    assert_eq!(report.channel.as_deref(), Some(expected_channel));
 }
 
 #[test]
@@ -249,6 +408,62 @@ fn app_runtime_user_card_loader_sends_persisted_client_secret()
 }
 
 struct FailingOpener;
+
+struct MockUpdateEngine;
+
+struct NoUpdateEngine;
+
+impl UpdateEngine for NoUpdateEngine {
+    fn check(
+        &self,
+        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        Ok(None)
+    }
+
+    fn download(
+        &self,
+        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        Ok(None)
+    }
+
+    fn apply(
+        &self,
+        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+    ) -> Result<(), UpdateEngineError> {
+        Ok(())
+    }
+}
+
+impl UpdateEngine for MockUpdateEngine {
+    fn check(
+        &self,
+        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        Ok(Some(AvailableUpdate {
+            version: Some("1.2.3".to_string()),
+            hash: Some("hash-abc".to_string()),
+        }))
+    }
+
+    fn download(
+        &self,
+        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        Ok(Some(AvailableUpdate {
+            version: Some("1.2.3".to_string()),
+            hash: Some("hash-abc".to_string()),
+        }))
+    }
+
+    fn apply(
+        &self,
+        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+    ) -> Result<(), UpdateEngineError> {
+        Ok(())
+    }
+}
 
 impl ExternalOpener for FailingOpener {
     fn open_external(&self, params: &OpenExternalUrlParams) -> ExternalOpenResult<()> {

@@ -14,7 +14,7 @@ use crate::protocol::messages::{
 };
 use crate::protocol::rpc::{GetUserChatHistoryParams, UserChatHistoryPage};
 use crate::protocol::types::Platform;
-use crate::runtime::{AppRuntime, UserCardRuntimeLoader};
+use crate::runtime::{AppRuntime, UPDATE_CHECK_INTERVAL, UpdateCheckSource, UserCardRuntimeLoader};
 use crate::services::{BackendWsEvent, ServiceEvent, fetch_channels_status};
 
 use crate::ui::components::input::Input;
@@ -46,6 +46,8 @@ pub struct TwirChatApp {
     tab_selector_focus: FocusHandle,
     runtime: Option<AppRuntime>,
     _runtime_poll_task: Option<Task<()>>,
+    _update_check_task: Option<Task<()>>,
+    update_toast_dismiss_task: Option<Task<()>>,
     _stream_status_task: Option<Task<()>>,
     _user_card_history_task: Option<Task<()>>,
     _user_card_metadata_task: Option<Task<()>>,
@@ -180,6 +182,41 @@ impl TwirChatApp {
             })
         });
 
+        let update_check_task = runtime.as_ref().map(|runtime| {
+            let auto_check_enabled = state.read(cx).update_state().auto_check_updates;
+            if auto_check_enabled {
+                let _ = runtime.dispatch_update_check(UpdateCheckSource::Startup);
+            }
+            cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor().timer(UPDATE_CHECK_INTERVAL).await;
+                    let auto_check_enabled = match this.update(cx, |this, cx| {
+                        this.state.read(cx).update_state().auto_check_updates
+                    }) {
+                        Ok(enabled) => enabled,
+                        Err(_) => break,
+                    };
+                    if auto_check_enabled
+                        && let Ok(Some(runtime)) = this.update(cx, |this, _| {
+                            this.runtime.as_ref().map(|runtime| {
+                                runtime.dispatch_update_check(UpdateCheckSource::Periodic)
+                            })
+                        })
+                        && let Err(error) = runtime
+                    {
+                        let _ = this.update(cx, |this, cx| {
+                            this.state.update(cx, |state, cx| {
+                                state.record_runtime_failure(format!(
+                                    "failed to dispatch periodic update check: {error}"
+                                ));
+                                cx.notify();
+                            });
+                        });
+                    }
+                }
+            })
+        });
+
         let chat_list_state = ListState::new(0, ListAlignment::Bottom, px(2048.));
         chat_list_state.set_follow_mode(FollowMode::Tail);
 
@@ -195,6 +232,8 @@ impl TwirChatApp {
             tab_selector_focus,
             runtime,
             _runtime_poll_task: runtime_poll_task,
+            _update_check_task: update_check_task,
+            update_toast_dismiss_task: None,
             _stream_status_task: stream_status_task,
             _user_card_history_task: None,
             _user_card_metadata_task: None,
@@ -215,7 +254,7 @@ impl TwirChatApp {
         }
     }
 
-    fn drain_runtime_events(&self, cx: &mut Context<Self>) {
+    fn drain_runtime_events(&mut self, cx: &mut Context<Self>) {
         let Some(runtime) = &self.runtime else {
             return;
         };
@@ -232,7 +271,12 @@ impl TwirChatApp {
             }
             cx.notify();
         });
-        if should_resubscribe_seven_tv && let Err(error) = runtime.dispatch_seven_tv_resubscribe() {
+        let update_snapshot = self.state.read(cx).update_state().clone();
+        self.schedule_update_toast_auto_dismiss(update_snapshot, cx);
+        if should_resubscribe_seven_tv
+            && let Some(runtime) = &self.runtime
+            && let Err(error) = runtime.dispatch_seven_tv_resubscribe()
+        {
             self.state.update(cx, |state, cx| {
                 state.record_runtime_failure(format!(
                     "failed to resubscribe 7TV after backend reconnect: {error}"
@@ -240,6 +284,87 @@ impl TwirChatApp {
                 cx.notify();
             });
         }
+    }
+
+    fn schedule_update_toast_auto_dismiss(
+        &mut self,
+        update_snapshot: crate::runtime::UpdateStatusSnapshot,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(delay_ms) = update_snapshot.auto_dismiss_after_ms else {
+            return;
+        };
+        let expected_status = update_snapshot.status;
+        let expected_message = update_snapshot.message;
+        let expected_hash = update_snapshot.hash;
+
+        self.update_toast_dismiss_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(delay_ms))
+                .await;
+
+            let _ = this.update(cx, |this, cx| {
+                let current = this.state.read(cx).update_state();
+                let matches_auto_dismiss_target = current.show
+                    && current.status == expected_status
+                    && current.message == expected_message
+                    && current.hash == expected_hash;
+                if matches_auto_dismiss_target {
+                    this.state.update(cx, |state, cx| {
+                        state.dismiss_update_toast();
+                        cx.notify();
+                    });
+                    cx.notify();
+                }
+            });
+        }));
+    }
+
+    pub(crate) fn download_update(&mut self, cx: &mut Context<Self>) {
+        let Some(runtime) = &self.runtime else {
+            self.record_update_dispatch_failure("download update", "runtime is not running", cx);
+            return;
+        };
+
+        if let Err(error) = runtime.dispatch_update_download() {
+            self.record_update_dispatch_failure("download update", &error.to_string(), cx);
+        }
+    }
+
+    pub(crate) fn apply_update(&mut self, cx: &mut Context<Self>) {
+        let Some(runtime) = &self.runtime else {
+            self.record_update_dispatch_failure("apply update", "runtime is not running", cx);
+            return;
+        };
+
+        if let Err(error) = runtime.dispatch_update_apply() {
+            self.record_update_dispatch_failure("apply update", &error.to_string(), cx);
+        }
+    }
+
+    pub(crate) fn skip_update(&mut self, hash: String, cx: &mut Context<Self>) {
+        let Some(runtime) = &self.runtime else {
+            self.record_update_dispatch_failure("skip update", "runtime is not running", cx);
+            return;
+        };
+
+        if let Err(error) = runtime.dispatch_update_skip(hash) {
+            self.record_update_dispatch_failure("skip update", &error.to_string(), cx);
+        }
+    }
+
+    fn record_update_dispatch_failure(
+        &mut self,
+        action: &'static str,
+        reason: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let message = format!("failed to dispatch {action}: {reason}");
+        eprintln!("[updates] {message}");
+        self.state.update(cx, |state, cx| {
+            state.record_runtime_failure(message);
+            cx.notify();
+        });
     }
 
     fn flush_pending_watched_channel_adds(&self, cx: &mut Context<Self>) {
@@ -1423,7 +1548,7 @@ impl Render for TwirChatApp {
             .when(self.tab_selector_open, |el| {
                 el.child(self.render_tab_selector_modal(&state, cx))
             })
-            .child(UpdateToast::new(self.state.clone()))
+            .child(UpdateToast::new(self.state.clone(), cx.entity()))
     }
 }
 fn mention_context_id(target: &MentionComposerTarget, query: &str) -> String {

@@ -123,7 +123,7 @@ fn animated_emote_component_drives_unfocused_redraw_contract() {
     assert!(animated_emote_rs.contains("ImageSource::Render"));
     assert!(animated_emote_rs.contains("animated_emote_cache"));
     assert!(selectable_message_rs.contains("animated_emote("));
-    assert!(watched_layout_rs.contains("MessageRowOptions::watched()"));
+    assert!(watched_layout_rs.contains("MessageRowContext::watched"));
 }
 
 #[test]
@@ -314,6 +314,7 @@ fn compact_chat_uses_distinct_layout_without_avatar_branch() {
     assert!(compact_body.contains("SelectableMessagePart::Custom"));
     assert!(compact_body.contains("reply_preview(message, typography)"));
     assert!(compact_body.contains("message_row_actions("));
+    assert!(compact_body.contains("reply_focus_input"));
     assert!(compact_body.contains("row_actions_visible"));
     assert!(compact_body.contains(".on_hover({"));
     assert!(compact_body.contains(".flex()"));

@@ -1,6 +1,7 @@
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use tempfile::TempDir;
 use twirchat_desktop_rust::runtime::{
     AssetKind, PackagingVerificationError, PackagingVerificationStatus, TwirChatPackagingSpec,
@@ -70,6 +71,47 @@ fn packaging_missing_overlay_asset_fails() -> Result<(), Box<dyn std::error::Err
     )?;
 
     println!("missing overlay index failed packaging verification as expected");
+    Ok(())
+}
+
+#[test]
+fn release_contract_verify_artifact_cli_accepts_packaged_layout()
+-> Result<(), Box<dyn std::error::Error>> {
+    let artifact = create_packaging_artifact()?;
+    let output = Command::new(env!("CARGO_BIN_EXE_release-contract"))
+        .arg("verify-artifact")
+        .arg(artifact.path())
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "verify-artifact failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains(r#""artifactRoot""#));
+    assert!(stdout.contains(r#""packagedPath": "views/main/index.html""#));
+    assert!(stdout.contains(r#""packagedPath": "assets/icon.png""#));
+
+    Ok(())
+}
+
+#[test]
+fn release_contract_verify_artifact_cli_rejects_missing_assets()
+-> Result<(), Box<dyn std::error::Error>> {
+    let artifact = create_packaging_artifact()?;
+    fs::remove_dir_all(artifact.path().join("assets/icon.iconset"))?;
+
+    let output = Command::new(env!("CARGO_BIN_EXE_release-contract"))
+        .arg("verify-artifact")
+        .arg(artifact.path())
+        .output()?;
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("packaging artifact is missing required assets"));
+    assert!(stderr.contains("assets/icon.iconset"));
+
     Ok(())
 }
 

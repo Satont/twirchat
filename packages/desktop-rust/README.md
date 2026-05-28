@@ -4,12 +4,13 @@ GPUI shell for the native Rust desktop UI.
 
 ## Scope
 
-- Native GPUI desktop shell with Rust-side runtime state for settings, overlay serving, update toast state,
-  and packaging verification.
+- Native GPUI desktop shell with Rust-side runtime state for settings, overlay serving, update toast
+  state, and packaging verification.
 - Production desktop releases are published from `packages/desktop-rust` through the Velopack release
   contract in `src/runtime/packaging.rs`.
-- The Rust runtime initializes Velopack at startup and performs safe update checks for packaged builds;
-  download/apply/relaunch behavior remains outside the current release contract.
+- The Rust runtime initializes Velopack at startup, checks stable platform feeds on startup and
+  periodically, shows an in-app update toast, downloads updates, and restarts to apply them in
+  packaged builds.
 
 ## Run
 
@@ -35,17 +36,18 @@ cargo test --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-
 
 ## Package asset verification
 
-The Rust package verifier mirrors the current Electrobun packaging contract instead of inventing a
-second source of truth:
+The Rust package verifier mirrors the Velopack app directory that CI prepares before `vpk pack`:
 
-- `dist/overlay/index.html` -> `views/overlay/index.html`
-- `dist/overlay/assets` -> `views/overlay/assets`
-- `dist/main/index.html` -> `views/main/index.html`
-- `dist/main/assets` -> `views/main/assets`
-- `public/fonts` -> `views/fonts`
-- `assets/icon.png`, `assets/icon.ico`, and `assets/icon.iconset` remain required platform icon assets
+- `packages/desktop-rust/release-assets/dist/overlay/index.html` -> `views/overlay/index.html`
+- `packages/desktop-rust/release-assets/dist/overlay/assets` -> `views/overlay/assets`
+- `packages/desktop-rust/release-assets/dist/main/index.html` -> `views/main/index.html`
+- `packages/desktop-rust/release-assets/dist/main/assets` -> `views/main/assets`
+- `packages/desktop/public/fonts` -> `views/fonts`
+- `packages/desktop/assets/icon.png` -> `assets/icon.png`
+- `packages/desktop/assets/icon.ico` -> `assets/icon.ico`
+- `packages/desktop/assets/icon.iconset` -> `assets/icon.iconset`
 - App metadata remains `TwirChat`, `dev.twirchat.app`, and the GitHub release download base URL used
-  by the existing desktop package
+  by the native updater.
 
 Run the focused verifier tests with:
 
@@ -54,7 +56,14 @@ cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_artifact_c
 cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_overlay_asset_fails -- --nocapture
 ```
 
-From the repo root, the same flow is exposed as:
+Verify a prepared CI-style app directory directly with:
+
+```sh
+cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
+  verify-artifact artifacts/desktop-linux-x64
+```
+
+From the repo root, the same focused test flow is exposed as:
 
 ```sh
 bun run package:desktop-rust:verify
@@ -68,15 +77,21 @@ The tests write evidence to `.sisyphus/evidence/task-25-packaging-assets.json` a
 The native Rust Velopack release contract is deterministic and lives in
 `src/runtime/packaging.rs`:
 
-- Package ID is `dev.twirchat.app`, matching the preserved `TwirChat` app metadata from the
-  Electrobun desktop package and Rust packaging verifier.
+- Package ID is `dev.twirchat.app`, matching the preserved `TwirChat` app metadata from the desktop
+  package and Rust packaging verifier.
 - Stable release tags only match `^v[0-9]+\.[0-9]+\.[0-9]+$`.
 - `packVersion` strips the leading `v` from a stable tag, so `v1.2.3` becomes `1.2.3`.
 - Platform channels are `linux`, `win`, and `osx`.
 - Architecture matrix is Linux x64, Windows x64, and macOS universal.
+- Linux releases produce Velopack AppImage assets.
+- Windows releases produce Velopack Setup `.exe` assets.
+- macOS releases produce Velopack `.pkg` assets containing `TwirChat.app`.
+- Platform feeds are published as `releases.linux.json`, `releases.win.json`, and
+  `releases.osx.json`.
 - The first stable tag creates the initial Velopack feed for every platform channel.
 - Rerunning an already-published stable tag must fail rather than overwrite release assets or feeds.
-- Signing and notarization are not part of the current contract.
+- Signing and notarization are not part of the current contract; releases are unsigned and macOS is
+  not notarized.
 - Prerelease channels are not supported; beta, nightly, prerelease, and unprefixed semver tags are
   rejected.
 
@@ -93,9 +108,12 @@ cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contrac
 cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- 1.2.3
 ```
 
-## Current updater boundaries
+## Current updater behavior
 
-- Startup initialization and update-feed checks are implemented in `src/runtime/update.rs` and are safe
-  no-ops for dev, unpackaged, offline, and no-feed states.
-- The current contract publishes stable Velopack packages and feeds; in-app download, apply, and
-  relaunch actions are not part of this release pass.
+- Packaged builds initialize Velopack at startup and use
+  `https://github.com/Satont/twirchat/releases/latest/download/releases.<channel>.json` for the
+  current platform channel.
+- Startup checks and periodic checks run while automatic update checks are enabled.
+- Available stable updates are surfaced through the in-app update toast.
+- Download and restart/apply actions are wired to Velopack for packaged builds, with safe no-op or
+  error states for dev, unpackaged, offline, and missing-feed states.

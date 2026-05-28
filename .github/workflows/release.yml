@@ -185,26 +185,48 @@ jobs:
         if: matrix.target == 'linux-x64'
         shell: bash
         run: |
-          mkdir -p artifacts/${{ matrix.artifact_dir }}
+          mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
           cp target/release/twirchat-desktop-rust artifacts/${{ matrix.artifact_dir }}/twirchat
-          cp -R packages/desktop-rust/release-assets/dist artifacts/${{ matrix.artifact_dir }}/dist
+          cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
+          cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
+          cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
+          cp packages/desktop/assets/icon.png artifacts/${{ matrix.artifact_dir }}/assets/icon.png
+          cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
+          cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
 
       - name: Prepare Windows Velopack app artifact
         if: matrix.target == 'win-x64'
         shell: bash
         run: |
-          mkdir -p artifacts/${{ matrix.artifact_dir }}
+          mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
           cp target/release/twirchat-desktop-rust.exe artifacts/${{ matrix.artifact_dir }}/twirchat.exe
-          cp -R packages/desktop-rust/release-assets/dist artifacts/${{ matrix.artifact_dir }}/dist
+          cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
+          cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
+          cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
+          cp packages/desktop/assets/icon.png artifacts/${{ matrix.artifact_dir }}/assets/icon.png
+          cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
+          cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
 
       - name: Prepare macOS Velopack app artifact
         if: matrix.target == 'macos-universal'
         shell: bash
         run: |
           mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS
+          mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
           cp target/universal-apple-darwin/release/twirchat-desktop-rust \
             artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS/TwirChat
-          cp -R packages/desktop-rust/release-assets/dist artifacts/${{ matrix.artifact_dir }}/dist
+          cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
+          cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
+          cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
+          cp packages/desktop/assets/icon.png artifacts/${{ matrix.artifact_dir }}/assets/icon.png
+          cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
+          cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
+
+      - name: Verify desktop-rust app artifact
+        shell: bash
+        run: |
+          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
+            verify-artifact artifacts/${{ matrix.artifact_dir }}
 
       - name: Upload desktop-rust app artifact
         uses: actions/upload-artifact@v4
@@ -317,6 +339,12 @@ jobs:
           name: desktop-rust-${{ matrix.target }}
           path: artifacts/${{ matrix.artifact_dir }}
 
+      - name: Verify downloaded desktop-rust app artifact
+        shell: bash
+        run: |
+          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
+            verify-artifact artifacts/${{ matrix.artifact_dir }}
+
       - name: Collect existing Velopack feed assets
         id: release_assets
         shell: bash
@@ -368,6 +396,7 @@ jobs:
             echo "No previous Velopack feed found for $CHANNEL; continuing as first release"
           fi
           vpk pack -u dev.twirchat.app -v "$PACK_VERSION" --packDir "$APP_ARTIFACT_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
+          ls -R "$PACKAGE_OUTPUT_DIR"
           vpk upload github --repoUrl "$REPO_URL" --publish --merge --tag "$RELEASE_TAG" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
 
   push-docker:

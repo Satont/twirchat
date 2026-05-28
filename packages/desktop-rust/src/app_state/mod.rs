@@ -11,7 +11,9 @@ use crate::protocol::types::{
 };
 use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
-use crate::services::{BackendWsEvent, LifecycleEvent, ServiceEvent, WatchedChannelsEvent};
+use crate::services::{
+    BackendWsEvent, LifecycleEvent, ServiceEvent, UpdateStateEvent, WatchedChannelsEvent,
+};
 use crate::settings::SettingsManager;
 use crate::storage::Storage;
 use crate::storage::settings::default_app_settings;
@@ -197,6 +199,7 @@ impl Default for AppState {
                 hash: None,
                 skipped_hash: None,
                 auto_check_updates: true,
+                auto_dismiss_after_ms: None,
             },
             settings: SettingsManager::new(default_app_settings()),
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),
@@ -391,6 +394,13 @@ impl AppState {
 
     pub fn set_home_reply_target(&mut self, message: NormalizedChatMessage) {
         self.home_reply_target = Some(message);
+    }
+
+    pub fn home_reply_can_send(&self, message: &NormalizedChatMessage) -> bool {
+        self.home_channel_targets()
+            .iter()
+            .filter(|target| target.watched_channel_id.is_some())
+            .any(|target| home_reply_matches_target(message, target))
     }
 
     pub fn cancel_home_reply_target(&mut self) {
@@ -879,6 +889,9 @@ impl AppState {
                 self.runtime_errors.push(reason);
             }
             ServiceEvent::WatchedChannels(event) => self.apply_watched_channels_event(event),
+            ServiceEvent::UpdateState(UpdateStateEvent::StateChanged { snapshot }) => {
+                self.set_update_state(snapshot);
+            }
             _ => {}
         }
     }
@@ -1504,13 +1517,18 @@ impl AppState {
         }
 
         let mut queued = false;
+        let active_reply_target = self.home_reply_target.clone();
         for target in self.home_channel_targets() {
             if self.composer_disabled_channel_ids.contains(&target.id) {
                 continue;
             }
+            if let Some(reply) = active_reply_target.as_ref()
+                && !home_reply_matches_target(reply, &target)
+            {
+                continue;
+            }
             if let Some(watched_channel_id) = &target.watched_channel_id {
-                let reply_target = self
-                    .home_reply_target
+                let reply_target = active_reply_target
                     .as_ref()
                     .filter(|reply| home_reply_matches_target(reply, &target))
                     .cloned();
@@ -2331,15 +2349,7 @@ fn chat_reply_from_message(message: &NormalizedChatMessage) -> ChatReply {
 }
 
 fn home_reply_matches_target(reply: &NormalizedChatMessage, target: &HomeChannelTarget) -> bool {
-    if reply.platform != target.platform {
-        return false;
-    }
-
-    reply.channel_id.eq_ignore_ascii_case(&target.channel_login)
-        || target
-            .watched_channel_id
-            .as_ref()
-            .is_some_and(|channel_id| reply.channel_id == *channel_id)
+    reply.platform == target.platform
 }
 
 fn home_channel_target_id(platform: Platform, channel_login: &str) -> String {

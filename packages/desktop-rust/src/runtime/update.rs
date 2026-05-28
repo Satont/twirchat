@@ -1,12 +1,15 @@
 use crate::protocol::rpc::UpdateStatusPayload;
 use crate::protocol::types::AppSettings;
-use crate::services::commands::UpdateStateCommand;
+use crate::runtime::packaging::TwirChatPackagingSpec;
+use crate::services::commands::{UpdateCheckSource, UpdateStateCommand};
 use crate::services::events::UpdateStateEvent;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::Duration;
 use velopack::{UpdateCheck, UpdateManager, UpdateOptions, VelopackApp, sources::AutoSource};
 
 pub const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
+pub const STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER: Duration = Duration::from_secs(3);
 
 pub fn run_velopack_startup() {
     VelopackApp::build().set_auto_apply_on_startup(true).run();
@@ -173,10 +176,37 @@ pub enum UpdateEvent {
         version: Option<String>,
         hash: Option<String>,
     },
-    NoUpdate,
+    NoUpdate {
+        source: UpdateCheckSource,
+        message: String,
+    },
     Error {
         message: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AvailableUpdate {
+    pub version: Option<String>,
+    pub hash: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UpdateEngineError {
+    Offline(String),
+    Failed(String),
+}
+
+pub trait UpdateEngine: Send + Sync {
+    fn check(
+        &self,
+        request: &UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError>;
+    fn download(
+        &self,
+        request: &UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError>;
+    fn apply(&self, request: &UpdateCheckRequest) -> Result<(), UpdateEngineError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -189,6 +219,7 @@ pub struct UpdateStatusSnapshot {
     pub hash: Option<String>,
     pub skipped_hash: Option<String>,
     pub auto_check_updates: bool,
+    pub auto_dismiss_after_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -200,6 +231,7 @@ pub struct UpdateState {
     hash: Option<String>,
     skipped_hash: Option<String>,
     auto_check_updates: bool,
+    auto_dismiss_after_ms: Option<u64>,
 }
 
 impl Default for UpdateState {
@@ -212,8 +244,18 @@ impl Default for UpdateState {
             hash: None,
             skipped_hash: None,
             auto_check_updates: true,
+            auto_dismiss_after_ms: None,
         }
     }
+}
+
+fn stable_skip_identifier(version: Option<&str>, hash: Option<String>) -> Option<String> {
+    hash.filter(|hash| !hash.trim().is_empty()).or_else(|| {
+        version
+            .map(str::trim)
+            .filter(|version| !version.is_empty())
+            .map(ToOwned::to_owned)
+    })
 }
 
 impl UpdateState {
@@ -235,21 +277,20 @@ impl UpdateState {
                 hash,
             } => self.apply_status(status, message, progress, hash),
             UpdateEvent::UpdateAvailable { version, hash } => {
-                if hash.as_ref().is_some_and(|hash| self.is_hash_skipped(hash)) {
+                let stable_hash = stable_skip_identifier(version.as_deref(), hash);
+                if stable_hash
+                    .as_ref()
+                    .is_some_and(|hash| self.is_hash_skipped(hash))
+                {
                     return None;
                 }
-                let message = version.map_or_else(
+                let message = version.as_deref().map_or_else(
                     || "Update available".to_string(),
                     |version| format!("Update available: {version}"),
                 );
-                self.apply_status(UpdateStatus::UpdateAvailable, message, None, hash)
+                self.apply_status(UpdateStatus::UpdateAvailable, message, None, stable_hash)
             }
-            UpdateEvent::NoUpdate => self.apply_status(
-                UpdateStatus::NoUpdate,
-                "No updates available".to_string(),
-                None,
-                None,
-            ),
+            UpdateEvent::NoUpdate { source, message } => self.apply_no_update(source, message),
             UpdateEvent::Error { message } => {
                 self.apply_status(UpdateStatus::Error, message, None, None)
             }
@@ -274,6 +315,7 @@ impl UpdateState {
             hash: self.hash.clone(),
             skipped_hash: self.skipped_hash.clone(),
             auto_check_updates: self.auto_check_updates,
+            auto_dismiss_after_ms: self.auto_dismiss_after_ms,
         }
     }
 
@@ -283,12 +325,7 @@ impl UpdateState {
 
     fn apply_command(&mut self, command: UpdateStateCommand) -> Option<UpdateStatusPayload> {
         match command {
-            UpdateStateCommand::CheckForUpdates => self.apply_status(
-                UpdateStatus::Checking,
-                "Checking for updates...".to_string(),
-                None,
-                None,
-            ),
+            UpdateStateCommand::CheckForUpdates { source } => self.apply_check_requested(source),
             UpdateStateCommand::DownloadUpdate => self.apply_status(
                 UpdateStatus::DownloadStarting,
                 "Starting update download...".to_string(),
@@ -304,6 +341,7 @@ impl UpdateState {
             UpdateStateCommand::SkipUpdate { hash } => {
                 self.skipped_hash = Some(hash.clone());
                 self.hash = Some(hash);
+                self.show = false;
                 None
             }
         }
@@ -311,8 +349,8 @@ impl UpdateState {
 
     fn apply_service_event(&mut self, event: UpdateStateEvent) -> Option<UpdateStatusPayload> {
         match event {
-            UpdateStateEvent::CheckRequested => {
-                self.apply_command(UpdateStateCommand::CheckForUpdates)
+            UpdateStateEvent::CheckRequested { source } => {
+                self.apply_command(UpdateStateCommand::CheckForUpdates { source })
             }
             UpdateStateEvent::DownloadRequested => {
                 self.apply_command(UpdateStateCommand::DownloadUpdate)
@@ -321,6 +359,35 @@ impl UpdateState {
             UpdateStateEvent::SkipRequested { hash } => {
                 self.apply_command(UpdateStateCommand::SkipUpdate { hash })
             }
+            UpdateStateEvent::StateChanged { .. } => None,
+        }
+    }
+
+    fn apply_check_requested(&mut self, source: UpdateCheckSource) -> Option<UpdateStatusPayload> {
+        match source {
+            UpdateCheckSource::Startup => self.apply_status(
+                UpdateStatus::Checking,
+                "Checking for updates...".to_string(),
+                None,
+                None,
+            ),
+            UpdateCheckSource::Periodic => None,
+        }
+    }
+
+    fn apply_no_update(
+        &mut self,
+        source: UpdateCheckSource,
+        message: String,
+    ) -> Option<UpdateStatusPayload> {
+        match source {
+            UpdateCheckSource::Startup => {
+                let payload = self.apply_status(UpdateStatus::NoUpdate, message, None, None);
+                self.auto_dismiss_after_ms =
+                    Some(STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER.as_millis() as u64);
+                payload
+            }
+            UpdateCheckSource::Periodic => None,
         }
     }
 
@@ -331,6 +398,7 @@ impl UpdateState {
         progress: Option<f64>,
         hash: Option<String>,
     ) -> Option<UpdateStatusPayload> {
+        self.auto_dismiss_after_ms = None;
         self.show = should_show_status(status);
         self.status = Some(status);
         self.message = message;
@@ -342,14 +410,37 @@ impl UpdateState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Clone)]
 pub struct UpdateRuntime {
     state: UpdateState,
+    request: UpdateCheckRequest,
+    engine: Arc<dyn UpdateEngine>,
+    available_update: Option<AvailableUpdate>,
+}
+
+impl Default for UpdateRuntime {
+    fn default() -> Self {
+        Self::new(UpdateState::default())
+    }
 }
 
 impl UpdateRuntime {
     pub fn new(state: UpdateState) -> Self {
-        Self { state }
+        let request = UpdateCheckRequest::packaged(Some(default_update_feed_url()));
+        Self::with_engine(state, request, Arc::new(VelopackUpdateEngine))
+    }
+
+    pub fn with_engine(
+        state: UpdateState,
+        request: UpdateCheckRequest,
+        engine: Arc<dyn UpdateEngine>,
+    ) -> Self {
+        Self {
+            state,
+            request,
+            engine,
+            available_update: None,
+        }
     }
 
     pub fn dispatch(&mut self, event: UpdateEvent) -> Option<UpdateStatusPayload> {
@@ -362,10 +453,201 @@ impl UpdateRuntime {
 
     pub fn check_for_updates(&mut self, request: &UpdateCheckRequest) -> UpdateCheckReport {
         let report = check_velopack_updates(request);
-        let event = report.to_event();
+        let event = report.to_event(UpdateCheckSource::Startup);
         let _ = self.dispatch(event);
         report
     }
+
+    pub fn dispatch_command(&mut self, command: UpdateStateCommand) {
+        let _ = self.dispatch(UpdateEvent::Command(command.clone()));
+        match command {
+            UpdateStateCommand::CheckForUpdates { source } => self.run_check(source),
+            UpdateStateCommand::DownloadUpdate => self.run_download(),
+            UpdateStateCommand::ApplyUpdate => self.run_apply(),
+            UpdateStateCommand::SkipUpdate { .. } => {}
+        }
+    }
+
+    pub fn snapshot(&self) -> UpdateStatusSnapshot {
+        self.state.snapshot()
+    }
+
+    fn run_check(&mut self, source: UpdateCheckSource) {
+        match self.engine.check(&self.request) {
+            Ok(Some(update)) => {
+                let stable_hash = stable_skip_identifier(update.version.as_deref(), update.hash);
+                self.available_update = Some(AvailableUpdate {
+                    version: update.version.clone(),
+                    hash: stable_hash.clone(),
+                });
+                let _ = self.dispatch(UpdateEvent::UpdateAvailable {
+                    version: update.version,
+                    hash: stable_hash,
+                });
+            }
+            Ok(None) => {
+                self.available_update = None;
+                let _ = self.dispatch(UpdateEvent::NoUpdate {
+                    source,
+                    message: "No updates available".to_string(),
+                });
+            }
+            Err(UpdateEngineError::Offline(message)) | Err(UpdateEngineError::Failed(message)) => {
+                let _ = self.dispatch(UpdateEvent::Error { message });
+            }
+        }
+    }
+
+    fn run_download(&mut self) {
+        match self.engine.download(&self.request) {
+            Ok(Some(update)) => {
+                let stable_hash = stable_skip_identifier(update.version.as_deref(), update.hash);
+                self.available_update = Some(AvailableUpdate {
+                    version: update.version,
+                    hash: stable_hash.clone(),
+                });
+                let _ = self.dispatch(UpdateEvent::Status {
+                    status: UpdateStatus::DownloadComplete,
+                    message: "Download complete".to_string(),
+                    progress: Some(100.0),
+                    hash: stable_hash,
+                });
+            }
+            Ok(None) => {
+                let _ = self.dispatch(UpdateEvent::NoUpdate {
+                    source: UpdateCheckSource::Startup,
+                    message: "No updates available".to_string(),
+                });
+            }
+            Err(UpdateEngineError::Offline(message)) | Err(UpdateEngineError::Failed(message)) => {
+                let _ = self.dispatch(UpdateEvent::Error { message });
+            }
+        }
+    }
+
+    fn run_apply(&mut self) {
+        match self.engine.apply(&self.request) {
+            Ok(()) => {
+                let _ = self.dispatch(UpdateEvent::Status {
+                    status: UpdateStatus::Complete,
+                    message: "Update applied. Restarting...".to_string(),
+                    progress: Some(100.0),
+                    hash: self
+                        .available_update
+                        .as_ref()
+                        .and_then(|update| update.hash.clone()),
+                });
+            }
+            Err(UpdateEngineError::Offline(message)) | Err(UpdateEngineError::Failed(message)) => {
+                let _ = self.dispatch(UpdateEvent::Error { message });
+            }
+        }
+    }
+}
+
+pub fn default_update_feed_url() -> String {
+    format!(
+        "{}releases.{}.json",
+        TwirChatPackagingSpec::APP.release_base_url,
+        default_update_channel()
+    )
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct VelopackUpdateEngine;
+
+impl UpdateEngine for VelopackUpdateEngine {
+    fn check(
+        &self,
+        request: &UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        let report = check_velopack_updates(request);
+        match report.runtime_status {
+            VelopackRuntimeStatus::UpdateAvailable => {
+                let version = report.available_version;
+                let hash = stable_skip_identifier(version.as_deref(), None);
+                Ok(Some(AvailableUpdate { version, hash }))
+            }
+            VelopackRuntimeStatus::NoUpdate
+            | VelopackRuntimeStatus::NoFeed
+            | VelopackRuntimeStatus::Unpackaged => Ok(None),
+            VelopackRuntimeStatus::Offline => Err(UpdateEngineError::Offline(report.message)),
+            VelopackRuntimeStatus::Error | VelopackRuntimeStatus::Packaged => {
+                Err(UpdateEngineError::Failed(report.message))
+            }
+        }
+    }
+
+    fn download(
+        &self,
+        request: &UpdateCheckRequest,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        let manager = create_manager(request)?;
+        match manager.check_for_updates() {
+            Ok(UpdateCheck::UpdateAvailable(update)) => {
+                manager.download_updates(&update, None).map_err(|error| {
+                    UpdateEngineError::Failed(format!("Update download failed: {error}"))
+                })?;
+                let version = Some(update.TargetFullRelease.Version);
+                let hash = stable_skip_identifier(version.as_deref(), None);
+                Ok(Some(AvailableUpdate { version, hash }))
+            }
+            Ok(UpdateCheck::NoUpdateAvailable | UpdateCheck::RemoteIsEmpty) => Ok(None),
+            Err(error) if is_offline_error(&error) => Err(UpdateEngineError::Offline(format!(
+                "Update download could not reach feed: {error}"
+            ))),
+            Err(error) => Err(UpdateEngineError::Failed(format!(
+                "Update download failed: {error}"
+            ))),
+        }
+    }
+
+    fn apply(&self, request: &UpdateCheckRequest) -> Result<(), UpdateEngineError> {
+        let manager = create_manager(request)?;
+        match manager.check_for_updates() {
+            Ok(UpdateCheck::UpdateAvailable(update)) => {
+                manager.apply_updates_and_restart(&update).map_err(|error| {
+                    UpdateEngineError::Failed(format!("Update apply failed: {error}"))
+                })
+            }
+            Ok(UpdateCheck::NoUpdateAvailable | UpdateCheck::RemoteIsEmpty) => Ok(()),
+            Err(error) if is_offline_error(&error) => Err(UpdateEngineError::Offline(format!(
+                "Update apply could not reach feed: {error}"
+            ))),
+            Err(error) => Err(UpdateEngineError::Failed(format!(
+                "Update apply failed: {error}"
+            ))),
+        }
+    }
+}
+
+fn create_manager(request: &UpdateCheckRequest) -> Result<UpdateManager, UpdateEngineError> {
+    if request.mode == UpdateCheckMode::Unpackaged {
+        return Err(UpdateEngineError::Failed(
+            "Update action skipped: application is not packaged by Velopack".to_string(),
+        ));
+    }
+    let Some(feed) = request
+        .feed
+        .as_deref()
+        .filter(|feed| !feed.trim().is_empty())
+    else {
+        return Err(UpdateEngineError::Failed(
+            "Update action skipped: no Velopack feed configured".to_string(),
+        ));
+    };
+    let source = AutoSource::new(&update_source_base(feed));
+    let options = UpdateOptions {
+        ExplicitChannel: Some(update_channel_from_feed(feed)),
+        ..UpdateOptions::default()
+    };
+    UpdateManager::new(source, Some(options), None).map_err(|error| {
+        if is_not_installed_error(&error) {
+            UpdateEngineError::Failed(format!("Update action skipped: {error}"))
+        } else {
+            UpdateEngineError::Failed(format!("Update action unavailable: {error}"))
+        }
+    })
 }
 
 impl UpdateCheckReport {
@@ -399,20 +681,18 @@ impl UpdateCheckReport {
         self
     }
 
-    fn to_event(&self) -> UpdateEvent {
+    fn to_event(&self, source: UpdateCheckSource) -> UpdateEvent {
         match self.runtime_status {
             VelopackRuntimeStatus::UpdateAvailable => UpdateEvent::UpdateAvailable {
                 version: self.available_version.clone(),
-                hash: None,
+                hash: stable_skip_identifier(self.available_version.as_deref(), None),
             },
             VelopackRuntimeStatus::Error | VelopackRuntimeStatus::Offline => UpdateEvent::Error {
                 message: self.message.clone(),
             },
-            _ => UpdateEvent::Status {
-                status: UpdateStatus::NoUpdate,
+            _ => UpdateEvent::NoUpdate {
+                source,
                 message: self.message.clone(),
-                progress: None,
-                hash: None,
             },
         }
     }
@@ -565,4 +845,94 @@ fn should_show_status(status: UpdateStatus) -> bool {
             | UpdateStatus::LaunchingNewVersion
             | UpdateStatus::Complete
     ) || status.is_download_progress_family()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[derive(Debug)]
+    struct VersionOnlyEngine;
+
+    impl UpdateEngine for VersionOnlyEngine {
+        fn check(
+            &self,
+            _request: &UpdateCheckRequest,
+        ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+            Ok(Some(AvailableUpdate {
+                version: Some("1.2.3".to_string()),
+                hash: None,
+            }))
+        }
+
+        fn download(
+            &self,
+            _request: &UpdateCheckRequest,
+        ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+            Ok(Some(AvailableUpdate {
+                version: Some("1.2.3".to_string()),
+                hash: None,
+            }))
+        }
+
+        fn apply(&self, _request: &UpdateCheckRequest) -> Result<(), UpdateEngineError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn update_available_uses_version_as_stable_skip_identifier_when_hash_missing() {
+        let mut state = UpdateState::default();
+
+        let payload = state.apply(UpdateEvent::UpdateAvailable {
+            version: Some("1.2.3".to_string()),
+            hash: None,
+        });
+
+        assert!(payload.is_some());
+        assert!(state.snapshot().show);
+        assert_eq!(state.snapshot().hash.as_deref(), Some("1.2.3"));
+
+        let skipped_payload = state.apply(UpdateEvent::Command(UpdateStateCommand::SkipUpdate {
+            hash: "1.2.3".to_string(),
+        }));
+
+        assert!(skipped_payload.is_none());
+        assert!(!state.snapshot().show);
+        assert_eq!(state.snapshot().skipped_hash.as_deref(), Some("1.2.3"));
+
+        let repeated_payload = state.apply(UpdateEvent::UpdateAvailable {
+            version: Some("1.2.3".to_string()),
+            hash: None,
+        });
+
+        assert!(repeated_payload.is_none());
+        assert!(!state.snapshot().show);
+    }
+
+    #[test]
+    fn runtime_check_preserves_version_identifier_for_skip_and_download_complete() {
+        let mut runtime = UpdateRuntime::with_engine(
+            UpdateState::default(),
+            UpdateCheckRequest::packaged(Some(
+                "https://example.test/releases.linux.json".to_string(),
+            )),
+            Arc::new(VersionOnlyEngine),
+        );
+
+        runtime.dispatch_command(UpdateStateCommand::CheckForUpdates {
+            source: UpdateCheckSource::Startup,
+        });
+
+        let checked = runtime.snapshot();
+        assert_eq!(checked.status.as_deref(), Some("update-available"));
+        assert_eq!(checked.hash.as_deref(), Some("1.2.3"));
+
+        runtime.dispatch_command(UpdateStateCommand::DownloadUpdate);
+
+        let downloaded = runtime.snapshot();
+        assert_eq!(downloaded.status.as_deref(), Some("download-complete"));
+        assert_eq!(downloaded.hash.as_deref(), Some("1.2.3"));
+    }
 }

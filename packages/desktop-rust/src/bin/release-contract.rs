@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use twirchat_desktop_rust::runtime::{
     VelopackPlanInput, plan_velopack_commands, render_velopack_simulation,
-    validate_velopack_release_tag,
+    validate_velopack_release_tag, verify_packaging_artifact,
 };
 
 const DEFAULT_REPOSITORY_URL: &str = "https://github.com/Satont/twirchat";
@@ -11,18 +11,23 @@ const DEFAULT_REPOSITORY_URL: &str = "https://github.com/Satont/twirchat";
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let Some(first) = args.first() else {
-        eprintln!("usage: release-contract <stable-tag>");
-        eprintln!(
-            "       release-contract velopack-plan <stable-tag> [--repo-url <url>] [--artifact-root <dir>] [--first-release] [--existing-asset <name>] [--existing-assets <csv>]"
-        );
+        print_usage();
         return ExitCode::FAILURE;
     };
 
-    if first == "velopack-plan" {
-        return run_velopack_plan(&args[1..]);
+    match first.as_str() {
+        "velopack-plan" => run_velopack_plan(&args[1..]),
+        "verify-artifact" => run_verify_artifact(&args[1..]),
+        tag => print_release_contract(tag),
     }
+}
 
-    print_release_contract(first)
+fn print_usage() {
+    eprintln!("usage: release-contract <stable-tag>");
+    eprintln!(
+        "       release-contract velopack-plan <stable-tag> [--repo-url <url>] [--artifact-root <dir>] [--first-release] [--existing-asset <name>] [--existing-assets <csv>]"
+    );
+    eprintln!("       release-contract verify-artifact <path>");
 }
 
 fn print_release_contract(tag: &str) -> ExitCode {
@@ -44,11 +49,43 @@ fn print_release_contract(tag: &str) -> ExitCode {
     }
 }
 
+fn run_verify_artifact(args: &[String]) -> ExitCode {
+    let Some(path) = args.first() else {
+        eprintln!("usage: release-contract verify-artifact <path>");
+        return ExitCode::FAILURE;
+    };
+
+    if args.len() != 1 {
+        eprintln!("verify-artifact accepts exactly one artifact path");
+        return ExitCode::FAILURE;
+    }
+
+    match verify_packaging_artifact(Path::new(path)) {
+        Ok(report) => match serde_json::to_string_pretty(&report) {
+            Ok(json) => {
+                println!("{json}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("failed to serialize packaging verification report: {error}");
+                ExitCode::FAILURE
+            }
+        },
+        Err(error) => {
+            if let Some(report) = error.report() {
+                if let Ok(json) = serde_json::to_string_pretty(report) {
+                    eprintln!("{json}");
+                }
+            }
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn run_velopack_plan(args: &[String]) -> ExitCode {
     let Some(tag) = args.first() else {
-        eprintln!(
-            "usage: release-contract velopack-plan <stable-tag> [--repo-url <url>] [--artifact-root <dir>] [--first-release] [--existing-asset <name>] [--existing-assets <csv>]"
-        );
+        print_usage();
         return ExitCode::FAILURE;
     };
 

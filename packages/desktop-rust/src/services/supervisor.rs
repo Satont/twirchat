@@ -471,6 +471,15 @@ impl ServiceSupervisor {
                         events,
                     )
                 }
+                ServiceKind::UpdateState => {
+                    crate::services::update_state::run_update_state_service(
+                        storage_path,
+                        context.cancellation,
+                        context.poll_interval,
+                        command_receiver,
+                        events,
+                    )
+                }
                 _ => run_placeholder_service(context, command_receiver),
             })
             .map_err(|source| ServiceError::ThreadSpawn {

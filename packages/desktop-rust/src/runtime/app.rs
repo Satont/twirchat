@@ -4,7 +4,8 @@ use crate::protocol::types::Platform;
 use crate::runtime::{RuntimeConfig, RuntimeConfigInput};
 use crate::services::{
     BackendWsCommand, BackendWsConfig, BusReceiver, ServiceCommand, ServiceEvent, ServiceKind,
-    ServiceResult, ServiceRuntimeConfig, ServiceSupervisor, WatchedChannelsCommand,
+    ServiceResult, ServiceRuntimeConfig, ServiceSupervisor, UpdateCheckSource, UpdateStateCommand,
+    WatchedChannelsCommand,
 };
 use crate::services::{UserCardServiceError, fetch_user_card_metadata, get_user_chat_history};
 use crate::storage::{Storage, StorageError};
@@ -205,6 +206,34 @@ impl AppRuntime {
         self.supervisor.dispatch(
             ServiceKind::BackendWs,
             ServiceCommand::BackendWs(BackendWsCommand::SendMessage { message }),
+        )
+    }
+
+    pub fn dispatch_update_check(&self, source: UpdateCheckSource) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::UpdateState,
+            ServiceCommand::UpdateState(UpdateStateCommand::CheckForUpdates { source }),
+        )
+    }
+
+    pub fn dispatch_update_download(&self) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::UpdateState,
+            ServiceCommand::UpdateState(UpdateStateCommand::DownloadUpdate),
+        )
+    }
+
+    pub fn dispatch_update_apply(&self) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::UpdateState,
+            ServiceCommand::UpdateState(UpdateStateCommand::ApplyUpdate),
+        )
+    }
+
+    pub fn dispatch_update_skip(&self, hash: String) -> ServiceResult<()> {
+        self.supervisor.dispatch(
+            ServiceKind::UpdateState,
+            ServiceCommand::UpdateState(UpdateStateCommand::SkipUpdate { hash }),
         )
     }
 

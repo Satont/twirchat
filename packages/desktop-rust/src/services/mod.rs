@@ -10,6 +10,7 @@ pub mod commands;
 pub mod events;
 pub mod stream_status;
 pub mod supervisor;
+pub mod update_state;
 pub mod user_card;
 pub mod watched_channels;
 
@@ -22,5 +23,6 @@ pub use commands::*;
 pub use events::*;
 pub use stream_status::*;
 pub use supervisor::*;
+pub use update_state::*;
 pub use user_card::*;
 pub use watched_channels::*;

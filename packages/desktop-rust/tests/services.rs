@@ -1,8 +1,8 @@
 use std::time::Duration;
 use twirchat_desktop_rust::services::{
     BusConfig, BusSendError, BusTryRecvError, ChatEvent, LifecycleEvent, ServiceCommand,
-    ServiceEvent, ServiceKind, ServiceRuntimeConfig, ServiceSupervisor, WatchedChannelsCommand,
-    WatchedChannelsEvent, bounded,
+    ServiceEvent, ServiceKind, ServiceRuntimeConfig, ServiceSupervisor, UpdateCheckSource,
+    UpdateStateCommand, UpdateStateEvent, WatchedChannelsCommand, WatchedChannelsEvent, bounded,
 };
 
 #[test]
@@ -148,6 +148,48 @@ fn watched_send_failure_event_carries_client_message_id() -> Result<(), Box<dyn 
         saw_expected,
         "expected watched-channel send failure event with matching client_message_id"
     );
+    Ok(())
+}
+
+#[test]
+fn update_state_service_emits_requested_and_snapshot_events()
+-> Result<(), Box<dyn std::error::Error>> {
+    let config =
+        ServiceRuntimeConfig::new(128, 16)?.with_service_poll_interval(Duration::from_millis(5));
+    let mut supervisor = ServiceSupervisor::new(config)?;
+    let events = supervisor
+        .take_event_receiver()
+        .ok_or("service event receiver should be available")?;
+
+    supervisor.start()?;
+    supervisor.dispatch(
+        ServiceKind::UpdateState,
+        ServiceCommand::UpdateState(UpdateStateCommand::CheckForUpdates {
+            source: UpdateCheckSource::Startup,
+        }),
+    )?;
+
+    let mut saw_requested = false;
+    let mut saw_snapshot = false;
+    for _ in 0..60 {
+        match events.recv_timeout(Duration::from_millis(25)) {
+            Ok(ServiceEvent::UpdateState(UpdateStateEvent::CheckRequested { source })) => {
+                assert_eq!(source, UpdateCheckSource::Startup);
+                saw_requested = true;
+            }
+            Ok(ServiceEvent::UpdateState(UpdateStateEvent::StateChanged { snapshot })) => {
+                saw_snapshot = true;
+                assert!(snapshot.status.is_some());
+                break;
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+
+    let _ = supervisor.stop();
+    assert!(saw_requested);
+    assert!(saw_snapshot);
     Ok(())
 }
 

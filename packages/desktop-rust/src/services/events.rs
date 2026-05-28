@@ -1,5 +1,7 @@
 use crate::protocol::messages::{BackendToDesktopMessage, DesktopToBackendMessage};
 use crate::protocol::types::{NormalizedChatMessage, Platform, PlatformStatusInfo};
+use crate::runtime::UpdateStatusSnapshot;
+use crate::services::commands::UpdateCheckSource;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -282,10 +284,11 @@ pub enum SettingsEvent {
     ResetRequested { key: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UpdateStateEvent {
-    CheckRequested,
+    CheckRequested { source: UpdateCheckSource },
     DownloadRequested,
     ApplyRequested,
     SkipRequested { hash: String },
+    StateChanged { snapshot: UpdateStatusSnapshot },
 }

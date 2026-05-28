@@ -157,12 +157,14 @@
 - Source-contract tests now assert the presence of padding and bounds on the overlay wrapper, guaranteeing the sizing logic relies on true screen boundaries.
 
 ## 2026-05-23 Modal Responsiveness Fix
+
 - `user_card.rs`: The `.h(px(360.0))` was successfully removed, and the `UserCard` now features `.flex_1().min_h_0().w_full().h_full()` on its root GPUI element. This is essential for forcing it to shrink when constrained by an outer app shell container, instead of expanding to the unlimited intrinsic height of its metadata and history children.
 - `app.rs`: The `render_user_card_modal` overlay layout now enforces constraints correctly. The modal wrapper acts as a bounds container: it uses `.w_full().h_full().max_w(px(760.0)).max_h(px(820.0)).overflow_hidden()`. Removing `.flex().flex_col()` from this wrapper simplified the block layout, ensuring the child `UserCard` inherits the precise bounded dimensions from the padded background overlay.
 - `chat_domain.rs`, `storage.rs`, and `app_state.rs` scope creeps from a previous step had been erroneously staged; they were successfully cleared via `git reset HEAD` and `git checkout --`.
 - `tests/ui_visuals.rs` was updated to explicitly enforce the layout invariants on the `UserCard` (must contain `flex_1` and `min_h_0`) and the app overlay wrapper bounds, guarding against regressions that would break height constraints or scroll capability.
 
 ### Rust UI modal scroll constraint
+
 - To make a modal properly scrollable and responsive in GPUI without clipping:
   - The outer overlay needs padding (`p(px(24.0))`).
   - The inner wrapper needs to constraint height via `.flex().flex_col().w_full().h_full().max_w(...).max_h(...)` and `overflow_hidden()`.
@@ -170,6 +172,7 @@
   - The inner scrolling body must be `overflow_y_scroll()` with `flex_1().min_h_0()`, avoiding fixed heights on its lists like `h(px(360.0))` so it naturally fills the wrapper.
 
 ### Mention Autocomplete Visuals & Matching
+
 - Mention autocomplete was visually crossed by the composer's top border because GPUI overlays nested inside a parent with borders render behind the parent's border when overflowing. Solved by separating the background/border into an absolute sibling that renders first.
 - To support both alias and original nickname autocomplete simultaneously, `fuzzy_filter_mentions` was updated to test `label` (which holds the alias), `display_name`, and `username`, selecting the best rank from any matched string. The insertion logic naturally inserts the original label preserving consistency with existing logic.
 - Verified and finalized the autocomplete border visibility fix by using a `.absolute().size_full()` sibling trick.

@@ -622,6 +622,124 @@ fn home_composer_watched_target_attaches_reply_id_when_channel_matches() {
 }
 
 #[test]
+fn home_composer_reply_sends_when_message_channel_id_uses_platform_specific_identifier() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.platforms_panel.statuses.insert(
+        Platform::Twitch,
+        PlatformStatusInfo {
+            platform: Platform::Twitch,
+            status: PlatformStatus::Connected,
+            error: None,
+            mode: PlatformStatusMode::Authenticated,
+            channel_login: Some("satont".to_string()),
+        },
+    );
+    state.watched_channels.push(watched_channel(
+        "watched-twitch",
+        Platform::Twitch,
+        "satont",
+    ));
+    let parent = user_message(
+        "twitch-parent-platform-id",
+        Platform::Twitch,
+        "123456789",
+        "viewer-1",
+        Some("viewerone"),
+        "Twitch Parent",
+        "1000",
+    );
+    state.set_home_reply_target(parent);
+
+    assert!(state.queue_composer_send("reply body"));
+
+    let pending = state.take_pending_watched_channel_messages();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].channel_id, "watched-twitch");
+    assert_eq!(
+        pending[0].reply_to_message_id.as_deref(),
+        Some("twitch-parent-platform-id")
+    );
+    assert!(state.home_reply_target().is_none());
+}
+
+#[test]
+fn home_reply_send_targets_only_matching_twitch_or_kick_channel() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    for (platform, login) in [(Platform::Twitch, "satont"), (Platform::Kick, "satont")] {
+        state.platforms_panel.statuses.insert(
+            platform,
+            PlatformStatusInfo {
+                platform,
+                status: PlatformStatus::Connected,
+                error: None,
+                mode: PlatformStatusMode::Authenticated,
+                channel_login: Some(login.to_string()),
+            },
+        );
+        state.watched_channels.push(watched_channel(
+            &format!("watched-{platform:?}"),
+            platform,
+            login,
+        ));
+    }
+
+    let parent = user_message(
+        "twitch-parent-1",
+        Platform::Twitch,
+        "watched-Twitch",
+        "viewer-1",
+        Some("viewerone"),
+        "Twitch Parent",
+        "1000",
+    );
+    state.set_home_reply_target(parent);
+
+    assert!(state.queue_composer_send("reply body"));
+
+    let pending = state.take_pending_watched_channel_messages();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].channel_id, "watched-Twitch");
+    assert_eq!(
+        pending[0].reply_to_message_id.as_deref(),
+        Some("twitch-parent-1")
+    );
+    assert!(state.take_pending_backend_messages().is_empty());
+    assert!(state.home_reply_target().is_none());
+}
+
+#[test]
+fn home_reply_sendability_requires_matching_watched_channel_route() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.platforms_panel.statuses.insert(
+        Platform::Kick,
+        PlatformStatusInfo {
+            platform: Platform::Kick,
+            status: PlatformStatus::Connected,
+            error: None,
+            mode: PlatformStatusMode::Authenticated,
+            channel_login: Some("satont".to_string()),
+        },
+    );
+    let parent = user_message(
+        "home-parent-backend-only",
+        Platform::Kick,
+        "satont",
+        "viewer-1",
+        Some("viewerone"),
+        "Home Parent",
+        "1000",
+    );
+
+    assert!(!state.home_reply_can_send(&parent));
+
+    state
+        .watched_channels
+        .push(watched_channel("watched-home", Platform::Kick, "satont"));
+
+    assert!(state.home_reply_can_send(&parent));
+}
+
+#[test]
 fn watched_echo_replaces_optimistic_without_duplicates_in_watched_and_home() {
     let mut state = twirchat_desktop_rust::app_state::AppState::default();
     state
