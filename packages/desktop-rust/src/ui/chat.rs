@@ -994,6 +994,7 @@ struct RowMessages {
     target: NormalizedChatMessage,
 }
 
+#[derive(Clone, Copy)]
 struct MessageTypography {
     font_size: f32,
     font_family: FontFamilyChoice,
@@ -1119,6 +1120,22 @@ impl MessageTypography {
             font_family: settings.font_family,
         }
     }
+
+    fn author_font_size(self) -> f32 {
+        self.font_size
+    }
+
+    fn badge_size(self) -> f32 {
+        self.font_size
+    }
+
+    fn text_badge_font_size(self) -> f32 {
+        self.font_size * 0.72
+    }
+
+    fn platform_icon_size(self) -> f32 {
+        self.font_size
+    }
 }
 
 fn author_label_text(message: &NormalizedChatMessage, use_fallback: bool) -> String {
@@ -1194,7 +1211,7 @@ fn compact_message_row(
                     .mr(px(4.0))
                     .child(
                         PlatformIcon::new(to_model_platform(platform))
-                            .size(px(12.0))
+                            .size(px(typography.platform_icon_size()))
                             .color(theme::platform_color(to_model_platform(platform))),
                     )
                     .into_any_element()
@@ -1215,8 +1232,8 @@ fn compact_message_row(
                     {
                         return div()
                             .mr(px(4.0))
-                            .w(px(14.0))
-                            .h(px(14.0))
+                            .w(px(typography.badge_size()))
+                            .h(px(typography.badge_size()))
                             .rounded_sm()
                             .overflow_hidden()
                             .child(
@@ -1236,8 +1253,8 @@ fn compact_message_row(
                     {
                         div()
                             .mr(px(4.0))
-                            .w(px(14.0))
-                            .h(px(14.0))
+                            .w(px(typography.badge_size()))
+                            .h(px(typography.badge_size()))
                             .rounded_sm()
                             .overflow_hidden()
                             .child(
@@ -1256,7 +1273,7 @@ fn compact_message_row(
                             .py(px(1.0))
                             .bg(rgba(0xffffff1a))
                             .text_color(theme::text_primary())
-                            .text_size(px(10.0))
+                            .text_size(px(typography.text_badge_font_size()))
                             .child(badge.text.clone())
                             .into_any_element()
                     }
@@ -1278,7 +1295,7 @@ fn compact_message_row(
             div()
                 .mr(px(4.0))
                 .text_color(theme::accent())
-                .text_size(px(12.0))
+                .text_size(px(typography.author_font_size()))
                 .font_weight(gpui::FontWeight::BOLD)
                 .on_mouse_down(gpui::MouseButton::Right, move |_, _window, cx| {
                     state_entity.update(cx, |state, cx| {
@@ -1569,7 +1586,7 @@ pub(crate) fn message_row(
                         .when(settings.show_platform_icon, |el| {
                             el.child(
                                 PlatformIcon::new(to_model_platform(message.platform))
-                                    .size(px(12.0))
+                                    .size(px(typography.platform_icon_size()))
                                     .color(theme::platform_color(to_model_platform(
                                         message.platform,
                                     ))),
@@ -1584,8 +1601,8 @@ pub(crate) fn message_row(
                                         .filter(|url| Path::new(url).is_absolute())
                                     {
                                         return div()
-                                            .w(px(14.0))
-                                            .h(px(14.0))
+                                            .w(px(typography.badge_size()))
+                                            .h(px(typography.badge_size()))
                                             .rounded_sm()
                                             .overflow_hidden()
                                             .child(
@@ -1605,8 +1622,8 @@ pub(crate) fn message_row(
                                         url.starts_with("http://") || url.starts_with("https://")
                                     }) {
                                         div()
-                                            .w(px(14.0))
-                                            .h(px(14.0))
+                                            .w(px(typography.badge_size()))
+                                            .h(px(typography.badge_size()))
                                             .rounded_sm()
                                             .overflow_hidden()
                                             .child(
@@ -1627,7 +1644,7 @@ pub(crate) fn message_row(
                                             .py(px(1.0))
                                             .bg(rgba(0xffffff1a))
                                             .text_color(theme::text_primary())
-                                            .text_size(px(10.0))
+                                            .text_size(px(typography.text_badge_font_size()))
                                             .child(badge.text.clone())
                                     }
                                 },
@@ -1636,7 +1653,7 @@ pub(crate) fn message_row(
                         .child(
                             div()
                                 .text_color(theme::accent())
-                                .text_size(px(12.0))
+                                .text_size(px(typography.author_font_size()))
                                 .font_weight(gpui::FontWeight::BOLD)
                                 .on_mouse_down(gpui::MouseButton::Right, {
                                     let state_entity = state_entity.clone();

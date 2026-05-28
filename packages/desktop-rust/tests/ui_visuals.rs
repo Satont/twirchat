@@ -209,3 +209,29 @@ fn home_chat_renders_outgoing_send_status() {
     assert!(chat_rs.contains("sending..."));
     assert!(chat_rs.contains("failed"));
 }
+
+#[test]
+fn chat_font_size_scales_message_metadata_contract() {
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+
+    assert!(
+        chat_rs.contains("author_font_size()"),
+        "author names must derive their text size from the chat font-size setting"
+    );
+    assert!(
+        chat_rs.contains(".size(px(typography.platform_icon_size()))"),
+        "platform icons must scale with the chat font-size setting"
+    );
+    assert!(
+        chat_rs.contains(".w(px(typography.badge_size()))"),
+        "image badge width must scale with the chat font-size setting"
+    );
+    assert!(
+        chat_rs.contains(".h(px(typography.badge_size()))"),
+        "image badge height must scale with the chat font-size setting"
+    );
+    assert!(
+        chat_rs.contains(".text_size(px(typography.text_badge_font_size()))"),
+        "text badge labels must scale with the chat font-size setting"
+    );
+}
