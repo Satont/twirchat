@@ -4,10 +4,10 @@ use crate::chat::{AliasBook, SevenTvCatalog, SevenTvEmote, enrich_message_with_s
 use crate::hotkeys::{HotkeyAction, HotkeyManager};
 use crate::protocol::messages::{ChannelStatus, ChannelStatusRequest, LiveStatusPlatform};
 use crate::protocol::types::{
-    Account, AppSettings, AppTheme, Badge, ChatAuthor, ChatMessageType, ChatTheme,
+    Account, AppSettings, AppTheme, Badge, ChatAuthor, ChatMessageType, ChatReply, ChatTheme,
     FontFamilyChoice, LayoutNode, NormalizedChatMessage, OverlayAnimation, OverlayConfig,
     OverlayPosition, PanelContent, Platform, PlatformStatus, PlatformStatusInfo,
-    PlatformStatusMode, SplitDirection, WatchedChannel, WatchedChannelsLayout,
+    PlatformStatusMode, ReplyAuthor, SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
 use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
@@ -31,6 +31,7 @@ pub struct PendingWatchedChannelAdd {
 pub struct PendingWatchedChannelMessage {
     pub channel_id: String,
     pub text: String,
+    pub reply_to_message_id: Option<String>,
     pub client_message_id: Option<String>,
 }
 
@@ -156,6 +157,9 @@ pub struct AppState {
     home_channel_statuses: BTreeMap<String, ChannelStatus>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_channel_messages: BTreeMap<String, Vec<NormalizedChatMessage>>,
+    home_reply_target: Option<NormalizedChatMessage>,
+    watched_reply_targets: BTreeMap<String, NormalizedChatMessage>,
+    hovered_message_actions_row: Option<String>,
     outgoing_message_statuses: BTreeMap<String, OutgoingChatMessageStatus>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
     pub events: Vec<crate::protocol::types::NormalizedEvent>,
@@ -203,6 +207,9 @@ impl Default for AppState {
             home_channel_statuses: BTreeMap::new(),
             watched_channel_statuses: BTreeMap::new(),
             watched_channel_messages: BTreeMap::new(),
+            home_reply_target: None,
+            watched_reply_targets: BTreeMap::new(),
+            hovered_message_actions_row: None,
             outgoing_message_statuses: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
             events: vec![],
@@ -372,6 +379,47 @@ impl AppState {
 
     pub fn outgoing_message_status(&self, message_id: &str) -> Option<OutgoingChatMessageStatus> {
         self.outgoing_message_statuses.get(message_id).copied()
+    }
+
+    pub fn home_reply_target(&self) -> Option<&NormalizedChatMessage> {
+        self.home_reply_target.as_ref()
+    }
+
+    pub fn watched_reply_target(&self, channel_id: &str) -> Option<&NormalizedChatMessage> {
+        self.watched_reply_targets.get(channel_id)
+    }
+
+    pub fn set_home_reply_target(&mut self, message: NormalizedChatMessage) {
+        self.home_reply_target = Some(message);
+    }
+
+    pub fn cancel_home_reply_target(&mut self) {
+        self.home_reply_target = None;
+    }
+
+    pub fn set_watched_reply_target(
+        &mut self,
+        channel_id: impl Into<String>,
+        message: NormalizedChatMessage,
+    ) {
+        self.watched_reply_targets
+            .insert(channel_id.into(), message);
+    }
+
+    pub fn cancel_watched_reply_target(&mut self, channel_id: &str) {
+        self.watched_reply_targets.remove(channel_id);
+    }
+
+    pub fn message_actions_visible_for(&self, row_id: &str) -> bool {
+        self.hovered_message_actions_row.as_deref() == Some(row_id)
+    }
+
+    pub fn set_message_actions_hovered(&mut self, row_id: String, hovered: bool) {
+        if hovered {
+            self.hovered_message_actions_row = Some(row_id);
+        } else if self.hovered_message_actions_row.as_deref() == Some(row_id.as_str()) {
+            self.hovered_message_actions_row = None;
+        }
     }
 
     pub fn visible_watched_channels(&self) -> Vec<&WatchedChannel> {
@@ -1403,6 +1451,7 @@ impl AppState {
             .retain(|channel| channel.id != channel_id);
         self.watched_channel_statuses.remove(channel_id);
         self.watched_channel_messages.remove(channel_id);
+        self.watched_reply_targets.remove(channel_id);
         self.watched_layouts.remove(channel_id);
         self.composer_disabled_channel_ids.remove(channel_id);
         self.chat_add_menu_open = false;
@@ -1460,12 +1509,22 @@ impl AppState {
                 continue;
             }
             if let Some(watched_channel_id) = &target.watched_channel_id {
-                let client_message_id =
-                    self.insert_optimistic_watched_message(watched_channel_id, text);
+                let reply_target = self
+                    .home_reply_target
+                    .as_ref()
+                    .filter(|reply| home_reply_matches_target(reply, &target))
+                    .cloned();
+                let reply_to_message_id = reply_target.as_ref().map(|reply| reply.id.clone());
+                let client_message_id = self.insert_optimistic_watched_message(
+                    watched_channel_id,
+                    text,
+                    reply_target.as_ref(),
+                );
                 self.pending_watched_channel_messages
                     .push(PendingWatchedChannelMessage {
                         channel_id: watched_channel_id.clone(),
                         text: text.to_string(),
+                        reply_to_message_id,
                         client_message_id: Some(client_message_id),
                     });
             } else {
@@ -1478,6 +1537,9 @@ impl AppState {
                 );
             }
             queued = true;
+        }
+        if queued {
+            self.home_reply_target = None;
         }
         queued
     }
@@ -1493,11 +1555,15 @@ impl AppState {
             return false;
         }
 
-        let client_message_id = self.insert_optimistic_watched_message(channel_id, text);
+        let reply_target = self.watched_reply_targets.remove(channel_id);
+        let reply_to_message_id = reply_target.as_ref().map(|reply| reply.id.clone());
+        let client_message_id =
+            self.insert_optimistic_watched_message(channel_id, text, reply_target.as_ref());
         self.pending_watched_channel_messages
             .push(PendingWatchedChannelMessage {
                 channel_id: channel_id.to_string(),
                 text: text.to_string(),
+                reply_to_message_id,
                 client_message_id: Some(client_message_id),
             });
         true
@@ -1853,7 +1919,12 @@ impl AppState {
             .push(PendingWatchedChannelRemove { channel_id });
     }
 
-    fn insert_optimistic_watched_message(&mut self, channel_id: &str, text: &str) -> String {
+    fn insert_optimistic_watched_message(
+        &mut self,
+        channel_id: &str,
+        text: &str,
+        reply_target: Option<&NormalizedChatMessage>,
+    ) -> String {
         self.next_outgoing_message_sequence = self.next_outgoing_message_sequence.saturating_add(1);
         let client_message_id = format!(
             "local:{}:{}",
@@ -1914,7 +1985,7 @@ impl AppState {
             emotes: Vec::new(),
             timestamp: crate::storage::now_millis().to_string(),
             message_type: ChatMessageType::Message,
-            reply: None,
+            reply: reply_target.map(chat_reply_from_message),
         };
 
         if let Some(account) = self_account
@@ -2245,6 +2316,30 @@ struct HomeChannelTarget {
     platform: Platform,
     channel_login: String,
     watched_channel_id: Option<String>,
+}
+
+fn chat_reply_from_message(message: &NormalizedChatMessage) -> ChatReply {
+    ChatReply {
+        parent_message_id: message.id.clone(),
+        parent_message_text: message.text.clone(),
+        parent_author: ReplyAuthor {
+            id: message.author.id.clone(),
+            username: message.author.username.clone().unwrap_or_default(),
+            display_name: message.author.display_name.clone(),
+        },
+    }
+}
+
+fn home_reply_matches_target(reply: &NormalizedChatMessage, target: &HomeChannelTarget) -> bool {
+    if reply.platform != target.platform {
+        return false;
+    }
+
+    reply.channel_id.eq_ignore_ascii_case(&target.channel_login)
+        || target
+            .watched_channel_id
+            .as_ref()
+            .is_some_and(|channel_id| reply.channel_id == *channel_id)
 }
 
 fn home_channel_target_id(platform: Platform, channel_login: &str) -> String {

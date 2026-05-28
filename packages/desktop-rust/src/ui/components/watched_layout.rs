@@ -3,7 +3,7 @@ use crate::protocol::types::{
     LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection, WatchedChannel,
     WatchedChannelsLayout,
 };
-use crate::ui::chat::{MentionAutocompleteUi, MessageRowOptions, message_row};
+use crate::ui::chat::{MentionAutocompleteUi, MessageRowOptions, composer_reply_bar, message_row};
 use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
 use crate::ui::components::input::Input;
 use crate::ui::shell::app::TwirChatApp;
@@ -348,6 +348,7 @@ fn watched_panel(
         )
         .when_some(composer.input, |panel, composer_input| {
             panel.child(watched_composer(
+                state,
                 state_entity,
                 channel_id.to_string(),
                 composer_input,
@@ -521,15 +522,18 @@ fn outgoing_status_label(label: &'static str, bg: gpui::Rgba, color: gpui::Rgba)
 }
 
 fn watched_composer(
+    state: &AppState,
     state_entity: Entity<AppState>,
     channel_id: String,
     composer_input: Entity<Input>,
     mention_autocomplete: Option<MentionAutocompleteUi>,
     app_entity: Entity<TwirChatApp>,
 ) -> Div {
+    let reply_target = state.watched_reply_target(&channel_id).cloned();
+
     div()
         .w_full()
-        .h(px(58.0))
+        .h(px(if reply_target.is_some() { 88.0 } else { 58.0 }))
         .relative()
         .child(
             div()
@@ -546,6 +550,23 @@ fn watched_composer(
                 .flex()
                 .flex_col()
                 .justify_center()
+                .gap(px(6.0))
+                .when_some(reply_target, |body, target| {
+                    body.child(composer_reply_bar(
+                        &target,
+                        format!("watched-reply-target-cancel-{channel_id}"),
+                        {
+                            let state_entity = state_entity.clone();
+                            let channel_id = channel_id.clone();
+                            move |_event, _window, cx| {
+                                state_entity.update(cx, |state, cx| {
+                                    state.cancel_watched_reply_target(&channel_id);
+                                    cx.notify();
+                                });
+                            }
+                        },
+                    ))
+                })
                 .child(
                     div()
                         .flex()

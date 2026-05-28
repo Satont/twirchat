@@ -14,8 +14,9 @@ use crate::ui::shared::{format_compact_viewers, format_exact_viewers};
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    AnyElement, App, Context, Div, Entity, FollowMode, ImageSource, ListSizingBehavior, ListState,
-    ObjectFit, Render, Stateful, Window, div, img, list, prelude::*, px, relative, rgb, rgba,
+    AnyElement, App, ClipboardItem, Context, Div, Entity, FollowMode, ImageSource,
+    ListSizingBehavior, ListState, ObjectFit, Render, Stateful, Window, div, img, list, prelude::*,
+    px, relative, rgb, rgba,
 };
 use std::path::Path;
 use ui::WithScrollbar;
@@ -335,10 +336,11 @@ fn composer(
         && home_targets
             .iter()
             .any(|channel| !state.composer_disabled_channel_ids.contains(&channel.id));
+    let reply_target = state.home_reply_target().cloned();
 
     div()
         .w_full()
-        .h(px(104.0))
+        .h(px(if reply_target.is_some() { 132.0 } else { 104.0 }))
         .min_h(px(82.0))
         .relative()
         .child(
@@ -358,6 +360,21 @@ fn composer(
                 .flex()
                 .flex_col()
                 .gap(px(6.0))
+                .when_some(reply_target, |body, target| {
+                    body.child(composer_reply_bar(
+                        &target,
+                        "home-reply-target-cancel".to_string(),
+                        {
+                            let state_entity = state_entity.clone();
+                            move |_event, _window, cx| {
+                                state_entity.update(cx, |state, cx| {
+                                    state.cancel_home_reply_target();
+                                    cx.notify();
+                                });
+                            }
+                        },
+                    ))
+                })
                 .child(div().flex().flex_row().flex_wrap().gap(px(6.0)).children(
                     home_targets.iter().map({
                         let state_entity = state_entity.clone();
@@ -463,6 +480,61 @@ fn composer(
                         .child("Shift+Enter for newline"),
                 ),
         )
+}
+
+pub(crate) fn composer_reply_bar(
+    target: &NormalizedChatMessage,
+    cancel_id: String,
+    on_cancel: impl Fn(&gpui::MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> Stateful<Div> {
+    div()
+        .id("composer-reply-target")
+        .w_full()
+        .min_h(px(24.0))
+        .rounded_md()
+        .bg(rgba(0xa78bfa1f))
+        .border_1()
+        .border_color(rgba(0xa78bfa55))
+        .px(px(8.0))
+        .py(px(4.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .text_size(px(11.0))
+        .text_color(theme::text_muted())
+        .child("↩")
+        .child(
+            div()
+                .min_w(px(0.0))
+                .flex_1()
+                .overflow_hidden()
+                .child(format!(
+                    "Replying to {}: {}",
+                    target.author.display_name,
+                    trimmed_reply_text(&target.text)
+                )),
+        )
+        .child(
+            div()
+                .id(cancel_id)
+                .rounded_sm()
+                .px(px(6.0))
+                .py(px(2.0))
+                .text_color(theme::text_muted())
+                .cursor_pointer()
+                .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
+                .child("×")
+                .on_mouse_down(gpui::MouseButton::Left, on_cancel),
+        )
+}
+
+fn trimmed_reply_text(text: &str) -> String {
+    if text.chars().count() > 72 {
+        format!("{}…", text.chars().take(72).collect::<String>())
+    } else {
+        text.to_string()
+    }
 }
 
 fn status_chip(
@@ -1346,6 +1418,76 @@ fn aliased_row_message(
     apply_alias(message, alias.as_deref()).message
 }
 
+fn message_row_actions(
+    message: NormalizedChatMessage,
+    state_entity: Entity<AppState>,
+    options: MessageRowOptions,
+) -> Stateful<Div> {
+    let reply_message = message.clone();
+    let reply_channel_id = message.channel_id.clone();
+    let copy_text = message.text.clone();
+
+    div()
+        .id(format!(
+            "message-row-actions-{}-{}",
+            options.surface_scope, message.id
+        ))
+        .absolute()
+        .top(px(3.0))
+        .right(px(8.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(3.0))
+        .rounded_md()
+        .bg(rgba(0x18181bcc))
+        .border_1()
+        .border_color(theme::border())
+        .px(px(3.0))
+        .py(px(2.0))
+        .child(
+            message_action_button("message-reply-action", "↩").on_mouse_down(
+                gpui::MouseButton::Left,
+                move |_event, _window, cx| {
+                    let message = reply_message.clone();
+                    let channel_id = reply_channel_id.clone();
+                    state_entity.update(cx, |state, cx| {
+                        if options.surface_scope == "watched" {
+                            state.set_watched_reply_target(channel_id, message);
+                        } else {
+                            state.set_home_reply_target(message);
+                        }
+                        cx.notify();
+                    });
+                },
+            ),
+        )
+        .child(
+            message_action_button("message-copy-action", "⧉").on_mouse_down(
+                gpui::MouseButton::Left,
+                move |_event, _window, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+                },
+            ),
+        )
+}
+
+fn message_action_button(id: &'static str, label: &'static str) -> Stateful<Div> {
+    div()
+        .id(id)
+        .w(px(22.0))
+        .h(px(20.0))
+        .rounded_sm()
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px(11.0))
+        .text_color(theme::text_muted())
+        .cursor_pointer()
+        .hover(|s| s.bg(theme::surface_2()).text_color(theme::text_primary()))
+        .child(label)
+}
+
 fn compact_message_row(
     messages: &RowMessages,
     settings: &AppSettings,
@@ -1359,6 +1501,8 @@ fn compact_message_row(
     let target_message = messages.target.clone();
     let typography = MessageTypography::from_settings(settings);
     let row_background = message_row_background(message, settings, accounts);
+    let row_id = options.message_row_id(&message.id);
+    let row_actions_visible = state_entity.read(cx).message_actions_visible_for(&row_id);
     let mut custom_parts = Vec::new();
 
     if settings.show_timestamp {
@@ -1518,14 +1662,21 @@ fn compact_message_row(
     );
 
     div()
-        .id(options.message_row_id(&message.id))
+        .id(row_id.clone())
         .w_full()
         .px(px(14.0))
         .py(px(1.0))
-        .flex()
-        .flex_col()
-        .items_start()
         .relative()
+        .on_hover({
+            let state_entity = state_entity.clone();
+            let row_id = row_id.clone();
+            move |hovered, _window, cx| {
+                state_entity.update(cx, |state, cx| {
+                    state.set_message_actions_hovered(row_id.clone(), *hovered);
+                    cx.notify();
+                });
+            }
+        })
         .when_some(row_background, |row, bg| row.bg(bg))
         .hover(|s| s.bg(rgba(0xffffff06)))
         .when(settings.show_platform_color_stripe, |el| {
@@ -1542,6 +1693,13 @@ fn compact_message_row(
         })
         .when_some(reply_preview(message, typography), |row, preview| {
             row.child(div().w_full().min_w(px(0.0)).mb(px(1.0)).child(preview))
+        })
+        .when(row_actions_visible, |row| {
+            row.child(message_row_actions(
+                target_message,
+                state_entity.clone(),
+                options,
+            ))
         })
         .child(
             div()
@@ -1654,6 +1812,8 @@ pub(crate) fn message_row(
     };
     let message = &row_messages.display;
     let row_background = message_row_background(message, settings, accounts);
+    let row_id = options.message_row_id(&message.id);
+    let row_actions_visible = state_entity.read(cx).message_actions_visible_for(&row_id);
 
     if is_compact {
         return compact_message_row(
@@ -1668,7 +1828,7 @@ pub(crate) fn message_row(
     }
 
     div()
-        .id(options.message_row_id(&message.id))
+        .id(row_id.clone())
         .w_full()
         .px(px(14.0))
         .py(px(v_pad))
@@ -1677,6 +1837,16 @@ pub(crate) fn message_row(
         .items_start()
         .gap(px(8.0))
         .relative()
+        .on_hover({
+            let state_entity = state_entity.clone();
+            let row_id = row_id.clone();
+            move |hovered, _window, cx| {
+                state_entity.update(cx, |state, cx| {
+                    state.set_message_actions_hovered(row_id.clone(), *hovered);
+                    cx.notify();
+                });
+            }
+        })
         .when_some(row_background, |row, bg| row.bg(bg))
         .hover(|s| s.bg(rgba(0xffffff06))) // 0.025 * 255 = 6.375
         .when(settings.show_platform_color_stripe, |el| {
@@ -1690,6 +1860,13 @@ pub(crate) fn message_row(
                     .rounded_sm()
                     .bg(theme::platform_color(to_model_platform(message.platform))),
             )
+        })
+        .when(row_actions_visible, |row| {
+            row.child(message_row_actions(
+                row_messages.target.clone(),
+                state_entity.clone(),
+                options,
+            ))
         })
         .when(settings.show_avatars, |el| {
             let avatar_url = message.author.avatar_url.clone().or_else(|| {

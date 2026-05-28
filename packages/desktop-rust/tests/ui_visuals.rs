@@ -253,3 +253,19 @@ fn chat_reply_and_self_ping_visual_contracts_are_rendered_in_rust_ui() {
             .contains("message_row(\n        message,\n        settings,\n        &[],")
     );
 }
+
+#[test]
+fn chat_message_row_hover_actions_match_vue_contract() {
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+
+    assert!(chat_rs.contains("message_row_actions"));
+    assert!(chat_rs.contains("message-row-actions"));
+    assert!(chat_rs.contains("message-reply-action"));
+    assert!(chat_rs.contains("message-copy-action"));
+    assert!(chat_rs.contains("ClipboardItem::new_string"));
+    assert!(chat_rs.contains("row_actions_visible"));
+    assert!(chat_rs.contains("set_message_actions_hovered"));
+    assert!(chat_rs.contains(".on_hover({"));
+    assert!(chat_rs.contains("set_home_reply_target"));
+    assert!(chat_rs.contains("set_watched_reply_target"));
+}

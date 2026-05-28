@@ -532,6 +532,96 @@ fn watched_send_inserts_optimistic_message_without_account_cache() {
 }
 
 #[test]
+fn watched_reply_target_attaches_to_pending_and_optimistic_send_then_clears() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state
+        .watched_channels
+        .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
+    let parent = user_message(
+        "parent-1",
+        Platform::Kick,
+        "watched-1",
+        "viewer-1",
+        Some("viewerone"),
+        "Parent Viewer",
+        "1000",
+    );
+    state.set_watched_reply_target("watched-1", parent.clone());
+
+    assert!(state.queue_watched_channel_send("watched-1", "reply body"));
+
+    let pending = state.take_pending_watched_channel_messages();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].reply_to_message_id.as_deref(), Some("parent-1"));
+    assert!(state.watched_reply_target("watched-1").is_none());
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("reply optimistic send should carry a client id");
+    let optimistic = state
+        .watched_channel_messages
+        .get("watched-1")
+        .and_then(|messages| {
+            messages
+                .iter()
+                .find(|message| message.id == *client_message_id)
+        })
+        .expect("optimistic reply should be inserted");
+    let reply = optimistic
+        .reply
+        .as_ref()
+        .expect("optimistic message should render a reply preview");
+    assert_eq!(reply.parent_message_id, "parent-1");
+    assert_eq!(reply.parent_message_text, parent.text);
+    assert_eq!(reply.parent_author.display_name, "Parent Viewer");
+}
+
+#[test]
+fn home_composer_watched_target_attaches_reply_id_when_channel_matches() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.platforms_panel.statuses.insert(
+        Platform::Kick,
+        PlatformStatusInfo {
+            platform: Platform::Kick,
+            status: PlatformStatus::Connected,
+            error: None,
+            mode: PlatformStatusMode::Authenticated,
+            channel_login: Some("satont".to_string()),
+        },
+    );
+    state
+        .watched_channels
+        .push(watched_channel("watched-home", Platform::Kick, "satont"));
+    state.platforms_panel.accounts.push(account(
+        "kick-account",
+        Platform::Kick,
+        "kick-user-1",
+        "satont",
+    ));
+    let parent = user_message(
+        "home-parent-1",
+        Platform::Kick,
+        "watched-home",
+        "viewer-1",
+        Some("viewerone"),
+        "Home Parent",
+        "1000",
+    );
+    state.set_home_reply_target(parent);
+
+    assert!(state.queue_composer_send("home reply"));
+
+    let pending = state.take_pending_watched_channel_messages();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].channel_id, "watched-home");
+    assert_eq!(
+        pending[0].reply_to_message_id.as_deref(),
+        Some("home-parent-1")
+    );
+    assert!(state.home_reply_target().is_none());
+}
+
+#[test]
 fn watched_echo_replaces_optimistic_without_duplicates_in_watched_and_home() {
     let mut state = twirchat_desktop_rust::app_state::AppState::default();
     state

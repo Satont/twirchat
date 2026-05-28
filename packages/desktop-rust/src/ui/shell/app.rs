@@ -285,6 +285,7 @@ impl TwirChatApp {
             if let Err(error) = runtime.dispatch_watched_channel_message(
                 message.channel_id.clone(),
                 message.text.clone(),
+                message.reply_to_message_id.clone(),
                 message.client_message_id.clone(),
             ) {
                 let error_message = format!(
