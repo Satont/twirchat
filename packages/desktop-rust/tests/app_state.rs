@@ -11,6 +11,7 @@ use twirchat_desktop_rust::protocol::{
     LiveStatusPlatform, NormalizedChatMessage, Platform, PlatformStatus, PlatformStatusInfo,
     PlatformStatusMode, SevenTvEmote, WatchedChannel,
 };
+use twirchat_desktop_rust::storage::Storage;
 
 #[test]
 fn changing_active_section_updates_state() {
@@ -610,10 +611,7 @@ fn watched_echo_replaces_optimistic_without_duplicates_in_watched_and_home() {
             .iter()
             .any(|message| message.id == client_message_id)
     );
-    assert_eq!(
-        state.outgoing_message_status("server-msg-1"),
-        Some(OutgoingChatMessageStatus::Sent)
-    );
+    assert_eq!(state.outgoing_message_status("server-msg-1"), None);
     assert_eq!(state.outgoing_message_status(&client_message_id), None);
 }
 
@@ -816,6 +814,146 @@ fn optimistic_send_reuses_previous_own_badges() {
 }
 
 #[test]
+fn watched_send_uses_authenticated_account_when_channel_differs() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.watched_channels.push(watched_channel(
+        "watched-other",
+        Platform::Kick,
+        "otherstreamer",
+    ));
+    state.platforms_panel.accounts.push(account(
+        "kick-account",
+        Platform::Kick,
+        "kick-user-1",
+        "satont",
+    ));
+    state.watched_channel_messages.insert(
+        "watched-other".to_string(),
+        vec![NormalizedChatMessage {
+            id: "previous-own".to_string(),
+            platform: Platform::Kick,
+            channel_id: "watched-other".to_string(),
+            author: ChatAuthor {
+                id: "kick-user-1".to_string(),
+                username: Some("satont".to_string()),
+                display_name: "Satont".to_string(),
+                color: Some("#00ff00".to_string()),
+                avatar_url: Some("https://example.test/avatar.png".to_string()),
+                badges: vec![badge("subscriber/1", Some("https://example.test/sub.png"))],
+            },
+            text: "previous".to_string(),
+            emotes: vec![],
+            timestamp: "1700000000".to_string(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        }],
+    );
+
+    assert!(state.queue_watched_channel_send("watched-other", "watched badges"));
+    let pending = state.take_pending_watched_channel_messages();
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("watched optimistic send should carry a client id");
+    let optimistic = state
+        .watched_channel_messages
+        .get("watched-other")
+        .and_then(|messages| {
+            messages
+                .iter()
+                .find(|message| message.id == *client_message_id)
+        })
+        .expect("optimistic watched message should be inserted");
+
+    assert_eq!(optimistic.author.id, "kick-user-1");
+    assert_eq!(optimistic.author.username.as_deref(), Some("satont"));
+    assert_eq!(optimistic.author.badges.len(), 1);
+    assert_eq!(optimistic.author.badges[0].id, "subscriber/1");
+    assert_eq!(
+        optimistic.author.avatar_url.as_deref(),
+        Some("https://example.test/avatar.png")
+    );
+    assert_eq!(optimistic.author.color.as_deref(), Some("#00ff00"));
+}
+
+#[test]
+fn identical_optimistic_sends_reconcile_in_order_without_stale_duplicates() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state
+        .watched_channels
+        .push(watched_channel("watched-1", Platform::Kick, "satont"));
+    state.platforms_panel.accounts.push(account(
+        "kick-account",
+        Platform::Kick,
+        "kick-user-1",
+        "satont",
+    ));
+
+    assert!(state.queue_watched_channel_send("watched-1", "same text"));
+    assert!(state.queue_watched_channel_send("watched-1", "same text"));
+    let pending = state.take_pending_watched_channel_messages();
+    let first_client_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("first optimistic send should carry a client id")
+        .clone();
+    let second_client_id = pending[1]
+        .client_message_id
+        .as_ref()
+        .expect("second optimistic send should carry a client id")
+        .clone();
+
+    for client_message_id in [&first_client_id, &second_client_id] {
+        state.apply_service_event(
+            twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
+                twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendSucceeded {
+                    channel_id: "watched-1".to_string(),
+                    client_message_id: client_message_id.clone(),
+                },
+            ),
+        );
+    }
+
+    for server_id in ["server-1", "server-2"] {
+        state.apply_service_event(
+            twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
+                twirchat_desktop_rust::services::WatchedChannelsEvent::MessageBuffered {
+                    channel_id: "watched-1".to_string(),
+                    message: Box::new(NormalizedChatMessage {
+                        id: server_id.to_string(),
+                        platform: Platform::Kick,
+                        channel_id: "watched-1".to_string(),
+                        author: ChatAuthor {
+                            id: "kick-user-1".to_string(),
+                            username: Some("satont".to_string()),
+                            display_name: "Satont".to_string(),
+                            color: None,
+                            avatar_url: None,
+                            badges: vec![],
+                        },
+                        text: "same text".to_string(),
+                        emotes: vec![],
+                        timestamp: "1700000010".to_string(),
+                        message_type: ChatMessageType::Message,
+                        reply: None,
+                    }),
+                },
+            ),
+        );
+    }
+
+    let watched = state
+        .watched_channel_messages
+        .get("watched-1")
+        .expect("watched history should exist");
+    assert_eq!(watched.len(), 2);
+    assert!(watched.iter().any(|message| message.id == "server-1"));
+    assert!(watched.iter().any(|message| message.id == "server-2"));
+    assert!(!watched.iter().any(|message| message.id == first_client_id));
+    assert!(!watched.iter().any(|message| message.id == second_client_id));
+}
+
+#[test]
 fn live_badge_image_backfills_older_messages() {
     let mut state = new_state();
     state.messages.clear();
@@ -857,8 +995,129 @@ fn live_badge_image_backfills_older_messages() {
     );
 }
 
+#[test]
+fn startup_recent_messages_backfill_badge_images_from_stored_snapshot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("startup-recent-badges.sqlite"))?;
+
+    storage
+        .messages()
+        .save(&chat_message_with_timestamp_and_badges(
+            "msg-old",
+            "fixturestreamer",
+            "old",
+            "1700000000",
+            vec![badge("vip/1", None), badge("moderator/1", None)],
+        ))?;
+    storage
+        .messages()
+        .save(&chat_message_with_timestamp_and_badges(
+            "msg-source",
+            "fixturestreamer",
+            "source",
+            "1700000001",
+            vec![badge("vip/1", Some("https://example.test/vip.png"))],
+        ))?;
+
+    let state = twirchat_desktop_rust::app_state::AppState::from_storage(&storage);
+    let old = state
+        .messages
+        .iter()
+        .find(|message| message.id == "msg-old")
+        .expect("stored old message should load on startup");
+
+    assert_eq!(
+        badge_image_url(old, "vip/1"),
+        Some("https://example.test/vip.png"),
+        "startup-loaded messages should reuse stored badge image URLs before any live message arrives"
+    );
+    assert_eq!(
+        badge_image_url(old, "moderator/1"),
+        None,
+        "badges without any stored image source should keep the text fallback"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn startup_watched_history_backfills_badge_images_from_stored_snapshot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("startup-watched-badges.sqlite"))?;
+    let channel = storage.watched_channels().upsert(
+        Platform::Twitch,
+        "FixtureStreamer",
+        "Fixture Streamer",
+    )?;
+
+    storage.watched_history().set(
+        &channel.id,
+        &[
+            chat_message_with_timestamp_and_badges(
+                "watched-old",
+                "fixturestreamer",
+                "old",
+                "1700000000",
+                vec![badge("moderator/1", None)],
+            ),
+            chat_message_with_timestamp_and_badges(
+                "watched-source",
+                "fixturestreamer",
+                "source",
+                "1700000001",
+                vec![badge(
+                    "moderator/1",
+                    Some("https://example.test/moderator.png"),
+                )],
+            ),
+        ],
+    )?;
+
+    let state = twirchat_desktop_rust::app_state::AppState::from_storage(&storage);
+    let watched = state
+        .watched_channel_messages
+        .get(&channel.id)
+        .expect("stored watched history should load on startup");
+    let old = watched
+        .iter()
+        .find(|message| message.id == "watched-old")
+        .expect("stored watched message should remain");
+
+    assert_eq!(
+        badge_image_url(old, "moderator/1"),
+        Some("https://example.test/moderator.png"),
+        "startup-loaded watched history should render badge images before a new live message arrives"
+    );
+
+    Ok(())
+}
+
 fn chat_message(id: &str, channel_id: &str, text: &str) -> NormalizedChatMessage {
     chat_message_with_badges(id, channel_id, text, vec![], false)
+}
+
+fn chat_message_with_timestamp_and_badges(
+    id: &str,
+    channel_id: &str,
+    text: &str,
+    timestamp: &str,
+    badges: Vec<Badge>,
+) -> NormalizedChatMessage {
+    NormalizedChatMessage {
+        timestamp: timestamp.to_string(),
+        ..chat_message_with_badges(id, channel_id, text, badges, false)
+    }
+}
+
+fn badge_image_url<'a>(message: &'a NormalizedChatMessage, id: &str) -> Option<&'a str> {
+    message
+        .author
+        .badges
+        .iter()
+        .find(|badge| badge.id == id)
+        .and_then(|badge| badge.image_url.as_deref())
 }
 
 fn chat_message_with_badges(

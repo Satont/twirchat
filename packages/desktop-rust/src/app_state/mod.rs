@@ -239,7 +239,8 @@ impl AppState {
     }
 
     fn load_storage_snapshot(&mut self, storage: &Storage) {
-        if let Ok(messages) = storage.messages().get_recent(Some(50)) {
+        if let Ok(mut messages) = storage.messages().get_recent(Some(50)) {
+            hydrate_badge_images_from_snapshot(&mut messages);
             self.messages = messages;
         }
         if let Ok(aliases) = storage.user_aliases().find_all() {
@@ -275,9 +276,10 @@ impl AppState {
             self.platforms_panel.joined_channels = joined_channels;
         }
         for channel in &self.watched_channels {
-            if let Ok(messages) = storage.watched_history().get(&channel.id)
+            if let Ok(mut messages) = storage.watched_history().get(&channel.id)
                 && !messages.is_empty()
             {
+                hydrate_badge_images_from_snapshot(&mut messages);
                 if self.is_home_account_channel(channel) {
                     self.messages.extend(messages.iter().cloned());
                 }
@@ -303,6 +305,7 @@ impl AppState {
         let mut seen_ids = BTreeSet::new();
         self.messages
             .retain(|message| seen_ids.insert(message.id.clone()));
+        hydrate_badge_images_from_snapshot(&mut self.messages);
         self.messages
             .sort_by_key(|message| message.timestamp.clone());
     }
@@ -1865,10 +1868,19 @@ impl AppState {
             .cloned();
 
         let self_account = channel.as_ref().and_then(|channel| {
-            self.platforms_panel.accounts.iter().find(|account| {
-                account.platform == channel.platform
-                    && account.username.eq_ignore_ascii_case(&channel.channel_slug)
-            })
+            self.platforms_panel
+                .accounts
+                .iter()
+                .find(|account| {
+                    account.platform == channel.platform
+                        && account.username.eq_ignore_ascii_case(&channel.channel_slug)
+                })
+                .or_else(|| {
+                    self.platforms_panel
+                        .accounts
+                        .iter()
+                        .find(|account| account.platform == channel.platform)
+                })
         });
 
         let fallback_display_name = channel
@@ -1956,10 +1968,20 @@ impl AppState {
             return false;
         };
 
-        let self_account = self.platforms_panel.accounts.iter().find(|account| {
-            account.platform == channel.platform
-                && account.username.eq_ignore_ascii_case(&channel.channel_slug)
-        });
+        let self_account = self
+            .platforms_panel
+            .accounts
+            .iter()
+            .find(|account| {
+                account.platform == channel.platform
+                    && account.username.eq_ignore_ascii_case(&channel.channel_slug)
+            })
+            .or_else(|| {
+                self.platforms_panel
+                    .accounts
+                    .iter()
+                    .find(|account| account.platform == channel.platform)
+            });
 
         let optimistic_id = self
             .watched_channel_messages
@@ -1969,6 +1991,7 @@ impl AppState {
                     if candidate.channel_id != channel_id
                         || candidate.platform != message.platform
                         || candidate.text != message.text
+                        || !candidate.id.starts_with("local:")
                     {
                         return None;
                     }
@@ -2025,8 +2048,6 @@ impl AppState {
         }
 
         self.outgoing_message_statuses.remove(&optimistic_id);
-        self.outgoing_message_statuses
-            .insert(message.id.clone(), OutgoingChatMessageStatus::Sent);
         true
     }
 
@@ -2246,6 +2267,24 @@ fn backfill_badge_images(messages: &mut [NormalizedChatMessage], source: &Normal
                 }
             }
         }
+    }
+}
+
+fn hydrate_badge_images_from_snapshot(messages: &mut [NormalizedChatMessage]) {
+    let sources = messages
+        .iter()
+        .filter(|message| {
+            message
+                .author
+                .badges
+                .iter()
+                .any(|badge| badge.image_url.is_some())
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    for source in &sources {
+        backfill_badge_images(messages, source);
     }
 }
 
