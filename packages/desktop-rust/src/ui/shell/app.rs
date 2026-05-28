@@ -54,6 +54,7 @@ pub struct TwirChatApp {
     chat_list_state: ListState,
     settings_scroll_handle: ScrollHandle,
     platforms_scroll_handle: ScrollHandle,
+    user_card_scroll_handle: ScrollHandle,
     last_chat_message_count: usize,
     chat_scroll_paused: bool,
     tab_selector_open: bool,
@@ -192,6 +193,7 @@ impl TwirChatApp {
             chat_list_state,
             settings_scroll_handle: ScrollHandle::new(),
             platforms_scroll_handle: ScrollHandle::new(),
+            user_card_scroll_handle: ScrollHandle::new(),
             last_chat_message_count: 0,
             chat_scroll_paused: false,
             tab_selector_open: false,
@@ -268,15 +270,20 @@ impl TwirChatApp {
             .update(cx, |state, _| state.take_pending_watched_channel_messages());
 
         for message in pending {
-            if let Err(error) = runtime
-                .dispatch_watched_channel_message(message.channel_id.clone(), message.text.clone())
-            {
+            if let Err(error) = runtime.dispatch_watched_channel_message(
+                message.channel_id.clone(),
+                message.text.clone(),
+                message.client_message_id.clone(),
+            ) {
                 let error_message = format!(
                     "failed to send watched-channel message for {}: {}",
                     message.channel_id, error
                 );
                 self.state.update(cx, |state, cx| {
-                    state.record_runtime_failure(error_message);
+                    state.mark_watched_send_dispatch_failed(
+                        message.client_message_id.as_deref(),
+                        error_message,
+                    );
                     cx.notify();
                 });
             }
@@ -954,7 +961,8 @@ impl TwirChatApp {
             target.display_name.clone(),
         )
         .metadata_state(metadata_state_from_app_state(&state.user_card.metadata))
-        .history_state(history_state_from_app_state(state));
+        .history_state(history_state_from_app_state(state))
+        .body_scroll_handle(&self.user_card_scroll_handle);
 
         if let Some(username) = &target.username {
             card = card.username(username.clone());
@@ -1001,16 +1009,21 @@ impl TwirChatApp {
             });
 
         div()
+            .id("user-card-modal-overlay")
             .absolute()
             .top(px(0.0))
             .right(px(0.0))
             .bottom(px(0.0))
             .left(px(0.0))
+            .occlude()
             .bg(gpui::rgba(0x00000099))
             .p(px(24.0))
             .flex()
             .items_center()
             .justify_center()
+            .on_scroll_wheel(|_event, _window, cx| {
+                cx.stop_propagation();
+            })
             .child(
                 div()
                     .relative()

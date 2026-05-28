@@ -170,6 +170,7 @@ impl AppRuntime {
         &self,
         channel_id: String,
         text: String,
+        client_message_id: Option<String>,
     ) -> ServiceResult<()> {
         self.supervisor.dispatch(
             ServiceKind::WatchedChannels,
@@ -177,6 +178,7 @@ impl AppRuntime {
                 channel_id,
                 text,
                 reply_to_message_id: None,
+                client_message_id,
             }),
         )
     }

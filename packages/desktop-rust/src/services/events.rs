@@ -222,6 +222,7 @@ pub enum WatchedChannelsEvent {
     },
     SendRequested {
         channel_id: String,
+        client_message_id: Option<String>,
     },
     PollRequested,
     MessageBuffered {
@@ -240,6 +241,15 @@ pub enum WatchedChannelsEvent {
         channel_id: String,
         platform: Platform,
         message: String,
+    },
+    MessageSendSucceeded {
+        channel_id: String,
+        client_message_id: String,
+    },
+    MessageSendFailed {
+        channel_id: String,
+        client_message_id: String,
+        error: String,
     },
 }
 

@@ -72,6 +72,7 @@ pub enum WatchedChannelsCommand {
         channel_id: String,
         text: String,
         reply_to_message_id: Option<String>,
+        client_message_id: Option<String>,
     },
     ResubscribeSevenTv,
     Poll,

@@ -1,4 +1,4 @@
-use crate::app_state::{AppState, AppStateActions};
+use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
 use crate::protocol::types::{
     LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection, WatchedChannel,
     WatchedChannelsLayout,
@@ -475,7 +475,8 @@ fn watched_message_row(
     window: &mut gpui::Window,
     cx: &mut gpui::Context<crate::app::TwirChatApp>,
 ) -> gpui::AnyElement {
-    message_row(
+    let status = state_entity.read(cx).outgoing_message_status(&message.id);
+    let row = message_row(
         message,
         settings,
         &[],
@@ -483,7 +484,44 @@ fn watched_message_row(
         window,
         cx,
         MessageRowOptions::watched(),
-    )
+    );
+
+    match status {
+        Some(OutgoingChatMessageStatus::Pending) => div()
+            .w_full()
+            .opacity(0.58)
+            .child(row)
+            .child(outgoing_status_label(
+                "sending...",
+                rgba(0xffffff14),
+                theme::text_muted(),
+            ))
+            .into_any_element(),
+        Some(OutgoingChatMessageStatus::Error) => div()
+            .w_full()
+            .child(row)
+            .child(outgoing_status_label(
+                "failed",
+                rgba(0xef44442a),
+                rgb(0xef4444),
+            ))
+            .into_any_element(),
+        Some(OutgoingChatMessageStatus::Sent) | None => row,
+    }
+}
+
+fn outgoing_status_label(label: &'static str, bg: gpui::Rgba, color: gpui::Rgba) -> Div {
+    div()
+        .ml(px(14.0))
+        .mt(px(-2.0))
+        .mb(px(4.0))
+        .rounded_sm()
+        .px(px(6.0))
+        .py(px(1.0))
+        .bg(bg)
+        .text_color(color)
+        .text_size(px(10.0))
+        .child(label)
 }
 
 fn watched_composer(

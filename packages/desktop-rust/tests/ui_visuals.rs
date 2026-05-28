@@ -44,6 +44,36 @@ fn visual_user_card_responsiveness() {
     assert!(!user_card_rs.contains(".h(px(360.0))"));
     assert!(user_card_rs.contains("user-card-body-scroll"));
     assert!(user_card_rs.contains(".overflow_y_scroll()"));
+    assert!(user_card_rs.contains(".track_scroll(&body_scroll_handle)"));
+    assert!(user_card_rs.contains(".vertical_scrollbar_for(&body_scroll_handle, window, cx)"));
+}
+
+#[test]
+fn visual_user_card_scroll_containment() {
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
+    let user_card_rs =
+        fs::read_to_string("src/ui/components/user_card.rs").expect("should read user_card.rs");
+
+    let overlay_start = app_rs
+        .find(".id(\"user-card-modal-overlay\")")
+        .expect("user-card modal overlay should have a stable id");
+    let close_button_start = app_rs
+        .find(".id(\"user-card-close\")")
+        .expect("user-card modal should keep the close button");
+    let overlay_block = &app_rs[overlay_start..close_button_start];
+
+    assert!(overlay_block.contains(".occlude()"));
+    assert!(overlay_block.contains(".on_scroll_wheel(|_event, _window, cx|"));
+    assert!(overlay_block.contains("cx.stop_propagation();"));
+
+    assert!(app_rs.contains("user_card_scroll_handle: ScrollHandle"));
+    assert!(app_rs.contains("user_card_scroll_handle: ScrollHandle::new()"));
+    assert!(app_rs.contains(".body_scroll_handle(&self.user_card_scroll_handle)"));
+
+    assert!(user_card_rs.contains("user-card-body-scroll"));
+    assert!(user_card_rs.contains(".overflow_y_scroll()"));
+    assert!(user_card_rs.contains(".track_scroll(&body_scroll_handle)"));
+    assert!(user_card_rs.contains(".vertical_scrollbar_for(&body_scroll_handle, window, cx)"));
 }
 
 #[test]
@@ -169,4 +199,13 @@ fn watched_mention_autocomplete_matches_visible_panel_fallback_scope() {
     assert!(app_rs.contains("eq_ignore_ascii_case(&channel.channel_slug)"));
     assert!(app_rs.contains("user_card_alias_input"));
     assert!(app_rs.contains("is_focused(window)"));
+}
+
+#[test]
+fn home_chat_renders_outgoing_send_status() {
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+
+    assert!(chat_rs.contains("outgoing_message_status(&message.id)"));
+    assert!(chat_rs.contains("sending..."));
+    assert!(chat_rs.contains("failed"));
 }

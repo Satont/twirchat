@@ -31,6 +31,14 @@ pub struct PendingWatchedChannelAdd {
 pub struct PendingWatchedChannelMessage {
     pub channel_id: String,
     pub text: String,
+    pub client_message_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutgoingChatMessageStatus {
+    Pending,
+    Sent,
+    Error,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,6 +156,7 @@ pub struct AppState {
     home_channel_statuses: BTreeMap<String, ChannelStatus>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_channel_messages: BTreeMap<String, Vec<NormalizedChatMessage>>,
+    outgoing_message_statuses: BTreeMap<String, OutgoingChatMessageStatus>,
     pub watched_layouts: BTreeMap<String, WatchedChannelsLayout>,
     pub events: Vec<crate::protocol::types::NormalizedEvent>,
     hotkey_manager: HotkeyManager,
@@ -163,6 +172,7 @@ pub struct AppState {
     pending_watched_channel_messages: Vec<PendingWatchedChannelMessage>,
     pending_watched_channel_removals: Vec<PendingWatchedChannelRemove>,
     pending_backend_messages: Vec<crate::protocol::messages::DesktopToBackendMessage>,
+    next_outgoing_message_sequence: u64,
 }
 
 impl Default for AppState {
@@ -193,6 +203,7 @@ impl Default for AppState {
             home_channel_statuses: BTreeMap::new(),
             watched_channel_statuses: BTreeMap::new(),
             watched_channel_messages: BTreeMap::new(),
+            outgoing_message_statuses: BTreeMap::new(),
             watched_layouts: BTreeMap::new(),
             events: vec![],
             hotkey_manager: HotkeyManager::new(),
@@ -208,6 +219,7 @@ impl Default for AppState {
             pending_watched_channel_messages: Vec::new(),
             pending_watched_channel_removals: Vec::new(),
             pending_backend_messages: Vec::new(),
+            next_outgoing_message_sequence: 0,
         }
     }
 }
@@ -353,6 +365,10 @@ impl AppState {
 
     pub fn watched_layout(&self, tab_id: &str) -> Option<&WatchedChannelsLayout> {
         self.watched_layouts.get(tab_id)
+    }
+
+    pub fn outgoing_message_status(&self, message_id: &str) -> Option<OutgoingChatMessageStatus> {
+        self.outgoing_message_statuses.get(message_id).copied()
     }
 
     pub fn visible_watched_channels(&self) -> Vec<&WatchedChannel> {
@@ -832,6 +848,9 @@ impl AppState {
                     "[watched/live] app_state accepted {:?} message id={} channel={}",
                     message.platform, message.id, message.channel_id
                 );
+                if self.reconcile_outgoing_echo(&channel_id, &message) {
+                    return;
+                }
                 if self.is_home_account_channel_id(&channel_id) {
                     self.messages.push(message.clone());
                 }
@@ -861,6 +880,18 @@ impl AppState {
             }
             WatchedChannelsEvent::BackendMessagePlanned { message, .. } => {
                 self.pending_backend_messages.push(message);
+            }
+            WatchedChannelsEvent::MessageSendSucceeded {
+                client_message_id, ..
+            } => {
+                self.mark_outgoing_message_sent(&client_message_id);
+            }
+            WatchedChannelsEvent::MessageSendFailed {
+                client_message_id,
+                error,
+                ..
+            } => {
+                self.mark_outgoing_message_error(&client_message_id, error);
             }
             WatchedChannelsEvent::LoadRequested
             | WatchedChannelsEvent::AddRequested { .. }
@@ -953,11 +984,11 @@ impl AppState {
                 channel_id,
                 message,
             } => {
-                let text = seven_tv_system_message_text(&message);
+                let (text, preview_emotes) = seven_tv_system_message_data(&message);
                 eprintln!(
                     "[backend/7tv] system message platform={platform:?} channel={channel_id}: {text}"
                 );
-                self.push_seven_tv_system_message(platform, &channel_id, text);
+                self.push_seven_tv_system_message(platform, &channel_id, text, preview_emotes);
             }
             crate::protocol::messages::BackendToDesktopMessage::ChatEvent { data } => {
                 if let Ok(event) =
@@ -1006,7 +1037,8 @@ impl AppState {
 
     fn rehydrate_channel_seven_tv_emotes(&mut self, platform: Platform, channel_id: &str) {
         for message in &mut self.messages {
-            if message.platform != platform
+            if message.message_type == ChatMessageType::System
+                || message.platform != platform
                 || !message_matches_seven_tv_channel(
                     &self.watched_channels,
                     message.platform,
@@ -1025,7 +1057,10 @@ impl AppState {
 
         for messages in self.watched_channel_messages.values_mut() {
             for message in messages {
-                if message.platform != platform || message.channel_id != channel_id {
+                if message.message_type == ChatMessageType::System
+                    || message.platform != platform
+                    || message.channel_id != channel_id
+                {
                     continue;
                 }
                 let mut base = message.clone();
@@ -1054,6 +1089,7 @@ impl AppState {
         platform: Platform,
         seven_tv_channel_id: &str,
         text: String,
+        preview_emotes: Vec<crate::protocol::types::Emote>,
     ) {
         let timestamp = crate::storage::now_millis().to_string();
         let message = NormalizedChatMessage {
@@ -1069,7 +1105,7 @@ impl AppState {
                 badges: Vec::<Badge>::new(),
             },
             text,
-            emotes: Vec::new(),
+            emotes: preview_emotes,
             timestamp,
             message_type: ChatMessageType::System,
             reply: None,
@@ -1421,10 +1457,13 @@ impl AppState {
                 continue;
             }
             if let Some(watched_channel_id) = &target.watched_channel_id {
+                let client_message_id =
+                    self.insert_optimistic_watched_message(watched_channel_id, text);
                 self.pending_watched_channel_messages
                     .push(PendingWatchedChannelMessage {
                         channel_id: watched_channel_id.clone(),
                         text: text.to_string(),
+                        client_message_id: Some(client_message_id),
                     });
             } else {
                 self.pending_backend_messages.push(
@@ -1451,10 +1490,12 @@ impl AppState {
             return false;
         }
 
+        let client_message_id = self.insert_optimistic_watched_message(channel_id, text);
         self.pending_watched_channel_messages
             .push(PendingWatchedChannelMessage {
                 channel_id: channel_id.to_string(),
                 text: text.to_string(),
+                client_message_id: Some(client_message_id),
             });
         true
     }
@@ -1760,6 +1801,18 @@ impl AppState {
         std::mem::take(&mut self.pending_backend_messages)
     }
 
+    pub fn mark_watched_send_dispatch_failed(
+        &mut self,
+        client_message_id: Option<&str>,
+        error: String,
+    ) {
+        if let Some(client_message_id) = client_message_id {
+            self.mark_outgoing_message_error(client_message_id, error);
+        } else {
+            self.runtime_errors.push(error);
+        }
+    }
+
     fn queue_watched_channel_add(
         &mut self,
         platform: Platform,
@@ -1795,6 +1848,199 @@ impl AppState {
 
         self.pending_watched_channel_removals
             .push(PendingWatchedChannelRemove { channel_id });
+    }
+
+    fn insert_optimistic_watched_message(&mut self, channel_id: &str, text: &str) -> String {
+        self.next_outgoing_message_sequence = self.next_outgoing_message_sequence.saturating_add(1);
+        let client_message_id = format!(
+            "local:{}:{}",
+            crate::storage::now_millis(),
+            self.next_outgoing_message_sequence
+        );
+
+        let channel = self
+            .watched_channels
+            .iter()
+            .find(|channel| channel.id == channel_id)
+            .cloned();
+
+        let self_account = channel.as_ref().and_then(|channel| {
+            self.platforms_panel.accounts.iter().find(|account| {
+                account.platform == channel.platform
+                    && account.username.eq_ignore_ascii_case(&channel.channel_slug)
+            })
+        });
+
+        let fallback_display_name = channel
+            .as_ref()
+            .map(|channel| channel.display_name.clone())
+            .unwrap_or_else(|| "You".to_string());
+
+        let platform = channel
+            .as_ref()
+            .map(|channel| channel.platform)
+            .unwrap_or(Platform::Twitch);
+
+        let mut optimistic_message = NormalizedChatMessage {
+            id: client_message_id.clone(),
+            platform,
+            channel_id: channel_id.to_string(),
+            author: ChatAuthor {
+                id: self_account
+                    .map(|account| account.platform_user_id.clone())
+                    .filter(|id| !id.is_empty())
+                    .unwrap_or_else(|| format!("local-self-{platform:?}").to_lowercase()),
+                username: self_account.map(|account| account.username.clone()),
+                display_name: self_account
+                    .map(|account| account.display_name.clone())
+                    .unwrap_or(fallback_display_name),
+                color: None,
+                avatar_url: self_account.and_then(|account| account.avatar_url.clone()),
+                badges: Vec::new(),
+            },
+            text: text.to_string(),
+            emotes: Vec::new(),
+            timestamp: crate::storage::now_millis().to_string(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        };
+
+        if let Some(account) = self_account
+            && let Some(history) = self.watched_channel_messages.get(channel_id)
+            && let Some(cached_self) = history.iter().rev().find(|message| {
+                message.platform == account.platform
+                    && message
+                        .author
+                        .id
+                        .eq_ignore_ascii_case(&account.platform_user_id)
+            })
+        {
+            optimistic_message.author.badges = cached_self.author.badges.clone();
+            if optimistic_message.author.avatar_url.is_none() {
+                optimistic_message.author.avatar_url = cached_self.author.avatar_url.clone();
+            }
+            if optimistic_message.author.color.is_none() {
+                optimistic_message.author.color = cached_self.author.color.clone();
+            }
+        }
+
+        if let Some(history) = self.watched_channel_messages.get_mut(channel_id) {
+            history.push(optimistic_message.clone());
+        } else {
+            self.watched_channel_messages
+                .insert(channel_id.to_string(), vec![optimistic_message.clone()]);
+        }
+
+        if self.is_home_account_channel_id(channel_id) {
+            self.messages.push(optimistic_message);
+        }
+
+        self.outgoing_message_statuses.insert(
+            client_message_id.clone(),
+            OutgoingChatMessageStatus::Pending,
+        );
+        client_message_id
+    }
+
+    fn reconcile_outgoing_echo(
+        &mut self,
+        channel_id: &str,
+        message: &NormalizedChatMessage,
+    ) -> bool {
+        let Some(channel) = self
+            .watched_channels
+            .iter()
+            .find(|channel| channel.id == channel_id)
+            .cloned()
+        else {
+            return false;
+        };
+
+        let self_account = self.platforms_panel.accounts.iter().find(|account| {
+            account.platform == channel.platform
+                && account.username.eq_ignore_ascii_case(&channel.channel_slug)
+        });
+
+        let optimistic_id = self
+            .watched_channel_messages
+            .get(channel_id)
+            .and_then(|messages| {
+                messages.iter().find_map(|candidate| {
+                    if candidate.channel_id != channel_id
+                        || candidate.platform != message.platform
+                        || candidate.text != message.text
+                    {
+                        return None;
+                    }
+
+                    let status = self.outgoing_message_statuses.get(&candidate.id)?;
+                    if !matches!(
+                        status,
+                        OutgoingChatMessageStatus::Pending | OutgoingChatMessageStatus::Sent
+                    ) {
+                        return None;
+                    }
+
+                    if let Some(account) = self_account
+                        && !message
+                            .author
+                            .id
+                            .eq_ignore_ascii_case(&account.platform_user_id)
+                    {
+                        return None;
+                    }
+
+                    Some(candidate.id.clone())
+                })
+            });
+
+        let Some(optimistic_id) = optimistic_id else {
+            return false;
+        };
+
+        if let Some(history) = self.watched_channel_messages.get_mut(channel_id)
+            && let Some(position) = history.iter().position(|entry| entry.id == optimistic_id)
+        {
+            if history.iter().any(|entry| entry.id == message.id) {
+                history.remove(position);
+            } else {
+                history[position] = message.clone();
+            }
+        }
+
+        if self.is_home_account_channel_id(channel_id) {
+            if let Some(position) = self
+                .messages
+                .iter()
+                .position(|entry| entry.id == optimistic_id)
+            {
+                if self.messages.iter().any(|entry| entry.id == message.id) {
+                    self.messages.remove(position);
+                } else {
+                    self.messages[position] = message.clone();
+                }
+            } else if !self.messages.iter().any(|entry| entry.id == message.id) {
+                self.messages.push(message.clone());
+            }
+        }
+
+        self.outgoing_message_statuses.remove(&optimistic_id);
+        self.outgoing_message_statuses
+            .insert(message.id.clone(), OutgoingChatMessageStatus::Sent);
+        true
+    }
+
+    fn mark_outgoing_message_sent(&mut self, client_message_id: &str) {
+        if let Some(status) = self.outgoing_message_statuses.get_mut(client_message_id) {
+            *status = OutgoingChatMessageStatus::Sent;
+        }
+    }
+
+    fn mark_outgoing_message_error(&mut self, client_message_id: &str, error: String) {
+        if let Some(status) = self.outgoing_message_statuses.get_mut(client_message_id) {
+            *status = OutgoingChatMessageStatus::Error;
+        }
+        self.runtime_errors.push(error);
     }
 
     fn is_home_account_channel(&self, channel: &WatchedChannel) -> bool {
@@ -2014,21 +2260,41 @@ fn map_backend_seven_tv_emote(emote: crate::protocol::messages::SevenTvEmote) ->
     }
 }
 
-fn seven_tv_system_message_text(
+fn seven_tv_system_message_data(
     message: &crate::protocol::messages::SevenTvSystemMessage,
-) -> String {
-    match message {
+) -> (String, Vec<crate::protocol::types::Emote>) {
+    let preview_emotes = match message {
+        crate::protocol::messages::SevenTvSystemMessage::Added { emote, .. }
+        | crate::protocol::messages::SevenTvSystemMessage::Removed { emote, .. }
+        | crate::protocol::messages::SevenTvSystemMessage::Updated { emote, .. } => {
+            vec![crate::protocol::types::Emote {
+                id: emote.id.clone(),
+                name: emote.alias.clone(),
+                image_url: emote.image_url.clone(),
+                positions: Vec::new(),
+                aspect_ratio: Some(emote.aspect_ratio),
+            }]
+        }
+        _ => Vec::new(),
+    };
+
+    let text = match message {
         crate::protocol::messages::SevenTvSystemMessage::Added { emote, .. } => {
-            format!("7TV emote added: {}", emote.alias)
+            format!("Emote {} added to the channel", emote.alias)
         }
         crate::protocol::messages::SevenTvSystemMessage::Removed { emote, .. } => {
-            format!("7TV emote removed: {}", emote.alias)
+            format!("Emote {} removed from the channel", emote.alias)
         }
         crate::protocol::messages::SevenTvSystemMessage::Updated {
             emote, old_alias, ..
         } => old_alias.as_ref().map_or_else(
-            || format!("7TV emote updated: {}", emote.alias),
-            |old_alias| format!("7TV emote updated: {old_alias} → {}", emote.alias),
+            || format!("Emote {} updated in the channel", emote.alias),
+            |old_alias| {
+                format!(
+                    "Emote {} updated in the channel (was {old_alias})",
+                    emote.alias
+                )
+            },
         ),
         crate::protocol::messages::SevenTvSystemMessage::SetChanged { set_name } => {
             format!("7TV emote set changed: {set_name}")
@@ -2039,7 +2305,9 @@ fn seven_tv_system_message_text(
         crate::protocol::messages::SevenTvSystemMessage::SetDeleted { set_name } => {
             format!("7TV emote set deleted: {set_name}")
         }
-    }
+    };
+
+    (text, preview_emotes)
 }
 
 fn message_matches_seven_tv_channel(

@@ -349,7 +349,31 @@ fn handle_watched_command(
             channel_id,
             text,
             reply_to_message_id,
-        } => runtime.send_message(&channel_id, &text, reply_to_message_id.as_deref()),
+            client_message_id,
+        } => {
+            let send_result =
+                runtime.send_message(&channel_id, &text, reply_to_message_id.as_deref());
+            if let Some(client_message_id) = client_message_id {
+                match &send_result {
+                    Ok(()) => publish_watched_event(
+                        events,
+                        WatchedChannelsEvent::MessageSendSucceeded {
+                            channel_id: channel_id.clone(),
+                            client_message_id,
+                        },
+                    ),
+                    Err(error) => publish_watched_event(
+                        events,
+                        WatchedChannelsEvent::MessageSendFailed {
+                            channel_id: channel_id.clone(),
+                            client_message_id,
+                            error: error.to_string(),
+                        },
+                    ),
+                }
+            }
+            send_result
+        }
         WatchedChannelsCommand::ResubscribeSevenTv => {
             runtime.resubscribe_seven_tv();
             Ok(())

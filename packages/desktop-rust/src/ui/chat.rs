@@ -1,8 +1,8 @@
-use crate::app_state::{AppState, AppStateActions};
+use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
 use crate::chat::{MentionSuggestion, apply_alias};
 use crate::protocol::types::{
-    Account, AppSettings, ChatMessageType, ChatTheme, FontFamilyChoice, NormalizedChatMessage,
-    Platform, PlatformStatus,
+    Account, AppSettings, ChatMessageType, ChatTheme, Emote, FontFamilyChoice,
+    NormalizedChatMessage, Platform, PlatformStatus,
 };
 use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
 use crate::ui::components::input::Input;
@@ -92,7 +92,7 @@ pub(crate) fn panel(
                 .child({
                     let state_entity = props.state_entity.clone();
                     list(props.scroll_ui.list_state.clone(), move |ix, window, cx| {
-                        message_row(
+                        outgoing_message_row(
                             &messages[ix],
                             &settings,
                             &accounts,
@@ -999,6 +999,119 @@ struct MessageTypography {
     font_family: FontFamilyChoice,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SystemMessageAction {
+    Added,
+    Removed,
+    Updated,
+    Neutral,
+}
+
+struct SystemMessageRenderParts {
+    action: SystemMessageAction,
+    text_parts: Vec<SelectableMessagePart>,
+}
+
+fn system_message_action(text: &str) -> SystemMessageAction {
+    if text.contains(" added ") {
+        SystemMessageAction::Added
+    } else if text.contains(" removed ") {
+        SystemMessageAction::Removed
+    } else if text.contains(" updated ") {
+        SystemMessageAction::Updated
+    } else {
+        SystemMessageAction::Neutral
+    }
+}
+
+fn system_action_icon(action: SystemMessageAction) -> &'static str {
+    match action {
+        SystemMessageAction::Added => "+",
+        SystemMessageAction::Removed => "−",
+        SystemMessageAction::Updated | SystemMessageAction::Neutral => "~",
+    }
+}
+
+fn system_message_render_parts(message: &NormalizedChatMessage) -> SystemMessageRenderParts {
+    let preview_emote = message
+        .emotes
+        .iter()
+        .find(|emote| emote.positions.is_empty())
+        .cloned();
+
+    let Some(preview_emote) = preview_emote else {
+        return SystemMessageRenderParts {
+            action: system_message_action(&message.text),
+            text_parts: vec![SelectableMessagePart::Text {
+                text: message.text.clone().into(),
+                source_range: 0..message.text.len(),
+                is_link: false,
+            }],
+        };
+    };
+
+    let alias_start = message.text.find(&preview_emote.name);
+    let mut text_parts = Vec::new();
+
+    if let Some(start) = alias_start {
+        if start > 0
+            && let Some(prefix) = message.text.get(0..start)
+        {
+            text_parts.push(SelectableMessagePart::Text {
+                text: prefix.to_string().into(),
+                source_range: 0..start,
+                is_link: false,
+            });
+        }
+
+        text_parts.push(preview_emote_part(message, preview_emote, 0));
+
+        if let Some(rest) = message.text.get(start..message.text.len()) {
+            text_parts.push(SelectableMessagePart::Text {
+                text: rest.to_string().into(),
+                source_range: start..message.text.len(),
+                is_link: false,
+            });
+        }
+    } else {
+        text_parts.push(SelectableMessagePart::Text {
+            text: message.text.clone().into(),
+            source_range: 0..message.text.len(),
+            is_link: false,
+        });
+        text_parts.push(preview_emote_part(message, preview_emote, 0));
+    }
+
+    SystemMessageRenderParts {
+        action: system_message_action(&message.text),
+        text_parts,
+    }
+}
+
+fn preview_emote_part(
+    message: &NormalizedChatMessage,
+    emote: Emote,
+    part_index: usize,
+) -> SelectableMessagePart {
+    let message_id = message.id.clone();
+    SelectableMessagePart::Custom(std::sync::Arc::new(move |window, cx| {
+        let size = 24.0;
+        div()
+            .mx(px(2.0))
+            .h(px(size))
+            .min_w(px(size))
+            .max_w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
+            .child(crate::ui::components::animated_emote(
+                format!("sys-emote-{message_id}-{}-{part_index}", emote.id),
+                emote.image_url.clone(),
+                emote.name.clone(),
+                window,
+                cx,
+            ))
+            .into_any_element()
+    }))
+}
+
 impl MessageTypography {
     fn from_settings(settings: &AppSettings) -> Self {
         Self {
@@ -1272,6 +1385,14 @@ pub(crate) fn message_row(
     let v_pad = if is_compact { 1.0 } else { 2.0 };
 
     if message.message_type == ChatMessageType::System {
+        let system_parts = system_message_render_parts(message);
+        let (row_bg, icon_bg, icon_color) = match system_parts.action {
+            SystemMessageAction::Added => (0x22c55e12, 0x22c55e33, 0x22c55e),
+            SystemMessageAction::Removed => (0xef444414, 0xef444433, 0xef4444),
+            SystemMessageAction::Updated => (0xf59e0b12, 0xf59e0b33, 0xf59e0b),
+            SystemMessageAction::Neutral => (0x00000000, 0x4ade8026, 0x4ade80),
+        };
+
         return div()
             .id(options.message_row_id(&message.id))
             .w_full()
@@ -1281,35 +1402,37 @@ pub(crate) fn message_row(
             .flex_row()
             .items_center()
             .gap(px(8.0))
+            .when(row_bg != 0, |row| row.bg(rgba(row_bg)))
             .child(
                 div()
                     .w(px(17.0))
                     .h(px(17.0))
                     .rounded_full()
-                    .bg(rgba(0x4ade8026)) // 0.15 * 255 = ~38 = 26
-                    .text_color(rgb(0x4ade80))
+                    .bg(rgba(icon_bg))
+                    .text_color(rgb(icon_color))
                     .text_size(px(12.0))
                     .flex()
                     .items_center()
                     .justify_center()
                     .font_weight(gpui::FontWeight::BOLD)
-                    .child("~"),
+                    .child(system_action_icon(system_parts.action)),
             )
             .child(
                 div()
                     .flex_1()
+                    .min_w(px(0.0))
                     .text_size(px(typography.font_size))
                     .text_color(theme::text_muted())
                     .font(theme::app_font(typography.font_family))
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .items_center()
                     .child(selectable_message(
                         options.selectable_key(&message.id),
                         options.selectable_key(&message.id),
                         message,
-                        vec![SelectableMessagePart::Text {
-                            text: message.text.clone().into(),
-                            source_range: 0..message.text.len(),
-                            is_link: false,
-                        }],
+                        system_parts.text_parts,
                         typography,
                         window,
                         cx,
@@ -1543,6 +1666,64 @@ pub(crate) fn message_row(
                 )),
         )
         .into_any_element()
+}
+
+fn outgoing_message_row(
+    message: &NormalizedChatMessage,
+    settings: &AppSettings,
+    accounts: &[Account],
+    state_entity: Entity<AppState>,
+    window: &mut Window,
+    cx: &mut App,
+    options: MessageRowOptions,
+) -> AnyElement {
+    let status = state_entity.read(cx).outgoing_message_status(&message.id);
+    let row = message_row(
+        message,
+        settings,
+        accounts,
+        state_entity,
+        window,
+        cx,
+        options,
+    );
+
+    match status {
+        Some(OutgoingChatMessageStatus::Pending) => div()
+            .w_full()
+            .opacity(0.58)
+            .child(row)
+            .child(outgoing_status_label(
+                "sending...",
+                rgba(0xffffff14),
+                theme::text_muted(),
+            ))
+            .into_any_element(),
+        Some(OutgoingChatMessageStatus::Error) => div()
+            .w_full()
+            .child(row)
+            .child(outgoing_status_label(
+                "failed",
+                rgba(0xef44442a),
+                rgb(0xef4444),
+            ))
+            .into_any_element(),
+        Some(OutgoingChatMessageStatus::Sent) | None => row,
+    }
+}
+
+fn outgoing_status_label(label: &'static str, bg: gpui::Rgba, color: gpui::Rgba) -> Div {
+    div()
+        .ml(px(14.0))
+        .mt(px(-2.0))
+        .mb(px(4.0))
+        .rounded_sm()
+        .px(px(6.0))
+        .py(px(1.0))
+        .bg(bg)
+        .text_color(color)
+        .text_size(px(10.0))
+        .child(label)
 }
 
 fn message_text_with_emotes(

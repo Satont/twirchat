@@ -5,6 +5,7 @@ use crate::ui::theme;
 use gpui::prelude::*;
 use gpui::*;
 use std::rc::Rc;
+use ui::WithScrollbar;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UserCardMetadata {
@@ -54,6 +55,7 @@ pub struct UserCard {
 
     pub metadata_state: MetadataState,
     pub history_state: HistoryState,
+    pub body_scroll_handle: ScrollHandle,
 
     pub on_refresh_metadata: Option<WindowAppCallback>,
     pub on_refresh_history: Option<WindowAppCallback>,
@@ -78,6 +80,7 @@ impl UserCard {
             alias_input: None,
             metadata_state: MetadataState::Unsupported,
             history_state: HistoryState::Empty,
+            body_scroll_handle: ScrollHandle::new(),
             on_refresh_metadata: None,
             on_refresh_history: None,
             on_load_older: None,
@@ -123,6 +126,11 @@ impl UserCard {
 
     pub fn history_state(mut self, state: HistoryState) -> Self {
         self.history_state = state;
+        self
+    }
+
+    pub fn body_scroll_handle(mut self, scroll_handle: &ScrollHandle) -> Self {
+        self.body_scroll_handle = scroll_handle.clone();
         self
     }
 
@@ -730,7 +738,9 @@ impl UserCard {
 }
 
 impl RenderOnce for UserCard {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let body_scroll_handle = self.body_scroll_handle.clone();
+
         div()
             .id("user-card-modal")
             .flex_1()
@@ -752,6 +762,7 @@ impl RenderOnce for UserCard {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
+                    .track_scroll(&body_scroll_handle)
                     .p(px(20.0))
                     .flex()
                     .flex_col()
@@ -759,5 +770,6 @@ impl RenderOnce for UserCard {
                     .child(self.render_metadata())
                     .child(self.render_history()),
             )
+            .vertical_scrollbar_for(&body_scroll_handle, window, cx)
     }
 }

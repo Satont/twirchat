@@ -3,7 +3,7 @@ mod support;
 use serde_json::to_value;
 use support::new_state;
 use twirchat_desktop_rust::app_state::{
-    MainSection, UserCardHistoryPage, UserCardLoadState, UserCardTarget,
+    MainSection, OutgoingChatMessageStatus, UserCardHistoryPage, UserCardLoadState, UserCardTarget,
 };
 use twirchat_desktop_rust::protocol::rpc::UserChatHistoryCursor;
 use twirchat_desktop_rust::protocol::{
@@ -498,6 +498,321 @@ fn duplicate_live_message_merges_richer_emotes() {
     assert_eq!(duplicates, 1);
     let merged = state.messages.first().expect("merged message should exist");
     assert!(merged.emotes.iter().any(|emote| emote.id == "7tv-kekw"));
+}
+
+#[test]
+fn watched_send_inserts_optimistic_message_without_account_cache() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state
+        .watched_channels
+        .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
+
+    assert!(state.queue_watched_channel_send("watched-1", "hello optimistic"));
+
+    let pending = state.take_pending_watched_channel_messages();
+    assert_eq!(pending.len(), 1);
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("optimistic client id should be set")
+        .clone();
+
+    let watched = state
+        .watched_channel_messages
+        .get("watched-1")
+        .expect("watched history should contain optimistic row");
+    assert_eq!(watched.len(), 1);
+    assert_eq!(watched[0].id, client_message_id);
+    assert_eq!(watched[0].text, "hello optimistic");
+    assert_eq!(
+        state.outgoing_message_status(&client_message_id),
+        Some(OutgoingChatMessageStatus::Pending)
+    );
+}
+
+#[test]
+fn watched_echo_replaces_optimistic_without_duplicates_in_watched_and_home() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state
+        .watched_channels
+        .push(watched_channel("watched-home", Platform::Kick, "satont"));
+    state.platforms_panel.accounts.push(account(
+        "kick-account",
+        Platform::Kick,
+        "kick-user-1",
+        "satont",
+    ));
+
+    assert!(state.queue_watched_channel_send("watched-home", "echo me"));
+    let pending = state.take_pending_watched_channel_messages();
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("client id should be present")
+        .clone();
+
+    let server_message = NormalizedChatMessage {
+        id: "server-msg-1".to_string(),
+        platform: Platform::Kick,
+        channel_id: "watched-home".to_string(),
+        author: ChatAuthor {
+            id: "kick-user-1".to_string(),
+            username: Some("satont".to_string()),
+            display_name: "Satont".to_string(),
+            color: None,
+            avatar_url: None,
+            badges: vec![],
+        },
+        text: "echo me".to_string(),
+        emotes: vec![],
+        timestamp: "1700000010".to_string(),
+        message_type: ChatMessageType::Message,
+        reply: None,
+    };
+
+    state.apply_service_event(
+        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
+            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageBuffered {
+                channel_id: "watched-home".to_string(),
+                message: Box::new(server_message.clone()),
+            },
+        ),
+    );
+
+    let watched = state
+        .watched_channel_messages
+        .get("watched-home")
+        .expect("watched history should exist");
+    assert_eq!(
+        watched
+            .iter()
+            .filter(|message| message.id == "server-msg-1")
+            .count(),
+        1
+    );
+    assert!(
+        !watched
+            .iter()
+            .any(|message| message.id == client_message_id)
+    );
+
+    assert_eq!(
+        state
+            .messages
+            .iter()
+            .filter(|message| message.id == "server-msg-1")
+            .count(),
+        1
+    );
+    assert!(
+        !state
+            .messages
+            .iter()
+            .any(|message| message.id == client_message_id)
+    );
+    assert_eq!(
+        state.outgoing_message_status("server-msg-1"),
+        Some(OutgoingChatMessageStatus::Sent)
+    );
+    assert_eq!(state.outgoing_message_status(&client_message_id), None);
+}
+
+#[test]
+fn watched_send_failure_marks_optimistic_message_as_error() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state
+        .watched_channels
+        .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
+
+    assert!(state.queue_watched_channel_send("watched-1", "fail me"));
+    let pending = state.take_pending_watched_channel_messages();
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("client id should be present")
+        .clone();
+
+    state.apply_service_event(
+        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
+            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendFailed {
+                channel_id: "watched-1".to_string(),
+                client_message_id: client_message_id.clone(),
+                error: "send failed".to_string(),
+            },
+        ),
+    );
+
+    assert_eq!(
+        state.outgoing_message_status(&client_message_id),
+        Some(OutgoingChatMessageStatus::Error)
+    );
+    assert!(
+        state
+            .watched_channel_messages
+            .get("watched-1")
+            .is_some_and(|messages| messages
+                .iter()
+                .any(|message| message.id == client_message_id))
+    );
+}
+
+#[test]
+fn watched_send_success_event_marks_message_sent() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state
+        .watched_channels
+        .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
+
+    assert!(state.queue_watched_channel_send("watched-1", "send me"));
+    let pending = state.take_pending_watched_channel_messages();
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("client id should be present")
+        .clone();
+
+    state.apply_service_event(
+        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
+            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendSucceeded {
+                channel_id: "watched-1".to_string(),
+                client_message_id: client_message_id.clone(),
+            },
+        ),
+    );
+
+    assert_eq!(
+        state.outgoing_message_status(&client_message_id),
+        Some(OutgoingChatMessageStatus::Sent)
+    );
+}
+
+#[test]
+fn home_composer_owned_watched_channel_inserts_optimistic_message() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.platforms_panel.statuses.insert(
+        Platform::Kick,
+        PlatformStatusInfo {
+            platform: Platform::Kick,
+            status: PlatformStatus::Connected,
+            error: None,
+            mode: PlatformStatusMode::Authenticated,
+            channel_login: Some("satont".to_string()),
+        },
+    );
+    state
+        .watched_channels
+        .push(watched_channel("watched-home", Platform::Kick, "satont"));
+    state.platforms_panel.accounts.push(account(
+        "kick-account",
+        Platform::Kick,
+        "kick-user-1",
+        "satont",
+    ));
+
+    assert!(state.queue_composer_send("home optimistic"));
+
+    let pending = state.take_pending_watched_channel_messages();
+    assert_eq!(pending.len(), 1);
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("home optimistic send should carry a client id")
+        .clone();
+    assert_eq!(pending[0].channel_id, "watched-home");
+    assert_eq!(pending[0].text, "home optimistic");
+    assert_eq!(
+        state.outgoing_message_status(&client_message_id),
+        Some(OutgoingChatMessageStatus::Pending)
+    );
+    assert!(
+        state.messages.iter().any(|message| {
+            message.id == client_message_id && message.text == "home optimistic"
+        })
+    );
+    assert!(
+        state
+            .watched_channel_messages
+            .get("watched-home")
+            .is_some_and(|messages| messages
+                .iter()
+                .any(|message| message.id == client_message_id))
+    );
+}
+
+#[test]
+fn optimistic_send_reuses_previous_own_badges() {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.platforms_panel.statuses.insert(
+        Platform::Kick,
+        PlatformStatusInfo {
+            platform: Platform::Kick,
+            status: PlatformStatus::Connected,
+            error: None,
+            mode: PlatformStatusMode::Authenticated,
+            channel_login: Some("satont".to_string()),
+        },
+    );
+    state
+        .watched_channels
+        .push(watched_channel("watched-home", Platform::Kick, "satont"));
+    state.platforms_panel.accounts.push(account(
+        "kick-account",
+        Platform::Kick,
+        "kick-user-1",
+        "satont",
+    ));
+    state.watched_channel_messages.insert(
+        "watched-home".to_string(),
+        vec![NormalizedChatMessage {
+            id: "previous-own".to_string(),
+            platform: Platform::Kick,
+            channel_id: "watched-home".to_string(),
+            author: ChatAuthor {
+                id: "kick-user-1".to_string(),
+                username: Some("satont".to_string()),
+                display_name: "Satont".to_string(),
+                color: Some("#00ff00".to_string()),
+                avatar_url: Some("https://example.test/avatar.png".to_string()),
+                badges: vec![badge(
+                    "broadcaster/1",
+                    Some("https://example.test/badge.png"),
+                )],
+            },
+            text: "previous".to_string(),
+            emotes: vec![],
+            timestamp: "1700000000".to_string(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        }],
+    );
+
+    assert!(state.queue_composer_send("with badges"));
+    let pending = state.take_pending_watched_channel_messages();
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("home optimistic send should carry a client id");
+    let optimistic = state
+        .watched_channel_messages
+        .get("watched-home")
+        .and_then(|messages| {
+            messages
+                .iter()
+                .find(|message| message.id == *client_message_id)
+        })
+        .expect("optimistic message should be inserted into watched history");
+
+    assert_eq!(optimistic.author.badges.len(), 1);
+    assert_eq!(optimistic.author.badges[0].id, "broadcaster/1");
+    assert_eq!(
+        optimistic.author.badges[0].image_url.as_deref(),
+        Some("https://example.test/badge.png")
+    );
+    assert_eq!(
+        optimistic.author.avatar_url.as_deref(),
+        Some("https://example.test/avatar.png")
+    );
+    assert_eq!(optimistic.author.color.as_deref(), Some("#00ff00"));
 }
 
 #[test]

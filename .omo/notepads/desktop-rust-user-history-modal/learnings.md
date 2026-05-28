@@ -175,3 +175,26 @@
 - Verified and finalized the autocomplete border visibility fix by using a `.absolute().size_full()` sibling trick.
 - The `fuzzy_filter_mentions` logic has been verified to return a single matching record per user regardless of how many fallback fields (alias, display name, username) matched, thanks to iter processing.
 - The selectable text/message scope creep files were correctly reset to HEAD.
+
+## 2026-05-28 User-card modal scroll containment
+
+- GPUI `overflow_y_scroll()` updates an element's scroll offset on wheel events but does not stop propagation by itself, so a lower z-index chat `ListState` can still receive the same `ScrollWheelEvent` when a modal is layered above it.
+- The user-card overlay should use `.occlude()` to remove underlying hitboxes and an overlay-level `.on_scroll_wheel(... cx.stop_propagation())` to consume wheel events after the modal body's own scroll handler has a chance to run.
+- Keep `user-card-body-scroll` as the internal `.overflow_y_scroll()` container; do not move scrolling back to `user-card-history-scroll` or restore the old fixed `.h(px(360.0))` history height.
+
+## 2026-05-28 Scroll containment cleanup
+
+- Cleaned the follow-up scope back to only the user-card modal overlay/test/notepad files; watched-channel optimistic send, chat rendering, Vue chat scaling, and scratch patch scripts are unrelated to this scroll containment fix and should not be present in this task diff.
+
+## 2026-05-28 User-card modal visible scrollbar
+
+- The visible GPUI scrollbar affordance needs the same two-part pattern used by settings/platforms: the scrollable body calls `.track_scroll(&body_scroll_handle)` and the modal render chain calls `.vertical_scrollbar_for(&body_scroll_handle, window, cx)`.
+- The handle should be owned by `TwirChatApp` and passed into `UserCard`, keeping scroll state stable across renders while the scrollbar remains attached to `user-card-body-scroll` rather than the underlying chat list.
+- The overlay-level `.occlude()` and `.on_scroll_wheel(... cx.stop_propagation())` containment remain in `render_user_card_modal`; the modal body still owns `.overflow_y_scroll()` for internal scrolling.
+
+## 2026-05-28 Modal scrollbar scope cleanup
+
+- Restored accidental app-state/runtime/services/chat/watched-channel source and test changes so the remaining diff is limited to the user-card modal scrollbar, shell containment/handle wiring, UI visual contract tests, and this notepad.
+- Removed the watched-channel send-status hunk from `render_user_card_modal`'s file neighbor code in `app.rs`; the only remaining `app.rs` changes are the `ScrollHandle` field/init/pass-through and modal overlay containment.
+- Removed the lingering `app_state/mod.rs` 7TV system-message/emote-preview scope creep from the modal scrollbar diff.
+- Final cleanup removed the remaining `app_state/mod.rs` and `ui/chat.rs` leftovers from the modal scrollbar diff.

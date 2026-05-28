@@ -1,7 +1,8 @@
 use std::time::Duration;
 use twirchat_desktop_rust::services::{
-    BusConfig, BusSendError, BusTryRecvError, ChatEvent, LifecycleEvent, ServiceEvent, ServiceKind,
-    ServiceRuntimeConfig, ServiceSupervisor, bounded,
+    BusConfig, BusSendError, BusTryRecvError, ChatEvent, LifecycleEvent, ServiceCommand,
+    ServiceEvent, ServiceKind, ServiceRuntimeConfig, ServiceSupervisor, WatchedChannelsCommand,
+    WatchedChannelsEvent, bounded,
 };
 
 #[test]
@@ -96,6 +97,57 @@ fn service_bus_backpressure_reports_error() -> Result<(), Box<dyn std::error::Er
     assert_eq!(receiver.recv_timeout(Duration::from_millis(10))?, second);
     assert_eq!(receiver.try_recv(), Err(BusTryRecvError::Empty));
 
+    Ok(())
+}
+
+#[test]
+fn watched_send_failure_event_carries_client_message_id() -> Result<(), Box<dyn std::error::Error>>
+{
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("service-events.sqlite");
+    let config = ServiceRuntimeConfig::new(128, 16)?
+        .with_service_poll_interval(Duration::from_millis(5))
+        .with_storage_path(&db_path);
+    let mut supervisor = ServiceSupervisor::new(config)?;
+    let events = supervisor
+        .take_event_receiver()
+        .ok_or("service event receiver should be available")?;
+
+    supervisor.start()?;
+    let client_message_id = "client-msg-1".to_string();
+    supervisor.dispatch(
+        ServiceKind::WatchedChannels,
+        ServiceCommand::WatchedChannels(WatchedChannelsCommand::SendMessage {
+            channel_id: "missing-channel".to_string(),
+            text: "hello".to_string(),
+            reply_to_message_id: None,
+            client_message_id: Some(client_message_id.clone()),
+        }),
+    )?;
+
+    let mut saw_expected = false;
+    for _ in 0..40 {
+        match events.recv_timeout(Duration::from_millis(25)) {
+            Ok(ServiceEvent::WatchedChannels(WatchedChannelsEvent::MessageSendFailed {
+                channel_id,
+                client_message_id: event_client_message_id,
+                ..
+            })) => {
+                assert_eq!(channel_id, "missing-channel");
+                assert_eq!(event_client_message_id, client_message_id);
+                saw_expected = true;
+                break;
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+
+    let _ = supervisor.stop();
+    assert!(
+        saw_expected,
+        "expected watched-channel send failure event with matching client_message_id"
+    );
     Ok(())
 }
 
