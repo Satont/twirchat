@@ -174,6 +174,7 @@ fn watched_panel(
         .as_ref()
         .and_then(|channel| state.watched_channel_statuses.get(&channel.id))
         .cloned();
+    let accounts = state.platforms_panel.accounts.clone();
     let messages = channel
         .as_ref()
         .map(|channel| collect_panel_messages(state, channel))
@@ -336,6 +337,7 @@ fn watched_panel(
                             watched_message_row(
                                 &message,
                                 &settings,
+                                &accounts,
                                 state_entity.clone(),
                                 window,
                                 cx,
@@ -464,6 +466,7 @@ fn collect_panel_messages(
 fn watched_message_row(
     message: &crate::protocol::types::NormalizedChatMessage,
     settings: &crate::protocol::types::AppSettings,
+    accounts: &[crate::protocol::types::Account],
     state_entity: gpui::Entity<crate::app_state::AppState>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<crate::app::TwirChatApp>,
@@ -472,7 +475,7 @@ fn watched_message_row(
     let row = message_row(
         message,
         settings,
-        &[],
+        accounts,
         state_entity,
         window,
         cx,

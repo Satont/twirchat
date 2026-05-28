@@ -2,7 +2,7 @@ use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
 use crate::chat::{MentionSuggestion, apply_alias};
 use crate::protocol::types::{
     Account, AppSettings, ChatMessageType, ChatTheme, Emote, FontFamilyChoice,
-    NormalizedChatMessage, Platform, PlatformStatus,
+    NormalizedChatMessage, Platform, PlatformStatus, SelfPingConfig,
 };
 use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
 use crate::ui::components::input::Input;
@@ -512,12 +512,7 @@ fn status_chip(
                     .color(foreground),
             ),
         )
-        .child(
-            div()
-                .max_w(px(80.0))
-                .overflow_hidden()
-                .child(chip.display_name.clone()),
-        )
+        .child(div().whitespace_nowrap().child(chip.display_name.clone()))
 }
 
 fn header_chip(chip: &HomeChatTarget) -> impl IntoElement {
@@ -1186,6 +1181,159 @@ fn author_name_color(message: &NormalizedChatMessage) -> gpui::Rgba {
     theme::accent()
 }
 
+fn shows_reply_preview(message: &NormalizedChatMessage) -> bool {
+    matches!(message.platform, Platform::Twitch | Platform::Kick) && message.reply.is_some()
+}
+
+fn is_self_ping_message(
+    message: &NormalizedChatMessage,
+    settings: &AppSettings,
+    accounts: &[Account],
+) -> bool {
+    let Some(self_ping) = settings.self_ping.as_ref().filter(|config| config.enabled) else {
+        return false;
+    };
+    if !matches!(message.platform, Platform::Twitch | Platform::Kick) {
+        return false;
+    }
+    if self_ping.color.trim().is_empty() {
+        return false;
+    }
+
+    let Some(account) = accounts
+        .iter()
+        .find(|account| account.platform == message.platform)
+    else {
+        return false;
+    };
+
+    message
+        .text
+        .split(|ch: char| !is_mention_token_char(ch) && ch != '@')
+        .filter_map(|token| token.strip_prefix('@'))
+        .any(|mention| {
+            !mention.is_empty()
+                && (mention.eq_ignore_ascii_case(&account.username)
+                    || mention.eq_ignore_ascii_case(&account.display_name))
+        })
+}
+
+fn is_mention_token_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+fn self_ping_row_background(settings: &AppSettings) -> Option<gpui::Rgba> {
+    settings
+        .self_ping
+        .as_ref()
+        .filter(|config| config.enabled)
+        .and_then(parse_self_ping_color)
+}
+
+fn parse_self_ping_color(config: &SelfPingConfig) -> Option<gpui::Rgba> {
+    let value = config.color.trim();
+    if let Some(hex) = value.strip_prefix('#') {
+        return parse_hex_color(hex);
+    }
+    parse_rgba_color(value)
+}
+
+fn parse_hex_color(hex: &str) -> Option<gpui::Rgba> {
+    let value = u32::from_str_radix(hex, 16).ok()?;
+    match hex.len() {
+        6 => Some(rgb(value)),
+        8 => {
+            let r = ((value >> 24) & 0xff) as f32 / 255.0;
+            let g = ((value >> 16) & 0xff) as f32 / 255.0;
+            let b = ((value >> 8) & 0xff) as f32 / 255.0;
+            let a = (value & 0xff) as f32 / 255.0;
+            Some(gpui::Rgba { r, g, b, a })
+        }
+        _ => None,
+    }
+}
+
+fn parse_rgba_color(value: &str) -> Option<gpui::Rgba> {
+    let inner = value
+        .strip_prefix("rgba(")
+        .and_then(|value| value.strip_suffix(')'))?;
+    let mut parts = inner.split(',').map(str::trim);
+    let r = parts.next()?.parse::<f32>().ok()? / 255.0;
+    let g = parts.next()?.parse::<f32>().ok()? / 255.0;
+    let b = parts.next()?.parse::<f32>().ok()? / 255.0;
+    let a = parts.next()?.parse::<f32>().ok()?;
+    if parts.next().is_some() || [r, g, b, a].iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    Some(gpui::Rgba {
+        r: r.clamp(0.0, 1.0),
+        g: g.clamp(0.0, 1.0),
+        b: b.clamp(0.0, 1.0),
+        a: a.clamp(0.0, 1.0),
+    })
+}
+
+fn message_row_background(
+    message: &NormalizedChatMessage,
+    settings: &AppSettings,
+    accounts: &[Account],
+) -> Option<gpui::Rgba> {
+    if is_self_ping_message(message, settings, accounts) {
+        return self_ping_row_background(settings);
+    }
+    shows_reply_preview(message).then(|| rgba(0xa78bfa1f))
+}
+
+fn reply_preview(
+    message: &NormalizedChatMessage,
+    typography: MessageTypography,
+) -> Option<AnyElement> {
+    if !shows_reply_preview(message) {
+        return None;
+    }
+    let reply = message.reply.as_ref()?;
+    let preview_text = if reply.parent_message_text.chars().count() > 80 {
+        format!(
+            "{}…",
+            reply
+                .parent_message_text
+                .chars()
+                .take(80)
+                .collect::<String>()
+        )
+    } else {
+        reply.parent_message_text.clone()
+    };
+
+    Some(
+        div()
+            .id(format!("reply-preview-{}", message.id))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(4.0))
+            .overflow_hidden()
+            .text_size(px((typography.font_size * 0.82).max(10.0)))
+            .text_color(theme::text_muted())
+            .child("↩")
+            .child(
+                div()
+                    .id(format!("reply-preview-author-{}", message.id))
+                    .text_color(theme::text_primary())
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .child(reply.parent_author.display_name.clone()),
+            )
+            .child(":")
+            .child(
+                div()
+                    .id(format!("reply-preview-text-{}", message.id))
+                    .overflow_hidden()
+                    .child(preview_text),
+            )
+            .into_any_element(),
+    )
+}
+
 fn aliased_row_message(
     message: &NormalizedChatMessage,
     state_entity: &Entity<AppState>,
@@ -1201,7 +1349,7 @@ fn aliased_row_message(
 fn compact_message_row(
     messages: &RowMessages,
     settings: &AppSettings,
-    _accounts: &[Account],
+    accounts: &[Account],
     state_entity: Entity<AppState>,
     window: &mut Window,
     cx: &mut App,
@@ -1210,6 +1358,7 @@ fn compact_message_row(
     let message = &messages.display;
     let target_message = messages.target.clone();
     let typography = MessageTypography::from_settings(settings);
+    let row_background = message_row_background(message, settings, accounts);
     let mut custom_parts = Vec::new();
 
     if settings.show_timestamp {
@@ -1374,9 +1523,10 @@ fn compact_message_row(
         .px(px(14.0))
         .py(px(1.0))
         .flex()
-        .flex_row()
+        .flex_col()
         .items_start()
         .relative()
+        .when_some(row_background, |row, bg| row.bg(bg))
         .hover(|s| s.bg(rgba(0xffffff06)))
         .when(settings.show_platform_color_stripe, |el| {
             el.child(
@@ -1389,6 +1539,9 @@ fn compact_message_row(
                     .rounded_sm()
                     .bg(theme::platform_color(to_model_platform(message.platform))),
             )
+        })
+        .when_some(reply_preview(message, typography), |row, preview| {
+            row.child(div().w_full().min_w(px(0.0)).mb(px(1.0)).child(preview))
         })
         .child(
             div()
@@ -1500,6 +1653,7 @@ pub(crate) fn message_row(
         target: message.clone(),
     };
     let message = &row_messages.display;
+    let row_background = message_row_background(message, settings, accounts);
 
     if is_compact {
         return compact_message_row(
@@ -1523,6 +1677,7 @@ pub(crate) fn message_row(
         .items_start()
         .gap(px(8.0))
         .relative()
+        .when_some(row_background, |row, bg| row.bg(bg))
         .hover(|s| s.bg(rgba(0xffffff06))) // 0.025 * 255 = 6.375
         .when(settings.show_platform_color_stripe, |el| {
             el.child(
@@ -1605,6 +1760,9 @@ pub(crate) fn message_row(
                 .flex()
                 .flex_col()
                 .gap(px(2.0))
+                .when_some(reply_preview(message, typography), |body, preview| {
+                    body.child(preview)
+                })
                 .child(
                     div()
                         .flex()
@@ -2657,8 +2815,9 @@ mod tests {
     use super::SelectableMessagePart;
     use crate::app_state::AppState;
     use crate::protocol::types::{
-        ChatAuthor, ChatMessageType, Emote, EmotePosition, NormalizedChatMessage, Platform,
-        PlatformStatus, PlatformStatusInfo, PlatformStatusMode,
+        Account, ChatAuthor, ChatMessageType, ChatReply, Emote, EmotePosition,
+        NormalizedChatMessage, Platform, PlatformStatus, PlatformStatusInfo, PlatformStatusMode,
+        ReplyAuthor,
     };
 
     fn chat_message_with_author_color(color: Option<&str>) -> NormalizedChatMessage {
@@ -2679,6 +2838,53 @@ mod tests {
             timestamp: "2026-05-18T21:03:27.000Z".into(),
             message_type: ChatMessageType::Message,
             reply: None,
+        }
+    }
+
+    fn chat_message_with_text(platform: Platform, text: &str) -> NormalizedChatMessage {
+        NormalizedChatMessage {
+            id: "message-text".into(),
+            platform,
+            channel_id: "channel-1".into(),
+            author: ChatAuthor {
+                id: "author-1".into(),
+                username: Some("viewer".into()),
+                display_name: "Viewer".into(),
+                color: None,
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text: text.into(),
+            emotes: Vec::new(),
+            timestamp: "2026-05-18T21:03:27.000Z".into(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        }
+    }
+
+    fn account(platform: Platform) -> Account {
+        Account {
+            id: "account-1".into(),
+            platform,
+            platform_user_id: "self-1".into(),
+            username: "satont".into(),
+            display_name: "Satont".into(),
+            avatar_url: None,
+            scopes: Vec::new(),
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    fn reply() -> ChatReply {
+        ChatReply {
+            parent_message_id: "parent-1".into(),
+            parent_message_text: "original text".into(),
+            parent_author: ReplyAuthor {
+                id: "parent-author".into(),
+                username: "original".into(),
+                display_name: "Original".into(),
+            },
         }
     }
 
@@ -2781,6 +2987,70 @@ mod tests {
             super::author_name_color(&message),
             crate::ui::theme::accent()
         );
+    }
+
+    #[test]
+    fn reply_preview_is_visible_only_for_twitch_and_kick_replies() {
+        let mut twitch = chat_message_with_text(Platform::Twitch, "reply body");
+        twitch.reply = Some(reply());
+        let mut kick = chat_message_with_text(Platform::Kick, "reply body");
+        kick.reply = Some(reply());
+        let mut youtube = chat_message_with_text(Platform::Youtube, "reply body");
+        youtube.reply = Some(reply());
+
+        assert!(super::shows_reply_preview(&twitch));
+        assert!(super::shows_reply_preview(&kick));
+        assert!(!super::shows_reply_preview(&youtube));
+        assert!(!super::shows_reply_preview(&chat_message_with_text(
+            Platform::Twitch,
+            "plain"
+        )));
+    }
+
+    #[test]
+    fn self_ping_matches_exact_own_mentions_for_twitch_and_kick() {
+        let settings = crate::storage::settings::default_app_settings();
+        let accounts = [account(Platform::Twitch), account(Platform::Kick)];
+
+        assert!(super::is_self_ping_message(
+            &chat_message_with_text(Platform::Twitch, "hey @Satont"),
+            &settings,
+            &accounts,
+        ));
+        assert!(super::is_self_ping_message(
+            &chat_message_with_text(Platform::Kick, "@satont ping"),
+            &settings,
+            &accounts,
+        ));
+    }
+
+    #[test]
+    fn self_ping_rejects_partial_email_wrong_platform_and_disabled_cases() {
+        let mut settings = crate::storage::settings::default_app_settings();
+        let accounts = [account(Platform::Twitch)];
+
+        assert!(!super::is_self_ping_message(
+            &chat_message_with_text(Platform::Twitch, "hey @satontology"),
+            &settings,
+            &accounts,
+        ));
+        assert!(!super::is_self_ping_message(
+            &chat_message_with_text(Platform::Twitch, "mail foo@satont.com"),
+            &settings,
+            &accounts,
+        ));
+        assert!(!super::is_self_ping_message(
+            &chat_message_with_text(Platform::Kick, "hey @satont"),
+            &settings,
+            &accounts,
+        ));
+
+        settings.self_ping.as_mut().unwrap().enabled = false;
+        assert!(!super::is_self_ping_message(
+            &chat_message_with_text(Platform::Twitch, "hey @satont"),
+            &settings,
+            &accounts,
+        ));
     }
 
     #[test]

@@ -77,7 +77,7 @@ impl RealKickClient {
                         break;
                     }
                     Err(error) => {
-                        eprintln!("[kick/live] websocket read failed: {error}");
+                        self.socket = None;
                         return Err(PlatformError::new(Platform::Kick, error.to_string()));
                     }
                 }
@@ -94,7 +94,7 @@ impl RealKickClient {
                 }
                 Message::Close(_) => {
                     self.socket = None;
-                    break;
+                    return Err(PlatformError::new(Platform::Kick, "Kick websocket closed"));
                 }
                 _ => {}
             }

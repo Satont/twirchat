@@ -33,6 +33,7 @@ pub struct MockKickClient {
     follow_events: VecDeque<KickFollowEvent>,
     subscription_events: VecDeque<KickSubscriptionEvent>,
     refreshed_tokens: VecDeque<TokenPair>,
+    next_drain_error: Option<String>,
     next_sent_id: u64,
 }
 
@@ -54,6 +55,7 @@ impl MockKickClient {
             follow_events: VecDeque::new(),
             subscription_events: VecDeque::new(),
             refreshed_tokens: VecDeque::new(),
+            next_drain_error: None,
             next_sent_id: 1,
         }
     }
@@ -100,6 +102,16 @@ impl MockKickClient {
 
     pub fn push_refreshed_token(&mut self, token: TokenPair) {
         self.refreshed_tokens.push_back(token);
+    }
+
+    pub fn push_drain_error_once(&mut self, message: &str) {
+        self.next_drain_error = Some(message.into());
+    }
+
+    fn take_drain_error(&mut self) -> Option<PlatformError> {
+        self.next_drain_error
+            .take()
+            .map(|message| PlatformError::new(Platform::Kick, message))
     }
 }
 
@@ -150,14 +162,23 @@ impl KickChatClient for MockKickClient {
     }
 
     fn drain_messages(&mut self) -> PlatformResult<Vec<KickChatMessage>> {
+        if let Some(error) = self.take_drain_error() {
+            return Err(error);
+        }
         Ok(self.incoming_messages.drain(..).collect())
     }
 
     fn drain_follow_events(&mut self) -> PlatformResult<Vec<KickFollowEvent>> {
+        if let Some(error) = self.take_drain_error() {
+            return Err(error);
+        }
         Ok(self.follow_events.drain(..).collect())
     }
 
     fn drain_subscription_events(&mut self) -> PlatformResult<Vec<KickSubscriptionEvent>> {
+        if let Some(error) = self.take_drain_error() {
+            return Err(error);
+        }
         Ok(self.subscription_events.drain(..).collect())
     }
 

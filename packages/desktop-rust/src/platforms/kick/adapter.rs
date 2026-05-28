@@ -12,11 +12,13 @@ use crate::storage::{Storage, TokenPair, TokenState};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 include!(concat!(env!("OUT_DIR"), "/kick_badges_generated.rs"));
 
 const KICK_TOKEN_REFRESH_WINDOW_SECONDS: u64 = 300;
+const KICK_RECONNECT_MIN_DELAY: Duration = Duration::from_secs(1);
+const KICK_RECONNECT_MAX_DELAY: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KickAuthState {
@@ -300,6 +302,8 @@ pub struct KickAdapter<'a, C> {
     chatroom: Option<KickChatroom>,
     is_connected: bool,
     should_reconnect: bool,
+    reconnect_attempt: u32,
+    reconnect_due_at: Option<Instant>,
     auth_state: KickAuthState,
     last_error: Option<KickAdapterError>,
     avatar_cache: BTreeMap<String, String>,
@@ -315,6 +319,8 @@ impl<'a, C> KickAdapter<'a, C> {
             chatroom: None,
             is_connected: false,
             should_reconnect: true,
+            reconnect_attempt: 0,
+            reconnect_due_at: None,
             auth_state: KickAuthState::Anonymous,
             last_error: None,
             avatar_cache: BTreeMap::new(),
@@ -344,9 +350,60 @@ impl<'a, C> KickAdapter<'a, C> {
 
 impl<C: KickChatClient> KickAdapter<'_, C> {
     pub fn poll(&mut self, sink: &mut dyn PlatformEventSink) -> PlatformResult<()> {
-        let messages = self.client.drain_messages()?;
-        let follows = self.client.drain_follow_events()?;
-        let subscriptions = self.client.drain_subscription_events()?;
+        if !self.is_connected && self.channel_slug.is_some() {
+            if !self.should_reconnect {
+                return Ok(());
+            }
+
+            if !self.is_reconnect_due() {
+                return Ok(());
+            }
+
+            self.emit_status(
+                sink,
+                PlatformStatus::Connecting,
+                reauth_reason(&self.auth_state),
+            )?;
+
+            match self.connect_once() {
+                Ok(()) => {
+                    self.reset_reconnect_state();
+                    self.emit_status(
+                        sink,
+                        PlatformStatus::Connected,
+                        reauth_reason(&self.auth_state),
+                    )?;
+                }
+                Err(error) => {
+                    self.emit_status(sink, PlatformStatus::Error, Some(error.message.clone()))?;
+                    self.schedule_reconnect(false);
+                }
+            }
+
+            return Ok(());
+        }
+
+        let messages = match self.client.drain_messages() {
+            Ok(messages) => messages,
+            Err(error) => {
+                self.handle_transport_poll_error(sink, error)?;
+                return Ok(());
+            }
+        };
+        let follows = match self.client.drain_follow_events() {
+            Ok(events) => events,
+            Err(error) => {
+                self.handle_transport_poll_error(sink, error)?;
+                return Ok(());
+            }
+        };
+        let subscriptions = match self.client.drain_subscription_events() {
+            Ok(events) => events,
+            Err(error) => {
+                self.handle_transport_poll_error(sink, error)?;
+                return Ok(());
+            }
+        };
 
         if !messages.is_empty() || !follows.is_empty() || !subscriptions.is_empty() {
             eprintln!(
@@ -371,6 +428,51 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
         }
 
         Ok(())
+    }
+
+    fn handle_transport_poll_error(
+        &mut self,
+        sink: &mut dyn PlatformEventSink,
+        error: PlatformError,
+    ) -> PlatformResult<()> {
+        self.is_connected = false;
+        self.should_reconnect = true;
+        let _ = self.client.disconnect();
+
+        let typed = KickAdapterError::new(
+            KickAdapterErrorKind::Transport,
+            self.channel_slug.clone(),
+            error.message.clone(),
+            true,
+        );
+        self.last_error = Some(typed.clone());
+
+        self.emit_status(sink, PlatformStatus::Error, Some(typed.message.clone()))?;
+        self.schedule_reconnect(true);
+        Ok(())
+    }
+
+    fn schedule_reconnect(&mut self, immediate: bool) {
+        let now = Instant::now();
+        if immediate {
+            self.reconnect_due_at = Some(now);
+            self.reconnect_attempt = 0;
+            return;
+        }
+
+        let delay = reconnect_delay_for_attempt(self.reconnect_attempt);
+        self.reconnect_due_at = Some(now + delay);
+        self.reconnect_attempt = self.reconnect_attempt.saturating_add(1);
+    }
+
+    fn is_reconnect_due(&self) -> bool {
+        self.reconnect_due_at
+            .is_none_or(|due_at| Instant::now() >= due_at)
+    }
+
+    fn reset_reconnect_state(&mut self) {
+        self.reconnect_attempt = 0;
+        self.reconnect_due_at = None;
     }
 
     pub fn stream_status(&mut self, channel_slug: &str) -> PlatformResult<StreamStatus> {
@@ -421,6 +523,7 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
         self.chatroom = Some(chatroom);
         self.is_connected = true;
         self.last_error = None;
+        self.reset_reconnect_state();
         Ok(())
     }
 
@@ -748,6 +851,8 @@ impl<C: KickChatClient> PlatformAdapter for KickAdapter<'_, C> {
         self.chatroom = None;
         self.is_connected = false;
         self.should_reconnect = true;
+        self.reset_reconnect_state();
+        self.reconnect_due_at = Some(Instant::now());
         self.auth_state = self.resolve_auth_state()?;
 
         self.storage
@@ -767,6 +872,7 @@ impl<C: KickChatClient> PlatformAdapter for KickAdapter<'_, C> {
                 reauth_reason(&self.auth_state),
             ),
             Err(error) => {
+                self.schedule_reconnect(false);
                 self.emit_status(sink, PlatformStatus::Error, Some(error.message.clone()))?;
                 Err(error)
             }
@@ -778,6 +884,7 @@ impl<C: KickChatClient> PlatformAdapter for KickAdapter<'_, C> {
         self.client.disconnect()?;
         self.chatroom = None;
         self.is_connected = false;
+        self.reset_reconnect_state();
         Ok(())
     }
 
@@ -1041,6 +1148,16 @@ fn to_u32_or_max(value: usize) -> u32 {
 
 fn storage_error(error: crate::storage::StorageError) -> PlatformError {
     PlatformError::new(Platform::Kick, error.to_string())
+}
+
+fn reconnect_delay_for_attempt(attempt: u32) -> Duration {
+    let max_steps = 5;
+    let shift = attempt.min(max_steps);
+    let multiplier = 1u32 << shift;
+    let seconds = KICK_RECONNECT_MIN_DELAY
+        .as_secs()
+        .saturating_mul(u64::from(multiplier));
+    Duration::from_secs(seconds).min(KICK_RECONNECT_MAX_DELAY)
 }
 
 #[cfg(test)]

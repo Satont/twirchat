@@ -342,6 +342,96 @@ fn kick_adapter_missing_chatroom_reports_error() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
+fn kick_adapter_poll_transport_error_reconnects_without_restart()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("kick-poll-reconnect.sqlite"))?;
+
+    let client = MockKickClient::new().with_chatroom("recoverable", 888, 99_001);
+    let mut adapter = KickAdapter::new(&storage, client);
+    let mut sink = CapturingSink::default();
+
+    adapter.connect("recoverable", &mut sink)?;
+    adapter
+        .client_mut()
+        .push_drain_error_once("Kick websocket closed");
+
+    let first_poll = adapter.poll(&mut sink);
+    assert!(first_poll.is_ok());
+
+    let typed = adapter
+        .last_error()
+        .ok_or("typed Kick transport error should be recorded")?;
+    assert_eq!(typed.kind, KickAdapterErrorKind::Transport);
+    assert!(typed.recoverable);
+    assert_eq!(typed.channel_slug.as_deref(), Some("recoverable"));
+    assert_eq!(adapter.client().disconnect_count, 1);
+
+    let error_statuses_after_drop = sink
+        .statuses()
+        .into_iter()
+        .filter(|status| status.status == PlatformStatus::Error)
+        .count();
+    assert_eq!(error_statuses_after_drop, 1);
+
+    adapter.poll(&mut sink)?;
+
+    assert_eq!(adapter.client().subscribed_chatrooms.len(), 2);
+    assert!(adapter.last_error().is_none());
+    assert!(
+        sink.statuses()
+            .iter()
+            .any(|status| status.status == PlatformStatus::Connected)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn kick_adapter_poll_reconnect_failure_is_backed_off() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("kick-poll-backoff.sqlite"))?;
+
+    let client = MockKickClient::new().with_chatroom("recoverable", 888, 99_001);
+    let mut adapter = KickAdapter::new(&storage, client);
+    let mut sink = CapturingSink::default();
+
+    adapter.connect("recoverable", &mut sink)?;
+    adapter
+        .client_mut()
+        .push_drain_error_once("Kick websocket closed");
+    adapter.poll(&mut sink)?;
+
+    adapter
+        .client_mut()
+        .push_missing_chatroom_once("temporary reconnect failure");
+    adapter.poll(&mut sink)?;
+
+    let reconnect_resolution_attempts = adapter.client().chatroom_resolutions.len();
+    let error_statuses_after_failed_reconnect = sink
+        .statuses()
+        .into_iter()
+        .filter(|status| status.status == PlatformStatus::Error)
+        .count();
+
+    adapter.poll(&mut sink)?;
+
+    assert_eq!(
+        adapter.client().chatroom_resolutions.len(),
+        reconnect_resolution_attempts
+    );
+    assert_eq!(
+        sink.statuses()
+            .into_iter()
+            .filter(|status| status.status == PlatformStatus::Error)
+            .count(),
+        error_statuses_after_failed_reconnect
+    );
+
+    Ok(())
+}
+
+#[test]
 fn kick_adapter_resolves_missing_sender_avatar() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let storage = Storage::open(&temp.path().join("kick-avatar-resolver.sqlite"))?;

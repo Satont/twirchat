@@ -235,3 +235,21 @@ fn chat_font_size_scales_message_metadata_contract() {
         "text badge labels must scale with the chat font-size setting"
     );
 }
+
+#[test]
+fn chat_reply_and_self_ping_visual_contracts_are_rendered_in_rust_ui() {
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let watched_layout_rs = fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+
+    assert!(chat_rs.contains("shows_reply_preview"));
+    assert!(chat_rs.contains("reply-preview-author"));
+    assert!(chat_rs.contains("reply-preview-text"));
+    assert!(chat_rs.contains("is_self_ping_message"));
+    assert!(chat_rs.contains("self_ping_row_background"));
+    assert!(watched_layout_rs.contains("state.platforms_panel.accounts"));
+    assert!(
+        !watched_layout_rs
+            .contains("message_row(\n        message,\n        settings,\n        &[],")
+    );
+}

@@ -44,6 +44,14 @@ fn visual_chat_page_matches_vue_reference() {
     // Composer
     assert!(chat_rs.contains("composer"));
     assert!(chat_rs.contains("status_chip"));
+    let status_chip_body = chat_rs
+        .split("fn status_chip")
+        .nth(1)
+        .and_then(|body| body.split("fn header_chip").next())
+        .expect("should isolate status_chip");
+    assert!(status_chip_body.contains(".whitespace_nowrap()"));
+    assert!(!status_chip_body.contains(".max_w(px(80.0))"));
+    assert!(!status_chip_body.contains(".overflow_hidden()"));
     let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
     assert!(app_rs.contains("Send a message"));
 
