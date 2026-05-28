@@ -1,5 +1,6 @@
 use crate::app_state::{
-    AppState, MainSection, UserCardHistoryPage, UserCardHistoryRequest, UserCardLoadState,
+    AppState, AppStateActions, MainSection, UserCardHistoryPage, UserCardHistoryRequest,
+    UserCardLoadState,
 };
 use crate::chat::{
     MentionSuggestion, ParsedMentionToken, fuzzy_filter_mentions, mention_suggestions,
@@ -36,6 +37,7 @@ use std::time::Duration;
 pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
     composer_input: Entity<Input>,
+    font_size_input: Entity<Input>,
     user_card_alias_input: Entity<Input>,
     add_channel_input: Entity<Input>,
     tab_selector_input: Entity<Input>,
@@ -92,6 +94,13 @@ impl TwirChatApp {
         };
         let state = cx.new(|_| initial_state);
         let composer_input = cx.new(|cx| Input::new("Send a message...", cx).with_clear_on_copy());
+        let initial_font_size =
+            crate::ui::chat::format_chat_font_size(state.read(cx).settings().font_size);
+        let font_size_input = cx.new(|cx| {
+            let mut input = Input::new("14", cx).with_compact_appearance();
+            input.set_text(initial_font_size, cx);
+            input
+        });
         let user_card_alias_input = cx.new(|cx| Input::new("Local alias", cx));
         let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
         let tab_selector_input = cx.new(|cx| Input::new("Switch to tab...", cx));
@@ -99,6 +108,8 @@ impl TwirChatApp {
         let tab_selector_focus = cx.focus_handle();
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         cx.observe(&composer_input, |_, _, cx| cx.notify()).detach();
+        cx.observe(&font_size_input, |_, _, cx| cx.notify())
+            .detach();
         cx.observe(&user_card_alias_input, |_, _, cx| cx.notify())
             .detach();
         cx.observe(&add_channel_input, |_, _, cx| cx.notify())
@@ -175,6 +186,7 @@ impl TwirChatApp {
         Self {
             state,
             composer_input,
+            font_size_input,
             user_card_alias_input,
             add_channel_input,
             tab_selector_input,
@@ -491,6 +503,55 @@ impl TwirChatApp {
         }
     }
 
+    fn flush_font_size_submit(&self, cx: &mut Context<Self>) {
+        let submitted_text = self.font_size_input.update(cx, |input, _cx| {
+            input
+                .take_submit_requested()
+                .then(|| input.text().trim().to_string())
+        });
+
+        let Some(submitted_text) = submitted_text else {
+            return;
+        };
+
+        let current_font_size = self.state.read(cx).settings().font_size;
+        let parsed_font_size = crate::ui::chat::parse_chat_font_size_input(&submitted_text);
+        let display_font_size = parsed_font_size
+            .unwrap_or_else(|| crate::ui::chat::normalize_chat_font_size(current_font_size));
+
+        if let Some(font_size) = parsed_font_size {
+            self.state.set_font_size(cx, font_size);
+            self.state.persist_settings(cx);
+        }
+
+        self.font_size_input.update(cx, |input, cx| {
+            input.set_text(
+                crate::ui::chat::format_chat_font_size(display_font_size),
+                cx,
+            );
+        });
+        cx.notify();
+    }
+
+    fn sync_font_size_input(&self, state: &AppState, window: &Window, cx: &mut Context<Self>) {
+        if self
+            .font_size_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
+            return;
+        }
+
+        let expected_text = crate::ui::chat::format_chat_font_size(state.settings().font_size);
+        if self.font_size_input.read(cx).text() == expected_text {
+            return;
+        }
+
+        self.font_size_input
+            .update(cx, |input, cx| input.set_text(expected_text, cx));
+    }
+
     fn flush_pending_watched_channel_removals(&self, cx: &mut Context<Self>) {
         let Some(runtime) = &self.runtime else {
             return;
@@ -797,6 +858,11 @@ impl TwirChatApp {
             .read(cx)
             .focus_handle(cx)
             .is_focused(window)
+            || self
+                .font_size_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
             || self
                 .user_card_alias_input
                 .read(cx)
@@ -1238,12 +1304,14 @@ impl Render for TwirChatApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
         self.drain_runtime_events(cx);
         self.flush_composer_submit(cx);
+        self.flush_font_size_submit(cx);
         self.flush_watched_composer_submits(cx);
         self.flush_pending_watched_channel_adds(cx);
         self.flush_pending_watched_channel_messages(cx);
         self.flush_pending_watched_channel_removals(cx);
         self.flush_pending_backend_messages(cx);
         let state = self.state.read(cx).clone();
+        self.sync_font_size_input(&state, window, cx);
         self.sync_watched_composer_inputs(&state, cx);
         let composer_text = self.composer_input.read(cx).text().to_string();
         let tab_selector_query = self.tab_selector_input.read(cx).text().to_string();
@@ -1328,6 +1396,7 @@ impl Render for TwirChatApp {
                         content::ContentPanelProps {
                             state_entity: self.state.clone(),
                             composer_input: self.composer_input.clone(),
+                            font_size_input: self.font_size_input.clone(),
                             add_channel_input: self.add_channel_input.clone(),
                             watched_composer_inputs: self.watched_composer_inputs.clone(),
                             hotkey_capture_focus: self.hotkey_capture_focus.clone(),

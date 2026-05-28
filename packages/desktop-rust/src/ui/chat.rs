@@ -8,6 +8,7 @@ use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::selectable_message::{SelectableMessage, SelectableMessagePart};
+use crate::ui::components::slider::Slider;
 use crate::ui::components::switch::Switch;
 use crate::ui::shared::{format_compact_viewers, format_exact_viewers};
 use crate::ui::shell::app::TwirChatApp;
@@ -59,10 +60,15 @@ pub(crate) struct MentionAutocompleteUi {
 pub(crate) struct ChatPanelProps<'a> {
     pub state_entity: Entity<AppState>,
     pub composer_input: Entity<Input>,
+    pub font_size_input: Entity<Input>,
     pub composer_text: String,
     pub mention_autocomplete: Option<MentionAutocompleteUi>,
     pub scroll_ui: ChatScrollUi<'a>,
 }
+
+pub(crate) const CHAT_FONT_SIZE_MIN: f64 = 10.0;
+pub(crate) const CHAT_FONT_SIZE_MAX: f64 = 30.0;
+pub(crate) const CHAT_FONT_SIZE_STEP: f64 = 1.0;
 
 pub(crate) fn panel(
     state: &AppState,
@@ -148,11 +154,17 @@ pub(crate) fn panel(
                     state.messages.len(),
                     state,
                     props.state_entity.clone(),
+                    props.font_size_input,
                 )),
         )
 }
 
-fn header(message_count: usize, state: &AppState, state_entity: Entity<AppState>) -> Div {
+fn header(
+    message_count: usize,
+    state: &AppState,
+    state_entity: Entity<AppState>,
+    font_size_input: Entity<Input>,
+) -> Div {
     let message_count_text = format!("{} messages", message_count);
     let home_targets = stream_status_header_targets(state);
 
@@ -233,6 +245,7 @@ fn header(message_count: usize, state: &AppState, state_entity: Entity<AppState>
                                     |el| {
                                         el.child(render_appearance_popover(
                                             state_entity.clone(),
+                                            font_size_input.clone(),
                                             state.settings().clone(),
                                         ))
                                     },
@@ -2201,6 +2214,33 @@ fn popover_row(label: &'static str, control: impl IntoElement) -> Div {
         .child(control)
 }
 
+pub(crate) fn normalize_chat_font_size(value: f64) -> f64 {
+    value.round().clamp(CHAT_FONT_SIZE_MIN, CHAT_FONT_SIZE_MAX)
+}
+
+pub(crate) fn format_chat_font_size(value: f64) -> String {
+    format!("{:.0}", normalize_chat_font_size(value))
+}
+
+pub(crate) fn parse_chat_font_size_input(text: &str) -> Option<f64> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let numeric_text = trimmed
+        .strip_suffix("px")
+        .or_else(|| trimmed.strip_suffix("PX"))
+        .unwrap_or(trimmed)
+        .trim();
+
+    numeric_text
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+        .map(normalize_chat_font_size)
+}
+
 fn popover_btn(
     label: &'static str,
     on_click: impl Fn(&gpui::MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static,
@@ -2370,8 +2410,11 @@ pub(crate) fn build_message_parts(message: &NormalizedChatMessage) -> Vec<Messag
 
 pub fn render_appearance_popover(
     state_entity: Entity<crate::app_state::AppState>,
+    font_size_input: Entity<Input>,
     settings: crate::protocol::AppSettings,
 ) -> impl IntoElement {
+    let font_size = normalize_chat_font_size(settings.font_size);
+
     div()
         .absolute()
         .top(px(32.0))
@@ -2476,18 +2519,31 @@ pub fn render_appearance_popover(
                         .child("-")
                         .on_mouse_down(gpui::MouseButton::Left, {
                             let state_entity = state_entity.clone();
-                            let fs = settings.font_size;
+                            let font_size_input = font_size_input.clone();
                             move |_, _, cx| {
-                                state_entity.set_font_size(cx, (fs - 1.0).max(10.0));
+                                let next_font_size =
+                                    normalize_chat_font_size(font_size - CHAT_FONT_SIZE_STEP);
+                                state_entity.set_font_size(cx, next_font_size);
                                 state_entity.persist_settings(cx);
+                                font_size_input.update(cx, |input, cx| {
+                                    input.set_text(format_chat_font_size(next_font_size), cx);
+                                });
                             }
                         }),
                 )
                 .child(
                     div()
-                        .text_size(px(12.0))
-                        .text_color(theme::text_primary())
-                        .child(format!("{}px", settings.font_size)),
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(3.0))
+                        .child(div().w(px(40.0)).child(font_size_input.clone()))
+                        .child(
+                            div()
+                                .text_size(px(11.0))
+                                .text_color(theme::text_muted())
+                                .child("px"),
+                        ),
                 )
                 .child(
                     div()
@@ -2503,14 +2559,37 @@ pub fn render_appearance_popover(
                         .child("+")
                         .on_mouse_down(gpui::MouseButton::Left, {
                             let state_entity = state_entity.clone();
-                            let fs = settings.font_size;
+                            let font_size_input = font_size_input.clone();
                             move |_, _, cx| {
-                                state_entity.set_font_size(cx, (fs + 1.0).min(30.0));
+                                let next_font_size =
+                                    normalize_chat_font_size(font_size + CHAT_FONT_SIZE_STEP);
+                                state_entity.set_font_size(cx, next_font_size);
                                 state_entity.persist_settings(cx);
+                                font_size_input.update(cx, |input, cx| {
+                                    input.set_text(format_chat_font_size(next_font_size), cx);
+                                });
                             }
                         }),
                 ),
         ))
+        .child(
+            div().pb(px(6.0)).child(
+                Slider::new("chat-font-size-slider", font_size)
+                    .range(CHAT_FONT_SIZE_MIN, CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_STEP)
+                    .on_change({
+                        let state_entity = state_entity.clone();
+                        let font_size_input = font_size_input.clone();
+                        move |next_font_size, _window, cx| {
+                            let next_font_size = normalize_chat_font_size(next_font_size);
+                            state_entity.set_font_size(cx, next_font_size);
+                            state_entity.persist_settings(cx);
+                            font_size_input.update(cx, |input, cx| {
+                                input.set_text(format_chat_font_size(next_font_size), cx);
+                            });
+                        }
+                    }),
+            ),
+        )
         .child(div().w_full().h(px(1.0)).bg(theme::border()))
         .child(popover_row(
             "Show Avatars",
@@ -2859,6 +2938,15 @@ mod tests {
                 is_link: false,
             } if text == "world" && source_range.start == 6 && source_range.end == 11
         ));
+    }
+
+    #[test]
+    fn parse_chat_font_size_input_clamps_rounds_and_rejects_invalid_text() {
+        assert_eq!(super::parse_chat_font_size_input("9"), Some(10.0));
+        assert_eq!(super::parse_chat_font_size_input("17.6"), Some(18.0));
+        assert_eq!(super::parse_chat_font_size_input("31px"), Some(30.0));
+        assert_eq!(super::parse_chat_font_size_input(""), None);
+        assert_eq!(super::parse_chat_font_size_input("large"), None);
     }
 
     #[test]

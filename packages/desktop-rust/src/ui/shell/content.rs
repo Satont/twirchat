@@ -18,6 +18,7 @@ pub(crate) struct SectionScrollUi<'a> {
 pub(crate) struct ContentPanelProps<'a> {
     pub state_entity: Entity<AppState>,
     pub composer_input: Entity<Input>,
+    pub font_size_input: Entity<Input>,
     pub add_channel_input: Entity<Input>,
     pub watched_composer_inputs: BTreeMap<String, Entity<Input>>,
     pub hotkey_capture_focus: FocusHandle,
@@ -55,6 +56,7 @@ pub(crate) fn panel(
                         ChatPanelProps {
                             state_entity: props.state_entity.clone(),
                             composer_input: props.composer_input,
+                            font_size_input: props.font_size_input.clone(),
                             composer_text: props.composer_text,
                             mention_autocomplete: props.home_mention_autocomplete,
                             scroll_ui: props.scroll_ui.chat,
@@ -68,6 +70,7 @@ pub(crate) fn panel(
                     watched_layout::tab_panel(
                         state,
                         props.state_entity.clone(),
+                        props.font_size_input.clone(),
                         &props.watched_composer_inputs,
                         &props.watched_mention_autocomplete,
                         window,

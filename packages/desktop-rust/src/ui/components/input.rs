@@ -1,3 +1,4 @@
+use crate::ui::theme;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
     Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, IntoElement, KeyBinding,
@@ -130,6 +131,7 @@ pub struct Input {
     last_bounds: Option<Bounds<Pixels>>,
     submit_requested: bool,
     clear_on_copy: bool,
+    compact_appearance: bool,
 }
 
 impl Input {
@@ -145,11 +147,17 @@ impl Input {
             last_bounds: None,
             submit_requested: false,
             clear_on_copy: false,
+            compact_appearance: false,
         }
     }
 
     pub fn with_clear_on_copy(mut self) -> Self {
         self.clear_on_copy = true;
+        self
+    }
+
+    pub fn with_compact_appearance(mut self) -> Self {
+        self.compact_appearance = true;
         self
     }
 
@@ -547,6 +555,22 @@ impl EntityInputHandler for Input {
 
 impl Render for Input {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let min_height = if self.compact_appearance { 24.0 } else { 36.0 };
+        let horizontal_padding = if self.compact_appearance { 8.0 } else { 12.0 };
+        let text_size = if self.compact_appearance { 12.0 } else { 13.0 };
+        let border_color = if self.focus_handle.is_focused(_window) {
+            rgba(0xa78bfa80)
+        } else if self.compact_appearance {
+            theme::border()
+        } else {
+            rgb(0x3f3f46)
+        };
+        let background_color = if self.compact_appearance {
+            theme::surface_2()
+        } else {
+            rgb(0x18181b)
+        };
+
         div()
             .key_context("TwirChatInput")
             .track_focus(&self.focus_handle(cx))
@@ -568,19 +592,16 @@ impl Render for Input {
             .on_action(cx.listener(Self::paste))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .w_full()
-            .min_h(px(36.0))
+            .min_h(px(min_height))
             .rounded_lg()
+            .when(self.compact_appearance, |el| el.rounded_md())
             .border_1()
-            .border_color(if self.focus_handle.is_focused(_window) {
-                rgba(0xa78bfa80)
-            } else {
-                rgb(0x3f3f46)
-            })
-            .bg(rgb(0x18181b))
-            .px(px(12.0))
+            .border_color(border_color)
+            .bg(background_color)
+            .px(px(horizontal_padding))
             .flex()
             .items_center()
-            .text_size(px(13.0))
+            .text_size(px(text_size))
             .child(TextElement { input: cx.entity() })
     }
 }

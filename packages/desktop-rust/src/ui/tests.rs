@@ -247,6 +247,35 @@ fn chat_appearance_toggles_apply_to_all_scopes() {
 }
 
 #[test]
+fn chat_appearance_font_size_controls_share_real_input_and_slider_contract() {
+    let app_rs = std::fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
+    let content_rs =
+        std::fs::read_to_string("src/ui/shell/content.rs").expect("should read shell content.rs");
+    let chat_rs = std::fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let watched_layout_rs = std::fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+    let slider_rs =
+        std::fs::read_to_string("src/ui/components/slider.rs").expect("should read slider.rs");
+
+    assert!(app_rs.contains("font_size_input: Entity<Input>"));
+    assert!(app_rs.contains("Input::new(\"14\", cx).with_compact_appearance()"));
+    assert!(content_rs.contains("pub font_size_input: Entity<Input>"));
+    assert!(chat_rs.contains("pub font_size_input: Entity<Input>"));
+    assert!(watched_layout_rs.contains("font_size_input: Entity<Input>"));
+    assert!(chat_rs.contains("parse_chat_font_size_input"));
+    assert!(chat_rs.contains("Slider::new(\"chat-font-size-slider\""));
+    assert!(chat_rs.contains("CHAT_FONT_SIZE_MIN"));
+    assert!(chat_rs.contains("CHAT_FONT_SIZE_MAX"));
+    assert!(chat_rs.contains("font_size_input.update(cx, |input, cx|"));
+    assert!(chat_rs.contains(".child(\"px\")"));
+    assert!(chat_rs.contains("theme::text_muted()"));
+    assert!(app_rs.contains(".font_size_input\n                .read(cx)"));
+    assert!(slider_rs.contains("on_mouse_down(MouseButton::Left"));
+    assert!(slider_rs.contains(".on_drag(SliderDrag"));
+    assert!(slider_rs.contains(".on_drag_move::<SliderDrag>"));
+}
+
+#[test]
 fn compact_chat_uses_distinct_layout_without_avatar_branch() {
     let chat_rs = std::fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
 

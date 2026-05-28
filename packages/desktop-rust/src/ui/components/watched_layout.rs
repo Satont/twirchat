@@ -17,9 +17,19 @@ struct WatchedComposerUi {
     autocomplete: Option<MentionAutocompleteUi>,
 }
 
+#[derive(Clone)]
+struct WatchedLayoutDeps<'a> {
+    state: &'a AppState,
+    state_entity: Entity<AppState>,
+    font_size_input: Entity<Input>,
+    watched_composer_inputs: &'a BTreeMap<String, Entity<Input>>,
+    watched_mention_autocomplete: &'a BTreeMap<String, MentionAutocompleteUi>,
+}
+
 pub(crate) fn tab_panel(
     state: &AppState,
     state_entity: Entity<AppState>,
+    font_size_input: Entity<Input>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
     watched_mention_autocomplete: &BTreeMap<String, MentionAutocompleteUi>,
     window: &mut gpui::Window,
@@ -41,10 +51,13 @@ pub(crate) fn tab_panel(
         .bg(theme::background())
         .child(render_layout(
             &layout,
-            state,
-            state_entity,
-            watched_composer_inputs,
-            watched_mention_autocomplete,
+            WatchedLayoutDeps {
+                state,
+                state_entity,
+                font_size_input,
+                watched_composer_inputs,
+                watched_mention_autocomplete,
+            },
             window,
             cx,
         ))
@@ -52,10 +65,7 @@ pub(crate) fn tab_panel(
 
 fn render_layout(
     layout: &WatchedChannelsLayout,
-    state: &AppState,
-    state_entity: Entity<AppState>,
-    watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
-    watched_mention_autocomplete: &BTreeMap<String, MentionAutocompleteUi>,
+    deps: WatchedLayoutDeps<'_>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
@@ -65,23 +75,12 @@ fn render_layout(
         .min_h(px(0.0))
         .flex()
         .bg(theme::background())
-        .child(render_node(
-            &layout.root,
-            state,
-            state_entity,
-            watched_composer_inputs,
-            watched_mention_autocomplete,
-            window,
-            cx,
-        ))
+        .child(render_node(&layout.root, deps, window, cx))
 }
 
 fn render_node(
     node: &LayoutNode,
-    state: &AppState,
-    state_entity: Entity<AppState>,
-    watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
-    watched_mention_autocomplete: &BTreeMap<String, MentionAutocompleteUi>,
+    deps: WatchedLayoutDeps<'_>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Stateful<Div> {
@@ -89,25 +88,24 @@ fn render_node(
         LayoutNode::Panel { id, content, .. } => {
             let panel = match content {
                 PanelContent::Main => empty_panel(
-                    state_entity.clone(),
+                    deps.state_entity.clone(),
                     id,
                     "Main pane",
                     "Watched tabs render channel panes only.",
                 ),
                 PanelContent::Watched { channel_id } => watched_panel(
-                    state,
-                    state_entity,
+                    deps.clone(),
                     id,
                     channel_id,
                     WatchedComposerUi {
-                        input: watched_composer_inputs.get(channel_id).cloned(),
-                        autocomplete: watched_mention_autocomplete.get(channel_id).cloned(),
+                        input: deps.watched_composer_inputs.get(channel_id).cloned(),
+                        autocomplete: deps.watched_mention_autocomplete.get(channel_id).cloned(),
                     },
                     window,
                     cx,
                 ),
                 PanelContent::Empty => empty_panel(
-                    state_entity,
+                    deps.state_entity.clone(),
                     id,
                     "Empty pane",
                     "Use the plus button in a pane header to add another split.",
@@ -143,15 +141,7 @@ fn render_node(
 
             let mut child_elements = Vec::with_capacity(children.len());
             for child in children {
-                child_elements.push(render_node(
-                    child,
-                    state,
-                    state_entity.clone(),
-                    watched_composer_inputs,
-                    watched_mention_autocomplete,
-                    window,
-                    cx,
-                ));
+                child_elements.push(render_node(child, deps.clone(), window, cx));
             }
 
             container.children(child_elements)
@@ -160,14 +150,16 @@ fn render_node(
 }
 
 fn watched_panel(
-    state: &AppState,
-    state_entity: Entity<AppState>,
+    deps: WatchedLayoutDeps<'_>,
     panel_id: &str,
     channel_id: &str,
     composer: WatchedComposerUi,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
+    let state = deps.state;
+    let state_entity = deps.state_entity.clone();
+    let font_size_input = deps.font_size_input.clone();
     let settings = state.settings().clone();
     let channel = state
         .watched_channels
@@ -297,6 +289,7 @@ fn watched_panel(
                                     |el| {
                                         el.child(crate::ui::chat::render_appearance_popover(
                                             state_entity.clone(),
+                                            font_size_input.clone(),
                                             settings.clone(),
                                         ))
                                     },
