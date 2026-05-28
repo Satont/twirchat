@@ -1158,6 +1158,21 @@ fn author_label_text(message: &NormalizedChatMessage, use_fallback: bool) -> Str
     display_name.to_string()
 }
 
+fn author_name_color(message: &NormalizedChatMessage) -> gpui::Rgba {
+    if let Some(hex) = message
+        .author
+        .color
+        .as_deref()
+        .and_then(|color| color.strip_prefix('#'))
+        .filter(|hex| hex.len() == 6)
+        && let Ok(value) = u32::from_str_radix(hex, 16)
+    {
+        return rgb(value);
+    }
+
+    theme::accent()
+}
+
 fn aliased_row_message(
     message: &NormalizedChatMessage,
     state_entity: &Entity<AppState>,
@@ -1286,6 +1301,7 @@ fn compact_message_row(
         "{}:",
         author_label_text(message, options.use_author_fallback)
     );
+    let author_color = author_name_color(message);
     let state_entity_for_compact = state_entity.clone();
     let message_for_compact = target_message.clone();
     custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
@@ -1294,7 +1310,7 @@ fn compact_message_row(
             let message = message_for_compact.clone();
             div()
                 .mr(px(4.0))
-                .text_color(theme::accent())
+                .text_color(author_color)
                 .text_size(px(typography.author_font_size()))
                 .font_weight(gpui::FontWeight::BOLD)
                 .on_mouse_down(gpui::MouseButton::Right, move |_, _window, cx| {
@@ -1652,7 +1668,7 @@ pub(crate) fn message_row(
                         })
                         .child(
                             div()
-                                .text_color(theme::accent())
+                                .text_color(author_name_color(message))
                                 .text_size(px(typography.author_font_size()))
                                 .font_weight(gpui::FontWeight::BOLD)
                                 .on_mouse_down(gpui::MouseButton::Right, {
@@ -2566,6 +2582,27 @@ mod tests {
         PlatformStatus, PlatformStatusInfo, PlatformStatusMode,
     };
 
+    fn chat_message_with_author_color(color: Option<&str>) -> NormalizedChatMessage {
+        NormalizedChatMessage {
+            id: "message-color".into(),
+            platform: Platform::Twitch,
+            channel_id: "channel-1".into(),
+            author: ChatAuthor {
+                id: "author-1".into(),
+                username: Some("fixture".into()),
+                display_name: "Fixture".into(),
+                color: color.map(str::to_string),
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text: "hello".into(),
+            emotes: Vec::new(),
+            timestamp: "2026-05-18T21:03:27.000Z".into(),
+            message_type: ChatMessageType::Message,
+            reply: None,
+        }
+    }
+
     #[test]
     fn stream_status_header_targets_skip_youtube() {
         let mut state = AppState::default();
@@ -2628,6 +2665,43 @@ mod tests {
             &parts[0],
             super::TextSegment::Text(text) if text == "hello world"
         ));
+    }
+
+    #[test]
+    fn author_name_color_uses_valid_platform_hex_color() {
+        let message = chat_message_with_author_color(Some("#12abef"));
+
+        assert_eq!(super::author_name_color(&message), gpui::rgb(0x12abef));
+    }
+
+    #[test]
+    fn author_name_color_falls_back_when_color_missing() {
+        let message = chat_message_with_author_color(None);
+
+        assert_eq!(
+            super::author_name_color(&message),
+            crate::ui::theme::accent()
+        );
+    }
+
+    #[test]
+    fn author_name_color_falls_back_when_color_invalid() {
+        let message = chat_message_with_author_color(Some("#nothex"));
+
+        assert_eq!(
+            super::author_name_color(&message),
+            crate::ui::theme::accent()
+        );
+    }
+
+    #[test]
+    fn author_name_color_rejects_shorthand_hex_color() {
+        let message = chat_message_with_author_color(Some("#abc"));
+
+        assert_eq!(
+            super::author_name_color(&message),
+            crate::ui::theme::accent()
+        );
     }
 
     #[test]
