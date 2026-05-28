@@ -1,6 +1,6 @@
-use twirchat_desktop_rust::app_state::AppState;
+use twirchat_desktop_rust::app_state::{AppState, PaneDropDirection};
 use twirchat_desktop_rust::protocol::types::{ChatAuthor, ChatMessageType, NormalizedChatMessage};
-use twirchat_desktop_rust::protocol::types::{LayoutNode, PanelContent, Platform};
+use twirchat_desktop_rust::protocol::types::{LayoutNode, PanelContent, Platform, SplitDirection};
 use twirchat_desktop_rust::services::{ServiceEvent, WatchedChannelsEvent};
 use twirchat_desktop_rust::storage::Storage;
 use twirchat_desktop_rust::storage::accounts::UpsertAccount;
@@ -152,6 +152,11 @@ fn empty_pane_can_be_assigned_via_modal_target() {
         .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "suhodolskiy")
         .expect("base watched tab should persist");
     let active_tab = state.active_channel_tab_id().to_string();
+    let visible_tabs_before = state
+        .visible_watched_channels()
+        .into_iter()
+        .map(|channel| channel.id.clone())
+        .collect::<Vec<_>>();
     state
         .add_chat_pane_for_active_tab(&storage)
         .expect("empty pane should be added");
@@ -177,6 +182,21 @@ fn empty_pane_can_be_assigned_via_modal_target() {
         .expect("assigned watched channel should exist");
     assert!(layout_contains_channel(&updated.root, &assigned_channel_id));
     assert_eq!(state.active_channel_tab_id(), active_tab);
+    assert_eq!(
+        state
+            .visible_watched_channels()
+            .into_iter()
+            .map(|channel| channel.id.clone())
+            .collect::<Vec<_>>(),
+        visible_tabs_before,
+    );
+    assert_eq!(
+        storage
+            .settings()
+            .get_tab_channel_ids()
+            .expect("tab order should reload"),
+        Some(visible_tabs_before),
+    );
 }
 
 #[test]
@@ -395,6 +415,194 @@ fn custom_watched_history_is_filtered_out_of_home_reload() {
     );
 }
 
+#[test]
+fn watched_tab_order_rehydrates_from_persisted_ids_only() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("tab-order-rehydrate.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for tab order test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "alpha")
+        .expect("first watched tab should persist");
+    let alpha_id = state.active_channel_tab_id().to_string();
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "bravo")
+        .expect("second watched tab should persist");
+    let bravo_id = state.active_channel_tab_id().to_string();
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "charlie")
+        .expect("third watched tab should persist");
+    let charlie_id = state.active_channel_tab_id().to_string();
+
+    storage
+        .settings()
+        .set_tab_channel_ids(&[bravo_id.clone(), alpha_id.clone()])
+        .expect("persisted tab order should save");
+
+    let reloaded = AppState::from_storage(&storage);
+    let visible_ids = reloaded
+        .visible_watched_channels()
+        .into_iter()
+        .map(|channel| channel.id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(visible_ids, vec![bravo_id, alpha_id]);
+    assert!(
+        reloaded
+            .watched_channels
+            .iter()
+            .any(|channel| channel.id == charlie_id)
+    );
+}
+
+#[test]
+fn reorder_watched_channel_tab_persists_insert_before_target_order() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("tab-reorder.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for tab reorder test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "alpha")
+        .expect("first watched tab should persist");
+    let alpha_id = state.active_channel_tab_id().to_string();
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "bravo")
+        .expect("second watched tab should persist");
+    let bravo_id = state.active_channel_tab_id().to_string();
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "charlie")
+        .expect("third watched tab should persist");
+    let charlie_id = state.active_channel_tab_id().to_string();
+
+    let reordered = state
+        .reorder_watched_channel_tab(&storage, &charlie_id, &alpha_id)
+        .expect("tab reorder should persist");
+
+    assert!(reordered);
+    assert_eq!(
+        storage
+            .settings()
+            .get_tab_channel_ids()
+            .expect("tab order should reload"),
+        Some(vec![charlie_id, alpha_id, bravo_id]),
+    );
+}
+
+#[test]
+fn remove_watched_channel_for_tab_persists_filtered_tab_ids_and_falls_back_home() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("tab-remove-persist.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for tab remove test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "alpha")
+        .expect("first watched tab should persist");
+    let alpha_id = state.active_channel_tab_id().to_string();
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "bravo")
+        .expect("second watched tab should persist");
+    let bravo_id = state.active_channel_tab_id().to_string();
+
+    let removed = state
+        .remove_watched_channel_for_tab(&storage, &bravo_id)
+        .expect("tab removal should persist");
+
+    assert!(removed);
+    assert_eq!(state.active_channel_tab_id(), "home");
+    assert_eq!(
+        storage
+            .settings()
+            .get_tab_channel_ids()
+            .expect("tab order should reload"),
+        Some(vec![alpha_id]),
+    );
+}
+
+#[test]
+fn move_chat_pane_for_active_tab_moves_panel_right_and_persists() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("pane-move-right.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for pane move test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "base")
+        .expect("base watched tab should persist");
+    let active_tab = state.active_channel_tab_id().to_string();
+    state
+        .add_chat_pane_for_active_tab(&storage)
+        .expect("second pane should persist");
+    state
+        .add_chat_pane_for_active_tab(&storage)
+        .expect("third pane should persist");
+
+    let layout = state
+        .watched_layout(&active_tab)
+        .expect("layout should exist before move");
+    let before = panel_ids_in_order(&layout.root);
+    assert_eq!(before.len(), 3);
+
+    let moved = state
+        .move_chat_pane_for_active_tab(&storage, &before[0], &before[2], PaneDropDirection::Right)
+        .expect("pane move should persist");
+
+    assert!(moved);
+    let persisted = storage
+        .watched_layout()
+        .get(&active_tab)
+        .expect("persisted layout should reload");
+    assert_eq!(
+        panel_ids_in_order(&persisted.root),
+        vec![before[1].clone(), before[2].clone(), before[0].clone()]
+    );
+}
+
+#[test]
+fn move_chat_pane_for_active_tab_wraps_root_target_when_direction_changes() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("pane-move-wrap-root.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for pane wrap test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "base")
+        .expect("base watched tab should persist");
+    let active_tab = state.active_channel_tab_id().to_string();
+    state
+        .add_chat_pane_for_active_tab(&storage)
+        .expect("second pane should persist");
+
+    let layout = state
+        .watched_layout(&active_tab)
+        .expect("layout should exist before move");
+    let before = panel_ids_in_order(&layout.root);
+    assert_eq!(before.len(), 2);
+
+    let moved = state
+        .move_chat_pane_for_active_tab(&storage, &before[0], &before[1], PaneDropDirection::Bottom)
+        .expect("pane move should persist");
+
+    assert!(moved);
+    let persisted = storage
+        .watched_layout()
+        .get(&active_tab)
+        .expect("persisted layout should reload");
+    assert!(matches!(
+        persisted.root,
+        LayoutNode::Split {
+            direction: SplitDirection::Vertical,
+            ..
+        }
+    ));
+    assert_eq!(
+        panel_ids_in_order(&persisted.root),
+        vec![before[1].clone(), before[0].clone()]
+    );
+}
+
 fn count_panels(node: &LayoutNode) -> usize {
     match node {
         LayoutNode::Panel { .. } => 1,
@@ -426,5 +634,14 @@ fn layout_contains_channel(node: &LayoutNode, channel_id: &str) -> bool {
         LayoutNode::Split { children, .. } => children
             .iter()
             .any(|child| layout_contains_channel(child, channel_id)),
+    }
+}
+
+fn panel_ids_in_order(node: &LayoutNode) -> Vec<String> {
+    match node {
+        LayoutNode::Panel { id, .. } => vec![id.clone()],
+        LayoutNode::Split { children, .. } => {
+            children.iter().flat_map(panel_ids_in_order).collect()
+        }
     }
 }

@@ -1,4 +1,4 @@
-use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
+use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus, PaneDropDirection};
 use crate::protocol::types::{
     LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection, WatchedChannel,
     WatchedChannelsLayout,
@@ -24,6 +24,11 @@ struct WatchedLayoutDeps<'a> {
     font_size_input: Entity<Input>,
     watched_composer_inputs: &'a BTreeMap<String, Entity<Input>>,
     watched_mention_autocomplete: &'a BTreeMap<String, MentionAutocompleteUi>,
+}
+
+#[derive(Clone)]
+struct DraggedPane {
+    panel_id: String,
 }
 
 pub(crate) fn tab_panel(
@@ -86,6 +91,7 @@ fn render_node(
 ) -> Stateful<Div> {
     match node {
         LayoutNode::Panel { id, content, .. } => {
+            let is_main_panel = matches!(content, PanelContent::Main);
             let panel = match content {
                 PanelContent::Main => empty_panel(
                     deps.state_entity.clone(),
@@ -114,9 +120,38 @@ fn render_node(
 
             div()
                 .id(id.clone())
+                .relative()
                 .flex_1()
                 .min_w(px(0.0))
                 .min_h(px(0.0))
+                .when(!is_main_panel, |el| {
+                    el.on_drag(
+                        DraggedPane {
+                            panel_id: id.clone(),
+                        },
+                        |_, _, _, cx| cx.new(|_| gpui::Empty),
+                    )
+                    .child(pane_drop_zone(
+                        deps.state_entity.clone(),
+                        id.clone(),
+                        PaneDropDirection::Left,
+                    ))
+                    .child(pane_drop_zone(
+                        deps.state_entity.clone(),
+                        id.clone(),
+                        PaneDropDirection::Right,
+                    ))
+                    .child(pane_drop_zone(
+                        deps.state_entity.clone(),
+                        id.clone(),
+                        PaneDropDirection::Top,
+                    ))
+                    .child(pane_drop_zone(
+                        deps.state_entity.clone(),
+                        id.clone(),
+                        PaneDropDirection::Bottom,
+                    ))
+                })
                 .child(panel)
         }
         LayoutNode::Split {
@@ -301,6 +336,20 @@ fn watched_panel(
                             move |_event, _window, cx| {
                                 state_entity.add_chat_pane_for_active_tab(cx);
                             }
+                        }))
+                        .child(action_button("↔").on_click({
+                            let state_entity = state_entity.clone();
+                            let panel_id = panel_id.to_string();
+                            move |_event, _window, cx| {
+                                state_entity.open_add_channel_modal_for_panel(cx, &panel_id);
+                            }
+                        }))
+                        .child(action_button("×").on_click({
+                            let state_entity = state_entity.clone();
+                            let panel_id = panel_id.to_string();
+                            move |_event, _window, cx| {
+                                state_entity.remove_chat_pane_for_active_tab(cx, &panel_id);
+                            }
                         })),
                 ),
         )
@@ -435,6 +484,43 @@ fn empty_panel(
                         .child(description.to_string()),
                 ),
         )
+}
+
+fn pane_drop_zone(
+    state_entity: Entity<AppState>,
+    target_id: String,
+    direction: PaneDropDirection,
+) -> Div {
+    let (positioned, is_horizontal_edge) = match direction {
+        PaneDropDirection::Left => (div().left(px(0.0)).top(px(0.0)), true),
+        PaneDropDirection::Right => (div().right(px(0.0)).top(px(0.0)), true),
+        PaneDropDirection::Top => (div().left(px(0.0)).top(px(0.0)), false),
+        PaneDropDirection::Bottom => (div().left(px(0.0)).bottom(px(0.0)), false),
+    };
+
+    let target_for_drop = target_id.clone();
+    positioned
+        .absolute()
+        .when(is_horizontal_edge, |el| el.w(px(20.0)).h_full())
+        .when(!is_horizontal_edge, |el| el.w_full().h(px(20.0)))
+        .drag_over::<DraggedPane>(move |style, dragged, _, _| {
+            if dragged.panel_id == target_id {
+                style
+            } else {
+                style
+                    .bg(rgba(0x5865f25a))
+                    .border_1()
+                    .border_color(rgba(0x5865f2cc))
+            }
+        })
+        .on_drop::<DraggedPane>(move |dragged, _window, app| {
+            state_entity.move_chat_pane_for_active_tab(
+                app,
+                &dragged.panel_id,
+                &target_for_drop,
+                direction,
+            );
+        })
 }
 
 fn collect_panel_messages(

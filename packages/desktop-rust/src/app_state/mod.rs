@@ -58,6 +58,14 @@ pub enum MainSection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaneDropDirection {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeStatus {
     Starting,
     Running,
@@ -156,6 +164,7 @@ pub struct AppState {
     aliases: AliasBook,
     seven_tv_catalog: SevenTvCatalog,
     pub watched_channels: Vec<WatchedChannel>,
+    watched_tab_channel_ids: Vec<String>,
     home_channel_statuses: BTreeMap<String, ChannelStatus>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_channel_messages: BTreeMap<String, Vec<NormalizedChatMessage>>,
@@ -207,6 +216,7 @@ impl Default for AppState {
             aliases: AliasBook::default(),
             seven_tv_catalog: SevenTvCatalog::new(),
             watched_channels: vec![],
+            watched_tab_channel_ids: Vec::new(),
             home_channel_statuses: BTreeMap::new(),
             watched_channel_statuses: BTreeMap::new(),
             watched_channel_messages: BTreeMap::new(),
@@ -266,6 +276,16 @@ impl AppState {
         }
         if let Ok(channels) = storage.watched_channels().find_all() {
             self.watched_channels = channels;
+            if let Ok(Some(tab_ids)) = storage.settings().get_tab_channel_ids() {
+                self.set_visible_tab_order(tab_ids);
+            } else {
+                self.watched_tab_channel_ids = self
+                    .watched_channels
+                    .iter()
+                    .filter(|channel| !self.is_home_account_channel(channel))
+                    .map(|channel| channel.id.clone())
+                    .collect();
+            }
         }
         if let Ok(accounts) = storage.accounts().find_all() {
             for account in &accounts {
@@ -433,10 +453,43 @@ impl AppState {
     }
 
     pub fn visible_watched_channels(&self) -> Vec<&WatchedChannel> {
-        self.watched_channels
+        self.watched_tab_channel_ids
             .iter()
-            .filter(|channel| !self.is_home_account_channel(channel))
+            .filter_map(|id| {
+                self.watched_channels
+                    .iter()
+                    .find(|channel| channel.id == *id && !self.is_home_account_channel(channel))
+            })
             .collect()
+    }
+
+    fn set_visible_tab_order(&mut self, tab_ids: Vec<String>) {
+        let positions = tab_ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| (id.as_str(), index))
+            .collect::<BTreeMap<_, _>>();
+
+        self.watched_channels.sort_by_key(|channel| {
+            positions
+                .get(channel.id.as_str())
+                .copied()
+                .unwrap_or(usize::MAX)
+        });
+        self.watched_tab_channel_ids = tab_ids
+            .into_iter()
+            .filter(|id| {
+                self.watched_channels
+                    .iter()
+                    .any(|channel| channel.id == *id && !self.is_home_account_channel(channel))
+            })
+            .collect();
+    }
+
+    fn persist_visible_tab_order(&self, storage: &Storage) -> crate::storage::StorageResult<()> {
+        storage
+            .settings()
+            .set_tab_channel_ids(&self.watched_tab_channel_ids)
     }
 
     pub fn home_channel_status_requests(&self) -> Vec<ChannelStatusRequest> {
@@ -1432,7 +1485,15 @@ impl AppState {
             return Ok(false);
         };
 
+        if !self
+            .watched_tab_channel_ids
+            .iter()
+            .any(|id| id == &channel.id)
+        {
+            self.watched_tab_channel_ids.push(channel.id.clone());
+        }
         self.select_channel_tab(channel.id.clone());
+        self.persist_visible_tab_order(storage)?;
         self.close_add_channel_modal();
         Ok(true)
     }
@@ -1462,6 +1523,7 @@ impl AppState {
 
         self.watched_channels
             .retain(|channel| channel.id != channel_id);
+        self.watched_tab_channel_ids.retain(|id| id != channel_id);
         self.watched_channel_statuses.remove(channel_id);
         self.watched_channel_messages.remove(channel_id);
         self.watched_reply_targets.remove(channel_id);
@@ -1479,6 +1541,51 @@ impl AppState {
             .retain(|remove| remove.channel_id != channel_id);
         self.queue_watched_channel_remove(removed_channel.id);
         true
+    }
+
+    pub fn remove_watched_channel_for_tab(
+        &mut self,
+        storage: &Storage,
+        channel_id: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        let removed = self.remove_watched_channel(channel_id);
+        if removed {
+            self.persist_visible_tab_order(storage)?;
+        }
+        Ok(removed)
+    }
+
+    pub fn reorder_watched_channel_tab(
+        &mut self,
+        storage: &Storage,
+        from_id: &str,
+        to_id: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        if from_id == to_id {
+            return Ok(false);
+        }
+
+        let mut ids = self
+            .visible_watched_channels()
+            .into_iter()
+            .map(|channel| channel.id.clone())
+            .collect::<Vec<_>>();
+        let Some(from_index) = ids.iter().position(|id| id == from_id) else {
+            return Ok(false);
+        };
+        let Some(mut to_index) = ids.iter().position(|id| id == to_id) else {
+            return Ok(false);
+        };
+
+        let moved = ids.remove(from_index);
+        if from_index < to_index {
+            to_index -= 1;
+        }
+        ids.insert(to_index, moved);
+
+        self.set_visible_tab_order(ids.clone());
+        storage.settings().set_tab_channel_ids(&ids)?;
+        Ok(true)
     }
 
     pub fn toggle_composer_channel(&mut self, channel_id: &str) {
@@ -1797,6 +1904,41 @@ impl AppState {
             .cloned()
             .unwrap_or_else(|| create_default_tab_layout(&tab_id));
         if !remove_panel_from_layout(&mut layout.root, panel_id) {
+            return Ok(false);
+        }
+
+        storage.watched_layout().set(&tab_id, &layout)?;
+        self.watched_layouts.insert(tab_id, layout);
+        Ok(true)
+    }
+
+    pub fn move_chat_pane_for_active_tab(
+        &mut self,
+        storage: &Storage,
+        source_id: &str,
+        target_id: &str,
+        direction: PaneDropDirection,
+    ) -> crate::storage::StorageResult<bool> {
+        let tab_id = self.active_channel_tab_id.clone();
+        if tab_id == "home" || source_id == target_id {
+            return Ok(false);
+        }
+
+        let mut layout = self
+            .watched_layouts
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_else(|| create_default_tab_layout(&tab_id));
+        if panel_is_main(&layout.root, source_id).unwrap_or(true) {
+            return Ok(false);
+        }
+
+        let Some(source_panel) = take_panel_from_layout(&mut layout.root, source_id) else {
+            return Ok(false);
+        };
+        collapse_single_child_splits(&mut layout.root);
+
+        if !insert_panel_near_target(&mut layout.root, source_panel, target_id, direction) {
             return Ok(false);
         }
 
@@ -2518,6 +2660,8 @@ pub trait AppStateActions {
     );
     fn submit_add_channel_modal(&self, app: &mut App, platform: Platform, channel_slug: &str);
     fn remove_watched_channel(&self, app: &mut App, channel_id: &str);
+    fn remove_watched_channel_for_tab(&self, app: &mut App, channel_id: &str);
+    fn reorder_watched_channel_tab(&self, app: &mut App, from_id: &str, to_id: &str);
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool;
     fn queue_watched_channel_send(&self, app: &mut App, channel_id: &str, text: &str) -> bool;
     fn open_user_card(&self, app: &mut App, target: UserCardTarget);
@@ -2547,6 +2691,13 @@ pub trait AppStateActions {
     fn toggle_composer_channel(&self, app: &mut App, channel_id: &str);
     fn add_chat_pane_for_active_tab(&self, app: &mut App);
     fn remove_chat_pane_for_active_tab(&self, app: &mut App, panel_id: &str);
+    fn move_chat_pane_for_active_tab(
+        &self,
+        app: &mut App,
+        source_id: &str,
+        target_id: &str,
+        direction: PaneDropDirection,
+    );
     fn add_watched_channel_from_account(&self, app: &mut App, account_id: &str);
     fn connect_kick_account(&self, app: &mut App);
     fn connect_twitch_account(&self, app: &mut App);
@@ -2872,6 +3023,37 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
+    fn remove_watched_channel_for_tab(&self, app: &mut App, channel_id: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.remove_watched_channel_for_tab(&storage, channel_id) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn reorder_watched_channel_tab(&self, app: &mut App, from_id: &str, to_id: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.reorder_watched_channel_tab(&storage, from_id, to_id)
+                    {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool {
         self.update(app, |state, cx| {
             let queued = state.queue_composer_send(text);
@@ -3012,6 +3194,29 @@ impl AppStateActions for Entity<AppState> {
             match Storage::open_or_recover(config.db_path()) {
                 Ok(storage) => {
                     if let Err(error) = state.remove_chat_pane_for_active_tab(&storage, panel_id) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
+    fn move_chat_pane_for_active_tab(
+        &self,
+        app: &mut App,
+        source_id: &str,
+        target_id: &str,
+        direction: PaneDropDirection,
+    ) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state
+                        .move_chat_pane_for_active_tab(&storage, source_id, target_id, direction)
+                    {
                         state.record_runtime_failure(error.to_string());
                     }
                 }
@@ -3242,6 +3447,156 @@ fn remove_panel_from_layout(root: &mut LayoutNode, panel_id: &str) -> bool {
                 .iter_mut()
                 .any(|child| remove_panel_from_layout(child, panel_id))
         }
+    }
+}
+
+fn panel_is_main(node: &LayoutNode, panel_id: &str) -> Option<bool> {
+    match node {
+        LayoutNode::Panel { id, content, .. } => {
+            (id == panel_id).then_some(matches!(content, PanelContent::Main))
+        }
+        LayoutNode::Split { children, .. } => children
+            .iter()
+            .find_map(|child| panel_is_main(child, panel_id)),
+    }
+}
+
+fn take_panel_from_layout(root: &mut LayoutNode, panel_id: &str) -> Option<LayoutNode> {
+    match root {
+        LayoutNode::Panel { .. } => None,
+        LayoutNode::Split { children, .. } => {
+            if let Some(index) = children
+                .iter()
+                .position(|child| matches!(child, LayoutNode::Panel { id, .. } if id == panel_id))
+            {
+                return Some(children.remove(index));
+            }
+
+            children
+                .iter_mut()
+                .find_map(|child| take_panel_from_layout(child, panel_id))
+        }
+    }
+}
+
+fn collapse_single_child_splits(node: &mut LayoutNode) {
+    if let LayoutNode::Split { children, .. } = node {
+        for child in children.iter_mut() {
+            collapse_single_child_splits(child);
+        }
+
+        if children.len() == 1 {
+            *node = children.remove(0);
+        } else if !children.is_empty() {
+            rebalance_children(children);
+        }
+    }
+}
+
+fn insert_panel_near_target(
+    node: &mut LayoutNode,
+    source_panel: LayoutNode,
+    target_id: &str,
+    drop_direction: PaneDropDirection,
+) -> bool {
+    let split_direction = pane_drop_split_direction(drop_direction);
+    let insert_after = matches!(
+        drop_direction,
+        PaneDropDirection::Right | PaneDropDirection::Bottom
+    );
+
+    match node {
+        LayoutNode::Panel { id, flex, .. } if id == target_id => {
+            let target_flex = *flex;
+            let target = node.clone();
+            let mut source_panel = source_panel;
+            set_layout_flex(&mut source_panel, 50.0);
+            let mut target = target;
+            set_layout_flex(&mut target, 50.0);
+            *node = LayoutNode::Split {
+                id: uuid::Uuid::new_v4().to_string(),
+                direction: split_direction,
+                children: if insert_after {
+                    vec![target, source_panel]
+                } else {
+                    vec![source_panel, target]
+                },
+                flex: target_flex,
+                min_size: None,
+            };
+            true
+        }
+        LayoutNode::Panel { .. } => false,
+        LayoutNode::Split {
+            direction,
+            children,
+            ..
+        } => {
+            if let Some(index) = children
+                .iter()
+                .position(|child| matches!(child, LayoutNode::Panel { id, .. } if id == target_id))
+            {
+                if *direction == split_direction {
+                    let insert_index = if insert_after { index + 1 } else { index };
+                    children.insert(insert_index, source_panel);
+                    rebalance_children(children);
+                } else {
+                    let target_flex = layout_flex(&children[index]);
+                    let target = children[index].clone();
+                    let mut source_panel = source_panel;
+                    set_layout_flex(&mut source_panel, 50.0);
+                    let mut target = target;
+                    set_layout_flex(&mut target, 50.0);
+                    children[index] = LayoutNode::Split {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        direction: split_direction,
+                        children: if insert_after {
+                            vec![target, source_panel]
+                        } else {
+                            vec![source_panel, target]
+                        },
+                        flex: target_flex,
+                        min_size: None,
+                    };
+                }
+                true
+            } else {
+                children.iter_mut().any(|child| {
+                    insert_panel_near_target(child, source_panel.clone(), target_id, drop_direction)
+                })
+            }
+        }
+    }
+}
+
+fn pane_drop_split_direction(direction: PaneDropDirection) -> SplitDirection {
+    match direction {
+        PaneDropDirection::Left | PaneDropDirection::Right => SplitDirection::Horizontal,
+        PaneDropDirection::Top | PaneDropDirection::Bottom => SplitDirection::Vertical,
+    }
+}
+
+fn rebalance_children(children: &mut [LayoutNode]) {
+    let flex = 100.0 / children.len() as f64;
+    for child in children {
+        set_layout_flex(child, flex);
+    }
+}
+
+fn layout_flex(node: &LayoutNode) -> f64 {
+    match node {
+        LayoutNode::Panel { flex, .. } | LayoutNode::Split { flex, .. } => *flex,
+    }
+}
+
+fn set_layout_flex(node: &mut LayoutNode, flex: f64) {
+    match node {
+        LayoutNode::Panel {
+            flex: node_flex, ..
+        }
+        | LayoutNode::Split {
+            flex: node_flex, ..
+        } => *node_flex = flex,
     }
 }
 

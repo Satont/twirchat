@@ -7,6 +7,11 @@ use crate::ui::theme;
 use gpui::{App, ClickEvent, Div, Entity, Window, div, prelude::*, px};
 
 #[derive(Clone)]
+struct DraggedTab {
+    id: String,
+}
+
+#[derive(Clone)]
 pub(crate) struct TabItem {
     pub id: String,
     pub label: String,
@@ -69,6 +74,7 @@ pub(crate) fn bar(
             let is_home = tab_id == "home";
 
             div()
+                .id(format!("tab-wrapper-{id}"))
                 .relative()
                 .flex()
                 .items_center()
@@ -130,25 +136,55 @@ pub(crate) fn bar(
                 .when(!is_home, |wrapper| {
                     let state_entity = tabs_state_entity.clone();
                     let tab_id = id.clone();
-                    wrapper.child(
-                        div()
-                            .absolute()
-                            .right(px(8.0))
-                            .top(px(7.0))
-                            .w(px(18.0))
-                            .h(px(18.0))
-                            .rounded_md()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .text_color(theme::text_muted())
-                            .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
-                            .child("×")
-                            .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, app| {
-                                state_entity.remove_watched_channel(app, &tab_id);
-                            }),
-                    )
+                    let drop_target_id = id.clone();
+                    let drag_tab_id = id.clone();
+                    wrapper
+                        .on_drag(DraggedTab { id: drag_tab_id }, |_, _, _, cx| {
+                            cx.new(|_| gpui::Empty)
+                        })
+                        .drag_over::<DraggedTab>(move |style, dragged, _, _| {
+                            if dragged.id == drop_target_id {
+                                style
+                            } else {
+                                style
+                                    .bg(theme::surface())
+                                    .border_b_2()
+                                    .border_color(theme::accent())
+                            }
+                        })
+                        .on_drop::<DraggedTab>({
+                            let state_entity = tabs_state_entity.clone();
+                            let target_id = id.clone();
+                            move |dragged, _window, app| {
+                                state_entity.reorder_watched_channel_tab(
+                                    app,
+                                    &dragged.id,
+                                    &target_id,
+                                );
+                            }
+                        })
+                        .child(
+                            div()
+                                .absolute()
+                                .right(px(8.0))
+                                .top(px(7.0))
+                                .w(px(18.0))
+                                .h(px(18.0))
+                                .rounded_md()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_pointer()
+                                .text_color(theme::text_muted())
+                                .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
+                                .child("×")
+                                .on_mouse_down(
+                                    gpui::MouseButton::Left,
+                                    move |_event, _window, app| {
+                                        state_entity.remove_watched_channel_for_tab(app, &tab_id);
+                                    },
+                                ),
+                        )
                 })
         }))
         .child(

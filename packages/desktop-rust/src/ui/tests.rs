@@ -186,6 +186,34 @@ fn watched_tab_header_has_pane_add_contract() {
 }
 
 #[test]
+fn watched_tabs_have_drag_reorder_contract() {
+    let tabs_rs = std::fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
+
+    assert!(tabs_rs.contains("DraggedTab"));
+    assert!(tabs_rs.contains(".on_drag(DraggedTab"));
+    assert!(tabs_rs.contains(".drag_over::<DraggedTab>"));
+    assert!(tabs_rs.contains(".on_drop::<DraggedTab>"));
+    assert!(tabs_rs.contains("reorder_watched_channel_tab"));
+    assert!(tabs_rs.contains("remove_watched_channel_for_tab"));
+}
+
+#[test]
+fn watched_panes_have_drag_drop_and_panel_controls_contract() {
+    let watched_layout_rs = std::fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+
+    assert!(watched_layout_rs.contains("DraggedPane"));
+    assert!(watched_layout_rs.contains("PaneDropDirection"));
+    assert!(watched_layout_rs.contains(".on_drag("));
+    assert!(watched_layout_rs.contains("DraggedPane {"));
+    assert!(watched_layout_rs.contains(".drag_over::<DraggedPane>"));
+    assert!(watched_layout_rs.contains(".on_drop::<DraggedPane>"));
+    assert!(watched_layout_rs.contains("move_chat_pane_for_active_tab"));
+    assert!(watched_layout_rs.contains("remove_chat_pane_for_active_tab"));
+    assert!(watched_layout_rs.contains("open_add_channel_modal_for_panel"));
+}
+
+#[test]
 fn tab_add_button_has_visible_menu_contract() {
     let tabs_rs = fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
     let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
