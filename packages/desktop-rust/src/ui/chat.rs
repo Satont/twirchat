@@ -20,6 +20,32 @@ use std::path::Path;
 use ui::WithScrollbar;
 use url::Url;
 
+fn parse_timestamp(ts: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(ts) {
+        return Some(dt.with_timezone(&chrono::Utc));
+    }
+
+    if let Ok(num) = ts.parse::<i64>() {
+        let timestamp = if num >= 20000000000 { num / 1000 } else { num };
+
+        if let Some(dt) = chrono::DateTime::from_timestamp(timestamp, 0) {
+            return Some(dt.with_timezone(&chrono::Utc));
+        }
+    }
+
+    None
+}
+
+fn format_timestamp(ts: &str) -> String {
+    if let Some(dt) = parse_timestamp(ts) {
+        dt.with_timezone(&chrono::Local)
+            .format("%H:%M:%S")
+            .to_string()
+    } else {
+        ts.to_string()
+    }
+}
+
 pub(crate) struct ChatScrollUi<'a> {
     pub list_state: &'a ListState,
     pub paused: bool,
@@ -1029,10 +1055,16 @@ fn compact_message_row(
     let mut custom_parts = Vec::new();
 
     if settings.show_timestamp {
-        let ts = message.timestamp.clone();
+        let ts = format_timestamp(&message.timestamp);
         custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
             move |_win, _cx| {
                 div()
+                    .w(px(50.0))
+                    .flex_shrink_0()
+                    .flex()
+                    .justify_end()
+                    .items_center()
+                    .mr(px(4.0))
                     .text_size(px(10.0))
                     .text_color(theme::text_muted())
                     .child(ts.clone())
@@ -1045,9 +1077,13 @@ fn compact_message_row(
         let platform = message.platform;
         custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
             move |_win, _cx| {
-                PlatformIcon::new(to_model_platform(platform))
-                    .size(px(12.0))
-                    .color(theme::platform_color(to_model_platform(platform)))
+                div()
+                    .mr(px(4.0))
+                    .child(
+                        PlatformIcon::new(to_model_platform(platform))
+                            .size(px(12.0))
+                            .color(theme::platform_color(to_model_platform(platform))),
+                    )
                     .into_any_element()
             },
         )));
@@ -1065,6 +1101,7 @@ fn compact_message_row(
                         .filter(|url| Path::new(url).is_absolute())
                     {
                         return div()
+                            .mr(px(4.0))
                             .w(px(14.0))
                             .h(px(14.0))
                             .rounded_sm()
@@ -1085,6 +1122,7 @@ fn compact_message_row(
                         .filter(|url| url.starts_with("http://") || url.starts_with("https://"))
                     {
                         div()
+                            .mr(px(4.0))
                             .w(px(14.0))
                             .h(px(14.0))
                             .rounded_sm()
@@ -1099,6 +1137,7 @@ fn compact_message_row(
                             .into_any_element()
                     } else {
                         div()
+                            .mr(px(4.0))
                             .rounded_sm()
                             .px(px(4.0))
                             .py(px(1.0))
@@ -1124,6 +1163,7 @@ fn compact_message_row(
             let state_entity = state_entity_for_compact.clone();
             let message = message_for_compact.clone();
             div()
+                .mr(px(4.0))
                 .text_color(theme::accent())
                 .text_size(px(12.0))
                 .font_weight(gpui::FontWeight::BOLD)
@@ -1280,7 +1320,7 @@ pub(crate) fn message_row(
                     div()
                         .text_size(px(10.0))
                         .text_color(theme::text_muted())
-                        .child(message.timestamp.clone()),
+                        .child(format_timestamp(&message.timestamp)),
                 )
             })
             .into_any_element();
@@ -1494,7 +1534,7 @@ pub(crate) fn message_row(
                                 div()
                                     .text_size(px(9.0))
                                     .text_color(theme::text_muted())
-                                    .child(message.timestamp.clone()),
+                                    .child(format_timestamp(&message.timestamp)),
                             )
                         }),
                 )
@@ -2547,5 +2587,29 @@ mod tests {
                 is_link: false,
             } if text == "world" && source_range.start == 6 && source_range.end == 11
         ));
+    }
+
+    #[test]
+    fn test_format_timestamp() {
+        use super::parse_timestamp;
+
+        let tz = chrono::FixedOffset::east_opt(2 * 3600).unwrap();
+
+        let format_with_tz = |ts: &str| -> String {
+            if let Some(dt) = parse_timestamp(ts) {
+                dt.with_timezone(&tz).format("%H:%M:%S").to_string()
+            } else {
+                ts.to_string()
+            }
+        };
+
+        assert_eq!(format_with_tz("2026-05-28T13:42:00.000Z"), "15:42:00");
+
+        assert_eq!(format_with_tz("1779979320"), "16:42:00");
+
+        assert_eq!(format_with_tz("1779979320000"), "16:42:00");
+
+        assert_eq!(format_with_tz("hello world"), "hello world");
+        assert_eq!(format_with_tz(""), "");
     }
 }
