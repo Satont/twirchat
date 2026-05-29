@@ -20,6 +20,7 @@ pub(crate) struct ContentPanelProps<'a> {
     pub composer_input: Entity<Input>,
     pub font_size_input: Entity<Input>,
     pub add_channel_input: Entity<Input>,
+    pub tab_rename_input: Entity<Input>,
     pub watched_composer_inputs: BTreeMap<String, Entity<Input>>,
     pub hotkey_capture_focus: FocusHandle,
     pub composer_text: String,
@@ -89,6 +90,7 @@ pub(crate) fn panel(
                             state,
                             props.state_entity.clone(),
                             props.add_channel_input.clone(),
+                            props.tab_rename_input.clone(),
                         )),
                 )
                 .when(state.tab_add_menu_open, |el| {

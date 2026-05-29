@@ -41,6 +41,7 @@ pub struct TwirChatApp {
     user_card_alias_input: Entity<Input>,
     add_channel_input: Entity<Input>,
     tab_selector_input: Entity<Input>,
+    tab_rename_input: Entity<Input>,
     watched_composer_inputs: BTreeMap<String, Entity<Input>>,
     hotkey_capture_focus: FocusHandle,
     tab_selector_focus: FocusHandle,
@@ -106,6 +107,7 @@ impl TwirChatApp {
         let user_card_alias_input = cx.new(|cx| Input::new("Local alias", cx));
         let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
         let tab_selector_input = cx.new(|cx| Input::new("Switch to tab...", cx));
+        let tab_rename_input = cx.new(|cx| Input::new("Tab name", cx).with_tab_rename_appearance());
         let hotkey_capture_focus = cx.focus_handle();
         let tab_selector_focus = cx.focus_handle();
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
@@ -117,6 +119,8 @@ impl TwirChatApp {
         cx.observe(&add_channel_input, |_, _, cx| cx.notify())
             .detach();
         cx.observe(&tab_selector_input, |_, _, cx| cx.notify())
+            .detach();
+        cx.observe(&tab_rename_input, |_, _, cx| cx.notify())
             .detach();
         let keystroke_listener = cx.listener(Self::observe_keystrokes);
         let keystroke_subscription = cx.intercept_keystrokes(keystroke_listener);
@@ -227,6 +231,7 @@ impl TwirChatApp {
             user_card_alias_input,
             add_channel_input,
             tab_selector_input,
+            tab_rename_input,
             watched_composer_inputs: BTreeMap::new(),
             hotkey_capture_focus,
             tab_selector_focus,
@@ -659,6 +664,40 @@ impl TwirChatApp {
         cx.notify();
     }
 
+    fn flush_tab_rename_submit(&self, cx: &mut Context<Self>) {
+        let Some(tab_id) = self
+            .state
+            .read(cx)
+            .renaming_watched_tab_id()
+            .map(str::to_string)
+        else {
+            return;
+        };
+
+        let submitted_text = self.tab_rename_input.update(cx, |input, _cx| {
+            input
+                .take_submit_requested()
+                .then(|| input.text().trim().to_string())
+        });
+
+        let Some(name) = submitted_text else {
+            return;
+        };
+
+        self.state.update(cx, |state, cx| {
+            let config = crate::runtime::config::RuntimeConfig::default();
+            match crate::storage::Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.rename_watched_tab(&storage, &tab_id, &name) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
     fn sync_font_size_input(&self, state: &AppState, window: &Window, cx: &mut Context<Self>) {
         if self
             .font_size_input
@@ -991,6 +1030,11 @@ impl TwirChatApp {
                 .is_focused(window)
             || self
                 .user_card_alias_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+            || self
+                .tab_rename_input
                 .read(cx)
                 .focus_handle(cx)
                 .is_focused(window)
@@ -1431,6 +1475,7 @@ impl Render for TwirChatApp {
         self.drain_runtime_events(cx);
         self.flush_composer_submit(cx);
         self.flush_font_size_submit(cx);
+        self.flush_tab_rename_submit(cx);
         self.flush_watched_composer_submits(cx);
         self.flush_pending_watched_channel_adds(cx);
         self.flush_pending_watched_channel_messages(cx);
@@ -1524,6 +1569,7 @@ impl Render for TwirChatApp {
                             composer_input: self.composer_input.clone(),
                             font_size_input: self.font_size_input.clone(),
                             add_channel_input: self.add_channel_input.clone(),
+                            tab_rename_input: self.tab_rename_input.clone(),
                             watched_composer_inputs: self.watched_composer_inputs.clone(),
                             hotkey_capture_focus: self.hotkey_capture_focus.clone(),
                             composer_text,

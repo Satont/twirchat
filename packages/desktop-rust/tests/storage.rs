@@ -10,6 +10,37 @@ use twirchat_desktop_rust::storage::crypto;
 use twirchat_desktop_rust::storage::{Storage, TokenState};
 
 #[test]
+fn watched_tab_custom_names_round_trip_and_clear() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("watched-tab-custom-names.sqlite");
+    let storage = Storage::open(&db_path)?;
+
+    storage
+        .settings()
+        .set_watched_tab_custom_name("wc-twitch", Some("Main crew"))?;
+    assert_eq!(
+        storage
+            .settings()
+            .get_watched_tab_custom_names()?
+            .get("wc-twitch")
+            .map(String::as_str),
+        Some("Main crew"),
+    );
+
+    storage
+        .settings()
+        .set_watched_tab_custom_name("wc-twitch", None)?;
+    assert!(
+        !storage
+            .settings()
+            .get_watched_tab_custom_names()?
+            .contains_key("wc-twitch")
+    );
+
+    Ok(())
+}
+
+#[test]
 fn storage_reads_vue_fixture_db() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let db_path = temp.path().join("healthy.sqlite");

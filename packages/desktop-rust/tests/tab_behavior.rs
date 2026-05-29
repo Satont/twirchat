@@ -200,6 +200,116 @@ fn empty_pane_can_be_assigned_via_modal_target() {
 }
 
 #[test]
+fn two_pane_tab_title_uses_both_channel_display_names() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("two-pane-title.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for title test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "base")
+        .expect("base watched tab should persist");
+    let active_tab = state.active_channel_tab_id().to_string();
+    state
+        .add_chat_pane_for_active_tab(&storage)
+        .expect("second pane should persist");
+    let empty_panel_id = find_empty_panel_id(
+        &state
+            .watched_layout(&active_tab)
+            .expect("layout should exist")
+            .root,
+    )
+    .expect("empty panel should exist");
+    state.open_add_channel_modal_for_panel(empty_panel_id);
+    state
+        .submit_add_channel_modal(&storage, Platform::Twitch, "guest")
+        .expect("guest pane should persist");
+
+    assert_eq!(
+        state.watched_tab_title(&active_tab).as_deref(),
+        Some("base + guest"),
+    );
+}
+
+#[test]
+fn custom_watched_tab_name_overrides_generated_title_and_rehydrates() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("custom-tab-title.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for custom title test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "base")
+        .expect("base watched tab should persist");
+    let active_tab = state.active_channel_tab_id().to_string();
+
+    assert!(
+        state
+            .rename_watched_tab(&storage, &active_tab, "Main + guests")
+            .expect("custom title should persist")
+    );
+    assert_eq!(
+        state.watched_tab_title(&active_tab).as_deref(),
+        Some("Main + guests"),
+    );
+
+    let rehydrated = AppState::from_storage(&storage);
+    assert_eq!(
+        rehydrated.watched_tab_title(&active_tab).as_deref(),
+        Some("Main + guests"),
+    );
+}
+
+#[test]
+fn removing_last_referenced_watched_pane_queues_channel_remove() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("orphan-pane-remove.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for orphan remove test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "base")
+        .expect("base watched tab should persist");
+    let active_tab = state.active_channel_tab_id().to_string();
+    state
+        .add_chat_pane_for_active_tab(&storage)
+        .expect("second pane should persist");
+    let empty_panel_id = find_empty_panel_id(
+        &state
+            .watched_layout(&active_tab)
+            .expect("layout should exist")
+            .root,
+    )
+    .expect("empty panel should exist");
+    state.open_add_channel_modal_for_panel(empty_panel_id.clone());
+    state
+        .submit_add_channel_modal(&storage, Platform::Twitch, "guest")
+        .expect("guest pane should persist");
+    let guest_id = state
+        .watched_channels
+        .iter()
+        .find(|channel| channel.channel_slug == "guest")
+        .map(|channel| channel.id.clone())
+        .expect("guest channel should exist");
+
+    assert!(
+        state
+            .remove_chat_pane_for_active_tab(&storage, &empty_panel_id)
+            .expect("pane remove should persist")
+    );
+
+    let pending = state.take_pending_watched_channel_removals();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].channel_id, guest_id);
+    assert!(
+        !state
+            .watched_channels
+            .iter()
+            .any(|channel| channel.channel_slug == "guest")
+    );
+}
+
+#[test]
 fn empty_pane_can_be_removed_and_layout_collapses() {
     let temp = tempfile::tempdir().expect("temp dir should be available");
     let db_path = temp.path().join("empty-remove.sqlite");

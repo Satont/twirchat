@@ -188,6 +188,7 @@ fn watched_tab_header_has_pane_add_contract() {
 #[test]
 fn watched_tabs_have_drag_reorder_contract() {
     let tabs_rs = std::fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
+    let app_rs = std::fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
 
     assert!(tabs_rs.contains("DraggedTab"));
     assert!(tabs_rs.contains(".on_drag(DraggedTab"));
@@ -195,6 +196,42 @@ fn watched_tabs_have_drag_reorder_contract() {
     assert!(tabs_rs.contains(".on_drop::<DraggedTab>"));
     assert!(tabs_rs.contains("reorder_watched_channel_tab"));
     assert!(tabs_rs.contains("remove_watched_channel_for_tab"));
+    assert!(tabs_rs.contains("watched_tab_title"));
+    assert!(tabs_rs.contains("start_watched_tab_rename"));
+    assert!(tabs_rs.contains("rename_watched_tab"));
+    assert!(app_rs.contains("tab_rename_input"));
+    assert!(app_rs.contains("flush_tab_rename_submit"));
+}
+
+#[test]
+fn watched_tab_rename_input_stays_inline_contract() {
+    let tabs_rs = std::fs::read_to_string("src/ui/shell/tabs.rs").expect("should read tabs.rs");
+    let app_rs = std::fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
+    let input_rs =
+        std::fs::read_to_string("src/ui/components/input.rs").expect("should read input.rs");
+
+    assert!(app_rs.contains("Input::new(\"Tab name\", cx).with_tab_rename_appearance()"));
+    assert!(input_rs.contains("pub fn with_tab_rename_appearance"));
+    assert!(input_rs.contains("tab_rename_appearance: bool"));
+    assert!(input_rs.contains("rgba(0x00000000)"));
+    assert!(tabs_rs.contains("const TAB_RENAME_INPUT_HEIGHT: f32 = 20.0;"));
+    assert!(tabs_rs.contains("const TAB_RENAME_INPUT_MAX_WIDTH: f32 = 148.0;"));
+
+    let rename_branch = tabs_rs
+        .split(".child(if is_renaming {")
+        .nth(1)
+        .and_then(|body| body.split("} else {").next())
+        .expect("should isolate watched tab rename branch");
+
+    assert!(rename_branch.contains("tab_rename_input_width(&label)"));
+    assert!(rename_branch.contains(".max_w(px(TAB_RENAME_INPUT_MAX_WIDTH))"));
+    assert!(rename_branch.contains(".h(px(TAB_RENAME_INPUT_HEIGHT))"));
+    assert!(rename_branch.contains(".items_center()"));
+    assert!(rename_branch.contains("tab_rename_input.clone()"));
+    assert!(!rename_branch.contains("tab_rename_input.clone().into_any_element()"));
+
+    assert!(tabs_rs.contains(".child(if is_renaming { \"✓\" } else { \"✎\" })"));
+    assert!(tabs_rs.contains(".child(\"×\")"));
 }
 
 #[test]
@@ -222,6 +259,11 @@ fn watched_panes_have_drag_drop_and_panel_controls_contract() {
     assert!(!drag_handle_body.contains("⋮⋮"));
     assert!(drag_handle_body.contains(".on_drag("));
     assert!(drag_handle_body.contains("DraggedPane {"));
+    assert!(watched_layout_rs.contains("can_drag_panes"));
+    assert!(watched_layout_rs.contains("count_layout_panels(&layout.root) > 1"));
+    assert!(watched_layout_rs.contains(".when(deps.can_drag_panes"));
+    assert!(watched_layout_rs.contains(".when(can_drag_panes"));
+    assert!(watched_layout_rs.contains("!is_main_panel && deps.can_drag_panes"));
     assert!(!render_node_body.contains(".on_drag("));
     assert!(watched_layout_rs.contains("fn pane_drop_zones"));
     assert!(watched_layout_rs.contains("fn pane_drop_target"));
@@ -243,6 +285,20 @@ fn watched_panes_have_drag_drop_and_panel_controls_contract() {
     assert!(watched_layout_rs.contains("open_add_channel_modal_for_panel"));
     assert!(watched_layout_rs.contains("action_button(\"Change\")"));
     assert!(!watched_layout_rs.contains("action_button(\"↔\")"));
+}
+
+#[test]
+fn foreign_watched_twitch_pane_uses_account_mode_contract() {
+    let watched_layout_rs = std::fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+
+    assert!(watched_layout_rs.contains("let has_account = accounts"));
+    assert!(watched_layout_rs.contains("account.platform == channel.platform"));
+    assert!(watched_layout_rs.contains("Some(PlatformStatusMode::Anonymous) if !has_account"));
+    assert!(
+        watched_layout_rs
+            .contains("Some(PlatformStatusMode::Anonymous) | None => \"authenticated\"")
+    );
 }
 
 #[test]

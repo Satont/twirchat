@@ -193,6 +193,75 @@ fn update_state_service_emits_requested_and_snapshot_events()
     Ok(())
 }
 
+#[test]
+fn update_state_service_does_not_republish_unchanged_periodic_no_update_snapshot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let config =
+        ServiceRuntimeConfig::new(128, 16)?.with_service_poll_interval(Duration::from_millis(5));
+    let mut supervisor = ServiceSupervisor::new(config)?;
+    let events = supervisor
+        .take_event_receiver()
+        .ok_or("service event receiver should be available")?;
+
+    supervisor.start()?;
+    supervisor.dispatch(
+        ServiceKind::UpdateState,
+        ServiceCommand::UpdateState(UpdateStateCommand::CheckForUpdates {
+            source: UpdateCheckSource::Startup,
+        }),
+    )?;
+
+    let mut saw_startup_snapshot = false;
+    for _ in 0..60 {
+        match events.recv_timeout(Duration::from_millis(25)) {
+            Ok(ServiceEvent::UpdateState(UpdateStateEvent::StateChanged { snapshot })) => {
+                assert!(snapshot.show);
+                assert_eq!(snapshot.status.as_deref(), Some("no-update"));
+                saw_startup_snapshot = true;
+                break;
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+    assert!(saw_startup_snapshot);
+
+    while events.try_recv().is_ok() {}
+
+    supervisor.dispatch(
+        ServiceKind::UpdateState,
+        ServiceCommand::UpdateState(UpdateStateCommand::CheckForUpdates {
+            source: UpdateCheckSource::Periodic,
+        }),
+    )?;
+
+    let mut saw_periodic_requested = false;
+    let mut saw_periodic_snapshot = false;
+    for _ in 0..20 {
+        match events.recv_timeout(Duration::from_millis(25)) {
+            Ok(ServiceEvent::UpdateState(UpdateStateEvent::CheckRequested { source })) => {
+                if source == UpdateCheckSource::Periodic {
+                    saw_periodic_requested = true;
+                }
+            }
+            Ok(ServiceEvent::UpdateState(UpdateStateEvent::StateChanged { .. })) => {
+                saw_periodic_snapshot = true;
+                break;
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+
+    let _ = supervisor.stop();
+    assert!(saw_periodic_requested);
+    assert!(
+        !saw_periodic_snapshot,
+        "periodic no-update must not republish the startup no-update snapshot"
+    );
+    Ok(())
+}
+
 fn chat_event(message_id: &str) -> ServiceEvent {
     ServiceEvent::Chat(ChatEvent::MessageQueued {
         message_id: message_id.into(),

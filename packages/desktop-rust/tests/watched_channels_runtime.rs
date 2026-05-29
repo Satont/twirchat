@@ -225,6 +225,50 @@ fn watched_channels_reconnects_and_resubscribes() -> Result<(), Box<dyn std::err
 }
 
 #[test]
+fn watched_channel_remove_disconnects_and_unsubscribes_seven_tv()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("watched-remove-unsubscribe.sqlite"))?;
+    let harness = AdapterHarness::default();
+    harness.set_seven_tv_channel_id(Platform::Kick, "kickone", "424242");
+    let mut runtime = runtime_with_harness(&storage, harness.clone(), 200);
+
+    let kick = runtime.add_channel(Platform::Kick, "KickOne", Some("Kick One"))?;
+    let initial_messages = runtime.drain_backend_messages();
+    assert!(initial_messages.iter().any(|message| {
+        matches!(
+            message,
+            DesktopToBackendMessage::SeventvSubscribe {
+                platform: Platform::Kick,
+                channel_id,
+                ..
+            } if channel_id == "424242"
+        )
+    }));
+
+    runtime.remove_channel(&kick.id)?;
+
+    assert_eq!(
+        harness
+            .snapshot(Platform::Kick, "kickone")
+            .map(|record| (record.connect_count, record.disconnect_count)),
+        Some((1, 1))
+    );
+    assert!(storage.watched_channels().find_by_id(&kick.id)?.is_none());
+    assert!(runtime.drain_backend_messages().iter().any(|message| {
+        matches!(
+            message,
+            DesktopToBackendMessage::SeventvUnsubscribe {
+                platform: Platform::Kick,
+                channel_id,
+            } if channel_id == "424242"
+        )
+    }));
+
+    Ok(())
+}
+
+#[test]
 fn watched_channels_runtime_preserves_twitch_platform_on_poll_error()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;

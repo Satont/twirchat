@@ -42,12 +42,14 @@ pub fn run_update_state_service(
                     }
                 };
                 let _ = events.try_publish(ServiceEvent::UpdateState(requested));
+                let previous_snapshot = runtime.snapshot();
                 runtime.dispatch_command(command);
                 let snapshot = runtime.snapshot();
-                let _ =
-                    events.try_publish(ServiceEvent::UpdateState(UpdateStateEvent::StateChanged {
-                        snapshot,
-                    }));
+                if snapshot != previous_snapshot {
+                    let _ = events.try_publish(ServiceEvent::UpdateState(
+                        UpdateStateEvent::StateChanged { snapshot },
+                    ));
+                }
             }
             Ok(_) => {}
             Err(BusRecvError::Timeout) => {}

@@ -132,6 +132,7 @@ pub struct Input {
     submit_requested: bool,
     clear_on_copy: bool,
     compact_appearance: bool,
+    tab_rename_appearance: bool,
 }
 
 impl Input {
@@ -148,6 +149,7 @@ impl Input {
             submit_requested: false,
             clear_on_copy: false,
             compact_appearance: false,
+            tab_rename_appearance: false,
         }
     }
 
@@ -158,6 +160,12 @@ impl Input {
 
     pub fn with_compact_appearance(mut self) -> Self {
         self.compact_appearance = true;
+        self
+    }
+
+    pub fn with_tab_rename_appearance(mut self) -> Self {
+        self.compact_appearance = true;
+        self.tab_rename_appearance = true;
         self
     }
 
@@ -555,17 +563,43 @@ impl EntityInputHandler for Input {
 
 impl Render for Input {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let min_height = if self.compact_appearance { 24.0 } else { 36.0 };
-        let horizontal_padding = if self.compact_appearance { 8.0 } else { 12.0 };
-        let text_size = if self.compact_appearance { 12.0 } else { 13.0 };
+        let min_height = if self.tab_rename_appearance {
+            20.0
+        } else if self.compact_appearance {
+            24.0
+        } else {
+            36.0
+        };
+        let horizontal_padding = if self.tab_rename_appearance {
+            2.0
+        } else if self.compact_appearance {
+            8.0
+        } else {
+            12.0
+        };
+        let text_size = if self.tab_rename_appearance {
+            13.0
+        } else if self.compact_appearance {
+            12.0
+        } else {
+            13.0
+        };
         let border_color = if self.focus_handle.is_focused(_window) {
-            rgba(0xa78bfa80)
+            if self.tab_rename_appearance {
+                rgba(0xffffff30)
+            } else {
+                rgba(0xa78bfa80)
+            }
+        } else if self.tab_rename_appearance {
+            rgba(0x00000000)
         } else if self.compact_appearance {
             theme::border()
         } else {
             rgb(0x3f3f46)
         };
-        let background_color = if self.compact_appearance {
+        let background_color = if self.tab_rename_appearance {
+            rgba(0x00000000)
+        } else if self.compact_appearance {
             theme::surface_2()
         } else {
             rgb(0x18181b)
@@ -592,9 +626,11 @@ impl Render for Input {
             .on_action(cx.listener(Self::paste))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .w_full()
-            .min_h(px(min_height))
+            .when(!self.tab_rename_appearance, |el| el.min_h(px(min_height)))
+            .when(self.tab_rename_appearance, |el| el.h(px(min_height)))
             .rounded_lg()
             .when(self.compact_appearance, |el| el.rounded_md())
+            .when(self.tab_rename_appearance, |el| el.rounded_sm())
             .border_1()
             .border_color(border_color)
             .bg(background_color)

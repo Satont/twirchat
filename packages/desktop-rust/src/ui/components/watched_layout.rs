@@ -24,6 +24,7 @@ struct WatchedLayoutDeps<'a> {
     font_size_input: Entity<Input>,
     watched_composer_inputs: &'a BTreeMap<String, Entity<Input>>,
     watched_mention_autocomplete: &'a BTreeMap<String, MentionAutocompleteUi>,
+    can_drag_panes: bool,
 }
 
 #[derive(Clone)]
@@ -47,6 +48,7 @@ pub(crate) fn tab_panel(
         .unwrap_or_else(|| {
             crate::storage::watched_layout::create_default_tab_layout(&active_tab_id)
         });
+    let can_drag_panes = count_layout_panels(&layout.root) > 1;
 
     div()
         .flex_1()
@@ -62,6 +64,7 @@ pub(crate) fn tab_panel(
                 font_size_input,
                 watched_composer_inputs,
                 watched_mention_autocomplete,
+                can_drag_panes,
             },
             window,
             cx,
@@ -98,6 +101,7 @@ fn render_node(
                     id,
                     "Main pane",
                     "Watched tabs render channel panes only.",
+                    deps.can_drag_panes,
                 ),
                 PanelContent::Watched { channel_id } => watched_panel(
                     deps.clone(),
@@ -115,6 +119,7 @@ fn render_node(
                     id,
                     "Empty pane",
                     "Use the plus button in a pane header to add another split.",
+                    deps.can_drag_panes,
                 ),
             };
 
@@ -125,7 +130,7 @@ fn render_node(
                 .min_w(px(0.0))
                 .min_h(px(0.0))
                 .child(panel)
-                .when(!is_main_panel, |el| {
+                .when(!is_main_panel && deps.can_drag_panes, |el| {
                     el.child(pane_drop_zones(deps.state_entity.clone(), id.clone()))
                 })
         }
@@ -156,6 +161,13 @@ fn render_node(
 
             container.children(child_elements)
         }
+    }
+}
+
+fn count_layout_panels(node: &LayoutNode) -> usize {
+    match node {
+        LayoutNode::Panel { .. } => 1,
+        LayoutNode::Split { children, .. } => children.iter().map(count_layout_panels).sum(),
     }
 }
 
@@ -198,9 +210,15 @@ fn watched_panel(
             PlatformStatus::Disconnected => theme::text_muted(),
         })
         .unwrap_or(theme::text_muted());
-    let mode_label = status.as_ref().map(|status| match status.mode {
-        PlatformStatusMode::Authenticated => "authenticated",
-        PlatformStatusMode::Anonymous => "read-only",
+    let mode_label = channel.as_ref().map(|channel| {
+        let has_account = accounts
+            .iter()
+            .any(|account| account.platform == channel.platform);
+        match status.as_ref().map(|status| status.mode) {
+            Some(PlatformStatusMode::Authenticated) => "authenticated",
+            Some(PlatformStatusMode::Anonymous) if !has_account => "read-only",
+            Some(PlatformStatusMode::Anonymous) | None => "authenticated",
+        }
     });
     let status_label = status.as_ref().map(|status| match status.status {
         PlatformStatus::Connected => "connected",
@@ -236,7 +254,9 @@ fn watched_panel(
                         .flex_row()
                         .items_center()
                         .gap(px(8.0))
-                        .child(pane_drag_handle(panel_id))
+                        .when(deps.can_drag_panes, |row| {
+                            row.child(pane_drag_handle(panel_id))
+                        })
                         .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(status_dot))
                         .child(
                             div()
@@ -390,6 +410,7 @@ fn empty_panel(
     panel_id: &str,
     title: &str,
     description: &str,
+    can_drag_panes: bool,
 ) -> Div {
     let panel_id = panel_id.to_string();
     div()
@@ -405,7 +426,9 @@ fn empty_panel(
                 .flex_col()
                 .items_center()
                 .gap(px(10.0))
-                .child(pane_drag_handle(&panel_id))
+                .when(can_drag_panes, |card| {
+                    card.child(pane_drag_handle(&panel_id))
+                })
                 .child(
                     div()
                         .w(px(40.0))

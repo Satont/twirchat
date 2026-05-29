@@ -165,6 +165,8 @@ pub struct AppState {
     seven_tv_catalog: SevenTvCatalog,
     pub watched_channels: Vec<WatchedChannel>,
     watched_tab_channel_ids: Vec<String>,
+    watched_tab_custom_names: BTreeMap<String, String>,
+    renaming_watched_tab_id: Option<String>,
     home_channel_statuses: BTreeMap<String, ChannelStatus>,
     pub watched_channel_statuses: BTreeMap<String, PlatformStatusInfo>,
     pub watched_channel_messages: BTreeMap<String, Vec<NormalizedChatMessage>>,
@@ -217,6 +219,8 @@ impl Default for AppState {
             seven_tv_catalog: SevenTvCatalog::new(),
             watched_channels: vec![],
             watched_tab_channel_ids: Vec::new(),
+            watched_tab_custom_names: BTreeMap::new(),
+            renaming_watched_tab_id: None,
             home_channel_statuses: BTreeMap::new(),
             watched_channel_statuses: BTreeMap::new(),
             watched_channel_messages: BTreeMap::new(),
@@ -273,6 +277,9 @@ impl AppState {
                 .settings()
                 .auto_check_updates
                 .unwrap_or(self.update_state.auto_check_updates);
+        }
+        if let Ok(custom_names) = storage.settings().get_watched_tab_custom_names() {
+            self.watched_tab_custom_names = custom_names;
         }
         if let Ok(channels) = storage.watched_channels().find_all() {
             self.watched_channels = channels;
@@ -400,6 +407,43 @@ impl AppState {
         self.watched_layouts.get(tab_id)
     }
 
+    pub fn renaming_watched_tab_id(&self) -> Option<&str> {
+        self.renaming_watched_tab_id.as_deref()
+    }
+
+    pub fn watched_tab_title(&self, tab_id: &str) -> Option<String> {
+        if let Some(name) = self.watched_tab_custom_names.get(tab_id) {
+            return Some(name.clone());
+        }
+
+        let channel = self
+            .watched_channels
+            .iter()
+            .find(|channel| channel.id == tab_id)?;
+        let mut titles = Vec::new();
+        if let Some(layout) = self.watched_layouts.get(tab_id) {
+            collect_watched_channel_ids(&layout.root, &mut titles);
+        }
+
+        let mut seen = BTreeSet::new();
+        let titles = titles
+            .into_iter()
+            .filter(|id| seen.insert(id.clone()))
+            .filter_map(|id| {
+                self.watched_channels
+                    .iter()
+                    .find(|channel| channel.id == id)
+                    .map(|channel| channel.display_name.clone())
+            })
+            .collect::<Vec<_>>();
+
+        if titles.is_empty() {
+            Some(channel.display_name.clone())
+        } else {
+            Some(titles.join(" + "))
+        }
+    }
+
     pub fn outgoing_message_status(&self, message_id: &str) -> Option<OutgoingChatMessageStatus> {
         self.outgoing_message_statuses.get(message_id).copied()
     }
@@ -461,6 +505,45 @@ impl AppState {
                     .find(|channel| channel.id == *id && !self.is_home_account_channel(channel))
             })
             .collect()
+    }
+
+    pub fn start_watched_tab_rename(&mut self, tab_id: &str) -> bool {
+        if !self.watched_tab_channel_ids.iter().any(|id| id == tab_id) {
+            return false;
+        }
+        self.renaming_watched_tab_id = Some(tab_id.to_string());
+        true
+    }
+
+    pub fn cancel_watched_tab_rename(&mut self) {
+        self.renaming_watched_tab_id = None;
+    }
+
+    pub fn rename_watched_tab(
+        &mut self,
+        storage: &Storage,
+        tab_id: &str,
+        name: &str,
+    ) -> crate::storage::StorageResult<bool> {
+        if !self.watched_tab_channel_ids.iter().any(|id| id == tab_id) {
+            return Ok(false);
+        }
+
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            self.watched_tab_custom_names.remove(tab_id);
+            storage
+                .settings()
+                .set_watched_tab_custom_name(tab_id, None)?;
+        } else {
+            self.watched_tab_custom_names
+                .insert(tab_id.to_string(), trimmed.to_string());
+            storage
+                .settings()
+                .set_watched_tab_custom_name(tab_id, Some(trimmed))?;
+        }
+        self.renaming_watched_tab_id = None;
+        Ok(true)
     }
 
     fn set_visible_tab_order(&mut self, tab_ids: Vec<String>) {
@@ -1524,6 +1607,10 @@ impl AppState {
         self.watched_channels
             .retain(|channel| channel.id != channel_id);
         self.watched_tab_channel_ids.retain(|id| id != channel_id);
+        self.watched_tab_custom_names.remove(channel_id);
+        if self.renaming_watched_tab_id.as_deref() == Some(channel_id) {
+            self.renaming_watched_tab_id = None;
+        }
         self.watched_channel_statuses.remove(channel_id);
         self.watched_channel_messages.remove(channel_id);
         self.watched_reply_targets.remove(channel_id);
@@ -1550,6 +1637,9 @@ impl AppState {
     ) -> crate::storage::StorageResult<bool> {
         let removed = self.remove_watched_channel(channel_id);
         if removed {
+            storage
+                .settings()
+                .set_watched_tab_custom_name(channel_id, None)?;
             self.persist_visible_tab_order(storage)?;
         }
         Ok(removed)
@@ -1903,13 +1993,31 @@ impl AppState {
             .get(&tab_id)
             .cloned()
             .unwrap_or_else(|| create_default_tab_layout(&tab_id));
+        let removed_channel_id = panel_watched_channel_id(&layout.root, panel_id);
         if !remove_panel_from_layout(&mut layout.root, panel_id) {
             return Ok(false);
         }
 
         storage.watched_layout().set(&tab_id, &layout)?;
         self.watched_layouts.insert(tab_id, layout);
+        if let Some(channel_id) = removed_channel_id
+            && !self.is_watched_channel_referenced(&channel_id)
+        {
+            self.remove_watched_channel(&channel_id);
+            self.persist_visible_tab_order(storage)?;
+        }
         Ok(true)
+    }
+
+    fn is_watched_channel_referenced(&self, channel_id: &str) -> bool {
+        self.watched_tab_channel_ids
+            .iter()
+            .any(|id| id == channel_id)
+            || self
+                .watched_tab_channel_ids
+                .iter()
+                .filter_map(|tab_id| self.watched_layouts.get(tab_id))
+                .any(|layout| layout_contains_watched_channel(&layout.root, channel_id))
     }
 
     pub fn move_chat_pane_for_active_tab(
@@ -2662,6 +2770,9 @@ pub trait AppStateActions {
     fn remove_watched_channel(&self, app: &mut App, channel_id: &str);
     fn remove_watched_channel_for_tab(&self, app: &mut App, channel_id: &str);
     fn reorder_watched_channel_tab(&self, app: &mut App, from_id: &str, to_id: &str);
+    fn start_watched_tab_rename(&self, app: &mut App, tab_id: &str);
+    fn cancel_watched_tab_rename(&self, app: &mut App);
+    fn rename_watched_tab(&self, app: &mut App, tab_id: &str, name: &str);
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool;
     fn queue_watched_channel_send(&self, app: &mut App, channel_id: &str, text: &str) -> bool;
     fn open_user_card(&self, app: &mut App, target: UserCardTarget);
@@ -3054,6 +3165,35 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
+    fn start_watched_tab_rename(&self, app: &mut App, tab_id: &str) {
+        self.update(app, |state, cx| {
+            state.start_watched_tab_rename(tab_id);
+            cx.notify();
+        });
+    }
+
+    fn cancel_watched_tab_rename(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.cancel_watched_tab_rename();
+            cx.notify();
+        });
+    }
+
+    fn rename_watched_tab(&self, app: &mut App, tab_id: &str, name: &str) {
+        self.update(app, |state, cx| {
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.rename_watched_tab(&storage, tab_id, name) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
+            cx.notify();
+        });
+    }
+
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool {
         self.update(app, |state, cx| {
             let queued = state.queue_composer_send(text);
@@ -3396,6 +3536,48 @@ fn count_layout_panels(node: &LayoutNode) -> usize {
     match node {
         LayoutNode::Panel { .. } => 1,
         LayoutNode::Split { children, .. } => children.iter().map(count_layout_panels).sum(),
+    }
+}
+
+fn collect_watched_channel_ids(node: &LayoutNode, ids: &mut Vec<String>) {
+    match node {
+        LayoutNode::Panel {
+            content: PanelContent::Watched { channel_id },
+            ..
+        } => ids.push(channel_id.clone()),
+        LayoutNode::Panel { .. } => {}
+        LayoutNode::Split { children, .. } => {
+            for child in children {
+                collect_watched_channel_ids(child, ids);
+            }
+        }
+    }
+}
+
+fn panel_watched_channel_id(node: &LayoutNode, panel_id: &str) -> Option<String> {
+    match node {
+        LayoutNode::Panel {
+            id,
+            content: PanelContent::Watched { channel_id },
+            ..
+        } if id == panel_id => Some(channel_id.clone()),
+        LayoutNode::Panel { .. } => None,
+        LayoutNode::Split { children, .. } => children
+            .iter()
+            .find_map(|child| panel_watched_channel_id(child, panel_id)),
+    }
+}
+
+fn layout_contains_watched_channel(node: &LayoutNode, channel_id: &str) -> bool {
+    match node {
+        LayoutNode::Panel {
+            content: PanelContent::Watched { channel_id: id },
+            ..
+        } => id == channel_id,
+        LayoutNode::Panel { .. } => false,
+        LayoutNode::Split { children, .. } => children
+            .iter()
+            .any(|child| layout_contains_watched_channel(child, channel_id)),
     }
 }
 

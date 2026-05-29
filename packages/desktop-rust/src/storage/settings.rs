@@ -7,6 +7,7 @@ use crate::runtime::DEFAULT_OVERLAY_SERVER_PORT;
 use crate::storage::db::{Connection, Param};
 use crate::storage::{StorageResult, merge_json};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
 pub struct SettingsStore<'a> {
     conn: &'a Connection,
@@ -49,6 +50,31 @@ impl<'a> SettingsStore<'a> {
 
     pub fn set_tab_channel_ids(&self, ids: &[String]) -> StorageResult<()> {
         self.set_json("tab_channel_ids", &json!(ids))
+    }
+
+    pub fn get_watched_tab_custom_names(&self) -> StorageResult<BTreeMap<String, String>> {
+        match self.get_json("watched_tab_custom_names")? {
+            Some(value) => serde_json::from_value::<BTreeMap<String, String>>(value)
+                .map_err(crate::storage::StorageError::from),
+            None => Ok(BTreeMap::new()),
+        }
+    }
+
+    pub fn set_watched_tab_custom_name(
+        &self,
+        tab_id: &str,
+        name: Option<&str>,
+    ) -> StorageResult<()> {
+        let mut names = self.get_watched_tab_custom_names()?;
+        match name.map(str::trim).filter(|name| !name.is_empty()) {
+            Some(name) => {
+                names.insert(tab_id.to_string(), name.to_string());
+            }
+            None => {
+                names.remove(tab_id);
+            }
+        }
+        self.set_json("watched_tab_custom_names", &json!(names))
     }
 
     pub(crate) fn get_json(&self, key: &str) -> StorageResult<Option<Value>> {
