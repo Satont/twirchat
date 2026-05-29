@@ -603,6 +603,68 @@ fn move_chat_pane_for_active_tab_wraps_root_target_when_direction_changes() {
     );
 }
 
+#[test]
+fn move_chat_pane_for_active_tab_recovers_horizontal_layout_from_vertical_split() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("pane-move-recover-horizontal.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for pane recover test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "base")
+        .expect("base watched tab should persist");
+    let active_tab = state.active_channel_tab_id().to_string();
+    state
+        .add_chat_pane_for_active_tab(&storage)
+        .expect("second pane should persist");
+
+    let layout = state
+        .watched_layout(&active_tab)
+        .expect("layout should exist before vertical move");
+    let before = panel_ids_in_order(&layout.root);
+    assert_eq!(before.len(), 2);
+
+    state
+        .move_chat_pane_for_active_tab(&storage, &before[0], &before[1], PaneDropDirection::Bottom)
+        .expect("vertical pane move should persist");
+
+    let vertical = storage
+        .watched_layout()
+        .get(&active_tab)
+        .expect("vertical layout should reload");
+    assert!(matches!(
+        vertical.root,
+        LayoutNode::Split {
+            direction: SplitDirection::Vertical,
+            ..
+        }
+    ));
+    let vertical_order = panel_ids_in_order(&vertical.root);
+
+    let recovered = state
+        .move_chat_pane_for_active_tab(
+            &storage,
+            &vertical_order[1],
+            &vertical_order[0],
+            PaneDropDirection::Right,
+        )
+        .expect("horizontal recovery move should persist");
+
+    assert!(recovered);
+    let horizontal = storage
+        .watched_layout()
+        .get(&active_tab)
+        .expect("horizontal layout should reload");
+    assert!(matches!(
+        horizontal.root,
+        LayoutNode::Split {
+            direction: SplitDirection::Horizontal,
+            ..
+        }
+    ));
+    assert_eq!(panel_ids_in_order(&horizontal.root), vertical_order);
+}
+
 fn count_panels(node: &LayoutNode) -> usize {
     match node {
         LayoutNode::Panel { .. } => 1,

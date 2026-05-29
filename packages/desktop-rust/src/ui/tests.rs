@@ -201,16 +201,48 @@ fn watched_tabs_have_drag_reorder_contract() {
 fn watched_panes_have_drag_drop_and_panel_controls_contract() {
     let watched_layout_rs = std::fs::read_to_string("src/ui/components/watched_layout.rs")
         .expect("should read watched_layout.rs");
+    let render_node_body = watched_layout_rs
+        .split("fn render_node")
+        .nth(1)
+        .and_then(|body| body.split("fn watched_panel").next())
+        .expect("should isolate render_node");
+    let drag_handle_body = watched_layout_rs
+        .split("fn pane_drag_handle")
+        .nth(1)
+        .and_then(|body| body.split("fn pane_drop_hint").next())
+        .expect("should isolate pane_drag_handle");
 
     assert!(watched_layout_rs.contains("DraggedPane"));
     assert!(watched_layout_rs.contains("PaneDropDirection"));
-    assert!(watched_layout_rs.contains(".on_drag("));
-    assert!(watched_layout_rs.contains("DraggedPane {"));
+    assert!(watched_layout_rs.contains("fn pane_drag_handle"));
+    assert!(watched_layout_rs.contains("fn pane_drag_grip_icon"));
+    assert!(watched_layout_rs.contains("fn pane_drag_dot"));
+    assert!(drag_handle_body.contains("pane-drag-handle-"));
+    assert!(drag_handle_body.contains(".cursor_move()"));
+    assert!(!drag_handle_body.contains("⋮⋮"));
+    assert!(drag_handle_body.contains(".on_drag("));
+    assert!(drag_handle_body.contains("DraggedPane {"));
+    assert!(!render_node_body.contains(".on_drag("));
+    assert!(watched_layout_rs.contains("fn pane_drop_zones"));
+    assert!(watched_layout_rs.contains("fn pane_drop_target"));
+    assert!(watched_layout_rs.contains("fn pane_horizontal_drop_row"));
+    assert!(!watched_layout_rs.contains("fn pane_drop_zone("));
+    assert!(watched_layout_rs.contains(".left(px(0.0))"));
+    assert!(watched_layout_rs.contains(".right(px(0.0))"));
+    assert!(watched_layout_rs.contains(".bottom(px(0.0))"));
+    assert!(watched_layout_rs.contains(".border_2()"));
     assert!(watched_layout_rs.contains(".drag_over::<DraggedPane>"));
     assert!(watched_layout_rs.contains(".on_drop::<DraggedPane>"));
+    assert!(watched_layout_rs.contains("Drop left"));
+    assert!(watched_layout_rs.contains("Drop right"));
+    assert!(watched_layout_rs.contains("Drop top"));
+    assert!(watched_layout_rs.contains("Drop bottom"));
     assert!(watched_layout_rs.contains("move_chat_pane_for_active_tab"));
+    assert!(watched_layout_rs.contains("add_chat_pane_for_active_tab"));
     assert!(watched_layout_rs.contains("remove_chat_pane_for_active_tab"));
     assert!(watched_layout_rs.contains("open_add_channel_modal_for_panel"));
+    assert!(watched_layout_rs.contains("action_button(\"Change\")"));
+    assert!(!watched_layout_rs.contains("action_button(\"↔\")"));
 }
 
 #[test]

@@ -124,35 +124,10 @@ fn render_node(
                 .flex_1()
                 .min_w(px(0.0))
                 .min_h(px(0.0))
-                .when(!is_main_panel, |el| {
-                    el.on_drag(
-                        DraggedPane {
-                            panel_id: id.clone(),
-                        },
-                        |_, _, _, cx| cx.new(|_| gpui::Empty),
-                    )
-                    .child(pane_drop_zone(
-                        deps.state_entity.clone(),
-                        id.clone(),
-                        PaneDropDirection::Left,
-                    ))
-                    .child(pane_drop_zone(
-                        deps.state_entity.clone(),
-                        id.clone(),
-                        PaneDropDirection::Right,
-                    ))
-                    .child(pane_drop_zone(
-                        deps.state_entity.clone(),
-                        id.clone(),
-                        PaneDropDirection::Top,
-                    ))
-                    .child(pane_drop_zone(
-                        deps.state_entity.clone(),
-                        id.clone(),
-                        PaneDropDirection::Bottom,
-                    ))
-                })
                 .child(panel)
+                .when(!is_main_panel, |el| {
+                    el.child(pane_drop_zones(deps.state_entity.clone(), id.clone()))
+                })
         }
         LayoutNode::Split {
             id,
@@ -261,6 +236,7 @@ fn watched_panel(
                         .flex_row()
                         .items_center()
                         .gap(px(8.0))
+                        .child(pane_drag_handle(panel_id))
                         .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(status_dot))
                         .child(
                             div()
@@ -337,7 +313,7 @@ fn watched_panel(
                                 state_entity.add_chat_pane_for_active_tab(cx);
                             }
                         }))
-                        .child(action_button("↔").on_click({
+                        .child(action_button("Change").on_click({
                             let state_entity = state_entity.clone();
                             let panel_id = panel_id.to_string();
                             move |_event, _window, cx| {
@@ -429,6 +405,7 @@ fn empty_panel(
                 .flex_col()
                 .items_center()
                 .gap(px(10.0))
+                .child(pane_drag_handle(&panel_id))
                 .child(
                     div()
                         .w(px(40.0))
@@ -486,28 +463,80 @@ fn empty_panel(
         )
 }
 
-fn pane_drop_zone(
+fn pane_drop_zones(state_entity: Entity<AppState>, target_id: String) -> Div {
+    div()
+        .absolute()
+        .top(px(0.0))
+        .right(px(0.0))
+        .bottom(px(0.0))
+        .left(px(0.0))
+        .flex()
+        .flex_col()
+        .child(pane_drop_target(
+            state_entity.clone(),
+            target_id.clone(),
+            PaneDropDirection::Top,
+        ))
+        .child(pane_horizontal_drop_row(
+            state_entity.clone(),
+            target_id.clone(),
+        ))
+        .child(pane_horizontal_drop_row(
+            state_entity.clone(),
+            target_id.clone(),
+        ))
+        .child(pane_horizontal_drop_row(
+            state_entity.clone(),
+            target_id.clone(),
+        ))
+        .child(pane_drop_target(
+            state_entity,
+            target_id,
+            PaneDropDirection::Bottom,
+        ))
+}
+
+fn pane_horizontal_drop_row(state_entity: Entity<AppState>, target_id: String) -> Div {
+    div()
+        .flex_1()
+        .min_h(px(0.0))
+        .flex()
+        .flex_row()
+        .child(pane_drop_target(
+            state_entity.clone(),
+            target_id.clone(),
+            PaneDropDirection::Left,
+        ))
+        .child(pane_drop_target(
+            state_entity,
+            target_id,
+            PaneDropDirection::Right,
+        ))
+}
+
+fn pane_drop_target(
     state_entity: Entity<AppState>,
     target_id: String,
     direction: PaneDropDirection,
 ) -> Div {
-    let (positioned, is_horizontal_edge) = match direction {
-        PaneDropDirection::Left => (div().left(px(0.0)).top(px(0.0)), true),
-        PaneDropDirection::Right => (div().right(px(0.0)).top(px(0.0)), true),
-        PaneDropDirection::Top => (div().left(px(0.0)).top(px(0.0)), false),
-        PaneDropDirection::Bottom => (div().left(px(0.0)).bottom(px(0.0)), false),
-    };
-
     let target_for_drop = target_id.clone();
-    positioned
-        .absolute()
-        .when(is_horizontal_edge, |el| el.w(px(20.0)).h_full())
-        .when(!is_horizontal_edge, |el| el.w_full().h(px(20.0)))
+    div()
+        .flex_1()
+        .min_w(px(0.0))
+        .min_h(px(0.0))
+        .opacity(0.0)
+        .border_2()
+        .border_color(rgba(0x5865f200))
+        .bg(rgba(0x5865f200))
+        .flex()
+        .items_center()
+        .justify_center()
         .drag_over::<DraggedPane>(move |style, dragged, _, _| {
             if dragged.panel_id == target_id {
                 style
             } else {
                 style
+                    .opacity(1.0)
                     .bg(rgba(0x5865f25a))
                     .border_1()
                     .border_color(rgba(0x5865f2cc))
@@ -521,6 +550,86 @@ fn pane_drop_zone(
                 direction,
             );
         })
+        .child(pane_drop_hint(direction))
+}
+
+fn pane_drag_handle(panel_id: &str) -> Stateful<Div> {
+    div()
+        .id(format!("pane-drag-handle-{panel_id}"))
+        .h(px(24.0))
+        .min_w(px(30.0))
+        .px(px(6.0))
+        .rounded_md()
+        .border_1()
+        .border_color(theme::border())
+        .bg(theme::surface_2())
+        .text_color(theme::text_muted())
+        .text_size(px(11.0))
+        .font_weight(gpui::FontWeight::BOLD)
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_move()
+        .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
+        .child(pane_drag_grip_icon())
+        .on_drag(
+            DraggedPane {
+                panel_id: panel_id.to_string(),
+            },
+            |_, _, _, cx| cx.new(|_| gpui::Empty),
+        )
+}
+
+fn pane_drag_grip_icon() -> Div {
+    div()
+        .flex()
+        .flex_row()
+        .gap(px(3.0))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.0))
+                .child(pane_drag_dot())
+                .child(pane_drag_dot())
+                .child(pane_drag_dot()),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.0))
+                .child(pane_drag_dot())
+                .child(pane_drag_dot())
+                .child(pane_drag_dot()),
+        )
+}
+
+fn pane_drag_dot() -> Div {
+    div()
+        .w(px(3.0))
+        .h(px(3.0))
+        .rounded_full()
+        .bg(theme::text_muted())
+}
+
+fn pane_drop_hint(direction: PaneDropDirection) -> Div {
+    let label = match direction {
+        PaneDropDirection::Left => "Drop left",
+        PaneDropDirection::Right => "Drop right",
+        PaneDropDirection::Top => "Drop top",
+        PaneDropDirection::Bottom => "Drop bottom",
+    };
+
+    div()
+        .px(px(8.0))
+        .py(px(3.0))
+        .rounded_md()
+        .bg(theme::surface_2())
+        .text_color(theme::text_primary())
+        .text_size(px(11.0))
+        .font_weight(gpui::FontWeight::MEDIUM)
+        .child(label)
 }
 
 fn collect_panel_messages(
@@ -723,13 +832,16 @@ fn watched_composer(
 fn action_button(icon: &'static str) -> Stateful<Div> {
     div()
         .id(icon)
-        .w(px(26.0))
+        .min_w(px(26.0))
         .h(px(26.0))
+        .px(px(7.0))
         .rounded_md()
         .flex()
         .items_center()
         .justify_center()
         .text_color(theme::text_muted())
+        .text_size(px(12.0))
+        .font_weight(gpui::FontWeight::MEDIUM)
         .cursor_pointer()
         .hover(|s| s.bg(rgb(0x2a2a33)).text_color(theme::text_primary()))
         .child(icon)
