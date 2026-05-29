@@ -72,10 +72,10 @@ fn run_verify_artifact(args: &[String]) -> ExitCode {
             }
         },
         Err(error) => {
-            if let Some(report) = error.report() {
-                if let Ok(json) = serde_json::to_string_pretty(report) {
-                    eprintln!("{json}");
-                }
+            if let Some(report) = error.report()
+                && let Ok(json) = serde_json::to_string_pretty(report)
+            {
+                eprintln!("{json}");
             }
             eprintln!("{error}");
             ExitCode::FAILURE

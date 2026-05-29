@@ -9,7 +9,7 @@ use twirchat_desktop_rust::protocol::types::{
     ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform, PlatformStatus,
     PlatformStatusMode,
 };
-use twirchat_desktop_rust::storage::accounts::UpsertAccount;
+use twirchat_desktop_rust::storage::accounts::{TokenPair, UpsertAccount};
 use twirchat_desktop_rust::storage::{Storage, TokenState};
 
 #[test]
@@ -228,40 +228,99 @@ fn twitch_adapter_preserves_repeated_emotes_and_overlay_parts()
 }
 
 #[test]
-fn twitch_adapter_expired_token_requires_reauth() -> Result<(), Box<dyn std::error::Error>> {
+fn twitch_adapter_expired_token_refreshes_before_send() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let storage = Storage::open(&temp.path().join("twitch-expired.sqlite"))?;
     seed_twitch_account(&storage, Some(1))?;
+    let mut client = MockTwitchClient::new();
+    client.push_refreshed_token(TokenPair {
+        access_token: "access-token-refreshed".into(),
+        refresh_token: Some("refresh-token-next".into()),
+        expires_at: Some(4_102_444_800),
+    });
+    let mut adapter = TwitchAdapter::new(&storage, client);
+    let mut sink = CapturingSink::default();
+
+    adapter.connect("fixturestreamer", &mut sink)?;
+    assert!(
+        matches!(adapter.auth_state(), TwitchAuthState::Authenticated { access_token, .. } if access_token == "access-token-refreshed")
+    );
+    adapter.send_message("fixturestreamer", "refreshed send", None)?;
+
+    let accounts = storage.accounts().find_all_with_token_state()?;
+    assert_eq!(adapter.client().refresh_calls.len(), 1);
+    assert_eq!(adapter.client().sent_messages.len(), 1);
+    assert!(matches!(
+        &adapter.client().connect_auth_state,
+        Some(TwitchAuthState::Authenticated { access_token, .. }) if access_token == "access-token-refreshed"
+    ));
+    assert!(matches!(
+        &accounts[0].token_state,
+        TokenState::Valid(tokens)
+            if tokens.access_token == "access-token-refreshed"
+                && tokens.refresh_token.as_deref() == Some("refresh-token-next")
+                && tokens.expires_at == Some(4_102_444_800)
+    ));
+    assert!(sink.statuses().iter().any(|status| {
+        status.status == PlatformStatus::Connected
+            && status.mode == PlatformStatusMode::Authenticated
+            && status.error.is_none()
+    }));
+
+    write_evidence(
+        "task-11-twitch-expired-token-refresh.json",
+        &serde_json::json!({
+            "accountPreserved": accounts[0].account.id,
+            "adapterAuthState": "authenticated",
+            "refreshCalls": adapter.client().refresh_calls.len(),
+            "sentMessages": adapter.client().sent_messages.len()
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn twitch_adapter_expired_token_without_refresh_token_requires_reauth()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("twitch-expired-no-refresh.sqlite"))?;
+    seed_twitch_account_without_refresh_token(&storage, Some(1))?;
     let mut adapter = TwitchAdapter::new(&storage, MockTwitchClient::new());
     let mut sink = CapturingSink::default();
 
     adapter.connect("fixturestreamer", &mut sink)?;
-    let reason = match adapter.auth_state() {
-        TwitchAuthState::ReauthRequired { reason, .. } => reason.clone(),
-        other => return Err(format!("expected reauth required, got {other:?}").into()),
-    };
     let err = adapter
         .send_message("fixturestreamer", "should fail", None)
-        .expect_err("expired token must prevent send");
-    assert!(err.message.contains("requires reauth"));
+        .expect_err("expired token without refresh token must prevent send");
 
-    let accounts = storage.accounts().find_all_with_token_state()?;
-    assert_eq!(accounts.len(), 1, "expired account must be preserved");
-    assert!(matches!(accounts[0].token_state, TokenState::Valid(_)));
+    assert!(err.message.contains("no refresh token"));
+    assert_eq!(adapter.client().refresh_calls.len(), 0);
+    assert_eq!(adapter.client().sent_messages.len(), 0);
+    assert!(matches!(
+        adapter.auth_state(),
+        TwitchAuthState::ReauthRequired { reason, .. } if reason.contains("no refresh token")
+    ));
     assert!(sink.statuses().iter().any(|status| {
-        status.status == PlatformStatus::Connected
-            && status.mode == PlatformStatusMode::Anonymous
-            && status.error.as_deref() == Some(reason.as_str())
+        status.status == PlatformStatus::Connected && status.mode == PlatformStatusMode::Anonymous
     }));
 
-    write_evidence(
-        "task-11-twitch-expired-token.json",
-        &serde_json::json!({
-            "accountPreserved": accounts[0].account.id,
-            "adapterAuthState": "reauth_required",
-            "reason": reason
-        }),
-    )?;
+    Ok(())
+}
+
+#[test]
+fn twitch_adapter_fresh_token_send_does_not_refresh() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("twitch-fresh.sqlite"))?;
+    seed_twitch_account(&storage, Some(4_102_444_800))?;
+    let mut adapter = TwitchAdapter::new(&storage, MockTwitchClient::new());
+    let mut sink = CapturingSink::default();
+
+    adapter.connect("fixturestreamer", &mut sink)?;
+    adapter.send_message("fixturestreamer", "fresh send", None)?;
+
+    assert_eq!(adapter.client().refresh_calls.len(), 0);
+    assert_eq!(adapter.client().sent_messages.len(), 1);
 
     Ok(())
 }
@@ -317,6 +376,21 @@ fn seed_twitch_account(
     storage: &Storage,
     expires_at: Option<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    seed_twitch_account_with_refresh_token(storage, expires_at, Some("refresh-token"))
+}
+
+fn seed_twitch_account_without_refresh_token(
+    storage: &Storage,
+    expires_at: Option<u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    seed_twitch_account_with_refresh_token(storage, expires_at, None)
+}
+
+fn seed_twitch_account_with_refresh_token(
+    storage: &Storage,
+    expires_at: Option<u64>,
+    refresh_token: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     storage.accounts().upsert(UpsertAccount {
         id: "twitch:user-1",
         platform: Platform::Twitch,
@@ -325,7 +399,7 @@ fn seed_twitch_account(
         display_name: "Fixture Streamer",
         avatar_url: Some("https://cdn.example/avatar.png"),
         access_token: "access-token",
-        refresh_token: Some("refresh-token"),
+        refresh_token,
         expires_at,
         scopes: &["chat:read".into(), "chat:edit".into()],
     })?;

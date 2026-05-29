@@ -4,6 +4,7 @@ use crate::platforms::twitch::adapter::{
 };
 use crate::platforms::{PlatformError, PlatformResult};
 use crate::protocol::types::{Platform, StreamStatus};
+use crate::storage::TokenPair;
 use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +26,8 @@ pub struct MockTwitchClient {
     pub categories: Vec<TwitchCategory>,
     pub stream_status: StreamStatus,
     pub stream_updates: Vec<StreamUpdate>,
+    pub refresh_calls: Vec<(String, String)>,
+    refreshed_tokens: VecDeque<TokenPair>,
     next_sent_id: u64,
 }
 
@@ -49,6 +52,8 @@ impl MockTwitchClient {
                 viewer_count: Some(42),
             },
             stream_updates: Vec::new(),
+            refresh_calls: Vec::new(),
+            refreshed_tokens: VecDeque::new(),
             next_sent_id: 1,
         }
     }
@@ -72,6 +77,10 @@ impl MockTwitchClient {
 
     pub fn push_event(&mut self, event: TwitchChatEvent) {
         self.incoming_events.push_back(event);
+    }
+
+    pub fn push_refreshed_token(&mut self, token: TokenPair) {
+        self.refreshed_tokens.push_back(token);
     }
 }
 
@@ -108,6 +117,21 @@ impl TwitchChatClient for MockTwitchClient {
         let id = self.next_sent_id.to_string();
         self.next_sent_id = self.next_sent_id.saturating_add(1);
         Ok(id)
+    }
+
+    fn refresh_access_token(
+        &mut self,
+        account_id: &str,
+        refresh_token: &str,
+    ) -> PlatformResult<TokenPair> {
+        self.refresh_calls
+            .push((account_id.into(), refresh_token.into()));
+        self.refreshed_tokens.pop_front().ok_or_else(|| {
+            PlatformError::new(
+                Platform::Twitch,
+                "mock Twitch token refresh response missing",
+            )
+        })
     }
 
     fn fetch_badges(&mut self, _channel: &str) -> PlatformResult<BTreeMap<String, String>> {

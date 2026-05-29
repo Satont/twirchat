@@ -8,7 +8,7 @@ use crate::protocol::types::{
     PlatformStatusInfo, PlatformStatusMode, ReplyAuthor, StreamStatus,
 };
 use crate::runtime::TWITCH_REDIRECT_URI;
-use crate::storage::{Storage, TokenState};
+use crate::storage::{Storage, TokenPair, TokenState};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -25,6 +25,8 @@ pub enum TwitchAuthState {
         display_name: String,
         avatar_url: Option<String>,
         access_token: String,
+        refresh_token: Option<String>,
+        expires_at: Option<u64>,
     },
     ReauthRequired {
         account_id: String,
@@ -137,6 +139,11 @@ pub trait TwitchChatClient {
         text: &str,
         reply_to_message_id: Option<&str>,
     ) -> PlatformResult<String>;
+    fn refresh_access_token(
+        &mut self,
+        account_id: &str,
+        refresh_token: &str,
+    ) -> PlatformResult<TokenPair>;
     fn fetch_badges(&mut self, channel: &str) -> PlatformResult<BTreeMap<String, String>>;
     fn drain_messages(&mut self) -> PlatformResult<Vec<TwitchChatMessage>>;
     fn drain_events(&mut self) -> PlatformResult<Vec<TwitchChatEvent>>;
@@ -270,28 +277,62 @@ impl<C: TwitchChatClient> TwitchAdapter<'_, C> {
         };
 
         match entry.token_state {
-            TokenState::Valid(tokens) => {
-                if token_requires_reauth(tokens.expires_at) {
-                    return Ok(TwitchAuthState::ReauthRequired {
-                        account_id: entry.account.id,
-                        reason: "access token expired or expires within refresh window".into(),
-                    });
-                }
-
-                Ok(TwitchAuthState::Authenticated {
-                    account_id: entry.account.id,
-                    platform_user_id: entry.account.platform_user_id,
-                    login: entry.account.username,
-                    display_name: entry.account.display_name,
-                    avatar_url: entry.account.avatar_url,
-                    access_token: tokens.access_token,
-                })
-            }
+            TokenState::Valid(tokens) => Ok(TwitchAuthState::Authenticated {
+                account_id: entry.account.id,
+                platform_user_id: entry.account.platform_user_id,
+                login: entry.account.username,
+                display_name: entry.account.display_name,
+                avatar_url: entry.account.avatar_url,
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                expires_at: tokens.expires_at,
+            }),
             TokenState::ReauthRequired { reason } => Ok(TwitchAuthState::ReauthRequired {
                 account_id: entry.account.id,
                 reason,
             }),
         }
+    }
+
+    fn refresh_token_if_needed(&mut self) -> PlatformResult<()> {
+        let TwitchAuthState::Authenticated {
+            account_id,
+            refresh_token,
+            expires_at,
+            ..
+        } = &self.auth_state
+        else {
+            return Ok(());
+        };
+
+        if !token_needs_refresh(*expires_at) {
+            return Ok(());
+        }
+
+        let account_id = account_id.clone();
+        let Some(refresh_token) = refresh_token.clone() else {
+            let reason = "access token expired or expires within refresh window and no refresh token is stored".to_string();
+            self.auth_state = TwitchAuthState::ReauthRequired {
+                account_id,
+                reason: reason.clone(),
+            };
+            return Err(PlatformError::new(Platform::Twitch, reason));
+        };
+
+        let refreshed = self
+            .client
+            .refresh_access_token(&account_id, &refresh_token)?;
+        self.storage
+            .accounts()
+            .update_tokens(
+                &account_id,
+                &refreshed.access_token,
+                refreshed.refresh_token.as_deref(),
+                refreshed.expires_at,
+            )
+            .map_err(storage_error)?;
+        self.auth_state = self.resolve_auth_state()?;
+        Ok(())
     }
 
     fn require_authenticated(&self, action: &str) -> PlatformResult<()> {
@@ -480,6 +521,7 @@ impl<C: TwitchChatClient> PlatformAdapter for TwitchAdapter<'_, C> {
         self.channel_name = Some(normalize_channel(channel_slug));
         self.is_connected = false;
         self.auth_state = self.resolve_auth_state()?;
+        let _ = self.refresh_token_if_needed();
         self.emit_status(
             sink,
             PlatformStatus::Connecting,
@@ -510,6 +552,10 @@ impl<C: TwitchChatClient> PlatformAdapter for TwitchAdapter<'_, C> {
         text: &str,
         reply_to_message_id: Option<&str>,
     ) -> PlatformResult<()> {
+        if let Err(error) = self.refresh_token_if_needed() {
+            self.require_authenticated("send Twitch messages")?;
+            return Err(error);
+        }
         self.require_authenticated("send Twitch messages")?;
         if !self.is_connected {
             return Err(PlatformError::new(
@@ -678,7 +724,7 @@ fn normalize_bits_event(message: &TwitchChatMessage, bits: u64) -> NormalizedEve
     }
 }
 
-fn token_requires_reauth(expires_at: Option<u64>) -> bool {
+fn token_needs_refresh(expires_at: Option<u64>) -> bool {
     expires_at.is_some_and(|expires_at| {
         expires_at <= current_unix_timestamp().saturating_add(TWITCH_TOKEN_REFRESH_WINDOW_SECONDS)
     })

@@ -133,13 +133,16 @@ impl AnimatedEmote {
         let http_client = cx.http_client();
 
         cx.spawn(async move |this, cx| {
-            let entry = match load_animated_emote_frames(&image_url, http_client).await {
-                Ok(frames) => CachedAnimatedEmote::Ready(frames),
-                Err(error) => {
+            let load_url = image_url.clone();
+            let entry = cx
+                .background_executor()
+                .spawn(async move { load_animated_emote_frames(&load_url, http_client).await })
+                .await
+                .map(CachedAnimatedEmote::Ready)
+                .unwrap_or_else(|error| {
                     eprintln!("failed to load animated emote {image_url}: {error}");
                     CachedAnimatedEmote::Failed
-                }
-            };
+                });
 
             animated_emote_cache()
                 .lock()
@@ -434,5 +437,15 @@ mod tests {
 
         assert_eq!(current_frame, 1);
         assert!(last_frame_time.is_some());
+    }
+
+    #[test]
+    fn animated_emote_loading_is_offloaded_to_background_executor() {
+        let source = include_str!("animated_emote.rs");
+
+        assert!(
+            source.contains("cx\n                .background_executor()\n                .spawn(async move { load_animated_emote_frames"),
+            "animated emote fetch/decode must run on GPUI background executor, not the foreground UI task"
+        );
     }
 }

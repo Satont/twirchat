@@ -5,10 +5,11 @@ use super::adapter::{
 use crate::platforms::{PlatformError, PlatformResult};
 use crate::protocol::types::{ChatReply, Platform, ReplyAuthor, StreamStatus};
 use crate::runtime::config::{RuntimeConfig, RuntimeConfigInput};
-use crate::storage::Storage;
+use crate::storage::{Storage, TokenPair};
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
+use serde_json::json;
 use std::collections::{BTreeMap, VecDeque};
 use std::net::TcpStream;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -239,6 +240,41 @@ impl TwitchChatClient for RealTwitchClient {
             .send(Message::Text(command))
             .map_err(|error| PlatformError::new(Platform::Twitch, error.to_string()))?;
         Ok(uuid::Uuid::new_v4().to_string())
+    }
+
+    fn refresh_access_token(
+        &mut self,
+        _account_id: &str,
+        refresh_token: &str,
+    ) -> PlatformResult<TokenPair> {
+        let response = self
+            .http
+            .post(format!("{}/api/auth/twitch/refresh", self.backend_url))
+            .json(&json!({ "refreshToken": refresh_token }))
+            .send()
+            .map_err(|error| PlatformError::new(Platform::Twitch, error.to_string()))?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().unwrap_or_else(|error| error.to_string());
+            return Err(PlatformError::new(
+                Platform::Twitch,
+                format!(
+                    "Twitch refresh failed with {status}: {}",
+                    body_snippet(&body)
+                ),
+            ));
+        }
+
+        let body: TwitchRefreshResponse = response
+            .json()
+            .map_err(|error| PlatformError::new(Platform::Twitch, error.to_string()))?;
+        Ok(TokenPair {
+            access_token: body.access_token,
+            refresh_token: body.refresh_token,
+            expires_at: body
+                .expires_in
+                .map(|expires_in| current_unix_timestamp().saturating_add(expires_in)),
+        })
     }
 
     fn fetch_badges(&mut self, channel: &str) -> PlatformResult<BTreeMap<String, String>> {
@@ -716,6 +752,16 @@ fn current_unix_timestamp() -> u64 {
 
 fn current_unix_timestamp_string() -> String {
     current_unix_timestamp().to_string()
+}
+
+#[derive(Deserialize)]
+struct TwitchRefreshResponse {
+    #[serde(rename = "accessToken")]
+    access_token: String,
+    #[serde(rename = "refreshToken")]
+    refresh_token: Option<String>,
+    #[serde(rename = "expiresIn")]
+    expires_in: Option<u64>,
 }
 
 #[derive(Deserialize)]
