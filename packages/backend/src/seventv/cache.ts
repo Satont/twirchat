@@ -1,21 +1,13 @@
 import type { Platform } from '@twirchat/shared'
 
-export interface SevenTVEmote {
-  id: string
-  alias: string
-  name: string
-  animated: boolean
-  zeroWidth: boolean
-  aspectRatio: number
-  imageUrl: string
-}
+import type { SevenTVEmote } from './emote.ts'
 
 export interface CachedEmoteSet {
   id: string
   name: string
   channelId: string
   platform: Platform
-  emotes: Map<string, SevenTVEmote> // Alias -> emote
+  emotes: Map<string, SevenTVEmote>
   fetchedAt: number
   ttl: number
 }
@@ -94,10 +86,9 @@ export class SevenTVCache {
     for (const [alias, emote] of entry.data.emotes) {
       if (emote.id === emoteId) {
         Object.assign(emote, update)
-        // If alias changed, update the map key
         if (update.alias && update.alias !== alias) {
           entry.data.emotes.delete(alias)
-          entry.data.emotes.set(update.alias.toLowerCase(), emote)
+          entry.data.emotes.set(update.alias, emote)
         }
         return true
       }
@@ -114,7 +105,7 @@ export class SevenTVCache {
       return false
     }
 
-    entry.data.emotes.set(emote.alias.toLowerCase(), emote)
+    entry.data.emotes.set(emote.alias, emote)
     return true
   }
 
@@ -155,7 +146,6 @@ export class SevenTVCache {
 
 export const sevenTVCache = new SevenTVCache()
 
-// Periodic cleanup every 5 minutes
 setInterval(
   () => {
     sevenTVCache.cleanup()

@@ -117,6 +117,142 @@ fn removing_active_watched_tab_returns_to_home() {
 }
 
 #[test]
+fn removing_active_watched_tab_deletes_storage_row_and_reload_excludes_it() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("remove-tab-storage.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for remove tab storage test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "stray228")
+        .expect("adding watched tab should persist");
+    let active_id = state.active_channel_tab_id().to_string();
+    assert!(
+        storage
+            .watched_channels()
+            .find_by_id(&active_id)
+            .expect("watched channel lookup should work")
+            .is_some()
+    );
+
+    let removed = state
+        .remove_watched_channel_for_tab(&storage, &active_id)
+        .expect("removing watched tab should persist");
+
+    assert!(removed);
+    assert_eq!(state.active_channel_tab_id(), "home");
+    assert!(
+        storage
+            .watched_channels()
+            .find_by_id(&active_id)
+            .expect("watched channel lookup should work")
+            .is_none()
+    );
+    let reloaded = AppState::from_storage(&storage);
+    assert!(
+        reloaded
+            .watched_channels
+            .iter()
+            .all(|channel| channel.id != active_id)
+    );
+}
+
+#[test]
+fn loading_storage_prunes_unreferenced_watched_channel_rows() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("prune-unreferenced-tab.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for prune test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "satont")
+        .expect("visible watched tab should persist");
+    let visible_id = state.active_channel_tab_id().to_string();
+    let stale = storage
+        .watched_channels()
+        .upsert(Platform::Twitch, "stray228", "stray228")
+        .expect("stale watched channel should persist");
+    storage
+        .watched_layout()
+        .get(&stale.id)
+        .expect("stale self layout should persist");
+
+    let reloaded = AppState::from_storage(&storage);
+
+    assert!(
+        reloaded
+            .watched_channels
+            .iter()
+            .any(|channel| channel.id == visible_id)
+    );
+    assert!(
+        reloaded
+            .watched_channels
+            .iter()
+            .all(|channel| channel.id != stale.id)
+    );
+    assert!(
+        storage
+            .watched_channels()
+            .find_by_id(&stale.id)
+            .expect("watched channel lookup should work")
+            .is_none()
+    );
+}
+
+#[test]
+fn removing_visible_tab_preserves_channel_referenced_by_another_layout() {
+    let temp = tempfile::tempdir().expect("temp dir should be available");
+    let db_path = temp.path().join("remove-referenced-tab.sqlite");
+    let storage = Storage::open(&db_path).expect("storage should open for referenced tab test");
+    let mut state = AppState::from_storage(&storage);
+
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Kick, "base")
+        .expect("base watched tab should persist");
+    let base_id = state.active_channel_tab_id().to_string();
+    state
+        .add_watched_channel_tab_from_slug(&storage, Platform::Twitch, "stray228")
+        .expect("referenced watched tab should persist");
+    let referenced_id = state.active_channel_tab_id().to_string();
+    state.select_channel_tab(base_id.clone());
+    state
+        .add_chat_pane_for_active_tab(&storage)
+        .expect("second pane should persist");
+    let empty_panel_id = find_empty_panel_id(
+        &state
+            .watched_layout(&base_id)
+            .expect("base layout should exist")
+            .root,
+    )
+    .expect("empty panel should exist");
+    state.open_add_channel_modal_for_panel(empty_panel_id);
+    state
+        .submit_add_channel_modal(&storage, Platform::Twitch, "stray228")
+        .expect("referenced pane should persist");
+
+    let removed = state
+        .remove_watched_channel_for_tab(&storage, &referenced_id)
+        .expect("tab remove should persist");
+
+    assert!(removed);
+    assert!(
+        storage
+            .watched_channels()
+            .find_by_id(&referenced_id)
+            .expect("watched channel lookup should work")
+            .is_some()
+    );
+    assert!(state.take_pending_watched_channel_removals().is_empty());
+    let reloaded = AppState::from_storage(&storage);
+    assert!(
+        reloaded
+            .watched_layout(&base_id)
+            .is_some_and(|layout| layout_contains_channel(&layout.root, &referenced_id))
+    );
+}
+
+#[test]
 fn watched_pane_send_queue_targets_only_requested_channel() {
     let temp = tempfile::tempdir().expect("temp dir should be available");
     let db_path = temp.path().join("watched-send.sqlite");
@@ -301,11 +437,24 @@ fn removing_last_referenced_watched_pane_queues_channel_remove() {
     let pending = state.take_pending_watched_channel_removals();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].channel_id, guest_id);
+    let pending_adds = state.take_pending_watched_channel_adds();
+    assert!(
+        pending_adds
+            .iter()
+            .all(|pending| pending.channel_slug != "guest")
+    );
     assert!(
         !state
             .watched_channels
             .iter()
             .any(|channel| channel.channel_slug == "guest")
+    );
+    assert!(
+        storage
+            .watched_channels()
+            .find_by_id(&pending[0].channel_id)
+            .expect("watched channel lookup should work")
+            .is_none()
     );
 }
 
@@ -562,7 +711,14 @@ fn watched_tab_order_rehydrates_from_persisted_ids_only() {
         reloaded
             .watched_channels
             .iter()
-            .any(|channel| channel.id == charlie_id)
+            .all(|channel| channel.id != charlie_id)
+    );
+    assert!(
+        storage
+            .watched_channels()
+            .find_by_id(&charlie_id)
+            .expect("watched channel lookup should work")
+            .is_none()
     );
 }
 

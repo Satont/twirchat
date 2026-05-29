@@ -3,8 +3,8 @@ use crate::protocol::types::{
     LayoutNode, PanelContent, PlatformStatus, PlatformStatusMode, SplitDirection, WatchedChannel,
     WatchedChannelsLayout,
 };
-use crate::ui::chat::{MentionAutocompleteUi, MessageRowContext, composer_reply_bar, message_row};
-use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
+use crate::ui::chat::{AutocompleteUi, MessageRowContext, composer_reply_bar, message_row};
+use crate::ui::components::autocomplete_popup::AutocompletePopup;
 use crate::ui::components::input::Input;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 #[derive(Clone)]
 struct WatchedComposerUi {
     input: Option<Entity<Input>>,
-    autocomplete: Option<MentionAutocompleteUi>,
+    autocomplete: Option<AutocompleteUi>,
 }
 
 #[derive(Clone)]
@@ -23,7 +23,7 @@ struct WatchedLayoutDeps<'a> {
     state_entity: Entity<AppState>,
     font_size_input: Entity<Input>,
     watched_composer_inputs: &'a BTreeMap<String, Entity<Input>>,
-    watched_mention_autocomplete: &'a BTreeMap<String, MentionAutocompleteUi>,
+    watched_autocomplete: &'a BTreeMap<String, AutocompleteUi>,
     can_drag_panes: bool,
 }
 
@@ -37,7 +37,7 @@ pub(crate) fn tab_panel(
     state_entity: Entity<AppState>,
     font_size_input: Entity<Input>,
     watched_composer_inputs: &BTreeMap<String, Entity<Input>>,
-    watched_mention_autocomplete: &BTreeMap<String, MentionAutocompleteUi>,
+    watched_autocomplete: &BTreeMap<String, AutocompleteUi>,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<TwirChatApp>,
 ) -> Div {
@@ -63,7 +63,7 @@ pub(crate) fn tab_panel(
                 state_entity,
                 font_size_input,
                 watched_composer_inputs,
-                watched_mention_autocomplete,
+                watched_autocomplete,
                 can_drag_panes,
             },
             window,
@@ -109,7 +109,7 @@ fn render_node(
                     channel_id,
                     WatchedComposerUi {
                         input: deps.watched_composer_inputs.get(channel_id).cloned(),
-                        autocomplete: deps.watched_mention_autocomplete.get(channel_id).cloned(),
+                        autocomplete: deps.watched_autocomplete.get(channel_id).cloned(),
                     },
                     window,
                     cx,
@@ -746,7 +746,7 @@ fn watched_composer(
     state_entity: Entity<AppState>,
     channel_id: String,
     composer_input: Entity<Input>,
-    mention_autocomplete: Option<MentionAutocompleteUi>,
+    autocomplete: Option<AutocompleteUi>,
     app_entity: Entity<TwirChatApp>,
 ) -> Div {
     let reply_target = state.watched_reply_target(&channel_id).cloned();
@@ -805,9 +805,9 @@ fn watched_composer(
                                 .flex()
                                 .items_center()
                                 .child(composer_input.clone())
-                                .when_some(mention_autocomplete, |input_box, autocomplete| {
+                                .when_some(autocomplete, |input_box, autocomplete| {
                                     input_box.child(
-                                        MentionAutocompletePopup::new(
+                                        AutocompletePopup::new(
                                             autocomplete.suggestions,
                                             autocomplete.selected_index,
                                         )
@@ -815,7 +815,7 @@ fn watched_composer(
                                             let app_entity = app_entity.clone();
                                             move |index, window, app| {
                                                 app_entity.update(app, |this, cx| {
-                                                    this.select_mention_suggestion(
+                                                    this.select_autocomplete_suggestion(
                                                         index, window, cx,
                                                     );
                                                 });

@@ -8,10 +8,35 @@ use twirchat_desktop_rust::app_state::{
 use twirchat_desktop_rust::protocol::rpc::UserChatHistoryCursor;
 use twirchat_desktop_rust::protocol::{
     Account, BackendToDesktopMessage, Badge, ChannelStatus, ChatAuthor, ChatMessageType,
-    LiveStatusPlatform, NormalizedChatMessage, Platform, PlatformStatus, PlatformStatusInfo,
-    PlatformStatusMode, SevenTvEmote, WatchedChannel,
+    DesktopToBackendMessage, LiveStatusPlatform, NormalizedChatMessage, Platform, PlatformStatus,
+    PlatformStatusInfo, PlatformStatusMode, SevenTvEmote, WatchedChannel,
+};
+use twirchat_desktop_rust::services::{
+    DesktopToBackendMessageKind, ServiceEvent, WatchedChannelsEvent,
 };
 use twirchat_desktop_rust::storage::Storage;
+
+#[test]
+fn app_state_tracks_watched_seven_tv_subscription_key_for_emote_autocomplete() {
+    let mut state = new_state();
+
+    state.apply_service_event(ServiceEvent::WatchedChannels(
+        WatchedChannelsEvent::BackendMessagePlanned {
+            kind: DesktopToBackendMessageKind::SeventvSubscribe,
+            watched_channel_id: Some("watched-local-id".to_string()),
+            message: DesktopToBackendMessage::SeventvSubscribe {
+                platform: Platform::Kick,
+                channel_id: "123456".to_string(),
+                platform_user_id: Some("123456".to_string()),
+            },
+        },
+    ));
+
+    assert_eq!(
+        state.seven_tv_channel_id_for_watched_channel("watched-local-id"),
+        Some("123456")
+    );
+}
 
 #[test]
 fn changing_active_section_updates_state() {
@@ -442,6 +467,73 @@ fn backend_live_message_gets_enriched_by_seven_tv_catalog() {
         .expect("live message should be appended");
     assert_eq!(latest.id, "msg-1");
     assert!(latest.emotes.iter().any(|emote| emote.id == "7tv-kekw"));
+}
+
+#[test]
+fn backend_live_message_preserves_exact_seven_tv_alias_casing() {
+    let mut state = new_state();
+    state.messages.clear();
+
+    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
+        twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+            message: BackendToDesktopMessage::SeventvEmoteSet {
+                platform: Platform::Kick,
+                channel_id: "kickone".to_string(),
+                emotes: vec![
+                    SevenTvEmote {
+                        id: "7tv-ww".to_string(),
+                        alias: "WW".to_string(),
+                        name: "w".to_string(),
+                        animated: false,
+                        zero_width: false,
+                        aspect_ratio: 1.0,
+                        image_url: "https://cdn.7tv.app/emote/7tv-ww/4x.webp".to_string(),
+                    },
+                    SevenTvEmote {
+                        id: "7tv-vahui".to_string(),
+                        alias: "vahui".to_string(),
+                        name: "vahui".to_string(),
+                        animated: false,
+                        zero_width: false,
+                        aspect_ratio: 1.0,
+                        image_url: "https://cdn.7tv.app/emote/7tv-vahui/4x.webp".to_string(),
+                    },
+                ],
+            },
+        },
+    ));
+
+    for (message_id, text, expected_emote_id) in [
+        ("msg-upper", "WW", Some("7tv-ww")),
+        ("msg-lower", "vahui", Some("7tv-vahui")),
+        ("msg-miss", "ww", None),
+    ] {
+        state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
+            twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+                message: BackendToDesktopMessage::ChatMessage {
+                    data: to_value(kick_chat_message(message_id, "kickone", text))
+                        .expect("chat message should serialize"),
+                },
+            },
+        ));
+
+        let latest = state
+            .messages
+            .iter()
+            .find(|message| message.id == message_id)
+            .expect("live message should be appended");
+
+        match expected_emote_id {
+            Some(emote_id) => assert!(
+                latest.emotes.iter().any(|emote| emote.id == emote_id),
+                "expected {text} to resolve to {emote_id}"
+            ),
+            None => assert!(
+                latest.emotes.is_empty(),
+                "expected {text} to stay unresolved"
+            ),
+        }
+    }
 }
 
 #[test]
@@ -1304,6 +1396,27 @@ fn startup_watched_history_backfills_badge_images_from_stored_snapshot()
 
 fn chat_message(id: &str, channel_id: &str, text: &str) -> NormalizedChatMessage {
     chat_message_with_badges(id, channel_id, text, vec![], false)
+}
+
+fn kick_chat_message(id: &str, channel_id: &str, text: &str) -> NormalizedChatMessage {
+    NormalizedChatMessage {
+        id: id.to_string(),
+        platform: Platform::Kick,
+        channel_id: channel_id.to_string(),
+        author: ChatAuthor {
+            id: "viewer-1".to_string(),
+            username: Some("viewerone".to_string()),
+            display_name: "Viewer One".to_string(),
+            color: None,
+            avatar_url: None,
+            badges: vec![],
+        },
+        text: text.to_string(),
+        emotes: vec![],
+        timestamp: "1700000000".to_string(),
+        message_type: ChatMessageType::Message,
+        reply: None,
+    }
 }
 
 fn chat_message_with_timestamp_and_badges(

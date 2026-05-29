@@ -1,4 +1,5 @@
-export { sevenTVCache, type SevenTVEmote, type CachedEmoteSet } from './cache'
+export { sevenTVCache, type CachedEmoteSet } from './cache'
+export { type SevenTVEmote } from './emote'
 export { sevenTVEventClient, type EmoteSetUpdateEvent } from './event-client'
 export { sevenTVManager, type SevenTVSubscriptionManager } from './subscription-manager'
 export { handleSevenTVImageProxy } from './image-proxy'

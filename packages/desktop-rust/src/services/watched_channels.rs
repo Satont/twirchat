@@ -10,7 +10,9 @@ use crate::platforms::{
 use crate::protocol::messages::{
     DesktopToBackendMessage, SevenTvEmote as BackendSevenTvEmote, SevenTvSubscription,
 };
-use crate::protocol::types::{NormalizedChatMessage, Platform, PlatformStatusInfo, WatchedChannel};
+use crate::protocol::types::{
+    LayoutNode, NormalizedChatMessage, PanelContent, Platform, PlatformStatusInfo, WatchedChannel,
+};
 use crate::services::bus::{BusReceiver, BusRecvError, BusSender};
 use crate::services::commands::{LifecycleCommand, ServiceCommand, WatchedChannelsCommand};
 use crate::services::events::{DesktopToBackendMessageKind, ServiceEvent, WatchedChannelsEvent};
@@ -452,13 +454,17 @@ fn publish_runtime_events(
                     WatchedChannelsEvent::StatusChanged { channel_id, status },
                 );
             }
-            WatchedChannelsRuntimeEvent::BackendMessagePlanned { message } => {
+            WatchedChannelsRuntimeEvent::BackendMessagePlanned {
+                watched_channel_id,
+                message,
+            } => {
                 eprintln!("[watched/live] planned backend message: {:?}", message);
                 publish_watched_event(
                     events,
                     WatchedChannelsEvent::BackendMessagePlanned {
                         kind: DesktopToBackendMessageKind::from(&message),
                         message,
+                        watched_channel_id,
                     },
                 );
             }
@@ -526,6 +532,7 @@ pub enum WatchedChannelsRuntimeEvent {
         message: String,
     },
     BackendMessagePlanned {
+        watched_channel_id: Option<String>,
         message: DesktopToBackendMessage,
     },
 }
@@ -585,6 +592,7 @@ impl<'a> WatchedChannelsRuntime<'a> {
 
     pub fn auto_connect(&mut self) -> WatchedChannelsRuntimeResult<Vec<WatchedChannel>> {
         self.ensure_kick_accounts_are_watched()?;
+        self.prune_unreferenced_watched_channels()?;
         let channels = self.storage.watched_channels().find_all()?;
         eprintln!(
             "[watched/live] auto_connect found {} watched channel(s)",
@@ -1018,11 +1026,14 @@ impl<'a> WatchedChannelsRuntime<'a> {
                 channel_id: channel_id.to_string(),
             });
         };
-        self.plan_backend_message(DesktopToBackendMessage::SeventvSubscribe {
-            platform: entry.watched_channel.platform,
-            channel_id: entry.seven_tv_channel_id.clone(),
-            platform_user_id: entry.seven_tv_platform_user_id.clone(),
-        });
+        self.plan_backend_message_for_channel(
+            channel_id,
+            DesktopToBackendMessage::SeventvSubscribe {
+                platform: entry.watched_channel.platform,
+                channel_id: entry.seven_tv_channel_id.clone(),
+                platform_user_id: entry.seven_tv_platform_user_id.clone(),
+            },
+        );
         Ok(())
     }
 
@@ -1046,9 +1057,28 @@ impl<'a> WatchedChannelsRuntime<'a> {
     }
 
     fn plan_backend_message(&mut self, message: DesktopToBackendMessage) {
+        self.push_backend_message(None, message);
+    }
+
+    fn plan_backend_message_for_channel(
+        &mut self,
+        channel_id: &str,
+        message: DesktopToBackendMessage,
+    ) {
+        self.push_backend_message(Some(channel_id.to_string()), message);
+    }
+
+    fn push_backend_message(
+        &mut self,
+        watched_channel_id: Option<String>,
+        message: DesktopToBackendMessage,
+    ) {
         self.backend_messages.push(message.clone());
         self.events
-            .push(WatchedChannelsRuntimeEvent::BackendMessagePlanned { message });
+            .push(WatchedChannelsRuntimeEvent::BackendMessagePlanned {
+                watched_channel_id,
+                message,
+            });
     }
 
     fn record_adapter_error(&mut self, channel_id: &str, error: PlatformError) {
@@ -1082,6 +1112,57 @@ impl<'a> WatchedChannelsRuntime<'a> {
             self.storage.settings().set_tab_channel_ids(&filtered)?;
         }
         Ok(())
+    }
+
+    fn prune_unreferenced_watched_channels(&self) -> WatchedChannelsRuntimeResult<()> {
+        let Some(tab_ids) = self.storage.settings().get_tab_channel_ids()? else {
+            return Ok(());
+        };
+
+        let mut referenced_ids = tab_ids.iter().cloned().collect::<BTreeSet<_>>();
+        for tab_id in &tab_ids {
+            let layout = self.storage.watched_layout().get(tab_id)?;
+            collect_watched_channel_ids(&layout.root, &mut referenced_ids);
+        }
+
+        let accounts = self.storage.accounts().find_all()?;
+        let channels = self.storage.watched_channels().find_all()?;
+        for channel in channels {
+            let is_account_channel = accounts.iter().any(|account| {
+                account.platform == channel.platform
+                    && normalize_watched_channel_slug(account.platform, &account.username)
+                        == channel.channel_slug
+            });
+            if referenced_ids.contains(&channel.id) || is_account_channel {
+                continue;
+            }
+
+            self.storage.watched_channels().remove(&channel.id)?;
+            self.storage.watched_history().remove(&channel.id)?;
+            self.storage.watched_layout().remove(&channel.id)?;
+            self.storage
+                .settings()
+                .set_watched_tab_custom_name(&channel.id, None)?;
+            self.cleanup_stale_persistence(&channel.id)?;
+        }
+        Ok(())
+    }
+}
+
+fn collect_watched_channel_ids(node: &LayoutNode, ids: &mut BTreeSet<String>) {
+    match node {
+        LayoutNode::Panel {
+            content: PanelContent::Watched { channel_id },
+            ..
+        } => {
+            ids.insert(channel_id.clone());
+        }
+        LayoutNode::Panel { .. } => {}
+        LayoutNode::Split { children, .. } => {
+            for child in children {
+                collect_watched_channel_ids(child, ids);
+            }
+        }
     }
 }
 

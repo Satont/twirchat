@@ -1,7 +1,7 @@
 use crate::protocol::rpc::OpenExternalUrlParams;
 use crate::protocol::types::Emote;
 use crate::runtime::{SystemExternalOpener, browser::open_external_url};
-use crate::ui::components::animated_emote;
+use crate::ui::components::{animated_emote, emote_tooltip};
 use crate::ui::theme;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId, Entity,
@@ -248,6 +248,10 @@ impl Render for SelectableMessage {
                     let state = cx.entity();
                     let focus_handle = self.focus_handle.clone();
                     div()
+                        .id(format!(
+                            "emote-tooltip-target-{}-{}-{}",
+                            message_id, emote.id, part_index
+                        ))
                         .mx(px(1.5))
                         .h(px(if is_compact { 20.0 } else { 24.0 }))
                         .min_w(px(if is_compact { 20.0 } else { 24.0 }))
@@ -278,6 +282,10 @@ impl Render for SelectableMessage {
                                 });
                             }
                         })
+                        .hoverable_tooltip(emote_tooltip(
+                            emote.clone(),
+                            format!("{}-{}-{}", message_id, emote.id, part_index),
+                        ))
                         .child(animated_emote(
                             format!("emote-{}-{}-{}", message_id, emote.id, part_index),
                             emote.image_url.clone(),

@@ -12,8 +12,9 @@ pub use aggregate::{
 };
 pub use alias::{AliasBook, apply_alias, apply_aliases};
 pub use autocomplete::{
-    MentionSuggestion, ParsedMentionToken, fuzzy_filter_mentions, mention_suggestions,
-    parse_mention_token, replace_mention_token,
+    EmoteSuggestion, MentionSuggestion, ParsedEmoteToken, ParsedMentionToken, emote_suggestions,
+    fuzzy_filter_emotes, fuzzy_filter_mentions, mention_suggestions, parse_emote_token,
+    parse_mention_token, replace_emote_token, replace_mention_token,
 };
 pub use history::{compare_messages, insert_live_message, merge_older_page, sort_messages};
 pub use normalize::{

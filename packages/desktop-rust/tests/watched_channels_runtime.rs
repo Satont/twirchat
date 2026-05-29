@@ -141,6 +141,42 @@ fn watched_channels_runtime_persists_and_rehydrates() -> Result<(), Box<dyn std:
 }
 
 #[test]
+fn auto_connect_prunes_unreferenced_watched_channels() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let storage = Storage::open(&temp.path().join("watched-prune.sqlite"))?;
+    let visible = storage
+        .watched_channels()
+        .upsert(Platform::Kick, "satont", "satont")?;
+    let stale = storage
+        .watched_channels()
+        .upsert(Platform::Twitch, "stray228", "stray228")?;
+    storage
+        .settings()
+        .set_tab_channel_ids(std::slice::from_ref(&visible.id))?;
+    storage
+        .watched_layout()
+        .set(&visible.id, &single_layout(&visible.id))?;
+    storage.watched_layout().get(&stale.id)?;
+
+    let harness = AdapterHarness::default();
+    let mut runtime = runtime_with_harness(&storage, harness.clone(), 2);
+    let connected = runtime.auto_connect()?;
+
+    assert_eq!(connected.len(), 1);
+    assert_eq!(connected[0].id, visible.id);
+    assert!(storage.watched_channels().find_by_id(&stale.id)?.is_none());
+    assert!(harness.snapshot(Platform::Twitch, "stray228").is_none());
+    assert_eq!(
+        harness
+            .snapshot(Platform::Kick, "satont")
+            .map(|record| record.connect_count),
+        Some(1)
+    );
+
+    Ok(())
+}
+
+#[test]
 fn watched_channels_reconnects_and_resubscribes() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let storage = Storage::open(&temp.path().join("watched-reconnect.sqlite"))?;

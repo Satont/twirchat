@@ -6,8 +6,9 @@ use std::path::PathBuf;
 use std::time::Instant;
 use twirchat_desktop_rust::chat::{
     AliasBook, ChatAggregator, ChatReplayItem, IngestOutcome, SevenTvCatalog, SevenTvEmote,
-    fuzzy_filter_mentions, insert_live_message, mention_suggestions, merge_older_page,
-    parse_mention_token, replace_mention_token, sort_messages,
+    emote_suggestions, fuzzy_filter_emotes, fuzzy_filter_mentions, insert_live_message,
+    mention_suggestions, merge_older_page, parse_emote_token, parse_mention_token,
+    replace_emote_token, replace_mention_token, sort_messages,
 };
 use twirchat_desktop_rust::protocol::{
     Badge, ChatAuthor, ChatMessageType, Emote, EmotePosition, EventUser, NormalizedChatMessage,
@@ -317,6 +318,86 @@ fn chat_burst_performance() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+#[test]
+fn emote_autocomplete_fuzzy_filters_and_replaces_colon_token() {
+    let emotes = [
+        SevenTvEmote {
+            id: "7tv-kappa".to_string(),
+            name: "Kappa".to_string(),
+            image_url: "https://cdn.7tv.app/emote/kappa/4x.webp".to_string(),
+            animated: false,
+            zero_width: false,
+            aspect_ratio: 1.0,
+        },
+        SevenTvEmote {
+            id: "7tv-kekw".to_string(),
+            name: "KEKW".to_string(),
+            image_url: "https://cdn.7tv.app/emote/kekw/4x.webp".to_string(),
+            animated: true,
+            zero_width: false,
+            aspect_ratio: 1.0,
+        },
+        SevenTvEmote {
+            id: "7tv-peepo".to_string(),
+            name: "peepoHappy".to_string(),
+            image_url: "https://cdn.7tv.app/emote/peepo/4x.webp".to_string(),
+            animated: false,
+            zero_width: false,
+            aspect_ratio: 1.0,
+        },
+    ];
+
+    let suggestions = emote_suggestions(emotes.iter());
+    let filtered = fuzzy_filter_emotes(&suggestions, "kw", 15);
+
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].label, "KEKW");
+    assert!(filtered[0].animated);
+
+    let token = parse_emote_token("hello @Friendly :kw").expect("emote token should parse");
+    assert_eq!(token.query, "kw");
+    assert_eq!(
+        replace_emote_token("hello @Friendly :kw", &token, &filtered[0]),
+        "hello @Friendly KEKW "
+    );
+    assert!(parse_emote_token("hello :ke ").is_none());
+    assert!(parse_emote_token(":").is_none());
+}
+
+#[test]
+fn seven_tv_catalog_returns_first_matching_channel_candidate_for_autocomplete() {
+    let mut catalog = SevenTvCatalog::new();
+    catalog.insert(
+        Platform::Twitch,
+        "satont",
+        SevenTvEmote {
+            id: "7tv-kekw".to_string(),
+            name: "KEKW".to_string(),
+            image_url: "https://cdn.7tv.app/emote/kekw/4x.webp".to_string(),
+            animated: false,
+            zero_width: false,
+            aspect_ratio: 1.0,
+        },
+    );
+    catalog.insert(
+        Platform::Kick,
+        "other",
+        SevenTvEmote {
+            id: "7tv-other".to_string(),
+            name: "Other".to_string(),
+            image_url: "https://cdn.7tv.app/emote/other/4x.webp".to_string(),
+            animated: false,
+            zero_width: false,
+            aspect_ratio: 1.0,
+        },
+    );
+
+    let emotes = catalog.for_channel_candidates(Platform::Twitch, ["satont-slug", "satont"]);
+
+    assert_eq!(emotes.len(), 1);
+    assert_eq!(emotes[0].name, "KEKW");
 }
 
 #[test]

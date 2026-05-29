@@ -152,6 +152,7 @@ impl UserCardModalState {
 pub struct AppState {
     active_section: MainSection,
     active_channel_tab_id: String,
+    hovered_channel_tab_id: Option<String>,
     sidebar_collapsed: bool,
     unread_events: usize,
     runtime_status: RuntimeStatus,
@@ -163,6 +164,7 @@ pub struct AppState {
     pub messages: Vec<NormalizedChatMessage>,
     aliases: AliasBook,
     seven_tv_catalog: SevenTvCatalog,
+    watched_seven_tv_channel_ids: BTreeMap<String, String>,
     pub watched_channels: Vec<WatchedChannel>,
     watched_tab_channel_ids: Vec<String>,
     watched_tab_custom_names: BTreeMap<String, String>,
@@ -181,6 +183,7 @@ pub struct AppState {
     pub chat_add_menu_open: bool,
     pub chat_options_menu_open: bool,
     pub tab_add_menu_open: bool,
+    pub watched_tab_context_menu_id: Option<String>,
     pub user_card: UserCardModalState,
     panel_assignment_target: Option<String>,
     pub add_channel_platform: Platform,
@@ -197,6 +200,7 @@ impl Default for AppState {
         Self {
             active_section: MainSection::Chat,
             active_channel_tab_id: String::from("home"),
+            hovered_channel_tab_id: None,
             sidebar_collapsed: false,
             unread_events: 3,
             runtime_status: RuntimeStatus::Starting,
@@ -217,6 +221,7 @@ impl Default for AppState {
             messages: vec![],
             aliases: AliasBook::default(),
             seven_tv_catalog: SevenTvCatalog::new(),
+            watched_seven_tv_channel_ids: BTreeMap::new(),
             watched_channels: vec![],
             watched_tab_channel_ids: Vec::new(),
             watched_tab_custom_names: BTreeMap::new(),
@@ -235,6 +240,7 @@ impl Default for AppState {
             chat_add_menu_open: false,
             chat_options_menu_open: false,
             tab_add_menu_open: false,
+            watched_tab_context_menu_id: None,
             user_card: UserCardModalState::closed(),
             panel_assignment_target: None,
             add_channel_platform: Platform::Twitch,
@@ -327,6 +333,9 @@ impl AppState {
                 self.watched_layouts.insert(channel.id.clone(), layout);
             }
         }
+        if let Err(error) = self.prune_unreferenced_watched_channels(storage) {
+            eprintln!("[storage] failed to prune unreferenced watched channels: {error}");
+        }
 
         let non_home_watched_ids = self
             .watched_channels
@@ -347,12 +356,69 @@ impl AppState {
             .sort_by_key(|message| message.timestamp.clone());
     }
 
+    fn prune_unreferenced_watched_channels(
+        &mut self,
+        storage: &Storage,
+    ) -> crate::storage::StorageResult<()> {
+        let mut referenced_ids = self
+            .watched_tab_channel_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        for tab_id in &self.watched_tab_channel_ids {
+            let Some(layout) = self.watched_layouts.get(tab_id) else {
+                continue;
+            };
+            let mut layout_ids = Vec::new();
+            collect_watched_channel_ids(&layout.root, &mut layout_ids);
+            referenced_ids.extend(layout_ids);
+        }
+
+        let removed_ids = self
+            .watched_channels
+            .iter()
+            .filter(|channel| !self.is_home_account_channel(channel))
+            .filter(|channel| !referenced_ids.contains(&channel.id))
+            .map(|channel| channel.id.clone())
+            .collect::<Vec<_>>();
+        if removed_ids.is_empty() {
+            return Ok(());
+        }
+
+        let removed = removed_ids.iter().cloned().collect::<BTreeSet<_>>();
+        for channel_id in &removed_ids {
+            Self::remove_watched_channel_storage(storage, channel_id)?;
+        }
+        self.watched_channels
+            .retain(|channel| !removed.contains(&channel.id));
+        self.watched_tab_channel_ids
+            .retain(|channel_id| !removed.contains(channel_id));
+        self.watched_tab_custom_names
+            .retain(|channel_id, _| !removed.contains(channel_id));
+        self.watched_channel_statuses
+            .retain(|channel_id, _| !removed.contains(channel_id));
+        self.watched_channel_messages
+            .retain(|channel_id, _| !removed.contains(channel_id));
+        self.watched_reply_targets
+            .retain(|channel_id, _| !removed.contains(channel_id));
+        self.watched_layouts
+            .retain(|channel_id, _| !removed.contains(channel_id));
+        self.composer_disabled_channel_ids
+            .retain(|channel_id| !removed.contains(channel_id));
+        Ok(())
+    }
+
     pub fn active_section(&self) -> MainSection {
         self.active_section
     }
 
     pub fn active_channel_tab_id(&self) -> &str {
         &self.active_channel_tab_id
+    }
+
+    pub fn hovered_channel_tab_id(&self) -> Option<&str> {
+        self.hovered_channel_tab_id.as_deref()
     }
 
     pub fn sidebar_collapsed(&self) -> bool {
@@ -373,6 +439,16 @@ impl AppState {
 
     pub fn aliases(&self) -> &AliasBook {
         &self.aliases
+    }
+
+    pub fn seven_tv_catalog(&self) -> &SevenTvCatalog {
+        &self.seven_tv_catalog
+    }
+
+    pub fn seven_tv_channel_id_for_watched_channel(&self, channel_id: &str) -> Option<&str> {
+        self.watched_seven_tv_channel_ids
+            .get(channel_id)
+            .map(String::as_str)
     }
 
     pub fn alias_for_user(&self, platform: Platform, platform_user_id: &str) -> Option<&str> {
@@ -409,6 +485,10 @@ impl AppState {
 
     pub fn renaming_watched_tab_id(&self) -> Option<&str> {
         self.renaming_watched_tab_id.as_deref()
+    }
+
+    pub fn watched_tab_context_menu_id(&self) -> Option<&str> {
+        self.watched_tab_context_menu_id.as_deref()
     }
 
     pub fn watched_tab_title(&self, tab_id: &str) -> Option<String> {
@@ -512,11 +592,32 @@ impl AppState {
             return false;
         }
         self.renaming_watched_tab_id = Some(tab_id.to_string());
+        self.watched_tab_context_menu_id = None;
         true
     }
 
     pub fn cancel_watched_tab_rename(&mut self) {
         self.renaming_watched_tab_id = None;
+    }
+
+    pub fn set_channel_tab_hovered(&mut self, tab_id: &str, hovered: bool) {
+        if hovered {
+            self.hovered_channel_tab_id = Some(tab_id.to_string());
+        } else if self.hovered_channel_tab_id.as_deref() == Some(tab_id) {
+            self.hovered_channel_tab_id = None;
+        }
+    }
+
+    pub fn open_watched_tab_context_menu(&mut self, tab_id: &str) -> bool {
+        if !self.watched_tab_channel_ids.iter().any(|id| id == tab_id) {
+            return false;
+        }
+        self.watched_tab_context_menu_id = Some(tab_id.to_string());
+        true
+    }
+
+    pub fn close_watched_tab_context_menu(&mut self) {
+        self.watched_tab_context_menu_id = None;
     }
 
     pub fn rename_watched_tab(
@@ -1078,7 +1179,22 @@ impl AppState {
                 );
                 self.runtime_errors.push(message);
             }
-            WatchedChannelsEvent::BackendMessagePlanned { message, .. } => {
+            WatchedChannelsEvent::BackendMessagePlanned {
+                message,
+                watched_channel_id,
+                ..
+            } => {
+                if let (
+                    Some(watched_channel_id),
+                    crate::protocol::messages::DesktopToBackendMessage::SeventvSubscribe {
+                        channel_id,
+                        ..
+                    },
+                ) = (&watched_channel_id, &message)
+                {
+                    self.watched_seven_tv_channel_ids
+                        .insert(watched_channel_id.clone(), channel_id.clone());
+                }
                 self.pending_backend_messages.push(message);
             }
             WatchedChannelsEvent::MessageSendSucceeded {
@@ -1093,9 +1209,11 @@ impl AppState {
             } => {
                 self.mark_outgoing_message_error(&client_message_id, error);
             }
+            WatchedChannelsEvent::RemoveRequested { channel_id } => {
+                self.watched_seven_tv_channel_ids.remove(&channel_id);
+            }
             WatchedChannelsEvent::LoadRequested
             | WatchedChannelsEvent::AddRequested { .. }
-            | WatchedChannelsEvent::RemoveRequested { .. }
             | WatchedChannelsEvent::ReconnectRequested { .. }
             | WatchedChannelsEvent::SendRequested { .. }
             | WatchedChannelsEvent::PollRequested => {}
@@ -1334,6 +1452,7 @@ impl AppState {
 
     pub fn select_channel_tab(&mut self, tab_id: impl Into<String>) {
         self.active_channel_tab_id = tab_id.into();
+        self.watched_tab_context_menu_id = None;
     }
 
     pub fn cycle_channel_tab(&mut self, direction: i32) -> bool {
@@ -1608,8 +1727,14 @@ impl AppState {
             .retain(|channel| channel.id != channel_id);
         self.watched_tab_channel_ids.retain(|id| id != channel_id);
         self.watched_tab_custom_names.remove(channel_id);
+        if self.hovered_channel_tab_id.as_deref() == Some(channel_id) {
+            self.hovered_channel_tab_id = None;
+        }
         if self.renaming_watched_tab_id.as_deref() == Some(channel_id) {
             self.renaming_watched_tab_id = None;
+        }
+        if self.watched_tab_context_menu_id.as_deref() == Some(channel_id) {
+            self.watched_tab_context_menu_id = None;
         }
         self.watched_channel_statuses.remove(channel_id);
         self.watched_channel_messages.remove(channel_id);
@@ -1624,10 +1749,29 @@ impl AppState {
 
         self.pending_watched_channel_messages
             .retain(|message| message.channel_id != channel_id);
+        self.pending_watched_channel_adds.retain(|pending| {
+            pending.platform != removed_channel.platform
+                || !pending
+                    .channel_slug
+                    .eq_ignore_ascii_case(&removed_channel.channel_slug)
+        });
         self.pending_watched_channel_removals
             .retain(|remove| remove.channel_id != channel_id);
         self.queue_watched_channel_remove(removed_channel.id);
         true
+    }
+
+    fn remove_watched_channel_storage(
+        storage: &Storage,
+        channel_id: &str,
+    ) -> crate::storage::StorageResult<()> {
+        storage.watched_channels().remove(channel_id)?;
+        storage.watched_history().remove(channel_id)?;
+        storage.watched_layout().remove(channel_id)?;
+        storage
+            .settings()
+            .set_watched_tab_custom_name(channel_id, None)?;
+        Ok(())
     }
 
     pub fn remove_watched_channel_for_tab(
@@ -1635,14 +1779,34 @@ impl AppState {
         storage: &Storage,
         channel_id: &str,
     ) -> crate::storage::StorageResult<bool> {
-        let removed = self.remove_watched_channel(channel_id);
-        if removed {
-            storage
-                .settings()
-                .set_watched_tab_custom_name(channel_id, None)?;
-            self.persist_visible_tab_order(storage)?;
+        if !self
+            .watched_tab_channel_ids
+            .iter()
+            .any(|id| id == channel_id)
+        {
+            return Ok(false);
         }
-        Ok(removed)
+
+        self.watched_tab_channel_ids.retain(|id| id != channel_id);
+        self.watched_tab_custom_names.remove(channel_id);
+        if self.renaming_watched_tab_id.as_deref() == Some(channel_id) {
+            self.renaming_watched_tab_id = None;
+        }
+        self.watched_layouts.remove(channel_id);
+        if self.active_channel_tab_id == channel_id {
+            self.active_channel_tab_id = String::from("home");
+        }
+
+        storage.watched_layout().remove(channel_id)?;
+        storage
+            .settings()
+            .set_watched_tab_custom_name(channel_id, None)?;
+        if !self.is_watched_channel_referenced(channel_id) {
+            self.remove_watched_channel(channel_id);
+            Self::remove_watched_channel_storage(storage, channel_id)?;
+        }
+        self.persist_visible_tab_order(storage)?;
+        Ok(true)
     }
 
     pub fn reorder_watched_channel_tab(
@@ -2004,6 +2168,7 @@ impl AppState {
             && !self.is_watched_channel_referenced(&channel_id)
         {
             self.remove_watched_channel(&channel_id);
+            Self::remove_watched_channel_storage(storage, &channel_id)?;
             self.persist_visible_tab_order(storage)?;
         }
         Ok(true)
@@ -2773,6 +2938,9 @@ pub trait AppStateActions {
     fn start_watched_tab_rename(&self, app: &mut App, tab_id: &str);
     fn cancel_watched_tab_rename(&self, app: &mut App);
     fn rename_watched_tab(&self, app: &mut App, tab_id: &str, name: &str);
+    fn set_channel_tab_hovered(&self, app: &mut App, tab_id: &str, hovered: bool);
+    fn open_watched_tab_context_menu(&self, app: &mut App, tab_id: &str);
+    fn close_watched_tab_context_menu(&self, app: &mut App);
     fn queue_composer_send(&self, app: &mut App, text: &str) -> bool;
     fn queue_watched_channel_send(&self, app: &mut App, channel_id: &str, text: &str) -> bool;
     fn open_user_card(&self, app: &mut App, target: UserCardTarget);
@@ -3190,6 +3358,27 @@ impl AppStateActions for Entity<AppState> {
                 }
                 Err(error) => state.record_runtime_failure(error.to_string()),
             }
+            cx.notify();
+        });
+    }
+
+    fn set_channel_tab_hovered(&self, app: &mut App, tab_id: &str, hovered: bool) {
+        self.update(app, |state, cx| {
+            state.set_channel_tab_hovered(tab_id, hovered);
+            cx.notify();
+        });
+    }
+
+    fn open_watched_tab_context_menu(&self, app: &mut App, tab_id: &str) {
+        self.update(app, |state, cx| {
+            state.open_watched_tab_context_menu(tab_id);
+            cx.notify();
+        });
+    }
+
+    fn close_watched_tab_context_menu(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.close_watched_tab_context_menu();
             cx.notify();
         });
     }

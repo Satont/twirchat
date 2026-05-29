@@ -2,7 +2,8 @@ import type { Platform } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
 import { sevenTVCache } from './cache'
-import type { SevenTVEmote } from './cache'
+import { createSevenTvEmote } from './emote'
+import type { SevenTVEmote } from './emote'
 import { sevenTVEventClient } from './event-client'
 import type { EmoteSetUpdateEvent, EmoteSetDeleteEvent, UserUpdateEvent } from './event-client'
 import { getEmoteSetById, getUserByConnection } from './client'
@@ -228,17 +229,18 @@ export class SevenTVSubscriptionManager {
     const emotes = new Map<string, SevenTVEmote>()
 
     for (const item of emoteSet.emotes?.items ?? []) {
-      const alias = item.alias.toLowerCase()
-
-      emotes.set(alias, {
-        alias: alias,
-        animated: item.emote.flags?.animated ?? false,
-        aspectRatio: item.emote.aspectRatio ?? 1,
-        id: item.emote.id,
-        imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
-        name: item.emote.defaultName,
-        zeroWidth: item.flags?.zeroWidth ?? false,
-      })
+      emotes.set(
+        item.alias,
+        createSevenTvEmote({
+          alias: item.alias,
+          animated: item.emote.flags?.animated ?? false,
+          aspectRatio: item.emote.aspectRatio ?? 1,
+          id: item.emote.id,
+          imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
+          name: item.emote.defaultName,
+          zeroWidth: item.flags?.zeroWidth ?? false,
+        }),
+      )
     }
 
     sevenTVCache.set(platform, channelId, {
@@ -276,16 +278,18 @@ export class SevenTVSubscriptionManager {
 
     const emotes = new Map<string, SevenTVEmote>()
     for (const item of emoteSet.emotes?.items ?? []) {
-      const alias = item.alias.toLowerCase()
-      emotes.set(alias, {
-        alias,
-        animated: item.emote.flags?.animated ?? false,
-        aspectRatio: item.emote.aspectRatio ?? 1,
-        id: item.emote.id,
-        imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
-        name: item.emote.defaultName,
-        zeroWidth: item.flags?.zeroWidth ?? false,
-      })
+      emotes.set(
+        item.alias,
+        createSevenTvEmote({
+          alias: item.alias,
+          animated: item.emote.flags?.animated ?? false,
+          aspectRatio: item.emote.aspectRatio ?? 1,
+          id: item.emote.id,
+          imageUrl: selectPreferredSevenTvImageUrl(item.emote.images),
+          name: item.emote.defaultName,
+          zeroWidth: item.flags?.zeroWidth ?? false,
+        }),
+      )
     }
 
     sevenTVCache.set(platform, channelId, {
@@ -433,15 +437,15 @@ export class SevenTVSubscriptionManager {
         const files = emoteData?.host?.files || []
         const imageUrl = selectPreferredSevenTvHostFile(hostUrl, files)
 
-        const emote: SevenTVEmote = {
-          alias: valueData.name.toLowerCase(),
+        const emote = createSevenTvEmote({
+          alias: valueData.name,
           animated: emoteData?.animated ?? false,
           aspectRatio: 1,
           id: valueData.id,
           imageUrl,
           name: valueData.name,
           zeroWidth: false,
-        }
+        })
 
         log.info('7TV emote ADDED', {
           alias: emote.alias,
@@ -501,15 +505,15 @@ export class SevenTVSubscriptionManager {
           this.broadcastToChannel(channelKey, {
             action: 'removed',
             channelId,
-            emote: {
-              alias: oldValueData.name.toLowerCase(),
+            emote: createSevenTvEmote({
+              alias: oldValueData.name,
               animated: emoteData?.animated ?? false,
               aspectRatio: 1,
               id: oldValueData.id,
               imageUrl,
               name: oldValueData.name,
               zeroWidth: false,
-            },
+            }),
             platform,
             type: 'seventv_system_message',
           })
@@ -573,15 +577,15 @@ export class SevenTVSubscriptionManager {
           })
 
           const cachedSet = sevenTVCache.get(platform, channelId)
-          let emoteForMessage: SevenTVEmote = {
-            alias: newValue.name.toLowerCase(),
+          let emoteForMessage = createSevenTvEmote({
+            alias: newValue.name,
             animated: false,
             aspectRatio: 1,
             id: newValue.id,
             imageUrl: '',
             name: newValue.name,
             zeroWidth: false,
-          }
+          })
 
           if (cachedSet) {
             for (const [, cachedEmote] of cachedSet.emotes) {

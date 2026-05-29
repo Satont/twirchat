@@ -1,10 +1,11 @@
 use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
-use crate::chat::{MentionSuggestion, apply_alias};
+use crate::chat::apply_alias;
 use crate::protocol::types::{
     Account, AppSettings, ChatMessageType, ChatTheme, Emote, FontFamilyChoice,
     NormalizedChatMessage, Platform, PlatformStatus, SelfPingConfig,
 };
-use crate::ui::components::autocomplete_popup::MentionAutocompletePopup;
+use crate::ui::components::autocomplete_popup::{AutocompletePopup, AutocompleteSuggestion};
+use crate::ui::components::emote_tooltip;
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::selectable_message::{SelectableMessage, SelectableMessagePart};
@@ -54,8 +55,8 @@ pub(crate) struct ChatScrollUi<'a> {
 }
 
 #[derive(Clone)]
-pub(crate) struct MentionAutocompleteUi {
-    pub suggestions: Vec<MentionSuggestion>,
+pub(crate) struct AutocompleteUi {
+    pub suggestions: Vec<AutocompleteSuggestion>,
     pub selected_index: usize,
 }
 pub(crate) struct ChatPanelProps<'a> {
@@ -63,7 +64,7 @@ pub(crate) struct ChatPanelProps<'a> {
     pub composer_input: Entity<Input>,
     pub font_size_input: Entity<Input>,
     pub composer_text: String,
-    pub mention_autocomplete: Option<MentionAutocompleteUi>,
+    pub autocomplete: Option<AutocompleteUi>,
     pub scroll_ui: ChatScrollUi<'a>,
 }
 
@@ -122,7 +123,7 @@ pub(crate) fn panel(
             props.state_entity.clone(),
             props.composer_input,
             props.composer_text,
-            props.mention_autocomplete,
+            props.autocomplete,
             cx.entity(),
         ))
         .when(props.scroll_ui.paused, |el| {
@@ -331,7 +332,7 @@ fn composer(
     state_entity: Entity<AppState>,
     composer_input: Entity<Input>,
     composer_text: String,
-    mention_autocomplete: Option<MentionAutocompleteUi>,
+    autocomplete: Option<AutocompleteUi>,
     app_entity: Entity<TwirChatApp>,
 ) -> Div {
     let home_targets = home_chat_targets(state);
@@ -407,9 +408,9 @@ fn composer(
                                 .flex()
                                 .items_center()
                                 .child(composer_input.clone())
-                                .when_some(mention_autocomplete, |input_box, autocomplete| {
+                                .when_some(autocomplete, |input_box, autocomplete| {
                                     input_box.child(
-                                        MentionAutocompletePopup::new(
+                                        AutocompletePopup::new(
                                             autocomplete.suggestions,
                                             autocomplete.selected_index,
                                         )
@@ -417,7 +418,7 @@ fn composer(
                                             let app_entity = app_entity.clone();
                                             move |index, window, app| {
                                                 app_entity.update(app, |this, cx| {
-                                                    this.select_mention_suggestion(
+                                                    this.select_autocomplete_suggestion(
                                                         index, window, cx,
                                                     );
                                                 });
@@ -1211,13 +1212,19 @@ fn preview_emote_part(
     let message_id = message.id.clone();
     SelectableMessagePart::Custom(std::sync::Arc::new(move |window, cx| {
         let size = 24.0;
+        let element_id = format!("sys-emote-{message_id}-{}-{part_index}", emote.id);
         div()
+            .id(format!(
+                "sys-emote-tooltip-target-{message_id}-{}-{part_index}",
+                emote.id
+            ))
             .mx(px(2.0))
             .h(px(size))
             .min_w(px(size))
             .max_w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
+            .hoverable_tooltip(emote_tooltip(emote.clone(), element_id.clone()))
             .child(crate::ui::components::animated_emote(
-                format!("sys-emote-{message_id}-{}-{part_index}", emote.id),
+                element_id,
                 emote.image_url.clone(),
                 emote.name.clone(),
                 window,

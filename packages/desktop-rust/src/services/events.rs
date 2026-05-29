@@ -238,6 +238,7 @@ pub enum WatchedChannelsEvent {
     BackendMessagePlanned {
         kind: DesktopToBackendMessageKind,
         message: DesktopToBackendMessage,
+        watched_channel_id: Option<String>,
     },
     AdapterError {
         channel_id: String,

@@ -3,8 +3,9 @@ use crate::app_state::{
     UserCardLoadState,
 };
 use crate::chat::{
-    MentionSuggestion, ParsedMentionToken, fuzzy_filter_mentions, mention_suggestions,
-    parse_mention_token, replace_mention_token,
+    ParsedEmoteToken, ParsedMentionToken, emote_suggestions, fuzzy_filter_emotes,
+    fuzzy_filter_mentions, mention_suggestions, parse_emote_token, parse_mention_token,
+    replace_emote_token, replace_mention_token,
 };
 use crate::hotkeys::matches_hotkey;
 use crate::models::Platform as UiPlatform;
@@ -23,7 +24,8 @@ use crate::ui::components::user_card::{
 };
 use crate::ui::shell::{content, nav, update_toast::UpdateToast};
 use crate::ui::{
-    chat::{ChatScrollUi, MentionAutocompleteUi},
+    chat::{AutocompleteUi, ChatScrollUi},
+    components::autocomplete_popup::AutocompleteSuggestion,
     theme,
 };
 use gpui::{
@@ -53,9 +55,9 @@ pub struct TwirChatApp {
     _user_card_history_task: Option<Task<()>>,
     _user_card_metadata_task: Option<Task<()>>,
     user_card_load_generation: Option<u64>,
-    mention_selected_index: usize,
-    mention_last_context: String,
-    mention_dismissed_context: Option<String>,
+    autocomplete_selected_index: usize,
+    autocomplete_last_context: String,
+    autocomplete_dismissed_context: Option<String>,
     chat_list_state: ListState,
     settings_scroll_handle: ScrollHandle,
     platforms_scroll_handle: ScrollHandle,
@@ -69,16 +71,21 @@ pub struct TwirChatApp {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum MentionComposerTarget {
+enum ComposerTarget {
     Home,
     Watched(String),
 }
 
-struct ActiveMentionAutocomplete {
-    target: MentionComposerTarget,
+enum ParsedAutocompleteToken {
+    Mention(ParsedMentionToken),
+    Emote(ParsedEmoteToken),
+}
+
+struct ActiveAutocomplete {
+    target: ComposerTarget,
     context_id: String,
-    token: ParsedMentionToken,
-    suggestions: Vec<MentionSuggestion>,
+    token: ParsedAutocompleteToken,
+    suggestions: Vec<AutocompleteSuggestion>,
 }
 
 impl TwirChatApp {
@@ -243,9 +250,9 @@ impl TwirChatApp {
             _user_card_history_task: None,
             _user_card_metadata_task: None,
             user_card_load_generation: None,
-            mention_selected_index: 0,
-            mention_last_context: String::new(),
-            mention_dismissed_context: None,
+            autocomplete_selected_index: 0,
+            autocomplete_last_context: String::new(),
+            autocomplete_dismissed_context: None,
             chat_list_state,
             settings_scroll_handle: ScrollHandle::new(),
             platforms_scroll_handle: ScrollHandle::new(),
@@ -784,55 +791,105 @@ impl TwirChatApp {
         }
     }
 
-    fn sync_mention_selection(&mut self, active: &ActiveMentionAutocomplete) {
-        if self.mention_last_context != active.context_id {
-            self.mention_last_context = active.context_id.clone();
-            self.mention_selected_index = 0;
+    fn sync_autocomplete_selection(&mut self, active: &ActiveAutocomplete) {
+        if self.autocomplete_last_context != active.context_id {
+            self.autocomplete_last_context = active.context_id.clone();
+            self.autocomplete_selected_index = 0;
             return;
         }
 
         if active.suggestions.is_empty() {
-            self.mention_selected_index = 0;
+            self.autocomplete_selected_index = 0;
         } else {
-            self.mention_selected_index = self
-                .mention_selected_index
+            self.autocomplete_selected_index = self
+                .autocomplete_selected_index
                 .min(active.suggestions.len().saturating_sub(1));
         }
+    }
+
+    fn active_autocomplete(
+        &self,
+        state: &AppState,
+        window: &Window,
+        cx: &App,
+    ) -> Option<ActiveAutocomplete> {
+        let (target, text) = self.focused_composer_input_text(window, cx)?;
+
+        if let Some(token) = parse_mention_token(&text) {
+            return self.active_mention_autocomplete(state, target, token);
+        }
+
+        let token = parse_emote_token(&text)?;
+        self.active_emote_autocomplete(state, target, token)
     }
 
     fn active_mention_autocomplete(
         &self,
         state: &AppState,
-        window: &Window,
-        cx: &App,
-    ) -> Option<ActiveMentionAutocomplete> {
-        let (target, text) = self.focused_mention_input_text(window, cx)?;
-        let token = parse_mention_token(&text)?;
-        let context_id = mention_context_id(&target, &token.query);
-        if self.mention_dismissed_context.as_deref() == Some(context_id.as_str()) {
+        target: ComposerTarget,
+        token: ParsedMentionToken,
+    ) -> Option<ActiveAutocomplete> {
+        let context_id = autocomplete_context_id(&target, "mention", &token.query);
+        if self.autocomplete_dismissed_context.as_deref() == Some(context_id.as_str()) {
             return None;
         }
 
         let messages = mention_source_messages(state, &target);
         let candidates = mention_suggestions(messages, state.aliases());
-        let suggestions = fuzzy_filter_mentions(&candidates, &token.query, 15);
+        let suggestions = fuzzy_filter_mentions(&candidates, &token.query, 15)
+            .into_iter()
+            .map(AutocompleteSuggestion::Mention)
+            .collect::<Vec<_>>();
         if suggestions.is_empty() {
             return None;
         }
 
-        Some(ActiveMentionAutocomplete {
+        Some(ActiveAutocomplete {
             target,
             context_id,
-            token,
+            token: ParsedAutocompleteToken::Mention(token),
             suggestions,
         })
     }
 
-    fn focused_mention_input_text(
+    fn active_emote_autocomplete(
+        &self,
+        state: &AppState,
+        target: ComposerTarget,
+        token: ParsedEmoteToken,
+    ) -> Option<ActiveAutocomplete> {
+        let context_id = autocomplete_context_id(&target, "emote", &token.query);
+        if self.autocomplete_dismissed_context.as_deref() == Some(context_id.as_str()) {
+            return None;
+        }
+
+        let (platform, channel_ids) = emote_source_channels(state, &target)?;
+        let candidates = emote_suggestions(
+            state
+                .seven_tv_catalog()
+                .for_channel_candidates(platform, channel_ids.iter().map(String::as_str)),
+        );
+        let suggestions = fuzzy_filter_emotes(&candidates, &token.query, 15)
+            .into_iter()
+            .map(AutocompleteSuggestion::Emote)
+            .collect::<Vec<_>>();
+        if suggestions.is_empty() {
+            return None;
+        }
+
+        Some(ActiveAutocomplete {
+            target,
+            context_id,
+            token: ParsedAutocompleteToken::Emote(token),
+            suggestions,
+        })
+    }
+
+    fn focused_composer_input_text(
         &self,
         window: &Window,
         cx: &App,
-    ) -> Option<(MentionComposerTarget, String)> {
+    ) -> Option<(ComposerTarget, String)> {
         let home_focused = self
             .composer_input
             .read(cx)
@@ -840,7 +897,7 @@ impl TwirChatApp {
             .is_focused(window);
         if home_focused {
             return Some((
-                MentionComposerTarget::Home,
+                ComposerTarget::Home,
                 self.composer_input.read(cx).text().to_string(),
             ));
         }
@@ -848,7 +905,7 @@ impl TwirChatApp {
         for (channel_id, input) in &self.watched_composer_inputs {
             if input.read(cx).focus_handle(cx).is_focused(window) {
                 return Some((
-                    MentionComposerTarget::Watched(channel_id.clone()),
+                    ComposerTarget::Watched(channel_id.clone()),
                     input.read(cx).text().to_string(),
                 ));
             }
@@ -857,23 +914,23 @@ impl TwirChatApp {
         None
     }
 
-    fn input_for_mention_target(&self, target: &MentionComposerTarget) -> Option<Entity<Input>> {
+    fn input_for_composer_target(&self, target: &ComposerTarget) -> Option<Entity<Input>> {
         match target {
-            MentionComposerTarget::Home => Some(self.composer_input.clone()),
-            MentionComposerTarget::Watched(channel_id) => {
+            ComposerTarget::Home => Some(self.composer_input.clone()),
+            ComposerTarget::Watched(channel_id) => {
                 self.watched_composer_inputs.get(channel_id).cloned()
             }
         }
     }
 
-    pub(crate) fn select_mention_suggestion(
+    pub(crate) fn select_autocomplete_suggestion(
         &mut self,
         index: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let state = self.state.read(cx).clone();
-        let Some(active) = self.active_mention_autocomplete(&state, window, cx) else {
+        let Some(active) = self.active_autocomplete(&state, window, cx) else {
             return;
         };
         let Some(suggestion) = active
@@ -883,58 +940,67 @@ impl TwirChatApp {
         else {
             return;
         };
-        let Some(input) = self.input_for_mention_target(&active.target) else {
+        let Some(input) = self.input_for_composer_target(&active.target) else {
             return;
         };
 
-        let next_text = replace_mention_token(input.read(cx).text(), &active.token, &suggestion);
+        let next_text = match (&active.token, &suggestion) {
+            (
+                ParsedAutocompleteToken::Mention(token),
+                AutocompleteSuggestion::Mention(suggestion),
+            ) => replace_mention_token(input.read(cx).text(), token, suggestion),
+            (ParsedAutocompleteToken::Emote(token), AutocompleteSuggestion::Emote(suggestion)) => {
+                replace_emote_token(input.read(cx).text(), token, suggestion)
+            }
+            _ => return,
+        };
         input.update(cx, |input, cx| input.set_text(next_text, cx));
         let focus = input.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
-        self.mention_selected_index = 0;
-        self.mention_last_context.clear();
-        self.mention_dismissed_context = None;
+        self.autocomplete_selected_index = 0;
+        self.autocomplete_last_context.clear();
+        self.autocomplete_dismissed_context = None;
         cx.notify();
     }
 
-    fn handle_mention_keystroke(
+    fn handle_autocomplete_keystroke(
         &mut self,
         event: &KeystrokeEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let state = self.state.read(cx).clone();
-        let Some(active) = self.active_mention_autocomplete(&state, window, cx) else {
+        let Some(active) = self.active_autocomplete(&state, window, cx) else {
             return false;
         };
-        self.sync_mention_selection(&active);
+        self.sync_autocomplete_selection(&active);
 
         match event.keystroke.key.as_str() {
             "escape" => {
-                self.mention_dismissed_context = Some(active.context_id);
+                self.autocomplete_dismissed_context = Some(active.context_id);
                 cx.stop_propagation();
                 cx.notify();
                 true
             }
             "down" | "arrowdown" => {
-                self.mention_selected_index =
-                    (self.mention_selected_index + 1) % active.suggestions.len();
+                self.autocomplete_selected_index =
+                    (self.autocomplete_selected_index + 1) % active.suggestions.len();
                 cx.stop_propagation();
                 cx.notify();
                 true
             }
             "up" | "arrowup" => {
-                self.mention_selected_index = if self.mention_selected_index == 0 {
+                self.autocomplete_selected_index = if self.autocomplete_selected_index == 0 {
                     active.suggestions.len().saturating_sub(1)
                 } else {
-                    self.mention_selected_index - 1
+                    self.autocomplete_selected_index - 1
                 };
                 cx.stop_propagation();
                 cx.notify();
                 true
             }
             "enter" | "tab" => {
-                self.select_mention_suggestion(self.mention_selected_index, window, cx);
+                self.select_autocomplete_suggestion(self.autocomplete_selected_index, window, cx);
                 cx.stop_propagation();
                 true
             }
@@ -1057,7 +1123,7 @@ impl TwirChatApp {
             return;
         }
 
-        if self.handle_mention_keystroke(event, window, cx) {
+        if self.handle_autocomplete_keystroke(event, window, cx) {
             return;
         }
 
@@ -1520,27 +1586,27 @@ impl Render for TwirChatApp {
         }
         self.last_chat_message_count = state.messages.len();
 
-        let active_mention = self.active_mention_autocomplete(&state, window, cx);
-        let mut home_mention_autocomplete = None;
-        let mut watched_mention_autocomplete = BTreeMap::new();
-        if let Some(active) = active_mention {
-            self.sync_mention_selection(&active);
+        let active_autocomplete = self.active_autocomplete(&state, window, cx);
+        let mut home_autocomplete = None;
+        let mut watched_autocomplete = BTreeMap::new();
+        if let Some(active) = active_autocomplete {
+            self.sync_autocomplete_selection(&active);
             let selected_index = self
-                .mention_selected_index
+                .autocomplete_selected_index
                 .min(active.suggestions.len().saturating_sub(1));
-            let autocomplete = MentionAutocompleteUi {
+            let autocomplete = AutocompleteUi {
                 suggestions: active.suggestions,
                 selected_index,
             };
             match active.target {
-                MentionComposerTarget::Home => home_mention_autocomplete = Some(autocomplete),
-                MentionComposerTarget::Watched(channel_id) => {
-                    watched_mention_autocomplete.insert(channel_id, autocomplete);
+                ComposerTarget::Home => home_autocomplete = Some(autocomplete),
+                ComposerTarget::Watched(channel_id) => {
+                    watched_autocomplete.insert(channel_id, autocomplete);
                 }
             }
         } else {
-            self.mention_last_context.clear();
-            self.mention_selected_index = 0;
+            self.autocomplete_last_context.clear();
+            self.autocomplete_selected_index = 0;
         }
 
         div()
@@ -1573,8 +1639,8 @@ impl Render for TwirChatApp {
                             watched_composer_inputs: self.watched_composer_inputs.clone(),
                             hotkey_capture_focus: self.hotkey_capture_focus.clone(),
                             composer_text,
-                            home_mention_autocomplete,
-                            watched_mention_autocomplete,
+                            home_autocomplete,
+                            watched_autocomplete,
                             scroll_ui: content::SectionScrollUi {
                                 chat: ChatScrollUi {
                                     list_state: &self.chat_list_state,
@@ -1597,20 +1663,92 @@ impl Render for TwirChatApp {
             .child(UpdateToast::new(self.state.clone(), cx.entity()))
     }
 }
-fn mention_context_id(target: &MentionComposerTarget, query: &str) -> String {
+fn autocomplete_context_id(target: &ComposerTarget, mode: &str, query: &str) -> String {
     match target {
-        MentionComposerTarget::Home => format!("home:{query}"),
-        MentionComposerTarget::Watched(channel_id) => format!("watched:{channel_id}:{query}"),
+        ComposerTarget::Home => format!("home:{mode}:{query}"),
+        ComposerTarget::Watched(channel_id) => format!("watched:{channel_id}:{mode}:{query}"),
     }
+}
+
+fn emote_source_channels(
+    state: &AppState,
+    target: &ComposerTarget,
+) -> Option<(Platform, Vec<String>)> {
+    match target {
+        ComposerTarget::Home => state.platforms_panel.statuses.values().find_map(|status| {
+            let channel_login = status.channel_login.as_ref()?;
+            matches!(
+                status.status,
+                crate::protocol::types::PlatformStatus::Connected
+                    | crate::protocol::types::PlatformStatus::Connecting
+            )
+            .then(|| {
+                let mut channel_ids = vec![channel_login.clone()];
+                channel_ids.extend(
+                    state
+                        .messages
+                        .iter()
+                        .rev()
+                        .filter(|message| message.platform == status.platform)
+                        .map(|message| message.channel_id.clone()),
+                );
+                dedupe_channel_ids(&mut channel_ids);
+                (status.platform, channel_ids)
+            })
+        }),
+        ComposerTarget::Watched(channel_id) => {
+            let channel = state
+                .watched_channels
+                .iter()
+                .find(|channel| channel.id == *channel_id)?;
+            let mut channel_ids = Vec::new();
+            if let Some(seven_tv_channel_id) =
+                state.seven_tv_channel_id_for_watched_channel(channel_id)
+            {
+                channel_ids.push(seven_tv_channel_id.to_string());
+            }
+            channel_ids.extend([channel.channel_slug.clone(), channel.id.clone()]);
+            channel_ids.extend(
+                state
+                    .watched_channel_messages
+                    .get(channel_id)
+                    .into_iter()
+                    .flat_map(|messages| messages.iter().rev())
+                    .filter(|message| message.platform == channel.platform)
+                    .map(|message| message.channel_id.clone()),
+            );
+            channel_ids.extend(
+                state
+                    .messages
+                    .iter()
+                    .rev()
+                    .filter(|message| {
+                        message.platform == channel.platform
+                            && (message.channel_id == channel.id
+                                || message
+                                    .channel_id
+                                    .eq_ignore_ascii_case(&channel.channel_slug))
+                    })
+                    .map(|message| message.channel_id.clone()),
+            );
+            dedupe_channel_ids(&mut channel_ids);
+            Some((channel.platform, channel_ids))
+        }
+    }
+}
+
+fn dedupe_channel_ids(channel_ids: &mut Vec<String>) {
+    let mut seen = BTreeSet::new();
+    channel_ids.retain(|channel_id| seen.insert(channel_id.to_lowercase()));
 }
 
 fn mention_source_messages<'a>(
     state: &'a AppState,
-    target: &MentionComposerTarget,
+    target: &ComposerTarget,
 ) -> Vec<&'a crate::protocol::types::NormalizedChatMessage> {
     match target {
-        MentionComposerTarget::Home => state.messages.iter().rev().collect(),
-        MentionComposerTarget::Watched(channel_id) => state
+        ComposerTarget::Home => state.messages.iter().rev().collect(),
+        ComposerTarget::Watched(channel_id) => state
             .watched_channel_messages
             .get(channel_id)
             .map(|messages| messages.iter().rev().collect())

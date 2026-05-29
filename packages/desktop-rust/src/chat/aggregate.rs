@@ -60,6 +60,30 @@ impl SevenTvCatalog {
         })
     }
 
+    pub fn for_channel(&self, platform: Platform, channel_id: &str) -> Vec<&SevenTvEmote> {
+        self.emotes
+            .iter()
+            .filter_map(|(key, emote)| {
+                (key.platform == platform && key.channel_id == channel_id).then_some(emote)
+            })
+            .collect()
+    }
+
+    pub fn for_channel_candidates<'a>(
+        &self,
+        platform: Platform,
+        channel_ids: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<&SevenTvEmote> {
+        for channel_id in channel_ids {
+            let emotes = self.for_channel(platform, channel_id);
+            if !emotes.is_empty() {
+                return emotes;
+            }
+        }
+
+        Vec::new()
+    }
+
     pub fn replace_for_channel(
         &mut self,
         platform: Platform,

@@ -10,6 +10,12 @@ pub struct ParsedMentionToken {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedEmoteToken {
+    pub query: String,
+    pub range: Range<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MentionSuggestion {
     pub label: String,
     pub insert_label: String,
@@ -23,7 +29,24 @@ pub struct MentionSuggestion {
     pub current_alias: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct EmoteSuggestion {
+    pub label: String,
+    pub image_url: String,
+    pub animated: bool,
+}
+
 pub fn parse_mention_token(text: &str) -> Option<ParsedMentionToken> {
+    let (query, range) = parse_prefixed_token(text, '@')?;
+    Some(ParsedMentionToken { query, range })
+}
+
+pub fn parse_emote_token(text: &str) -> Option<ParsedEmoteToken> {
+    let (query, range) = parse_prefixed_token(text, ':')?;
+    Some(ParsedEmoteToken { query, range })
+}
+
+fn parse_prefixed_token(text: &str, prefix: char) -> Option<(String, Range<usize>)> {
     if text.chars().next_back().is_some_and(char::is_whitespace) {
         return None;
     }
@@ -34,14 +57,11 @@ pub fn parse_mention_token(text: &str) -> Option<ParsedMentionToken> {
         .find_map(|(index, ch)| ch.is_whitespace().then_some(index + ch.len_utf8()))
         .unwrap_or(0);
     let word = text.get(start..)?;
-    if !word.starts_with('@') || word.chars().count() < 2 {
+    if !word.starts_with(prefix) || word.chars().count() < 2 {
         return None;
     }
 
-    Some(ParsedMentionToken {
-        query: word[1..].to_string(),
-        range: start..text.len(),
-    })
+    Some((word[prefix.len_utf8()..].to_string(), start..text.len()))
 }
 
 pub fn mention_suggestions<'a>(
@@ -103,6 +123,43 @@ pub fn fuzzy_filter_mentions(
     query: &str,
     limit: usize,
 ) -> Vec<MentionSuggestion> {
+    fuzzy_filter_by_targets(suggestions, query, limit, |suggestion| {
+        vec![suggestion.label.as_str(), suggestion.display_name.as_str()]
+            .into_iter()
+            .chain(suggestion.username.as_deref())
+            .collect()
+    })
+}
+
+pub fn emote_suggestions<'a>(
+    emotes: impl IntoIterator<Item = &'a crate::chat::SevenTvEmote>,
+) -> Vec<EmoteSuggestion> {
+    emotes
+        .into_iter()
+        .map(|emote| EmoteSuggestion {
+            label: emote.name.clone(),
+            image_url: emote.image_url.clone(),
+            animated: emote.animated,
+        })
+        .collect()
+}
+
+pub fn fuzzy_filter_emotes(
+    suggestions: &[EmoteSuggestion],
+    query: &str,
+    limit: usize,
+) -> Vec<EmoteSuggestion> {
+    fuzzy_filter_by_targets(suggestions, query, limit, |suggestion| {
+        vec![suggestion.label.as_str()]
+    })
+}
+
+fn fuzzy_filter_by_targets<T: Clone>(
+    suggestions: &[T],
+    query: &str,
+    limit: usize,
+    targets: impl Fn(&T) -> Vec<&str>,
+) -> Vec<T> {
     if query.is_empty() || limit == 0 {
         return Vec::new();
     }
@@ -115,15 +172,9 @@ pub fn fuzzy_filter_mentions(
     let mut matches = suggestions
         .iter()
         .filter_map(|suggestion| {
-            let targets = [
-                Some(suggestion.label.as_str()),
-                Some(suggestion.display_name.as_str()),
-                suggestion.username.as_deref(),
-            ];
-
             let mut best_rank = None;
 
-            for target in targets.into_iter().flatten() {
+            for target in targets(suggestion) {
                 let target_lower = target.to_lowercase();
                 let mut query_chars = query.chars();
                 let mut current = query_chars.next()?;
@@ -164,16 +215,32 @@ pub fn replace_mention_token(
     token: &ParsedMentionToken,
     suggestion: &MentionSuggestion,
 ) -> String {
-    if token.range.start > token.range.end
-        || token.range.end > text.len()
-        || !text.is_char_boundary(token.range.start)
-        || !text.is_char_boundary(token.range.end)
+    replace_range(
+        text,
+        token.range.clone(),
+        &format!("@{} ", suggestion.insert_label),
+    )
+}
+
+pub fn replace_emote_token(
+    text: &str,
+    token: &ParsedEmoteToken,
+    suggestion: &EmoteSuggestion,
+) -> String {
+    replace_range(text, token.range.clone(), &format!("{} ", suggestion.label))
+}
+
+fn replace_range(text: &str, range: Range<usize>, replacement: &str) -> String {
+    if range.start > range.end
+        || range.end > text.len()
+        || !text.is_char_boundary(range.start)
+        || !text.is_char_boundary(range.end)
     {
         return text.to_string();
     }
 
-    let before = &text[..token.range.start];
-    format!("{}@{} ", before, suggestion.insert_label)
+    let before = &text[..range.start];
+    format!("{before}{replacement}")
 }
 
 fn platform_label(platform: Platform) -> &'static str {

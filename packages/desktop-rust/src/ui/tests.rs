@@ -198,7 +198,7 @@ fn watched_tabs_have_drag_reorder_contract() {
     assert!(tabs_rs.contains("remove_watched_channel_for_tab"));
     assert!(tabs_rs.contains("watched_tab_title"));
     assert!(tabs_rs.contains("start_watched_tab_rename"));
-    assert!(tabs_rs.contains("rename_watched_tab"));
+    assert!(app_rs.contains("rename_watched_tab"));
     assert!(app_rs.contains("tab_rename_input"));
     assert!(app_rs.contains("flush_tab_rename_submit"));
 }
@@ -216,6 +216,12 @@ fn watched_tab_rename_input_stays_inline_contract() {
     assert!(input_rs.contains("rgba(0x00000000)"));
     assert!(tabs_rs.contains("const TAB_RENAME_INPUT_HEIGHT: f32 = 20.0;"));
     assert!(tabs_rs.contains("const TAB_RENAME_INPUT_MAX_WIDTH: f32 = 148.0;"));
+    assert!(tabs_rs.contains("const WATCHED_TAB_ACTIONS_RIGHT_PADDING: f32 = 34.0;"));
+    assert!(tabs_rs.contains(".pl(if is_home"));
+    assert!(tabs_rs.contains("px(WATCHED_TAB_LABEL_LEFT_PADDING)"));
+    assert!(tabs_rs.contains(".pr(if is_home"));
+    assert!(tabs_rs.contains("px(WATCHED_TAB_ACTIONS_RIGHT_PADDING)"));
+    assert!(!tabs_rs.contains(".px(if is_home { px(16.0) } else { px(28.0) })"));
 
     let rename_branch = tabs_rs
         .split(".child(if is_renaming {")
@@ -227,11 +233,33 @@ fn watched_tab_rename_input_stays_inline_contract() {
     assert!(rename_branch.contains(".max_w(px(TAB_RENAME_INPUT_MAX_WIDTH))"));
     assert!(rename_branch.contains(".h(px(TAB_RENAME_INPUT_HEIGHT))"));
     assert!(rename_branch.contains(".items_center()"));
+    assert!(rename_branch.contains(".overflow_x_hidden()"));
     assert!(rename_branch.contains("tab_rename_input.clone()"));
     assert!(!rename_branch.contains("tab_rename_input.clone().into_any_element()"));
 
-    assert!(tabs_rs.contains(".child(if is_renaming { \"✓\" } else { \"✎\" })"));
+    let label_branch = tabs_rs
+        .split(".child(if is_renaming {")
+        .nth(1)
+        .and_then(|body| body.split("} else {").nth(1))
+        .and_then(|body| body.split(".when_some(viewer_count").next())
+        .expect("should isolate watched tab label branch");
+
+    assert!(label_branch.contains(".max_w(px(WATCHED_TAB_LABEL_MAX_WIDTH))"));
+    assert!(label_branch.contains(".overflow_x_hidden()"));
+    assert!(label_branch.contains(".whitespace_nowrap()"));
+    assert!(label_branch.contains("label.clone()"));
+
+    assert!(tabs_rs.contains("hovered_channel_tab_id"));
+    assert!(tabs_rs.contains("set_channel_tab_hovered"));
+    assert!(tabs_rs.contains("let show_close = !is_home && (is_active || is_hovered);"));
+    assert!(tabs_rs.contains(".when(show_close"));
     assert!(tabs_rs.contains(".child(\"×\")"));
+    assert!(!tabs_rs.contains("✎"));
+    assert!(tabs_rs.contains("MouseButton::Right"));
+    assert!(tabs_rs.contains("watched_tab_context_menu_id"));
+    assert!(tabs_rs.contains("open_watched_tab_context_menu"));
+    assert!(tabs_rs.contains("fn watched_tab_context_menu"));
+    assert!(tabs_rs.contains(".child(\"Rename\")"));
 }
 
 #[test]

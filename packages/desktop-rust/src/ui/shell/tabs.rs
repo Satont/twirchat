@@ -11,6 +11,9 @@ const TAB_RENAME_INPUT_MIN_WIDTH: f32 = 56.0;
 const TAB_RENAME_INPUT_MAX_WIDTH: f32 = 148.0;
 const TAB_RENAME_INPUT_CHAR_WIDTH: f32 = 7.0;
 const TAB_RENAME_INPUT_PADDING: f32 = 10.0;
+const WATCHED_TAB_LABEL_LEFT_PADDING: f32 = 28.0;
+const WATCHED_TAB_LABEL_MAX_WIDTH: f32 = 168.0;
+const WATCHED_TAB_ACTIONS_RIGHT_PADDING: f32 = 34.0;
 
 #[derive(Clone)]
 struct DraggedTab {
@@ -88,6 +91,9 @@ pub(crate) fn bar(
             let accent = tab_accent(platform);
             let is_home = tab_id == "home";
             let is_renaming = state.renaming_watched_tab_id() == Some(tab_id.as_str());
+            let is_hovered = state.hovered_channel_tab_id() == Some(tab_id.as_str());
+            let show_close = !is_home && (is_active || is_hovered);
+            let context_menu_open = state.watched_tab_context_menu_id() == Some(tab_id.as_str());
 
             div()
                 .id(format!("tab-wrapper-{id}"))
@@ -100,7 +106,16 @@ pub(crate) fn bar(
                         .cursor_pointer()
                         .rounded_t_md()
                         .h(px(32.0))
-                        .px(if is_home { px(16.0) } else { px(28.0) })
+                        .pl(if is_home {
+                            px(16.0)
+                        } else {
+                            px(WATCHED_TAB_LABEL_LEFT_PADDING)
+                        })
+                        .pr(if is_home {
+                            px(16.0)
+                        } else {
+                            px(WATCHED_TAB_ACTIONS_RIGHT_PADDING)
+                        })
                         .flex()
                         .items_center()
                         .border_1()
@@ -132,6 +147,16 @@ pub(crate) fn bar(
                                 state_entity.select_channel_tab(app, &tab_id);
                             },
                         )
+                        .when(!is_home, |tab| {
+                            let state_entity = tabs_state_entity.clone();
+                            let tab_id = id.clone();
+                            tab.on_mouse_down(
+                                gpui::MouseButton::Right,
+                                move |_event, _window, app| {
+                                    state_entity.open_watched_tab_context_menu(app, &tab_id);
+                                },
+                            )
+                        })
                         .gap(px(6.0))
                         .when((is_active || is_live) && platform.is_some(), |this| {
                             this.child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(accent))
@@ -143,10 +168,16 @@ pub(crate) fn bar(
                                 .h(px(TAB_RENAME_INPUT_HEIGHT))
                                 .flex()
                                 .items_center()
+                                .overflow_x_hidden()
                                 .child(tab_rename_input.clone())
                                 .into_any_element()
                         } else {
-                            div().child(label.clone()).into_any_element()
+                            div()
+                                .max_w(px(WATCHED_TAB_LABEL_MAX_WIDTH))
+                                .overflow_x_hidden()
+                                .whitespace_nowrap()
+                                .child(label.clone())
+                                .into_any_element()
                         })
                         .when_some(viewer_count.filter(|_| is_live), |this, viewer_count| {
                             this.child(
@@ -166,6 +197,13 @@ pub(crate) fn bar(
                     let drop_target_id = id.clone();
                     let drag_tab_id = id.clone();
                     wrapper
+                        .on_hover({
+                            let state_entity = tabs_state_entity.clone();
+                            let tab_id = id.clone();
+                            move |hovered, _window, app| {
+                                state_entity.set_channel_tab_hovered(app, &tab_id, *hovered);
+                            }
+                        })
                         .on_drag(DraggedTab { id: drag_tab_id }, |_, _, _, cx| {
                             cx.new(|_| gpui::Empty)
                         })
@@ -190,68 +228,41 @@ pub(crate) fn bar(
                                 );
                             }
                         })
-                        .child(
-                            div()
-                                .absolute()
-                                .right(px(28.0))
-                                .top(px(7.0))
-                                .w(px(18.0))
-                                .h(px(18.0))
-                                .rounded_md()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .text_color(theme::text_muted())
-                                .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
-                                .child("×")
-                                .on_mouse_down(
-                                    gpui::MouseButton::Left,
-                                    move |_event, _window, app| {
-                                        state_entity.remove_watched_channel_for_tab(app, &tab_id);
-                                    },
-                                ),
-                        )
-                        .child(
-                            div()
-                                .absolute()
-                                .right(px(8.0))
-                                .top(px(7.0))
-                                .w(px(18.0))
-                                .h(px(18.0))
-                                .rounded_md()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .text_color(theme::text_muted())
-                                .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
-                                .child(if is_renaming { "✓" } else { "✎" })
-                                .on_mouse_down(gpui::MouseButton::Left, {
-                                    let state_entity = tabs_state_entity.clone();
-                                    let tab_id = id.clone();
-                                    let label = label.clone();
-                                    let tab_rename_input = tab_rename_input.clone();
-                                    move |_event, window, app| {
-                                        if is_renaming {
-                                            let name = tab_rename_input
-                                                .read(app)
-                                                .text()
-                                                .trim()
-                                                .to_string();
-                                            state_entity.rename_watched_tab(app, &tab_id, &name);
-                                        } else {
-                                            tab_rename_input.update(app, |input, cx| {
-                                                input.set_text(label.clone(), cx);
-                                            });
-                                            state_entity.start_watched_tab_rename(app, &tab_id);
-                                            let focus =
-                                                tab_rename_input.read(app).focus_handle(app);
-                                            window.focus(&focus, app);
-                                        }
-                                    }
-                                }),
-                        )
+                        .when(show_close, |wrapper| {
+                            wrapper.child(
+                                div()
+                                    .absolute()
+                                    .right(px(8.0))
+                                    .top(px(7.0))
+                                    .w(px(18.0))
+                                    .h(px(18.0))
+                                    .rounded_md()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .text_color(theme::text_muted())
+                                    .hover(|s| {
+                                        s.bg(theme::surface()).text_color(theme::text_primary())
+                                    })
+                                    .child("×")
+                                    .on_mouse_down(
+                                        gpui::MouseButton::Left,
+                                        move |_event, _window, app| {
+                                            state_entity
+                                                .remove_watched_channel_for_tab(app, &tab_id);
+                                        },
+                                    ),
+                            )
+                        })
+                        .when(context_menu_open, |wrapper| {
+                            wrapper.child(watched_tab_context_menu(
+                                tabs_state_entity.clone(),
+                                id.clone(),
+                                label.clone(),
+                                tab_rename_input.clone(),
+                            ))
+                        })
                 })
         }))
         .child(
@@ -278,6 +289,44 @@ pub(crate) fn bar(
                     }
                 })
                 .child("+"),
+        )
+}
+
+fn watched_tab_context_menu(
+    state_entity: Entity<AppState>,
+    tab_id: String,
+    label: String,
+    tab_rename_input: Entity<Input>,
+) -> Div {
+    div()
+        .absolute()
+        .top(px(34.0))
+        .left(px(0.0))
+        .min_w(px(132.0))
+        .rounded_md()
+        .border_1()
+        .border_color(theme::border())
+        .bg(theme::surface())
+        .shadow_lg()
+        .p(px(4.0))
+        .child(
+            div()
+                .rounded_sm()
+                .px(px(10.0))
+                .py(px(6.0))
+                .text_size(px(12.0))
+                .text_color(theme::text_primary())
+                .cursor_pointer()
+                .hover(|s| s.bg(theme::surface_2()))
+                .child("Rename")
+                .on_mouse_down(gpui::MouseButton::Left, move |_event, window, app| {
+                    tab_rename_input.update(app, |input, cx| {
+                        input.set_text(label.clone(), cx);
+                    });
+                    state_entity.start_watched_tab_rename(app, &tab_id);
+                    let focus = tab_rename_input.read(app).focus_handle(app);
+                    window.focus(&focus, app);
+                }),
         )
 }
 

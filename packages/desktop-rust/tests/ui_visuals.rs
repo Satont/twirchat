@@ -162,7 +162,7 @@ fn assert_no_user_card_service_call_inside_this_update(app_rs: &str, call: &str)
 }
 
 #[test]
-fn alias_editor_and_mention_autocomplete_source_contract() {
+fn alias_editor_and_autocomplete_source_contract() {
     let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
     let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
     let user_card_rs =
@@ -177,11 +177,30 @@ fn alias_editor_and_mention_autocomplete_source_contract() {
     assert!(app_rs.contains("fn save_user_alias"));
     assert!(app_rs.contains("fn remove_user_alias"));
 
-    assert!(popup_rs.contains("mention-autocomplete-popup"));
+    assert!(popup_rs.contains("autocomplete-popup"));
     assert!(popup_rs.contains("mention-autocomplete-item-"));
-    assert!(chat_rs.contains("MentionAutocompletePopup::new"));
+    assert!(chat_rs.contains("AutocompletePopup::new"));
     assert!(app_rs.contains("parse_mention_token"));
     assert!(app_rs.contains("replace_mention_token"));
+}
+
+#[test]
+fn emote_autocomplete_source_contract() {
+    let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read shell app.rs");
+    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
+    let watched_layout_rs = fs::read_to_string("src/ui/components/watched_layout.rs")
+        .expect("should read watched_layout.rs");
+    let popup_rs = fs::read_to_string("src/ui/components/autocomplete_popup.rs")
+        .expect("should read autocomplete_popup.rs");
+
+    assert!(popup_rs.contains("autocomplete-popup"));
+    assert!(popup_rs.contains("emote-autocomplete-item-"));
+    assert!(chat_rs.contains("AutocompletePopup::new"));
+    assert!(watched_layout_rs.contains("AutocompletePopup::new"));
+    assert!(app_rs.contains("parse_emote_token"));
+    assert!(app_rs.contains("replace_emote_token"));
+    assert!(app_rs.contains("watched_channel_messages"));
+    assert!(app_rs.contains("for_channel_candidates"));
 }
 
 #[test]
