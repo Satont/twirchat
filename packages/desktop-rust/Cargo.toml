@@ -38,3 +38,6 @@ velopack = "0.0.1589-ga2c5a97"
 
 [dev-dependencies]
 tempfile = "3.23"
+
+[profile.dev.package."*"]
+incremental = false
