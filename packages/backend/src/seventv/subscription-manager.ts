@@ -2,10 +2,15 @@ import type { Platform } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
 import { sevenTVCache } from './cache'
-import { createSevenTvEmote } from './emote'
+import {
+  createSevenTvEmote,
+  createSevenTvEmoteFromEventValue,
+  isSevenTvEventEmoteUpdate,
+  selectPreferredSevenTvImageUrl,
+} from './emote'
 import type { SevenTVEmote } from './emote'
 import { sevenTVEventClient } from './event-client'
-import type { EmoteSetUpdateEvent, EmoteSetDeleteEvent, UserUpdateEvent } from './event-client'
+import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-client'
 import { getEmoteSetById, getUserByConnection } from './client'
 
 const log = logger('seventv:manager')
@@ -392,19 +397,16 @@ export class SevenTVSubscriptionManager {
     }
   }
 
-  private handleEvent(event: {
-    type: string
-    body: EmoteSetUpdateEvent | EmoteSetDeleteEvent | UserUpdateEvent
-  }): void {
+  private handleEvent(event: SevenTVEvent): void {
     log.info('handleEvent called', { eventType: event.type, hasBody: Boolean(event.body) })
 
     if (event.type === 'user.update') {
-      this.handleUserUpdateEvent(event.body as UserUpdateEvent)
+      this.handleUserUpdateEvent(event.body)
       return
     }
 
     if (event.type === 'emote_set.delete') {
-      this.handleEmoteSetDeleteEvent(event.body as EmoteSetDeleteEvent)
+      this.handleEmoteSetDeleteEvent(event.body)
       return
     }
 
@@ -412,7 +414,7 @@ export class SevenTVSubscriptionManager {
       return
     }
 
-    const body = event.body as EmoteSetUpdateEvent
+    const body = event.body
     const emoteSetSub = this.emoteSetSubscriptions.get(body.id)
 
     if (!emoteSetSub) {
@@ -431,21 +433,7 @@ export class SevenTVSubscriptionManager {
 
     for (const push of body.pushed ?? []) {
       if (push.key === 'emotes') {
-        const valueData = push.value as any
-        const emoteData = valueData.data
-        const hostUrl = emoteData?.host?.url || ''
-        const files = emoteData?.host?.files || []
-        const imageUrl = selectPreferredSevenTvHostFile(hostUrl, files)
-
-        const emote = createSevenTvEmote({
-          alias: valueData.name,
-          animated: emoteData?.animated ?? false,
-          aspectRatio: 1,
-          id: valueData.id,
-          imageUrl,
-          name: valueData.name,
-          zeroWidth: false,
-        })
+        const emote = createSevenTvEmoteFromEventValue(push.value)
 
         log.info('7TV emote ADDED', {
           alias: emote.alias,
@@ -478,26 +466,22 @@ export class SevenTVSubscriptionManager {
 
     for (const pull of body.pulled ?? []) {
       if (pull.key === 'emotes') {
-        const oldValueData = pull.old_value as any
-        const emoteData = oldValueData.data
-        const hostUrl = emoteData?.host?.url || ''
-        const files = emoteData?.host?.files || []
-        const imageUrl = selectPreferredSevenTvHostFile(hostUrl, files)
+        const emote = createSevenTvEmoteFromEventValue(pull.old_value)
 
         log.info('7TV emote REMOVED', {
-          alias: oldValueData.name,
-          emoteId: oldValueData.id,
+          alias: emote.alias,
+          emoteId: emote.id,
           emoteSetId: body.id,
-          name: oldValueData.name,
+          name: emote.name,
         })
 
         for (const channelKey of emoteSetSub.channelKeys) {
           const [platform, channelId] = channelKey.split(':') as [Platform, string]
-          sevenTVCache.removeEmote(platform, channelId, oldValueData.id)
+          sevenTVCache.removeEmote(platform, channelId, emote.id)
 
           this.broadcastToChannel(channelKey, {
             channelId,
-            emoteId: oldValueData.id,
+            emoteId: emote.id,
             platform,
             type: 'seventv_emote_removed',
           })
@@ -505,15 +489,7 @@ export class SevenTVSubscriptionManager {
           this.broadcastToChannel(channelKey, {
             action: 'removed',
             channelId,
-            emote: createSevenTvEmote({
-              alias: oldValueData.name,
-              animated: emoteData?.animated ?? false,
-              aspectRatio: 1,
-              id: oldValueData.id,
-              imageUrl,
-              name: oldValueData.name,
-              zeroWidth: false,
-            }),
+            emote,
             platform,
             type: 'seventv_system_message',
           })
@@ -551,9 +527,9 @@ export class SevenTVSubscriptionManager {
         }
       }
 
-      if (update.key === 'emotes') {
-        const newValue = update.value as any
-        const oldValue = update.old_value as any
+      if (isSevenTvEventEmoteUpdate(update)) {
+        const newValue = update.value
+        const oldValue = update.old_value
 
         log.info('7TV emote UPDATED', {
           emoteId: newValue.id,
@@ -577,15 +553,7 @@ export class SevenTVSubscriptionManager {
           })
 
           const cachedSet = sevenTVCache.get(platform, channelId)
-          let emoteForMessage = createSevenTvEmote({
-            alias: newValue.name,
-            animated: false,
-            aspectRatio: 1,
-            id: newValue.id,
-            imageUrl: '',
-            name: newValue.name,
-            zeroWidth: false,
-          })
+          let emoteForMessage = createSevenTvEmoteFromEventValue(newValue)
 
           if (cachedSet) {
             for (const [, cachedEmote] of cachedSet.emotes) {
@@ -839,7 +807,10 @@ export class SevenTVSubscriptionManager {
     log.info('Broadcast result', {
       channelKey,
       clientCount: foundClients,
-      messageType: (message as any).type,
+      messageType:
+        typeof message === 'object' && message !== null && 'type' in message
+          ? String((message as { type?: unknown }).type)
+          : undefined,
     })
   }
 
@@ -854,45 +825,6 @@ export class SevenTVSubscriptionManager {
       eventClientConnected: sevenTVEventClient.isConnected,
     }
   }
-}
-
-function selectPreferredSevenTvImageUrl(
-  images: Array<{ url?: string | null }> | null | undefined,
-): string {
-  const preferred = findPreferredImage(images, ['.gif', '.webp', '.avif'])
-  return preferred?.url ?? ''
-}
-
-function selectPreferredSevenTvHostFile(
-  hostUrl: string,
-  files: Array<{ name?: string | null }> | null | undefined,
-): string {
-  const preferred = findPreferredImage(files, ['.gif', '.webp', '.avif'])
-  const fileName = preferred?.name
-
-  if (!hostUrl || !fileName) {
-    return ''
-  }
-
-  return `https:${hostUrl}/${fileName}`
-}
-
-function findPreferredImage<T extends { url?: string | null; name?: string | null }>(
-  images: Array<T> | null | undefined,
-  extensions: string[],
-): T | undefined {
-  for (const extension of extensions) {
-    const match = images?.find((image) => {
-      const value = image.url ?? image.name ?? ''
-      return value.toLowerCase().endsWith(extension)
-    })
-
-    if (match) {
-      return match
-    }
-  }
-
-  return images?.[0]
 }
 
 export const sevenTVManager = new SevenTVSubscriptionManager()

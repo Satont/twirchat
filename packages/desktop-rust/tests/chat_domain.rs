@@ -350,6 +350,12 @@ fn emote_autocomplete_fuzzy_filters_and_replaces_colon_token() {
     ];
 
     let suggestions = emote_suggestions(emotes.iter());
+    let unfiltered = fuzzy_filter_emotes(&suggestions, "", 15);
+    assert_eq!(unfiltered.len(), 3);
+
+    let bare_token = parse_emote_token("hello :").expect("bare emote token should parse");
+    assert_eq!(bare_token.query, "");
+
     let filtered = fuzzy_filter_emotes(&suggestions, "kw", 15);
 
     assert_eq!(filtered.len(), 1);
@@ -363,7 +369,8 @@ fn emote_autocomplete_fuzzy_filters_and_replaces_colon_token() {
         "hello @Friendly KEKW "
     );
     assert!(parse_emote_token("hello :ke ").is_none());
-    assert!(parse_emote_token(":").is_none());
+    let root_token = parse_emote_token(":").expect("root emote token should parse");
+    assert_eq!(root_token.query, "");
 }
 
 #[test]

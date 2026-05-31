@@ -36,71 +36,75 @@ export interface UserUpdateEvent {
   }[]
 }
 
+export interface SevenTVEventImageFile {
+  url?: string | null
+  name?: string | null
+  mime?: string | null
+  size?: number | null
+  scale?: number | null
+  width?: number | null
+  height?: number | null
+  frameCount?: number | null
+}
+
+export interface SevenTVEventEmoteData {
+  animated: boolean
+  host: {
+    url: string
+    files: SevenTVEventImageFile[]
+  }
+}
+
+export interface SevenTVEventEmoteValue {
+  id: string
+  name: string
+  data: SevenTVEventEmoteData
+}
+
+export interface SevenTVEventEmoteInsert {
+  key: 'emotes'
+  index: number
+  type: 'emote'
+  value: SevenTVEventEmoteValue
+}
+
+export interface SevenTVEventEmoteRemove {
+  key: 'emotes'
+  index: number
+  type: 'emote'
+  old_value: SevenTVEventEmoteValue
+}
+
+export interface SevenTVEventEmoteUpdate {
+  key: 'emotes'
+  index?: number
+  type?: string
+  old_value: SevenTVEventEmoteValue
+  value: SevenTVEventEmoteValue
+}
+
+export interface SevenTVEventFieldUpdate {
+  key: string
+  index?: number
+  type?: string
+  old_value: unknown
+  value: unknown
+}
+
+export type SevenTVEvent =
+  | { type: 'emote_set.update'; body: EmoteSetUpdateEvent }
+  | { type: 'emote_set.delete'; body: EmoteSetDeleteEvent }
+  | { type: 'user.update'; body: UserUpdateEvent }
+
 export interface EmoteSetUpdateEvent {
   id: string
   actor?: {
     id: string
     display_name: string
   }
-  pushed?: {
-    key: string
-    index: number
-    type: 'emote'
-    value: {
-      id: string
-      alias: string
-      emote: {
-        id: string
-        defaultName: string
-        flags: {
-          animated: boolean
-        }
-        aspectRatio: number
-        images: Array<{
-          url: string
-          mime: string
-          size: number
-          scale: number
-          width: number
-          height: number
-          frameCount: number
-        }>
-      }
-    }
-  }[]
-  pulled?: {
-    key: string
-    index: number
-    type: 'emote'
-    old_value: {
-      id: string
-      alias: string
-      emote: {
-        id: string
-        defaultName: string
-        flags: {
-          animated: boolean
-        }
-        aspectRatio: number
-        images: Array<{
-          url: string
-          mime: string
-          size: number
-          scale: number
-          width: number
-          height: number
-          frameCount: number
-        }>
-      }
-    }
-  }[]
-  updated?: {
-    key: string
-    index?: number
-    type?: string
-    old_value: unknown
-    value: unknown
-  }[]
+  pushed?: SevenTVEventEmoteInsert[]
+  pulled?: SevenTVEventEmoteRemove[]
+  updated?: Array<SevenTVEventEmoteUpdate | SevenTVEventFieldUpdate>
 }
 
 export interface EmoteSetDeleteEvent {
@@ -111,10 +115,7 @@ export interface EmoteSetDeleteEvent {
   }
 }
 
-export type SevenTVEventHandler = (event: {
-  type: string
-  body: EmoteSetUpdateEvent | EmoteSetDeleteEvent | UserUpdateEvent
-}) => void
+export type SevenTVEventHandler = (event: SevenTVEvent) => void
 
 export class SevenTVEventClient {
   private ws: WebSocket | null = null
@@ -222,9 +223,14 @@ export class SevenTVEventClient {
       }
 
       if (message.op !== 2) {
+        const dispatchType =
+          typeof message.d === 'object' && message.d !== null && 'type' in message.d
+            ? String((message.d as { type?: unknown }).type)
+            : undefined
+
         log.info('7TV EventAPI message received', {
           op: message.op,
-          type: (message.d as any)?.type,
+          type: dispatchType,
         })
       }
 
@@ -237,10 +243,7 @@ export class SevenTVEventClient {
         case 0: {
           // Dispatch
           if (message.d) {
-            const dispatch = message.d as {
-              type: string
-              body: EmoteSetUpdateEvent | UserUpdateEvent
-            }
+            const dispatch = message.d as SevenTVEvent
             log.info('DISPATCH EVENT RECEIVED', { type: dispatch.type, bodyId: dispatch.body?.id })
             this.onEvent?.(dispatch)
           }

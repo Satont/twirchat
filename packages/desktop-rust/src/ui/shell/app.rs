@@ -863,12 +863,18 @@ impl TwirChatApp {
             return None;
         }
 
-        let (platform, channel_ids) = emote_source_channels(state, &target)?;
-        let candidates = emote_suggestions(
-            state
-                .seven_tv_catalog()
-                .for_channel_candidates(platform, channel_ids.iter().map(String::as_str)),
-        );
+        let source_channels = emote_source_channels(state, &target);
+        if source_channels.is_empty() {
+            return None;
+        }
+
+        let mut candidates = Vec::new();
+        for (platform, channel_ids) in &source_channels {
+            candidates.extend(emote_suggestions(state.seven_tv_catalog().for_channel_candidates(
+                *platform,
+                channel_ids.iter().map(String::as_str),
+            )));
+        }
         let suggestions = fuzzy_filter_emotes(&candidates, &token.query, 15)
             .into_iter()
             .map(AutocompleteSuggestion::Emote)
@@ -1670,76 +1676,14 @@ fn autocomplete_context_id(target: &ComposerTarget, mode: &str, query: &str) -> 
     }
 }
 
-fn emote_source_channels(
-    state: &AppState,
-    target: &ComposerTarget,
-) -> Option<(Platform, Vec<String>)> {
+fn emote_source_channels(state: &AppState, target: &ComposerTarget) -> Vec<(Platform, Vec<String>)> {
     match target {
-        ComposerTarget::Home => state.platforms_panel.statuses.values().find_map(|status| {
-            let channel_login = status.channel_login.as_ref()?;
-            matches!(
-                status.status,
-                crate::protocol::types::PlatformStatus::Connected
-                    | crate::protocol::types::PlatformStatus::Connecting
-            )
-            .then(|| {
-                let mut channel_ids = vec![channel_login.clone()];
-                channel_ids.extend(
-                    state
-                        .messages
-                        .iter()
-                        .rev()
-                        .filter(|message| message.platform == status.platform)
-                        .map(|message| message.channel_id.clone()),
-                );
-                dedupe_channel_ids(&mut channel_ids);
-                (status.platform, channel_ids)
-            })
-        }),
-        ComposerTarget::Watched(channel_id) => {
-            let channel = state
-                .watched_channels
-                .iter()
-                .find(|channel| channel.id == *channel_id)?;
-            let mut channel_ids = Vec::new();
-            if let Some(seven_tv_channel_id) =
-                state.seven_tv_channel_id_for_watched_channel(channel_id)
-            {
-                channel_ids.push(seven_tv_channel_id.to_string());
-            }
-            channel_ids.extend([channel.channel_slug.clone(), channel.id.clone()]);
-            channel_ids.extend(
-                state
-                    .watched_channel_messages
-                    .get(channel_id)
-                    .into_iter()
-                    .flat_map(|messages| messages.iter().rev())
-                    .filter(|message| message.platform == channel.platform)
-                    .map(|message| message.channel_id.clone()),
-            );
-            channel_ids.extend(
-                state
-                    .messages
-                    .iter()
-                    .rev()
-                    .filter(|message| {
-                        message.platform == channel.platform
-                            && (message.channel_id == channel.id
-                                || message
-                                    .channel_id
-                                    .eq_ignore_ascii_case(&channel.channel_slug))
-                    })
-                    .map(|message| message.channel_id.clone()),
-            );
-            dedupe_channel_ids(&mut channel_ids);
-            Some((channel.platform, channel_ids))
-        }
+        ComposerTarget::Home => state.home_emote_source_channels(),
+        ComposerTarget::Watched(channel_id) => state
+            .watched_emote_source_channel(channel_id)
+            .into_iter()
+            .collect(),
     }
-}
-
-fn dedupe_channel_ids(channel_ids: &mut Vec<String>) {
-    let mut seen = BTreeSet::new();
-    channel_ids.retain(|channel_id| seen.insert(channel_id.to_lowercase()));
 }
 
 fn mention_source_messages<'a>(

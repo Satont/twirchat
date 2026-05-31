@@ -451,6 +451,76 @@ impl AppState {
             .map(String::as_str)
     }
 
+    pub fn home_emote_source_channels(&self) -> Vec<(Platform, Vec<String>)> {
+        self.platforms_panel
+            .statuses
+            .values()
+            .filter_map(|status| {
+                let channel_login = status.channel_login.as_ref()?;
+                matches!(
+                    status.status,
+                    PlatformStatus::Connected | PlatformStatus::Connecting
+                )
+                .then(|| {
+                    let mut channel_ids = vec![channel_login.clone()];
+                    if let Some(channel) = self.watched_channels.iter().find(|channel| {
+                        channel.platform == status.platform
+                            && channel.channel_slug.eq_ignore_ascii_case(channel_login)
+                    }) {
+                        if let Some(seven_tv_channel_id) =
+                            self.seven_tv_channel_id_for_watched_channel(&channel.id)
+                        {
+                            channel_ids.push(seven_tv_channel_id.to_string());
+                        }
+                        channel_ids.push(channel.id.clone());
+                    }
+                    channel_ids.extend(
+                        self.messages
+                            .iter()
+                            .rev()
+                            .filter(|message| message.platform == status.platform)
+                            .map(|message| message.channel_id.clone()),
+                    );
+                    dedupe_channel_ids(&mut channel_ids);
+                    (status.platform, channel_ids)
+                })
+            })
+            .collect()
+    }
+
+    pub fn watched_emote_source_channel(&self, channel_id: &str) -> Option<(Platform, Vec<String>)> {
+        let channel = self
+            .watched_channels
+            .iter()
+            .find(|channel| channel.id == channel_id)?;
+        let mut channel_ids = Vec::new();
+        if let Some(seven_tv_channel_id) = self.seven_tv_channel_id_for_watched_channel(channel_id) {
+            channel_ids.push(seven_tv_channel_id.to_string());
+        }
+        channel_ids.extend([channel.channel_slug.clone(), channel.id.clone()]);
+        channel_ids.extend(
+            self.watched_channel_messages
+                .get(channel_id)
+                .into_iter()
+                .flat_map(|messages| messages.iter().rev())
+                .filter(|message| message.platform == channel.platform)
+                .map(|message| message.channel_id.clone()),
+        );
+        channel_ids.extend(
+            self.messages
+                .iter()
+                .rev()
+                .filter(|message| {
+                    message.platform == channel.platform
+                        && (message.channel_id == channel.id
+                            || message.channel_id.eq_ignore_ascii_case(&channel.channel_slug))
+                })
+                .map(|message| message.channel_id.clone()),
+        );
+        dedupe_channel_ids(&mut channel_ids);
+        Some((channel.platform, channel_ids))
+    }
+
     pub fn alias_for_user(&self, platform: Platform, platform_user_id: &str) -> Option<&str> {
         self.aliases.get(platform, platform_user_id)
     }
@@ -2885,6 +2955,11 @@ fn message_matches_seven_tv_channel(
 
 fn is_seven_tv_emote(emote: &crate::protocol::types::Emote) -> bool {
     emote.image_url.contains("7tv") || emote.image_url.contains("/proxy/7tv/")
+}
+
+fn dedupe_channel_ids(channel_ids: &mut Vec<String>) {
+    let mut seen = BTreeSet::new();
+    channel_ids.retain(|channel_id| seen.insert(channel_id.to_lowercase()));
 }
 
 pub trait AppStateActions {

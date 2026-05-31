@@ -39,6 +39,51 @@ fn app_state_tracks_watched_seven_tv_subscription_key_for_emote_autocomplete() {
 }
 
 #[test]
+fn home_emote_sources_include_all_connected_platforms() {
+    let mut state = new_state();
+
+    for (platform, login, watched_id, seven_tv_id) in [
+        (Platform::Twitch, "satont", "tw-local", "tw-7tv"),
+        (Platform::Kick, "suhodolskiy", "kick-local", "kick-7tv"),
+    ] {
+        state.platforms_panel.statuses.insert(
+            platform,
+            PlatformStatusInfo {
+                platform,
+                status: PlatformStatus::Connected,
+                error: None,
+                mode: PlatformStatusMode::Authenticated,
+                channel_login: Some(login.to_string()),
+            },
+        );
+        state
+            .watched_channels
+            .push(watched_channel(watched_id, platform, login));
+        state.apply_service_event(ServiceEvent::WatchedChannels(
+            WatchedChannelsEvent::BackendMessagePlanned {
+                kind: DesktopToBackendMessageKind::SeventvSubscribe,
+                watched_channel_id: Some(watched_id.to_string()),
+                message: DesktopToBackendMessage::SeventvSubscribe {
+                    platform,
+                    channel_id: seven_tv_id.to_string(),
+                    platform_user_id: Some(seven_tv_id.to_string()),
+                },
+            },
+        ));
+    }
+
+    let sources = state.home_emote_source_channels();
+
+    assert_eq!(sources.len(), 2);
+    assert!(sources.iter().any(|(platform, channel_ids)| {
+        *platform == Platform::Twitch && channel_ids.iter().any(|id| id == "tw-7tv")
+    }));
+    assert!(sources.iter().any(|(platform, channel_ids)| {
+        *platform == Platform::Kick && channel_ids.iter().any(|id| id == "kick-7tv")
+    }));
+}
+
+#[test]
 fn changing_active_section_updates_state() {
     let mut state = new_state();
     state.select_section(MainSection::Platforms);

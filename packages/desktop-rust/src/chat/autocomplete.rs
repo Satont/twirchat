@@ -57,7 +57,11 @@ fn parse_prefixed_token(text: &str, prefix: char) -> Option<(String, Range<usize
         .find_map(|(index, ch)| ch.is_whitespace().then_some(index + ch.len_utf8()))
         .unwrap_or(0);
     let word = text.get(start..)?;
-    if !word.starts_with(prefix) || word.chars().count() < 2 {
+    if !word.starts_with(prefix) {
+        return None;
+    }
+
+    if prefix != ':' && word.chars().count() < 2 {
         return None;
     }
 
@@ -160,8 +164,12 @@ fn fuzzy_filter_by_targets<T: Clone>(
     limit: usize,
     targets: impl Fn(&T) -> Vec<&str>,
 ) -> Vec<T> {
-    if query.is_empty() || limit == 0 {
+    if limit == 0 {
         return Vec::new();
+    }
+
+    if query.is_empty() {
+        return suggestions.iter().take(limit).cloned().collect();
     }
 
     let query = query.to_lowercase();
