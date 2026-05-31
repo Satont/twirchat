@@ -1,6 +1,6 @@
 use std::env;
 use std::process::ExitCode;
-use twirchat_desktop_rust::runtime::{
+use twirchat::runtime::{
     UpdateCheckMode, UpdateCheckRequest, UpdateRuntime, UpdateState, VelopackRuntimeStatus,
 };
 

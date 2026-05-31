@@ -1,13 +1,13 @@
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
-use twirchat_desktop_rust::protocol::types::{
+use twirchat::protocol::types::{
     ChatAuthor, ChatMessageType, LayoutNode, NormalizedChatMessage, PanelContent, Platform,
 };
-use twirchat_desktop_rust::runtime::DEFAULT_OVERLAY_SERVER_PORT;
-use twirchat_desktop_rust::storage::accounts::UpsertAccount;
-use twirchat_desktop_rust::storage::crypto;
-use twirchat_desktop_rust::storage::{Storage, TokenState};
+use twirchat::runtime::DEFAULT_OVERLAY_SERVER_PORT;
+use twirchat::storage::accounts::UpsertAccount;
+use twirchat::storage::crypto;
+use twirchat::storage::{Storage, TokenState};
 
 #[test]
 fn watched_tab_custom_names_round_trip_and_clear() -> Result<(), Box<dyn std::error::Error>> {
@@ -71,10 +71,7 @@ fn storage_reads_vue_fixture_db() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(secret, "fixture-client-secret");
 
     let settings = storage.settings().get_app_settings()?;
-    assert_eq!(
-        settings.theme,
-        twirchat_desktop_rust::protocol::types::AppTheme::Light
-    );
+    assert_eq!(settings.theme, twirchat::protocol::types::AppTheme::Light);
     assert_eq!(settings.overlay.max_messages, 5);
     assert_eq!(settings.overlay.port, DEFAULT_OVERLAY_SERVER_PORT);
     assert_eq!(settings.hotkeys.new_tab, "ctrl+n");
@@ -83,7 +80,7 @@ fn storage_reads_vue_fixture_db() -> Result<(), Box<dyn std::error::Error>> {
     let layout = storage.settings().get_chat_layout()?;
     assert_eq!(
         layout.mode,
-        twirchat_desktop_rust::protocol::types::ChatLayoutMode::Split
+        twirchat::protocol::types::ChatLayoutMode::Split
     );
     assert_eq!(layout.splits.len(), 1);
 
@@ -491,7 +488,7 @@ fn message_ids(messages: &[NormalizedChatMessage]) -> Vec<&str> {
 }
 
 fn load_sql_fixture(
-    conn: &twirchat_desktop_rust::storage::db::Connection,
+    conn: &twirchat::storage::db::Connection,
     name: &str,
     replacements: &[(&str, &str)],
 ) -> Result<(), Box<dyn std::error::Error>> {

@@ -131,7 +131,7 @@ impl Default for ServiceRuntimeConfig {
 }
 
 fn default_storage_path() -> PathBuf {
-    PathBuf::from("twirchat-desktop-rust.sqlite")
+    PathBuf::from("twirchat.sqlite")
 }
 
 #[derive(Debug, Clone)]

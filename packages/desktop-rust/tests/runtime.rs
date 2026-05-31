@@ -6,18 +6,18 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
-use twirchat_desktop_rust::protocol::messages::{
+use twirchat::protocol::messages::{
     UserCardFieldStatus, UserCardMetadataPlatform, UserCardMetadataRequest,
 };
-use twirchat_desktop_rust::protocol::rpc::OpenExternalUrlParams;
-use twirchat_desktop_rust::runtime::browser::{ExternalOpenError, open_external_url};
-use twirchat_desktop_rust::runtime::{
+use twirchat::protocol::rpc::OpenExternalUrlParams;
+use twirchat::runtime::browser::{ExternalOpenError, open_external_url};
+use twirchat::runtime::{
     AppRuntime, AvailableUpdate, ExternalOpenResult, ExternalOpener, RuntimeConfig,
     RuntimeConfigInput, STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER, UpdateCheckMode,
     UpdateCheckRequest, UpdateCheckSource, UpdateEngine, UpdateEngineError, UpdateEvent,
     UpdateRuntime, UpdateState, UpdateStatus, default_update_feed_url,
 };
-use twirchat_desktop_rust::services::commands::UpdateStateCommand;
+use twirchat::services::commands::UpdateStateCommand;
 
 #[test]
 fn runtime_update_state_transitions() -> Result<(), Box<dyn std::error::Error>> {
@@ -123,7 +123,7 @@ fn runtime_update_state_transitions() -> Result<(), Box<dyn std::error::Error>> 
 fn runtime_update_service_commands_use_engine() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = UpdateRuntime::with_engine(
         UpdateState::default(),
-        twirchat_desktop_rust::runtime::UpdateCheckRequest::packaged(Some(
+        twirchat::runtime::UpdateCheckRequest::packaged(Some(
             "https://updates.example/releases.linux.json".to_string(),
         )),
         Arc::new(MockUpdateEngine),
@@ -416,21 +416,21 @@ struct NoUpdateEngine;
 impl UpdateEngine for NoUpdateEngine {
     fn check(
         &self,
-        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+        _request: &twirchat::runtime::UpdateCheckRequest,
     ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
         Ok(None)
     }
 
     fn download(
         &self,
-        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+        _request: &twirchat::runtime::UpdateCheckRequest,
     ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
         Ok(None)
     }
 
     fn apply(
         &self,
-        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+        _request: &twirchat::runtime::UpdateCheckRequest,
     ) -> Result<(), UpdateEngineError> {
         Ok(())
     }
@@ -439,7 +439,7 @@ impl UpdateEngine for NoUpdateEngine {
 impl UpdateEngine for MockUpdateEngine {
     fn check(
         &self,
-        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+        _request: &twirchat::runtime::UpdateCheckRequest,
     ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
         Ok(Some(AvailableUpdate {
             version: Some("1.2.3".to_string()),
@@ -449,7 +449,7 @@ impl UpdateEngine for MockUpdateEngine {
 
     fn download(
         &self,
-        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+        _request: &twirchat::runtime::UpdateCheckRequest,
     ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
         Ok(Some(AvailableUpdate {
             version: Some("1.2.3".to_string()),
@@ -459,7 +459,7 @@ impl UpdateEngine for MockUpdateEngine {
 
     fn apply(
         &self,
-        _request: &twirchat_desktop_rust::runtime::UpdateCheckRequest,
+        _request: &twirchat::runtime::UpdateCheckRequest,
     ) -> Result<(), UpdateEngineError> {
         Ok(())
     }

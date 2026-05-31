@@ -1,7 +1,7 @@
 use std::env;
 use std::path::Path;
 use std::process::ExitCode;
-use twirchat_desktop_rust::runtime::{
+use twirchat::runtime::{
     VelopackPlanInput, plan_velopack_commands, render_velopack_simulation,
     validate_velopack_release_tag, verify_packaging_artifact,
 };

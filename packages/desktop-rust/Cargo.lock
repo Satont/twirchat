@@ -6430,7 +6430,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "twirchat-desktop-rust"
+name = "twirchat"
 version = "0.1.0"
 dependencies = [
  "base64",

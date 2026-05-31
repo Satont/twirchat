@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 use url::Url;
 
 const DEFAULT_BACKEND_WS_URL: &str = "ws://localhost:3000/ws";
-const DEFAULT_STORAGE_FILE: &str = "twirchat-desktop-rust.sqlite";
+const DEFAULT_STORAGE_FILE: &str = "twirchat.sqlite";
 const CLIENT_WEBSOCKET_VERSION: &str = "13";
 const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const CLOSE_NORMAL: u16 = 1000;

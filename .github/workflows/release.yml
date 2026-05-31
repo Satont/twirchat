@@ -119,11 +119,13 @@ jobs:
           path: packages/desktop/dist/**
           if-no-files-found: error
 
-  build-desktop-rust:
-    name: Build Desktop Rust (${{ matrix.target }})
+  build-desktop:
+    name: Build Desktop (${{ matrix.target }})
     needs: [changelog, build-views]
     runs-on: ${{ matrix.os }}
     if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
+    env:
+      CARGO_TARGET_DIR: target
     strategy:
       fail-fast: false
       matrix:
@@ -175,31 +177,56 @@ jobs:
           name: desktop-views
           path: packages/desktop-rust/release-assets/dist
 
+      - name: Install Linux native dependencies
+        if: matrix.target == 'linux-x64'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev libsqlite3-dev
+
+      - name: Install Windows native dependencies
+        if: matrix.target == 'win-x64'
+        shell: pwsh
+        run: |
+          vcpkg install sqlite3:x64-windows
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) {
+            $vcpkgRoot = 'C:\vcpkg'
+          }
+          $vcpkgTripletPath = Join-Path $vcpkgRoot 'installed\x64-windows'
+          $sqliteLib = Join-Path $vcpkgTripletPath 'lib\sqlite3.lib'
+          if (-not (Test-Path $sqliteLib)) {
+            throw "sqlite3.lib was not found at $sqliteLib"
+          }
+          "LIB=$vcpkgTripletPath\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INCLUDE=$vcpkgTripletPath\include;$env:INCLUDE" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PATH=$vcpkgTripletPath\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Build Rust desktop
         if: matrix.target != 'macos-universal'
         shell: bash
-        run: cargo build --manifest-path packages/desktop-rust/Cargo.toml --release
+        run: cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --bin twirchat
 
       - name: Build macOS universal Rust desktop
         if: matrix.target == 'macos-universal'
         shell: bash
         run: |
           rustup target add x86_64-apple-darwin aarch64-apple-darwin
-          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --target x86_64-apple-darwin
-          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --target aarch64-apple-darwin
+          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --bin twirchat --target x86_64-apple-darwin
+          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --bin twirchat --target aarch64-apple-darwin
           mkdir -p target/universal-apple-darwin/release
           lipo -create \
-            target/x86_64-apple-darwin/release/twirchat-desktop-rust \
-            target/aarch64-apple-darwin/release/twirchat-desktop-rust \
-            -output target/universal-apple-darwin/release/twirchat-desktop-rust
-          lipo -info target/universal-apple-darwin/release/twirchat-desktop-rust
+            target/x86_64-apple-darwin/release/twirchat \
+            target/aarch64-apple-darwin/release/twirchat \
+            -output target/universal-apple-darwin/release/twirchat
+          lipo -info target/universal-apple-darwin/release/twirchat
 
       - name: Prepare Linux Velopack app artifact
         if: matrix.target == 'linux-x64'
         shell: bash
         run: |
           mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
-          cp target/release/twirchat-desktop-rust artifacts/${{ matrix.artifact_dir }}/twirchat
+          cp target/release/twirchat artifacts/${{ matrix.artifact_dir }}/twirchat
           cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
           cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
           cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
@@ -212,7 +239,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
-          cp target/release/twirchat-desktop-rust.exe artifacts/${{ matrix.artifact_dir }}/twirchat.exe
+          cp target/release/twirchat.exe artifacts/${{ matrix.artifact_dir }}/twirchat.exe
           cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
           cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
           cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
@@ -226,7 +253,7 @@ jobs:
         run: |
           mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS
           mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
-          cp target/universal-apple-darwin/release/twirchat-desktop-rust \
+          cp target/universal-apple-darwin/release/twirchat \
             artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS/TwirChat
           cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
           cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
@@ -235,16 +262,16 @@ jobs:
           cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
           cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
 
-      - name: Verify desktop-rust app artifact
+      - name: Verify desktop app artifact
         shell: bash
         run: |
           cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
             verify-artifact artifacts/${{ matrix.artifact_dir }}
 
-      - name: Upload desktop-rust app artifact
+      - name: Upload desktop app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-rust-${{ matrix.target }}
+          name: desktop-${{ matrix.target }}
           path: artifacts/${{ matrix.artifact_dir }}/**
           if-no-files-found: error
 
@@ -315,9 +342,9 @@ jobs:
           echo "Dry run: would create GitHub Release ${{ needs.changelog.outputs.version }} with backend artifact."
           echo "Skipping real release creation."
 
-  publish-desktop-rust:
-    name: Publish Desktop Rust Velopack (${{ matrix.target }})
-    needs: [changelog, build-desktop-rust, release]
+  publish-desktop:
+    name: Publish Desktop Velopack (${{ matrix.target }})
+    needs: [changelog, build-desktop, release]
     runs-on: ubuntu-latest
     if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     strategy:
@@ -354,13 +381,19 @@ jobs:
         shell: bash
         run: dotnet tool install --global vpk
 
-      - name: Download desktop-rust app artifact
+      - name: Install Linux native dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev libsqlite3-dev
+
+      - name: Download desktop app artifact
         uses: actions/download-artifact@v4
         with:
-          name: desktop-rust-${{ matrix.target }}
+          name: desktop-${{ matrix.target }}
           path: artifacts/${{ matrix.artifact_dir }}
 
-      - name: Verify downloaded desktop-rust app artifact
+      - name: Verify downloaded desktop app artifact
         shell: bash
         run: |
           cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \

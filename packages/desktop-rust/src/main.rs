@@ -5,13 +5,13 @@ use std::env;
 use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::Duration;
-use twirchat_desktop_rust::app::TwirChatApp;
-use twirchat_desktop_rust::ui::components::input;
-use twirchat_desktop_rust::ui::components::selectable_message;
-use twirchat_desktop_rust::ui::components::selectable_text;
+use twirchat::app::TwirChatApp;
+use twirchat::ui::components::input;
+use twirchat::ui::components::selectable_message;
+use twirchat::ui::components::selectable_text;
 
 fn main() -> ExitCode {
-    twirchat_desktop_rust::runtime::run_velopack_startup();
+    twirchat::runtime::run_velopack_startup();
 
     let smoke_exit_after_first_frame =
         env::args().any(|arg| arg == "--smoke-exit-after-first-frame");
@@ -36,7 +36,7 @@ fn main() -> ExitCode {
 
         move |cx: &mut App| {
             theme::init(theme::LoadThemes::JustBase, cx);
-            if let Err(error) = twirchat_desktop_rust::ui::theme::load_app_fonts(cx) {
+            if let Err(error) = twirchat::ui::theme::load_app_fonts(cx) {
                 eprintln!("failed to load bundled app fonts: {error}");
             }
             match reqwest_client::ReqwestClient::proxy_and_user_agent(None, "TwirChat/0.1.0") {

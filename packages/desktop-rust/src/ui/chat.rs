@@ -1719,7 +1719,7 @@ fn compact_message_row(
     div()
         .id(row_id.clone())
         .w_full()
-        .px(px(14.0))
+        .px(px(8.0))
         .py(px(1.0))
         .relative()
         .on_hover({

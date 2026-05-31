@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
-use twirchat_desktop_rust::runtime::{
+use twirchat::runtime::{
     AssetKind, PackagingVerificationError, PackagingVerificationStatus, TwirChatPackagingSpec,
     VelopackPlanInput, plan_velopack_commands, render_velopack_simulation,
     verify_packaging_artifact,
@@ -145,6 +145,26 @@ fn velopack_upload_plan_merges_into_existing_github_release()
     assert!(simulation.contains("vpk upload github --repoUrl https://github.com/Satont/twirchat --publish --merge --tag v1.2.3 --channel linux --outputDir artifacts/velopack/linux"));
     assert!(simulation.contains("vpk upload github --repoUrl https://github.com/Satont/twirchat --publish --merge --tag v1.2.3 --channel win --outputDir artifacts/velopack/win"));
     assert!(simulation.contains("vpk upload github --repoUrl https://github.com/Satont/twirchat --publish --merge --tag v1.2.3 --channel osx --outputDir artifacts/velopack/osx"));
+
+    Ok(())
+}
+
+#[test]
+fn velopack_plan_uses_twirchat_app_binary_names() -> Result<(), Box<dyn std::error::Error>> {
+    let plan = plan_velopack_commands(VelopackPlanInput {
+        tag: "v1.2.3",
+        repository_url: "https://github.com/Satont/twirchat",
+        artifact_root: Path::new("artifacts"),
+        first_release: true,
+        existing_assets: &[],
+    })?;
+    let simulation = render_velopack_simulation(&plan);
+
+    assert!(simulation.contains("--packDir artifacts/desktop-linux-x64 --mainExe twirchat"));
+    assert!(simulation.contains("--packDir artifacts/desktop-win-x64 --mainExe twirchat.exe"));
+    assert!(
+        simulation.contains("--packDir artifacts/desktop-macos-universal --mainExe TwirChat.app")
+    );
 
     Ok(())
 }

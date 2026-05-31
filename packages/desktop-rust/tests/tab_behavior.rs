@@ -1,9 +1,9 @@
-use twirchat_desktop_rust::app_state::{AppState, PaneDropDirection};
-use twirchat_desktop_rust::protocol::types::{ChatAuthor, ChatMessageType, NormalizedChatMessage};
-use twirchat_desktop_rust::protocol::types::{LayoutNode, PanelContent, Platform, SplitDirection};
-use twirchat_desktop_rust::services::{ServiceEvent, WatchedChannelsEvent};
-use twirchat_desktop_rust::storage::Storage;
-use twirchat_desktop_rust::storage::accounts::UpsertAccount;
+use twirchat::app_state::{AppState, PaneDropDirection};
+use twirchat::protocol::types::{ChatAuthor, ChatMessageType, NormalizedChatMessage};
+use twirchat::protocol::types::{LayoutNode, PanelContent, Platform, SplitDirection};
+use twirchat::services::{ServiceEvent, WatchedChannelsEvent};
+use twirchat::storage::Storage;
+use twirchat::storage::accounts::UpsertAccount;
 
 #[test]
 fn top_level_add_creates_and_selects_a_watched_tab() {
@@ -74,26 +74,24 @@ fn watched_tab_uses_buffered_messages_for_channel_specific_rendering() {
     state.apply_service_event(ServiceEvent::WatchedChannels(
         WatchedChannelsEvent::MessageBuffered {
             channel_id: watched_id.clone(),
-            message: Box::new(
-                twirchat_desktop_rust::protocol::types::NormalizedChatMessage {
-                    id: "kick-msg-1".into(),
-                    platform: Platform::Kick,
-                    channel_id: "424242".into(),
-                    author: twirchat_desktop_rust::protocol::types::ChatAuthor {
-                        id: "viewer-1".into(),
-                        username: Some("viewerone".into()),
-                        display_name: "Viewer One".into(),
-                        color: None,
-                        avatar_url: None,
-                        badges: vec![],
-                    },
-                    text: "hello from kick".into(),
-                    emotes: vec![],
-                    timestamp: "1700000000".into(),
-                    message_type: twirchat_desktop_rust::protocol::types::ChatMessageType::Message,
-                    reply: None,
+            message: Box::new(twirchat::protocol::types::NormalizedChatMessage {
+                id: "kick-msg-1".into(),
+                platform: Platform::Kick,
+                channel_id: "424242".into(),
+                author: twirchat::protocol::types::ChatAuthor {
+                    id: "viewer-1".into(),
+                    username: Some("viewerone".into()),
+                    display_name: "Viewer One".into(),
+                    color: None,
+                    avatar_url: None,
+                    badges: vec![],
                 },
-            ),
+                text: "hello from kick".into(),
+                emotes: vec![],
+                timestamp: "1700000000".into(),
+                message_type: twirchat::protocol::types::ChatMessageType::Message,
+                reply: None,
+            }),
         },
     ));
 
@@ -525,11 +523,11 @@ fn home_composer_routes_owned_kick_channel_through_watched_runtime() {
 
     state.platforms_panel.statuses.insert(
         Platform::Kick,
-        twirchat_desktop_rust::protocol::types::PlatformStatusInfo {
+        twirchat::protocol::types::PlatformStatusInfo {
             platform: Platform::Kick,
-            status: twirchat_desktop_rust::protocol::types::PlatformStatus::Connected,
+            status: twirchat::protocol::types::PlatformStatus::Connected,
             error: None,
-            mode: twirchat_desktop_rust::protocol::types::PlatformStatusMode::Authenticated,
+            mode: twirchat::protocol::types::PlatformStatusMode::Authenticated,
             channel_login: Some("satont".into()),
         },
     );

@@ -1,16 +1,16 @@
 use std::fs;
 use std::path::PathBuf;
-use twirchat_desktop_rust::platforms::twitch::{
+use twirchat::platforms::twitch::{
     MockTwitchClient, StreamUpdate, TwitchAdapter, TwitchAuthState, TwitchChatEvent,
     TwitchChatMessage, TwitchEmoteSpan,
 };
-use twirchat_desktop_rust::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
-use twirchat_desktop_rust::protocol::types::{
+use twirchat::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
+use twirchat::protocol::types::{
     ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform, PlatformStatus,
     PlatformStatusMode,
 };
-use twirchat_desktop_rust::storage::accounts::{TokenPair, UpsertAccount};
-use twirchat_desktop_rust::storage::{Storage, TokenState};
+use twirchat::storage::accounts::{TokenPair, UpsertAccount};
+use twirchat::storage::{Storage, TokenState};
 
 #[test]
 fn twitch_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::Error>> {
@@ -215,8 +215,7 @@ fn twitch_adapter_preserves_repeated_emotes_and_overlay_parts()
         Some("https://static-cdn.jtvnw.net/badges/v1/broadcaster/1")
     );
 
-    let overlay =
-        twirchat_desktop_rust::overlay::OverlayMessage::from_chat_message(message.clone());
+    let overlay = twirchat::overlay::OverlayMessage::from_chat_message(message.clone());
     let value = serde_json::to_value(overlay)?;
     assert_eq!(value["type"], "chat_message");
     assert_eq!(value["data"]["parts"].as_array().map(Vec::len), Some(3));
@@ -331,7 +330,7 @@ struct CapturingSink {
 }
 
 impl CapturingSink {
-    fn statuses(&self) -> Vec<&twirchat_desktop_rust::protocol::types::PlatformStatusInfo> {
+    fn statuses(&self) -> Vec<&twirchat::protocol::types::PlatformStatusInfo> {
         self.events
             .iter()
             .filter_map(|event| match event {
@@ -351,7 +350,7 @@ impl CapturingSink {
             .collect()
     }
 
-    fn events(&self) -> Vec<&twirchat_desktop_rust::protocol::types::NormalizedEvent> {
+    fn events(&self) -> Vec<&twirchat::protocol::types::NormalizedEvent> {
         self.events
             .iter()
             .filter_map(|event| match event {
@@ -363,10 +362,7 @@ impl CapturingSink {
 }
 
 impl PlatformEventSink for CapturingSink {
-    fn emit(
-        &mut self,
-        event: PlatformEvent,
-    ) -> twirchat_desktop_rust::platforms::PlatformResult<()> {
+    fn emit(&mut self, event: PlatformEvent) -> twirchat::platforms::PlatformResult<()> {
         self.events.push(event);
         Ok(())
     }

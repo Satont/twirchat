@@ -1,10 +1,8 @@
-use twirchat_desktop_rust::app_state::AppState;
-use twirchat_desktop_rust::protocol::messages::{BackendToDesktopMessage, SevenTvEmote};
-use twirchat_desktop_rust::protocol::types::{
-    ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform,
-};
-use twirchat_desktop_rust::services::{BackendWsEvent, ServiceEvent, WatchedChannelsEvent};
-use twirchat_desktop_rust::storage::Storage;
+use twirchat::app_state::AppState;
+use twirchat::protocol::messages::{BackendToDesktopMessage, SevenTvEmote};
+use twirchat::protocol::types::{ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform};
+use twirchat::services::{BackendWsEvent, ServiceEvent, WatchedChannelsEvent};
+use twirchat::storage::Storage;
 
 fn main() {
     let db_path = std::env::temp_dir().join(format!(

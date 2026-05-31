@@ -1,18 +1,18 @@
 use std::fs;
 use std::path::PathBuf;
-use twirchat_desktop_rust::platforms::kick::{
+use twirchat::platforms::kick::{
     KickAdapter, KickAdapterErrorKind, KickAuthState, KickAvatarLookupRequest,
     KickAvatarLookupSource, KickBadge, KickChatMessage, KickChatMessageKind, KickFollowEvent,
     KickMessageSender, KickOriginalMessage, KickOriginalSender, KickReplyMetadata,
     KickSenderIdentity, KickSubscriptionEvent, KickTransportAuth, MockKickClient,
 };
-use twirchat_desktop_rust::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
-use twirchat_desktop_rust::protocol::types::{
+use twirchat::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
+use twirchat::protocol::types::{
     ChatAuthor, ChatMessageType, NormalizedChatMessage, NormalizedEvent, Platform, PlatformStatus,
     PlatformStatusInfo, PlatformStatusMode,
 };
-use twirchat_desktop_rust::storage::accounts::UpsertAccount;
-use twirchat_desktop_rust::storage::{Storage, TokenPair};
+use twirchat::storage::accounts::UpsertAccount;
+use twirchat::storage::{Storage, TokenPair};
 
 #[test]
 fn kick_chat_message_deserializes_pusher_payload_shape() -> Result<(), Box<dyn std::error::Error>> {
@@ -243,10 +243,16 @@ fn kick_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::
             .iter()
             .any(|event| event.id.starts_with("kick:follow:555"))
     );
-    assert!(events.iter().any(|event| event.event_type
-        == twirchat_desktop_rust::protocol::types::NormalizedEventType::Sub));
-    assert!(events.iter().any(|event| event.event_type
-        == twirchat_desktop_rust::protocol::types::NormalizedEventType::GiftSub));
+    assert!(
+        events
+            .iter()
+            .any(|event| event.event_type == twirchat::protocol::types::NormalizedEventType::Sub)
+    );
+    assert!(
+        events.iter().any(
+            |event| event.event_type == twirchat::protocol::types::NormalizedEventType::GiftSub
+        )
+    );
 
     let local_echo = storage
         .messages()
@@ -565,10 +571,7 @@ impl CapturingSink {
 }
 
 impl PlatformEventSink for CapturingSink {
-    fn emit(
-        &mut self,
-        event: PlatformEvent,
-    ) -> twirchat_desktop_rust::platforms::PlatformResult<()> {
+    fn emit(&mut self, event: PlatformEvent) -> twirchat::platforms::PlatformResult<()> {
         self.events.push(event);
         Ok(())
     }

@@ -1,9 +1,22 @@
 use std::time::Duration;
-use twirchat_desktop_rust::services::{
+use twirchat::services::{
     BusConfig, BusSendError, BusTryRecvError, ChatEvent, LifecycleEvent, ServiceCommand,
     ServiceEvent, ServiceKind, ServiceRuntimeConfig, ServiceSupervisor, UpdateCheckSource,
     UpdateStateCommand, UpdateStateEvent, WatchedChannelsCommand, WatchedChannelsEvent, bounded,
 };
+
+#[test]
+fn service_runtime_default_uses_twirchat_sqlite() {
+    let config = ServiceRuntimeConfig::default();
+
+    assert!(config.storage_path().ends_with("twirchat.sqlite"));
+    assert!(
+        config
+            .backend_ws()
+            .storage_path()
+            .ends_with("twirchat.sqlite")
+    );
+}
 
 #[test]
 fn service_lifecycle_start_stop() -> Result<(), Box<dyn std::error::Error>> {

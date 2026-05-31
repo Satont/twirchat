@@ -10,13 +10,13 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
-use twirchat_desktop_rust::protocol::{DesktopToBackendMessage, Platform};
-use twirchat_desktop_rust::services::{
+use twirchat::protocol::{DesktopToBackendMessage, Platform};
+use twirchat::services::{
     BackendToDesktopMessageKind, BackendWsCommand, BackendWsConfig, BackendWsEvent, BusConfig,
     BusReceiver, BusSender, LifecycleCommand, ReconnectBackoff, ServiceCommand, ServiceEvent,
     ServiceExitReason, bounded, run_backend_ws_service,
 };
-use twirchat_desktop_rust::storage::Storage;
+use twirchat::storage::Storage;
 
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -176,7 +176,7 @@ impl TestStorage {
 struct TestService {
     commands: BusSender<ServiceCommand>,
     events: BusReceiver<ServiceEvent>,
-    join: thread::JoinHandle<twirchat_desktop_rust::services::ServiceStopReport>,
+    join: thread::JoinHandle<twirchat::services::ServiceStopReport>,
 }
 
 impl TestService {
@@ -189,7 +189,7 @@ impl TestService {
         let (commands, command_receiver) = bounded(BusConfig::new(64)?);
         let backoff = ReconnectBackoff::new(Duration::from_millis(10), Duration::from_millis(10));
         let config = BackendWsConfig::new(url, storage_path).with_backoff(backoff);
-        let cancellation = twirchat_desktop_rust::services::CancellationToken::new();
+        let cancellation = twirchat::services::CancellationToken::new();
         let join = thread::spawn(move || {
             run_backend_ws_service(
                 config,

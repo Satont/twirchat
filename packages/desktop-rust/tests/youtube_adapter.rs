@@ -1,13 +1,13 @@
-use twirchat_desktop_rust::platforms::youtube::{
+use twirchat::platforms::youtube::{
     MockYouTubeTransport, YouTubeAdapter, YouTubeAuthor, YouTubeStreamItem, YouTubeStreamSignal,
     YouTubeTextMessage, YouTubeTransportKind,
 };
-use twirchat_desktop_rust::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
-use twirchat_desktop_rust::protocol::types::{
+use twirchat::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
+use twirchat::protocol::types::{
     NormalizedChatMessage, Platform, PlatformStatus, PlatformStatusMode,
 };
-use twirchat_desktop_rust::storage::Storage;
-use twirchat_desktop_rust::storage::accounts::UpsertAccount;
+use twirchat::storage::Storage;
+use twirchat::storage::accounts::UpsertAccount;
 
 #[test]
 fn youtube_adapter_uses_non_polling_transport() -> Result<(), Box<dyn std::error::Error>> {
@@ -43,7 +43,7 @@ fn youtube_adapter_uses_non_polling_transport() -> Result<(), Box<dyn std::error
     assert!(adapter.transport().subscribe_auth[0].is_authenticated());
     assert!(matches!(
         adapter.auth_state(),
-        twirchat_desktop_rust::platforms::youtube::YouTubeAuthState::Authenticated { username, .. }
+        twirchat::platforms::youtube::YouTubeAuthState::Authenticated { username, .. }
             if username == "@fixturechannel"
     ));
 
@@ -182,7 +182,7 @@ struct CapturingSink {
 }
 
 impl CapturingSink {
-    fn statuses(&self) -> Vec<&twirchat_desktop_rust::protocol::types::PlatformStatusInfo> {
+    fn statuses(&self) -> Vec<&twirchat::protocol::types::PlatformStatusInfo> {
         self.events
             .iter()
             .filter_map(|event| match event {
@@ -204,10 +204,7 @@ impl CapturingSink {
 }
 
 impl PlatformEventSink for CapturingSink {
-    fn emit(
-        &mut self,
-        event: PlatformEvent,
-    ) -> twirchat_desktop_rust::platforms::PlatformResult<()> {
+    fn emit(&mut self, event: PlatformEvent) -> twirchat::platforms::PlatformResult<()> {
         self.events.push(event);
         Ok(())
     }
@@ -217,11 +214,11 @@ trait TestTransportAuth {
     fn is_authenticated(&self) -> bool;
 }
 
-impl TestTransportAuth for twirchat_desktop_rust::platforms::youtube::YouTubeTransportAuth {
+impl TestTransportAuth for twirchat::platforms::youtube::YouTubeTransportAuth {
     fn is_authenticated(&self) -> bool {
         matches!(
             self,
-            twirchat_desktop_rust::platforms::youtube::YouTubeTransportAuth::Authenticated { .. }
+            twirchat::platforms::youtube::YouTubeTransportAuth::Authenticated { .. }
         )
     }
 }

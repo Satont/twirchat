@@ -2,19 +2,17 @@ mod support;
 
 use serde_json::to_value;
 use support::new_state;
-use twirchat_desktop_rust::app_state::{
+use twirchat::app_state::{
     MainSection, OutgoingChatMessageStatus, UserCardHistoryPage, UserCardLoadState, UserCardTarget,
 };
-use twirchat_desktop_rust::protocol::rpc::UserChatHistoryCursor;
-use twirchat_desktop_rust::protocol::{
+use twirchat::protocol::rpc::UserChatHistoryCursor;
+use twirchat::protocol::{
     Account, BackendToDesktopMessage, Badge, ChannelStatus, ChatAuthor, ChatMessageType,
     DesktopToBackendMessage, LiveStatusPlatform, NormalizedChatMessage, Platform, PlatformStatus,
     PlatformStatusInfo, PlatformStatusMode, SevenTvEmote, WatchedChannel,
 };
-use twirchat_desktop_rust::services::{
-    DesktopToBackendMessageKind, ServiceEvent, WatchedChannelsEvent,
-};
-use twirchat_desktop_rust::storage::Storage;
+use twirchat::services::{DesktopToBackendMessageKind, ServiceEvent, WatchedChannelsEvent};
+use twirchat::storage::Storage;
 
 #[test]
 fn app_state_tracks_watched_seven_tv_subscription_key_for_emote_autocomplete() {
@@ -101,7 +99,7 @@ fn app_state_section_change_notifies_ui() {
 
 #[test]
 fn user_card_modal_state_is_closed_by_default() {
-    let state = twirchat_desktop_rust::app_state::AppState::default();
+    let state = twirchat::app_state::AppState::default();
 
     assert!(!state.user_card.open);
     assert!(state.user_card.target.is_none());
@@ -114,7 +112,7 @@ fn user_card_modal_state_is_closed_by_default() {
 
 #[test]
 fn home_channel_status_requests_match_vue_stream_status_scope() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.accounts = vec![
         account("twitch-account", Platform::Twitch, "123", "FixtureStreamer"),
         account("kick-account", Platform::Kick, "456", "KickOne"),
@@ -158,7 +156,7 @@ fn home_channel_status_requests_match_vue_stream_status_scope() {
 
 #[test]
 fn home_channel_statuses_are_applied_case_insensitively() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
 
     state.apply_home_channel_statuses(vec![ChannelStatus {
         platform: LiveStatusPlatform::Twitch,
@@ -185,7 +183,7 @@ fn home_channel_statuses_are_applied_case_insensitively() {
 
 #[test]
 fn user_card_modal_state_open_close_and_generation_guard() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     let first_target = user_card_target(
         Platform::Twitch,
         "viewer-1",
@@ -285,7 +283,7 @@ fn user_card_modal_state_open_close_and_generation_guard() {
     assert!(!state.apply_user_card_metadata_result(
         second_generation,
         Ok(user_card_metadata_response(
-            twirchat_desktop_rust::protocol::messages::UserCardMetadataPlatform::Kick,
+            twirchat::protocol::messages::UserCardMetadataPlatform::Kick,
             "viewer-2",
         )),
     ));
@@ -293,7 +291,7 @@ fn user_card_modal_state_open_close_and_generation_guard() {
 
 #[test]
 fn user_card_async_older_history_merges_and_stale_results_are_ignored() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     let target = user_card_target(
         Platform::Twitch,
         "viewer-1",
@@ -391,7 +389,7 @@ fn user_card_async_older_history_merges_and_stale_results_are_ignored() {
 
 #[test]
 fn user_card_async_same_generation_older_result_cannot_overwrite_refresh() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     let generation = state.open_user_card(user_card_target(
         Platform::Twitch,
         "viewer-1",
@@ -478,8 +476,8 @@ fn backend_live_message_gets_enriched_by_seven_tv_catalog() {
     let mut state = new_state();
     state.messages.clear();
 
-    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
-        twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+    state.apply_service_event(twirchat::services::ServiceEvent::BackendWs(
+        twirchat::services::BackendWsEvent::MessageDecoded {
             message: BackendToDesktopMessage::SeventvEmoteSet {
                 platform: Platform::Twitch,
                 channel_id: "fixturestreamer".to_string(),
@@ -496,8 +494,8 @@ fn backend_live_message_gets_enriched_by_seven_tv_catalog() {
         },
     ));
 
-    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
-        twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+    state.apply_service_event(twirchat::services::ServiceEvent::BackendWs(
+        twirchat::services::BackendWsEvent::MessageDecoded {
             message: BackendToDesktopMessage::ChatMessage {
                 data: to_value(chat_message("msg-1", "fixturestreamer", "hello KEKW"))
                     .expect("chat message should serialize"),
@@ -519,8 +517,8 @@ fn backend_live_message_preserves_exact_seven_tv_alias_casing() {
     let mut state = new_state();
     state.messages.clear();
 
-    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
-        twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+    state.apply_service_event(twirchat::services::ServiceEvent::BackendWs(
+        twirchat::services::BackendWsEvent::MessageDecoded {
             message: BackendToDesktopMessage::SeventvEmoteSet {
                 platform: Platform::Kick,
                 channel_id: "kickone".to_string(),
@@ -553,8 +551,8 @@ fn backend_live_message_preserves_exact_seven_tv_alias_casing() {
         ("msg-lower", "vahui", Some("7tv-vahui")),
         ("msg-miss", "ww", None),
     ] {
-        state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
-            twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+        state.apply_service_event(twirchat::services::ServiceEvent::BackendWs(
+            twirchat::services::BackendWsEvent::MessageDecoded {
                 message: BackendToDesktopMessage::ChatMessage {
                     data: to_value(kick_chat_message(message_id, "kickone", text))
                         .expect("chat message should serialize"),
@@ -586,8 +584,8 @@ fn duplicate_live_message_merges_richer_emotes() {
     let mut state = new_state();
     state.messages.clear();
 
-    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
-        twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+    state.apply_service_event(twirchat::services::ServiceEvent::BackendWs(
+        twirchat::services::BackendWsEvent::MessageDecoded {
             message: BackendToDesktopMessage::ChatMessage {
                 data: to_value(chat_message("msg-merge", "fixturestreamer", "hello KEKW"))
                     .expect("chat message should serialize"),
@@ -595,8 +593,8 @@ fn duplicate_live_message_merges_richer_emotes() {
         },
     ));
 
-    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
-        twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+    state.apply_service_event(twirchat::services::ServiceEvent::BackendWs(
+        twirchat::services::BackendWsEvent::MessageDecoded {
             message: BackendToDesktopMessage::SeventvEmoteSet {
                 platform: Platform::Twitch,
                 channel_id: "fixturestreamer".to_string(),
@@ -613,20 +611,18 @@ fn duplicate_live_message_merges_richer_emotes() {
         },
     ));
 
-    state.apply_service_event(
-        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageBuffered {
-                channel_id: "watched-1".to_string(),
-                message: Box::new(chat_message_with_badges(
-                    "msg-merge",
-                    "fixturestreamer",
-                    "hello KEKW",
-                    vec![badge("vip/1", None)],
-                    true,
-                )),
-            },
-        ),
-    );
+    state.apply_service_event(twirchat::services::ServiceEvent::WatchedChannels(
+        twirchat::services::WatchedChannelsEvent::MessageBuffered {
+            channel_id: "watched-1".to_string(),
+            message: Box::new(chat_message_with_badges(
+                "msg-merge",
+                "fixturestreamer",
+                "hello KEKW",
+                vec![badge("vip/1", None)],
+                true,
+            )),
+        },
+    ));
 
     let duplicates = state
         .messages
@@ -640,7 +636,7 @@ fn duplicate_live_message_merges_richer_emotes() {
 
 #[test]
 fn watched_send_inserts_optimistic_message_without_account_cache() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state
         .watched_channels
         .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
@@ -670,7 +666,7 @@ fn watched_send_inserts_optimistic_message_without_account_cache() {
 
 #[test]
 fn watched_reply_target_attaches_to_pending_and_optimistic_send_then_clears() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state
         .watched_channels
         .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
@@ -715,7 +711,7 @@ fn watched_reply_target_attaches_to_pending_and_optimistic_send_then_clears() {
 
 #[test]
 fn home_composer_watched_target_attaches_reply_id_when_channel_matches() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
         Platform::Kick,
         PlatformStatusInfo {
@@ -760,7 +756,7 @@ fn home_composer_watched_target_attaches_reply_id_when_channel_matches() {
 
 #[test]
 fn home_composer_reply_sends_when_message_channel_id_uses_platform_specific_identifier() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
         Platform::Twitch,
         PlatformStatusInfo {
@@ -801,7 +797,7 @@ fn home_composer_reply_sends_when_message_channel_id_uses_platform_specific_iden
 
 #[test]
 fn home_reply_send_targets_only_matching_twitch_or_kick_channel() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     for (platform, login) in [(Platform::Twitch, "satont"), (Platform::Kick, "satont")] {
         state.platforms_panel.statuses.insert(
             platform,
@@ -846,7 +842,7 @@ fn home_reply_send_targets_only_matching_twitch_or_kick_channel() {
 
 #[test]
 fn home_reply_sendability_requires_matching_watched_channel_route() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
         Platform::Kick,
         PlatformStatusInfo {
@@ -878,7 +874,7 @@ fn home_reply_sendability_requires_matching_watched_channel_route() {
 
 #[test]
 fn watched_echo_replaces_optimistic_without_duplicates_in_watched_and_home() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state
         .watched_channels
         .push(watched_channel("watched-home", Platform::Kick, "satont"));
@@ -916,14 +912,12 @@ fn watched_echo_replaces_optimistic_without_duplicates_in_watched_and_home() {
         reply: None,
     };
 
-    state.apply_service_event(
-        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageBuffered {
-                channel_id: "watched-home".to_string(),
-                message: Box::new(server_message.clone()),
-            },
-        ),
-    );
+    state.apply_service_event(twirchat::services::ServiceEvent::WatchedChannels(
+        twirchat::services::WatchedChannelsEvent::MessageBuffered {
+            channel_id: "watched-home".to_string(),
+            message: Box::new(server_message.clone()),
+        },
+    ));
 
     let watched = state
         .watched_channel_messages
@@ -962,7 +956,7 @@ fn watched_echo_replaces_optimistic_without_duplicates_in_watched_and_home() {
 
 #[test]
 fn watched_send_failure_marks_optimistic_message_as_error() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state
         .watched_channels
         .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
@@ -975,15 +969,13 @@ fn watched_send_failure_marks_optimistic_message_as_error() {
         .expect("client id should be present")
         .clone();
 
-    state.apply_service_event(
-        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendFailed {
-                channel_id: "watched-1".to_string(),
-                client_message_id: client_message_id.clone(),
-                error: "send failed".to_string(),
-            },
-        ),
-    );
+    state.apply_service_event(twirchat::services::ServiceEvent::WatchedChannels(
+        twirchat::services::WatchedChannelsEvent::MessageSendFailed {
+            channel_id: "watched-1".to_string(),
+            client_message_id: client_message_id.clone(),
+            error: "send failed".to_string(),
+        },
+    ));
 
     assert_eq!(
         state.outgoing_message_status(&client_message_id),
@@ -1001,7 +993,7 @@ fn watched_send_failure_marks_optimistic_message_as_error() {
 
 #[test]
 fn watched_send_success_event_marks_message_sent() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state
         .watched_channels
         .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
@@ -1014,14 +1006,12 @@ fn watched_send_success_event_marks_message_sent() {
         .expect("client id should be present")
         .clone();
 
-    state.apply_service_event(
-        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendSucceeded {
-                channel_id: "watched-1".to_string(),
-                client_message_id: client_message_id.clone(),
-            },
-        ),
-    );
+    state.apply_service_event(twirchat::services::ServiceEvent::WatchedChannels(
+        twirchat::services::WatchedChannelsEvent::MessageSendSucceeded {
+            channel_id: "watched-1".to_string(),
+            client_message_id: client_message_id.clone(),
+        },
+    ));
 
     assert_eq!(
         state.outgoing_message_status(&client_message_id),
@@ -1088,15 +1078,13 @@ fn composer_sent_message_history_skips_empty_failed_and_user_card_commands() {
         .expect("failed watched send should carry a client id")
         .clone();
 
-    state.apply_service_event(
-        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendFailed {
-                channel_id: "watched-1".to_string(),
-                client_message_id: client_message_id.clone(),
-                error: "send failed".to_string(),
-            },
-        ),
-    );
+    state.apply_service_event(twirchat::services::ServiceEvent::WatchedChannels(
+        twirchat::services::WatchedChannelsEvent::MessageSendFailed {
+            channel_id: "watched-1".to_string(),
+            client_message_id: client_message_id.clone(),
+            error: "send failed".to_string(),
+        },
+    ));
 
     assert!(state.sent_message_history().is_empty());
 }
@@ -1112,7 +1100,7 @@ fn composer_sent_message_history_removes_failed_home_backend_send() {
     );
 
     state.apply_service_event(ServiceEvent::BackendWs(
-        twirchat_desktop_rust::services::BackendWsEvent::SendFailed {
+        twirchat::services::BackendWsEvent::SendFailed {
             kind: DesktopToBackendMessageKind::SendMessage,
             reason: "backend send failed".to_string(),
         },
@@ -1123,7 +1111,7 @@ fn composer_sent_message_history_removes_failed_home_backend_send() {
 
 #[test]
 fn home_composer_owned_watched_channel_inserts_optimistic_message() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
         Platform::Kick,
         PlatformStatusInfo {
@@ -1176,7 +1164,7 @@ fn home_composer_owned_watched_channel_inserts_optimistic_message() {
 
 #[test]
 fn optimistic_send_reuses_previous_own_badges() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
         Platform::Kick,
         PlatformStatusInfo {
@@ -1252,7 +1240,7 @@ fn optimistic_send_reuses_previous_own_badges() {
 
 #[test]
 fn watched_send_uses_authenticated_account_when_channel_differs() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state.watched_channels.push(watched_channel(
         "watched-other",
         Platform::Kick,
@@ -1315,7 +1303,7 @@ fn watched_send_uses_authenticated_account_when_channel_differs() {
 
 #[test]
 fn identical_optimistic_sends_reconcile_in_order_without_stale_duplicates() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
     state
         .watched_channels
         .push(watched_channel("watched-1", Platform::Kick, "satont"));
@@ -1341,42 +1329,38 @@ fn identical_optimistic_sends_reconcile_in_order_without_stale_duplicates() {
         .clone();
 
     for client_message_id in [&first_client_id, &second_client_id] {
-        state.apply_service_event(
-            twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-                twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendSucceeded {
-                    channel_id: "watched-1".to_string(),
-                    client_message_id: client_message_id.clone(),
-                },
-            ),
-        );
+        state.apply_service_event(twirchat::services::ServiceEvent::WatchedChannels(
+            twirchat::services::WatchedChannelsEvent::MessageSendSucceeded {
+                channel_id: "watched-1".to_string(),
+                client_message_id: client_message_id.clone(),
+            },
+        ));
     }
 
     for server_id in ["server-1", "server-2"] {
-        state.apply_service_event(
-            twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
-                twirchat_desktop_rust::services::WatchedChannelsEvent::MessageBuffered {
+        state.apply_service_event(twirchat::services::ServiceEvent::WatchedChannels(
+            twirchat::services::WatchedChannelsEvent::MessageBuffered {
+                channel_id: "watched-1".to_string(),
+                message: Box::new(NormalizedChatMessage {
+                    id: server_id.to_string(),
+                    platform: Platform::Kick,
                     channel_id: "watched-1".to_string(),
-                    message: Box::new(NormalizedChatMessage {
-                        id: server_id.to_string(),
-                        platform: Platform::Kick,
-                        channel_id: "watched-1".to_string(),
-                        author: ChatAuthor {
-                            id: "kick-user-1".to_string(),
-                            username: Some("satont".to_string()),
-                            display_name: "Satont".to_string(),
-                            color: None,
-                            avatar_url: None,
-                            badges: vec![],
-                        },
-                        text: "same text".to_string(),
-                        emotes: vec![],
-                        timestamp: "1700000010".to_string(),
-                        message_type: ChatMessageType::Message,
-                        reply: None,
-                    }),
-                },
-            ),
-        );
+                    author: ChatAuthor {
+                        id: "kick-user-1".to_string(),
+                        username: Some("satont".to_string()),
+                        display_name: "Satont".to_string(),
+                        color: None,
+                        avatar_url: None,
+                        badges: vec![],
+                    },
+                    text: "same text".to_string(),
+                    emotes: vec![],
+                    timestamp: "1700000010".to_string(),
+                    message_type: ChatMessageType::Message,
+                    reply: None,
+                }),
+            },
+        ));
     }
 
     let watched = state
@@ -1403,8 +1387,8 @@ fn live_badge_image_backfills_older_messages() {
         false,
     ));
 
-    state.apply_service_event(twirchat_desktop_rust::services::ServiceEvent::BackendWs(
-        twirchat_desktop_rust::services::BackendWsEvent::MessageDecoded {
+    state.apply_service_event(twirchat::services::ServiceEvent::BackendWs(
+        twirchat::services::BackendWsEvent::MessageDecoded {
             message: BackendToDesktopMessage::ChatMessage {
                 data: to_value(chat_message_with_badges(
                     "msg-new",
@@ -1457,7 +1441,7 @@ fn startup_recent_messages_backfill_badge_images_from_stored_snapshot()
             vec![badge("vip/1", Some("https://example.test/vip.png"))],
         ))?;
 
-    let state = twirchat_desktop_rust::app_state::AppState::from_storage(&storage);
+    let state = twirchat::app_state::AppState::from_storage(&storage);
     let old = state
         .messages
         .iter()
@@ -1512,7 +1496,7 @@ fn startup_watched_history_backfills_badge_images_from_stored_snapshot()
         ],
     )?;
 
-    let state = twirchat_desktop_rust::app_state::AppState::from_storage(&storage);
+    let state = twirchat::app_state::AppState::from_storage(&storage);
     let watched = state
         .watched_channel_messages
         .get(&channel.id)
@@ -1599,14 +1583,11 @@ fn chat_message_with_badges(
         },
         text: text.to_string(),
         emotes: if include_emote {
-            vec![twirchat_desktop_rust::protocol::Emote {
+            vec![twirchat::protocol::Emote {
                 id: "7tv-kekw".to_string(),
                 name: "KEKW".to_string(),
                 image_url: "https://cdn.7tv.app/emote/7tv-kekw/4x.webp".to_string(),
-                positions: vec![twirchat_desktop_rust::protocol::EmotePosition {
-                    start: 6,
-                    end: 9,
-                }],
+                positions: vec![twirchat::protocol::EmotePosition { start: 6, end: 9 }],
                 aspect_ratio: Some(1.0),
             }]
         } else {
@@ -1665,13 +1646,12 @@ fn user_command_opens_user_card_and_suppresses_send() {
 fn app_state_loads_aliases_and_updates_open_user_card_alias()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
-    let storage =
-        twirchat_desktop_rust::storage::Storage::open(&temp.path().join("aliases.sqlite"))?;
+    let storage = twirchat::storage::Storage::open(&temp.path().join("aliases.sqlite"))?;
     storage
         .user_aliases()
         .upsert(Platform::Twitch, "viewer-1", "Friendly Alias")?;
 
-    let mut state = twirchat_desktop_rust::app_state::AppState::from_storage(&storage);
+    let mut state = twirchat::app_state::AppState::from_storage(&storage);
     let message = user_message(
         "msg-1",
         Platform::Twitch,
@@ -1714,7 +1694,7 @@ fn app_state_loads_aliases_and_updates_open_user_card_alias()
 
 #[test]
 fn user_command_records_feedback_when_no_user_matches() {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    let mut state = twirchat::app_state::AppState::default();
 
     let queued = state.queue_composer_send("/user missing");
 
@@ -1808,8 +1788,8 @@ fn user_command_prefers_active_scope_matches_over_home_messages() {
     assert_eq!(target.channel_slug, "watched-streamer");
 }
 
-fn base_user_command_state() -> twirchat_desktop_rust::app_state::AppState {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+fn base_user_command_state() -> twirchat::app_state::AppState {
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
         Platform::Twitch,
         PlatformStatusInfo {
@@ -1823,8 +1803,8 @@ fn base_user_command_state() -> twirchat_desktop_rust::app_state::AppState {
     state
 }
 
-fn composer_history_state() -> twirchat_desktop_rust::app_state::AppState {
-    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+fn composer_history_state() -> twirchat::app_state::AppState {
+    let mut state = twirchat::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
         Platform::Twitch,
         PlatformStatusInfo {
@@ -1921,15 +1901,15 @@ fn user_message(
 }
 
 fn user_card_metadata_response(
-    platform: twirchat_desktop_rust::protocol::messages::UserCardMetadataPlatform,
+    platform: twirchat::protocol::messages::UserCardMetadataPlatform,
     platform_user_id: &str,
-) -> twirchat_desktop_rust::protocol::messages::UserCardMetadataResponse {
-    use twirchat_desktop_rust::protocol::messages::{
+) -> twirchat::protocol::messages::UserCardMetadataResponse {
+    use twirchat::protocol::messages::{
         UserCardAccountAgeField, UserCardFieldStatus, UserCardFollowAgeField, UserCardSubAgeField,
         UserCardSubscriptionDurationField,
     };
 
-    twirchat_desktop_rust::protocol::messages::UserCardMetadataResponse {
+    twirchat::protocol::messages::UserCardMetadataResponse {
         platform,
         platform_user_id: platform_user_id.to_string(),
         fetched_at: 1234,

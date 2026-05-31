@@ -1,11 +1,11 @@
 [package]
-name = "twirchat-desktop-rust"
+name = "twirchat"
 version = "0.1.0"
 edition = "2024"
 publish = false
-default-run = "twirchat-desktop-rust"
+default-run = "twirchat"
 
-[package.metadata.twirchat.desktop-rust.guardrails]
+[package.metadata.twirchat.guardrails]
 policy = [
   "Keep recoverable production paths panic-free; prefer Result or safe fallbacks over unwrap/expect/panic.",
   "Use #[expect(..., reason = \"...\")] for unavoidable local clippy waivers instead of blanket allow.",

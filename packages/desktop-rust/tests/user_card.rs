@@ -1,10 +1,10 @@
-use twirchat_desktop_rust::app_state::{AppState, UserCardLoadState};
-use twirchat_desktop_rust::protocol::messages::{
+use twirchat::app_state::{AppState, UserCardLoadState};
+use twirchat::protocol::messages::{
     UserCardAccountAgeField, UserCardFieldStatus, UserCardFollowAgeField, UserCardMetadataPlatform,
     UserCardMetadataResponse, UserCardSubAgeField, UserCardSubscriptionDurationField,
 };
-use twirchat_desktop_rust::ui::components::user_card::{HistoryState, MetadataState};
-use twirchat_desktop_rust::ui::shell::app::{
+use twirchat::ui::components::user_card::{HistoryState, MetadataState};
+use twirchat::ui::shell::app::{
     account_age_text, follow_age_text, history_state_from_app_state, metadata_state_from_app_state,
     sub_age_text, subscription_duration_text,
 };
@@ -110,7 +110,7 @@ fn user_card_empty_history_state() {
     assert_eq!(history_state_from_app_state(&state), HistoryState::Empty);
 }
 
-use twirchat_desktop_rust::protocol::types::{
+use twirchat::protocol::types::{
     ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform as ProtocolPlatform,
 };
 

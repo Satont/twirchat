@@ -29,7 +29,7 @@ must preserve. It keeps the existing Vite-built desktop assets as package inputs
 - app identity stays aligned with `TwirChat` / `dev.twirchat.app`
 - Velopack release identity stays `dev.twirchat.app`
 
-CI prepares those `views/...` and `assets/...` paths before uploading the desktop-rust app artifact
+CI prepares those `views/...` and `assets/...` paths before uploading the desktop app artifact
 and before `vpk pack`. The `release-contract verify-artifact <path>` command runs the same Rust
 verifier against the prepared app directory.
 

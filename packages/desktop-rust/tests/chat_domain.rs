@@ -4,13 +4,13 @@ use std::fs;
 use std::hint::black_box;
 use std::path::PathBuf;
 use std::time::Instant;
-use twirchat_desktop_rust::chat::{
+use twirchat::chat::{
     AliasBook, ChatAggregator, ChatReplayItem, IngestOutcome, SevenTvCatalog, SevenTvEmote,
     emote_suggestions, fuzzy_filter_emotes, fuzzy_filter_mentions, insert_live_message,
     insert_live_message_in_place, mention_suggestions, merge_older_page, parse_emote_token,
     parse_mention_token, replace_emote_token, replace_mention_token, sort_messages,
 };
-use twirchat_desktop_rust::protocol::{
+use twirchat::protocol::{
     Badge, ChatAuthor, ChatMessageType, Emote, EmotePosition, EventUser, NormalizedChatMessage,
     NormalizedEvent, NormalizedEventType, Platform, UserAlias,
 };

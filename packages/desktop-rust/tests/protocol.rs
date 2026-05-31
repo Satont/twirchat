@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use twirchat_desktop_rust::protocol::{
+use twirchat::protocol::{
     Account, AppSettings, BackendToDesktopMessage, BunRequestPayload, DesktopToBackendMessage,
     GetUserChatHistoryParams, NormalizedChatMessage, NormalizedEvent, Platform, PlatformStatusInfo,
     ProtocolDecodeError, StreamStatus, TwitchBadgesResponse, UserCardAccountAgeField,

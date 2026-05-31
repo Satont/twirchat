@@ -8,12 +8,10 @@ use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
-use twirchat_desktop_rust::overlay::{
+use twirchat::overlay::{
     OverlayRuntimePaths, OverlayServer, OverlayServerConfig, resolve_overlay_runtime_paths,
 };
-use twirchat_desktop_rust::protocol::{
-    ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform,
-};
+use twirchat::protocol::{ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform};
 
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -309,7 +307,7 @@ fn read_ws_text(stream: &mut TcpStream) -> Result<String, Box<dyn std::error::Er
 }
 
 fn wait_for_client_count(
-    broadcast: &twirchat_desktop_rust::overlay::OverlayBroadcast,
+    broadcast: &twirchat::overlay::OverlayBroadcast,
     expected: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(2);

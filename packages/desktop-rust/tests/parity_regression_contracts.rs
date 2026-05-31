@@ -2,13 +2,13 @@ mod support;
 
 use serde_json::{Map, Value};
 use support::{new_state, read_source};
-use twirchat_desktop_rust::app_state::RuntimeStatus;
-use twirchat_desktop_rust::protocol::messages::BackendToDesktopMessage;
-use twirchat_desktop_rust::protocol::types::{
+use twirchat::app_state::RuntimeStatus;
+use twirchat::protocol::messages::BackendToDesktopMessage;
+use twirchat::protocol::types::{
     ChatAuthor, ChatMessageType, EventUser, NormalizedChatMessage, NormalizedEvent,
     NormalizedEventType, Platform,
 };
-use twirchat_desktop_rust::services::{BackendWsEvent, LifecycleEvent, ServiceEvent};
+use twirchat::services::{BackendWsEvent, LifecycleEvent, ServiceEvent};
 
 #[test]
 fn chat_gear_opens_appearance_popover_state_instead_of_settings_section() {

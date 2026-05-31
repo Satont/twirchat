@@ -1,4 +1,4 @@
-use twirchat_desktop_rust::protocol::types::{
+use twirchat::protocol::types::{
     LayoutNode, PanelContent, SplitDirection, WatchedChannelsLayout, WatchedChannelsLayoutMeta,
 };
 

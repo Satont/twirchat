@@ -1,6 +1,6 @@
-# TwirChat Desktop Rust
+# TwirChat Desktop
 
-GPUI shell for the native Rust desktop UI.
+GPUI shell for the native TwirChat desktop app. The Cargo package and primary app binary are `twirchat`; helper binaries such as `release-contract` keep their task-specific names.
 
 ## Scope
 
@@ -8,7 +8,7 @@ GPUI shell for the native Rust desktop UI.
   state, and packaging verification.
 - Production desktop releases are published from `packages/desktop-rust` through the Velopack release
   contract in `src/runtime/packaging.rs`.
-- The Rust runtime initializes Velopack at startup, checks stable platform feeds on startup and
+- The native runtime initializes Velopack at startup, checks stable platform feeds on startup and
   periodically, shows an in-app update toast, downloads updates, and restarts to apply them in
   packaged builds.
 
@@ -16,6 +16,7 @@ GPUI shell for the native Rust desktop UI.
 
 ```sh
 cargo run --manifest-path packages/desktop-rust/Cargo.toml
+cargo build --manifest-path packages/desktop-rust/Cargo.toml --bin twirchat
 ```
 
 ## Verify
@@ -36,7 +37,7 @@ cargo test --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-
 
 ## Package asset verification
 
-The Rust package verifier mirrors the Velopack app directory that CI prepares before `vpk pack`:
+The native package verifier mirrors the Velopack app directory that CI prepares before `vpk pack`:
 
 - `packages/desktop-rust/release-assets/dist/overlay/index.html` -> `views/overlay/index.html`
 - `packages/desktop-rust/release-assets/dist/overlay/assets` -> `views/overlay/assets`
@@ -66,7 +67,7 @@ cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contrac
 From the repo root, the same focused test flow is exposed as:
 
 ```sh
-bun run package:desktop-rust:verify
+bun run package:desktop:verify
 ```
 
 The tests write evidence to `.sisyphus/evidence/task-25-packaging-assets.json` and
@@ -78,7 +79,7 @@ The native Rust Velopack release contract is deterministic and lives in
 `src/runtime/packaging.rs`:
 
 - Package ID is `dev.twirchat.app`, matching the preserved `TwirChat` app metadata from the desktop
-  package and Rust packaging verifier.
+  package and native packaging verifier.
 - Stable release tags only match `^v[0-9]+\.[0-9]+\.[0-9]+$`.
 - `packVersion` strips the leading `v` from a stable tag, so `v1.2.3` becomes `1.2.3`.
 - Platform channels are `linux`, `win`, and `osx`.

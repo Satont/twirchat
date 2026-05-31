@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use twirchat_desktop_rust::app_state::AppState;
+use twirchat::app_state::AppState;
 
 pub fn new_state() -> AppState {
     AppState::new()

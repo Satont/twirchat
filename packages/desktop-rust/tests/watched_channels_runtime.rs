@@ -1,17 +1,17 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
-use twirchat_desktop_rust::platforms::{PlatformEvent, PlatformEventSink, PlatformResult};
-use twirchat_desktop_rust::protocol::{
+use twirchat::platforms::{PlatformEvent, PlatformEventSink, PlatformResult};
+use twirchat::protocol::{
     Badge, ChatAuthor, ChatMessageType, DesktopToBackendMessage, Emote, LayoutNode,
     NormalizedChatMessage, PanelContent, Platform, PlatformStatus, PlatformStatusInfo,
     PlatformStatusMode, SevenTvEmote, SplitDirection, WatchedChannelsLayout,
     WatchedChannelsLayoutMeta,
 };
-use twirchat_desktop_rust::services::{WatchedChannelAdapter, WatchedChannelsRuntime};
-use twirchat_desktop_rust::storage::Storage;
-use twirchat_desktop_rust::storage::accounts::UpsertAccount;
-use twirchat_desktop_rust::storage::db::Param;
+use twirchat::services::{WatchedChannelAdapter, WatchedChannelsRuntime};
+use twirchat::storage::Storage;
+use twirchat::storage::accounts::UpsertAccount;
+use twirchat::storage::db::Param;
 
 #[test]
 fn watched_channels_runtime_persists_and_rehydrates() -> Result<(), Box<dyn std::error::Error>> {
@@ -324,7 +324,7 @@ fn watched_channels_runtime_preserves_twitch_platform_on_poll_error()
         .expect_err("Twitch poll failure should propagate");
 
     match error {
-        twirchat_desktop_rust::services::WatchedChannelsRuntimeError::Adapter {
+        twirchat::services::WatchedChannelsRuntimeError::Adapter {
             platform,
             channel_id,
             message,
@@ -487,7 +487,7 @@ impl WatchedChannelAdapter for RecordingAdapter {
             .poll_error
             .take()
         {
-            return Err(twirchat_desktop_rust::platforms::PlatformError::new(
+            return Err(twirchat::platforms::PlatformError::new(
                 self.platform,
                 message,
             ));

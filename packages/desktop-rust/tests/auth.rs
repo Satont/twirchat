@@ -1,14 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use twirchat_desktop_rust::auth::browser::BrowserOpener;
-use twirchat_desktop_rust::auth::callback::AuthCallback;
-use twirchat_desktop_rust::auth::pkce::{generate_code_challenge, generate_pkce_pair};
-use twirchat_desktop_rust::auth::{
-    AuthError, AuthProvider, AuthResult, AuthService, AuthenticatedAccount,
-};
-use twirchat_desktop_rust::protocol::types::Platform;
-use twirchat_desktop_rust::runtime::TWITCH_REDIRECT_URI;
-use twirchat_desktop_rust::storage::{Storage, TokenState};
+use twirchat::auth::browser::BrowserOpener;
+use twirchat::auth::callback::AuthCallback;
+use twirchat::auth::pkce::{generate_code_challenge, generate_pkce_pair};
+use twirchat::auth::{AuthError, AuthProvider, AuthResult, AuthService, AuthenticatedAccount};
+use twirchat::protocol::types::Platform;
+use twirchat::runtime::TWITCH_REDIRECT_URI;
+use twirchat::storage::{Storage, TokenState};
 
 #[test]
 fn auth_pkce_round_trip() -> Result<(), Box<dyn std::error::Error>> {
