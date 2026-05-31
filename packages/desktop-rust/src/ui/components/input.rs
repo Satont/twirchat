@@ -1,10 +1,11 @@
 use crate::ui::theme;
 use gpui::{
-    App, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
-    Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, IntoElement, KeyBinding,
-    LayoutId, MouseButton, MouseDownEvent, PaintQuad, Pixels, Render, ShapedLine, SharedString,
-    Style, TextRun, UTF16Selection, Window, actions, div, fill, hsla, point, prelude::*, px,
-    relative, rgb, rgba, size,
+    App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId,
+    ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId,
+    Hitbox, HitboxBehavior, IntoElement, KeyBinding, LayoutId, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, PaintQuad, Pixels, Render, ShapedLine, SharedString, Style, TextRun,
+    UTF16Selection, Window, actions, div, fill, hsla, point, prelude::*, px, relative, rgb, rgba,
+    size,
 };
 use std::ops::Range;
 
@@ -71,6 +72,25 @@ fn next_word_boundary_in(content: &str, offset: usize) -> usize {
         .unwrap_or(content.len())
 }
 
+fn extend_selection_to(
+    mut selected_range: Range<usize>,
+    mut selection_reversed: bool,
+    offset: usize,
+) -> (Range<usize>, bool) {
+    if selection_reversed {
+        selected_range.start = offset;
+    } else {
+        selected_range.end = offset;
+    }
+
+    if selected_range.end < selected_range.start {
+        selection_reversed = !selection_reversed;
+        selected_range = selected_range.end..selected_range.start;
+    }
+
+    (selected_range, selection_reversed)
+}
+
 actions!(
     twirchat_input,
     [
@@ -130,6 +150,7 @@ pub struct Input {
     last_layout: Option<ShapedLine>,
     last_bounds: Option<Bounds<Pixels>>,
     submit_requested: bool,
+    is_selecting: bool,
     clear_on_copy: bool,
     compact_appearance: bool,
     tab_rename_appearance: bool,
@@ -147,6 +168,7 @@ impl Input {
             last_layout: None,
             last_bounds: None,
             submit_requested: false,
+            is_selecting: false,
             clear_on_copy: false,
             compact_appearance: false,
             tab_rename_appearance: false,
@@ -177,6 +199,7 @@ impl Input {
         self.content = text.into();
         self.selected_range = self.content.len()..self.content.len();
         self.marked_range = None;
+        self.is_selecting = false;
         cx.notify();
     }
 
@@ -224,16 +247,10 @@ impl Input {
     }
 
     fn select_to(&mut self, offset: usize, cx: &mut Context<Self>) {
-        if self.selection_reversed {
-            self.selected_range.start = offset;
-        } else {
-            self.selected_range.end = offset;
-        }
-
-        if self.selected_range.end < self.selected_range.start {
-            self.selection_reversed = !self.selection_reversed;
-            self.selected_range = self.selected_range.end..self.selected_range.start;
-        }
+        let (selected_range, selection_reversed) =
+            extend_selection_to(self.selected_range.clone(), self.selection_reversed, offset);
+        self.selected_range = selected_range;
+        self.selection_reversed = selection_reversed;
 
         cx.notify();
     }
@@ -264,6 +281,17 @@ impl Input {
     fn selected_text(&self) -> Option<String> {
         (!self.selected_range.is_empty())
             .then(|| self.content[self.selected_range.clone()].to_string())
+    }
+
+    fn offset_for_mouse_position(&self, position: gpui::Point<Pixels>) -> Option<usize> {
+        let bounds = self.last_bounds?;
+        let line = self.last_layout.as_ref()?;
+        if self.content.is_empty() {
+            return Some(0);
+        }
+
+        let x = position.x - bounds.left();
+        Some(self.clamp_offset_to_content(line.index_for_x(x).unwrap_or(self.content.len())))
     }
 
     fn offset_from_utf16(&self, offset: usize) -> usize {
@@ -420,18 +448,31 @@ impl Input {
         cx: &mut Context<Self>,
     ) {
         window.focus(&self.focus_handle, cx);
-        if let Some(bounds) = self.last_bounds {
-            let x = event.position.x - bounds.left();
-            if let Some(line) = &self.last_layout {
-                let offset = if self.content.is_empty() {
-                    0
-                } else {
-                    self.clamp_offset_to_content(line.index_for_x(x).unwrap_or(self.content.len()))
-                };
-                self.selected_range = offset..offset;
-                self.selection_reversed = false;
-            }
+        if let Some(offset) = self.offset_for_mouse_position(event.position) {
+            self.selected_range = offset..offset;
+            self.selection_reversed = false;
+            self.is_selecting = true;
         }
+        cx.notify();
+    }
+
+    fn on_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
+        if !self.is_selecting {
+            return;
+        }
+
+        if let Some(offset) = self.offset_for_mouse_position(event.position) {
+            self.select_to(offset, cx);
+        }
+    }
+
+    fn on_mouse_up(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) {
+        if self.is_selecting
+            && let Some(offset) = self.offset_for_mouse_position(event.position)
+        {
+            self.select_to(offset, cx);
+        }
+        self.is_selecting = false;
         cx.notify();
     }
 }
@@ -496,6 +537,7 @@ impl EntityInputHandler for Input {
         self.selected_range = cursor..cursor;
         self.selection_reversed = false;
         self.marked_range = None;
+        self.is_selecting = false;
         cx.notify();
     }
 
@@ -521,6 +563,7 @@ impl EntityInputHandler for Input {
             .as_ref()
             .map(|range_utf16| self.range_from_utf16(range_utf16))
             .unwrap_or_else(|| range.start + new_text.len()..range.start + new_text.len());
+        self.is_selecting = false;
         cx.notify();
     }
 
@@ -624,7 +667,6 @@ impl Render for Input {
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(Self::cut))
             .on_action(cx.listener(Self::paste))
-            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .w_full()
             .when(!self.tab_rename_appearance, |el| el.min_h(px(min_height)))
             .when(self.tab_rename_appearance, |el| el.h(px(min_height)))
@@ -653,6 +695,7 @@ struct TextElement {
 }
 
 struct PrepaintState {
+    hitbox: Hitbox,
     line: Option<ShapedLine>,
     cursor: Option<PaintQuad>,
     selection: Option<PaintQuad>,
@@ -700,6 +743,7 @@ impl Element for TextElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
         let input = self.input.read(cx);
         let content = input.content.clone();
         let selected_range = input.selected_range.clone();
@@ -759,6 +803,7 @@ impl Element for TextElement {
             )
         };
         PrepaintState {
+            hitbox,
             line: Some(line),
             cursor,
             selection,
@@ -776,11 +821,48 @@ impl Element for TextElement {
         cx: &mut App,
     ) {
         let focus_handle = self.input.read(cx).focus_handle.clone();
+        window.set_cursor_style(CursorStyle::IBeam, &prepaint.hitbox);
         window.handle_input(
             &focus_handle,
             ElementInputHandler::new(bounds, self.input.clone()),
             cx,
         );
+
+        let input_entity = self.input.clone();
+        let input_hitbox = prepaint.hitbox.clone();
+        let input_focus = focus_handle.clone();
+        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
+            if phase != DispatchPhase::Bubble || !input_hitbox.is_hovered(window) {
+                return;
+            }
+
+            input_entity.update(cx, |input, cx| {
+                input.on_mouse_down(event, window, cx);
+            });
+            window.refresh();
+            window.focus(&input_focus, cx);
+        });
+
+        let input_entity = self.input.clone();
+        window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+            if phase != DispatchPhase::Bubble {
+                return;
+            }
+
+            input_entity.update(cx, |input, cx| input.on_mouse_move(event, cx));
+            window.refresh();
+        });
+
+        let input_entity = self.input.clone();
+        window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
+            if phase != DispatchPhase::Bubble {
+                return;
+            }
+
+            input_entity.update(cx, |input, cx| input.on_mouse_up(event, cx));
+            window.refresh();
+        });
+
         if let Some(selection) = prepaint.selection.take() {
             window.paint_quad(selection);
         }
@@ -817,7 +899,9 @@ impl Element for TextElement {
 
 #[cfg(test)]
 mod tests {
-    use super::{clamp_offset_to_str, next_word_boundary_in, previous_word_boundary_in};
+    use super::{
+        clamp_offset_to_str, extend_selection_to, next_word_boundary_in, previous_word_boundary_in,
+    };
 
     #[test]
     fn clamp_offset_handles_placeholder_range_on_empty_content() {
@@ -840,5 +924,12 @@ mod tests {
         assert_eq!(previous_word_boundary_in(content, 23), 18);
         assert_eq!(previous_word_boundary_in(content, 17), 8);
         assert_eq!(previous_word_boundary_in(content, 8), 0);
+    }
+
+    #[test]
+    fn extend_selection_normalizes_forward_and_reversed_ranges() {
+        assert_eq!(extend_selection_to(2..2, false, 5), (2..5, false));
+        assert_eq!(extend_selection_to(2..5, false, 1), (1..2, true));
+        assert_eq!(extend_selection_to(1..2, true, 4), (2..4, false));
     }
 }
