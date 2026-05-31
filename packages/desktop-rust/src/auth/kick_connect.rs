@@ -1,16 +1,14 @@
 use super::browser::{BrowserOpener, SystemBrowser};
 use super::callback::{AuthCallback, error_page, success_page};
+use super::local_callback::{PendingOAuthCallback, wait_for_oauth_callback, write_callback_page};
 use super::pkce::{generate_pkce_pair, generate_state};
 use crate::protocol::types::{Account, Platform};
-use crate::runtime::{AUTH_CALLBACK_BASE, KICK_REDIRECT_URI};
+use crate::runtime::KICK_REDIRECT_URI;
 use crate::storage::accounts::UpsertAccount;
 use crate::storage::{Storage, now_millis};
 use reqwest::blocking::Client;
 use serde::Deserialize;
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
-use url::Url;
 
 pub fn connect_kick_account(storage: &Storage) -> Result<Account, String> {
     let runtime =
@@ -118,11 +116,6 @@ fn finish_kick_connection(
         .ok_or_else(|| String::from("Kick account persisted but could not be reloaded"))
 }
 
-struct PendingKickCallback {
-    callback: AuthCallback,
-    stream: TcpStream,
-}
-
 fn build_kick_auth_url(
     http: &Client,
     backend_url: &str,
@@ -158,57 +151,8 @@ fn build_kick_auth_url(
     Ok(body.url)
 }
 
-fn wait_for_kick_callback(expected_state: &str) -> Result<PendingKickCallback, String> {
-    let listener = TcpListener::bind(("127.0.0.1", crate::runtime::DEFAULT_AUTH_SERVER_PORT))
-        .map_err(|error| error.to_string())?;
-    listener
-        .set_nonblocking(false)
-        .map_err(|error| error.to_string())?;
-
-    let (mut stream, address) = listener.accept().map_err(|error| error.to_string())?;
-    println!("[kick/auth] accepted callback connection from {address}");
-    let mut buffer = [0_u8; 8192];
-    let read = stream
-        .read(&mut buffer)
-        .map_err(|error| error.to_string())?;
-    let request = String::from_utf8_lossy(&buffer[..read]);
-    let path = request
-        .lines()
-        .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .ok_or_else(|| String::from("Invalid callback request"))?;
-    let url =
-        Url::parse(&format!("{AUTH_CALLBACK_BASE}{path}")).map_err(|error| error.to_string())?;
-    let callback = AuthCallback::from_url(&url).map_err(|error| error.to_string())?;
-    println!(
-        "[kick/auth] callback parsed: code_present={}, state_present={}",
-        !callback.code.is_empty(),
-        !callback.state.is_empty()
-    );
-    if callback.state != expected_state {
-        let page = error_page("OAuth state mismatch");
-        write_callback_page(&mut stream, page.status, page.content_type, &page.body)?;
-        return Err(String::from("Kick OAuth state mismatch"));
-    }
-
-    Ok(PendingKickCallback { callback, stream })
-}
-
-fn write_callback_page(
-    stream: &mut TcpStream,
-    status: u16,
-    content_type: &str,
-    body: &str,
-) -> Result<(), String> {
-    let response = format!(
-        "HTTP/1.1 {status} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        status_reason(status),
-        body.len(),
-        body
-    );
-    stream
-        .write_all(response.as_bytes())
-        .map_err(|error| error.to_string())
+fn wait_for_kick_callback(expected_state: &str) -> Result<PendingOAuthCallback, String> {
+    wait_for_oauth_callback("Kick", expected_state)
 }
 
 fn exchange_kick_code(
@@ -282,18 +226,6 @@ fn body_snippet(value: &str) -> String {
     } else {
         let snippet: String = trimmed.chars().take(MAX_LENGTH).collect();
         format!("{snippet}...")
-    }
-}
-
-fn status_reason(status: u16) -> &'static str {
-    match status {
-        200 => "OK",
-        400 => "Bad Request",
-        401 => "Unauthorized",
-        403 => "Forbidden",
-        404 => "Not Found",
-        500 => "Internal Server Error",
-        _ => "OK",
     }
 }
 

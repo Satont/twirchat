@@ -5,6 +5,13 @@ edition = "2024"
 publish = false
 default-run = "twirchat-desktop-rust"
 
+[package.metadata.twirchat.desktop-rust.guardrails]
+policy = [
+  "Keep recoverable production paths panic-free; prefer Result or safe fallbacks over unwrap/expect/panic.",
+  "Use #[expect(..., reason = \"...\")] for unavoidable local clippy waivers instead of blanket allow.",
+  "Defer Miri, property tests, and fuzzing unless a stable narrow pure-logic target is identified.",
+]
+
 [dependencies]
 base64 = "0.22"
 chrono = "0.4.44"

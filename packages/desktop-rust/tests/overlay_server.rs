@@ -6,6 +6,7 @@ use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::{Duration, Instant};
 use twirchat_desktop_rust::overlay::{
     OverlayRuntimePaths, OverlayServer, OverlayServerConfig, resolve_overlay_runtime_paths,
@@ -94,6 +95,57 @@ fn overlay_ws_reconnect_contract() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "overlay websocket accepted a reconnect after server restart and delivered later chat"
     );
+    Ok(())
+}
+
+#[test]
+fn overlay_ws_oversized_frame_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime_paths = built_overlay_runtime_paths()?;
+    let server = OverlayServer::start(OverlayServerConfig {
+        address: "127.0.0.1:0".into(),
+        runtime_paths,
+    })?;
+
+    let address = server.local_addr();
+    let broadcast = server.broadcaster();
+    let mut client = connect_ws(address)?;
+    wait_for_client_count(&broadcast, 1)?;
+
+    write_masked_ws_frame(&mut client, 0x1, 1_048_577, None)?;
+    thread::sleep(Duration::from_millis(100));
+
+    broadcast.push_chat_message(sample_message("after-oversize"))?;
+    assert_no_ws_data(&mut client)?;
+    wait_for_client_count(&broadcast, 0)?;
+
+    server.shutdown()?;
+    Ok(())
+}
+
+#[test]
+fn overlay_ws_broadcast_prunes_disconnected_clients() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime_paths = built_overlay_runtime_paths()?;
+    let server = OverlayServer::start(OverlayServerConfig {
+        address: "127.0.0.1:0".into(),
+        runtime_paths,
+    })?;
+    let address = server.local_addr();
+    let broadcast = server.broadcaster();
+
+    let mut active_client = connect_ws(address)?;
+    let stale_client = connect_ws(address)?;
+    wait_for_client_count(&broadcast, 2)?;
+    drop(stale_client);
+
+    thread::sleep(Duration::from_millis(50));
+    broadcast.push_chat_message(sample_message("prune-1"))?;
+    let payload = read_ws_text(&mut active_client)?;
+    let value: Value = serde_json::from_str(&payload)?;
+    assert_eq!(value["data"]["message"]["id"], "prune-1");
+    wait_for_client_count(&broadcast, 1)?;
+
+    active_client.shutdown(Shutdown::Both)?;
+    server.shutdown()?;
     Ok(())
 }
 
@@ -265,9 +317,57 @@ fn wait_for_client_count(
         if broadcast.client_count()? == expected {
             return Ok(());
         }
-        std::thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(10));
     }
     Err(format!("timed out waiting for {expected} overlay websocket clients").into())
+}
+
+fn write_masked_ws_frame(
+    stream: &mut TcpStream,
+    opcode: u8,
+    payload_len: usize,
+    payload: Option<&[u8]>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut frame = Vec::new();
+    frame.push(0x80 | (opcode & 0x0f));
+    if payload_len < 126 {
+        frame.push(0x80 | u8::try_from(payload_len)?);
+    } else if u16::try_from(payload_len).is_ok() {
+        frame.push(0x80 | 126);
+        frame.extend_from_slice(&u16::try_from(payload_len)?.to_be_bytes());
+    } else {
+        frame.push(0x80 | 127);
+        frame.extend_from_slice(&u64::try_from(payload_len)?.to_be_bytes());
+    }
+    let mask = [1_u8, 2_u8, 3_u8, 4_u8];
+    frame.extend_from_slice(&mask);
+
+    if let Some(payload) = payload {
+        for (index, byte) in payload.iter().enumerate() {
+            frame.push(*byte ^ mask[index % 4]);
+        }
+    }
+
+    stream.write_all(&frame)?;
+    stream.flush()?;
+    Ok(())
+}
+
+fn assert_no_ws_data(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    stream.set_read_timeout(Some(Duration::from_millis(400)))?;
+    let mut first = [0_u8; 1];
+    match stream.read(&mut first) {
+        Ok(0) => Ok(()),
+        Err(error)
+            if error.kind() == io::ErrorKind::WouldBlock
+                || error.kind() == io::ErrorKind::TimedOut
+                || error.kind() == io::ErrorKind::ConnectionReset =>
+        {
+            Ok(())
+        }
+        Ok(_) => Err("websocket unexpectedly stayed open and delivered data".into()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn sample_message(id: &str) -> NormalizedChatMessage {

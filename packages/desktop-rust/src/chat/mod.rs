@@ -16,7 +16,10 @@ pub use autocomplete::{
     fuzzy_filter_emotes, fuzzy_filter_mentions, mention_suggestions, parse_emote_token,
     parse_mention_token, replace_emote_token, replace_mention_token,
 };
-pub use history::{compare_messages, insert_live_message, merge_older_page, sort_messages};
+pub use history::{
+    compare_messages, insert_live_message, insert_live_message_in_place, merge_older_page,
+    sort_messages,
+};
 pub use normalize::{
     NormalizedChatItem, message_timestamp_millis, normalize_event, normalize_message,
 };

@@ -27,6 +27,16 @@ fn top_level_add_creates_and_selects_a_watched_tab() {
 }
 
 #[test]
+fn input_unicode_boundary_contract_uses_char_boundaries() {
+    let input_rs = std::fs::read_to_string("src/ui/components/input.rs")
+        .expect("should read input.rs for unicode boundary contract");
+
+    assert!(input_rs.contains("fn clamp_offset_to_str(content: &str, offset: usize) -> usize"));
+    assert!(input_rs.contains("!content.is_char_boundary(offset)"));
+    assert!(input_rs.contains("for ch in self.content.chars()"));
+}
+
+#[test]
 fn watched_tab_inner_add_creates_an_empty_split_pane() {
     let temp = tempfile::tempdir().expect("temp dir should be available");
     let db_path = temp.path().join("inner-pane.sqlite");

@@ -9,7 +9,7 @@ use image::{
 use std::{
     collections::HashMap,
     io::Cursor,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -73,6 +73,16 @@ pub struct AnimatedEmote {
 }
 
 impl AnimatedEmote {
+    fn lock_cache() -> Option<MutexGuard<'static, HashMap<String, CachedAnimatedEmote>>> {
+        match animated_emote_cache().lock() {
+            Ok(cache) => Some(cache),
+            Err(error) => {
+                eprintln!("animated emote cache lock poisoned: {error}");
+                None
+            }
+        }
+    }
+
     fn new(
         element_id: String,
         image_url: String,
@@ -116,12 +126,15 @@ impl AnimatedEmote {
 
     fn ensure_cached(&self, cx: &mut Context<Self>) {
         let should_load = {
-            let mut cache = animated_emote_cache().lock().unwrap();
-            if cache.contains_key(&self.image_url) {
-                false
+            if let Some(mut cache) = Self::lock_cache() {
+                if cache.contains_key(&self.image_url) {
+                    false
+                } else {
+                    cache.insert(self.image_url.clone(), CachedAnimatedEmote::Loading);
+                    true
+                }
             } else {
-                cache.insert(self.image_url.clone(), CachedAnimatedEmote::Loading);
-                true
+                false
             }
         };
 
@@ -144,10 +157,9 @@ impl AnimatedEmote {
                     CachedAnimatedEmote::Failed
                 });
 
-            animated_emote_cache()
-                .lock()
-                .unwrap()
-                .insert(image_url, entry);
+            if let Some(mut cache) = Self::lock_cache() {
+                cache.insert(image_url, entry);
+            }
 
             let _ = this.update(cx, |this, cx| {
                 this.pending_refresh_task = None;
@@ -158,11 +170,7 @@ impl AnimatedEmote {
     }
 
     fn cached_frames(&self) -> Option<CachedAnimatedEmote> {
-        animated_emote_cache()
-            .lock()
-            .unwrap()
-            .get(&self.image_url)
-            .cloned()
+        Self::lock_cache().and_then(|cache| cache.get(&self.image_url).cloned())
     }
 
     fn schedule_refresh_poll(&mut self, cx: &mut Context<Self>) {

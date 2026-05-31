@@ -18,7 +18,7 @@ fn main() -> ExitCode {
     match first.as_str() {
         "velopack-plan" => run_velopack_plan(&args[1..]),
         "verify-artifact" => run_verify_artifact(&args[1..]),
-        tag => print_release_contract(tag),
+        tag => print_release_contract(tag, &args[1..]),
     }
 }
 
@@ -30,7 +30,15 @@ fn print_usage() {
     eprintln!("       release-contract verify-artifact <path>");
 }
 
-fn print_release_contract(tag: &str) -> ExitCode {
+fn print_release_contract(tag: &str, trailing_args: &[String]) -> ExitCode {
+    if !trailing_args.is_empty() {
+        eprintln!(
+            "release-contract <stable-tag> accepts exactly one argument; unexpected extra args: {}",
+            trailing_args.join(" ")
+        );
+        return ExitCode::FAILURE;
+    }
+
     match validate_velopack_release_tag(tag) {
         Ok(release) => match serde_json::to_string_pretty(&release) {
             Ok(json) => {

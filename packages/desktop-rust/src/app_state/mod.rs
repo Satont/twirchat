@@ -463,10 +463,17 @@ impl AppState {
                 )
                 .then(|| {
                     let mut channel_ids = vec![channel_login.clone()];
-                    if let Some(channel) = self.watched_channels.iter().find(|channel| {
-                        channel.platform == status.platform
-                            && channel.channel_slug.eq_ignore_ascii_case(channel_login)
-                    }) {
+                    if let Some(channel) = self
+                        .watched_channels
+                        .iter()
+                        .filter(|channel| {
+                            channel.platform == status.platform
+                                && channel.channel_slug.eq_ignore_ascii_case(channel_login)
+                        })
+                        .max_by_key(|channel| {
+                            self.watched_seven_tv_channel_ids.contains_key(&channel.id)
+                        })
+                    {
                         if let Some(seven_tv_channel_id) =
                             self.seven_tv_channel_id_for_watched_channel(&channel.id)
                         {
@@ -488,13 +495,17 @@ impl AppState {
             .collect()
     }
 
-    pub fn watched_emote_source_channel(&self, channel_id: &str) -> Option<(Platform, Vec<String>)> {
+    pub fn watched_emote_source_channel(
+        &self,
+        channel_id: &str,
+    ) -> Option<(Platform, Vec<String>)> {
         let channel = self
             .watched_channels
             .iter()
             .find(|channel| channel.id == channel_id)?;
         let mut channel_ids = Vec::new();
-        if let Some(seven_tv_channel_id) = self.seven_tv_channel_id_for_watched_channel(channel_id) {
+        if let Some(seven_tv_channel_id) = self.seven_tv_channel_id_for_watched_channel(channel_id)
+        {
             channel_ids.push(seven_tv_channel_id.to_string());
         }
         channel_ids.extend([channel.channel_slug.clone(), channel.id.clone()]);
@@ -513,7 +524,9 @@ impl AppState {
                 .filter(|message| {
                     message.platform == channel.platform
                         && (message.channel_id == channel.id
-                            || message.channel_id.eq_ignore_ascii_case(&channel.channel_slug))
+                            || message
+                                .channel_id
+                                .eq_ignore_ascii_case(&channel.channel_slug))
                 })
                 .map(|message| message.channel_id.clone()),
         );

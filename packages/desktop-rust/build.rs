@@ -4,7 +4,21 @@ use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../desktop/src/platforms/kick/badges.ts");
+    if let Err(error) = run() {
+        eprintln!("cargo:warning=build script failed: {error}");
+        panic!("build script failed");
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let source_path = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .map(|root| root.join("packages/desktop/src/platforms/kick/badges.ts"))
+        .ok_or("could not resolve workspace root for kick badges path")?;
+
+    println!("cargo:rerun-if-changed={}", source_path.display());
     println!("cargo:rerun-if-changed=.env");
     println!("cargo:rerun-if-changed=.env.example");
     println!("cargo:rerun-if-env-changed=CHATRIX_BACKEND_URL");
@@ -14,11 +28,18 @@ fn main() {
     println!("cargo:rerun-if-env-changed=OVERLAY_SERVER_PORT");
     println!("cargo:rerun-if-env-changed=TWIRCHAT_REQUIRE_BUILD_ENV");
 
-    let source_path = PathBuf::from("../desktop/src/platforms/kick/badges.ts");
-    let source = fs::read_to_string(&source_path).expect("should read kick badges.ts");
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR should exist"));
+    let source = fs::read_to_string(&source_path).map_err(|error| {
+        format!(
+            "failed to read kick badges source at {}: {error}",
+            source_path.display()
+        )
+    })?;
+    let out_dir = PathBuf::from(
+        env::var("OUT_DIR").map_err(|_| "OUT_DIR is not set by cargo for build script")?,
+    );
 
-    write_build_runtime_config(&out_dir).expect("should write build runtime config");
+    write_build_runtime_config(&out_dir)
+        .map_err(|error| format!("failed to write build runtime config: {error}"))?;
 
     let badge_types = [
         "broadcaster",
@@ -36,7 +57,9 @@ fn main() {
     for badge_type in badge_types {
         if let Some(svg) = extract_badge_svg(&source, badge_type) {
             let file_name = format!("kick_badge_{badge_type}.svg");
-            fs::write(out_dir.join(&file_name), &svg).expect("should write generated badge svg");
+            fs::write(out_dir.join(&file_name), &svg).map_err(|error| {
+                format!("failed to write generated badge svg {file_name}: {error}")
+            })?;
             generated.push_str(&format!(
                 "        \"{badge_type}\" => Some(concat!(env!(\"OUT_DIR\"), \"/{file_name}\")),\n"
             ));
@@ -45,7 +68,8 @@ fn main() {
 
     generated.push_str("        _ => None,\n    }\n}\n");
     fs::write(out_dir.join("kick_badges_generated.rs"), generated)
-        .expect("should write generated kick badges file");
+        .map_err(|error| format!("failed to write generated kick badges file: {error}"))?;
+    Ok(())
 }
 
 fn write_build_runtime_config(out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -57,14 +81,14 @@ fn write_build_runtime_config(out_dir: &Path) -> Result<(), Box<dyn std::error::
         "CHATRIX_BACKEND_URL",
         "http://127.0.0.1:3000",
         require_build_env,
-    );
+    )?;
     let backend_ws_url = read_env_or_dotenv(
         &dotenv,
         "CHATRIX_BACKEND_WS_URL",
         "ws://127.0.0.1:3000/ws",
         require_build_env,
-    );
-    let node_env = read_env_or_dotenv(&dotenv, "NODE_ENV", "production", false);
+    )?;
+    let node_env = read_env_or_dotenv(&dotenv, "NODE_ENV", "production", false)?;
     let auth_server_port = read_port(&dotenv, "AUTH_SERVER_PORT", 45_821)?;
     let overlay_server_port = read_port(&dotenv, "OVERLAY_SERVER_PORT", 45_823)?;
 
@@ -130,7 +154,7 @@ fn read_env_or_dotenv(
     key: &str,
     default: &str,
     required: bool,
-) -> String {
+) -> Result<String, Box<dyn std::error::Error>> {
     let value = env::var(key)
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -143,9 +167,9 @@ fn read_env_or_dotenv(
         });
 
     match value {
-        Some(value) => value,
-        None if required => panic!("Missing required build-time config: {key}"),
-        None => default.to_string(),
+        Some(value) => Ok(value),
+        None if required => Err(format!("missing required build-time config: {key}").into()),
+        None => Ok(default.to_string()),
     }
 }
 
@@ -154,14 +178,16 @@ fn read_port(
     key: &str,
     default: u16,
 ) -> Result<u16, Box<dyn std::error::Error>> {
-    let value = read_env_or_dotenv(dotenv, key, &default.to_string(), false);
+    let value = read_env_or_dotenv(dotenv, key, &default.to_string(), false)?;
     let port = value.parse::<u16>()?;
     Ok(port)
 }
 
 fn read_env_flag(dotenv: &[(String, String)], key: &str) -> bool {
     matches!(
-        read_env_or_dotenv(dotenv, key, "0", false).as_str(),
+        read_env_or_dotenv(dotenv, key, "0", false)
+            .unwrap_or_else(|_| "0".to_string())
+            .as_str(),
         "1" | "true" | "TRUE"
     )
 }

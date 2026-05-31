@@ -291,3 +291,19 @@ fn chat_message_row_hover_actions_match_vue_contract() {
     assert!(chat_rs.contains("set_home_reply_target"));
     assert!(chat_rs.contains("set_watched_reply_target"));
 }
+
+#[test]
+fn ui_panic_safety_contract_for_input_and_animated_emote() {
+    let input_rs = fs::read_to_string("src/ui/components/input.rs").expect("should read input.rs");
+    let animated_emote_rs = fs::read_to_string("src/ui/components/animated_emote.rs")
+        .expect("should read animated_emote.rs");
+
+    assert!(input_rs.contains("input paint skipped: missing prepaint line"));
+    assert!(input_rs.contains("input paint failed:"));
+    assert!(!input_rs.contains("prepaint.line.take().unwrap()"));
+    assert!(!input_rs.contains("line.paint(\n            bounds.origin,\n            window.line_height(),\n            gpui::TextAlign::Left,\n            None,\n            window,\n            cx,\n        )\n        .unwrap()"));
+
+    assert!(animated_emote_rs.contains("fn lock_cache()"));
+    assert!(animated_emote_rs.contains("animated emote cache lock poisoned"));
+    assert!(!animated_emote_rs.contains("animated_emote_cache().lock().unwrap()"));
+}

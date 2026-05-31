@@ -70,3 +70,23 @@ Always run these commands from the package root before committing.
   `cargo test packaging_artifact_contains_required_assets -- --nocapture`
 
 The `tests/` directory is broad and boundary-oriented. Ensure new features are covered by a matching test in the relevant domain (storage, protocol, runtime, etc.).
+
+## Rust Guardrails For Future Agents
+
+- Keep recoverable production paths panic-free. Use `Result` or a safe fallback instead of `unwrap()`,
+  `expect()`, or `panic!()` when the input comes from users, files, the network, or another process.
+- Test-only `unwrap()` and `expect()` are acceptable for fixture setup and assertions in `tests/**`.
+- Cap untrusted frame or payload sizes before allocating buffers. Do not allocate from peer-controlled
+  lengths first and validate later.
+- Avoid holding locks across I/O or other blocking work. Snapshot shared state first, then write or
+  perform network operations outside the critical section.
+- Preserve SQLite FFI invariants: keep handles and statements RAII-owned, copy SQLite-owned strings
+  before release/finalize, and prefer `SQLITE_TRANSIENT` for bound text.
+- Keep GPUI render and update paths panic-safe. Do not move storage, network, or other blocking work
+  into render logic.
+- Treat P2 performance claims as evidence-driven. Add benchmark, stress, or allocation evidence before
+  claiming a performance fix.
+- Prefer local clippy waivers with `#[expect(..., reason = "...")]` over blanket `allow(...)` when a
+  waiver is unavoidable.
+- Consider Miri, property tests, or fuzzing only for a stable narrow pure-logic target. Defer if the
+  candidate crosses SQLite FFI, UI rendering, or other broad integration boundaries.

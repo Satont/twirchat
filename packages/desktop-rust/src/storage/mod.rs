@@ -34,8 +34,14 @@ pub enum StorageError {
     Db(DbError),
     Json(serde_json::Error),
     Io(std::io::Error),
-    TokenDecode { account_id: String },
+    TokenDecode {
+        account_id: String,
+    },
     InvalidLayout(String),
+    CorruptBackupPathExhausted {
+        path: std::path::PathBuf,
+        attempts: usize,
+    },
 }
 
 impl fmt::Display for StorageError {
@@ -48,6 +54,11 @@ impl fmt::Display for StorageError {
                 write!(f, "stored token for account {account_id} cannot be decoded")
             }
             Self::InvalidLayout(message) => write!(f, "invalid watched-channel layout: {message}"),
+            Self::CorruptBackupPathExhausted { path, attempts } => write!(
+                f,
+                "unable to choose corrupt database backup path for {} after {attempts} attempts",
+                path.display()
+            ),
         }
     }
 }
@@ -58,7 +69,9 @@ impl Error for StorageError {
             Self::Db(source) => Some(source),
             Self::Json(source) => Some(source),
             Self::Io(source) => Some(source),
-            Self::TokenDecode { .. } | Self::InvalidLayout(_) => None,
+            Self::TokenDecode { .. }
+            | Self::InvalidLayout(_)
+            | Self::CorruptBackupPathExhausted { .. } => None,
         }
     }
 }
@@ -101,7 +114,7 @@ impl Storage {
         match Self::open(path) {
             Ok(storage) => Ok(storage),
             Err(error) if path.exists() && is_recoverable_corruption(&error) => {
-                fs::rename(path, corrupt_backup_path(path))?;
+                fs::rename(path, corrupt_backup_path(path)?)?;
                 Self::open(path)
             }
             Err(error) => Err(error),
@@ -159,20 +172,25 @@ fn is_recoverable_corruption(error: &StorageError) -> bool {
         || message.contains("database disk image is malformed")
 }
 
-fn corrupt_backup_path(path: &Path) -> std::path::PathBuf {
+const MAX_CORRUPT_BACKUP_PATH_ATTEMPTS: usize = 1024;
+
+fn corrupt_backup_path(path: &Path) -> StorageResult<std::path::PathBuf> {
     let base = path.with_extension("corrupt");
     if !base.exists() {
-        return base;
+        return Ok(base);
     }
 
-    for index in 1.. {
+    for index in 1..=MAX_CORRUPT_BACKUP_PATH_ATTEMPTS {
         let candidate = path.with_extension(format!("corrupt.{index}"));
         if !candidate.exists() {
-            return candidate;
+            return Ok(candidate);
         }
     }
 
-    unreachable!("unbounded corrupt backup suffix search should always return")
+    Err(StorageError::CorruptBackupPathExhausted {
+        path: path.to_path_buf(),
+        attempts: MAX_CORRUPT_BACKUP_PATH_ATTEMPTS + 1,
+    })
 }
 
 pub fn migrate(conn: &Connection) -> StorageResult<()> {

@@ -30,6 +30,7 @@ const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const CLOSE_NORMAL: u16 = 1000;
 const OPCODE_CLOSE: u8 = 0x8;
 const OPCODE_TEXT: u8 = 0x1;
+const MAX_BACKEND_WS_FRAME_PAYLOAD_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackendWsConfig {
@@ -539,6 +540,7 @@ impl WebSocketClient {
     }
 }
 
+#[derive(Debug)]
 enum Frame {
     Text(Vec<u8>),
     Close,
@@ -567,7 +569,17 @@ fn read_frame(stream: &mut TcpStream) -> Result<Option<Frame>, BackendWsError> {
     } else if len == 127 {
         let mut bytes = [0_u8; 8];
         stream.read_exact(&mut bytes)?;
+        if bytes[0] & 0x80 != 0 {
+            return Err(BackendWsError::Protocol(
+                "websocket frame length uses reserved high bit".into(),
+            ));
+        }
         len = u64::from_be_bytes(bytes);
+    }
+    if len > MAX_BACKEND_WS_FRAME_PAYLOAD_BYTES {
+        return Err(BackendWsError::Protocol(format!(
+            "websocket frame exceeds maximum payload size of {MAX_BACKEND_WS_FRAME_PAYLOAD_BYTES} bytes"
+        )));
     }
     let mask = if masked {
         let mut bytes = [0_u8; 4];
@@ -691,4 +703,48 @@ fn disconnect_reason(error: &BackendWsError) -> BackendWsDisconnectReason {
 
 fn stop_report(reason: ServiceExitReason) -> ServiceStopReport {
     ServiceStopReport::new(ServiceKind::BackendWs, reason)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+    use std::thread;
+
+    #[test]
+    fn read_frame_rejects_oversized_payload_before_allocation() -> Result<(), Box<dyn Error>> {
+        let mut stream = connect_to_frame_bytes(&[0x81, 127, 0, 0, 0, 0, 0, 0x10, 0, 0x01])?;
+
+        let error = read_frame(&mut stream).expect_err("oversized frame should be rejected");
+
+        assert!(
+            matches!(error, BackendWsError::Protocol(message) if message.contains("maximum payload size"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn read_frame_rejects_reserved_high_bit_length() -> Result<(), Box<dyn Error>> {
+        let mut stream = connect_to_frame_bytes(&[0x81, 127, 0x80, 0, 0, 0, 0, 0, 0, 1])?;
+
+        let error = read_frame(&mut stream).expect_err("invalid frame length should be rejected");
+
+        assert!(
+            matches!(error, BackendWsError::Protocol(message) if message.contains("reserved high bit"))
+        );
+        Ok(())
+    }
+
+    fn connect_to_frame_bytes(bytes: &'static [u8]) -> Result<TcpStream, Box<dyn Error>> {
+        let listener = TcpListener::bind(("127.0.0.1", 0))?;
+        let address = listener.local_addr()?;
+        let join = thread::spawn(move || -> io::Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            stream.write_all(bytes)?;
+            stream.flush()
+        });
+        let stream = TcpStream::connect(address)?;
+        join.join().map_err(|_| "frame writer thread panicked")??;
+        Ok(stream)
+    }
 }

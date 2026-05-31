@@ -116,6 +116,21 @@ fn release_contract_verify_artifact_cli_rejects_missing_assets()
 }
 
 #[test]
+fn release_contract_tag_mode_rejects_extra_args() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new(env!("CARGO_BIN_EXE_release-contract"))
+        .arg("v1.2.3")
+        .arg("extra")
+        .output()?;
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("accepts exactly one argument"));
+    assert!(stderr.contains("extra"));
+
+    Ok(())
+}
+
+#[test]
 fn velopack_upload_plan_merges_into_existing_github_release()
 -> Result<(), Box<dyn std::error::Error>> {
     let plan = plan_velopack_commands(VelopackPlanInput {

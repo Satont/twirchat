@@ -163,3 +163,18 @@ fn user_card_load_older() {
         panic!("Expected HistoryState::Loaded");
     }
 }
+
+#[test]
+fn animated_emote_render_contract_avoids_io_and_handles_failed_cache() {
+    let animated_emote_rs = include_str!("../src/ui/components/animated_emote.rs");
+
+    assert!(
+        animated_emote_rs
+            .contains("Some(CachedAnimatedEmote::Failed) => self.render_remote_fallback()")
+    );
+    assert!(
+        animated_emote_rs
+            .contains("Some(CachedAnimatedEmote::Loading) | None => self.render_loading(cx)")
+    );
+    assert!(!animated_emote_rs.contains("fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {\n        let mut response ="));
+}

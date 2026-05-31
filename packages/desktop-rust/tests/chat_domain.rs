@@ -7,8 +7,8 @@ use std::time::Instant;
 use twirchat_desktop_rust::chat::{
     AliasBook, ChatAggregator, ChatReplayItem, IngestOutcome, SevenTvCatalog, SevenTvEmote,
     emote_suggestions, fuzzy_filter_emotes, fuzzy_filter_mentions, insert_live_message,
-    mention_suggestions, merge_older_page, parse_emote_token, parse_mention_token,
-    replace_emote_token, replace_mention_token, sort_messages,
+    insert_live_message_in_place, mention_suggestions, merge_older_page, parse_emote_token,
+    parse_mention_token, replace_emote_token, replace_mention_token, sort_messages,
 };
 use twirchat_desktop_rust::protocol::{
     Badge, ChatAuthor, ChatMessageType, Emote, EmotePosition, EventUser, NormalizedChatMessage,
@@ -233,7 +233,7 @@ fn chat_burst_performance() -> Result<(), Box<dyn std::error::Error>> {
             format!("Burst User {index}"),
             1_710_000_100_000_i128 + i128::try_from(index)?,
         );
-        let inserted = aggregator.inject_message(black_box(message));
+        let inserted = aggregator.inject_message_ref(black_box(message));
         assert!(inserted.is_some());
 
         if index % fixture.duplicate_every == 0 {
@@ -245,29 +245,29 @@ fn chat_burst_performance() -> Result<(), Box<dyn std::error::Error>> {
                 "Duplicate Burst User".to_string(),
                 1_710_999_999_999,
             );
-            let inserted = aggregator.inject_message(black_box(duplicate));
+            let inserted = aggregator.inject_message_ref(black_box(duplicate));
             assert!(inserted.is_none());
         }
     }
     let ingest_elapsed = ingest_start.elapsed();
 
-    let recent = aggregator.get_recent_messages();
-    assert_eq!(recent.len(), fixture.count);
+    let recent_ids = aggregator
+        .recent_messages()
+        .map(|message| message.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(recent_ids.len(), fixture.count);
     assert_eq!(aggregator.seen_message_count(), fixture.count);
-    assert_eq!(
-        recent.first().map(|message| message.id.as_str()),
-        Some("burst-0000")
-    );
-    assert_eq!(
-        recent.last().map(|message| message.id.as_str()),
-        Some("burst-0249")
-    );
+    assert_eq!(recent_ids.first().copied(), Some("burst-0000"));
+    assert_eq!(recent_ids.last().copied(), Some("burst-0249"));
 
+    let recent = aggregator.get_recent_messages();
     let history_start = Instant::now();
-    let mut sorted_history = Vec::new();
+    let mut sorted_history = Vec::with_capacity(recent.len());
     for message in recent.iter().rev() {
-        sorted_history =
-            insert_live_message(black_box(&sorted_history), black_box(message.clone()));
+        assert!(insert_live_message_in_place(
+            black_box(&mut sorted_history),
+            black_box(message.clone())
+        ));
     }
     let history_elapsed = history_start.elapsed();
 
@@ -475,6 +475,99 @@ fn mention_autocomplete_uses_alias_labels_but_inserts_original_display_names() {
     );
     assert!(parse_mention_token("hello @fr ").is_none());
     assert!(parse_mention_token("@").is_none());
+}
+
+#[test]
+fn chat_history_hot_paths_preserve_empty_large_and_unicode_semantics()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut empty_history = Vec::new();
+    let mut emoji_message = make_message(
+        "unicode-emoji".to_string(),
+        Platform::Twitch,
+        "unicode-channel".to_string(),
+        "unicode-author".to_string(),
+        "Emoji Viewer".to_string(),
+        1_710_000_000_002,
+    );
+    emoji_message.text = "Привет 👋 café KEKW".to_string();
+    emoji_message.emotes.clear();
+
+    assert!(insert_live_message_in_place(
+        &mut empty_history,
+        emoji_message.clone()
+    ));
+    assert_eq!(empty_history.len(), 1);
+    assert_eq!(
+        empty_history.first().map(|message| message.text.as_str()),
+        Some("Привет 👋 café KEKW")
+    );
+    assert!(!insert_live_message_in_place(
+        &mut empty_history,
+        emoji_message
+    ));
+    assert_eq!(empty_history.len(), 1);
+
+    let mut large_history = Vec::with_capacity(1_024);
+    for index in (0..1_024).rev() {
+        let message = make_message(
+            format!("large-{index:04}"),
+            Platform::Youtube,
+            "large-channel".to_string(),
+            "large-author".to_string(),
+            format!("Large Viewer {index}"),
+            1_710_000_100_000_i128 + i128::from(index),
+        );
+        assert!(insert_live_message_in_place(&mut large_history, message));
+    }
+
+    assert_eq!(large_history.len(), 1_024);
+    assert_eq!(
+        large_history.first().map(|message| message.id.as_str()),
+        Some("large-0000")
+    );
+    assert_eq!(
+        large_history.last().map(|message| message.id.as_str()),
+        Some("large-1023")
+    );
+
+    let older_duplicate = large_history
+        .first()
+        .cloned()
+        .ok_or("large history should contain the first message")?;
+    let older_unique = make_message(
+        "large-older".to_string(),
+        Platform::Youtube,
+        "large-channel".to_string(),
+        "large-author".to_string(),
+        "Older Viewer".to_string(),
+        1_710_000_099_999,
+    );
+    let merged = merge_older_page([older_duplicate, older_unique], large_history.clone());
+
+    assert_eq!(merged.len(), 1_025);
+    assert_eq!(
+        merged.first().map(|message| message.id.as_str()),
+        Some("large-older")
+    );
+    assert_eq!(
+        merged.get(1).map(|message| message.id.as_str()),
+        Some("large-0000")
+    );
+
+    write_evidence(
+        "task-7-chat-history-hot-paths.json",
+        &json!({
+            "emptyHistoryInsertions": empty_history.len(),
+            "largeHistoryInsertions": large_history.len(),
+            "mergedHistoryInsertions": merged.len(),
+            "unicodeText": empty_history.first().map(|message| message.text.as_str()),
+            "largeHistoryFirst": large_history.first().map(|message| message.id.as_str()),
+            "largeHistoryLast": large_history.last().map(|message| message.id.as_str()),
+            "olderDuplicateSkipped": merged.len() == large_history.len() + 1
+        }),
+    )?;
+
+    Ok(())
 }
 
 fn make_message(

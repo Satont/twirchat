@@ -1,6 +1,7 @@
 pub mod browser;
 pub mod callback;
 pub mod kick_connect;
+pub(crate) mod local_callback;
 pub mod pkce;
 pub mod server;
 pub mod twitch_connect;

@@ -870,10 +870,11 @@ impl TwirChatApp {
 
         let mut candidates = Vec::new();
         for (platform, channel_ids) in &source_channels {
-            candidates.extend(emote_suggestions(state.seven_tv_catalog().for_channel_candidates(
-                *platform,
-                channel_ids.iter().map(String::as_str),
-            )));
+            candidates.extend(emote_suggestions(
+                state
+                    .seven_tv_catalog()
+                    .for_channel_candidates(*platform, channel_ids.iter().map(String::as_str)),
+            ));
         }
         let suggestions = fuzzy_filter_emotes(&candidates, &token.query, 15)
             .into_iter()
@@ -1676,7 +1677,10 @@ fn autocomplete_context_id(target: &ComposerTarget, mode: &str, query: &str) -> 
     }
 }
 
-fn emote_source_channels(state: &AppState, target: &ComposerTarget) -> Vec<(Platform, Vec<String>)> {
+fn emote_source_channels(
+    state: &AppState,
+    target: &ComposerTarget,
+) -> Vec<(Platform, Vec<String>)> {
     match target {
         ComposerTarget::Home => state.home_emote_source_channels(),
         ComposerTarget::Watched(channel_id) => state

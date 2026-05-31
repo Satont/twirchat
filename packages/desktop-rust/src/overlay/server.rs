@@ -14,6 +14,8 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 pub const DEFAULT_OVERLAY_PORT: u16 = DEFAULT_OVERLAY_SERVER_PORT;
+const MAX_WEBSOCKET_FRAME_BYTES: u64 = 1_048_576;
+const ACCEPT_LOOP_WAIT: Duration = Duration::from_millis(10);
 
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -117,7 +119,18 @@ impl OverlayBroadcast {
             .clients
             .lock()
             .map_err(|_| OverlayServerError::LockPoisoned("clients"))?;
-        clients.retain_mut(|client| write_text_frame(&mut client.stream, payload).is_ok());
+
+        let mut active_clients = Vec::with_capacity(clients.len());
+        std::mem::swap(&mut *clients, &mut active_clients);
+        drop(clients);
+
+        active_clients.retain_mut(|client| write_text_frame(&mut client.stream, payload).is_ok());
+
+        let mut clients = self
+            .clients
+            .lock()
+            .map_err(|_| OverlayServerError::LockPoisoned("clients"))?;
+        clients.extend(active_clients);
         Ok(())
     }
 
@@ -292,9 +305,12 @@ fn run_accept_loop(
     shutdown: Arc<AtomicBool>,
 ) -> Result<(), OverlayServerError> {
     let next_client_id = Arc::new(AtomicU64::new(1));
+    let mut accept_backoff = ACCEPT_LOOP_WAIT;
+
     while !shutdown.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
+                accept_backoff = ACCEPT_LOOP_WAIT;
                 let paths = runtime_paths.clone();
                 let client_broadcast = broadcast.clone();
                 let client_shutdown = Arc::clone(&shutdown);
@@ -310,7 +326,8 @@ fn run_accept_loop(
                 });
             }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(10));
+                thread::sleep(accept_backoff);
+                accept_backoff = (accept_backoff * 2).min(Duration::from_millis(100));
             }
             Err(error) => return Err(error.into()),
         }
@@ -615,6 +632,12 @@ fn read_frame(stream: &mut TcpStream) -> io::Result<FrameRead> {
         let mut bytes = [0_u8; 8];
         stream.read_exact(&mut bytes)?;
         len = u64::from_be_bytes(bytes);
+    }
+    if len > MAX_WEBSOCKET_FRAME_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "frame exceeds max size",
+        ));
     }
     let mask = if masked {
         let mut bytes = [0_u8; 4];

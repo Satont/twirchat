@@ -62,10 +62,9 @@ impl RealKickClient {
 
         loop {
             let message = {
-                let socket = self
-                    .socket
-                    .as_mut()
-                    .expect("socket should exist while pumping");
+                let Some(socket) = self.socket.as_mut() else {
+                    break;
+                };
                 match socket.read() {
                     Ok(message) => message,
                     Err(tungstenite::Error::Io(error))

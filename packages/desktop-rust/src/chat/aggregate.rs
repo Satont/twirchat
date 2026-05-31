@@ -176,21 +176,35 @@ impl ChatAggregator {
         &mut self,
         message: NormalizedChatMessage,
     ) -> Option<NormalizedChatMessage> {
+        if self.buffer_size == 0 {
+            return self.inject_unbuffered_message(message);
+        }
+
+        self.inject_message_ref(message).cloned()
+    }
+
+    pub fn inject_message_ref(
+        &mut self,
+        message: NormalizedChatMessage,
+    ) -> Option<&NormalizedChatMessage> {
+        if self.buffer_size == 0 {
+            return None;
+        }
+
         if self.seen_ids.contains(&message.id) {
             return None;
         }
 
-        self.seen_ids.insert(message.id.clone());
-        let enriched_message = merge_seven_tv_emotes(message, &self.seven_tv);
-        self.message_buffer.push_back(enriched_message.clone());
-
-        if self.message_buffer.len() > self.buffer_size
+        if self.message_buffer.len() == self.buffer_size
             && let Some(removed) = self.message_buffer.pop_front()
         {
             self.seen_ids.remove(&removed.id);
         }
 
-        Some(enriched_message)
+        self.seen_ids.insert(message.id.clone());
+        let enriched_message = merge_seven_tv_emotes(message, &self.seven_tv);
+        self.message_buffer.push_back(enriched_message);
+        self.message_buffer.back()
     }
 
     pub fn inject_event(&mut self, event: NormalizedEvent) -> NormalizedEvent {
@@ -215,11 +229,18 @@ impl ChatAggregator {
         &mut self,
         items: impl IntoIterator<Item = ChatReplayItem>,
     ) -> Vec<IngestOutcome> {
-        items.into_iter().map(|item| self.ingest(item)).collect()
+        let items = items.into_iter();
+        let mut outcomes = Vec::with_capacity(items.size_hint().0);
+        outcomes.extend(items.map(|item| self.ingest(item)));
+        outcomes
+    }
+
+    pub fn recent_messages(&self) -> impl DoubleEndedIterator<Item = &NormalizedChatMessage> {
+        self.message_buffer.iter()
     }
 
     pub fn get_recent_messages(&self) -> Vec<NormalizedChatMessage> {
-        self.message_buffer.iter().cloned().collect()
+        self.recent_messages().cloned().collect()
     }
 
     pub fn events(&self) -> &[NormalizedEvent] {
@@ -228,6 +249,20 @@ impl ChatAggregator {
 
     pub fn seen_message_count(&self) -> usize {
         self.seen_ids.len()
+    }
+
+    fn inject_unbuffered_message(
+        &mut self,
+        message: NormalizedChatMessage,
+    ) -> Option<NormalizedChatMessage> {
+        if self.seen_ids.contains(&message.id) {
+            return None;
+        }
+
+        self.seen_ids.insert(message.id.clone());
+        let enriched_message = merge_seven_tv_emotes(message, &self.seven_tv);
+        self.seen_ids.remove(&enriched_message.id);
+        Some(enriched_message)
     }
 }
 

@@ -784,16 +784,25 @@ impl Element for TextElement {
         if let Some(selection) = prepaint.selection.take() {
             window.paint_quad(selection);
         }
-        let line = prepaint.line.take().unwrap();
-        line.paint(
+        let Some(line) = prepaint.line.take() else {
+            eprintln!("input paint skipped: missing prepaint line");
+            self.input.update(cx, |input, _cx| {
+                input.last_layout = None;
+                input.last_bounds = Some(bounds);
+            });
+            return;
+        };
+
+        if let Err(error) = line.paint(
             bounds.origin,
             window.line_height(),
             gpui::TextAlign::Left,
             None,
             window,
             cx,
-        )
-        .unwrap();
+        ) {
+            eprintln!("input paint failed: {error}");
+        }
         if focus_handle.is_focused(window)
             && let Some(cursor) = prepaint.cursor.take()
         {

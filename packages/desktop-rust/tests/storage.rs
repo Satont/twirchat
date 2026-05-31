@@ -333,6 +333,53 @@ fn storage_corrupt_db_recovers_safely() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
+fn storage_corrupt_db_uses_next_available_backup_suffix() -> Result<(), Box<dyn std::error::Error>>
+{
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("corrupt-with-existing-backup.sqlite");
+    fs::copy(fixture_path("corrupt-not-sqlite.bin"), &db_path)?;
+    fs::write(db_path.with_extension("corrupt"), "existing backup")?;
+
+    let storage = Storage::open_or_recover(&db_path)?;
+
+    assert!(db_path.exists());
+    assert!(db_path.with_extension("corrupt").exists());
+    assert!(db_path.with_extension("corrupt.1").exists());
+    assert!(storage.accounts().find_all()?.is_empty());
+
+    Ok(())
+}
+
+#[test]
+fn storage_corrupt_db_returns_error_when_backup_names_are_exhausted()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let db_path = temp.path().join("corrupt-exhausted.sqlite");
+    fs::copy(fixture_path("corrupt-not-sqlite.bin"), &db_path)?;
+    fs::write(db_path.with_extension("corrupt"), "existing backup")?;
+    for index in 1..=1024 {
+        fs::write(
+            db_path.with_extension(format!("corrupt.{index}")),
+            "existing backup",
+        )?;
+    }
+
+    let error = match Storage::open_or_recover(&db_path) {
+        Ok(_) => return Err("backup exhaustion must fail".into()),
+        Err(error) => error,
+    };
+
+    assert!(db_path.exists());
+    assert!(
+        error
+            .to_string()
+            .contains("unable to choose corrupt database backup path")
+    );
+
+    Ok(())
+}
+
+#[test]
 fn storage_open_or_recover_preserves_db_on_non_corruption_errors()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
