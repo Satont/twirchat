@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - feat/refactor-desktop-gpui
     tags:
       - 'v*'
   workflow_dispatch:
@@ -27,6 +29,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       pack_version: ${{ steps.version.outputs.pack_version }}
       is_stable_tag: ${{ steps.version.outputs.is_stable_tag }}
+      dry_run: ${{ steps.version.outputs.dry_run }}
       release_notes: ${{ steps.changelog.outputs.clean_changelog }}
     steps:
       - name: Checkout
@@ -40,20 +43,30 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
+            DRY_RUN=false
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
+            DRY_RUN=false
           else
-            VERSION="${GITHUB_REF#refs/tags/}"
+            VERSION="v0.0.${GITHUB_RUN_NUMBER}"
+            DRY_RUN=true
           fi
 
-          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "is_stable_tag=true" >> $GITHUB_OUTPUT
-            echo "pack_version=${VERSION#v}" >> $GITHUB_OUTPUT
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "is_stable_tag=false" >> "$GITHUB_OUTPUT"
+            echo "pack_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+          elif [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_stable_tag=true" >> "$GITHUB_OUTPUT"
+            echo "pack_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
           else
-            echo "is_stable_tag=false" >> $GITHUB_OUTPUT
-            echo "pack_version=" >> $GITHUB_OUTPUT
+            echo "is_stable_tag=false" >> "$GITHUB_OUTPUT"
+            echo "pack_version=" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
+          echo "Dry run: $DRY_RUN"
           echo "Stable tag: $([[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && echo true || echo false)"
 
       - name: Generate Changelog
@@ -110,7 +123,7 @@ jobs:
     name: Build Desktop Rust (${{ matrix.target }})
     needs: [changelog, build-views]
     runs-on: ${{ matrix.os }}
-    if: needs.changelog.outputs.is_stable_tag == 'true'
+    if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -273,15 +286,17 @@ jobs:
     name: Create Release
     needs: [changelog, build-backend]
     runs-on: ubuntu-latest
-    if: needs.changelog.outputs.is_stable_tag == 'true'
+    if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     steps:
       - name: Download backend artifact
+        if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
         uses: actions/download-artifact@v4
         with:
           name: backend-linux-x64
           path: artifacts/backend
 
       - name: Create Release
+        if: needs.changelog.outputs.is_stable_tag == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.changelog.outputs.version }}
@@ -294,11 +309,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Dry-run release summary
+        if: needs.changelog.outputs.dry_run == 'true'
+        run: |
+          echo "Dry run: would create GitHub Release ${{ needs.changelog.outputs.version }} with backend artifact."
+          echo "Skipping real release creation."
+
   publish-desktop-rust:
     name: Publish Desktop Rust Velopack (${{ matrix.target }})
     needs: [changelog, build-desktop-rust, release]
     runs-on: ubuntu-latest
-    if: needs.changelog.outputs.is_stable_tag == 'true'
+    if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -346,6 +367,7 @@ jobs:
             verify-artifact artifacts/${{ matrix.artifact_dir }}
 
       - name: Collect existing Velopack feed assets
+        if: needs.changelog.outputs.is_stable_tag == 'true'
         id: release_assets
         shell: bash
         env:
@@ -373,7 +395,9 @@ jobs:
             --repo-url "$REPO_URL"
             --artifact-root artifacts
           )
-          if [ -n "$EXISTING_ASSETS" ]; then
+          if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
+            PLAN_ARGS+=(--first-release)
+          elif [ -n "$EXISTING_ASSETS" ]; then
             PLAN_ARGS+=(--existing-assets "$EXISTING_ASSETS")
           fi
           cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
@@ -392,18 +416,26 @@ jobs:
           MAIN_EXE: ${{ matrix.main_exe }}
         run: |
           mkdir -p "$PACKAGE_OUTPUT_DIR"
-          if ! vpk download github --repoUrl "$REPO_URL" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"; then
+          if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
+            echo "Dry run: skipping vpk download github and treating package as first release."
+          elif ! vpk download github --repoUrl "$REPO_URL" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"; then
             echo "No previous Velopack feed found for $CHANNEL; continuing as first release"
           fi
+
           vpk pack -u dev.twirchat.app -v "$PACK_VERSION" --packDir "$APP_ARTIFACT_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
           ls -R "$PACKAGE_OUTPUT_DIR"
-          vpk upload github --repoUrl "$REPO_URL" --publish --merge --tag "$RELEASE_TAG" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
+
+          if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
+            echo "Dry run: skipping vpk upload github."
+          else
+            vpk upload github --repoUrl "$REPO_URL" --publish --merge --tag "$RELEASE_TAG" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
+          fi
 
   push-docker:
     name: Push Docker to Registry
     needs: [changelog, build-backend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && needs.changelog.outputs.is_stable_tag == 'true'
+    if: github.event_name == 'push' && (needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -412,6 +444,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
+        if: needs.changelog.outputs.is_stable_tag == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -430,7 +463,7 @@ jobs:
           context: .
           file: ./packages/backend/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ needs.changelog.outputs.is_stable_tag == 'true' }}
           tags: |
             ghcr.io/${{ steps.repo.outputs.lowercase }}/backend:${{ needs.changelog.outputs.version }}
             ghcr.io/${{ steps.repo.outputs.lowercase }}/backend:latest
