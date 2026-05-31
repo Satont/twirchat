@@ -1030,6 +1030,98 @@ fn watched_send_success_event_marks_message_sent() {
 }
 
 #[test]
+fn composer_sent_message_history_tracks_home_and_watched_sends_in_global_order() {
+    let mut state = composer_history_state();
+
+    assert!(state.queue_composer_send("home one"));
+    assert_eq!(
+        state.sent_message_history(),
+        ["home one".to_string()].as_slice()
+    );
+
+    assert!(state.queue_watched_channel_send("watched-1", "watched two"));
+    assert_eq!(
+        state.sent_message_history(),
+        ["home one".to_string(), "watched two".to_string()].as_slice()
+    );
+
+    assert!(state.queue_composer_send("home three"));
+    assert_eq!(
+        state.sent_message_history(),
+        [
+            "home one".to_string(),
+            "watched two".to_string(),
+            "home three".to_string(),
+        ]
+        .as_slice()
+    );
+}
+
+#[test]
+fn composer_sent_message_history_skips_empty_failed_and_user_card_commands() {
+    let mut state = composer_history_state();
+    state.messages.push(user_message(
+        "msg-1",
+        Platform::Twitch,
+        "channel-home",
+        "viewer-1",
+        Some("viewerone"),
+        "TestViewer",
+        "1000",
+    ));
+
+    assert!(!state.queue_composer_send("   "));
+    assert!(state.sent_message_history().is_empty());
+
+    assert!(state.queue_composer_send("/user TestViewer"));
+    assert!(state.take_pending_backend_messages().is_empty());
+    assert!(state.take_pending_watched_channel_messages().is_empty());
+    assert!(state.user_card.open);
+    assert!(state.sent_message_history().is_empty());
+
+    assert!(state.queue_watched_channel_send("watched-1", "failed watched send"));
+    let pending = state.take_pending_watched_channel_messages();
+    assert_eq!(pending.len(), 1);
+    let client_message_id = pending[0]
+        .client_message_id
+        .as_ref()
+        .expect("failed watched send should carry a client id")
+        .clone();
+
+    state.apply_service_event(
+        twirchat_desktop_rust::services::ServiceEvent::WatchedChannels(
+            twirchat_desktop_rust::services::WatchedChannelsEvent::MessageSendFailed {
+                channel_id: "watched-1".to_string(),
+                client_message_id: client_message_id.clone(),
+                error: "send failed".to_string(),
+            },
+        ),
+    );
+
+    assert!(state.sent_message_history().is_empty());
+}
+
+#[test]
+fn composer_sent_message_history_removes_failed_home_backend_send() {
+    let mut state = composer_history_state();
+
+    assert!(state.queue_composer_send("failed home send"));
+    assert_eq!(
+        state.sent_message_history(),
+        ["failed home send".to_string()].as_slice()
+    );
+
+    state.apply_service_event(ServiceEvent::BackendWs(
+        twirchat_desktop_rust::services::BackendWsEvent::SendFailed {
+            kind: DesktopToBackendMessageKind::SendMessage,
+            reason: "backend send failed".to_string(),
+        },
+    ));
+
+    assert!(state.sent_message_history().is_empty());
+}
+
+#[test]
 fn home_composer_owned_watched_channel_inserts_optimistic_message() {
     let mut state = twirchat_desktop_rust::app_state::AppState::default();
     state.platforms_panel.statuses.insert(
@@ -1554,6 +1646,7 @@ fn user_command_opens_user_card_and_suppresses_send() {
     assert!(state.take_pending_backend_messages().is_empty());
     assert!(state.take_pending_watched_channel_messages().is_empty());
     assert!(state.user_card.open);
+    assert!(state.sent_message_history().is_empty());
     let target = state
         .user_card
         .target
@@ -1727,6 +1820,30 @@ fn base_user_command_state() -> twirchat_desktop_rust::app_state::AppState {
             channel_login: Some("channel-home".to_string()),
         },
     );
+    state
+}
+
+fn composer_history_state() -> twirchat_desktop_rust::app_state::AppState {
+    let mut state = twirchat_desktop_rust::app_state::AppState::default();
+    state.platforms_panel.statuses.insert(
+        Platform::Twitch,
+        PlatformStatusInfo {
+            platform: Platform::Twitch,
+            status: PlatformStatus::Connected,
+            error: None,
+            mode: PlatformStatusMode::Authenticated,
+            channel_login: Some("channel-home".to_string()),
+        },
+    );
+    state.platforms_panel.accounts.push(account(
+        "twitch-account",
+        Platform::Twitch,
+        "twitch-user-1",
+        "channel-home",
+    ));
+    state
+        .watched_channels
+        .push(watched_channel("watched-1", Platform::Kick, "fixture-kick"));
     state
 }
 

@@ -58,6 +58,7 @@ pub struct TwirChatApp {
     autocomplete_selected_index: usize,
     autocomplete_last_context: String,
     autocomplete_dismissed_context: Option<String>,
+    composer_history_navigation: ComposerHistoryNavigation,
     chat_list_state: ListState,
     settings_scroll_handle: ScrollHandle,
     platforms_scroll_handle: ScrollHandle,
@@ -79,6 +80,90 @@ enum ComposerTarget {
 enum ParsedAutocompleteToken {
     Mention(ParsedMentionToken),
     Emote(ParsedEmoteToken),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ComposerHistoryDirection {
+    Up,
+    Down,
+}
+
+#[derive(Default)]
+struct ComposerHistoryNavigation {
+    drafts: BTreeMap<String, String>,
+    history_indices: BTreeMap<String, usize>,
+}
+
+impl ComposerHistoryNavigation {
+    fn reset(&mut self) {
+        self.history_indices.clear();
+    }
+
+    fn reset_for_target(&mut self, target: &ComposerTarget) {
+        self.history_indices
+            .remove(&composer_history_target_key(target));
+    }
+
+    fn navigate(
+        &mut self,
+        target: &ComposerTarget,
+        current_text: &str,
+        history: &[String],
+        direction: ComposerHistoryDirection,
+    ) -> Option<String> {
+        if history.is_empty() {
+            self.reset_for_target(target);
+            return None;
+        }
+
+        let draft_key = composer_history_target_key(target);
+        let history_len = history.len();
+        let mut index = self.history_indices.get(&draft_key).copied();
+
+        match direction {
+            ComposerHistoryDirection::Up => {
+                if index.is_none() {
+                    self.drafts
+                        .insert(draft_key.clone(), current_text.to_string());
+                }
+                index = Some(match index {
+                    Some(existing) => existing
+                        .saturating_add(1)
+                        .min(history_len.saturating_sub(1)),
+                    None => 0,
+                });
+                if let Some(next_index) = index {
+                    self.history_indices.insert(draft_key, next_index);
+                }
+                index.and_then(|value| {
+                    history
+                        .get(history_len.saturating_sub(1).saturating_sub(value))
+                        .cloned()
+                })
+            }
+            ComposerHistoryDirection::Down => {
+                let existing = index?;
+
+                if existing == 0 {
+                    self.history_indices.remove(&draft_key);
+                    return self.drafts.get(&draft_key).cloned();
+                }
+
+                let next_index = existing - 1;
+                self.history_indices.insert(draft_key, next_index);
+                history
+                    .get(history_len.saturating_sub(1).saturating_sub(next_index))
+                    .cloned()
+            }
+        }
+    }
+}
+
+fn composer_history_target_key(target: &ComposerTarget) -> String {
+    match target {
+        ComposerTarget::Home => "home".to_string(),
+        ComposerTarget::Watched(channel_id) => format!("watched:{channel_id}"),
+    }
 }
 
 struct ActiveAutocomplete {
@@ -253,6 +338,7 @@ impl TwirChatApp {
             autocomplete_selected_index: 0,
             autocomplete_last_context: String::new(),
             autocomplete_dismissed_context: None,
+            composer_history_navigation: ComposerHistoryNavigation::default(),
             chat_list_state,
             settings_scroll_handle: ScrollHandle::new(),
             platforms_scroll_handle: ScrollHandle::new(),
@@ -620,7 +706,7 @@ impl TwirChatApp {
         cx.notify();
     }
 
-    fn flush_composer_submit(&self, cx: &mut Context<Self>) {
+    fn flush_composer_submit(&mut self, cx: &mut Context<Self>) {
         let submit_text = self.composer_input.update(cx, |input, _cx| {
             input
                 .take_submit_requested()
@@ -638,6 +724,7 @@ impl TwirChatApp {
         });
         if queued {
             self.composer_input.update(cx, |input, cx| input.clear(cx));
+            self.composer_history_navigation.reset();
         }
     }
 
@@ -746,7 +833,7 @@ impl TwirChatApp {
         }
     }
 
-    fn flush_watched_composer_submits(&self, cx: &mut Context<Self>) {
+    fn flush_watched_composer_submits(&mut self, cx: &mut Context<Self>) {
         for (channel_id, input) in &self.watched_composer_inputs {
             let submit_text = input.update(cx, |input, _cx| {
                 input
@@ -765,8 +852,50 @@ impl TwirChatApp {
             });
             if queued {
                 input.update(cx, |input, cx| input.clear(cx));
+                self.composer_history_navigation.reset();
             }
         }
+    }
+
+    fn handle_composer_history_keystroke(
+        &mut self,
+        event: &KeystrokeEvent,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let direction = match event.keystroke.key.as_str() {
+            "up" | "arrowup" => Some(ComposerHistoryDirection::Up),
+            "down" | "arrowdown" => Some(ComposerHistoryDirection::Down),
+            _ => None,
+        };
+
+        let Some((target, current_text)) = self.focused_composer_input_text(window, cx) else {
+            return false;
+        };
+
+        let Some(direction) = direction else {
+            self.composer_history_navigation.reset_for_target(&target);
+            return false;
+        };
+
+        let history = self.state.read(cx).sent_message_history().to_vec();
+        let Some(next_text) = self.composer_history_navigation.navigate(
+            &target,
+            &current_text,
+            history.as_slice(),
+            direction,
+        ) else {
+            return false;
+        };
+
+        let Some(input) = self.input_for_composer_target(&target) else {
+            return false;
+        };
+
+        input.update(cx, |input, cx| input.set_text(next_text, cx));
+        cx.stop_propagation();
+        cx.notify();
+        true
     }
 
     fn sync_watched_composer_inputs(&mut self, state: &AppState, cx: &mut Context<Self>) {
@@ -1131,6 +1260,10 @@ impl TwirChatApp {
         }
 
         if self.handle_autocomplete_keystroke(event, window, cx) {
+            return;
+        }
+
+        if self.handle_composer_history_keystroke(event, window, cx) {
             return;
         }
 
@@ -1889,5 +2022,148 @@ fn metadata_status_text(status: UserCardFieldStatus) -> &'static str {
         UserCardFieldStatus::Unavailable => "Unavailable",
         UserCardFieldStatus::Unsupported => "Unsupported",
         UserCardFieldStatus::MissingPermission => "Missing permission",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn history_entries() -> Vec<String> {
+        vec![
+            "first draft".to_string(),
+            "second draft".to_string(),
+            "third draft".to_string(),
+        ]
+    }
+
+    #[test]
+    fn composer_history_up_recalls_newest_then_clamps_to_oldest() {
+        let mut navigation = ComposerHistoryNavigation::default();
+        let history = history_entries();
+
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "unsent",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("third draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "third draft",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("second draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "second draft",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("first draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "first draft",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("first draft".to_string())
+        );
+    }
+
+    #[test]
+    fn composer_history_down_moves_newer_and_restores_draft_after_newest() {
+        let mut navigation = ComposerHistoryNavigation::default();
+        let history = history_entries();
+
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "draft",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("third draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "third draft",
+                &history,
+                ComposerHistoryDirection::Down
+            ),
+            Some("draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "draft",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("third draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "third draft",
+                &history,
+                ComposerHistoryDirection::Down
+            ),
+            Some("draft".to_string())
+        );
+    }
+
+    #[test]
+    fn composer_history_switching_targets_keeps_drafts_isolated() {
+        let mut navigation = ComposerHistoryNavigation::default();
+        let history = history_entries();
+        let watched_target = ComposerTarget::Watched("channel-a".to_string());
+
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "home draft",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("third draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &watched_target,
+                "watched draft",
+                &history,
+                ComposerHistoryDirection::Up
+            ),
+            Some("third draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &watched_target,
+                "third draft",
+                &history,
+                ComposerHistoryDirection::Down
+            ),
+            Some("watched draft".to_string())
+        );
+        assert_eq!(
+            navigation.navigate(
+                &ComposerTarget::Home,
+                "third draft",
+                &history,
+                ComposerHistoryDirection::Down
+            ),
+            Some("home draft".to_string())
+        );
     }
 }

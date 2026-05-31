@@ -86,18 +86,41 @@ pub enum AuthEvent {
 pub enum BackendWsEvent {
     ConnectionRequested,
     DisconnectionRequested,
-    Connecting { url: String },
+    Connecting {
+        url: String,
+    },
     Connected,
-    Disconnected { reason: BackendWsDisconnectReason },
+    Disconnected {
+        reason: BackendWsDisconnectReason,
+    },
     PingQueued,
-    MessageQueued { kind: DesktopToBackendMessageKind },
-    MessageSent { kind: DesktopToBackendMessageKind },
-    MessageReceived { kind: BackendToDesktopMessageKind },
-    MessageDecoded { message: BackendToDesktopMessage },
-    MalformedPayload { error: String },
-    AuthRejected { status: u16, message: String },
-    SendFailed { reason: String },
-    ReconnectScheduled { attempt: u32, delay: Duration },
+    MessageQueued {
+        kind: DesktopToBackendMessageKind,
+    },
+    MessageSent {
+        kind: DesktopToBackendMessageKind,
+    },
+    MessageReceived {
+        kind: BackendToDesktopMessageKind,
+    },
+    MessageDecoded {
+        message: BackendToDesktopMessage,
+    },
+    MalformedPayload {
+        error: String,
+    },
+    AuthRejected {
+        status: u16,
+        message: String,
+    },
+    SendFailed {
+        kind: DesktopToBackendMessageKind,
+        reason: String,
+    },
+    ReconnectScheduled {
+        attempt: u32,
+        delay: Duration,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

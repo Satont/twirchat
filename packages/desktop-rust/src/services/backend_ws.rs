@@ -324,6 +324,7 @@ impl BackendWsRunner {
             Ok(()) => self.publish(BackendWsEvent::MessageSent { kind }),
             Err(error) => {
                 self.publish(BackendWsEvent::SendFailed {
+                    kind,
                     reason: error.to_string(),
                 });
                 self.handle_unexpected_disconnect(disconnect_reason(&error));

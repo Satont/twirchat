@@ -12,7 +12,8 @@ use crate::protocol::types::{
 use crate::runtime::config::RuntimeConfig;
 use crate::runtime::update::UpdateStatusSnapshot;
 use crate::services::{
-    BackendWsEvent, LifecycleEvent, ServiceEvent, UpdateStateEvent, WatchedChannelsEvent,
+    BackendWsEvent, DesktopToBackendMessageKind, LifecycleEvent, ServiceEvent, UpdateStateEvent,
+    WatchedChannelsEvent,
 };
 use crate::settings::SettingsManager;
 use crate::storage::Storage;
@@ -20,7 +21,9 @@ use crate::storage::settings::default_app_settings;
 use crate::storage::watched_layout::{MAX_PANELS, create_default_tab_layout};
 use crate::ui::platforms::ToastKind;
 use gpui::{App, Entity, Keystroke};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+const SENT_MESSAGE_HISTORY_LIMIT: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingWatchedChannelAdd {
@@ -35,6 +38,13 @@ pub struct PendingWatchedChannelMessage {
     pub text: String,
     pub reply_to_message_id: Option<String>,
     pub client_message_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingBackendSentHistory {
+    text: String,
+    remaining: usize,
+    sent: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,10 +198,12 @@ pub struct AppState {
     panel_assignment_target: Option<String>,
     pub add_channel_platform: Platform,
     pub composer_disabled_channel_ids: BTreeSet<String>,
+    sent_message_history: Vec<String>,
     pending_watched_channel_adds: Vec<PendingWatchedChannelAdd>,
     pending_watched_channel_messages: Vec<PendingWatchedChannelMessage>,
     pending_watched_channel_removals: Vec<PendingWatchedChannelRemove>,
     pending_backend_messages: Vec<crate::protocol::messages::DesktopToBackendMessage>,
+    pending_backend_sent_history: VecDeque<PendingBackendSentHistory>,
     next_outgoing_message_sequence: u64,
 }
 
@@ -245,10 +257,12 @@ impl Default for AppState {
             panel_assignment_target: None,
             add_channel_platform: Platform::Twitch,
             composer_disabled_channel_ids: BTreeSet::new(),
+            sent_message_history: Vec::new(),
             pending_watched_channel_adds: Vec::new(),
             pending_watched_channel_messages: Vec::new(),
             pending_watched_channel_removals: Vec::new(),
             pending_backend_messages: Vec::new(),
+            pending_backend_sent_history: VecDeque::new(),
             next_outgoing_message_sequence: 0,
         }
     }
@@ -544,6 +558,10 @@ impl AppState {
 
     pub fn runtime_status(&self) -> RuntimeStatus {
         self.runtime_status
+    }
+
+    pub fn sent_message_history(&self) -> &[String] {
+        &self.sent_message_history
     }
 
     pub fn service_events_seen(&self) -> usize {
@@ -1199,13 +1217,17 @@ impl AppState {
             ServiceEvent::BackendWs(BackendWsEvent::MessageDecoded { message }) => {
                 self.apply_backend_message(message);
             }
+            ServiceEvent::BackendWs(BackendWsEvent::MessageSent { kind }) => {
+                self.apply_backend_send_result(kind, true);
+            }
             ServiceEvent::BackendWs(BackendWsEvent::AuthRejected { message, .. }) => {
                 self.runtime_errors.push(message);
             }
             ServiceEvent::BackendWs(BackendWsEvent::MalformedPayload { error }) => {
                 self.runtime_errors.push(error);
             }
-            ServiceEvent::BackendWs(BackendWsEvent::SendFailed { reason }) => {
+            ServiceEvent::BackendWs(BackendWsEvent::SendFailed { kind, reason }) => {
+                self.apply_backend_send_result(kind, false);
                 self.runtime_errors.push(reason);
             }
             ServiceEvent::WatchedChannels(event) => self.apply_watched_channels_event(event),
@@ -1961,6 +1983,7 @@ impl AppState {
         }
 
         let mut queued = false;
+        let mut backend_send_count = 0;
         let active_reply_target = self.home_reply_target.clone();
         for target in self.home_channel_targets() {
             if self.composer_disabled_channel_ids.contains(&target.id) {
@@ -1997,10 +2020,20 @@ impl AppState {
                         message: text.to_string(),
                     },
                 );
+                backend_send_count += 1;
             }
             queued = true;
         }
         if queued {
+            self.record_sent_message_history(text);
+            if backend_send_count > 0 {
+                self.pending_backend_sent_history
+                    .push_back(PendingBackendSentHistory {
+                        text: text.to_string(),
+                        remaining: backend_send_count,
+                        sent: 0,
+                    });
+            }
             self.home_reply_target = None;
         }
         queued
@@ -2028,7 +2061,45 @@ impl AppState {
                 reply_to_message_id,
                 client_message_id: Some(client_message_id),
             });
+        self.record_sent_message_history(text);
         true
+    }
+
+    fn record_sent_message_history(&mut self, text: &str) {
+        self.sent_message_history.push(text.to_string());
+        if self.sent_message_history.len() > SENT_MESSAGE_HISTORY_LIMIT {
+            let excess = self.sent_message_history.len() - SENT_MESSAGE_HISTORY_LIMIT;
+            self.sent_message_history.drain(0..excess);
+        }
+    }
+
+    fn apply_backend_send_result(&mut self, kind: DesktopToBackendMessageKind, sent: bool) {
+        if kind != DesktopToBackendMessageKind::SendMessage {
+            return;
+        }
+
+        let mut failed_text = None;
+        if let Some(pending) = self.pending_backend_sent_history.front_mut() {
+            pending.remaining = pending.remaining.saturating_sub(1);
+            if sent {
+                pending.sent = pending.sent.saturating_add(1);
+            }
+
+            if pending.remaining == 0 && pending.sent == 0 {
+                failed_text = Some(pending.text.clone());
+            }
+        }
+
+        let completed = self
+            .pending_backend_sent_history
+            .front()
+            .is_some_and(|pending| pending.remaining == 0);
+        if completed {
+            self.pending_backend_sent_history.pop_front();
+        }
+        if let Some(text) = failed_text {
+            self.remove_sent_message_history(&text);
+        }
     }
 
     pub fn open_user_card(&mut self, target: UserCardTarget) -> u64 {
@@ -2648,7 +2719,26 @@ impl AppState {
         if let Some(status) = self.outgoing_message_statuses.get_mut(client_message_id) {
             *status = OutgoingChatMessageStatus::Error;
         }
+        if let Some(text) = self
+            .watched_channel_messages
+            .values()
+            .flat_map(|messages| messages.iter())
+            .find(|message| message.id == client_message_id)
+            .map(|message| message.text.clone())
+        {
+            self.remove_sent_message_history(&text);
+        }
         self.runtime_errors.push(error);
+    }
+
+    fn remove_sent_message_history(&mut self, text: &str) {
+        if let Some(index) = self
+            .sent_message_history
+            .iter()
+            .rposition(|entry| entry == text)
+        {
+            self.sent_message_history.remove(index);
+        }
     }
 
     fn is_home_account_channel(&self, channel: &WatchedChannel) -> bool {
