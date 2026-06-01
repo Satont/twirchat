@@ -16,11 +16,7 @@ fn main() -> ExitCode {
     let smoke_exit_after_first_frame =
         env::args().any(|arg| arg == "--smoke-exit-after-first-frame");
 
-    let wayland_display = env::var_os("WAYLAND_DISPLAY");
-    let x11_display = env::var_os("DISPLAY");
-    let headless = env::var_os("ZED_HEADLESS").is_some();
-
-    if !headless && wayland_display.is_none() && x11_display.is_none() {
+    if requires_linux_graphical_session() && env::var_os("ZED_HEADLESS").is_none() {
         eprintln!(
             "desktop-rust requires a graphical Linux session. Set DISPLAY or WAYLAND_DISPLAY, or set ZED_HEADLESS=1 for headless mode."
         );
@@ -89,5 +85,40 @@ fn main() -> ExitCode {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+fn requires_linux_graphical_session() -> bool {
+    requires_graphical_session_for_target(
+        cfg!(target_os = "linux"),
+        env::var_os("WAYLAND_DISPLAY").is_some(),
+        env::var_os("DISPLAY").is_some(),
+    )
+}
+
+fn requires_graphical_session_for_target(
+    is_linux: bool,
+    has_wayland_display: bool,
+    has_x11_display: bool,
+) -> bool {
+    is_linux && !has_wayland_display && !has_x11_display
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn graphical_session_guard_is_linux_only() {
+        assert!(!super::requires_graphical_session_for_target(
+            false, false, false
+        ));
+        assert!(super::requires_graphical_session_for_target(
+            true, false, false
+        ));
+        assert!(!super::requires_graphical_session_for_target(
+            true, true, false
+        ));
+        assert!(!super::requires_graphical_session_for_target(
+            true, false, true
+        ));
     }
 }

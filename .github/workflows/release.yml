@@ -415,7 +415,7 @@ jobs:
             echo "No previous Velopack feed found for $CHANNEL; continuing as first release"
           fi
 
-          vpk "[$VPK_TARGET]" pack -u dev.twirchat.app -v "$PACK_VERSION" --packDir "$PACK_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR" ${RUNTIME_ARGS:+$RUNTIME_ARGS}
+          vpk "[$VPK_TARGET]" pack -u dev.twirchat.app --packTitle TwirChat -v "$PACK_VERSION" --packDir "$PACK_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR" ${RUNTIME_ARGS:+$RUNTIME_ARGS}
           ls -R "$PACKAGE_OUTPUT_DIR"
 
           if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then

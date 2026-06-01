@@ -509,9 +509,10 @@ fn velopack_target_plan(
             input.repository_url, channel.channel, package_directory
         ),
         format!(
-            "vpk [{}] pack -u {} -v {} --packDir {} --mainExe {} --channel {} --outputDir {}{}",
+            "vpk [{}] pack -u {} --packTitle {} -v {} --packDir {} --mainExe {} --channel {} --outputDir {}{}",
             velopack_target_directive(channel.channel),
             release.contract.package_id,
+            release.contract.display_name,
             release.pack_version,
             artifact_directory,
             velopack_target_executable(channel.channel),

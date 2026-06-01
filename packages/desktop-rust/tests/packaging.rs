@@ -318,13 +318,13 @@ fn velopack_plan_uses_twirchat_app_binary_names() -> Result<(), Box<dyn std::err
     let simulation = render_velopack_simulation(&plan);
 
     assert!(simulation.contains(
-        "vpk [linux] pack -u dev.twirchat.app -v 1.2.3 --packDir artifacts/desktop-linux-x64 --mainExe twirchat --channel linux --outputDir artifacts/velopack/linux --runtime linux-x64"
+        "vpk [linux] pack -u dev.twirchat.app --packTitle TwirChat -v 1.2.3 --packDir artifacts/desktop-linux-x64 --mainExe twirchat --channel linux --outputDir artifacts/velopack/linux --runtime linux-x64"
     ));
     assert!(simulation.contains(
-        "vpk [win] pack -u dev.twirchat.app -v 1.2.3 --packDir artifacts/desktop-win-x64 --mainExe twirchat.exe --channel win --outputDir artifacts/velopack/win --runtime win-x64"
+        "vpk [win] pack -u dev.twirchat.app --packTitle TwirChat -v 1.2.3 --packDir artifacts/desktop-win-x64 --mainExe twirchat.exe --channel win --outputDir artifacts/velopack/win --runtime win-x64"
     ));
     assert!(simulation.contains(
-        "vpk [osx] pack -u dev.twirchat.app -v 1.2.3 --packDir artifacts/desktop-macos-universal/TwirChat.app --mainExe TwirChat --channel osx --outputDir artifacts/velopack/osx"
+        "vpk [osx] pack -u dev.twirchat.app --packTitle TwirChat -v 1.2.3 --packDir artifacts/desktop-macos-universal/TwirChat.app --mainExe TwirChat --channel osx --outputDir artifacts/velopack/osx"
     ));
 
     Ok(())
