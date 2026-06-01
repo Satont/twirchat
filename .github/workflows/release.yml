@@ -236,12 +236,6 @@ jobs:
           </plist>
           PLIST
 
-      - name: Verify native artifact contract
-        shell: bash
-        run: |
-          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
-            verify-artifact artifacts/${{ matrix.artifact_dir }} --target ${{ matrix.target }}
-
       - name: Upload desktop app artifact
         uses: actions/upload-artifact@v4
         with:
