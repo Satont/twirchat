@@ -168,7 +168,8 @@ docker build -t twirchat-backend .
 The desktop application uses Velopack for distribution and automatic updates:
 
 - **Self-contained**: desktop artifacts are bundled as native platform app artifacts only
-  (`twirchat`, `twirchat.exe`, or `TwirChat.app`) before `vpk pack`.
+  (`twirchat`, `twirchat.exe`, or `TwirChat.app`) before `vpk pack`; the macOS bundle must include
+  `Contents/MacOS/TwirChat`, `Contents/Info.plist`, and non-empty `Contents/Resources`.
 - **Automatic checks**: packaged builds initialize Velopack at startup and check for updates on
   startup and periodically while automatic update checks are enabled.
 - **In-app flow**: available updates appear as an in-app toast; users can download the update and

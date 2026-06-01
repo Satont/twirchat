@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 #[serde(rename_all = "kebab-case")]
 pub enum AssetKind {
     File,
+    Directory,
     NonEmptyDirectory,
 }
 
@@ -346,6 +347,20 @@ impl TwirChatPackagingSpec {
             kind: AssetKind::File,
             reason: "native macOS app binary inside TwirChat.app bundle",
         },
+        AssetRequirement {
+            id: "macos-info-plist",
+            source_path: "packages/desktop-rust/release-assets/macos/Info.plist",
+            packaged_path: "TwirChat.app/Contents/Info.plist",
+            kind: AssetKind::File,
+            reason: "macOS bundle metadata required by the prebuilt TwirChat.app",
+        },
+        AssetRequirement {
+            id: "macos-resources-directory",
+            source_path: "packages/desktop-rust/release-assets/macos/Resources",
+            packaged_path: "TwirChat.app/Contents/Resources",
+            kind: AssetKind::NonEmptyDirectory,
+            reason: "Velopack writes sq.version into Contents/Resources during macOS preprocessing, and upload-artifact preserves non-empty directories",
+        },
     ];
 
     pub fn requirements(target: PackagingTarget) -> &'static [AssetRequirement] {
@@ -615,6 +630,8 @@ fn verify_asset(
     match kind {
         AssetKind::File if metadata.is_file() => Ok(PackagingVerificationStatus::Present),
         AssetKind::File => Ok(PackagingVerificationStatus::WrongType),
+        AssetKind::Directory if metadata.is_dir() => Ok(PackagingVerificationStatus::Present),
+        AssetKind::Directory => Ok(PackagingVerificationStatus::WrongType),
         AssetKind::NonEmptyDirectory if metadata.is_dir() => {
             if directory_has_entries(path)? {
                 Ok(PackagingVerificationStatus::Present)

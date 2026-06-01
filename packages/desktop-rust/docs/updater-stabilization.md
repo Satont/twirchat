@@ -24,7 +24,7 @@ must preserve. It verifies only native, target-specific app artifacts:
 
 - Linux target requires `twirchat`
 - Windows target requires `twirchat.exe`
-- macOS universal target requires `TwirChat.app` and `TwirChat.app/Contents/MacOS/TwirChat`
+- macOS universal target requires `TwirChat.app`, `TwirChat.app/Contents/MacOS/TwirChat`, `TwirChat.app/Contents/Info.plist`, and non-empty `TwirChat.app/Contents/Resources`
 - app identity stays aligned with `TwirChat` / `dev.twirchat.app`
 - Velopack release identity stays `dev.twirchat.app`
 

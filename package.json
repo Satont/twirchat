@@ -18,7 +18,7 @@
     "test": "bun test --workspaces test",
     "typecheck": "bun run --workspaces typecheck",
     "build": "bun run --workspaces build",
-    "package:desktop:verify": "cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_artifact_contains_required_assets -- --nocapture && cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_native_executable_fails -- --nocapture",
+    "package:desktop:verify": "cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_artifact_contains_required_assets -- --nocapture && cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_native_executable_fails -- --nocapture && cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_macos_resources_directory_fails -- --nocapture && cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_macos_info_plist_fails -- --nocapture && cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_empty_macos_resources_directory_fails -- --nocapture",
     "generate-icons": "bun scripts/generate-icons.ts",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
