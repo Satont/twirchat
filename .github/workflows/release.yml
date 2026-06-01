@@ -378,6 +378,7 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.changelog.outputs.version }}
           PACK_VERSION: ${{ needs.changelog.outputs.pack_version }}
           REPO_URL: https://github.com/${{ github.repository }}
@@ -391,6 +392,10 @@ jobs:
         run: |
           mkdir -p "$PACKAGE_OUTPUT_DIR"
           ls -R "$APP_ARTIFACT_DIR"
+          if [ "${{ needs.changelog.outputs.dry_run }}" != "true" ] && [ -z "${VPK_TOKEN:-}" ]; then
+            echo "Missing VPK_TOKEN for Velopack GitHub download/upload."
+            exit 1
+          fi
           if [ "$CHANNEL" = "linux" ]; then
             chmod +x "$APP_ARTIFACT_DIR/$MAIN_EXE"
           elif [ "$CHANNEL" = "osx" ]; then
@@ -406,7 +411,7 @@ jobs:
 
           if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
             echo "Dry run: skipping vpk download github and treating package as first release."
-          elif ! vpk download github --repoUrl "$REPO_URL" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"; then
+          elif ! vpk download github --repoUrl "$REPO_URL" --token "$VPK_TOKEN" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"; then
             echo "No previous Velopack feed found for $CHANNEL; continuing as first release"
           fi
 
@@ -416,7 +421,7 @@ jobs:
           if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
             echo "Dry run: skipping vpk upload github."
           else
-            vpk upload github --repoUrl "$REPO_URL" --publish --merge --tag "$RELEASE_TAG" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
+            vpk upload github --repoUrl "$REPO_URL" --token "$VPK_TOKEN" --publish --merge --tag "$RELEASE_TAG" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
           fi
 
   push-docker:
