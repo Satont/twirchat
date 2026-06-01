@@ -38,25 +38,14 @@ impl ExternalOpener for SystemExternalOpener {
     fn open_external(&self, params: &OpenExternalUrlParams) -> ExternalOpenResult<()> {
         validate_external_url(&params.url)?;
 
-        let command = if cfg!(target_os = "macos") {
-            "open"
-        } else if cfg!(target_os = "windows") {
-            "cmd"
-        } else {
-            "xdg-open"
-        };
-
-        let status = if cfg!(target_os = "windows") {
-            Command::new(command)
-                .args(["/C", "start", "", params.url.as_str()])
-                .status()
-        } else {
-            Command::new(command).arg(&params.url).status()
-        }
-        .map_err(|source| ExternalOpenError::OpenFailed {
-            url: params.url.clone(),
-            message: source.to_string(),
-        })?;
+        let command = external_open_command(&params.url);
+        let status = Command::new(command.program)
+            .args(command.args)
+            .status()
+            .map_err(|source| ExternalOpenError::OpenFailed {
+                url: params.url.clone(),
+                message: source.to_string(),
+            })?;
 
         if status.success() {
             Ok(())
@@ -66,6 +55,32 @@ impl ExternalOpener for SystemExternalOpener {
                 message: status.to_string(),
             })
         }
+    }
+}
+
+struct ExternalOpenCommand {
+    program: &'static str,
+    args: Vec<String>,
+}
+
+fn external_open_command(url: &str) -> ExternalOpenCommand {
+    external_open_command_for_target(url, std::env::consts::OS)
+}
+
+fn external_open_command_for_target(url: &str, target_os: &str) -> ExternalOpenCommand {
+    match target_os {
+        "macos" => ExternalOpenCommand {
+            program: "open",
+            args: vec![url.to_string()],
+        },
+        "windows" => ExternalOpenCommand {
+            program: "rundll32",
+            args: vec!["url.dll,FileProtocolHandler".to_string(), url.to_string()],
+        },
+        _ => ExternalOpenCommand {
+            program: "xdg-open",
+            args: vec![url.to_string()],
+        },
     }
 }
 
@@ -89,5 +104,21 @@ pub fn validate_external_url(url: &str) -> ExternalOpenResult<()> {
             url: url.to_string(),
             message: format!("unsupported scheme `{scheme}`"),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_external_open_command_avoids_cmd_shell_parsing() {
+        let url = "https://example.com/callback?code=one&state=two";
+
+        let command = external_open_command_for_target(url, "windows");
+
+        assert_eq!(command.program, "rundll32");
+        assert_eq!(command.args, ["url.dll,FileProtocolHandler", url]);
+        assert!(!command.args.iter().any(|arg| arg == "/C" || arg == "start"));
     }
 }
