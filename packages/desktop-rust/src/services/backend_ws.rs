@@ -12,24 +12,20 @@ use crate::services::supervisor::{
     CancellationToken, ReconnectBackoff, ServiceExitReason, ServiceStopReport,
 };
 use crate::storage::Storage;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
-use sha1_smol::Sha1;
 use std::error::Error;
 use std::fmt;
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::io;
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use tungstenite::client::{IntoClientRequest, connect_with_config};
+use tungstenite::protocol::WebSocketConfig;
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::{Message, WebSocket};
 use url::Url;
 
 const DEFAULT_BACKEND_WS_URL: &str = "ws://localhost:3000/ws";
 const DEFAULT_STORAGE_FILE: &str = "twirchat.sqlite";
-const CLIENT_WEBSOCKET_VERSION: &str = "13";
-const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-const CLOSE_NORMAL: u16 = 1000;
-const OPCODE_CLOSE: u8 = 0x8;
-const OPCODE_TEXT: u8 = 0x1;
 const MAX_BACKEND_WS_FRAME_PAYLOAD_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,6 +132,24 @@ impl From<url::ParseError> for BackendWsError {
 impl From<serde_json::Error> for BackendWsError {
     fn from(value: serde_json::Error) -> Self {
         Self::Json(value)
+    }
+}
+
+impl From<tungstenite::Error> for BackendWsError {
+    fn from(value: tungstenite::Error) -> Self {
+        match value {
+            tungstenite::Error::Io(error) => Self::Io(error),
+            tungstenite::Error::Url(error) => Self::Protocol(error.to_string()),
+            tungstenite::Error::Http(response) => Self::Handshake {
+                status: response.status().as_u16(),
+                message: response
+                    .status()
+                    .canonical_reason()
+                    .unwrap_or("HTTP error")
+                    .to_string(),
+            },
+            error => Self::Protocol(error.to_string()),
+        }
     }
 }
 
@@ -441,7 +455,7 @@ impl BackendWsRunner {
 }
 
 struct WebSocketClient {
-    stream: TcpStream,
+    socket: WebSocket<MaybeTlsStream<TcpStream>>,
 }
 
 impl WebSocketClient {
@@ -451,202 +465,80 @@ impl WebSocketClient {
         read_timeout: Duration,
     ) -> Result<Self, BackendWsError> {
         let parsed = Url::parse(url)?;
-        if parsed.scheme() != "ws" {
+        if parsed.scheme() != "ws" && parsed.scheme() != "wss" {
             return Err(BackendWsError::UnsupportedScheme(parsed.scheme().into()));
         }
         let host = parsed.host_str().ok_or(BackendWsError::MissingHost)?;
         let port = parsed
             .port_or_known_default()
             .ok_or(BackendWsError::MissingHost)?;
-        let mut stream = TcpStream::connect((host, port))?;
-        stream.set_read_timeout(Some(read_timeout))?;
-        stream.set_write_timeout(Some(read_timeout))?;
-
-        let key = websocket_key();
         let path = request_path(&parsed);
         eprintln!(
-            "[backend-ws] opening websocket handshake host={host}:{port} path={path} key_bytes=16"
+            "[backend-ws] opening websocket handshake scheme={} host={host}:{port} path={path}",
+            parsed.scheme()
         );
-        let request = format!(
-            "GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: {CLIENT_WEBSOCKET_VERSION}\r\nX-Client-Secret: {client_secret}\r\n\r\n"
+        let mut request = parsed.as_str().into_client_request()?;
+        request.headers_mut().insert(
+            "X-Client-Secret",
+            client_secret.parse().map_err(|error| {
+                BackendWsError::Protocol(format!("invalid client secret header: {error}"))
+            })?,
         );
-        stream.write_all(request.as_bytes())?;
-        stream.flush()?;
+        let config = WebSocketConfig {
+            max_message_size: Some(MAX_BACKEND_WS_FRAME_PAYLOAD_BYTES as usize),
+            ..WebSocketConfig::default()
+        };
+        let (mut socket, _response) = connect_with_config(request, Some(config), 0)?;
+        set_socket_timeouts(socket.get_mut(), read_timeout)?;
 
-        let mut reader = BufReader::new(stream.try_clone()?);
-        let mut status_line = String::new();
-        reader.read_line(&mut status_line)?;
-        let (status, message) = parse_status_line(&status_line)?;
-        let mut accept = None;
-        loop {
-            let mut line = String::new();
-            reader.read_line(&mut line)?;
-            let trimmed = line.trim_end_matches(['\r', '\n']);
-            if trimmed.is_empty() {
-                break;
-            }
-            if let Some((name, value)) = trimmed.split_once(':')
-                && name.eq_ignore_ascii_case("sec-websocket-accept")
-            {
-                accept = Some(value.trim().to_string());
-            }
-        }
-
-        if status != 101 {
-            eprintln!("[backend-ws] handshake rejected status={status} message={message}");
-            return Err(BackendWsError::Handshake { status, message });
-        }
-        let expected_accept = websocket_accept(&key);
-        if accept.as_deref() != Some(expected_accept.as_str()) {
-            return Err(BackendWsError::Protocol(
-                "handshake returned invalid Sec-WebSocket-Accept".into(),
-            ));
-        }
-
-        Ok(Self { stream })
+        Ok(Self { socket })
     }
 
     fn send_text(&mut self, payload: &str) -> Result<(), BackendWsError> {
-        write_frame(&mut self.stream, OPCODE_TEXT, payload.as_bytes(), true)
+        self.socket.send(Message::Text(payload.to_string()))?;
+        Ok(())
     }
 
     fn close(&mut self) -> Result<(), BackendWsError> {
-        write_frame(
-            &mut self.stream,
-            OPCODE_CLOSE,
-            &CLOSE_NORMAL.to_be_bytes(),
-            true,
-        )?;
-        self.stream.shutdown(Shutdown::Both)?;
+        self.socket.close(None)?;
         Ok(())
     }
 
     fn read_text_frame(&mut self) -> Result<Option<String>, BackendWsError> {
-        match read_frame(&mut self.stream) {
-            Ok(Some(Frame::Text(payload))) => {
-                Ok(Some(String::from_utf8(payload).map_err(|_| {
-                    BackendWsError::Protocol("text frame is not valid UTF-8".into())
-                })?))
+        match self.socket.read() {
+            Ok(Message::Text(payload)) => Ok(Some(payload)),
+            Ok(Message::Ping(payload)) => {
+                self.socket.send(Message::Pong(payload))?;
+                Ok(None)
             }
-            Ok(Some(Frame::Close)) => Err(BackendWsError::Protocol("websocket closed".into())),
-            Ok(None) => Ok(None),
-            Err(BackendWsError::Io(error))
+            Ok(Message::Close(_)) => Err(BackendWsError::Protocol("websocket closed".into())),
+            Ok(_) => Ok(None),
+            Err(tungstenite::Error::Io(error))
                 if error.kind() == io::ErrorKind::WouldBlock
                     || error.kind() == io::ErrorKind::TimedOut =>
             {
                 Ok(None)
             }
-            Err(error) => Err(error),
+            Err(error) => Err(error.into()),
         }
     }
 }
 
-#[derive(Debug)]
-enum Frame {
-    Text(Vec<u8>),
-    Close,
-}
-
-fn read_frame(stream: &mut TcpStream) -> Result<Option<Frame>, BackendWsError> {
-    let mut header = [0_u8; 2];
-    match stream.read_exact(&mut header) {
-        Ok(()) => {}
-        Err(error)
-            if error.kind() == io::ErrorKind::WouldBlock
-                || error.kind() == io::ErrorKind::TimedOut =>
-        {
-            return Ok(None);
-        }
-        Err(error) => return Err(BackendWsError::Io(error)),
-    }
-
-    let opcode = header[0] & 0x0f;
-    let masked = header[1] & 0x80 != 0;
-    let mut len = u64::from(header[1] & 0x7f);
-    if len == 126 {
-        let mut bytes = [0_u8; 2];
-        stream.read_exact(&mut bytes)?;
-        len = u64::from(u16::from_be_bytes(bytes));
-    } else if len == 127 {
-        let mut bytes = [0_u8; 8];
-        stream.read_exact(&mut bytes)?;
-        if bytes[0] & 0x80 != 0 {
-            return Err(BackendWsError::Protocol(
-                "websocket frame length uses reserved high bit".into(),
-            ));
-        }
-        len = u64::from_be_bytes(bytes);
-    }
-    if len > MAX_BACKEND_WS_FRAME_PAYLOAD_BYTES {
-        return Err(BackendWsError::Protocol(format!(
-            "websocket frame exceeds maximum payload size of {MAX_BACKEND_WS_FRAME_PAYLOAD_BYTES} bytes"
-        )));
-    }
-    let mask = if masked {
-        let mut bytes = [0_u8; 4];
-        stream.read_exact(&mut bytes)?;
-        Some(bytes)
-    } else {
-        None
-    };
-    let payload_len = usize::try_from(len)
-        .map_err(|_| BackendWsError::Protocol("websocket frame is too large".into()))?;
-    let mut payload = vec![0_u8; payload_len];
-    stream.read_exact(&mut payload)?;
-    if let Some(mask) = mask {
-        apply_mask(&mut payload, mask);
-    }
-
-    match opcode {
-        OPCODE_TEXT => Ok(Some(Frame::Text(payload))),
-        OPCODE_CLOSE => Ok(Some(Frame::Close)),
-        _ => Ok(None),
-    }
-}
-
-fn write_frame(
-    stream: &mut TcpStream,
-    opcode: u8,
-    payload: &[u8],
-    mask_payload: bool,
+fn set_socket_timeouts(
+    stream: &mut MaybeTlsStream<TcpStream>,
+    timeout: Duration,
 ) -> Result<(), BackendWsError> {
-    let mut frame = Vec::with_capacity(payload.len() + 14);
-    frame.push(0x80 | opcode);
-    let mask_bit = if mask_payload { 0x80 } else { 0 };
-    if payload.len() < 126 {
-        let len = u8::try_from(payload.len())
-            .map_err(|_| BackendWsError::Protocol("payload length overflow".into()))?;
-        frame.push(mask_bit | len);
-    } else if u16::try_from(payload.len()).is_ok() {
-        let len = u16::try_from(payload.len())
-            .map_err(|_| BackendWsError::Protocol("payload length overflow".into()))?;
-        frame.push(mask_bit | 126);
-        frame.extend_from_slice(&len.to_be_bytes());
-    } else {
-        let len = u64::try_from(payload.len())
-            .map_err(|_| BackendWsError::Protocol("payload length overflow".into()))?;
-        frame.push(mask_bit | 127);
-        frame.extend_from_slice(&len.to_be_bytes());
+    match stream {
+        MaybeTlsStream::Plain(stream) => set_tcp_timeouts(stream, timeout),
+        MaybeTlsStream::Rustls(stream) => set_tcp_timeouts(stream.get_mut(), timeout),
+        _ => Ok(()),
     }
-
-    if mask_payload {
-        let mask = mask_key();
-        frame.extend_from_slice(&mask);
-        let mut masked = payload.to_vec();
-        apply_mask(&mut masked, mask);
-        frame.extend_from_slice(&masked);
-    } else {
-        frame.extend_from_slice(payload);
-    }
-    stream.write_all(&frame)?;
-    stream.flush()?;
-    Ok(())
 }
 
-fn apply_mask(payload: &mut [u8], mask: [u8; 4]) {
-    for (index, byte) in payload.iter_mut().enumerate() {
-        *byte ^= mask[index % mask.len()];
-    }
+fn set_tcp_timeouts(stream: &mut TcpStream, timeout: Duration) -> Result<(), BackendWsError> {
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
+    Ok(())
 }
 
 fn request_path(url: &Url) -> String {
@@ -654,36 +546,6 @@ fn request_path(url: &Url) -> String {
         Some(query) => format!("{}?{query}", url.path()),
         None => url.path().to_string(),
     }
-}
-
-fn parse_status_line(line: &str) -> Result<(u16, String), BackendWsError> {
-    let mut parts = line.trim_end().splitn(3, ' ');
-    let _version = parts
-        .next()
-        .ok_or_else(|| BackendWsError::Protocol("missing HTTP version in handshake".into()))?;
-    let status = parts
-        .next()
-        .ok_or_else(|| BackendWsError::Protocol("missing HTTP status in handshake".into()))?
-        .parse::<u16>()
-        .map_err(|_| BackendWsError::Protocol("invalid HTTP status in handshake".into()))?;
-    let message = parts.next().map_or(String::new(), str::to_string);
-    Ok((status, message))
-}
-
-fn websocket_key() -> String {
-    STANDARD.encode(uuid::Uuid::new_v4().as_bytes())
-}
-
-fn websocket_accept(key: &str) -> String {
-    let mut sha1 = Sha1::new();
-    sha1.update(key.as_bytes());
-    sha1.update(WEBSOCKET_GUID.as_bytes());
-    STANDARD.encode(sha1.digest().bytes())
-}
-
-fn mask_key() -> [u8; 4] {
-    let bytes = *uuid::Uuid::new_v4().as_bytes();
-    [bytes[0], bytes[1], bytes[2], bytes[3]]
 }
 
 fn disconnect_reason(error: &BackendWsError) -> BackendWsDisconnectReason {
@@ -709,43 +571,15 @@ fn stop_report(reason: ServiceExitReason) -> ServiceStopReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::TcpListener;
-    use std::thread;
 
     #[test]
-    fn read_frame_rejects_oversized_payload_before_allocation() -> Result<(), Box<dyn Error>> {
-        let mut stream = connect_to_frame_bytes(&[0x81, 127, 0, 0, 0, 0, 0, 0x10, 0, 0x01])?;
+    fn backend_ws_accepts_ws_and_wss_schemes() -> Result<(), Box<dyn Error>> {
+        assert!("ws://localhost:3000/ws".into_client_request().is_ok());
+        assert!("wss://chat.twir.app/ws".into_client_request().is_ok());
 
-        let error = read_frame(&mut stream).expect_err("oversized frame should be rejected");
-
-        assert!(
-            matches!(error, BackendWsError::Protocol(message) if message.contains("maximum payload size"))
-        );
+        let parsed = Url::parse("wss://chat.twir.app/ws")?;
+        assert!(parsed.scheme() == "ws" || parsed.scheme() == "wss");
+        assert_eq!(parsed.port_or_known_default(), Some(443));
         Ok(())
-    }
-
-    #[test]
-    fn read_frame_rejects_reserved_high_bit_length() -> Result<(), Box<dyn Error>> {
-        let mut stream = connect_to_frame_bytes(&[0x81, 127, 0x80, 0, 0, 0, 0, 0, 0, 1])?;
-
-        let error = read_frame(&mut stream).expect_err("invalid frame length should be rejected");
-
-        assert!(
-            matches!(error, BackendWsError::Protocol(message) if message.contains("reserved high bit"))
-        );
-        Ok(())
-    }
-
-    fn connect_to_frame_bytes(bytes: &'static [u8]) -> Result<TcpStream, Box<dyn Error>> {
-        let listener = TcpListener::bind(("127.0.0.1", 0))?;
-        let address = listener.local_addr()?;
-        let join = thread::spawn(move || -> io::Result<()> {
-            let (mut stream, _) = listener.accept()?;
-            stream.write_all(bytes)?;
-            stream.flush()
-        });
-        let stream = TcpStream::connect(address)?;
-        join.join().map_err(|_| "frame writer thread panicked")??;
-        Ok(stream)
     }
 }

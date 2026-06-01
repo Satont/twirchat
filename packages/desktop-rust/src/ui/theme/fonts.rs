@@ -37,11 +37,18 @@ pub fn app_font_family(choice: FontFamilyChoice) -> &'static str {
 
 pub fn app_font(choice: FontFamilyChoice) -> Font {
     let mut font = gpui::font(app_font_family(choice));
-    font.fallbacks = Some(FontFallbacks::from_fonts(app_font_fallbacks(choice)));
+    let fallbacks = app_font_fallbacks(choice);
+    if !fallbacks.is_empty() {
+        font.fallbacks = Some(FontFallbacks::from_fonts(fallbacks));
+    }
     font
 }
 
 pub fn load_app_fonts(cx: &App) -> Result<()> {
+    if !should_load_bundled_fonts() {
+        return Ok(());
+    }
+
     cx.text_system().add_fonts(vec![
         Cow::Borrowed(include_bytes!("../../../assets/fonts/InterVariable.ttf").as_slice()),
         Cow::Borrowed(include_bytes!("../../../assets/fonts/InterVariable-Italic.ttf").as_slice()),
@@ -52,7 +59,15 @@ pub fn load_app_fonts(cx: &App) -> Result<()> {
     ])
 }
 
+pub fn should_load_bundled_fonts() -> bool {
+    !cfg!(target_os = "macos")
+}
+
 fn app_font_fallbacks(choice: FontFamilyChoice) -> Vec<String> {
+    if cfg!(target_os = "macos") {
+        return Vec::new();
+    }
+
     match choice {
         FontFamilyChoice::Inter => vec!["Inter", ".SystemUIFont"],
         FontFamilyChoice::Manrope => vec!["Inter Variable", "Inter", ".SystemUIFont"],
@@ -88,20 +103,34 @@ mod tests {
     #[test]
     fn app_font_includes_family_and_fallbacks() {
         let font = app_font(FontFamilyChoice::Manrope);
+        let expected_family = if cfg!(target_os = "macos") {
+            ".SystemUIFont"
+        } else {
+            "Manrope"
+        };
 
-        assert_eq!(font.family.to_string(), "Manrope");
+        assert_eq!(font.family.to_string(), expected_family);
         let fallbacks = font
             .fallbacks
             .as_ref()
             .map(FontFallbacks::fallback_list)
             .unwrap_or_default();
-        assert_eq!(
-            fallbacks,
-            [
-                "Inter Variable".to_string(),
-                "Inter".to_string(),
-                ".SystemUIFont".to_string(),
-            ]
-        );
+        if cfg!(target_os = "macos") {
+            assert!(fallbacks.is_empty());
+        } else {
+            assert_eq!(
+                fallbacks,
+                [
+                    "Inter Variable".to_string(),
+                    "Inter".to_string(),
+                    ".SystemUIFont".to_string(),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn macos_skips_bundled_font_registration() {
+        assert_eq!(should_load_bundled_fonts(), !cfg!(target_os = "macos"));
     }
 }

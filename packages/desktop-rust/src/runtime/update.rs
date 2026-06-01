@@ -6,7 +6,7 @@ use crate::services::events::UpdateStateEvent;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use velopack::{UpdateCheck, UpdateManager, UpdateOptions, VelopackApp, sources::AutoSource};
+use velopack::{UpdateCheck, UpdateManager, UpdateOptions, VelopackApp, sources::HttpSource};
 
 pub const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 pub const STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER: Duration = Duration::from_secs(3);
@@ -72,6 +72,7 @@ pub struct UpdateCheckReport {
     pub update_status: String,
     pub message: String,
     pub feed: Option<String>,
+    pub source_base: Option<String>,
     pub channel: Option<String>,
     pub current_version: Option<String>,
     pub available_version: Option<String>,
@@ -636,16 +637,34 @@ fn create_manager(request: &UpdateCheckRequest) -> Result<UpdateManager, UpdateE
             "Update action skipped: no Velopack feed configured".to_string(),
         ));
     };
-    let source = AutoSource::new(&update_source_base(feed));
+    let source_base = update_source_base(feed);
+    let channel = update_channel_from_feed(feed);
+    eprintln!(
+        "[update] preparing update action mode={:?} source_base={} channel={} feed={}",
+        request.mode, source_base, channel, feed
+    );
+    let source = HttpSource::new(&source_base);
     let options = UpdateOptions {
-        ExplicitChannel: Some(update_channel_from_feed(feed)),
+        ExplicitChannel: Some(channel.clone()),
         ..UpdateOptions::default()
     };
     UpdateManager::new(source, Some(options), None).map_err(|error| {
         if is_not_installed_error(&error) {
-            UpdateEngineError::Failed(format!("Update action skipped: {error}"))
+            UpdateEngineError::Failed(update_error_message(
+                "Update action skipped",
+                &error,
+                feed,
+                &source_base,
+                &channel,
+            ))
         } else {
-            UpdateEngineError::Failed(format!("Update action unavailable: {error}"))
+            UpdateEngineError::Failed(update_error_message(
+                "Update action unavailable",
+                &error,
+                feed,
+                &source_base,
+                &channel,
+            ))
         }
     })
 }
@@ -662,6 +681,7 @@ impl UpdateCheckReport {
             update_status: update_status.as_str().to_string(),
             message,
             feed: request.feed.clone(),
+            source_base: request.feed.as_deref().map(update_source_base),
             channel: request.feed.as_deref().map(update_channel_from_feed),
             current_version: None,
             available_version: None,
@@ -721,9 +741,15 @@ fn check_velopack_updates(request: &UpdateCheckRequest) -> UpdateCheckReport {
         );
     };
 
-    let source = AutoSource::new(&update_source_base(feed));
+    let source_base = update_source_base(feed);
+    let channel = update_channel_from_feed(feed);
+    eprintln!(
+        "[update] checking for updates mode={:?} source_base={} channel={} feed={}",
+        request.mode, source_base, channel, feed
+    );
+    let source = HttpSource::new(&source_base);
     let options = UpdateOptions {
-        ExplicitChannel: Some(update_channel_from_feed(feed)),
+        ExplicitChannel: Some(channel.clone()),
         ..UpdateOptions::default()
     };
 
@@ -733,7 +759,7 @@ fn check_velopack_updates(request: &UpdateCheckRequest) -> UpdateCheckReport {
             return UpdateCheckReport::new(
                 VelopackRuntimeStatus::Unpackaged,
                 UpdateStatus::NoUpdate,
-                format!("Update check skipped: {error}"),
+                update_error_message("Update check skipped", &error, feed, &source_base, &channel),
                 request,
             );
         }
@@ -741,7 +767,13 @@ fn check_velopack_updates(request: &UpdateCheckRequest) -> UpdateCheckReport {
             return UpdateCheckReport::new(
                 VelopackRuntimeStatus::Error,
                 UpdateStatus::Error,
-                format!("Update check unavailable: {error}"),
+                update_error_message(
+                    "Update check unavailable",
+                    &error,
+                    feed,
+                    &source_base,
+                    &channel,
+                ),
                 request,
             );
         }
@@ -773,14 +805,20 @@ fn check_velopack_updates(request: &UpdateCheckRequest) -> UpdateCheckReport {
         Err(error) if is_offline_error(&error) => UpdateCheckReport::new(
             VelopackRuntimeStatus::Offline,
             UpdateStatus::Error,
-            format!("Update check could not reach feed: {error}"),
+            update_error_message(
+                "Update check could not reach feed",
+                &error,
+                feed,
+                &source_base,
+                &channel,
+            ),
             request,
         )
         .with_manager(&manager),
         Err(error) => UpdateCheckReport::new(
             VelopackRuntimeStatus::Error,
             UpdateStatus::Error,
-            format!("Update check failed: {error}"),
+            update_error_message("Update check failed", &error, feed, &source_base, &channel),
             request,
         )
         .with_manager(&manager),
@@ -796,6 +834,27 @@ fn update_source_base(feed: &str) -> String {
     trimmed
         .rsplit_once('/')
         .map_or_else(|| trimmed.to_string(), |(base, _)| base.to_string())
+}
+
+fn update_feed_url(source_base: &str, channel: &str) -> String {
+    format!(
+        "{}/releases.{}.json",
+        source_base.trim_end_matches('/'),
+        channel
+    )
+}
+
+fn update_error_message(
+    prefix: &str,
+    error: &velopack::Error,
+    feed: &str,
+    source_base: &str,
+    channel: &str,
+) -> String {
+    format!(
+        "{prefix}: {error}; feed={feed}; source_base={source_base}; channel={channel}; expected_feed={}",
+        update_feed_url(source_base, channel)
+    )
 }
 
 fn update_channel_from_feed(feed: &str) -> String {
@@ -934,5 +993,40 @@ mod tests {
         let downloaded = runtime.snapshot();
         assert_eq!(downloaded.status.as_deref(), Some("download-complete"));
         assert_eq!(downloaded.hash.as_deref(), Some("1.2.3"));
+    }
+
+    #[test]
+    fn update_source_base_strips_static_feed_file_without_github_autosource() {
+        let feed = "https://github.com/Satont/twirchat/releases/latest/download/releases.osx.json";
+
+        assert_eq!(
+            update_source_base(feed),
+            "https://github.com/Satont/twirchat/releases/latest/download"
+        );
+        assert_eq!(update_channel_from_feed(feed), "osx");
+        assert_eq!(
+            update_feed_url(&update_source_base(feed), &update_channel_from_feed(feed)),
+            feed
+        );
+    }
+
+    #[test]
+    fn update_check_report_includes_feed_source_and_channel_context() {
+        let feed = "https://github.com/Satont/twirchat/releases/latest/download/releases.osx.json";
+        let request = UpdateCheckRequest::packaged(Some(feed.to_string()));
+
+        let report = UpdateCheckReport::new(
+            VelopackRuntimeStatus::Error,
+            UpdateStatus::Error,
+            "failed".to_string(),
+            &request,
+        );
+
+        assert_eq!(report.feed.as_deref(), Some(feed));
+        assert_eq!(
+            report.source_base.as_deref(),
+            Some("https://github.com/Satont/twirchat/releases/latest/download")
+        );
+        assert_eq!(report.channel.as_deref(), Some("osx"));
     }
 }
