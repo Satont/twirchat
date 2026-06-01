@@ -1,8 +1,4 @@
 //! Packaging verification for the native Rust desktop artifact.
-//!
-//! The native package is not yet a full release pipeline. This module captures
-//! the asset contract that must stay aligned with the current Electrobun build:
-//! built main/overlay views, overlay fonts, platform icons, and desktop metadata.
 
 use serde::Serialize;
 use std::fmt;
@@ -139,6 +135,25 @@ pub struct PackagingVerificationReport {
     pub app: PackagingAppMetadata,
     pub artifact_root: String,
     pub checks: Vec<AssetVerification>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PackagingTarget {
+    LinuxX64,
+    WinX64,
+    MacosUniversal,
+}
+
+impl PackagingTarget {
+    pub fn from_cli_value(value: &str) -> Option<Self> {
+        match value {
+            "linux-x64" => Some(Self::LinuxX64),
+            "win-x64" => Some(Self::WinX64),
+            "macos-universal" => Some(Self::MacosUniversal),
+            _ => None,
+        }
+    }
 }
 
 impl PackagingVerificationReport {
@@ -300,67 +315,45 @@ impl TwirChatPackagingSpec {
         prerelease_policy: "prerelease, beta, nightly, and unprefixed semver tags are rejected",
     };
 
-    pub const REQUIRED_ASSETS: &'static [AssetRequirement] = &[
+    pub const REQUIRED_ASSETS_LINUX_X64: &'static [AssetRequirement] = &[AssetRequirement {
+        id: "linux-executable",
+        source_path: "packages/desktop-rust/target/release/twirchat",
+        packaged_path: "twirchat",
+        kind: AssetKind::File,
+        reason: "native Linux executable staged for Velopack packDir",
+    }];
+
+    pub const REQUIRED_ASSETS_WIN_X64: &'static [AssetRequirement] = &[AssetRequirement {
+        id: "windows-executable",
+        source_path: "packages/desktop-rust/target/release/twirchat.exe",
+        packaged_path: "twirchat.exe",
+        kind: AssetKind::File,
+        reason: "native Windows executable staged for Velopack packDir",
+    }];
+
+    pub const REQUIRED_ASSETS_MACOS_UNIVERSAL: &'static [AssetRequirement] = &[
         AssetRequirement {
-            id: "overlay-index",
-            source_path: "packages/desktop/dist/overlay/index.html",
-            packaged_path: "views/overlay/index.html",
-            kind: AssetKind::File,
-            reason: "OBS overlay entry copied by Electrobun build.copy",
-        },
-        AssetRequirement {
-            id: "overlay-assets",
-            source_path: "packages/desktop/dist/overlay/assets",
-            packaged_path: "views/overlay/assets",
+            id: "macos-app-bundle",
+            source_path: "packages/desktop-rust/target/universal-apple-darwin/release/TwirChat.app",
+            packaged_path: "TwirChat.app",
             kind: AssetKind::NonEmptyDirectory,
-            reason: "OBS overlay bundled JS/CSS assets copied by Electrobun build.copy",
+            reason: "native macOS app bundle staged for Velopack packDir",
         },
         AssetRequirement {
-            id: "main-index",
-            source_path: "packages/desktop/dist/main/index.html",
-            packaged_path: "views/main/index.html",
+            id: "macos-app-executable",
+            source_path: "packages/desktop-rust/target/universal-apple-darwin/release/twirchat",
+            packaged_path: "TwirChat.app/Contents/MacOS/TwirChat",
             kind: AssetKind::File,
-            reason: "main window entry copied by Electrobun build.copy",
-        },
-        AssetRequirement {
-            id: "main-assets",
-            source_path: "packages/desktop/dist/main/assets",
-            packaged_path: "views/main/assets",
-            kind: AssetKind::NonEmptyDirectory,
-            reason: "main window bundled JS/CSS assets copied by Electrobun build.copy",
-        },
-        AssetRequirement {
-            id: "fonts",
-            source_path: "packages/desktop/public/fonts",
-            packaged_path: "views/fonts",
-            kind: AssetKind::NonEmptyDirectory,
-            reason: "shared Inter/Manrope font assets copied by Electrobun build.copy",
-        },
-        AssetRequirement {
-            id: "linux-icon",
-            source_path: "packages/desktop/assets/icon.png",
-            packaged_path: "assets/icon.png",
-            kind: AssetKind::File,
-            reason: "Linux package icon from Electrobun build.linux.icon",
-        },
-        AssetRequirement {
-            id: "windows-icon",
-            source_path: "packages/desktop/assets/icon.ico",
-            packaged_path: "assets/icon.ico",
-            kind: AssetKind::File,
-            reason: "Windows package icon from Electrobun build.win.icon",
-        },
-        AssetRequirement {
-            id: "mac-icons",
-            source_path: "packages/desktop/assets/icon.iconset",
-            packaged_path: "assets/icon.iconset",
-            kind: AssetKind::NonEmptyDirectory,
-            reason: "macOS iconset from Electrobun build.mac.icons",
+            reason: "native macOS app binary inside TwirChat.app bundle",
         },
     ];
 
-    pub fn requirements() -> &'static [AssetRequirement] {
-        Self::REQUIRED_ASSETS
+    pub fn requirements(target: PackagingTarget) -> &'static [AssetRequirement] {
+        match target {
+            PackagingTarget::LinuxX64 => Self::REQUIRED_ASSETS_LINUX_X64,
+            PackagingTarget::WinX64 => Self::REQUIRED_ASSETS_WIN_X64,
+            PackagingTarget::MacosUniversal => Self::REQUIRED_ASSETS_MACOS_UNIVERSAL,
+        }
     }
 
     pub fn velopack_release_contract() -> VelopackReleaseContract {
@@ -537,9 +530,10 @@ fn velopack_target_executable(channel: &str) -> &'static str {
 
 pub fn verify_packaging_artifact(
     artifact_root: impl AsRef<Path>,
+    target: PackagingTarget,
 ) -> Result<PackagingVerificationReport, PackagingVerificationError> {
     let artifact_root = artifact_root.as_ref();
-    let report = packaging_report(artifact_root)?;
+    let report = packaging_report(artifact_root, target)?;
     if report.is_success() {
         Ok(report)
     } else {
@@ -551,9 +545,11 @@ pub fn verify_packaging_artifact(
 
 fn packaging_report(
     artifact_root: &Path,
+    target: PackagingTarget,
 ) -> Result<PackagingVerificationReport, PackagingVerificationError> {
-    let mut checks = Vec::with_capacity(TwirChatPackagingSpec::requirements().len());
-    for requirement in TwirChatPackagingSpec::requirements() {
+    let requirements = TwirChatPackagingSpec::requirements(target);
+    let mut checks = Vec::with_capacity(requirements.len());
+    for requirement in requirements {
         let path = artifact_root.join(requirement.packaged_path);
         checks.push(AssetVerification {
             id: requirement.id,

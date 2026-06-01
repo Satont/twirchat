@@ -5,11 +5,11 @@ on:
     branches:
       - feat/refactor-desktop-gpui
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g., v1.0.0)"
+        description: 'Version to release (e.g., v1.0.0)'
         required: true
         type: string
 
@@ -74,54 +74,17 @@ jobs:
         uses: TriPSs/conventional-changelog-action@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-file: "./packages/backend/package.json"
-          version-path: "version"
+          version-file: './packages/backend/package.json'
+          version-path: 'version'
           skip-version-file: true
           skip-commit: true
           skip-tag: true
           skip-git-pull: true
           create-summary: true
 
-  build-views:
-    name: Build Views (Vite)
-    needs: changelog
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Cache dependencies
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('bun.lock', 'package.json') }}
-
-      - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: bun install --frozen-lockfile
-
-      - name: Build views
-        working-directory: packages/desktop
-        run: bun run build:views
-
-      - name: Upload views artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-views
-          path: packages/desktop/dist/**
-          if-no-files-found: error
-
   build-desktop:
     name: Build Desktop (${{ matrix.target }})
-    needs: [changelog, build-views]
+    needs: [changelog]
     runs-on: ${{ matrix.os }}
     if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     env:
@@ -176,12 +139,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Download views artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: desktop-views
-          path: packages/desktop-rust/release-assets/dist
-
       - name: Install Linux native dependencies
         if: matrix.target == 'linux-x64'
         shell: bash
@@ -230,42 +187,29 @@ jobs:
         if: matrix.target == 'linux-x64'
         shell: bash
         run: |
-          mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
+          mkdir -p artifacts/${{ matrix.artifact_dir }}
           cp target/release/twirchat artifacts/${{ matrix.artifact_dir }}/twirchat
-          cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
-          cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
-          cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
-          cp packages/desktop/assets/icon.png artifacts/${{ matrix.artifact_dir }}/assets/icon.png
-          cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
-          cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
 
       - name: Prepare Windows Velopack app artifact
         if: matrix.target == 'win-x64'
         shell: bash
         run: |
-          mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
+          mkdir -p artifacts/${{ matrix.artifact_dir }}
           cp target/release/twirchat.exe artifacts/${{ matrix.artifact_dir }}/twirchat.exe
-          cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
-          cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
-          cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
-          cp packages/desktop/assets/icon.png artifacts/${{ matrix.artifact_dir }}/assets/icon.png
-          cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
-          cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
 
       - name: Prepare macOS Velopack app artifact
         if: matrix.target == 'macos-universal'
         shell: bash
         run: |
           mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS
-          mkdir -p artifacts/${{ matrix.artifact_dir }}/views artifacts/${{ matrix.artifact_dir }}/assets
           cp target/universal-apple-darwin/release/twirchat \
             artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS/TwirChat
-          cp -R packages/desktop-rust/release-assets/dist/main artifacts/${{ matrix.artifact_dir }}/views/main
-          cp -R packages/desktop-rust/release-assets/dist/overlay artifacts/${{ matrix.artifact_dir }}/views/overlay
-          cp -R packages/desktop/public/fonts artifacts/${{ matrix.artifact_dir }}/views/fonts
-          cp packages/desktop/assets/icon.png artifacts/${{ matrix.artifact_dir }}/assets/icon.png
-          cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
-          cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
+
+      - name: Verify native artifact contract
+        shell: bash
+        run: |
+          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
+            verify-artifact artifacts/${{ matrix.artifact_dir }} --target ${{ matrix.target }}
 
       - name: Upload desktop app artifact
         uses: actions/upload-artifact@v4
@@ -366,7 +310,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: '8.0.x'
 
       - name: Install Velopack CLI
         shell: bash

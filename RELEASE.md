@@ -53,13 +53,12 @@ git push origin v1.0.0
 The workflow will automatically:
 
 1. Generate changelog from commits
-2. Build the legacy desktop Vite views used by the native package
-3. Build desktop-rust apps for Linux, Windows, and macOS
-4. Prepare Velopack app directories with `views/...` and `assets/...`
-5. Verify each prepared app directory with the Rust packaging verifier
-6. Create the GitHub Release for backend and release metadata
-7. Publish Velopack packages for each desktop channel (`linux`, `win`, `osx`)
-8. Build backend binary and Docker image
+2. Build desktop-rust apps for Linux, Windows, and macOS
+3. Prepare Velopack app directories with native staged artifacts only
+4. Verify each prepared app directory with the Rust packaging verifier
+5. Create the GitHub Release for backend and release metadata
+6. Publish Velopack packages for each desktop channel (`linux`, `win`, `osx`)
+7. Build backend binary and Docker image
 
 ### Method 2: Manual Trigger
 
@@ -146,7 +145,7 @@ To verify a prepared Velopack app directory directly:
 
 ```bash
 cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
-  verify-artifact artifacts/desktop-linux-x64
+  verify-artifact artifacts/desktop-linux-x64 --target linux-x64
 ```
 
 ### Backend
@@ -168,8 +167,8 @@ docker build -t twirchat-backend .
 
 The desktop application uses Velopack for distribution and automatic updates:
 
-- **Self-contained**: desktop artifacts are bundled with required `views/...` and `assets/...` files
-  before `vpk pack`.
+- **Self-contained**: desktop artifacts are bundled as native platform app artifacts only
+  (`twirchat`, `twirchat.exe`, or `TwirChat.app`) before `vpk pack`.
 - **Automatic checks**: packaged builds initialize Velopack at startup and check for updates on
   startup and periodically while automatic update checks are enabled.
 - **In-app flow**: available updates appear as an in-app toast; users can download the update and

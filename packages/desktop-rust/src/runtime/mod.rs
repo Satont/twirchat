@@ -18,7 +18,7 @@ pub use config::{
     RuntimeConfigInput, TWITCH_REDIRECT_URI, YOUTUBE_REDIRECT_URI,
 };
 pub use packaging::{
-    AssetKind, AssetRequirement, PackagingAppMetadata, PackagingVerificationError,
+    AssetKind, AssetRequirement, PackagingAppMetadata, PackagingTarget, PackagingVerificationError,
     PackagingVerificationReport, PackagingVerificationStatus, ReleaseTagError,
     TwirChatPackagingSpec, VelopackCommandPlan, VelopackCommandPlanError, VelopackPlanInput,
     VelopackPlatformChannel, VelopackReleaseContract, VelopackTargetCommandPlan,

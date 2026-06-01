@@ -37,16 +37,11 @@ cargo test --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-
 
 ## Package asset verification
 
-The native package verifier mirrors the Velopack app directory that CI prepares before `vpk pack`:
+The native package verifier checks only the platform-native artifact staged in Velopack `packDir`:
 
-- `packages/desktop-rust/release-assets/dist/overlay/index.html` -> `views/overlay/index.html`
-- `packages/desktop-rust/release-assets/dist/overlay/assets` -> `views/overlay/assets`
-- `packages/desktop-rust/release-assets/dist/main/index.html` -> `views/main/index.html`
-- `packages/desktop-rust/release-assets/dist/main/assets` -> `views/main/assets`
-- `packages/desktop/public/fonts` -> `views/fonts`
-- `packages/desktop/assets/icon.png` -> `assets/icon.png`
-- `packages/desktop/assets/icon.ico` -> `assets/icon.ico`
-- `packages/desktop/assets/icon.iconset` -> `assets/icon.iconset`
+- Linux target `linux-x64` requires `twirchat`
+- Windows target `win-x64` requires `twirchat.exe`
+- macOS target `macos-universal` requires `TwirChat.app` and `TwirChat.app/Contents/MacOS/TwirChat`
 - App metadata remains `TwirChat`, `dev.twirchat.app`, and the GitHub release download base URL used
   by the native updater.
 
@@ -54,14 +49,14 @@ Run the focused verifier tests with:
 
 ```sh
 cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_artifact_contains_required_assets -- --nocapture
-cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_overlay_asset_fails -- --nocapture
+cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging_missing_native_executable_fails -- --nocapture
 ```
 
 Verify a prepared CI-style app directory directly with:
 
 ```sh
 cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
-  verify-artifact artifacts/desktop-linux-x64
+  verify-artifact artifacts/desktop-linux-x64 --target linux-x64
 ```
 
 From the repo root, the same focused test flow is exposed as:

@@ -2,7 +2,7 @@ use std::env;
 use std::path::Path;
 use std::process::ExitCode;
 use twirchat::runtime::{
-    VelopackPlanInput, plan_velopack_commands, render_velopack_simulation,
+    PackagingTarget, VelopackPlanInput, plan_velopack_commands, render_velopack_simulation,
     validate_velopack_release_tag, verify_packaging_artifact,
 };
 
@@ -27,7 +27,9 @@ fn print_usage() {
     eprintln!(
         "       release-contract velopack-plan <stable-tag> [--repo-url <url>] [--artifact-root <dir>] [--first-release] [--existing-asset <name>] [--existing-assets <csv>]"
     );
-    eprintln!("       release-contract verify-artifact <path>");
+    eprintln!(
+        "       release-contract verify-artifact <path> --target <linux-x64|win-x64|macos-universal>"
+    );
 }
 
 fn print_release_contract(tag: &str, trailing_args: &[String]) -> ExitCode {
@@ -59,16 +61,43 @@ fn print_release_contract(tag: &str, trailing_args: &[String]) -> ExitCode {
 
 fn run_verify_artifact(args: &[String]) -> ExitCode {
     let Some(path) = args.first() else {
-        eprintln!("usage: release-contract verify-artifact <path>");
+        eprintln!(
+            "usage: release-contract verify-artifact <path> --target <linux-x64|win-x64|macos-universal>"
+        );
         return ExitCode::FAILURE;
     };
 
-    if args.len() != 1 {
-        eprintln!("verify-artifact accepts exactly one artifact path");
-        return ExitCode::FAILURE;
+    let mut target = None;
+    let mut index = 1;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--target" => {
+                let Some(value) = args.get(index + 1) else {
+                    eprintln!("--target requires a value");
+                    return ExitCode::FAILURE;
+                };
+                let Some(parsed) = PackagingTarget::from_cli_value(value) else {
+                    eprintln!(
+                        "invalid --target value '{value}'; expected one of linux-x64, win-x64, macos-universal"
+                    );
+                    return ExitCode::FAILURE;
+                };
+                target = Some(parsed);
+                index += 2;
+            }
+            unknown => {
+                eprintln!("unknown option for verify-artifact: {unknown}");
+                return ExitCode::FAILURE;
+            }
+        }
     }
 
-    match verify_packaging_artifact(Path::new(path)) {
+    let Some(target) = target else {
+        eprintln!("verify-artifact requires --target <linux-x64|win-x64|macos-universal>");
+        return ExitCode::FAILURE;
+    };
+
+    match verify_packaging_artifact(Path::new(path), target) {
         Ok(report) => match serde_json::to_string_pretty(&report) {
             Ok(json) => {
                 println!("{json}");
