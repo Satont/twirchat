@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 use gpui::{App, AppContext, Bounds, WindowBounds, WindowOptions, px, size};
 use gpui_platform::application;
 use std::cell::Cell;

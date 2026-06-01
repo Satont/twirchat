@@ -89,6 +89,8 @@ jobs:
     if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     env:
       CARGO_TARGET_DIR: target
+      BACKEND_URL: ${{ vars.BACKEND_URL || secrets.BACKEND_URL }}
+      BACKEND_WS_URL: ${{ vars.BACKEND_WS_URL || secrets.BACKEND_WS_URL }}
     strategy:
       fail-fast: false
       matrix:

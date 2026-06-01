@@ -28,6 +28,10 @@ impl FontFamily {
 }
 
 pub fn app_font_family(choice: FontFamilyChoice) -> &'static str {
+    if cfg!(target_os = "macos") {
+        return FontFamily::System.as_str();
+    }
+
     FontFamily::for_choice(choice).as_str()
 }
 
@@ -65,8 +69,19 @@ mod tests {
 
     #[test]
     fn font_choices_map_to_gpui_families() {
-        assert_eq!(app_font_family(FontFamilyChoice::Inter), "Inter Variable");
-        assert_eq!(app_font_family(FontFamilyChoice::Manrope), "Manrope");
+        let expected_inter = if cfg!(target_os = "macos") {
+            ".SystemUIFont"
+        } else {
+            "Inter Variable"
+        };
+        let expected_manrope = if cfg!(target_os = "macos") {
+            ".SystemUIFont"
+        } else {
+            "Manrope"
+        };
+
+        assert_eq!(app_font_family(FontFamilyChoice::Inter), expected_inter);
+        assert_eq!(app_font_family(FontFamilyChoice::Manrope), expected_manrope);
         assert_eq!(app_font_family(FontFamilyChoice::System), ".SystemUIFont");
     }
 

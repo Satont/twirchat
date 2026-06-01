@@ -21,8 +21,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed={}", source_path.display());
     println!("cargo:rerun-if-changed=.env");
     println!("cargo:rerun-if-changed=.env.example");
-    println!("cargo:rerun-if-env-changed=CHATRIX_BACKEND_URL");
-    println!("cargo:rerun-if-env-changed=CHATRIX_BACKEND_WS_URL");
+    println!("cargo:rerun-if-env-changed=BACKEND_URL");
+    println!("cargo:rerun-if-env-changed=BACKEND_WS_URL");
     println!("cargo:rerun-if-env-changed=NODE_ENV");
     println!("cargo:rerun-if-env-changed=AUTH_SERVER_PORT");
     println!("cargo:rerun-if-env-changed=OVERLAY_SERVER_PORT");
