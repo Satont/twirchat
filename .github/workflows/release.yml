@@ -280,24 +280,36 @@ jobs:
   publish-desktop:
     name: Publish Desktop Velopack (${{ matrix.target }})
     needs: [changelog, build-desktop, release]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: linux-x64
+            os: ubuntu-latest
             channel: linux
             artifact_dir: desktop-linux-x64
+            pack_dir_suffix: ''
             main_exe: twirchat
+            vpk_target: linux
+            runtime_arg: --runtime linux-x64
           - target: win-x64
+            os: ubuntu-latest
             channel: win
             artifact_dir: desktop-win-x64
+            pack_dir_suffix: ''
             main_exe: twirchat.exe
+            vpk_target: win
+            runtime_arg: --runtime win-x64
           - target: macos-universal
+            os: macos-latest
             channel: osx
             artifact_dir: desktop-macos-universal
-            main_exe: TwirChat.app
+            pack_dir_suffix: /TwirChat.app
+            main_exe: TwirChat
+            vpk_target: osx
+            runtime_arg: ''
     steps:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -340,17 +352,28 @@ jobs:
           REPO_URL: https://github.com/${{ github.repository }}
           CHANNEL: ${{ matrix.channel }}
           APP_ARTIFACT_DIR: artifacts/${{ matrix.artifact_dir }}
+          PACK_DIR_SUFFIX: ${{ matrix.pack_dir_suffix }}
           PACKAGE_OUTPUT_DIR: artifacts/velopack/${{ matrix.channel }}
           MAIN_EXE: ${{ matrix.main_exe }}
+          VPK_TARGET: ${{ matrix.vpk_target }}
+          RUNTIME_ARGS: ${{ matrix.runtime_arg }}
         run: |
           mkdir -p "$PACKAGE_OUTPUT_DIR"
+          ls -R "$APP_ARTIFACT_DIR"
+          if [ "$CHANNEL" = "linux" ]; then
+            chmod +x "$APP_ARTIFACT_DIR/$MAIN_EXE"
+          elif [ "$CHANNEL" = "osx" ]; then
+            chmod +x "$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX/Contents/MacOS/$MAIN_EXE"
+          fi
+          PACK_DIR="$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX"
+
           if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
             echo "Dry run: skipping vpk download github and treating package as first release."
           elif ! vpk download github --repoUrl "$REPO_URL" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"; then
             echo "No previous Velopack feed found for $CHANNEL; continuing as first release"
           fi
 
-          vpk pack -u dev.twirchat.app -v "$PACK_VERSION" --packDir "$APP_ARTIFACT_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
+          vpk "[$VPK_TARGET]" pack -u dev.twirchat.app -v "$PACK_VERSION" --packDir "$PACK_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR" ${RUNTIME_ARGS:+$RUNTIME_ARGS}
           ls -R "$PACKAGE_OUTPUT_DIR"
 
           if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then

@@ -464,14 +464,14 @@ fn velopack_target_plan(
         });
     }
 
-    let artifact_directory = input
-        .artifact_root
-        .join(format!(
-            "desktop-{}",
-            velopack_artifact_target_name(channel.channel)
-        ))
-        .display()
-        .to_string();
+    let mut artifact_directory = input.artifact_root.join(format!(
+        "desktop-{}",
+        velopack_artifact_target_name(channel.channel)
+    ));
+    if let Some(pack_dir_suffix) = velopack_pack_dir_suffix(channel.channel) {
+        artifact_directory = artifact_directory.join(pack_dir_suffix);
+    }
+    let artifact_directory = artifact_directory.display().to_string();
     let package_directory = input
         .artifact_root
         .join("velopack")
@@ -485,13 +485,15 @@ fn velopack_target_plan(
             input.repository_url, channel.channel, package_directory
         ),
         format!(
-            "vpk pack -u {} -v {} --packDir {} --mainExe {} --channel {} --outputDir {}",
+            "vpk [{}] pack -u {} -v {} --packDir {} --mainExe {} --channel {} --outputDir {}{}",
+            velopack_target_directive(channel.channel),
             release.contract.package_id,
             release.pack_version,
             artifact_directory,
             velopack_target_executable(channel.channel),
             channel.channel,
-            package_directory
+            package_directory,
+            velopack_target_runtime_arg(channel.channel)
         ),
         format!(
             "vpk upload github --repoUrl {} --publish --merge --tag {} --channel {} --outputDir {}",
@@ -523,8 +525,33 @@ fn velopack_target_executable(channel: &str) -> &'static str {
     match channel {
         "linux" => "twirchat",
         "win" => "twirchat.exe",
-        "osx" => "TwirChat.app",
+        "osx" => "TwirChat",
         _ => "twirchat",
+    }
+}
+
+fn velopack_pack_dir_suffix(channel: &str) -> Option<&'static str> {
+    match channel {
+        "osx" => Some("TwirChat.app"),
+        _ => None,
+    }
+}
+
+fn velopack_target_directive(channel: &str) -> &'static str {
+    match channel {
+        "linux" => "linux",
+        "win" => "win",
+        "osx" => "osx",
+        _ => "linux",
+    }
+}
+
+fn velopack_target_runtime_arg(channel: &str) -> &'static str {
+    match channel {
+        "linux" => " --runtime linux-x64",
+        "win" => " --runtime win-x64",
+        "osx" => "",
+        _ => "",
     }
 }
 
