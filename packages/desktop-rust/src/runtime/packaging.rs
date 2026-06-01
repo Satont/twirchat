@@ -349,17 +349,17 @@ impl TwirChatPackagingSpec {
         },
         AssetRequirement {
             id: "macos-info-plist",
-            source_path: "packages/desktop-rust/release-assets/macos/Info.plist",
+            source_path: ".github/workflows/release.yml macOS artifact preparation",
             packaged_path: "TwirChat.app/Contents/Info.plist",
             kind: AssetKind::File,
             reason: "macOS bundle metadata required by the prebuilt TwirChat.app",
         },
         AssetRequirement {
             id: "macos-resources-directory",
-            source_path: "packages/desktop-rust/release-assets/macos/Resources",
+            source_path: ".github/workflows/release.yml macOS artifact preparation",
             packaged_path: "TwirChat.app/Contents/Resources",
             kind: AssetKind::NonEmptyDirectory,
-            reason: "Velopack writes sq.version into Contents/Resources during macOS preprocessing, and upload-artifact preserves non-empty directories",
+            reason: "Velopack writes sq.version into Contents/Resources during macOS preprocessing, and upload-artifact preserves directories with non-hidden files",
         },
     ];
 

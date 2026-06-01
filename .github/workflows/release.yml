@@ -203,7 +203,8 @@ jobs:
         run: |
           mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS
           mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/Resources
-          : > artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/Resources/.keep
+          printf 'Preserve macOS Resources for Velopack.\n' > \
+            artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/Resources/artifact-sentinel.txt
           cp target/universal-apple-darwin/release/twirchat \
             artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS/TwirChat
           cat > artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/Info.plist <<'PLIST'
@@ -393,6 +394,12 @@ jobs:
           if [ "$CHANNEL" = "linux" ]; then
             chmod +x "$APP_ARTIFACT_DIR/$MAIN_EXE"
           elif [ "$CHANNEL" = "osx" ]; then
+            RESOURCES_SENTINEL="$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX/Contents/Resources/artifact-sentinel.txt"
+            if [ ! -f "$RESOURCES_SENTINEL" ]; then
+              echo "Missing macOS Resources sentinel after artifact download: $RESOURCES_SENTINEL"
+              ls -R "$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX/Contents"
+              exit 1
+            fi
             chmod +x "$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX/Contents/MacOS/$MAIN_EXE"
           fi
           PACK_DIR="$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX"

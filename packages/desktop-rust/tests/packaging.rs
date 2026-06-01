@@ -130,12 +130,48 @@ fn packaging_empty_macos_resources_directory_fails() -> Result<(), Box<dyn std::
     fs::remove_file(
         artifact
             .path()
-            .join("TwirChat.app/Contents/Resources/.asset-sentinel"),
+            .join("TwirChat.app/Contents/Resources/artifact-sentinel.txt"),
     )?;
 
     let error = match verify_packaging_artifact(artifact.path(), PackagingTarget::MacosUniversal) {
         Ok(_) => {
             return Err("empty macOS Resources directory unexpectedly passed verification".into());
+        }
+        Err(error) => error,
+    };
+    let PackagingVerificationError::MissingAssets { report } = error else {
+        return Err(format!("unexpected packaging verification error: {error}").into());
+    };
+
+    let failed = report.failed_checks().collect::<Vec<_>>();
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0].id, "macos-resources-directory");
+    assert_eq!(
+        failed[0].status,
+        PackagingVerificationStatus::EmptyDirectory
+    );
+
+    Ok(())
+}
+
+#[test]
+fn packaging_hidden_macos_resources_marker_fails_after_artifact_filtering()
+-> Result<(), Box<dyn std::error::Error>> {
+    let artifact = create_packaging_artifact(PackagingTarget::MacosUniversal)?;
+    let resources_dir = artifact.path().join("TwirChat.app/Contents/Resources");
+    fs::remove_file(resources_dir.join("artifact-sentinel.txt"))?;
+    write_file(
+        &resources_dir.join(".keep"),
+        "hidden marker omitted by upload-artifact",
+    )?;
+
+    fs::remove_file(resources_dir.join(".keep"))?;
+
+    let error = match verify_packaging_artifact(artifact.path(), PackagingTarget::MacosUniversal) {
+        Ok(_) => {
+            return Err(
+                "hidden-only macOS Resources marker unexpectedly survived filtering".into(),
+            );
         }
         Err(error) => error,
     };
@@ -284,7 +320,7 @@ fn create_packaging_artifact(
             AssetKind::Directory => fs::create_dir_all(&path)?,
             AssetKind::NonEmptyDirectory => {
                 fs::create_dir_all(&path)?;
-                write_file(&path.join(".asset-sentinel"), requirement.id)?;
+                write_file(&path.join("artifact-sentinel.txt"), requirement.id)?;
             }
         }
     }

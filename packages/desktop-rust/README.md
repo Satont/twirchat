@@ -41,7 +41,7 @@ The native package verifier checks only the platform-native artifact staged in V
 
 - Linux target `linux-x64` requires `twirchat`
 - Windows target `win-x64` requires `twirchat.exe`
-- macOS target `macos-universal` requires `TwirChat.app`, `TwirChat.app/Contents/MacOS/TwirChat`, `TwirChat.app/Contents/Info.plist`, and non-empty `TwirChat.app/Contents/Resources`
+- macOS target `macos-universal` requires `TwirChat.app`, `TwirChat.app/Contents/MacOS/TwirChat`, `TwirChat.app/Contents/Info.plist`, and `TwirChat.app/Contents/Resources` containing a non-hidden file so artifact upload preserves it
 - App metadata remains `TwirChat`, `dev.twirchat.app`, and the GitHub release download base URL used
   by the native updater.
 
