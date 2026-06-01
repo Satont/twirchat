@@ -324,13 +324,22 @@ impl TwirChatPackagingSpec {
         reason: "native Linux executable staged for Velopack packDir",
     }];
 
-    pub const REQUIRED_ASSETS_WIN_X64: &'static [AssetRequirement] = &[AssetRequirement {
-        id: "windows-executable",
-        source_path: "packages/desktop-rust/target/release/twirchat.exe",
-        packaged_path: "twirchat.exe",
-        kind: AssetKind::File,
-        reason: "native Windows executable staged for Velopack packDir",
-    }];
+    pub const REQUIRED_ASSETS_WIN_X64: &'static [AssetRequirement] = &[
+        AssetRequirement {
+            id: "windows-executable",
+            source_path: "packages/desktop-rust/target/release/twirchat.exe",
+            packaged_path: "twirchat.exe",
+            kind: AssetKind::File,
+            reason: "native Windows executable staged for Velopack packDir",
+        },
+        AssetRequirement {
+            id: "windows-sqlite-runtime",
+            source_path: "vcpkg installed/x64-windows/bin/sqlite3.dll",
+            packaged_path: "sqlite3.dll",
+            kind: AssetKind::File,
+            reason: "Windows desktop binary links sqlite3 dynamically and needs sqlite3.dll beside twirchat.exe",
+        },
+    ];
 
     pub const REQUIRED_ASSETS_MACOS_UNIVERSAL: &'static [AssetRequirement] = &[
         AssetRequirement {

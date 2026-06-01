@@ -11,10 +11,29 @@ fn ui_tokens_match_vue_sources() {
 }
 
 #[test]
-fn ui_platform_icons_have_svg_sources() {
-    assert!(Path::new("../desktop/src/assets/icons/platforms/twitch.svg").exists());
-    assert!(Path::new("../desktop/src/assets/icons/platforms/youtube.svg").exists());
-    assert!(Path::new("../desktop/src/assets/icons/platforms/kick.svg").exists());
+fn ui_platform_icons_are_embedded_for_packaged_builds() -> Result<(), Box<dyn std::error::Error>> {
+    let platform_icon_rs = fs::read_to_string("src/ui/components/platform_icon.rs")?;
+
+    assert!(Path::new("assets/icons/platforms/twitch.svg").exists());
+    assert!(Path::new("assets/icons/platforms/youtube.svg").exists());
+    assert!(Path::new("assets/icons/platforms/kick.svg").exists());
+    assert!(
+        platform_icon_rs.contains("include_bytes!(\"../../../assets/icons/platforms/twitch.svg\")")
+    );
+    assert!(
+        platform_icon_rs
+            .contains("include_bytes!(\"../../../assets/icons/platforms/youtube.svg\")")
+    );
+    assert!(
+        platform_icon_rs.contains("include_bytes!(\"../../../assets/icons/platforms/kick.svg\")")
+    );
+    assert!(platform_icon_rs.contains("EmbeddedSvg::new(cache_key, bytes)"));
+    assert!(platform_icon_rs.contains("window.paint_svg("));
+    assert!(platform_icon_rs.contains("Some(self.bytes)"));
+    assert!(!platform_icon_rs.contains("external_path"));
+    assert!(!platform_icon_rs.contains("../desktop/src/assets"));
+
+    Ok(())
 }
 
 #[test]
@@ -127,18 +146,21 @@ fn animated_emote_component_drives_unfocused_redraw_contract() {
 }
 
 #[test]
-fn chat_platform_icons_and_badges_match_parity_contract() {
-    let chat_rs = fs::read_to_string("src/ui/chat.rs").expect("should read chat.rs");
-    let adapter_rs =
-        fs::read_to_string("src/platforms/kick/adapter.rs").expect("should read adapter.rs");
-    let platform_icon_rs = fs::read_to_string("src/ui/components/platform_icon.rs")
-        .expect("should read platform_icon.rs");
+fn chat_platform_icons_and_badges_match_parity_contract() -> Result<(), Box<dyn std::error::Error>>
+{
+    let chat_rs = fs::read_to_string("src/ui/chat.rs")?;
+    let adapter_rs = fs::read_to_string("src/platforms/kick/adapter.rs")?;
+    let platform_icon_rs = fs::read_to_string("src/ui/components/platform_icon.rs")?;
 
     assert!(chat_rs.contains("PlatformIcon::new(to_model_platform(message.platform))"));
     assert!(chat_rs.contains("theme::platform_color(to_model_platform("));
     assert!(adapter_rs.contains("generated_kick_badge_path"));
-    assert!(platform_icon_rs.contains("svg()"));
-    assert!(platform_icon_rs.contains("external_path"));
+    assert!(platform_icon_rs.contains("EmbeddedSvg"));
+    assert!(platform_icon_rs.contains("paint_svg"));
+    assert!(!platform_icon_rs.contains("external_path"));
+    assert!(!platform_icon_rs.contains("../desktop/src/assets"));
+
+    Ok(())
 }
 
 #[test]

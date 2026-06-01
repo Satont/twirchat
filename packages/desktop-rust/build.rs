@@ -78,13 +78,13 @@ fn write_build_runtime_config(out_dir: &Path) -> Result<(), Box<dyn std::error::
 
     let backend_url = read_env_or_dotenv(
         &dotenv,
-        "CHATRIX_BACKEND_URL",
+        "BACKEND_URL",
         "http://127.0.0.1:3000",
         require_build_env,
     )?;
     let backend_ws_url = read_env_or_dotenv(
         &dotenv,
-        "CHATRIX_BACKEND_WS_URL",
+        "BACKEND_WS_URL",
         "ws://127.0.0.1:3000/ws",
         require_build_env,
     )?;

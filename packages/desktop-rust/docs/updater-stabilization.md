@@ -23,7 +23,7 @@ states remain safe no-ops or surfaced errors.
 must preserve. It verifies only native, target-specific app artifacts:
 
 - Linux target requires `twirchat`
-- Windows target requires `twirchat.exe`
+- Windows target requires `twirchat.exe` and `sqlite3.dll`
 - macOS universal target requires `TwirChat.app`, `TwirChat.app/Contents/MacOS/TwirChat`, `TwirChat.app/Contents/Info.plist`, and `TwirChat.app/Contents/Resources` containing a non-hidden file so artifact upload preserves it
 - app identity stays aligned with `TwirChat` / `dev.twirchat.app`
 - Velopack release identity stays `dev.twirchat.app`

@@ -237,6 +237,27 @@ fn release_contract_verify_artifact_cli_rejects_missing_assets()
 }
 
 #[test]
+fn release_contract_verify_artifact_cli_rejects_missing_windows_sqlite_runtime()
+-> Result<(), Box<dyn std::error::Error>> {
+    let artifact = create_packaging_artifact(PackagingTarget::WinX64)?;
+    fs::remove_file(artifact.path().join("sqlite3.dll"))?;
+
+    let output = Command::new(env!("CARGO_BIN_EXE_release-contract"))
+        .arg("verify-artifact")
+        .arg(artifact.path())
+        .arg("--target")
+        .arg("win-x64")
+        .output()?;
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("packaging artifact is missing required assets"));
+    assert!(stderr.contains("sqlite3.dll"));
+
+    Ok(())
+}
+
+#[test]
 fn release_contract_verify_artifact_cli_requires_target() -> Result<(), Box<dyn std::error::Error>>
 {
     let artifact = create_packaging_artifact(PackagingTarget::LinuxX64)?;

@@ -157,12 +157,17 @@ jobs:
           }
           $vcpkgTripletPath = Join-Path $vcpkgRoot 'installed\x64-windows'
           $sqliteLib = Join-Path $vcpkgTripletPath 'lib\sqlite3.lib'
+          $sqliteDll = Join-Path $vcpkgTripletPath 'bin\sqlite3.dll'
           if (-not (Test-Path $sqliteLib)) {
             throw "sqlite3.lib was not found at $sqliteLib"
+          }
+          if (-not (Test-Path $sqliteDll)) {
+            throw "sqlite3.dll was not found at $sqliteDll"
           }
           "LIB=$vcpkgTripletPath\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
           "INCLUDE=$vcpkgTripletPath\include;$env:INCLUDE" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PATH=$vcpkgTripletPath\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SQLITE3_DLL=$sqliteDll" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build Rust desktop
         if: matrix.target != 'macos-universal'
@@ -196,6 +201,7 @@ jobs:
         run: |
           mkdir -p artifacts/${{ matrix.artifact_dir }}
           cp target/release/twirchat.exe artifacts/${{ matrix.artifact_dir }}/twirchat.exe
+          cp "$SQLITE3_DLL" artifacts/${{ matrix.artifact_dir }}/sqlite3.dll
 
       - name: Prepare macOS Velopack app artifact
         if: matrix.target == 'macos-universal'
