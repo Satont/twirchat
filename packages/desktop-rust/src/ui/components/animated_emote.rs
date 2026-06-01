@@ -25,6 +25,11 @@ struct AnimatedEmoteFrames {
     delays: Vec<Duration>,
 }
 
+pub fn chat_emote_box_size(font_size: f32, is_compact: bool) -> f32 {
+    let multiplier = if is_compact { 1.65 } else { 2.0 };
+    font_size * multiplier
+}
+
 pub fn animated_emote(
     id: impl Into<String>,
     image_url: impl Into<String>,
@@ -398,11 +403,26 @@ fn advance_frame(
 
 #[cfg(test)]
 mod tests {
-    use super::{advance_frame, split_render_image};
+    use super::{advance_frame, chat_emote_box_size, split_render_image};
     use gpui::RenderImage;
     use image::{Delay, Frame, Rgba, RgbaImage};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn chat_emote_box_size_makes_default_emotes_larger_than_legacy_size() {
+        assert!(chat_emote_box_size(14.0, false) > 24.0);
+    }
+
+    #[test]
+    fn chat_emote_box_size_scales_with_chat_font_size() {
+        assert_eq!(chat_emote_box_size(26.0, false), 52.0);
+    }
+
+    #[test]
+    fn chat_emote_box_size_uses_smaller_compact_multiplier() {
+        assert_eq!(chat_emote_box_size(20.0, true), 33.0);
+    }
 
     #[test]
     fn split_render_image_preserves_frame_count_and_delay() {

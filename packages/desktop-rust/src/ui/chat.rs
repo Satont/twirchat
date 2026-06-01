@@ -5,6 +5,7 @@ use crate::protocol::types::{
     NormalizedChatMessage, Platform, PlatformStatus, SelfPingConfig,
 };
 use crate::ui::components::autocomplete_popup::{AutocompletePopup, AutocompleteSuggestion};
+use crate::ui::components::chat_emote_box_size;
 use crate::ui::components::emote_tooltip;
 use crate::ui::components::input::Input;
 use crate::ui::components::platform_icon::PlatformIcon;
@@ -1148,7 +1149,10 @@ fn system_action_icon(action: SystemMessageAction) -> &'static str {
     }
 }
 
-fn system_message_render_parts(message: &NormalizedChatMessage) -> SystemMessageRenderParts {
+fn system_message_render_parts(
+    message: &NormalizedChatMessage,
+    typography: MessageTypography,
+) -> SystemMessageRenderParts {
     let preview_emote = message
         .emotes
         .iter()
@@ -1180,7 +1184,7 @@ fn system_message_render_parts(message: &NormalizedChatMessage) -> SystemMessage
             });
         }
 
-        text_parts.push(preview_emote_part(message, preview_emote, 0));
+        text_parts.push(preview_emote_part(message, preview_emote, 0, typography));
 
         if let Some(rest) = message.text.get(start..message.text.len()) {
             text_parts.push(SelectableMessagePart::Text {
@@ -1195,7 +1199,7 @@ fn system_message_render_parts(message: &NormalizedChatMessage) -> SystemMessage
             source_range: 0..message.text.len(),
             is_link: false,
         });
-        text_parts.push(preview_emote_part(message, preview_emote, 0));
+        text_parts.push(preview_emote_part(message, preview_emote, 0, typography));
     }
 
     SystemMessageRenderParts {
@@ -1208,10 +1212,11 @@ fn preview_emote_part(
     message: &NormalizedChatMessage,
     emote: Emote,
     part_index: usize,
+    typography: MessageTypography,
 ) -> SelectableMessagePart {
     let message_id = message.id.clone();
     SelectableMessagePart::Custom(std::sync::Arc::new(move |window, cx| {
-        let size = 24.0;
+        let size = chat_emote_box_size(typography.font_size, false);
         let element_id = format!("sys-emote-{message_id}-{}-{part_index}", emote.id);
         div()
             .id(format!(
@@ -1800,7 +1805,7 @@ pub(crate) fn message_row(
     let v_pad = if is_compact { 1.0 } else { 2.0 };
 
     if message.message_type == ChatMessageType::System {
-        let system_parts = system_message_render_parts(message);
+        let system_parts = system_message_render_parts(message, typography);
         let (row_bg, icon_bg, icon_color) = match system_parts.action {
             SystemMessageAction::Added => (0x22c55e12, 0x22c55e33, 0x22c55e),
             SystemMessageAction::Removed => (0xef444414, 0xef444433, 0xef4444),

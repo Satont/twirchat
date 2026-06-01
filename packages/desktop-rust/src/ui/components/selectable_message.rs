@@ -1,7 +1,7 @@
 use crate::protocol::rpc::OpenExternalUrlParams;
 use crate::protocol::types::Emote;
 use crate::runtime::{SystemExternalOpener, browser::open_external_url};
-use crate::ui::components::{animated_emote, emote_tooltip};
+use crate::ui::components::{animated_emote, chat_emote_box_size, emote_tooltip};
 use crate::ui::theme;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId, Entity,
@@ -245,6 +245,7 @@ impl Render for SelectableMessage {
                     is_compact,
                 } => {
                     let is_selected = ranges_overlap(&self.selected_range, &source_range);
+                    let emote_size = chat_emote_box_size(self.font_size, is_compact);
                     let state = cx.entity();
                     let focus_handle = self.focus_handle.clone();
                     div()
@@ -253,10 +254,9 @@ impl Render for SelectableMessage {
                             message_id, emote.id, part_index
                         ))
                         .mx(px(1.5))
-                        .h(px(if is_compact { 20.0 } else { 24.0 }))
-                        .min_w(px(if is_compact { 20.0 } else { 24.0 }))
-                        .max_w(px(if is_compact { 20.0 } else { 24.0 }
-                            * emote.aspect_ratio.unwrap_or(1.0) as f32))
+                        .h(px(emote_size))
+                        .min_w(px(emote_size))
+                        .max_w(px(emote_size * emote.aspect_ratio.unwrap_or(1.0) as f32))
                         .when(is_selected, |el| el.bg(rgba(0x7c3aed55)).rounded_sm())
                         .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                             window.focus(&focus_handle, cx);

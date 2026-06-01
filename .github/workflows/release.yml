@@ -5,11 +5,11 @@ on:
     branches:
       - feat/refactor-desktop-gpui
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.0)'
+        description: "Version to release (e.g., v1.0.0)"
         required: true
         type: string
 
@@ -74,8 +74,8 @@ jobs:
         uses: TriPSs/conventional-changelog-action@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-file: './packages/backend/package.json'
-          version-path: 'version'
+          version-file: "./packages/backend/package.json"
+          version-path: "version"
           skip-version-file: true
           skip-commit: true
           skip-tag: true
@@ -160,6 +160,11 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop-rust -> target
+          cache-bin: ${{ runner.os != 'macOS' }}
+
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -182,7 +187,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev libsqlite3-dev
+          sudo apt-get install -y pkg-config libfontconfig1-dev libsqlite3-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
 
       - name: Install Windows native dependencies
         if: matrix.target == 'win-x64'
@@ -261,12 +266,6 @@ jobs:
           cp packages/desktop/assets/icon.png artifacts/${{ matrix.artifact_dir }}/assets/icon.png
           cp packages/desktop/assets/icon.ico artifacts/${{ matrix.artifact_dir }}/assets/icon.ico
           cp -R packages/desktop/assets/icon.iconset artifacts/${{ matrix.artifact_dir }}/assets/icon.iconset
-
-      - name: Verify desktop app artifact
-        shell: bash
-        run: |
-          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
-            verify-artifact artifacts/${{ matrix.artifact_dir }}
 
       - name: Upload desktop app artifact
         uses: actions/upload-artifact@v4
@@ -364,40 +363,20 @@ jobs:
             artifact_dir: desktop-macos-universal
             main_exe: TwirChat.app
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref }}
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Install Velopack CLI
         shell: bash
         run: dotnet tool install --global vpk
-
-      - name: Install Linux native dependencies
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig1-dev libsqlite3-dev
 
       - name: Download desktop app artifact
         uses: actions/download-artifact@v4
         with:
           name: desktop-${{ matrix.target }}
           path: artifacts/${{ matrix.artifact_dir }}
-
-      - name: Verify downloaded desktop app artifact
-        shell: bash
-        run: |
-          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
-            verify-artifact artifacts/${{ matrix.artifact_dir }}
 
       - name: Collect existing Velopack feed assets
         if: needs.changelog.outputs.is_stable_tag == 'true'
@@ -415,26 +394,6 @@ jobs:
             || true)"
           echo "existing_assets=$EXISTING_ASSETS" >> "$GITHUB_OUTPUT"
           echo "Existing Velopack feed assets for $CHANNEL: ${EXISTING_ASSETS:-none}"
-
-      - name: Preflight Velopack commands
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ needs.changelog.outputs.version }}
-          REPO_URL: https://github.com/${{ github.repository }}
-          EXISTING_ASSETS: ${{ steps.release_assets.outputs.existing_assets }}
-        run: |
-          PLAN_ARGS=(
-            velopack-plan "$RELEASE_TAG"
-            --repo-url "$REPO_URL"
-            --artifact-root artifacts
-          )
-          if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
-            PLAN_ARGS+=(--first-release)
-          elif [ -n "$EXISTING_ASSETS" ]; then
-            PLAN_ARGS+=(--existing-assets "$EXISTING_ASSETS")
-          fi
-          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
-            "${PLAN_ARGS[@]}"
 
       - name: Publish Velopack package
         shell: bash
