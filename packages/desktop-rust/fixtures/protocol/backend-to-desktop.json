@@ -1,0 +1,82 @@
+[
+  { "type": "auth_url", "platform": "kick", "url": "https://kick.example/oauth" },
+  {
+    "type": "auth_success",
+    "platform": "twitch",
+    "username": "streamer",
+    "displayName": "Streamer"
+  },
+  { "type": "auth_error", "platform": "youtube", "error": "denied" },
+  { "type": "error", "message": "backend failed" },
+  { "type": "pong" },
+  { "type": "chat_message", "data": { "id": "raw-message" } },
+  { "type": "chat_event", "data": { "id": "raw-event" } },
+  { "type": "platform_status", "platform": "twitch", "status": "connected" },
+  {
+    "type": "seventv_emote_set",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "emotes": [
+      {
+        "id": "7tv-1",
+        "alias": "peepoHi",
+        "name": "peepoHi",
+        "animated": false,
+        "zeroWidth": false,
+        "aspectRatio": 1.0,
+        "imageUrl": "https://cdn.7tv.app/emote/7tv-1/1x.webp"
+      }
+    ]
+  },
+  {
+    "type": "seventv_emote_added",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "emote": {
+      "id": "7tv-2",
+      "alias": "wideThing",
+      "name": "wideThing",
+      "animated": true,
+      "zeroWidth": false,
+      "aspectRatio": 3.0,
+      "imageUrl": "https://cdn.7tv.app/emote/7tv-2/1x.webp"
+    }
+  },
+  {
+    "type": "seventv_emote_removed",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "emoteId": "7tv-2"
+  },
+  {
+    "type": "seventv_emote_updated",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "emoteId": "7tv-1",
+    "alias": "peepoHey"
+  },
+  {
+    "type": "seventv_system_message",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "action": "updated",
+    "oldAlias": "peepoHi",
+    "emote": {
+      "id": "7tv-1",
+      "alias": "peepoHey",
+      "name": "peepoHi",
+      "animated": false,
+      "zeroWidth": false,
+      "aspectRatio": 1.0,
+      "imageUrl": "https://cdn.7tv.app/emote/7tv-1/1x.webp"
+    }
+  },
+  {
+    "type": "seventv_system_message",
+    "platform": "twitch",
+    "channelId": "streamer",
+    "action": "set_renamed",
+    "oldName": "Old Set",
+    "newName": "New Set"
+  }
+]

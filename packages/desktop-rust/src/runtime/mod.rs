@@ -1,0 +1,33 @@
+//! Runtime utility layer for the future native desktop runtime.
+//!
+//! This module intentionally mirrors the TypeScript desktop utility boundary without
+//! binding to GPUI, webviews, RPC transports, or the real updater pipeline.
+
+pub mod app;
+pub mod browser;
+pub mod config;
+pub mod packaging;
+pub mod update;
+
+pub use crate::services::commands::UpdateCheckSource;
+pub use app::{AppRuntime, AppRuntimeError, UserCardRuntimeLoader};
+pub use browser::{ExternalOpenError, ExternalOpenResult, ExternalOpener, SystemExternalOpener};
+pub use config::{
+    AUTH_CALLBACK_BASE, BackendRequestConfig, DEFAULT_AUTH_SERVER_PORT, DEFAULT_BACKEND_URL,
+    DEFAULT_BACKEND_WS_URL, DEFAULT_OVERLAY_SERVER_PORT, KICK_REDIRECT_URI, RuntimeConfig,
+    RuntimeConfigInput, TWITCH_REDIRECT_URI, YOUTUBE_REDIRECT_URI,
+};
+pub use packaging::{
+    AssetKind, AssetRequirement, PackagingAppMetadata, PackagingTarget, PackagingVerificationError,
+    PackagingVerificationReport, PackagingVerificationStatus, ReleaseTagError,
+    TwirChatPackagingSpec, VelopackCommandPlan, VelopackCommandPlanError, VelopackPlanInput,
+    VelopackPlatformChannel, VelopackReleaseContract, VelopackTargetCommandPlan,
+    VelopackValidatedRelease, plan_velopack_commands, render_velopack_simulation,
+    validate_velopack_release_tag, verify_packaging_artifact,
+};
+pub use update::{
+    AvailableUpdate, STARTUP_UPDATE_NO_UPDATE_DISMISS_AFTER, UPDATE_CHECK_INTERVAL,
+    UpdateCheckMode, UpdateCheckReport, UpdateCheckRequest, UpdateEngine, UpdateEngineError,
+    UpdateEvent, UpdateRuntime, UpdateState, UpdateStatus, UpdateStatusSnapshot,
+    VelopackRuntimeStatus, VelopackUpdateEngine, default_update_feed_url, run_velopack_startup,
+};

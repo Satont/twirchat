@@ -1,37 +1,62 @@
 #!/bin/bash
 set -e
 
-RELEASE_URL="https://github.com/Satont/twirchat/releases/latest/download"
-TARBALL="stable-linux-x64-TwirChat.tar.zst"
+REPO="Satont/twirchat"
+APP_ID="dev.twirchat.app"
+BIN_NAME="twirchat"
+
+echo "Fetching latest release information from GitHub..."
+LATEST_RELEASE_JSON=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest")
+VERSION=$(echo "$LATEST_RELEASE_JSON" | grep -oP '"tag_name":\s*"\K[^"]+')
+
+if [ -z "$VERSION" ]; then
+    echo "Error: Could not detect latest version."
+    exit 1
+fi
+
+echo "Latest stable version: $VERSION"
+
+APPIMAGE_URL=$(echo "$LATEST_RELEASE_JSON" | grep -oP '"browser_download_url":\s*"\K[^"]+\.AppImage' | head -n 1)
+
+if [ -z "$APPIMAGE_URL" ]; then
+    echo "Error: Could not find an AppImage asset for version $VERSION."
+    echo "Please check the releases page: https://github.com/$REPO/releases/latest"
+    exit 1
+fi
+
+APPIMAGE_FILENAME=$(basename "$APPIMAGE_URL")
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-echo "Downloading TwirChat for Linux..."
-curl -fsSL "$RELEASE_URL/$TARBALL" -o "$TMP_DIR/$TARBALL"
+echo "Downloading $APPIMAGE_FILENAME..."
+curl -fsSL "$APPIMAGE_URL" -o "$TMP_DIR/TwirChat.AppImage"
 
-echo "Extracting..."
-tar --zstd -xf "$TMP_DIR/$TARBALL" -C "$TMP_DIR"
-
-APP_NAME="TwirChat"
-APP_DIR="$HOME/.local/share/dev.twirchat.app/stable/app"
-APPLICATIONS_DIR="$HOME/.local/share/applications"
+INSTALL_DIR="$HOME/.local/share/$APP_ID"
 BIN_DIR="$HOME/.local/bin"
+APP_PATH="$INSTALL_DIR/TwirChat.AppImage"
 
-echo "Installing to $APP_DIR..."
-rm -rf "$APP_DIR"
-mkdir -p "$(dirname "$APP_DIR")"
-mv "$TMP_DIR/$APP_NAME" "$APP_DIR"
+echo "Installing to $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR"
+mv "$TMP_DIR/TwirChat.AppImage" "$APP_PATH"
+chmod +x "$APP_PATH"
 
-chmod +x "$APP_DIR/bin/launcher"
+echo "Extracting application icon..."
+cd "$INSTALL_DIR"
+"$APP_PATH" --appimage-extract "usr/share/icons/hicolor/512x512/apps/twirchat.png" > /dev/null 2>&1 || \
+"$APP_PATH" --appimage-extract "assets/icon.png" > /dev/null 2>&1 || true
 
-ICON_PATH=""
-for path in "$APP_DIR/Resources/appIcon.png" "$APP_DIR/Resources/app/icon.png"; do
-  if [ -f "$path" ]; then
-    ICON_PATH="$path"
-    break
-  fi
-done
+if [ -d "squashfs-root" ]; then
+    ICON_SOURCE=$(find squashfs-root -name "*.png" | head -n 1)
+    if [ -n "$ICON_SOURCE" ]; then
+        mv "$ICON_SOURCE" "$INSTALL_DIR/icon.png"
+    fi
+    rm -rf "squashfs-root"
+    ICON_PATH="$INSTALL_DIR/icon.png"
+else
+    ICON_PATH=""
+fi
 
+APPLICATIONS_DIR="$HOME/.local/share/applications"
 mkdir -p "$APPLICATIONS_DIR"
 
 cat > "$APPLICATIONS_DIR/twirchat.desktop" << EOF
@@ -40,28 +65,23 @@ Version=1.0
 Type=Application
 Name=TwirChat
 Comment=Multi-platform chat manager for streamers
-Exec="$APP_DIR/bin/launcher" %u
-TryExec=$APP_DIR/bin/launcher
-Icon=${ICON_PATH:-$APP_DIR/Resources/appIcon.png}
+Exec="$APP_PATH" %u
+Icon=${ICON_PATH:-twirchat}
 Terminal=false
 StartupWMClass=TwirChat
-StartupNotify=true
 Categories=Network;InstantMessaging;
 EOF
 
 chmod +x "$APPLICATIONS_DIR/twirchat.desktop"
-echo "Added TwirChat to applications menu"
+echo "Added TwirChat to the applications menu."
 
 mkdir -p "$BIN_DIR"
-ln -sf "$APP_DIR/bin/launcher" "$BIN_DIR/twirchat"
-echo "Created symlink: twirchat -> $APP_DIR/bin/launcher"
+ln -sf "$APP_PATH" "$BIN_DIR/$BIN_NAME"
+echo "Created symlink: $BIN_NAME -> $APP_PATH"
 
 if command -v update-desktop-database &> /dev/null; then
   update-desktop-database "$APPLICATIONS_DIR" 2>/dev/null || true
 fi
 
-if command -v gio &> /dev/null; then
-  gio set "$APPLICATIONS_DIR/twirchat.desktop" metadata::trusted true 2>/dev/null || true
-fi
-
-echo "TwirChat installed successfully! Run 'twirchat' from terminal or find it in your app menu."
+echo "TwirChat $VERSION installed successfully!"
+echo "You can launch it from your application menu or by running '$BIN_NAME' in your terminal."

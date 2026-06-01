@@ -13,9 +13,12 @@ The release pipeline is fully automated via GitHub Actions and triggers on:
 
 ### Desktop Application
 
-- **Linux**: x64 and ARM64 binaries + AppImage
-- **macOS**: ARM64 (Apple Silicon) and x64 (Intel) binaries
-- **Windows**: x64 binary
+- **Linux**: x64 AppImage (Velopack)
+- **Windows**: x64 Setup `.exe` (Velopack)
+- **macOS**: universal `.pkg` containing `TwirChat.app` (Velopack)
+
+Velopack also publishes platform feeds named `releases.linux.json`, `releases.win.json`, and
+`releases.osx.json` to the GitHub Release.
 
 ### Backend
 
@@ -50,13 +53,16 @@ git push origin v1.0.0
 The workflow will automatically:
 
 1. Generate changelog from commits
-2. Build desktop apps for all platforms
-3. Build backend binary and Docker image
-4. Create GitHub Release with all artifacts
+2. Build desktop-rust apps for Linux, Windows, and macOS
+3. Prepare Velopack app directories with native staged artifacts only
+4. Verify each prepared app directory with the Rust packaging verifier
+5. Create the GitHub Release for backend and release metadata
+6. Publish Velopack packages for each desktop channel (`linux`, `win`, `osx`)
+7. Build backend binary and Docker image
 
 ### Method 2: Manual Trigger
 
-1. Go to GitHub Actions → Release workflow
+1. Go to GitHub Actions -> Release workflow
 2. Click "Run workflow"
 3. Enter version (e.g., `v1.0.0`)
 4. Click "Run workflow"
@@ -113,26 +119,33 @@ docker compose up -d
 Caddy will automatically:
 
 - Obtain Let's Encrypt certificates
-- Handle HTTP → HTTPS redirect
+- Handle HTTP -> HTTPS redirect
 - Proxy WebSocket connections
 - Enable HTTP/2 and HTTP/3
 - Compress responses with gzip/zstd
 
 ## Local Build
 
-### Desktop
+### Desktop (Native Rust)
 
 ```bash
-cd packages/desktop
+cd packages/desktop-rust
 
 # Development
-bun run dev
+cargo run
 
-# Production build for current platform
-bun run build:prod
+# Production build
+cargo build --release
 
-# Cross-compile for specific platforms
-bunx electrobun build --env=stable --targets=linux-x64,macos-arm64
+# Verify packaging assets
+cargo test packaging_artifact_contains_required_assets
+```
+
+To verify a prepared Velopack app directory directly:
+
+```bash
+cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
+  verify-artifact artifacts/desktop-linux-x64 --target linux-x64
 ```
 
 ### Backend
@@ -150,14 +163,24 @@ bun run build:prod
 docker build -t twirchat-backend .
 ```
 
-## AppImage (Linux)
+## Desktop Updates (Velopack)
 
-The Linux build automatically creates an AppImage for easy distribution:
+The desktop application uses Velopack for distribution and automatic updates:
 
-- Self-contained executable
-- Works on most Linux distributions
-- No installation required
-- Automatic updates via zsync
+- **Self-contained**: desktop artifacts are bundled as native platform app artifacts only
+  (`twirchat`, `twirchat.exe`, or `TwirChat.app`) before `vpk pack`; the macOS bundle must include
+  `Contents/MacOS/TwirChat`, `Contents/Info.plist`, and `Contents/Resources` with a non-hidden
+  file so GitHub artifact upload preserves the directory.
+- **Automatic checks**: packaged builds initialize Velopack at startup and check for updates on
+  startup and periodically while automatic update checks are enabled.
+- **In-app flow**: available updates appear as an in-app toast; users can download the update and
+  restart to apply it through Velopack.
+- **Stable only**: only stable version tags (`vX.Y.Z`) trigger a full Velopack release. Prerelease,
+  beta, nightly, and unprefixed semver tags are rejected by the release contract.
+- **Platform feeds**: stable updates are provided through `releases.linux.json`,
+  `releases.win.json`, and `releases.osx.json`.
+- **No signing**: current releases are unsigned and do not include Apple notarization or Windows code
+  signing.
 
 ## Troubleshooting
 
@@ -171,13 +194,13 @@ The Linux build automatically creates an AppImage for easy distribution:
 
 If artifacts are missing from the release:
 
-1. Check the workflow logs for specific platform failures
-2. Verify the artifact upload step completed successfully
+1. Check the workflow logs for platform failures and packaging verifier output
+2. Verify the desktop-rust app artifact upload step completed successfully
 3. Check artifact retention settings (default: 90 days)
 
 ### Docker Push Failures
 
 Ensure the GitHub token has proper permissions:
 
-- Go to Settings → Actions → General
+- Go to Settings -> Actions -> General
 - Enable "Read and write permissions" for workflows

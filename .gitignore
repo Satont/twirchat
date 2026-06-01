@@ -41,3 +41,5 @@ worktrees/*
 evidence
 drafts
 boulder.json
+.sisyphus/run-continuation
+.omo/run-continuation

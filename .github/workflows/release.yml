@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - feat/refactor-desktop-gpui
     tags:
       - 'v*'
   workflow_dispatch:
@@ -15,12 +17,19 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   changelog:
     name: Generate Changelog
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      pack_version: ${{ steps.version.outputs.pack_version }}
+      is_stable_tag: ${{ steps.version.outputs.is_stable_tag }}
+      dry_run: ${{ steps.version.outputs.dry_run }}
       release_notes: ${{ steps.changelog.outputs.clean_changelog }}
     steps:
       - name: Checkout
@@ -34,18 +43,38 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
+            DRY_RUN=false
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
+            DRY_RUN=false
           else
-            VERSION="${GITHUB_REF#refs/tags/}"
+            VERSION="v0.0.${GITHUB_RUN_NUMBER}"
+            DRY_RUN=true
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "is_stable_tag=false" >> "$GITHUB_OUTPUT"
+            echo "pack_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+          elif [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_stable_tag=true" >> "$GITHUB_OUTPUT"
+            echo "pack_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_stable_tag=false" >> "$GITHUB_OUTPUT"
+            echo "pack_version=" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
+          echo "Dry run: $DRY_RUN"
+          echo "Stable tag: $([[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && echo true || echo false)"
 
       - name: Generate Changelog
         id: changelog
         uses: TriPSs/conventional-changelog-action@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-file: './packages/desktop/package.json'
+          version-file: './packages/backend/package.json'
           version-path: 'version'
           skip-version-file: true
           skip-commit: true
@@ -53,57 +82,32 @@ jobs:
           skip-git-pull: true
           create-summary: true
 
-  build-views:
-    name: Build Views (Vite)
-    needs: changelog
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Cache dependencies
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('bun.lock', 'package.json') }}
-
-      - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: bun install --frozen-lockfile
-
-      - name: Build views
-        working-directory: packages/desktop
-        run: bun run build:views
-
-      - name: Upload views artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-views
-          path: packages/desktop/dist/**
-          if-no-files-found: error
-
   build-desktop:
     name: Build Desktop (${{ matrix.target }})
-    needs: [changelog, build-views]
+    needs: [changelog]
     runs-on: ${{ matrix.os }}
+    if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
+    env:
+      CARGO_TARGET_DIR: target
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: linux-x64
+            channel: linux
+            artifact_dir: desktop-linux-x64
+            binary_name: twirchat
           - os: macos-latest
-            target: macos-arm64
+            target: macos-universal
+            channel: osx
+            artifact_dir: desktop-macos-universal
+            binary_name: TwirChat.app
           - os: windows-latest
             target: win-x64
+            channel: win
+            artifact_dir: desktop-win-x64
+            binary_name: twirchat.exe
 
     steps:
       - name: Checkout
@@ -115,6 +119,14 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop-rust -> target
+          cache-bin: ${{ runner.os != 'macOS' }}
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -127,29 +139,114 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Download views artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: desktop-views
-          path: packages/desktop/dist
-
-      - name: Build Electrobun
-        working-directory: packages/desktop
-        env:
-          NODE_ENV: production
-          CHATRIX_BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          CHATRIX_BACKEND_WS_URL: ${{ secrets.BACKEND_WS_URL }}
-        run: bunx electrobun build --env=stable
-
-      - name: Copy Linux installer script
+      - name: Install Linux native dependencies
         if: matrix.target == 'linux-x64'
-        run: cp scripts/install-linux.sh packages/desktop/artifacts/install-linux.sh
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfontconfig1-dev libsqlite3-dev libxcb1-dev libx11-dev libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan1
 
-      - name: Upload artifacts
+      - name: Install Windows native dependencies
+        if: matrix.target == 'win-x64'
+        shell: pwsh
+        run: |
+          vcpkg install sqlite3:x64-windows
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) {
+            $vcpkgRoot = 'C:\vcpkg'
+          }
+          $vcpkgTripletPath = Join-Path $vcpkgRoot 'installed\x64-windows'
+          $sqliteLib = Join-Path $vcpkgTripletPath 'lib\sqlite3.lib'
+          if (-not (Test-Path $sqliteLib)) {
+            throw "sqlite3.lib was not found at $sqliteLib"
+          }
+          "LIB=$vcpkgTripletPath\lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INCLUDE=$vcpkgTripletPath\include;$env:INCLUDE" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PATH=$vcpkgTripletPath\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build Rust desktop
+        if: matrix.target != 'macos-universal'
+        shell: bash
+        run: cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --bin twirchat
+
+      - name: Build macOS universal Rust desktop
+        if: matrix.target == 'macos-universal'
+        shell: bash
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --bin twirchat --target x86_64-apple-darwin
+          cargo build --manifest-path packages/desktop-rust/Cargo.toml --release --bin twirchat --target aarch64-apple-darwin
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create \
+            target/x86_64-apple-darwin/release/twirchat \
+            target/aarch64-apple-darwin/release/twirchat \
+            -output target/universal-apple-darwin/release/twirchat
+          lipo -info target/universal-apple-darwin/release/twirchat
+
+      - name: Prepare Linux Velopack app artifact
+        if: matrix.target == 'linux-x64'
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ matrix.artifact_dir }}
+          cp target/release/twirchat artifacts/${{ matrix.artifact_dir }}/twirchat
+
+      - name: Prepare Windows Velopack app artifact
+        if: matrix.target == 'win-x64'
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ matrix.artifact_dir }}
+          cp target/release/twirchat.exe artifacts/${{ matrix.artifact_dir }}/twirchat.exe
+
+      - name: Prepare macOS Velopack app artifact
+        if: matrix.target == 'macos-universal'
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS
+          mkdir -p artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/Resources
+          printf 'Preserve macOS Resources for Velopack.\n' > \
+            artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/Resources/artifact-sentinel.txt
+          cp target/universal-apple-darwin/release/twirchat \
+            artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/MacOS/TwirChat
+          cat > artifacts/${{ matrix.artifact_dir }}/TwirChat.app/Contents/Info.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDevelopmentRegion</key>
+            <string>en</string>
+            <key>CFBundleExecutable</key>
+            <string>TwirChat</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.twirchat.app</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>TwirChat</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${{ needs.changelog.outputs.pack_version }}</string>
+            <key>CFBundleVersion</key>
+            <string>${{ needs.changelog.outputs.pack_version }}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>11.0</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Verify native artifact contract
+        shell: bash
+        run: |
+          cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
+            verify-artifact artifacts/${{ matrix.artifact_dir }} --target ${{ matrix.target }}
+
+      - name: Upload desktop app artifact
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}
-          path: packages/desktop/artifacts/**
+          path: artifacts/${{ matrix.artifact_dir }}/**
           if-no-files-found: error
 
   build-backend:
@@ -165,15 +262,7 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Cache dependencies
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('bun.lock', 'package.json') }}
-
       - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
         run: bun install --frozen-lockfile
 
       - name: Build backend binary
@@ -188,33 +277,153 @@ jobs:
 
   release:
     name: Create Release
-    needs: [changelog, build-desktop, build-backend]
+    needs: [changelog, build-backend]
     runs-on: ubuntu-latest
+    if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
     steps:
-      - name: Download all artifacts
+      - name: Download backend artifact
+        if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          name: backend-linux-x64
+          path: artifacts/backend
 
       - name: Create Release
+        if: needs.changelog.outputs.is_stable_tag == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.changelog.outputs.version }}
           name: Release ${{ needs.changelog.outputs.version }}
           body: ${{ needs.changelog.outputs.release_notes }}
           draft: false
-          prerelease: ${{ contains(needs.changelog.outputs.version, 'alpha') || contains(needs.changelog.outputs.version, 'beta') || contains(needs.changelog.outputs.version, 'rc') }}
+          prerelease: false
           files: |
-            artifacts/**
+            artifacts/backend/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dry-run release summary
+        if: needs.changelog.outputs.dry_run == 'true'
+        run: |
+          echo "Dry run: would create GitHub Release ${{ needs.changelog.outputs.version }} with backend artifact."
+          echo "Skipping real release creation."
+
+  publish-desktop:
+    name: Publish Desktop Velopack (${{ matrix.target }})
+    needs: [changelog, build-desktop, release]
+    runs-on: ${{ matrix.os }}
+    if: needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-latest
+            channel: linux
+            artifact_dir: desktop-linux-x64
+            pack_dir_suffix: ''
+            main_exe: twirchat
+            vpk_target: linux
+            runtime_arg: --runtime linux-x64
+          - target: win-x64
+            os: ubuntu-latest
+            channel: win
+            artifact_dir: desktop-win-x64
+            pack_dir_suffix: ''
+            main_exe: twirchat.exe
+            vpk_target: win
+            runtime_arg: --runtime win-x64
+          - target: macos-universal
+            os: macos-latest
+            channel: osx
+            artifact_dir: desktop-macos-universal
+            pack_dir_suffix: /TwirChat.app
+            main_exe: TwirChat
+            vpk_target: osx
+            runtime_arg: ''
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Velopack CLI
+        shell: bash
+        run: dotnet tool install --global vpk
+
+      - name: Download desktop app artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: artifacts/${{ matrix.artifact_dir }}
+
+      - name: Collect existing Velopack feed assets
+        if: needs.changelog.outputs.is_stable_tag == 'true'
+        id: release_assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.changelog.outputs.version }}
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          FEED_ASSET="releases.${CHANNEL}.json"
+          EXISTING_ASSETS="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' \
+            | grep -Fx "$FEED_ASSET" \
+            | paste -sd, - \
+            || true)"
+          echo "existing_assets=$EXISTING_ASSETS" >> "$GITHUB_OUTPUT"
+          echo "Existing Velopack feed assets for $CHANNEL: ${EXISTING_ASSETS:-none}"
+
+      - name: Publish Velopack package
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.changelog.outputs.version }}
+          PACK_VERSION: ${{ needs.changelog.outputs.pack_version }}
+          REPO_URL: https://github.com/${{ github.repository }}
+          CHANNEL: ${{ matrix.channel }}
+          APP_ARTIFACT_DIR: artifacts/${{ matrix.artifact_dir }}
+          PACK_DIR_SUFFIX: ${{ matrix.pack_dir_suffix }}
+          PACKAGE_OUTPUT_DIR: artifacts/velopack/${{ matrix.channel }}
+          MAIN_EXE: ${{ matrix.main_exe }}
+          VPK_TARGET: ${{ matrix.vpk_target }}
+          RUNTIME_ARGS: ${{ matrix.runtime_arg }}
+        run: |
+          mkdir -p "$PACKAGE_OUTPUT_DIR"
+          ls -R "$APP_ARTIFACT_DIR"
+          if [ "$CHANNEL" = "linux" ]; then
+            chmod +x "$APP_ARTIFACT_DIR/$MAIN_EXE"
+          elif [ "$CHANNEL" = "osx" ]; then
+            RESOURCES_SENTINEL="$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX/Contents/Resources/artifact-sentinel.txt"
+            if [ ! -f "$RESOURCES_SENTINEL" ]; then
+              echo "Missing macOS Resources sentinel after artifact download: $RESOURCES_SENTINEL"
+              ls -R "$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX/Contents"
+              exit 1
+            fi
+            chmod +x "$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX/Contents/MacOS/$MAIN_EXE"
+          fi
+          PACK_DIR="$APP_ARTIFACT_DIR$PACK_DIR_SUFFIX"
+
+          if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
+            echo "Dry run: skipping vpk download github and treating package as first release."
+          elif ! vpk download github --repoUrl "$REPO_URL" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"; then
+            echo "No previous Velopack feed found for $CHANNEL; continuing as first release"
+          fi
+
+          vpk "[$VPK_TARGET]" pack -u dev.twirchat.app -v "$PACK_VERSION" --packDir "$PACK_DIR" --mainExe "$MAIN_EXE" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR" ${RUNTIME_ARGS:+$RUNTIME_ARGS}
+          ls -R "$PACKAGE_OUTPUT_DIR"
+
+          if [ "${{ needs.changelog.outputs.dry_run }}" = "true" ]; then
+            echo "Dry run: skipping vpk upload github."
+          else
+            vpk upload github --repoUrl "$REPO_URL" --publish --merge --tag "$RELEASE_TAG" --channel "$CHANNEL" --outputDir "$PACKAGE_OUTPUT_DIR"
+          fi
 
   push-docker:
     name: Push Docker to Registry
     needs: [changelog, build-backend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (needs.changelog.outputs.is_stable_tag == 'true' || needs.changelog.outputs.dry_run == 'true')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -223,6 +432,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
+        if: needs.changelog.outputs.is_stable_tag == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -241,7 +451,7 @@ jobs:
           context: .
           file: ./packages/backend/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ needs.changelog.outputs.is_stable_tag == 'true' }}
           tags: |
             ghcr.io/${{ steps.repo.outputs.lowercase }}/backend:${{ needs.changelog.outputs.version }}
             ghcr.io/${{ steps.repo.outputs.lowercase }}/backend:latest
