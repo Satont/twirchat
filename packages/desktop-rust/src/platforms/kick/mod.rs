@@ -1,6 +1,7 @@
 //! Native Kick platform adapter surface.
 
 pub mod adapter;
+pub mod badges;
 pub mod client;
 pub mod mock;
 
@@ -11,5 +12,6 @@ pub use adapter::{
     KickOriginalMessage, KickOriginalSender, KickReplyMetadata, KickSendMessageRequest,
     KickSenderIdentity, KickStreamStatusRequest, KickSubscriptionEvent, KickTransportAuth,
 };
+pub use badges::{embedded_kick_badge_svg, kick_badge_embedded_url};
 pub use client::RealKickClient;
 pub use mock::{MockKickClient, SentKickMessage};
