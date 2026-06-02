@@ -5,6 +5,7 @@ use crate::protocol::types::{
     NormalizedChatMessage, Platform, PlatformStatus, SelfPingConfig,
 };
 use crate::ui::components::autocomplete_popup::{AutocompletePopup, AutocompleteSuggestion};
+use crate::ui::components::badge_icon::embedded_kick_badge_icon;
 use crate::ui::components::chat_emote_box_size;
 use crate::ui::components::emote_tooltip;
 use crate::ui::components::input::Input;
@@ -20,7 +21,6 @@ use gpui::{
     ListSizingBehavior, ListState, ObjectFit, Render, Stateful, Window, div, img, list, prelude::*,
     px, relative, rgb, rgba,
 };
-use std::path::Path;
 use ui::WithScrollbar;
 use url::Url;
 
@@ -1264,6 +1264,66 @@ impl MessageTypography {
     }
 }
 
+fn is_remote_badge_url(url: &str) -> bool {
+    url.starts_with("http://") || url.starts_with("https://")
+}
+
+fn badge_image_container(typography: MessageTypography, margin_right: bool) -> Div {
+    div()
+        .when(margin_right, |badge| badge.mr(px(4.0)))
+        .w(px(typography.badge_size()))
+        .h(px(typography.badge_size()))
+        .rounded_sm()
+        .overflow_hidden()
+}
+
+fn text_badge_element(text: String, typography: MessageTypography, margin_right: bool) -> Div {
+    div()
+        .when(margin_right, |badge| badge.mr(px(4.0)))
+        .rounded_sm()
+        .px(px(4.0))
+        .py(px(1.0))
+        .bg(rgba(0xffffff1a))
+        .text_color(theme::text_primary())
+        .text_size(px(typography.text_badge_font_size()))
+        .child(text)
+}
+
+fn embedded_kick_badge_element(
+    image_url: Option<&str>,
+    badge_type: &str,
+    typography: MessageTypography,
+    margin_right: bool,
+) -> Option<Div> {
+    embedded_kick_badge_icon(image_url, badge_type, px(typography.badge_size()))
+        .map(|icon| badge_image_container(typography, margin_right).child(icon))
+}
+
+fn remote_badge_image_element(
+    url: String,
+    element_id: String,
+    fallback_text: String,
+    typography: MessageTypography,
+    margin_right: bool,
+) -> Div {
+    badge_image_container(typography, margin_right).child(
+        img(ImageSource::from(url))
+            .id(element_id)
+            .w_full()
+            .h_full()
+            .object_fit(ObjectFit::Contain)
+            .with_loading({
+                let fallback_text = fallback_text.clone();
+                move || {
+                    text_badge_element(fallback_text.clone(), typography, false).into_any_element()
+                }
+            })
+            .with_fallback(move || {
+                text_badge_element(fallback_text.clone(), typography, false).into_any_element()
+            }),
+    )
+}
+
 fn author_label_text(message: &NormalizedChatMessage, use_fallback: bool) -> String {
     let display_name = message.author.display_name.trim();
     if !display_name.is_empty() {
@@ -1601,62 +1661,38 @@ fn compact_message_row(
     }
 
     if settings.show_badges {
+        let is_kick_message = message.platform == Platform::Kick;
         for (index, badge) in message.author.badges.iter().enumerate() {
             let badge = badge.clone();
             let msg_id = message.id.clone();
             custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
                 move |_win, _cx| {
-                    if let Some(path) = badge
-                        .image_url
-                        .as_ref()
-                        .filter(|url| Path::new(url).is_absolute())
+                    if is_kick_message
+                        && let Some(icon) = embedded_kick_badge_element(
+                            badge.image_url.as_deref(),
+                            &badge.badge_type,
+                            typography,
+                            true,
+                        )
                     {
-                        return div()
-                            .mr(px(4.0))
-                            .w(px(typography.badge_size()))
-                            .h(px(typography.badge_size()))
-                            .rounded_sm()
-                            .overflow_hidden()
-                            .child(
-                                img(ImageSource::from(Path::new(path)))
-                                    .id(options.badge_id(&msg_id, &badge.id, index))
-                                    .w_full()
-                                    .h_full()
-                                    .object_fit(ObjectFit::Contain),
-                            )
-                            .into_any_element();
+                        return icon.into_any_element();
                     }
 
                     if let Some(url) = badge
                         .image_url
                         .as_ref()
-                        .filter(|url| url.starts_with("http://") || url.starts_with("https://"))
+                        .filter(|url| is_remote_badge_url(url))
                     {
-                        div()
-                            .mr(px(4.0))
-                            .w(px(typography.badge_size()))
-                            .h(px(typography.badge_size()))
-                            .rounded_sm()
-                            .overflow_hidden()
-                            .child(
-                                img(ImageSource::from(url.clone()))
-                                    .id(options.badge_id(&msg_id, &badge.id, index))
-                                    .w_full()
-                                    .h_full()
-                                    .object_fit(ObjectFit::Contain),
-                            )
-                            .into_any_element()
+                        remote_badge_image_element(
+                            url.clone(),
+                            options.badge_id(&msg_id, &badge.id, index),
+                            badge.text.clone(),
+                            typography,
+                            true,
+                        )
+                        .into_any_element()
                     } else {
-                        div()
-                            .mr(px(4.0))
-                            .rounded_sm()
-                            .px(px(4.0))
-                            .py(px(1.0))
-                            .bg(rgba(0xffffff1a))
-                            .text_color(theme::text_primary())
-                            .text_size(px(typography.text_badge_font_size()))
-                            .child(badge.text.clone())
-                            .into_any_element()
+                        text_badge_element(badge.text.clone(), typography, true).into_any_element()
                     }
                 },
             )));
@@ -2017,57 +2053,31 @@ pub(crate) fn message_row(
                         .when(settings.show_badges, |el| {
                             el.children(message.author.badges.iter().enumerate().map(
                                 |(index, badge)| {
-                                    if let Some(path) = badge
-                                        .image_url
-                                        .as_ref()
-                                        .filter(|url| Path::new(url).is_absolute())
+                                    if message.platform == Platform::Kick
+                                        && let Some(icon) = embedded_kick_badge_element(
+                                            badge.image_url.as_deref(),
+                                            &badge.badge_type,
+                                            typography,
+                                            false,
+                                        )
                                     {
-                                        return div()
-                                            .w(px(typography.badge_size()))
-                                            .h(px(typography.badge_size()))
-                                            .rounded_sm()
-                                            .overflow_hidden()
-                                            .child(
-                                                img(ImageSource::from(Path::new(path)))
-                                                    .id(options.badge_id(
-                                                        &message.id,
-                                                        &badge.id,
-                                                        index,
-                                                    ))
-                                                    .w_full()
-                                                    .h_full()
-                                                    .object_fit(ObjectFit::Contain),
-                                            );
+                                        return icon;
                                     }
 
-                                    if let Some(url) = badge.image_url.as_ref().filter(|url| {
-                                        url.starts_with("http://") || url.starts_with("https://")
-                                    }) {
-                                        div()
-                                            .w(px(typography.badge_size()))
-                                            .h(px(typography.badge_size()))
-                                            .rounded_sm()
-                                            .overflow_hidden()
-                                            .child(
-                                                img(ImageSource::from(url.clone()))
-                                                    .id(options.badge_id(
-                                                        &message.id,
-                                                        &badge.id,
-                                                        index,
-                                                    ))
-                                                    .w_full()
-                                                    .h_full()
-                                                    .object_fit(ObjectFit::Contain),
-                                            )
+                                    if let Some(url) = badge
+                                        .image_url
+                                        .as_ref()
+                                        .filter(|url| is_remote_badge_url(url))
+                                    {
+                                        remote_badge_image_element(
+                                            url.clone(),
+                                            options.badge_id(&message.id, &badge.id, index),
+                                            badge.text.clone(),
+                                            typography,
+                                            false,
+                                        )
                                     } else {
-                                        div()
-                                            .rounded_sm()
-                                            .px(px(4.0))
-                                            .py(px(1.0))
-                                            .bg(rgba(0xffffff1a))
-                                            .text_color(theme::text_primary())
-                                            .text_size(px(typography.text_badge_font_size()))
-                                            .child(badge.text.clone())
+                                        text_badge_element(badge.text.clone(), typography, false)
                                     }
                                 },
                             ))

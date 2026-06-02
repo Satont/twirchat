@@ -2,17 +2,23 @@ use std::fs;
 use std::path::Path;
 
 #[test]
-fn ui_tokens_match_vue_sources() {
-    let app_vue =
-        fs::read_to_string("../desktop/src/views/main/App.vue").expect("should read App.vue");
-    assert!(app_vue.contains("--c-bg: #0f0f11;"));
-    assert!(app_vue.contains("--c-surface: #18181b;"));
-    assert!(app_vue.contains("--c-bg: #f0eff4;"));
+fn ui_tokens_match_rust_theme_sources() {
+    let colors_rs = fs::read_to_string("src/ui/theme/colors.rs").expect("should read colors.rs");
+    assert!(colors_rs.contains("r: 0x0f as f32 / 255.0"));
+    assert!(colors_rs.contains("g: 0x0f as f32 / 255.0"));
+    assert!(colors_rs.contains("b: 0x11 as f32 / 255.0"));
+    assert!(colors_rs.contains("r: 0x18 as f32 / 255.0"));
+    assert!(colors_rs.contains("g: 0x18 as f32 / 255.0"));
+    assert!(colors_rs.contains("b: 0x1b as f32 / 255.0"));
+    assert!(colors_rs.contains("r: 0xf0 as f32 / 255.0"));
+    assert!(colors_rs.contains("g: 0xef as f32 / 255.0"));
+    assert!(colors_rs.contains("b: 0xf4 as f32 / 255.0"));
 }
 
 #[test]
 fn ui_platform_icons_are_embedded_for_packaged_builds() -> Result<(), Box<dyn std::error::Error>> {
     let platform_icon_rs = fs::read_to_string("src/ui/components/platform_icon.rs")?;
+    let embedded_svg_rs = fs::read_to_string("src/ui/components/embedded_svg.rs")?;
 
     assert!(Path::new("assets/icons/platforms/twitch.svg").exists());
     assert!(Path::new("assets/icons/platforms/youtube.svg").exists());
@@ -28,8 +34,8 @@ fn ui_platform_icons_are_embedded_for_packaged_builds() -> Result<(), Box<dyn st
         platform_icon_rs.contains("include_bytes!(\"../../../assets/icons/platforms/kick.svg\")")
     );
     assert!(platform_icon_rs.contains("EmbeddedSvg::new(cache_key, bytes)"));
-    assert!(platform_icon_rs.contains("window.paint_svg("));
-    assert!(platform_icon_rs.contains("Some(self.bytes)"));
+    assert!(embedded_svg_rs.contains("window.paint_svg("));
+    assert!(embedded_svg_rs.contains("Some(self.bytes)"));
     assert!(!platform_icon_rs.contains("external_path"));
     assert!(!platform_icon_rs.contains("../desktop/src/assets"));
 
@@ -123,7 +129,8 @@ fn gpui_images_use_loading_and_fallback_contracts() {
     assert!(chat_rs.contains("ObjectFit::Cover"));
     assert!(chat_rs.contains("with_loading"));
     assert!(chat_rs.contains("with_fallback"));
-    assert!(chat_rs.contains("Path::new(url).is_absolute()"));
+    assert!(chat_rs.contains("remote_badge_image_element"));
+    assert!(!chat_rs.contains("Path::new("));
     assert!(platforms_rs.contains("ImageSource::from"));
     assert!(platforms_rs.contains("ObjectFit::Cover"));
     assert!(app_rs.contains("retain_all"));
@@ -150,13 +157,27 @@ fn chat_platform_icons_and_badges_match_parity_contract() -> Result<(), Box<dyn 
 {
     let chat_rs = fs::read_to_string("src/ui/chat.rs")?;
     let adapter_rs = fs::read_to_string("src/platforms/kick/adapter.rs")?;
+    let badge_icon_rs = fs::read_to_string("src/ui/components/badge_icon.rs")?;
+    let embedded_svg_rs = fs::read_to_string("src/ui/components/embedded_svg.rs")?;
     let platform_icon_rs = fs::read_to_string("src/ui/components/platform_icon.rs")?;
 
     assert!(chat_rs.contains("PlatformIcon::new(to_model_platform(message.platform))"));
     assert!(chat_rs.contains("theme::platform_color(to_model_platform("));
-    assert!(adapter_rs.contains("generated_kick_badge_path"));
+    assert!(chat_rs.contains("message.platform == Platform::Kick"));
+    assert!(chat_rs.contains("embedded_kick_badge_element("));
+    assert!(chat_rs.contains("remote_badge_image_element("));
+    assert!(chat_rs.contains("text_badge_element("));
+    assert!(!chat_rs.contains("Path::new("));
+    assert!(adapter_rs.contains("kick_badge_embedded_url"));
+    assert!(!adapter_rs.contains("generated_kick_badge_path"));
+    assert!(badge_icon_rs.contains("embedded_kick_badge_svg"));
+    assert!(badge_icon_rs.contains("KICK_BADGE_EMBEDDED_PREFIX"));
+    assert!(badge_icon_rs.contains("embedded:kick:"));
+    assert!(badge_icon_rs.contains("strip_prefix(KICK_BADGE_EMBEDDED_PREFIX)"));
+    assert!(badge_icon_rs.contains("EmbeddedSvg::new(self.cache_key, self.svg.as_bytes())"));
+    assert!(embedded_svg_rs.contains("paint_svg"));
+    assert!(embedded_svg_rs.contains("Some(self.bytes)"));
     assert!(platform_icon_rs.contains("EmbeddedSvg"));
-    assert!(platform_icon_rs.contains("paint_svg"));
     assert!(!platform_icon_rs.contains("external_path"));
     assert!(!platform_icon_rs.contains("../desktop/src/assets"));
 
