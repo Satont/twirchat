@@ -8,32 +8,20 @@ use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
-use twirchat::overlay::{
-    OverlayRuntimePaths, OverlayServer, OverlayServerConfig, resolve_overlay_runtime_paths,
-};
+use twirchat::overlay::{OverlayRuntimePaths, OverlayServer, OverlayServerConfig};
 use twirchat::protocol::{ChatAuthor, ChatMessageType, NormalizedChatMessage, Platform};
 
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 #[test]
-fn overlay_server_serves_vue_assets() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime_paths = built_overlay_runtime_paths()?;
-    let overlay_dir = runtime_paths.overlay_dir.as_ref().ok_or(
-        "overlay dist directory was not resolved; run bun run --cwd packages/desktop build:views",
-    )?;
-    let asset_path = first_built_asset(overlay_dir)?;
-    let asset_name = asset_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or("built asset should have a UTF-8 file name")?;
+fn overlay_server_serves_configured_assets() -> Result<(), Box<dyn std::error::Error>> {
+    let overlay_assets = test_overlay_assets()?;
+    let asset_name = overlay_assets.asset_name;
 
-    let server = OverlayServer::start(
-        OverlayServerConfig {
-            address: "127.0.0.1:0".into(),
-            runtime_paths,
-        }
-        .with_runtime_paths(built_overlay_runtime_paths()?),
-    )?;
+    let server = OverlayServer::start(OverlayServerConfig {
+        address: "127.0.0.1:0".into(),
+        runtime_paths: overlay_assets.runtime_paths.clone(),
+    })?;
     let address = server.local_addr();
 
     let index = http_get(address, "/?bg=transparent&fontSize=14&maxMessages=20")?;
@@ -43,12 +31,12 @@ fn overlay_server_serves_vue_assets() -> Result<(), Box<dyn std::error::Error>> 
 
     let asset = http_get(address, &format!("/assets/{asset_name}"))?;
     assert_eq!(asset.status, 200);
-    assert_eq!(asset.body, fs::read(&asset_path)?);
+    assert_eq!(asset.body, fs::read(&overlay_assets.asset_path)?);
     assert_content_type_matches_asset(asset_name, &asset.content_type)?;
 
     server.shutdown()?;
     println!(
-        "overlay server served Vue index and /assets/{asset_name} with {}",
+        "overlay server served test index and /assets/{asset_name} with {}",
         asset.content_type
     );
     Ok(())
@@ -56,7 +44,8 @@ fn overlay_server_serves_vue_assets() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn overlay_ws_reconnect_contract() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime_paths = built_overlay_runtime_paths()?;
+    let overlay_assets = test_overlay_assets()?;
+    let runtime_paths = overlay_assets.runtime_paths.clone();
     let first_server = OverlayServer::start(OverlayServerConfig {
         address: "127.0.0.1:0".into(),
         runtime_paths: runtime_paths.clone(),
@@ -98,10 +87,10 @@ fn overlay_ws_reconnect_contract() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn overlay_ws_oversized_frame_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime_paths = built_overlay_runtime_paths()?;
+    let overlay_assets = test_overlay_assets()?;
     let server = OverlayServer::start(OverlayServerConfig {
         address: "127.0.0.1:0".into(),
-        runtime_paths,
+        runtime_paths: overlay_assets.runtime_paths.clone(),
     })?;
 
     let address = server.local_addr();
@@ -122,10 +111,10 @@ fn overlay_ws_oversized_frame_is_rejected() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn overlay_ws_broadcast_prunes_disconnected_clients() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime_paths = built_overlay_runtime_paths()?;
+    let overlay_assets = test_overlay_assets()?;
     let server = OverlayServer::start(OverlayServerConfig {
         address: "127.0.0.1:0".into(),
-        runtime_paths,
+        runtime_paths: overlay_assets.runtime_paths.clone(),
     })?;
     let address = server.local_addr();
     let broadcast = server.broadcaster();
@@ -153,28 +142,36 @@ struct HttpResponse {
     body: Vec<u8>,
 }
 
-fn built_overlay_runtime_paths() -> Result<OverlayRuntimePaths, Box<dyn std::error::Error>> {
-    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let paths = resolve_overlay_runtime_paths(&base);
-    if paths.overlay_dir.is_none() {
-        return Err(
-            "missing built Vue overlay assets; run bun run --cwd packages/desktop build:views"
-                .into(),
-        );
-    }
-    Ok(paths)
+struct TestOverlayAssets {
+    _temp_dir: tempfile::TempDir,
+    runtime_paths: OverlayRuntimePaths,
+    asset_path: PathBuf,
+    asset_name: &'static str,
 }
 
-fn first_built_asset(overlay_dir: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn test_overlay_assets() -> Result<TestOverlayAssets, Box<dyn std::error::Error>> {
+    let temp_dir = tempfile::tempdir()?;
+    let overlay_dir = temp_dir.path().join("overlay");
     let assets_dir = overlay_dir.join("assets");
-    let mut assets = fs::read_dir(&assets_dir)?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<Result<Vec<_>, _>>()?;
-    assets.sort();
-    assets
-        .into_iter()
-        .find(|path| path.is_file())
-        .ok_or_else(|| format!("no built assets found in {}", assets_dir.display()).into())
+    fs::create_dir_all(&assets_dir)?;
+
+    let asset_name = "overlay-test.js";
+    let asset_path = assets_dir.join(asset_name);
+    fs::write(
+        overlay_dir.join("index.html"),
+        r#"<html><body><div id="app"></div><script type="module" src="/assets/overlay-test.js"></script></body></html>"#,
+    )?;
+    fs::write(&asset_path, "export const overlayTest = true;\n")?;
+
+    Ok(TestOverlayAssets {
+        _temp_dir: temp_dir,
+        runtime_paths: OverlayRuntimePaths {
+            fonts_dir: None,
+            overlay_dir: Some(overlay_dir),
+        },
+        asset_path,
+        asset_name,
+    })
 }
 
 fn http_get(address: SocketAddr, path: &str) -> Result<HttpResponse, Box<dyn std::error::Error>> {
