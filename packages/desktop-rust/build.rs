@@ -11,14 +11,6 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
-    let source_path = manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .map(|root| root.join("packages/desktop/src/platforms/kick/badges.ts"))
-        .ok_or("could not resolve workspace root for kick badges path")?;
-
-    println!("cargo:rerun-if-changed={}", source_path.display());
     println!("cargo:rerun-if-changed=.env");
     println!("cargo:rerun-if-changed=.env.example");
     println!("cargo:rerun-if-env-changed=BACKEND_URL");
@@ -27,48 +19,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=AUTH_SERVER_PORT");
     println!("cargo:rerun-if-env-changed=OVERLAY_SERVER_PORT");
     println!("cargo:rerun-if-env-changed=TWIRCHAT_REQUIRE_BUILD_ENV");
-
-    let source = fs::read_to_string(&source_path).map_err(|error| {
-        format!(
-            "failed to read kick badges source at {}: {error}",
-            source_path.display()
-        )
-    })?;
     let out_dir = PathBuf::from(
         env::var("OUT_DIR").map_err(|_| "OUT_DIR is not set by cargo for build script")?,
     );
 
     write_build_runtime_config(&out_dir)
         .map_err(|error| format!("failed to write build runtime config: {error}"))?;
-
-    let badge_types = [
-        "broadcaster",
-        "moderator",
-        "subscriber",
-        "verified",
-        "founder",
-        "vip",
-    ];
-
-    let mut generated = String::from(
-        "pub fn generated_kick_badge_path(badge_type: &str) -> Option<&'static str> {\n    match badge_type {\n",
-    );
-
-    for badge_type in badge_types {
-        if let Some(svg) = extract_badge_svg(&source, badge_type) {
-            let file_name = format!("kick_badge_{badge_type}.svg");
-            fs::write(out_dir.join(&file_name), &svg).map_err(|error| {
-                format!("failed to write generated badge svg {file_name}: {error}")
-            })?;
-            generated.push_str(&format!(
-                "        \"{badge_type}\" => Some(concat!(env!(\"OUT_DIR\"), \"/{file_name}\")),\n"
-            ));
-        }
-    }
-
-    generated.push_str("        _ => None,\n    }\n}\n");
-    fs::write(out_dir.join("kick_badges_generated.rs"), generated)
-        .map_err(|error| format!("failed to write generated kick badges file: {error}"))?;
     Ok(())
 }
 
@@ -207,12 +163,4 @@ fn normalize_env_value(value: &str) -> String {
 
 fn escape_rust_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-fn extract_badge_svg(source: &str, badge_type: &str) -> Option<String> {
-    let marker = format!("{badge_type}: `");
-    let start = source.find(&marker)? + marker.len();
-    let rest = &source[start..];
-    let end = rest.find('`')?;
-    Some(rest[..end].to_string())
 }

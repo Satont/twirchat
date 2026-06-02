@@ -1,3 +1,4 @@
+use super::badges::kick_badge_embedded_url;
 use crate::auth::{AuthError, AuthProvider, AuthResult};
 use crate::platforms::{
     PlatformAdapter, PlatformError, PlatformEvent, PlatformEventSink, PlatformResult,
@@ -13,8 +14,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-include!(concat!(env!("OUT_DIR"), "/kick_badges_generated.rs"));
 
 const KICK_TOKEN_REFRESH_WINDOW_SECONDS: u64 = 300;
 const KICK_RECONNECT_MIN_DELAY: Duration = Duration::from_secs(1);
@@ -980,11 +979,14 @@ fn normalize_subscription_event(event: KickSubscriptionEvent) -> NormalizedEvent
 }
 
 fn normalize_badge(badge: KickBadge) -> Badge {
+    let badge_type = badge.badge_type;
+    let image_url = kick_badge_embedded_url(&badge_type);
+
     Badge {
-        id: badge.badge_type.clone(),
-        badge_type: badge.badge_type.clone(),
+        id: badge_type.clone(),
+        badge_type,
         text: badge.text,
-        image_url: kick_badge_svg(&badge.badge_type),
+        image_url,
     }
 }
 
@@ -1070,10 +1072,6 @@ fn parse_kick_emotes(content: &str) -> (String, Vec<Emote>) {
     }
     clean.push_str(rest);
     (clean, emotes)
-}
-
-fn kick_badge_svg(badge_type: &str) -> Option<String> {
-    generated_kick_badge_path(badge_type).map(str::to_string)
 }
 
 fn token_needs_refresh(expires_at: Option<u64>) -> bool {

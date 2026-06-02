@@ -5,6 +5,7 @@ use twirchat::platforms::kick::{
     KickAvatarLookupSource, KickBadge, KickChatMessage, KickChatMessageKind, KickFollowEvent,
     KickMessageSender, KickOriginalMessage, KickOriginalSender, KickReplyMetadata,
     KickSenderIdentity, KickSubscriptionEvent, KickTransportAuth, MockKickClient,
+    embedded_kick_badge_svg, kick_badge_embedded_url,
 };
 use twirchat::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
 use twirchat::protocol::types::{
@@ -76,6 +77,31 @@ fn kick_chat_message_deserializes_message_ref_metadata() -> Result<(), Box<dyn s
     assert_eq!(message.sender.username, "Satont");
     assert!(message.metadata.is_some());
     Ok(())
+}
+
+#[test]
+fn kick_badge_registry_embeds_only_historical_badges() {
+    let embedded_badges = [
+        ("broadcaster", "embedded:kick:broadcaster"),
+        ("mod", "embedded:kick:moderator"),
+        ("moderator", "embedded:kick:moderator"),
+        ("verified", "embedded:kick:verified"),
+        ("vip", "embedded:kick:vip"),
+        ("og", "embedded:kick:og"),
+    ];
+
+    for (badge_type, expected_url) in embedded_badges {
+        assert_eq!(
+            kick_badge_embedded_url(badge_type).as_deref(),
+            Some(expected_url)
+        );
+        assert!(embedded_kick_badge_svg(badge_type).is_some());
+    }
+
+    for badge_type in ["subscriber", "founder", "unknown"] {
+        assert!(kick_badge_embedded_url(badge_type).is_none());
+        assert!(embedded_kick_badge_svg(badge_type).is_none());
+    }
 }
 
 #[test]
@@ -225,7 +251,19 @@ fn kick_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::
         message.author.badges[0]
             .image_url
             .as_deref()
-            .is_some_and(|image| image.ends_with(".svg"))
+            .is_some_and(|image| image.starts_with("embedded:kick:"))
+    );
+    assert!(
+        message.author.badges[0]
+            .image_url
+            .as_deref()
+            .is_some_and(|image| !image.starts_with('/'))
+    );
+    assert!(
+        message.author.badges[0]
+            .image_url
+            .as_deref()
+            .is_some_and(|image| !image.ends_with(".svg"))
     );
     assert_eq!(message.emotes[0].name, "PeepoClap");
     assert_eq!(message.emotes[0].positions[0].start, 6);
