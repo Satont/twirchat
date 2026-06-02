@@ -1,8 +1,10 @@
 pub mod animated_emote;
 pub mod autocomplete_popup;
+pub mod badge_icon;
 pub mod button;
 pub mod card;
 pub mod chip;
+pub mod embedded_svg;
 pub mod icon;
 pub mod input;
 pub mod modal;
@@ -17,9 +19,11 @@ pub mod tooltip;
 
 pub use animated_emote::*;
 pub use autocomplete_popup::*;
+pub use badge_icon::*;
 pub use button::*;
 pub use card::*;
 pub use chip::*;
+pub use embedded_svg::*;
 pub use icon::*;
 pub use input::*;
 pub use modal::*;
