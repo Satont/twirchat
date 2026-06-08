@@ -30,7 +30,7 @@ jobs:
       pack_version: ${{ steps.version.outputs.pack_version }}
       is_stable_tag: ${{ steps.version.outputs.is_stable_tag }}
       dry_run: ${{ steps.version.outputs.dry_run }}
-      release_notes: ${{ steps.changelog.outputs.clean_changelog }}
+      release_notes: ${{ steps.changelog.outputs.changelog }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,16 +71,12 @@ jobs:
 
       - name: Generate Changelog
         id: changelog
-        uses: TriPSs/conventional-changelog-action@v5
+        uses: orhun/git-cliff-action@v4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-file: './packages/backend/package.json'
-          version-path: 'version'
-          skip-version-file: true
-          skip-commit: true
-          skip-tag: true
-          skip-git-pull: true
-          create-summary: true
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-desktop:
     name: Build Desktop (${{ matrix.target }})
