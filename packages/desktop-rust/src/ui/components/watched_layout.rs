@@ -358,7 +358,6 @@ fn watched_panel(
                 .overflow_y_scroll()
                 .flex()
                 .flex_col()
-                .justify_end()
                 .children(if messages.is_empty() {
                     vec![
                         div()
@@ -377,20 +376,20 @@ fn watched_panel(
                     ]
                 } else {
                     let reply_focus_input = composer.input.clone();
-                    messages
-                        .into_iter()
-                        .map(|message| {
-                            watched_message_row(
-                                &message,
-                                &settings,
-                                &accounts,
-                                reply_focus_input.clone(),
-                                window,
-                                cx,
-                                state_entity.clone(),
-                            )
-                        })
-                        .collect::<Vec<_>>()
+                    let mut elements: Vec<gpui::AnyElement> =
+                        vec![div().flex_1().min_h(px(0.0)).into_any_element()];
+                    elements.extend(messages.into_iter().map(|message| {
+                        watched_message_row(
+                            &message,
+                            &settings,
+                            &accounts,
+                            reply_focus_input.clone(),
+                            window,
+                            cx,
+                            state_entity.clone(),
+                        )
+                    }));
+                    elements
                 }),
         )
         .when_some(composer.input, |panel, composer_input| {
