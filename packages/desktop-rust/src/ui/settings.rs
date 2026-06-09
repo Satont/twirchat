@@ -1,9 +1,11 @@
 use crate::app_state::AppStateActions;
 use crate::hotkeys::{HotkeyAction, format_hotkey_display};
 use crate::overlay::DEFAULT_OVERLAY_PORT;
+use crate::protocol::types::FontFamilyChoice;
+use crate::ui::components::input::Input;
 use crate::ui::components::switch::Switch;
 use crate::ui::theme;
-use gpui::{AnyElement, Div, FocusHandle, Rgba, ScrollHandle, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, Entity, FocusHandle, Rgba, ScrollHandle, Window, div, prelude::*, px};
 use std::rc::Rc;
 use ui::WithScrollbar;
 
@@ -220,6 +222,7 @@ fn slider_mock(val: &'static str, percent: f32) -> Div {
 pub(crate) fn panel(
     state: &crate::app_state::AppState,
     state_entity: gpui::Entity<crate::app_state::AppState>,
+    system_font_input: Entity<Input>,
     hotkey_capture_focus: &FocusHandle,
     scroll_handle: &ScrollHandle,
     window: &mut Window,
@@ -333,23 +336,31 @@ pub(crate) fn panel(
                                     None,
                                     toggle_group(
                                         &[
-                                            ("Inter", settings.font_family == crate::protocol::types::FontFamilyChoice::Inter),
-                                            ("Manrope", settings.font_family == crate::protocol::types::FontFamilyChoice::Manrope),
-                                            ("System", settings.font_family == crate::protocol::types::FontFamilyChoice::System),
+                                            ("Inter", settings.font_family == FontFamilyChoice::Inter),
+                                            ("Manrope", settings.font_family == FontFamilyChoice::Manrope),
+                                            ("System", settings.font_family == FontFamilyChoice::System),
                                         ],
                                         Rc::new({
                                             let state_entity = state_entity.clone();
                                             move |opt, _window, app| {
                                                 let font = match opt {
-                                                    "Manrope" => crate::protocol::types::FontFamilyChoice::Manrope,
-                                                    "System" => crate::protocol::types::FontFamilyChoice::System,
-                                                    _ => crate::protocol::types::FontFamilyChoice::Inter,
+                                                    "Manrope" => FontFamilyChoice::Manrope,
+                                                    "System" => FontFamilyChoice::System,
+                                                    _ => FontFamilyChoice::Inter,
                                                 };
                                                 state_entity.set_font_family(app, font);
+                                                state_entity.persist_settings(app);
                                             }
                                         }),
                                     ),
-                                )),
+                                ))
+                                .when(settings.font_family == FontFamilyChoice::System, |section| {
+                                    section.child(form_row(
+                                        "System font",
+                                        Some("Type an installed font family and press Enter"),
+                                        div().w(px(220.0)).child(system_font_input.clone()),
+                                    ))
+                                }),
                         )
                         // Self-Ping Highlight Section
                         .child(

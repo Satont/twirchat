@@ -5,8 +5,8 @@ use crate::hotkeys::{HotkeyAction, HotkeyManager};
 use crate::protocol::messages::{ChannelStatus, ChannelStatusRequest, LiveStatusPlatform};
 use crate::protocol::types::{
     Account, AppSettings, AppTheme, Badge, ChatAuthor, ChatMessageType, ChatReply, ChatTheme,
-    FontFamilyChoice, LayoutNode, NormalizedChatMessage, OverlayAnimation, OverlayConfig,
-    OverlayPosition, PanelContent, Platform, PlatformStatus, PlatformStatusInfo,
+    FontFamilyChoice, LayoutNode, ModerationPresetKind, NormalizedChatMessage, OverlayAnimation,
+    OverlayConfig, OverlayPosition, PanelContent, Platform, PlatformStatus, PlatformStatusInfo,
     PlatformStatusMode, ReplyAuthor, SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
 use crate::runtime::config::RuntimeConfig;
@@ -93,6 +93,14 @@ pub struct UserCardTarget {
     pub username: Option<String>,
     pub avatar_url: Option<String>,
     pub current_alias: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModerationDragPreview {
+    pub target: String,
+    pub action: crate::protocol::types::ModerationAction,
+    pub duration_seconds: Option<u32>,
+    pub restore_follow_on_drop: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -190,6 +198,9 @@ pub struct AppState {
     pub events: Vec<crate::protocol::types::NormalizedEvent>,
     hotkey_manager: HotkeyManager,
     pub chat_appearance_popover_open: Option<String>,
+    pub moderation_popover_open: Option<String>,
+    pub moderation_popover_duration_seconds: u32,
+    pub moderation_drag_preview: Option<ModerationDragPreview>,
     pub chat_add_menu_open: bool,
     pub chat_options_menu_open: bool,
     pub tab_add_menu_open: bool,
@@ -249,6 +260,9 @@ impl Default for AppState {
             events: vec![],
             hotkey_manager: HotkeyManager::new(),
             chat_appearance_popover_open: None,
+            moderation_popover_open: None,
+            moderation_popover_duration_seconds: 600,
+            moderation_drag_preview: None,
             chat_add_menu_open: false,
             chat_options_menu_open: false,
             tab_add_menu_open: false,
@@ -1603,6 +1617,10 @@ impl AppState {
         self.settings.set_font_family(font);
     }
 
+    pub fn set_system_font_family(&mut self, font_family: impl Into<String>) {
+        self.settings.set_system_font_family(font_family);
+    }
+
     pub fn set_font_size(&mut self, font_size: f64) {
         self.settings.set_font_size(font_size);
     }
@@ -1625,6 +1643,61 @@ impl AppState {
 
     pub fn set_show_badges(&mut self, show: bool) {
         self.settings.set_show_badges(show);
+    }
+
+    pub fn set_show_moderation_buttons(&mut self, show: bool) {
+        self.settings.set_show_ban_button(show);
+        self.settings.set_show_timeout_button(show);
+    }
+
+    pub fn set_moderation_presets(&mut self, presets: Vec<ModerationPresetKind>) {
+        self.settings.set_moderation_presets(presets);
+    }
+
+    pub fn open_moderation_popover(&mut self, target: String, duration_seconds: u32) {
+        self.moderation_popover_open = Some(target);
+        self.moderation_popover_duration_seconds = duration_seconds;
+    }
+
+    pub fn close_moderation_popover(&mut self) {
+        self.moderation_popover_open = None;
+    }
+
+    pub fn set_moderation_popover_duration(&mut self, duration_seconds: u32) {
+        self.moderation_popover_duration_seconds = duration_seconds;
+    }
+
+    pub fn set_moderation_drag_preview(
+        &mut self,
+        target: String,
+        action: crate::protocol::types::ModerationAction,
+        duration_seconds: Option<u32>,
+        restore_follow_on_drop: bool,
+    ) {
+        self.moderation_drag_preview = Some(ModerationDragPreview {
+            target,
+            action,
+            duration_seconds,
+            restore_follow_on_drop,
+        });
+    }
+
+    pub fn update_moderation_drag_action(
+        &mut self,
+        target: String,
+        action: crate::protocol::types::ModerationAction,
+        duration_seconds: Option<u32>,
+    ) {
+        if let Some(preview) = self.moderation_drag_preview.as_mut()
+            && preview.target == target
+        {
+            preview.action = action;
+            preview.duration_seconds = duration_seconds;
+        }
+    }
+
+    pub fn clear_moderation_drag_preview(&mut self) {
+        self.moderation_drag_preview = None;
     }
 
     pub fn set_auto_check_updates(&mut self, enabled: bool) {
@@ -3074,12 +3147,34 @@ pub trait AppStateActions {
     fn set_theme(&self, app: &mut App, theme: AppTheme);
     fn set_chat_theme(&self, app: &mut App, chat_theme: ChatTheme);
     fn set_font_family(&self, app: &mut App, font: FontFamilyChoice);
+    fn set_system_font_family(&self, app: &mut App, font_family: String);
     fn set_font_size(&self, app: &mut App, font_size: f64);
     fn set_show_platform_color_stripe(&self, app: &mut App, show: bool);
     fn set_show_platform_icon(&self, app: &mut App, show: bool);
     fn set_show_timestamp(&self, app: &mut App, show: bool);
     fn set_show_avatars(&self, app: &mut App, show: bool);
     fn set_show_badges(&self, app: &mut App, show: bool);
+    fn set_show_moderation_buttons(&self, app: &mut App, show: bool);
+    fn set_moderation_presets(&self, app: &mut App, presets: Vec<ModerationPresetKind>);
+    fn open_moderation_popover(&self, app: &mut App, target: String, duration_seconds: u32);
+    fn close_moderation_popover(&self, app: &mut App);
+    fn set_moderation_popover_duration(&self, app: &mut App, duration_seconds: u32);
+    fn set_moderation_drag_preview(
+        &self,
+        app: &mut App,
+        target: String,
+        action: crate::protocol::types::ModerationAction,
+        duration_seconds: Option<u32>,
+        restore_follow_on_drop: bool,
+    );
+    fn update_moderation_drag_action(
+        &self,
+        app: &mut App,
+        target: String,
+        action: crate::protocol::types::ModerationAction,
+        duration_seconds: Option<u32>,
+    );
+    fn clear_moderation_drag_preview(&self, app: &mut App);
     fn set_auto_check_updates(&self, app: &mut App, enabled: bool);
     fn set_self_ping(&self, app: &mut App, enabled: bool, color: String);
     fn update_overlay_config(&self, app: &mut App, config: OverlayConfig);
@@ -3221,6 +3316,13 @@ impl AppStateActions for Entity<AppState> {
         });
     }
 
+    fn set_system_font_family(&self, app: &mut App, font_family: String) {
+        self.update(app, |state, cx| {
+            state.set_system_font_family(font_family);
+            cx.notify();
+        });
+    }
+
     fn set_font_size(&self, app: &mut App, font_size: f64) {
         self.update(app, |state, cx| {
             state.set_font_size(font_size);
@@ -3259,6 +3361,80 @@ impl AppStateActions for Entity<AppState> {
     fn set_show_badges(&self, app: &mut App, show: bool) {
         self.update(app, |state, cx| {
             state.set_show_badges(show);
+            cx.notify();
+        });
+    }
+
+    fn set_show_moderation_buttons(&self, app: &mut App, show: bool) {
+        self.update(app, |state, cx| {
+            state.set_show_moderation_buttons(show);
+            cx.notify();
+        });
+    }
+
+    fn set_moderation_presets(&self, app: &mut App, presets: Vec<ModerationPresetKind>) {
+        self.update(app, |state, cx| {
+            state.set_moderation_presets(presets);
+            cx.notify();
+        });
+    }
+
+    fn open_moderation_popover(&self, app: &mut App, target: String, duration_seconds: u32) {
+        self.update(app, |state, cx| {
+            state.open_moderation_popover(target, duration_seconds);
+            cx.notify();
+        });
+    }
+
+    fn close_moderation_popover(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.close_moderation_popover();
+            cx.notify();
+        });
+    }
+
+    fn set_moderation_popover_duration(&self, app: &mut App, duration_seconds: u32) {
+        self.update(app, |state, cx| {
+            state.set_moderation_popover_duration(duration_seconds);
+            cx.notify();
+        });
+    }
+
+    fn set_moderation_drag_preview(
+        &self,
+        app: &mut App,
+        target: String,
+        action: crate::protocol::types::ModerationAction,
+        duration_seconds: Option<u32>,
+        restore_follow_on_drop: bool,
+    ) {
+        self.update(app, |state, cx| {
+            state.set_moderation_drag_preview(
+                target,
+                action,
+                duration_seconds,
+                restore_follow_on_drop,
+            );
+            cx.notify();
+        });
+    }
+
+    fn update_moderation_drag_action(
+        &self,
+        app: &mut App,
+        target: String,
+        action: crate::protocol::types::ModerationAction,
+        duration_seconds: Option<u32>,
+    ) {
+        self.update(app, |state, cx| {
+            state.update_moderation_drag_action(target, action, duration_seconds);
+            cx.notify();
+        });
+    }
+
+    fn clear_moderation_drag_preview(&self, app: &mut App) {
+        self.update(app, |state, cx| {
+            state.clear_moderation_drag_preview();
             cx.notify();
         });
     }
@@ -4213,7 +4389,8 @@ mod tests {
     use super::{AppState, MainSection, count_layout_panels};
     use crate::hotkeys::HotkeyAction;
     use crate::protocol::types::{
-        AppTheme, ChatTheme, LayoutNode, OverlayAnimation, PanelContent, Platform, WatchedChannel,
+        AppTheme, ChatTheme, FontFamilyChoice, LayoutNode, OverlayAnimation, PanelContent,
+        Platform, WatchedChannel,
     };
     use crate::storage::Storage;
     use crate::storage::settings::default_app_settings;
@@ -4348,6 +4525,7 @@ mod tests {
             id: "channel-1".to_string(),
             platform: Platform::Twitch,
             channel_slug: "channel_one".to_string(),
+            broadcaster_id: None,
             display_name: "Channel One".to_string(),
             created_at: 1,
         };
@@ -4462,6 +4640,7 @@ mod tests {
             id: "channel-1".to_string(),
             platform: Platform::Kick,
             channel_slug: "suhodolskiy".to_string(),
+            broadcaster_id: None,
             display_name: "suhodolskiy".to_string(),
             created_at: 1,
         };
@@ -4491,6 +4670,8 @@ mod tests {
         let mut state = AppState::default();
         state.set_theme(AppTheme::Light);
         state.set_chat_theme(ChatTheme::Compact);
+        state.set_font_family(FontFamilyChoice::System);
+        state.set_system_font_family("JetBrains Mono");
         state.set_font_size(19.0);
         state.set_show_avatars(false);
 
@@ -4504,6 +4685,11 @@ mod tests {
             .expect("settings should reload");
         assert_eq!(persisted.theme, AppTheme::Light);
         assert_eq!(persisted.chat_theme, ChatTheme::Compact);
+        assert_eq!(persisted.font_family, FontFamilyChoice::System);
+        assert_eq!(
+            persisted.system_font_family.as_deref(),
+            Some("JetBrains Mono")
+        );
         assert_eq!(persisted.font_size, 19.0);
         assert!(!persisted.show_avatars);
     }

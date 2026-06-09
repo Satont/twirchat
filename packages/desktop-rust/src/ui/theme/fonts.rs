@@ -1,4 +1,4 @@
-use crate::protocol::types::FontFamilyChoice;
+use crate::protocol::types::{AppSettings, FontFamilyChoice};
 use gpui::{App, Font, FontFallbacks, Result};
 use std::borrow::Cow;
 
@@ -32,7 +32,25 @@ pub fn app_font_family(choice: FontFamilyChoice) -> &'static str {
 }
 
 pub fn app_font(choice: FontFamilyChoice) -> Font {
-    let mut font = gpui::font(app_font_family(choice));
+    app_font_with_system_family(choice, None)
+}
+
+pub fn app_font_for_settings(settings: &AppSettings) -> Font {
+    app_font_with_system_family(settings.font_family, settings.system_font_family.as_deref())
+}
+
+pub fn app_font_with_system_family(
+    choice: FontFamilyChoice,
+    system_font_family: Option<&str>,
+) -> Font {
+    let family = match choice {
+        FontFamilyChoice::System => system_font_family
+            .map(str::trim)
+            .filter(|family| !family.is_empty())
+            .unwrap_or_else(|| app_font_family(choice)),
+        FontFamilyChoice::Inter | FontFamilyChoice::Manrope => app_font_family(choice),
+    };
+    let mut font = gpui::font(family);
     let fallbacks = app_font_fallbacks(choice);
     if !fallbacks.is_empty() {
         font.fallbacks = Some(FontFallbacks::from_fonts(fallbacks));
@@ -73,6 +91,7 @@ fn app_font_fallbacks(choice: FontFamilyChoice) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::settings::default_app_settings;
 
     #[test]
     fn font_choices_map_to_gpui_families() {
@@ -99,6 +118,28 @@ mod tests {
                 ".SystemUIFont".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn app_font_uses_named_system_font_when_configured() {
+        let mut settings = default_app_settings();
+        settings.font_family = FontFamilyChoice::System;
+        settings.system_font_family = Some("JetBrains Mono".to_string());
+
+        let font = app_font_for_settings(&settings);
+
+        assert_eq!(font.family.to_string(), "JetBrains Mono");
+    }
+
+    #[test]
+    fn app_font_falls_back_to_os_system_font_when_system_name_is_blank() {
+        let mut settings = default_app_settings();
+        settings.font_family = FontFamilyChoice::System;
+        settings.system_font_family = Some("  ".to_string());
+
+        let font = app_font_for_settings(&settings);
+
+        assert_eq!(font.family.to_string(), ".SystemUIFont");
     }
 
     #[test]

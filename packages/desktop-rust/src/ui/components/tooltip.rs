@@ -103,17 +103,7 @@ impl Render for EmoteTooltip {
                                     link.bg(rgba(0xffffff1a)).text_color(theme::text_primary())
                                 })
                                 .on_mouse_down(MouseButton::Left, move |_event, _window, _cx| {
-                                    let params = OpenExternalUrlParams {
-                                        url: action_url.clone(),
-                                    };
-                                    if let Err(error) =
-                                        open_external_url(&SystemExternalOpener, &params)
-                                    {
-                                        eprintln!(
-                                            "[ui/components/tooltip] failed to open 7TV emote link `{}`: {}",
-                                            params.url, error
-                                        );
-                                    }
+                                    open_seven_tv_emote_url(&action_url);
                                 })
                                 .child("View on 7TV"),
                         )
@@ -122,8 +112,28 @@ impl Render for EmoteTooltip {
     }
 }
 
-pub(crate) fn seven_tv_emote_url(emote_id: &str) -> Option<String> {
+pub fn seven_tv_emote_url(emote_id: &str) -> Option<String> {
     is_safe_seven_tv_emote_id(emote_id).then(|| format!("https://7tv.app/emotes/{emote_id}"))
+}
+
+pub fn open_seven_tv_emote_url(url: &str) {
+    if !url
+        .strip_prefix("https://7tv.app/emotes/")
+        .is_some_and(is_safe_seven_tv_emote_id)
+    {
+        eprintln!("[ui/components/tooltip] rejected unsafe 7TV emote link `{url}`");
+        return;
+    }
+
+    let params = OpenExternalUrlParams {
+        url: url.to_string(),
+    };
+    if let Err(error) = open_external_url(&SystemExternalOpener, &params) {
+        eprintln!(
+            "[ui/components/tooltip] failed to open 7TV emote link `{}`: {}",
+            params.url, error
+        );
+    }
 }
 
 fn is_safe_seven_tv_emote_id(emote_id: &str) -> bool {

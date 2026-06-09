@@ -693,13 +693,14 @@ fn watched_message_row(
     state_entity: gpui::Entity<crate::app_state::AppState>,
 ) -> gpui::AnyElement {
     let status = state_entity.read(cx).outgoing_message_status(&message.id);
+    let app_entity = cx.entity();
     let row = message_row(
         message,
         settings,
         accounts,
         window,
         cx,
-        MessageRowContext::watched(state_entity, reply_focus_input),
+        MessageRowContext::watched(state_entity, reply_focus_input, app_entity),
     );
 
     match status {

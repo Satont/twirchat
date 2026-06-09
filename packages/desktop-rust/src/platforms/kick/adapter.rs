@@ -188,6 +188,51 @@ pub struct KickSubscriptionEvent {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KickUserBannedEvent {
+    #[serde(default)]
+    pub chatroom_id: Option<u64>,
+    #[serde(default)]
+    pub user_id: Option<u64>,
+    pub user: KickBannedUser,
+    pub banned_by: Option<KickBannedBy>,
+    #[serde(default)]
+    pub duration: Option<u32>,
+    pub permanent: bool,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KickBannedUser {
+    pub id: u64,
+    pub username: String,
+    pub slug: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KickBannedBy {
+    pub id: u64,
+    pub username: String,
+    pub slug: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KickUserUnbannedEvent {
+    #[serde(default)]
+    pub chatroom_id: Option<u64>,
+    #[serde(default)]
+    pub user_id: Option<u64>,
+    pub user: KickBannedUser,
+    #[serde(default)]
+    pub unbanned_by: Option<KickBannedBy>,
+    pub permanent: bool,
+    #[serde(default)]
+    pub created_at: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KickTransportAuth {
     Anonymous,
@@ -245,6 +290,8 @@ pub trait KickChatClient {
     fn drain_messages(&mut self) -> PlatformResult<Vec<KickChatMessage>>;
     fn drain_follow_events(&mut self) -> PlatformResult<Vec<KickFollowEvent>>;
     fn drain_subscription_events(&mut self) -> PlatformResult<Vec<KickSubscriptionEvent>>;
+    fn drain_ban_events(&mut self) -> PlatformResult<Vec<KickUserBannedEvent>>;
+    fn drain_unban_events(&mut self) -> PlatformResult<Vec<KickUserUnbannedEvent>>;
     fn send_message(
         &mut self,
         request: KickSendMessageRequest,
@@ -403,13 +450,34 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
                 return Ok(());
             }
         };
+        let bans = match self.client.drain_ban_events() {
+            Ok(events) => events,
+            Err(error) => {
+                self.handle_transport_poll_error(sink, error)?;
+                return Ok(());
+            }
+        };
+        let unbans = match self.client.drain_unban_events() {
+            Ok(events) => events,
+            Err(error) => {
+                self.handle_transport_poll_error(sink, error)?;
+                return Ok(());
+            }
+        };
 
-        if !messages.is_empty() || !follows.is_empty() || !subscriptions.is_empty() {
+        if !messages.is_empty()
+            || !follows.is_empty()
+            || !subscriptions.is_empty()
+            || !bans.is_empty()
+            || !unbans.is_empty()
+        {
             eprintln!(
-                "[kick/live] drained messages={} follows={} subscriptions={} slug={:?}",
+                "[kick/live] drained messages={} follows={} subscriptions={} bans={} unbans={} slug={:?}",
                 messages.len(),
                 follows.len(),
                 subscriptions.len(),
+                bans.len(),
+                unbans.len(),
                 self.channel_slug
             );
         }
@@ -424,6 +492,14 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
 
         for event in subscriptions {
             sink.emit(PlatformEvent::Event(normalize_subscription_event(event)))?;
+        }
+
+        for event in bans {
+            sink.emit(PlatformEvent::Message(self.normalize_ban_event(event)))?;
+        }
+
+        for event in unbans {
+            sink.emit(PlatformEvent::Message(self.normalize_unban_event(event)))?;
         }
 
         Ok(())
@@ -694,6 +770,82 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
             timestamp: message.created_at,
             message_type: ChatMessageType::Message,
             reply: normalize_reply(message.message_type, message.metadata),
+        }
+    }
+
+    fn normalize_ban_event(&self, event: KickUserBannedEvent) -> NormalizedChatMessage {
+        let text = if event.permanent {
+            format!("[Kick] {} was permanently banned", event.user.username)
+        } else {
+            let duration = event
+                .duration
+                .map(crate::ui::components::format_duration)
+                .unwrap_or_else(|| "?".into());
+            format!("[Kick] {} was banned for {}", event.user.username, duration)
+        };
+        let channel_id = if let Some(chatroom_id) = event.chatroom_id {
+            chatroom_id.to_string()
+        } else {
+            self.chatroom
+                .as_ref()
+                .map(|c| c.broadcaster_user_id.to_string())
+                .unwrap_or_default()
+        };
+        let user_id = event.user_id.unwrap_or(event.user.id);
+        let timestamp = event
+            .created_at
+            .clone()
+            .or(event.expires_at)
+            .unwrap_or_else(current_unix_timestamp_string);
+        NormalizedChatMessage {
+            id: format!("kick:ban:{}:{}", user_id, timestamp),
+            platform: Platform::Kick,
+            channel_id,
+            author: ChatAuthor {
+                id: event.user.id.to_string(),
+                username: Some(event.user.username.clone()),
+                display_name: event.user.username.clone(),
+                color: None,
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text,
+            emotes: Vec::new(),
+            timestamp,
+            message_type: ChatMessageType::System,
+            reply: None,
+        }
+    }
+
+    fn normalize_unban_event(&self, event: KickUserUnbannedEvent) -> NormalizedChatMessage {
+        let text = format!("[Kick] {} was unbanned", event.user.username);
+        let channel_id = if let Some(chatroom_id) = event.chatroom_id {
+            chatroom_id.to_string()
+        } else {
+            self.chatroom
+                .as_ref()
+                .map(|c| c.broadcaster_user_id.to_string())
+                .unwrap_or_default()
+        };
+        let user_id = event.user_id.unwrap_or(event.user.id);
+        let timestamp = event.created_at.clone().unwrap_or_else(current_unix_timestamp_string);
+        NormalizedChatMessage {
+            id: format!("kick:unban:{}:{}", user_id, timestamp),
+            platform: Platform::Kick,
+            channel_id,
+            author: ChatAuthor {
+                id: event.user.id.to_string(),
+                username: Some(event.user.username.clone()),
+                display_name: event.user.username.clone(),
+                color: None,
+                avatar_url: None,
+                badges: Vec::new(),
+            },
+            text,
+            emotes: Vec::new(),
+            timestamp,
+            message_type: ChatMessageType::System,
+            reply: None,
         }
     }
 

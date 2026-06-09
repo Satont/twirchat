@@ -499,7 +499,7 @@ fn compact_chat_uses_distinct_layout_without_avatar_branch() {
     assert!(!compact_body.contains("flex_col()"));
 
     assert!(compact_body.contains("SelectableMessagePart::Custom"));
-    assert!(compact_body.contains("reply_preview(message, typography)"));
+    assert!(compact_body.contains("reply_preview(message, &typography)"));
     assert!(compact_body.contains("message_row_actions("));
     assert!(compact_body.contains("reply_focus_input"));
     assert!(compact_body.contains("row_actions_visible"));

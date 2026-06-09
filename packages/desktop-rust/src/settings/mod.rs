@@ -1,7 +1,7 @@
 use crate::hotkeys::{HotkeyAction, hotkey_for_action, set_hotkey_for_action};
 use crate::protocol::types::{
-    AppSettings, AppTheme, ChatTheme, FontFamilyChoice, OverlayAnimation, OverlayConfig,
-    OverlayPosition, SelfPingConfig,
+    AppSettings, AppTheme, ChatTheme, FontFamilyChoice, ModerationPresetKind, OverlayAnimation,
+    OverlayConfig, OverlayPosition, SelfPingConfig,
 };
 
 #[derive(Debug, Clone)]
@@ -32,6 +32,16 @@ impl SettingsManager {
 
     pub fn set_font_family(&mut self, font: FontFamilyChoice) {
         self.settings.font_family = font;
+    }
+
+    pub fn set_system_font_family(&mut self, font_family: impl Into<String>) {
+        let font_family = font_family.into();
+        let trimmed = font_family.trim();
+        self.settings.system_font_family = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        };
     }
 
     pub fn set_font_size(&mut self, font_size: f64) {
@@ -121,6 +131,22 @@ impl SettingsManager {
     pub fn set_overlay_port(&mut self, port: u16) {
         self.settings.overlay.port = port;
     }
+
+    pub fn set_show_ban_button(&mut self, show: bool) {
+        self.settings.show_ban_button = Some(show);
+    }
+
+    pub fn set_show_timeout_button(&mut self, show: bool) {
+        self.settings.show_timeout_button = Some(show);
+    }
+
+    pub fn set_default_timeout_seconds(&mut self, seconds: u32) {
+        self.settings.default_timeout_seconds = Some(seconds);
+    }
+
+    pub fn set_moderation_presets(&mut self, presets: Vec<ModerationPresetKind>) {
+        self.settings.moderation_presets = Some(presets);
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +165,15 @@ mod settings_parity_tests {
 
         m.set_font_family(FontFamilyChoice::Inter);
         assert_eq!(m.settings.font_family, FontFamilyChoice::Inter);
+
+        m.set_system_font_family(" JetBrains Mono ");
+        assert_eq!(
+            m.settings.system_font_family.as_deref(),
+            Some("JetBrains Mono")
+        );
+
+        m.set_system_font_family(" ");
+        assert_eq!(m.settings.system_font_family, None);
 
         m.set_chat_theme(ChatTheme::Compact);
         assert_eq!(m.settings.chat_theme, ChatTheme::Compact);

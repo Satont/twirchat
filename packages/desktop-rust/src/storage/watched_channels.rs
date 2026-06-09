@@ -33,6 +33,21 @@ impl<'a> WatchedChannelsStore<'a> {
             .transpose()
     }
 
+    pub fn find_by_platform_and_slug(
+        &self,
+        platform: Platform,
+        channel_slug: &str,
+    ) -> StorageResult<Option<WatchedChannel>> {
+        let slug = normalize_watched_channel_slug(platform, channel_slug);
+        self.conn
+            .query_one(
+                "SELECT * FROM watched_channels WHERE platform = ? AND channel_slug = ? LIMIT 1",
+                &[Param::Text(platform_to_str(platform)), Param::Text(&slug)],
+            )?
+            .map(|row| row_to_watched_channel(&row))
+            .transpose()
+    }
+
     pub fn upsert(
         &self,
         platform: Platform,
@@ -71,9 +86,28 @@ impl<'a> WatchedChannelsStore<'a> {
             id,
             platform,
             channel_slug: slug,
+            broadcaster_id: None,
             display_name: display_name.into(),
             created_at: i64_to_u64(created_at),
         })
+    }
+
+    pub fn set_broadcaster_id(
+        &self,
+        platform: Platform,
+        channel_slug: &str,
+        broadcaster_id: &str,
+    ) -> StorageResult<()> {
+        let slug = normalize_watched_channel_slug(platform, channel_slug);
+        self.conn.execute(
+            "UPDATE watched_channels SET broadcaster_id = ? WHERE platform = ? AND channel_slug = ?",
+            &[
+                Param::Text(broadcaster_id),
+                Param::Text(platform_to_str(platform)),
+                Param::Text(&slug),
+            ],
+        )?;
+        Ok(())
     }
 
     pub fn remove(&self, id: &str) -> StorageResult<()> {
@@ -99,6 +133,10 @@ fn row_to_watched_channel(row: &crate::storage::db::Row) -> StorageResult<Watche
         id: row.text("id")?,
         platform: parse_platform(&row.text("platform")?),
         channel_slug: row.text("channel_slug")?,
+        broadcaster_id: row
+            .text("broadcaster_id")
+            .ok()
+            .filter(|value| !value.is_empty()),
         display_name: row.text("display_name")?,
         created_at: i64_to_u64(row.i64("created_at")?),
     })

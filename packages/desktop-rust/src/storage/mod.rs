@@ -249,6 +249,7 @@ pub fn migrate(conn: &Connection) -> StorageResult<()> {
           id TEXT PRIMARY KEY,
           platform TEXT NOT NULL,
           channel_slug TEXT NOT NULL,
+          broadcaster_id TEXT,
           display_name TEXT NOT NULL,
           created_at INTEGER DEFAULT (unixepoch()),
           UNIQUE (platform, channel_slug)
@@ -267,6 +268,13 @@ pub fn migrate(conn: &Connection) -> StorageResult<()> {
 
     if let Err(DbError::Sqlite(message)) =
         conn.execute_batch("ALTER TABLE chat_messages ADD COLUMN data TEXT;")
+        && !message.to_lowercase().contains("duplicate column")
+    {
+        return Err(StorageError::Db(DbError::Sqlite(message)));
+    }
+
+    if let Err(DbError::Sqlite(message)) =
+        conn.execute_batch("ALTER TABLE watched_channels ADD COLUMN broadcaster_id TEXT;")
         && !message.to_lowercase().contains("duplicate column")
     {
         return Err(StorageError::Db(DbError::Sqlite(message)));

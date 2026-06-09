@@ -297,6 +297,10 @@ pub struct SplitPanelResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "RPC payloads mirror the shared protocol and are not stored in hot collections"
+)]
 pub enum BunRequestPayload {
     #[serde(rename = "getAccounts")]
     GetAccounts,

@@ -19,6 +19,7 @@ pub(crate) struct ContentPanelProps<'a> {
     pub state_entity: Entity<AppState>,
     pub composer_input: Entity<Input>,
     pub font_size_input: Entity<Input>,
+    pub system_font_input: Entity<Input>,
     pub add_channel_input: Entity<Input>,
     pub tab_rename_input: Entity<Input>,
     pub watched_composer_inputs: BTreeMap<String, Entity<Input>>,
@@ -113,6 +114,7 @@ pub(crate) fn panel(
         MainSection::Settings => settings::panel(
             state,
             props.state_entity.clone(),
+            props.system_font_input,
             &props.hotkey_capture_focus,
             props.scroll_ui.settings,
             window,

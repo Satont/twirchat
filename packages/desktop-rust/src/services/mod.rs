@@ -8,6 +8,7 @@ pub mod backend_ws;
 pub mod bus;
 pub mod commands;
 pub mod events;
+pub mod moderation;
 pub mod stream_status;
 pub mod supervisor;
 pub mod update_state;
@@ -21,6 +22,7 @@ pub use bus::{
 };
 pub use commands::*;
 pub use events::*;
+pub use moderation::*;
 pub use stream_status::*;
 pub use supervisor::*;
 pub use update_state::*;

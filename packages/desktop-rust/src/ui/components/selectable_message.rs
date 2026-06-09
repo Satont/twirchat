@@ -1,7 +1,9 @@
 use crate::protocol::rpc::OpenExternalUrlParams;
 use crate::protocol::types::Emote;
 use crate::runtime::{SystemExternalOpener, browser::open_external_url};
-use crate::ui::components::{animated_emote, chat_emote_box_size, emote_tooltip};
+use crate::ui::components::{
+    animated_emote, chat_emote_box_size, emote_tooltip, open_seven_tv_emote_url, seven_tv_emote_url,
+};
 use crate::ui::theme;
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, DispatchPhase, Element, ElementId, Entity,
@@ -58,6 +60,7 @@ pub struct SelectableMessage {
     font_size: f32,
     font: Font,
     link_ranges: Vec<Range<usize>>,
+    pending_emote_click_url: Option<String>,
 }
 
 impl SelectableMessage {
@@ -99,6 +102,7 @@ impl SelectableMessage {
             font_size,
             font,
             link_ranges,
+            pending_emote_click_url: None,
         }
     }
 
@@ -212,6 +216,12 @@ impl SelectableMessage {
             }
         }
 
+        if let Some(emote_url) = self.pending_emote_click_url.take()
+            && self.selected_range.is_empty()
+        {
+            open_seven_tv_emote_url(&emote_url);
+        }
+
         cx.notify();
     }
 }
@@ -246,8 +256,9 @@ impl Render for SelectableMessage {
                 } => {
                     let is_selected = ranges_overlap(&self.selected_range, &source_range);
                     let emote_size = chat_emote_box_size(self.font_size, is_compact);
-                    let state = cx.entity();
                     let focus_handle = self.focus_handle.clone();
+                    let emote_click_url = seven_tv_emote_url(&emote.id);
+
                     div()
                         .id(format!(
                             "emote-tooltip-target-{}-{}-{}",
@@ -258,11 +269,20 @@ impl Render for SelectableMessage {
                         .min_w(px(emote_size))
                         .max_w(px(emote_size * emote.aspect_ratio.unwrap_or(1.0) as f32))
                         .when(is_selected, |el| el.bg(rgba(0x7c3aed55)).rounded_sm())
-                        .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
-                            window.focus(&focus_handle, cx);
-                            state.update(cx, |state, cx| {
-                                state.on_mouse_down_at(source_range.start, cx)
-                            });
+                        .when(emote_click_url.is_some(), |el| {
+                            el.cursor(CursorStyle::PointingHand)
+                        })
+                        .on_mouse_down(gpui::MouseButton::Left, {
+                            let state = cx.entity();
+                            let click_url = emote_click_url.clone();
+                            move |_, window, cx| {
+                                window.focus(&focus_handle, cx);
+                                let click_url = click_url.clone();
+                                state.update(cx, |state, cx| {
+                                    state.on_mouse_down_at(source_range.start, cx);
+                                    state.pending_emote_click_url = click_url;
+                                });
+                            }
                         })
                         .on_mouse_move({
                             let state = cx.entity();

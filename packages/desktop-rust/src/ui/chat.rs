@@ -1,25 +1,28 @@
 use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
 use crate::chat::apply_alias;
 use crate::protocol::types::{
-    Account, AppSettings, ChatMessageType, ChatTheme, Emote, FontFamilyChoice,
-    NormalizedChatMessage, Platform, PlatformStatus, SelfPingConfig,
+    Account, AppSettings, ChatMessageType, ChatTheme, Emote, FontFamilyChoice, ModerationAction,
+    ModerationPresetKind, NormalizedChatMessage, Platform, PlatformStatus, SelfPingConfig,
 };
 use crate::ui::components::autocomplete_popup::{AutocompletePopup, AutocompleteSuggestion};
 use crate::ui::components::badge_icon::embedded_kick_badge_icon;
 use crate::ui::components::chat_emote_box_size;
 use crate::ui::components::emote_tooltip;
 use crate::ui::components::input::Input;
+use crate::ui::components::open_seven_tv_emote_url;
 use crate::ui::components::platform_icon::PlatformIcon;
 use crate::ui::components::selectable_message::{SelectableMessage, SelectableMessagePart};
+use crate::ui::components::seven_tv_emote_url;
 use crate::ui::components::slider::Slider;
 use crate::ui::components::switch::Switch;
+use crate::ui::components::{format_duration, inline_moderation_presets, moderation_popover};
 use crate::ui::shared::{format_compact_viewers, format_exact_viewers};
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{
-    AnyElement, App, ClipboardItem, Context, Div, Entity, Focusable, FollowMode, ImageSource,
-    ListSizingBehavior, ListState, ObjectFit, Render, Stateful, Window, div, img, list, prelude::*,
-    px, relative, rgb, rgba,
+    AnyElement, App, ClipboardItem, Context, CursorStyle, Div, Empty, Entity, Focusable,
+    FollowMode, ImageSource, ListSizingBehavior, ListState, ObjectFit, Render, Stateful, Window,
+    div, img, list, prelude::*, px, relative, rgb, rgba,
 };
 use ui::WithScrollbar;
 use url::Url;
@@ -101,7 +104,9 @@ pub(crate) fn panel(
                 .child({
                     let state_entity = props.state_entity.clone();
                     let composer_input = props.composer_input.clone();
-                    list(props.scroll_ui.list_state.clone(), move |ix, window, cx| {
+                    let app_entity = cx.entity();
+                    let list_state = props.scroll_ui.list_state.clone();
+                    list(list_state.clone(), move |ix, window, cx| {
                         outgoing_message_row(
                             &messages[ix],
                             &settings,
@@ -111,6 +116,8 @@ pub(crate) fn panel(
                             MessageRowContext::home(
                                 state_entity.clone(),
                                 Some(composer_input.clone()),
+                                app_entity.clone(),
+                                Some(list_state.clone()),
                             ),
                         )
                         .into_any_element()
@@ -1040,30 +1047,39 @@ pub(crate) struct MessageRowOptions {
 #[derive(Clone)]
 pub(crate) struct MessageRowContext {
     state_entity: Entity<AppState>,
+    app_entity: Entity<TwirChatApp>,
     reply_focus_input: Option<Entity<Input>>,
     options: MessageRowOptions,
+    list_state: Option<ListState>,
 }
 
 impl MessageRowContext {
     pub(crate) fn home(
         state_entity: Entity<AppState>,
         reply_focus_input: Option<Entity<Input>>,
+        app_entity: Entity<TwirChatApp>,
+        list_state: Option<ListState>,
     ) -> Self {
         Self {
             state_entity,
+            app_entity,
             reply_focus_input,
             options: MessageRowOptions::home(),
+            list_state,
         }
     }
 
     pub(crate) fn watched(
         state_entity: Entity<AppState>,
         reply_focus_input: Option<Entity<Input>>,
+        app_entity: Entity<TwirChatApp>,
     ) -> Self {
         Self {
             state_entity,
+            app_entity,
             reply_focus_input,
             options: MessageRowOptions::watched(),
+            list_state: None,
         }
     }
 }
@@ -1089,6 +1105,10 @@ impl MessageRowOptions {
         format!("{}-message-row-{}", self.surface_scope, message_id)
     }
 
+    fn moderation_popover_target(self, message_id: &str) -> String {
+        format!("{}:{}", self.surface_scope, message_id)
+    }
+
     fn selectable_key(self, message_id: &str) -> String {
         format!("{}-message-{}", self.surface_scope, message_id)
     }
@@ -1110,10 +1130,16 @@ struct RowMessages {
     target: NormalizedChatMessage,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
+struct ModerationDrag {
+    target: String,
+}
+
+#[derive(Clone)]
 struct MessageTypography {
     font_size: f32,
     font_family: FontFamilyChoice,
+    system_font_family: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1151,7 +1177,7 @@ fn system_action_icon(action: SystemMessageAction) -> &'static str {
 
 fn system_message_render_parts(
     message: &NormalizedChatMessage,
-    typography: MessageTypography,
+    typography: &MessageTypography,
 ) -> SystemMessageRenderParts {
     let preview_emote = message
         .emotes
@@ -1212,13 +1238,15 @@ fn preview_emote_part(
     message: &NormalizedChatMessage,
     emote: Emote,
     part_index: usize,
-    typography: MessageTypography,
+    typography: &MessageTypography,
 ) -> SelectableMessagePart {
     let message_id = message.id.clone();
+    let typography = typography.clone();
     SelectableMessagePart::Custom(std::sync::Arc::new(move |window, cx| {
         let size = chat_emote_box_size(typography.font_size, false);
         let element_id = format!("sys-emote-{message_id}-{}-{part_index}", emote.id);
-        div()
+        let emote_click_url = seven_tv_emote_url(&emote.id);
+        let el = div()
             .id(format!(
                 "sys-emote-tooltip-target-{message_id}-{}-{part_index}",
                 emote.id
@@ -1227,6 +1255,14 @@ fn preview_emote_part(
             .h(px(size))
             .min_w(px(size))
             .max_w(px(size * emote.aspect_ratio.unwrap_or(1.0) as f32))
+            .when(emote_click_url.is_some(), |el| {
+                el.cursor(CursorStyle::PointingHand)
+            })
+            .when_some(emote_click_url.clone(), |el, url| {
+                el.on_mouse_down(gpui::MouseButton::Left, move |_, _, _| {
+                    open_seven_tv_emote_url(&url);
+                })
+            })
             .hoverable_tooltip(emote_tooltip(emote.clone(), element_id.clone()))
             .child(crate::ui::components::animated_emote(
                 element_id,
@@ -1234,8 +1270,8 @@ fn preview_emote_part(
                 emote.name.clone(),
                 window,
                 cx,
-            ))
-            .into_any_element()
+            ));
+        el.into_any_element()
     }))
 }
 
@@ -1244,22 +1280,27 @@ impl MessageTypography {
         Self {
             font_size: settings.font_size as f32,
             font_family: settings.font_family,
+            system_font_family: settings.system_font_family.clone(),
         }
     }
 
-    fn author_font_size(self) -> f32 {
+    fn font(&self) -> gpui::Font {
+        theme::app_font_with_system_family(self.font_family, self.system_font_family.as_deref())
+    }
+
+    fn author_font_size(&self) -> f32 {
         self.font_size
     }
 
-    fn badge_size(self) -> f32 {
+    fn badge_size(&self) -> f32 {
         self.font_size
     }
 
-    fn text_badge_font_size(self) -> f32 {
+    fn text_badge_font_size(&self) -> f32 {
         self.font_size * 0.72
     }
 
-    fn platform_icon_size(self) -> f32 {
+    fn platform_icon_size(&self) -> f32 {
         self.font_size
     }
 }
@@ -1268,7 +1309,7 @@ fn is_remote_badge_url(url: &str) -> bool {
     url.starts_with("http://") || url.starts_with("https://")
 }
 
-fn badge_image_container(typography: MessageTypography, margin_right: bool) -> Div {
+fn badge_image_container(typography: &MessageTypography, margin_right: bool) -> Div {
     div()
         .when(margin_right, |badge| badge.mr(px(4.0)))
         .w(px(typography.badge_size()))
@@ -1277,7 +1318,7 @@ fn badge_image_container(typography: MessageTypography, margin_right: bool) -> D
         .overflow_hidden()
 }
 
-fn text_badge_element(text: String, typography: MessageTypography, margin_right: bool) -> Div {
+fn text_badge_element(text: String, typography: &MessageTypography, margin_right: bool) -> Div {
     div()
         .when(margin_right, |badge| badge.mr(px(4.0)))
         .rounded_sm()
@@ -1292,7 +1333,7 @@ fn text_badge_element(text: String, typography: MessageTypography, margin_right:
 fn embedded_kick_badge_element(
     image_url: Option<&str>,
     badge_type: &str,
-    typography: MessageTypography,
+    typography: &MessageTypography,
     margin_right: bool,
 ) -> Option<Div> {
     embedded_kick_badge_icon(image_url, badge_type, px(typography.badge_size()))
@@ -1303,9 +1344,11 @@ fn remote_badge_image_element(
     url: String,
     element_id: String,
     fallback_text: String,
-    typography: MessageTypography,
+    typography: &MessageTypography,
     margin_right: bool,
 ) -> Div {
+    let loading_typography = typography.clone();
+    let fallback_typography = typography.clone();
     badge_image_container(typography, margin_right).child(
         img(ImageSource::from(url))
             .id(element_id)
@@ -1315,11 +1358,13 @@ fn remote_badge_image_element(
             .with_loading({
                 let fallback_text = fallback_text.clone();
                 move || {
-                    text_badge_element(fallback_text.clone(), typography, false).into_any_element()
+                    text_badge_element(fallback_text.clone(), &loading_typography, false)
+                        .into_any_element()
                 }
             })
             .with_fallback(move || {
-                text_badge_element(fallback_text.clone(), typography, false).into_any_element()
+                text_badge_element(fallback_text.clone(), &fallback_typography, false)
+                    .into_any_element()
             }),
     )
 }
@@ -1468,7 +1513,7 @@ fn can_start_reply_from_message(message: &NormalizedChatMessage) -> bool {
 
 fn reply_preview(
     message: &NormalizedChatMessage,
-    typography: MessageTypography,
+    typography: &MessageTypography,
 ) -> Option<AnyElement> {
     if !shows_reply_preview(message) {
         return None;
@@ -1528,9 +1573,18 @@ fn aliased_row_message(
     apply_alias(message, alias.as_deref()).message
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "message row action rendering needs UI state, settings, and callbacks from the row context"
+)]
 fn message_row_actions(
     message: NormalizedChatMessage,
     state_entity: Entity<AppState>,
+    app_entity: Entity<TwirChatApp>,
+    settings: &AppSettings,
+    accounts: &[Account],
+    moderation_popover_open: bool,
+    moderation_popover_duration_seconds: u32,
     reply_focus_input: Option<Entity<Input>>,
     options: MessageRowOptions,
     can_reply: bool,
@@ -1538,6 +1592,10 @@ fn message_row_actions(
     let reply_message = message.clone();
     let reply_channel_id = message.channel_id.clone();
     let copy_text = message.text.clone();
+    let can_moderate = can_moderate_message(&message, settings, accounts);
+    let presets = moderation_presets_for_settings(settings);
+    let popover_target = options.moderation_popover_target(&message.id);
+    let default_timeout_seconds = settings.default_timeout_seconds.unwrap_or(600);
 
     div()
         .id(format!(
@@ -1557,6 +1615,62 @@ fn message_row_actions(
         .border_color(theme::border())
         .px(px(3.0))
         .py(px(2.0))
+        .when(can_moderate, |actions| {
+            let preset_message = message.clone();
+            let preset_app = app_entity.clone();
+            let custom_state = state_entity.clone();
+            let custom_target = popover_target.clone();
+            actions.child(inline_moderation_presets(
+                &message.id,
+                message.platform,
+                &presets,
+                move |preset, _window, cx| {
+                    let (action, duration_seconds) = moderation_action_from_preset(preset);
+                    let message = preset_message.clone();
+                    preset_app.update(cx, |app, cx| {
+                        app.execute_moderation_action(message, action, duration_seconds, cx);
+                    });
+                },
+                move |_window, cx| {
+                    custom_state.open_moderation_popover(
+                        cx,
+                        custom_target.clone(),
+                        default_timeout_seconds,
+                    );
+                },
+            ))
+        })
+        .when(can_moderate && moderation_popover_open, |actions| {
+            let change_state = state_entity.clone();
+            let cancel_state = state_entity.clone();
+            let confirm_state = state_entity.clone();
+            let confirm_app = app_entity.clone();
+            let confirm_message = message.clone();
+            actions.child(div().absolute().bottom(px(28.0)).right(px(0.0)).child(
+                moderation_popover(
+                    message.platform,
+                    moderation_popover_duration_seconds,
+                    move |seconds, _window, cx| {
+                        change_state.set_moderation_popover_duration(cx, seconds);
+                    },
+                    move |seconds, _window, cx| {
+                        confirm_state.close_moderation_popover(cx);
+                        let message = confirm_message.clone();
+                        confirm_app.update(cx, |app, cx| {
+                            app.execute_moderation_action(
+                                message,
+                                ModerationAction::Timeout,
+                                Some(seconds),
+                                cx,
+                            );
+                        });
+                    },
+                    move |_window, cx| {
+                        cancel_state.close_moderation_popover(cx);
+                    },
+                ),
+            ))
+        })
         .when(can_reply, |actions| {
             actions.child(
                 message_action_button("message-reply-action", "↩").on_mouse_down(
@@ -1606,6 +1720,313 @@ fn message_action_button(id: &'static str, label: &'static str) -> Stateful<Div>
         .child(label)
 }
 
+fn moderation_drag_preview_label(
+    action: ModerationAction,
+    duration_seconds: Option<u32>,
+) -> String {
+    match action {
+        ModerationAction::DeleteMessage => "Delete".into(),
+        ModerationAction::Ban => "Perm".into(),
+        ModerationAction::Timeout => {
+            let seconds = duration_seconds.unwrap_or(0);
+            format_duration(seconds)
+        }
+    }
+}
+
+fn moderation_drag_preview_color(action: ModerationAction) -> gpui::Rgba {
+    match action {
+        ModerationAction::DeleteMessage => rgb(0xa855f7),
+        ModerationAction::Ban => rgb(0xef4444),
+        ModerationAction::Timeout => rgb(0xf97316),
+    }
+}
+
+fn moderation_drag_result_for_offset(
+    platform: Platform,
+    offset: f32,
+) -> (ModerationAction, Option<u32>) {
+    const DELETE_THRESHOLD: f32 = 16.0;
+
+    const TWITCH_STEPS: &[(f32, u32)] = &[
+        (24.0, 60),
+        (48.0, 300),
+        (72.0, 600),
+        (124.0, 1800),
+        (152.0, 3600),
+        (184.0, 10_800),
+        (216.0, 21_600),
+        (248.0, 86_400),
+        (280.0, 259_200),
+        (312.0, 604_800),
+        (344.0, 1_209_600),
+    ];
+    const KICK_STEPS: &[(f32, u32)] = &[
+        (48.0, 60),
+        (72.0, 300),
+        (96.0, 600),
+        (124.0, 1800),
+        (152.0, 3600),
+        (184.0, 10_800),
+        (216.0, 21_600),
+        (248.0, 86_400),
+        (280.0, 604_800),
+    ];
+
+    if offset < DELETE_THRESHOLD {
+        return (ModerationAction::DeleteMessage, None);
+    }
+
+    let steps = match platform {
+        Platform::Kick => KICK_STEPS,
+        Platform::Twitch => TWITCH_STEPS,
+        Platform::Youtube => return (ModerationAction::DeleteMessage, None),
+    };
+
+    let duration = steps
+        .iter()
+        .find_map(|(threshold, seconds)| (offset <= *threshold).then_some(*seconds));
+
+    match duration {
+        Some(seconds) => (ModerationAction::Timeout, Some(seconds)),
+        None => (ModerationAction::Ban, None),
+    }
+}
+
+fn moderation_drag_preview_width(action: ModerationAction, duration_seconds: Option<u32>) -> f32 {
+    match action {
+        ModerationAction::DeleteMessage => 42.0,
+        ModerationAction::Ban => 344.0,
+        ModerationAction::Timeout => match duration_seconds {
+            Some(0..=1) => 42.0,
+            Some(2..=60) => 58.0,
+            Some(61..=300) => 78.0,
+            Some(301..=600) => 98.0,
+            Some(601..=1800) => 126.0,
+            Some(1801..=3600) => 154.0,
+            Some(3601..=10_800) => 186.0,
+            Some(10_801..=21_600) => 216.0,
+            Some(21_601..=86_400) => 248.0,
+            Some(86_401..=259_200) => 280.0,
+            Some(259_201..=604_800) => 312.0,
+            Some(604_801..=1_209_600) => 344.0,
+            _ => 344.0,
+        },
+    }
+}
+
+fn moderation_drag_handle(
+    target: String,
+    message: NormalizedChatMessage,
+    state_entity: Entity<AppState>,
+    app_entity: Entity<TwirChatApp>,
+    preview: Option<crate::app_state::ModerationDragPreview>,
+    list_state: Option<ListState>,
+    visible: bool,
+) -> Stateful<Div> {
+    let is_active = preview.is_some();
+    let preview_width = preview
+        .as_ref()
+        .map(|p| moderation_drag_preview_width(p.action, p.duration_seconds))
+        .unwrap_or(16.0);
+    let preview_color = preview
+        .as_ref()
+        .map(|p| moderation_drag_preview_color(p.action));
+    let preview_label = preview
+        .as_ref()
+        .map(|p| moderation_drag_preview_label(p.action, p.duration_seconds));
+    let drag_target = target.clone();
+    let move_target = target.clone();
+    let drop_target = target.clone();
+    let drop_state = state_entity.clone();
+    let drop_app = app_entity.clone();
+    let drop_message = message.clone();
+    let drop_list_state = list_state.clone();
+
+    div()
+        .id(format!("mod-drag-{target}"))
+        .flex_shrink_0()
+        .h_full()
+        .w(px(preview_width))
+        .min_h(px(18.0))
+        .rounded(px(2.0))
+        .overflow_hidden()
+        .bg(if is_active || visible {
+            theme::surface_2()
+        } else {
+            rgba(0x00000000)
+        })
+        .border_1()
+        .border_color(if is_active || visible {
+            theme::border()
+        } else {
+            rgba(0x00000000)
+        })
+        .cursor_move()
+        .on_drag(
+            ModerationDrag {
+                target: drag_target,
+            },
+            |_, _, _, cx| {
+                cx.stop_propagation();
+                cx.new(|_| Empty)
+            },
+        )
+        .on_drag_move::<ModerationDrag>(move |event, _window, cx| {
+            if event.drag(cx).target != move_target {
+                return;
+            }
+            let offset = f32::from(event.event.position.x - event.bounds.left()).max(0.0);
+            const CANCEL_THRESHOLD: f32 = 8.0;
+            if offset < CANCEL_THRESHOLD {
+                let restore_follow = state_entity
+                    .read(cx)
+                    .moderation_drag_preview
+                    .as_ref()
+                    .is_some_and(|p| p.target == move_target && p.restore_follow_on_drop);
+                if restore_follow && let Some(ls) = list_state.as_ref() {
+                    ls.scroll_to_end();
+                    ls.set_follow_mode(FollowMode::Tail);
+                }
+                state_entity.clear_moderation_drag_preview(cx);
+                return;
+            }
+            let (action, duration_seconds) =
+                moderation_drag_result_for_offset(message.platform, offset);
+            let is_first_move = state_entity
+                .read(cx)
+                .moderation_drag_preview
+                .as_ref()
+                .is_none_or(|preview| preview.target != move_target);
+            if is_first_move {
+                let restore_follow = list_state.as_ref().is_some_and(|ls| ls.is_following_tail());
+                if restore_follow && let Some(ls) = list_state.as_ref() {
+                    ls.set_follow_mode(FollowMode::Normal);
+                }
+                state_entity.set_moderation_drag_preview(
+                    cx,
+                    move_target.clone(),
+                    action,
+                    duration_seconds,
+                    restore_follow,
+                );
+            } else {
+                state_entity.update_moderation_drag_action(
+                    cx,
+                    move_target.clone(),
+                    action,
+                    duration_seconds,
+                );
+            }
+        })
+        .on_drop::<ModerationDrag>(move |_, _window, cx| {
+            let preview = drop_state.read(cx).moderation_drag_preview.clone();
+            drop_state.clear_moderation_drag_preview(cx);
+            if let Some(preview) = preview
+                && preview.target == drop_target
+            {
+                if preview.restore_follow_on_drop
+                    && let Some(ls) = drop_list_state.as_ref()
+                {
+                    ls.scroll_to_end();
+                    ls.set_follow_mode(FollowMode::Tail);
+                }
+                let message = drop_message.clone();
+                drop_app.update(cx, |app, cx| {
+                    app.execute_moderation_action(
+                        message,
+                        preview.action,
+                        preview.duration_seconds,
+                        cx,
+                    );
+                });
+            }
+        })
+        .when(is_active, |el| {
+            let color = preview_color.unwrap_or(rgb(0xf97316));
+            el.child(
+                div()
+                    .absolute()
+                    .left(px(0.0))
+                    .top(px(0.0))
+                    .bottom(px(0.0))
+                    .w(px(preview_width))
+                    .bg(color),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(0.0))
+                    .top(px(0.0))
+                    .bottom(px(0.0))
+                    .w(px(5.0))
+                    .bg(rgba(0x00000055)),
+            )
+            .child(
+                div()
+                    .relative()
+                    .h_full()
+                    .px(px(6.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(10.0))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme::text_primary())
+                    .child(preview_label.unwrap_or_default()),
+            )
+        })
+}
+
+fn moderation_presets_for_settings(settings: &AppSettings) -> Vec<ModerationPresetKind> {
+    settings
+        .moderation_presets
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|preset| match preset {
+            ModerationPresetKind::Timeout(_) => settings.show_timeout_button.unwrap_or(true),
+            ModerationPresetKind::Ban => settings.show_ban_button.unwrap_or(true),
+        })
+        .collect()
+}
+
+fn moderation_action_from_preset(preset: ModerationPresetKind) -> (ModerationAction, Option<u32>) {
+    match preset {
+        ModerationPresetKind::Timeout(seconds) => (ModerationAction::Timeout, Some(seconds)),
+        ModerationPresetKind::Ban => (ModerationAction::Ban, None),
+    }
+}
+
+fn can_moderate_message(
+    message: &NormalizedChatMessage,
+    settings: &AppSettings,
+    accounts: &[Account],
+) -> bool {
+    if message.message_type != ChatMessageType::Message {
+        return false;
+    }
+    if !settings.show_ban_button.unwrap_or(true) && !settings.show_timeout_button.unwrap_or(true) {
+        return false;
+    }
+
+    let Some(required_scope) = required_moderation_scope(message.platform) else {
+        return false;
+    };
+    accounts
+        .iter()
+        .find(|account| account.platform == message.platform)
+        .is_some_and(|account| account.scopes.iter().any(|scope| scope == required_scope))
+}
+
+fn required_moderation_scope(platform: Platform) -> Option<&'static str> {
+    match platform {
+        Platform::Kick => Some("moderation:ban"),
+        Platform::Twitch => Some("moderator:manage:banned_users"),
+        Platform::Youtube => None,
+    }
+}
+
 fn compact_message_row(
     messages: &RowMessages,
     settings: &AppSettings,
@@ -1617,11 +2038,22 @@ fn compact_message_row(
     let message = &messages.display;
     let target_message = messages.target.clone();
     let state_entity = row_context.state_entity.clone();
+    let app_entity = row_context.app_entity.clone();
     let options = row_context.options;
     let typography = MessageTypography::from_settings(settings);
     let row_background = message_row_background(message, settings, accounts);
     let row_id = options.message_row_id(&message.id);
-    let row_actions_visible = state_entity.read(cx).message_actions_visible_for(&row_id);
+    let state = state_entity.read(cx);
+    let row_actions_visible = state.message_actions_visible_for(&row_id);
+    let popover_target = options.moderation_popover_target(&target_message.id);
+    let moderation_popover_open = state.moderation_popover_open.as_deref() == Some(&popover_target);
+    let moderation_popover_duration_seconds = state.moderation_popover_duration_seconds;
+    let moderation_drag_preview = state
+        .moderation_drag_preview
+        .as_ref()
+        .filter(|preview| preview.target == popover_target)
+        .cloned();
+    let can_moderate = can_moderate_message(&target_message, settings, accounts);
     let can_reply = can_start_reply_from_message(&target_message);
     let mut custom_parts = Vec::new();
 
@@ -1646,13 +2078,14 @@ fn compact_message_row(
 
     if settings.show_platform_icon {
         let platform = message.platform;
+        let icon_typography = typography.clone();
         custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
             move |_win, _cx| {
                 div()
                     .mr(px(4.0))
                     .child(
                         PlatformIcon::new(to_model_platform(platform))
-                            .size(px(typography.platform_icon_size()))
+                            .size(px(icon_typography.platform_icon_size()))
                             .color(theme::platform_color(to_model_platform(platform))),
                     )
                     .into_any_element()
@@ -1665,13 +2098,14 @@ fn compact_message_row(
         for (index, badge) in message.author.badges.iter().enumerate() {
             let badge = badge.clone();
             let msg_id = message.id.clone();
+            let badge_typography = typography.clone();
             custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
                 move |_win, _cx| {
                     if is_kick_message
                         && let Some(icon) = embedded_kick_badge_element(
                             badge.image_url.as_deref(),
                             &badge.badge_type,
-                            typography,
+                            &badge_typography,
                             true,
                         )
                     {
@@ -1687,12 +2121,13 @@ fn compact_message_row(
                             url.clone(),
                             options.badge_id(&msg_id, &badge.id, index),
                             badge.text.clone(),
-                            typography,
+                            &badge_typography,
                             true,
                         )
                         .into_any_element()
                     } else {
-                        text_badge_element(badge.text.clone(), typography, true).into_any_element()
+                        text_badge_element(badge.text.clone(), &badge_typography, true)
+                            .into_any_element()
                     }
                 },
             )));
@@ -1706,6 +2141,7 @@ fn compact_message_row(
     let author_color = author_name_color(message);
     let state_entity_for_compact = state_entity.clone();
     let message_for_compact = target_message.clone();
+    let author_typography = typography.clone();
     custom_parts.push(SelectableMessagePart::Custom(std::sync::Arc::new(
         move |_win, _cx| {
             let state_entity = state_entity_for_compact.clone();
@@ -1713,7 +2149,7 @@ fn compact_message_row(
             div()
                 .mr(px(4.0))
                 .text_color(author_color)
-                .text_size(px(typography.author_font_size()))
+                .text_size(px(author_typography.author_font_size()))
                 .font_weight(gpui::FontWeight::BOLD)
                 .on_mouse_down(gpui::MouseButton::Right, move |_, _window, cx| {
                     state_entity.update(cx, |state, cx| {
@@ -1763,6 +2199,8 @@ fn compact_message_row(
         .px(px(8.0))
         .py(px(1.0))
         .relative()
+        .flex()
+        .flex_row()
         .on_hover({
             let state_entity = state_entity.clone();
             let row_id = row_id.clone();
@@ -1787,16 +2225,15 @@ fn compact_message_row(
                     .bg(theme::platform_color(to_model_platform(message.platform))),
             )
         })
-        .when_some(reply_preview(message, typography), |row, preview| {
-            row.child(div().w_full().min_w(px(0.0)).mb(px(1.0)).child(preview))
-        })
-        .when(row_actions_visible, |row| {
-            row.child(message_row_actions(
-                target_message,
+        .when(can_moderate, |row| {
+            row.child(moderation_drag_handle(
+                popover_target.clone(),
+                target_message.clone(),
                 state_entity.clone(),
-                row_context.reply_focus_input.clone(),
-                options,
-                can_reply,
+                app_entity.clone(),
+                moderation_drag_preview.clone(),
+                row_context.list_state.clone(),
+                row_actions_visible,
             ))
         })
         .child(
@@ -1804,24 +2241,46 @@ fn compact_message_row(
                 .flex_1()
                 .w_full()
                 .min_w(px(0.0))
-                .text_size(px(typography.font_size))
-                .text_color(theme::text_primary())
-                .flex()
-                .flex_row()
-                .flex_wrap()
-                .items_center()
-                .whitespace_normal()
-                .font(theme::app_font(typography.font_family))
-                .child(selectable_message(
-                    scoped_message_id.clone(),
-                    scoped_message_id,
-                    message,
-                    parts,
-                    typography,
-                    window,
-                    cx,
-                )),
+                .when_some(reply_preview(message, &typography), |col, preview| {
+                    col.child(div().w_full().min_w(px(0.0)).mb(px(1.0)).child(preview))
+                })
+                .child(
+                    div()
+                        .w_full()
+                        .min_w(px(0.0))
+                        .text_size(px(typography.font_size))
+                        .text_color(theme::text_primary())
+                        .flex()
+                        .flex_row()
+                        .flex_wrap()
+                        .items_center()
+                        .whitespace_normal()
+                        .font(typography.font())
+                        .child(selectable_message(
+                            scoped_message_id.clone(),
+                            scoped_message_id,
+                            message,
+                            parts,
+                            typography,
+                            window,
+                            cx,
+                        )),
+                ),
         )
+        .when(row_actions_visible || moderation_popover_open, |row| {
+            row.child(message_row_actions(
+                target_message,
+                state_entity.clone(),
+                app_entity.clone(),
+                settings,
+                accounts,
+                moderation_popover_open,
+                moderation_popover_duration_seconds,
+                row_context.reply_focus_input.clone(),
+                options,
+                can_reply,
+            ))
+        })
         .into_any_element()
 }
 
@@ -1834,6 +2293,7 @@ pub(crate) fn message_row(
     row_context: MessageRowContext,
 ) -> AnyElement {
     let state_entity = row_context.state_entity.clone();
+    let app_entity = row_context.app_entity.clone();
     let options = row_context.options;
     let is_compact = settings.chat_theme == ChatTheme::Compact;
     let _is_modern = settings.chat_theme == ChatTheme::Modern;
@@ -1841,7 +2301,7 @@ pub(crate) fn message_row(
     let v_pad = if is_compact { 1.0 } else { 2.0 };
 
     if message.message_type == ChatMessageType::System {
-        let system_parts = system_message_render_parts(message, typography);
+        let system_parts = system_message_render_parts(message, &typography);
         let (row_bg, icon_bg, icon_color) = match system_parts.action {
             SystemMessageAction::Added => (0x22c55e12, 0x22c55e33, 0x22c55e),
             SystemMessageAction::Removed => (0xef444414, 0xef444433, 0xef4444),
@@ -1879,7 +2339,7 @@ pub(crate) fn message_row(
                     .min_w(px(0.0))
                     .text_size(px(typography.font_size))
                     .text_color(theme::text_muted())
-                    .font(theme::app_font(typography.font_family))
+                    .font(typography.font())
                     .flex()
                     .flex_row()
                     .flex_wrap()
@@ -1912,7 +2372,17 @@ pub(crate) fn message_row(
     let message = &row_messages.display;
     let row_background = message_row_background(message, settings, accounts);
     let row_id = options.message_row_id(&message.id);
-    let row_actions_visible = state_entity.read(cx).message_actions_visible_for(&row_id);
+    let state = state_entity.read(cx);
+    let row_actions_visible = state.message_actions_visible_for(&row_id);
+    let popover_target = options.moderation_popover_target(&row_messages.target.id);
+    let moderation_popover_open = state.moderation_popover_open.as_deref() == Some(&popover_target);
+    let moderation_popover_duration_seconds = state.moderation_popover_duration_seconds;
+    let moderation_drag_preview = state
+        .moderation_drag_preview
+        .as_ref()
+        .filter(|preview| preview.target == popover_target)
+        .cloned();
+    let can_moderate = can_moderate_message(&row_messages.target, settings, accounts);
     let can_reply = can_start_reply_from_message(&row_messages.target);
 
     if is_compact {
@@ -1926,7 +2396,6 @@ pub(crate) fn message_row(
         .py(px(v_pad))
         .flex()
         .flex_row()
-        .items_start()
         .gap(px(8.0))
         .relative()
         .on_hover({
@@ -1953,10 +2422,26 @@ pub(crate) fn message_row(
                     .bg(theme::platform_color(to_model_platform(message.platform))),
             )
         })
-        .when(row_actions_visible, |row| {
+        .when(can_moderate, |row| {
+            row.child(moderation_drag_handle(
+                popover_target.clone(),
+                row_messages.target.clone(),
+                state_entity.clone(),
+                app_entity.clone(),
+                moderation_drag_preview.clone(),
+                row_context.list_state.clone(),
+                row_actions_visible,
+            ))
+        })
+        .when(row_actions_visible || moderation_popover_open, |row| {
             row.child(message_row_actions(
                 row_messages.target.clone(),
                 state_entity.clone(),
+                app_entity.clone(),
+                settings,
+                accounts,
+                moderation_popover_open,
+                moderation_popover_duration_seconds,
                 row_context.reply_focus_input.clone(),
                 options,
                 can_reply,
@@ -2031,7 +2516,7 @@ pub(crate) fn message_row(
                 .flex()
                 .flex_col()
                 .gap(px(2.0))
-                .when_some(reply_preview(message, typography), |body, preview| {
+                .when_some(reply_preview(message, &typography), |body, preview| {
                     body.child(preview)
                 })
                 .child(
@@ -2057,7 +2542,7 @@ pub(crate) fn message_row(
                                         && let Some(icon) = embedded_kick_badge_element(
                                             badge.image_url.as_deref(),
                                             &badge.badge_type,
-                                            typography,
+                                            &typography,
                                             false,
                                         )
                                     {
@@ -2073,11 +2558,11 @@ pub(crate) fn message_row(
                                             url.clone(),
                                             options.badge_id(&message.id, &badge.id, index),
                                             badge.text.clone(),
-                                            typography,
+                                            &typography,
                                             false,
                                         )
                                     } else {
-                                        text_badge_element(badge.text.clone(), typography, false)
+                                        text_badge_element(badge.text.clone(), &typography, false)
                                     }
                                 },
                             ))
@@ -2208,7 +2693,7 @@ fn message_text_with_emotes(
         .flex_wrap()
         .items_center()
         .whitespace_normal()
-        .font(theme::app_font(typography.font_family))
+        .font(typography.font())
         .child(selectable_message(
             scoped_message_id.clone(),
             scoped_message_id,
@@ -2229,7 +2714,7 @@ fn selectable_message(
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<SelectableMessage> {
-    let font = theme::app_font(typography.font_family);
+    let font = typography.font();
     let selectable = window.use_keyed_state(id, cx, {
         let message_id = selection_id;
         let text = message.text.clone();

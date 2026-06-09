@@ -14,7 +14,7 @@ use crate::protocol::messages::{
     UserCardMetadataResponse,
 };
 use crate::protocol::rpc::{GetUserChatHistoryParams, UserChatHistoryPage};
-use crate::protocol::types::Platform;
+use crate::protocol::types::{FontFamilyChoice, ModerationAction, NormalizedChatMessage, Platform};
 use crate::runtime::{AppRuntime, UPDATE_CHECK_INTERVAL, UpdateCheckSource, UserCardRuntimeLoader};
 use crate::services::{BackendWsEvent, ServiceEvent, fetch_channels_status};
 
@@ -40,6 +40,7 @@ pub struct TwirChatApp {
     pub(crate) state: Entity<AppState>,
     composer_input: Entity<Input>,
     font_size_input: Entity<Input>,
+    system_font_input: Entity<Input>,
     user_card_alias_input: Entity<Input>,
     add_channel_input: Entity<Input>,
     tab_selector_input: Entity<Input>,
@@ -196,6 +197,17 @@ impl TwirChatApp {
             input.set_text(initial_font_size, cx);
             input
         });
+        let initial_system_font = state
+            .read(cx)
+            .settings()
+            .system_font_family
+            .clone()
+            .unwrap_or_default();
+        let system_font_input = cx.new(|cx| {
+            let mut input = Input::new("System font family", cx).with_compact_appearance();
+            input.set_text(initial_system_font, cx);
+            input
+        });
         let user_card_alias_input = cx.new(|cx| Input::new("Local alias", cx));
         let add_channel_input = cx.new(|cx| Input::new("Twitch channel name", cx));
         let tab_selector_input = cx.new(|cx| Input::new("Switch to tab...", cx));
@@ -205,6 +217,8 @@ impl TwirChatApp {
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         cx.observe(&composer_input, |_, _, cx| cx.notify()).detach();
         cx.observe(&font_size_input, |_, _, cx| cx.notify())
+            .detach();
+        cx.observe(&system_font_input, |_, _, cx| cx.notify())
             .detach();
         cx.observe(&user_card_alias_input, |_, _, cx| cx.notify())
             .detach();
@@ -320,6 +334,7 @@ impl TwirChatApp {
             state,
             composer_input,
             font_size_input,
+            system_font_input,
             user_card_alias_input,
             add_channel_input,
             tab_selector_input,
@@ -463,6 +478,79 @@ impl TwirChatApp {
             state.record_runtime_failure(message);
             cx.notify();
         });
+    }
+
+    pub(crate) fn execute_moderation_action(
+        &mut self,
+        message: NormalizedChatMessage,
+        action: ModerationAction,
+        duration_seconds: Option<u32>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(runtime) = &self.runtime else {
+            self.state.update(cx, |state, cx| {
+                state.platforms_panel.add_toast(
+                    message.platform,
+                    crate::ui::platforms::ToastKind::Error,
+                    String::from("Moderation runtime is not available"),
+                );
+                cx.notify();
+            });
+            return;
+        };
+
+        let config = runtime.config().clone();
+        let platform = message.platform;
+        let channel_id = message.channel_id.clone();
+        let target_user_id = message.author.id.clone();
+        let target_name = message.author.display_name.clone();
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    let storage = crate::storage::Storage::open_or_recover(config.db_path())
+                        .map_err(|error| error.to_string())?;
+                    crate::services::execute_moderation_ban(
+                        &storage,
+                        &config,
+                        platform,
+                        target_user_id,
+                        channel_id,
+                        action,
+                        duration_seconds,
+                        None,
+                    )
+                    .map_err(|error| error.to_string())
+                })
+                .await;
+
+            let _ = this.update(cx, |this, cx| {
+                this.state.update(cx, |state, cx| {
+                    let (kind, toast_message) = match result {
+                        Ok(response) if response.success => (
+                            crate::ui::platforms::ToastKind::Success,
+                            format!("Moderated {target_name}"),
+                        ),
+                        Ok(response) => (
+                            crate::ui::platforms::ToastKind::Error,
+                            response
+                                .error
+                                .map(|error| error.message)
+                                .unwrap_or_else(|| format!("Moderation failed for {target_name}")),
+                        ),
+                        Err(error) => (crate::ui::platforms::ToastKind::Error, error),
+                    };
+                    state
+                        .platforms_panel
+                        .add_toast(platform, kind, toast_message);
+                    state.close_moderation_popover();
+                    cx.notify();
+                });
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn flush_pending_watched_channel_adds(&self, cx: &mut Context<Self>) {
@@ -758,6 +846,33 @@ impl TwirChatApp {
         cx.notify();
     }
 
+    fn flush_system_font_submit(&self, cx: &mut Context<Self>) {
+        let submitted_text = self.system_font_input.update(cx, |input, _cx| {
+            input
+                .take_submit_requested()
+                .then(|| input.text().trim().to_string())
+        });
+
+        let Some(submitted_text) = submitted_text else {
+            return;
+        };
+
+        self.state.set_font_family(cx, FontFamilyChoice::System);
+        self.state.set_system_font_family(cx, submitted_text);
+        self.state.persist_settings(cx);
+
+        let stored_text = self
+            .state
+            .read(cx)
+            .settings()
+            .system_font_family
+            .clone()
+            .unwrap_or_default();
+        self.system_font_input
+            .update(cx, |input, cx| input.set_text(stored_text, cx));
+        cx.notify();
+    }
+
     fn flush_tab_rename_submit(&self, cx: &mut Context<Self>) {
         let Some(tab_id) = self
             .state
@@ -808,6 +923,29 @@ impl TwirChatApp {
         }
 
         self.font_size_input
+            .update(cx, |input, cx| input.set_text(expected_text, cx));
+    }
+
+    fn sync_system_font_input(&self, state: &AppState, window: &Window, cx: &mut Context<Self>) {
+        if self
+            .system_font_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
+            return;
+        }
+
+        let expected_text = state
+            .settings()
+            .system_font_family
+            .clone()
+            .unwrap_or_default();
+        if self.system_font_input.read(cx).text() == expected_text {
+            return;
+        }
+
+        self.system_font_input
             .update(cx, |input, cx| input.set_text(expected_text, cx));
     }
 
@@ -1681,6 +1819,7 @@ impl Render for TwirChatApp {
         self.drain_runtime_events(cx);
         self.flush_composer_submit(cx);
         self.flush_font_size_submit(cx);
+        self.flush_system_font_submit(cx);
         self.flush_tab_rename_submit(cx);
         self.flush_watched_composer_submits(cx);
         self.flush_pending_watched_channel_adds(cx);
@@ -1689,6 +1828,7 @@ impl Render for TwirChatApp {
         self.flush_pending_backend_messages(cx);
         let state = self.state.read(cx).clone();
         self.sync_font_size_input(&state, window, cx);
+        self.sync_system_font_input(&state, window, cx);
         self.sync_watched_composer_inputs(&state, cx);
         let composer_text = self.composer_input.read(cx).text().to_string();
         let tab_selector_query = self.tab_selector_input.read(cx).text().to_string();
@@ -1752,7 +1892,7 @@ impl Render for TwirChatApp {
         div()
             .image_cache(retain_all("twirchat-images"))
             .id("app-shell")
-            .font(theme::app_font(state.settings().font_family))
+            .font(theme::app_font_for_settings(state.settings()))
             .relative()
             .size_full()
             .bg(rgb(0x0f0f11)) // Match Vue body/app background
@@ -1774,6 +1914,7 @@ impl Render for TwirChatApp {
                             state_entity: self.state.clone(),
                             composer_input: self.composer_input.clone(),
                             font_size_input: self.font_size_input.clone(),
+                            system_font_input: self.system_font_input.clone(),
                             add_channel_input: self.add_channel_input.clone(),
                             tab_rename_input: self.tab_rename_input.clone(),
                             watched_composer_inputs: self.watched_composer_inputs.clone(),

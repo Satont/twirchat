@@ -1,7 +1,7 @@
 use crate::protocol::types::{
     AppSettings, AppTheme, ChatLayout, ChatLayoutMode, ChatTheme, FontFamilyChoice, HotkeySettings,
-    OverlayAnimation, OverlayConfig, OverlayPosition, PlatformFilter, SelfPingConfig, SplitConfig,
-    SplitConfigType,
+    ModerationPresetKind, OverlayAnimation, OverlayConfig, OverlayPosition, PlatformFilter,
+    SelfPingConfig, SplitConfig, SplitConfigType,
 };
 use crate::runtime::DEFAULT_OVERLAY_SERVER_PORT;
 use crate::storage::db::{Connection, Param};
@@ -119,6 +119,7 @@ pub fn default_app_settings() -> AppSettings {
         theme: AppTheme::Dark,
         chat_theme: ChatTheme::Modern,
         font_family: FontFamilyChoice::Inter,
+        system_font_family: None,
         font_size: 14.0,
         show_platform_color_stripe: true,
         show_platform_icon: true,
@@ -152,6 +153,15 @@ pub fn default_app_settings() -> AppSettings {
             enabled: true,
             color: "rgba(167, 139, 250, 0.15)".into(),
         }),
+        show_ban_button: Some(true),
+        show_timeout_button: Some(true),
+        default_timeout_seconds: Some(600),
+        moderation_presets: Some(vec![
+            ModerationPresetKind::Timeout(1),
+            ModerationPresetKind::Timeout(300),
+            ModerationPresetKind::Timeout(600),
+            ModerationPresetKind::Ban,
+        ]),
     }
 }
 

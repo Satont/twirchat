@@ -1,7 +1,7 @@
 use crate::platforms::kick::adapter::{
     KickAuthState, KickAvatarLookupRequest, KickChatClient, KickChatMessage, KickChatroom,
     KickFollowEvent, KickSendMessageRequest, KickStreamStatusRequest, KickSubscriptionEvent,
-    KickTransportAuth,
+    KickTransportAuth, KickUserBannedEvent, KickUserUnbannedEvent,
 };
 use crate::platforms::{PlatformError, PlatformResult};
 use crate::protocol::types::{Platform, StreamStatus};
@@ -32,6 +32,8 @@ pub struct MockKickClient {
     incoming_messages: VecDeque<KickChatMessage>,
     follow_events: VecDeque<KickFollowEvent>,
     subscription_events: VecDeque<KickSubscriptionEvent>,
+    ban_events: VecDeque<KickUserBannedEvent>,
+    unban_events: VecDeque<KickUserUnbannedEvent>,
     refreshed_tokens: VecDeque<TokenPair>,
     next_drain_error: Option<String>,
     next_sent_id: u64,
@@ -54,6 +56,8 @@ impl MockKickClient {
             incoming_messages: VecDeque::new(),
             follow_events: VecDeque::new(),
             subscription_events: VecDeque::new(),
+            ban_events: VecDeque::new(),
+            unban_events: VecDeque::new(),
             refreshed_tokens: VecDeque::new(),
             next_drain_error: None,
             next_sent_id: 1,
@@ -180,6 +184,20 @@ impl KickChatClient for MockKickClient {
             return Err(error);
         }
         Ok(self.subscription_events.drain(..).collect())
+    }
+
+    fn drain_ban_events(&mut self) -> PlatformResult<Vec<KickUserBannedEvent>> {
+        if let Some(error) = self.take_drain_error() {
+            return Err(error);
+        }
+        Ok(self.ban_events.drain(..).collect())
+    }
+
+    fn drain_unban_events(&mut self) -> PlatformResult<Vec<KickUserUnbannedEvent>> {
+        if let Some(error) = self.take_drain_error() {
+            return Err(error);
+        }
+        Ok(self.unban_events.drain(..).collect())
     }
 
     fn send_message(

@@ -1,6 +1,7 @@
 use super::adapter::{
     KickAvatarLookupRequest, KickChatClient, KickChatMessage, KickChatroom, KickFollowEvent,
     KickSendMessageRequest, KickStreamStatusRequest, KickSubscriptionEvent, KickTransportAuth,
+    KickUserBannedEvent, KickUserUnbannedEvent,
 };
 use crate::platforms::{PlatformError, PlatformResult};
 use crate::protocol::types::Platform;
@@ -28,6 +29,8 @@ pub struct RealKickClient {
     incoming_messages: VecDeque<KickChatMessage>,
     follow_events: VecDeque<KickFollowEvent>,
     subscription_events: VecDeque<KickSubscriptionEvent>,
+    ban_events: VecDeque<KickUserBannedEvent>,
+    unban_events: VecDeque<KickUserUnbannedEvent>,
     pending_subscribe: bool,
 }
 
@@ -51,6 +54,8 @@ impl RealKickClient {
             incoming_messages: VecDeque::new(),
             follow_events: VecDeque::new(),
             subscription_events: VecDeque::new(),
+            ban_events: VecDeque::new(),
+            unban_events: VecDeque::new(),
             pending_subscribe: false,
         })
     }
@@ -162,6 +167,28 @@ impl RealKickClient {
                 }
                 Err(error) => eprintln!(
                     "[kick/live] failed to decode subscription event payload: {} data={}",
+                    error.message,
+                    body_snippet(&envelope.data.to_string())
+                ),
+            },
+            r"App\Events\UserBannedEvent" => match envelope.decode_data() {
+                Ok(event) => {
+                    eprintln!("[kick/live] received user banned event from websocket");
+                    self.ban_events.push_back(event);
+                }
+                Err(error) => eprintln!(
+                    "[kick/live] failed to decode user banned event payload: {} data={}",
+                    error.message,
+                    body_snippet(&envelope.data.to_string())
+                ),
+            },
+            r"App\Events\UserUnbannedEvent" => match envelope.decode_data() {
+                Ok(event) => {
+                    eprintln!("[kick/live] received user unbanned event from websocket");
+                    self.unban_events.push_back(event);
+                }
+                Err(error) => eprintln!(
+                    "[kick/live] failed to decode user unbanned event payload: {} data={}",
                     error.message,
                     body_snippet(&envelope.data.to_string())
                 ),
@@ -347,6 +374,14 @@ impl KickChatClient for RealKickClient {
 
     fn drain_subscription_events(&mut self) -> PlatformResult<Vec<KickSubscriptionEvent>> {
         Ok(self.subscription_events.drain(..).collect())
+    }
+
+    fn drain_ban_events(&mut self) -> PlatformResult<Vec<KickUserBannedEvent>> {
+        Ok(self.ban_events.drain(..).collect())
+    }
+
+    fn drain_unban_events(&mut self) -> PlatformResult<Vec<KickUserUnbannedEvent>> {
+        Ok(self.unban_events.drain(..).collect())
     }
 
     fn send_message(

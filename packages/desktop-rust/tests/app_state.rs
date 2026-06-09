@@ -1832,6 +1832,7 @@ fn watched_channel(id: &str, platform: Platform, channel_slug: &str) -> WatchedC
         id: id.to_string(),
         platform,
         channel_slug: channel_slug.to_string(),
+        broadcaster_id: None,
         display_name: channel_slug.to_string(),
         created_at: 1,
     }

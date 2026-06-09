@@ -43,3 +43,4 @@ drafts
 boulder.json
 .sisyphus/run-continuation
 .omo/run-continuation
+daemon.pid

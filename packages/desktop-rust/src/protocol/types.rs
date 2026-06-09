@@ -259,6 +259,8 @@ pub struct AppSettings {
     pub theme: AppTheme,
     pub chat_theme: ChatTheme,
     pub font_family: FontFamilyChoice,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_font_family: Option<String>,
     pub font_size: f64,
     pub show_platform_color_stripe: bool,
     pub show_platform_icon: bool,
@@ -274,6 +276,14 @@ pub struct AppSettings {
     pub chat_layout: Option<ChatLayout>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub self_ping: Option<SelfPingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_ban_button: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_timeout_button: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_timeout_seconds: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moderation_presets: Option<Vec<ModerationPresetKind>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -325,6 +335,8 @@ pub struct WatchedChannel {
     pub id: String,
     pub platform: Platform,
     pub channel_slug: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub broadcaster_id: Option<String>,
     pub display_name: String,
     pub created_at: u64,
 }
@@ -374,9 +386,68 @@ pub type LegacySplitConfig = SplitConfig;
 pub type LegacyChatLayout = ChatLayout;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LayoutMigrationSource {
-    Legacy,
+#[serde(rename_all = "snake_case")]
+pub enum ModerationAction {
+    Ban,
+    Timeout,
+    DeleteMessage,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModerationError {
+    pub code: String,
+    pub status: u32,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModerationBanResponse {
+    pub success: bool,
+    pub user_id: String,
+    pub is_permanent: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_seconds: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ModerationError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModerationPresetKind {
+    Timeout(u32),
+    Ban,
+}
+
+impl ModerationPresetKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ModerationPresetKind::Timeout(secs) => match *secs {
+                0..=59 => "1s",
+                60 => "1m",
+                300 => "5m",
+                600 => "10m",
+                1800 => "30m",
+                3600 => "1h",
+                21600 => "6h",
+                86400 => "1d",
+                _ => "custom",
+            },
+            ModerationPresetKind::Ban => "Ban",
+        }
+    }
+
+    pub fn is_valid_for_platform(&self, platform: Platform) -> bool {
+        match platform {
+            Platform::Youtube => false,
+            Platform::Twitch => true,
+            Platform::Kick => match self {
+                ModerationPresetKind::Ban => true,
+                ModerationPresetKind::Timeout(secs) => *secs >= 60 && *secs <= 604_800,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -385,7 +456,7 @@ pub struct WatchedChannelsLayoutMeta {
     pub created_at: u64,
     pub updated_at: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub migrated_from: Option<LayoutMigrationSource>,
+    pub migrated_from: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
