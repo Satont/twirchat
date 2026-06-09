@@ -61,6 +61,8 @@ commit_parsers = [
   { message = "^refactor", group = "🚜 Refactor" },
   { message = "^style", group = "🎨 Styling" },
   { message = "^test", group = "🧪 Testing" },
+  { message = "^ci", group = "⚙️ Miscellaneous Tasks" },
+  { message = "^build", group = "📦 Build System" },
   { message = "^chore\\(release\\):", skip = true },
   { message = "^chore", group = "⚙️ Miscellaneous Tasks" },
   { body = ".*security", group = "🛡️ Security" },
@@ -71,7 +73,7 @@ commit_parsers = [
 protect_breaking_commits = false
 
 # filter out the commits that are not matched by commit parsers
-filter_commits = false
+filter_commits = true
 
 # regex for matching git tags
 tag_pattern = "^[v]?[0-9]+\\.[0-9]+\\.[0-9]+$"

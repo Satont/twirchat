@@ -5,11 +5,11 @@ on:
     branches:
       - feat/refactor-desktop-gpui
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g., v1.0.0)"
+        description: 'Version to release (e.g., v1.0.0)'
         required: true
         type: string
 
@@ -30,7 +30,7 @@ jobs:
       pack_version: ${{ steps.version.outputs.pack_version }}
       is_stable_tag: ${{ steps.version.outputs.is_stable_tag }}
       dry_run: ${{ steps.version.outputs.dry_run }}
-      release_notes: ${{ steps.changelog.outputs.changelog }}
+      release_notes: ${{ steps.release_notes.outputs.body }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,9 +74,19 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --latest --strip header
+          args: --latest --strip header --output release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read Release Notes
+        id: release_notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<EOF'
+            cat release-notes.md
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
   build-desktop:
     name: Build Desktop (${{ matrix.target }})
@@ -322,7 +332,7 @@ jobs:
             os: ubuntu-latest
             channel: linux
             artifact_dir: desktop-linux-x64
-            pack_dir_suffix: ""
+            pack_dir_suffix: ''
             main_exe: twirchat
             vpk_target: linux
             runtime_arg: --runtime linux-x64
@@ -330,7 +340,7 @@ jobs:
             os: ubuntu-latest
             channel: win
             artifact_dir: desktop-win-x64
-            pack_dir_suffix: ""
+            pack_dir_suffix: ''
             main_exe: twirchat.exe
             vpk_target: win
             runtime_arg: --runtime win-x64
@@ -341,12 +351,12 @@ jobs:
             pack_dir_suffix: /TwirChat.app
             main_exe: TwirChat
             vpk_target: osx
-            runtime_arg: ""
+            runtime_arg: ''
     steps:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: '8.0.x'
 
       - name: Install Velopack CLI
         shell: bash
