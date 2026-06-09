@@ -5,11 +5,11 @@ on:
     branches:
       - feat/refactor-desktop-gpui
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.0)'
+        description: "Version to release (e.g., v1.0.0)"
         required: true
         type: string
 
@@ -112,6 +112,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref }}
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -254,6 +255,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -319,7 +322,7 @@ jobs:
             os: ubuntu-latest
             channel: linux
             artifact_dir: desktop-linux-x64
-            pack_dir_suffix: ''
+            pack_dir_suffix: ""
             main_exe: twirchat
             vpk_target: linux
             runtime_arg: --runtime linux-x64
@@ -327,7 +330,7 @@ jobs:
             os: ubuntu-latest
             channel: win
             artifact_dir: desktop-win-x64
-            pack_dir_suffix: ''
+            pack_dir_suffix: ""
             main_exe: twirchat.exe
             vpk_target: win
             runtime_arg: --runtime win-x64
@@ -338,12 +341,12 @@ jobs:
             pack_dir_suffix: /TwirChat.app
             main_exe: TwirChat
             vpk_target: osx
-            runtime_arg: ''
+            runtime_arg: ""
     steps:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Install Velopack CLI
         shell: bash
@@ -430,6 +433,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
