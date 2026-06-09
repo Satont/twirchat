@@ -290,6 +290,16 @@ fn header(
                                 .when(state.chat_options_menu_open, |el| {
                                     el.child(
                                         div()
+                                            .id("options-menu-popover")
+                                            .on_mouse_down_out({
+                                                let state_entity = state_entity.clone();
+                                                move |_event, _window, cx| {
+                                                    state_entity.update(cx, |state, cx| {
+                                                        state.close_options_menu();
+                                                        cx.notify();
+                                                    });
+                                                }
+                                            })
                                             .absolute()
                                             .top(px(32.0))
                                             .right(px(0.0))
@@ -3310,6 +3320,16 @@ pub fn render_appearance_popover(
     let font_size = normalize_chat_font_size(settings.font_size);
 
     div()
+        .id("appearance-popover")
+        .on_mouse_down_out({
+            let state_entity = state_entity.clone();
+            move |_event, _window, cx| {
+                state_entity.update(cx, |state, cx| {
+                    state.close_appearance_popover();
+                    cx.notify();
+                });
+            }
+        })
         .absolute()
         .top(px(32.0))
         .right(px(0.0))

@@ -1834,6 +1834,14 @@ impl AppState {
         }
     }
 
+    pub fn close_appearance_popover(&mut self) {
+        self.chat_appearance_popover_open = None;
+    }
+
+    pub fn close_options_menu(&mut self) {
+        self.chat_options_menu_open = false;
+    }
+
     pub fn toggle_chat_add_menu(&mut self) {
         self.chat_add_menu_open = !self.chat_add_menu_open;
     }
