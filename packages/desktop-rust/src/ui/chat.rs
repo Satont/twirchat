@@ -1,4 +1,6 @@
 use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
+use crate::runtime::config::RuntimeConfig;
+use crate::storage::Storage;
 use crate::chat::apply_alias;
 use crate::protocol::types::{
     Account, AppSettings, ChatMessageType, ChatTheme, Emote, FontFamilyChoice, ModerationAction,
@@ -303,7 +305,17 @@ fn header(
                                                 move |_event, _window, cx| {
                                                     state_entity.update(cx, |state, cx| {
                                                         state.toggle_chat_options_menu();
-                                                        state.messages.clear();
+                                                        let config = RuntimeConfig::default();
+                                                        if let Ok(storage) =
+                                                            Storage::open_or_recover(
+                                                                config.db_path(),
+                                                            )
+                                                        {
+                                                            let _ = state
+                                                                .clear_all_chat_messages(
+                                                                    &storage,
+                                                                );
+                                                        }
                                                         cx.notify();
                                                     });
                                                 }

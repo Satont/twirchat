@@ -113,6 +113,14 @@ impl<'a> AccountsStore<'a> {
         Ok(())
     }
 
+    pub fn remove_by_platform(&self, platform: Platform) -> StorageResult<()> {
+        self.conn.execute(
+            "DELETE FROM accounts WHERE platform = ?",
+            &[Param::Text(platform_to_str(platform))],
+        )?;
+        Ok(())
+    }
+
     pub fn update_tokens(
         &self,
         id: &str,

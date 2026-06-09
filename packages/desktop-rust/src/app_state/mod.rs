@@ -938,7 +938,41 @@ impl AppState {
         );
     }
 
-    pub fn disconnect_platform_account(&mut self, platform: Platform) {
+    pub fn disconnect_platform_account(
+        &mut self,
+        storage: &Storage,
+        platform: Platform,
+    ) -> crate::storage::StorageResult<()> {
+        storage.accounts().remove_by_platform(platform)?;
+
+        let platform_channel_ids: Vec<String> = self
+            .watched_channels
+            .iter()
+            .filter(|channel| channel.platform == platform)
+            .map(|channel| channel.id.clone())
+            .collect();
+        for channel_id in &platform_channel_ids {
+            Self::remove_watched_channel_storage(storage, channel_id)?;
+        }
+        self.watched_channels
+            .retain(|channel| channel.platform != platform);
+        self.watched_tab_channel_ids
+            .retain(|id| !platform_channel_ids.contains(id));
+        for channel_id in &platform_channel_ids {
+            self.watched_tab_custom_names.remove(channel_id);
+            self.watched_channel_statuses.remove(channel_id);
+            self.watched_channel_messages.remove(channel_id);
+            self.watched_reply_targets.remove(channel_id);
+            self.watched_layouts.remove(channel_id);
+            self.composer_disabled_channel_ids.remove(channel_id);
+        }
+        if platform_channel_ids
+            .iter()
+            .any(|id| id == &self.active_channel_tab_id)
+        {
+            self.active_channel_tab_id = String::from("home");
+        }
+
         self.platforms_panel
             .accounts
             .retain(|account| account.platform != platform);
@@ -959,6 +993,7 @@ impl AppState {
             ToastKind::Success,
             format!("Disconnected {} account", format_platform_label(platform)),
         );
+        Ok(())
     }
 
     pub fn join_channel_from_account(
@@ -2814,6 +2849,18 @@ impl AppState {
         }
     }
 
+    pub fn clear_all_chat_messages(
+        &mut self,
+        storage: &Storage,
+    ) -> crate::storage::StorageResult<()> {
+        self.messages.clear();
+        self.watched_channel_messages.clear();
+        for channel in &self.watched_channels {
+            storage.watched_history().remove(&channel.id)?;
+        }
+        Ok(())
+    }
+
     fn is_home_account_channel(&self, channel: &WatchedChannel) -> bool {
         self.platforms_panel.accounts.iter().any(|account| {
             account.platform == channel.platform
@@ -4010,7 +4057,15 @@ impl AppStateActions for Entity<AppState> {
 
     fn disconnect_platform_account(&self, app: &mut App, platform: Platform) {
         self.update(app, |state, cx| {
-            state.disconnect_platform_account(platform);
+            let config = RuntimeConfig::default();
+            match Storage::open_or_recover(config.db_path()) {
+                Ok(storage) => {
+                    if let Err(error) = state.disconnect_platform_account(&storage, platform) {
+                        state.record_runtime_failure(error.to_string());
+                    }
+                }
+                Err(error) => state.record_runtime_failure(error.to_string()),
+            }
             cx.notify();
         });
     }
