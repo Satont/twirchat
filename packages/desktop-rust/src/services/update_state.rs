@@ -1,9 +1,16 @@
-use crate::runtime::{UpdateRuntime, UpdateState};
+use crate::runtime::{
+    UpdateCheckRequest, UpdateEngine, UpdateEvent, UpdateRuntime, UpdateState, UpdateStatus,
+};
 use crate::services::bus::{BusReceiver, BusRecvError, BusSender};
-use crate::services::commands::{LifecycleCommand, ServiceCommand, UpdateStateCommand};
+use crate::services::commands::{
+    LifecycleCommand, ServiceCommand, UpdateCheckSource, UpdateStateCommand,
+};
 use crate::services::events::{ServiceEvent, UpdateStateEvent};
 use crate::services::supervisor::{CancellationToken, ServiceExitReason, ServiceStopReport};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 pub fn run_update_state_service(
@@ -30,12 +37,30 @@ pub fn run_update_state_service(
                     ServiceExitReason::ShutdownCommand,
                 );
             }
+            Ok(ServiceCommand::UpdateState(UpdateStateCommand::DownloadUpdate)) => {
+                let _ = events.try_publish(ServiceEvent::UpdateState(
+                    UpdateStateEvent::DownloadRequested,
+                ));
+                let previous_snapshot = runtime.snapshot();
+                runtime.dispatch_command(UpdateStateCommand::DownloadUpdate);
+                let snapshot = runtime.snapshot();
+                if snapshot != previous_snapshot {
+                    let _ = events.try_publish(ServiceEvent::UpdateState(
+                        UpdateStateEvent::StateChanged { snapshot },
+                    ));
+                }
+                spawn_download_task(
+                    runtime.engine().clone(),
+                    runtime.request().clone(),
+                    events.clone(),
+                );
+            }
             Ok(ServiceCommand::UpdateState(command)) => {
                 let requested = match command.clone() {
                     UpdateStateCommand::CheckForUpdates { source } => {
                         UpdateStateEvent::CheckRequested { source }
                     }
-                    UpdateStateCommand::DownloadUpdate => UpdateStateEvent::DownloadRequested,
+                    UpdateStateCommand::DownloadUpdate => unreachable!(),
                     UpdateStateCommand::ApplyUpdate => UpdateStateEvent::ApplyRequested,
                     UpdateStateCommand::SkipUpdate { hash } => {
                         UpdateStateEvent::SkipRequested { hash }
@@ -61,4 +86,84 @@ pub fn run_update_state_service(
             }
         }
     }
+}
+
+fn spawn_download_task(
+    engine: Arc<dyn UpdateEngine>,
+    request: UpdateCheckRequest,
+    events: BusSender<ServiceEvent>,
+) {
+    thread::spawn(move || {
+        let (progress_tx, progress_rx) = mpsc::channel::<i16>();
+
+        let download_thread = {
+            let engine = engine.clone();
+            let request = request.clone();
+            thread::spawn(move || engine.download_with_progress(&request, progress_tx))
+        };
+
+        loop {
+            match progress_rx.try_recv() {
+                Ok(percent) => {
+                    let clamped = percent.clamp(0, 100);
+                    let mut runtime = UpdateRuntime::new(UpdateState::default());
+                    let _ = runtime.dispatch(UpdateEvent::Status {
+                        status: UpdateStatus::DownloadProgress,
+                        message: format!("Downloading: {clamped}%"),
+                        progress: Some(clamped as f64),
+                        hash: None,
+                    });
+                    let snapshot = runtime.snapshot();
+                    let _ = events.try_publish(ServiceEvent::UpdateState(
+                        UpdateStateEvent::StateChanged { snapshot },
+                    ));
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    if download_thread.is_finished() {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
+                Err(mpsc::TryRecvError::Disconnected) => break,
+            }
+        }
+
+        let result = download_thread.join().unwrap_or_else(|_| {
+            Err(crate::runtime::UpdateEngineError::Failed(
+                "Download thread panicked".to_string(),
+            ))
+        });
+
+        let mut runtime = UpdateRuntime::new(UpdateState::default());
+        match result {
+            Ok(Some(update)) => {
+                let hash = update.hash.clone().or_else(|| update.version.clone());
+                let message = update.version.as_deref().map_or_else(
+                    || "Download complete".to_string(),
+                    |v| format!("Downloaded v{v}"),
+                );
+                let _ = runtime.dispatch(UpdateEvent::Status {
+                    status: UpdateStatus::DownloadComplete,
+                    message,
+                    progress: Some(100.0),
+                    hash,
+                });
+            }
+            Ok(None) => {
+                let _ = runtime.dispatch(UpdateEvent::NoUpdate {
+                    source: UpdateCheckSource::Startup,
+                    message: "No updates available".to_string(),
+                });
+            }
+            Err(error) => {
+                let _ = runtime.dispatch(UpdateEvent::Error {
+                    message: error.to_string(),
+                });
+            }
+        }
+        let snapshot = runtime.snapshot();
+        let _ = events.try_publish(ServiceEvent::UpdateState(UpdateStateEvent::StateChanged {
+            snapshot,
+        }));
+    });
 }

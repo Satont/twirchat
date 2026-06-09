@@ -6450,6 +6450,7 @@ dependencies = [
  "theme",
  "tungstenite",
  "ui",
+ "ureq",
  "url",
  "uuid",
  "velopack",

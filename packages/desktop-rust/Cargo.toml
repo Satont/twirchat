@@ -39,6 +39,7 @@ tungstenite = { version = "0.24", default-features = false, features = [
   "handshake",
   "rustls-tls-webpki-roots",
 ] }
+ureq = "3.3"
 url = "2.5"
 uuid = { version = "1.19", features = ["v4"] }
 velopack = "0.0.1589-ga2c5a97"

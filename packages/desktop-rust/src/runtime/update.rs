@@ -5,6 +5,7 @@ use crate::services::commands::{UpdateCheckSource, UpdateStateCommand};
 use crate::services::events::UpdateStateEvent;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::time::Duration;
 use velopack::{UpdateCheck, UpdateManager, UpdateOptions, VelopackApp, sources::HttpSource};
 
@@ -198,6 +199,15 @@ pub enum UpdateEngineError {
     Failed(String),
 }
 
+impl std::fmt::Display for UpdateEngineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Offline(message) => write!(f, "offline: {message}"),
+            Self::Failed(message) => write!(f, "{message}"),
+        }
+    }
+}
+
 pub trait UpdateEngine: Send + Sync {
     fn check(
         &self,
@@ -207,6 +217,13 @@ pub trait UpdateEngine: Send + Sync {
         &self,
         request: &UpdateCheckRequest,
     ) -> Result<Option<AvailableUpdate>, UpdateEngineError>;
+    fn download_with_progress(
+        &self,
+        request: &UpdateCheckRequest,
+        _progress: Sender<i16>,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        self.download(request)
+    }
     fn apply(&self, request: &UpdateCheckRequest) -> Result<(), UpdateEngineError>;
 }
 
@@ -452,6 +469,14 @@ impl UpdateRuntime {
         &self.state
     }
 
+    pub fn engine(&self) -> &Arc<dyn UpdateEngine> {
+        &self.engine
+    }
+
+    pub fn request(&self) -> &UpdateCheckRequest {
+        &self.request
+    }
+
     pub fn check_for_updates(&mut self, request: &UpdateCheckRequest) -> UpdateCheckReport {
         let report = check_velopack_updates(request);
         let event = report.to_event(UpdateCheckSource::Startup);
@@ -589,6 +614,33 @@ impl UpdateEngine for VelopackUpdateEngine {
                 manager.download_updates(&update, None).map_err(|error| {
                     UpdateEngineError::Failed(format!("Update download failed: {error}"))
                 })?;
+                let version = Some(update.TargetFullRelease.Version);
+                let hash = stable_skip_identifier(version.as_deref(), None);
+                Ok(Some(AvailableUpdate { version, hash }))
+            }
+            Ok(UpdateCheck::NoUpdateAvailable | UpdateCheck::RemoteIsEmpty) => Ok(None),
+            Err(error) if is_offline_error(&error) => Err(UpdateEngineError::Offline(format!(
+                "Update download could not reach feed: {error}"
+            ))),
+            Err(error) => Err(UpdateEngineError::Failed(format!(
+                "Update download failed: {error}"
+            ))),
+        }
+    }
+
+    fn download_with_progress(
+        &self,
+        request: &UpdateCheckRequest,
+        progress: Sender<i16>,
+    ) -> Result<Option<AvailableUpdate>, UpdateEngineError> {
+        let manager = create_manager(request)?;
+        match manager.check_for_updates() {
+            Ok(UpdateCheck::UpdateAvailable(update)) => {
+                manager
+                    .download_updates(&update, Some(progress))
+                    .map_err(|error| {
+                        UpdateEngineError::Failed(format!("Update download failed: {error}"))
+                    })?;
                 let version = Some(update.TargetFullRelease.Version);
                 let hash = stable_skip_identifier(version.as_deref(), None);
                 Ok(Some(AvailableUpdate { version, hash }))
@@ -802,6 +854,16 @@ fn check_velopack_updates(request: &UpdateCheckRequest) -> UpdateCheckReport {
             request,
         )
         .with_manager(&manager),
+        Err(error) if is_feed_not_found_error(&error) => {
+            eprintln!("[update] feed not found (release assets may not be published yet): {error}");
+            UpdateCheckReport::new(
+                VelopackRuntimeStatus::NoFeed,
+                UpdateStatus::NoUpdate,
+                "Update feed not found; release assets may not be published yet".to_string(),
+                request,
+            )
+            .with_manager(&manager)
+        }
         Err(error) if is_offline_error(&error) => UpdateCheckReport::new(
             VelopackRuntimeStatus::Offline,
             UpdateStatus::Error,
@@ -888,6 +950,18 @@ fn is_not_installed_error(error: &velopack::Error) -> bool {
 
 fn is_offline_error(error: &velopack::Error) -> bool {
     matches!(error, velopack::Error::Network(_) | velopack::Error::Io(_))
+}
+
+fn is_feed_not_found_error(error: &velopack::Error) -> bool {
+    matches!(
+        error,
+        velopack::Error::Network(boxed)
+            if matches!(
+                boxed.as_ref(),
+                velopack::NetworkError::Http(ureq_err)
+                    if matches!(ureq_err, ureq::Error::StatusCode(404))
+            )
+    )
 }
 
 fn should_show_status(status: UpdateStatus) -> bool {
