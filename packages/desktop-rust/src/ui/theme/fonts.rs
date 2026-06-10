@@ -23,7 +23,7 @@ impl FontFamily {
 
     pub fn as_str(self) -> &'static str {
         match self {
-            FontFamily::Inter => "Inter Variable",
+            FontFamily::Inter => "Inter",
             FontFamily::Manrope => "Manrope",
             FontFamily::System => ".SystemUIFont",
         }
@@ -77,12 +77,8 @@ pub fn load_app_fonts(cx: &App) -> Result<()> {
 
     let font_files: &[(&str, &[u8])] = &[
         (
-            "InterVariable.ttf",
-            include_bytes!("../../../assets/fonts/InterVariable.ttf").as_slice(),
-        ),
-        (
-            "InterVariable-Italic.ttf",
-            include_bytes!("../../../assets/fonts/InterVariable-Italic.ttf").as_slice(),
+            "Inter-Regular.ttf",
+            include_bytes!("../../../assets/fonts/Inter-Regular.ttf").as_slice(),
         ),
         (
             "Manrope-VariableFont_wght.ttf",
@@ -108,7 +104,7 @@ pub fn load_app_fonts(cx: &App) -> Result<()> {
     }
 
     let available = cx.text_system().all_font_names();
-    for family in ["Inter Variable", "Manrope"] {
+    for family in ["Inter", "Manrope"] {
         if available.iter().any(|n| n == family) {
             eprintln!("font family available: {family}");
         } else {
@@ -153,9 +149,9 @@ fn emoji_font_family() -> &'static str {
 fn app_font_fallbacks(choice: FontFamilyChoice) -> Vec<String> {
     let emoji = emoji_font_family();
     match choice {
-        FontFamilyChoice::Inter => vec!["Inter", ".SystemUIFont", emoji],
-        FontFamilyChoice::Manrope => vec!["Inter Variable", "Inter", ".SystemUIFont", emoji],
-        FontFamilyChoice::System => vec!["Inter Variable", "Inter", emoji],
+        FontFamilyChoice::Inter => vec![".SystemUIFont", emoji],
+        FontFamilyChoice::Manrope => vec!["Inter", ".SystemUIFont", emoji],
+        FontFamilyChoice::System => vec!["Inter", emoji],
     }
     .into_iter()
     .map(String::from)
@@ -169,7 +165,6 @@ mod tests {
 
     fn ensure_test_fonts() {
         let _ = BUNDLED_FONT_FAMILIES.set(vec![
-            "Inter Variable".to_string(),
             "Inter".to_string(),
             "Manrope".to_string(),
             ".SystemUIFont".to_string(),
@@ -179,7 +174,7 @@ mod tests {
 
     #[test]
     fn font_choices_map_to_gpui_families() {
-        assert_eq!(app_font_family(FontFamilyChoice::Inter), "Inter Variable");
+        assert_eq!(app_font_family(FontFamilyChoice::Inter), "Inter");
         assert_eq!(app_font_family(FontFamilyChoice::Manrope), "Manrope");
         assert_eq!(app_font_family(FontFamilyChoice::System), ".SystemUIFont");
     }
@@ -198,7 +193,6 @@ mod tests {
         assert_eq!(
             fallbacks,
             [
-                "Inter Variable".to_string(),
                 "Inter".to_string(),
                 ".SystemUIFont".to_string(),
                 emoji_font_family().to_string(),
