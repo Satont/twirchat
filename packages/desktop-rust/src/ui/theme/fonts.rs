@@ -1,6 +1,9 @@
 use crate::protocol::types::{AppSettings, FontFamilyChoice};
 use gpui::{App, Font, FontFallbacks, Result};
 use std::borrow::Cow;
+use std::sync::OnceLock;
+
+static BUNDLED_FONT_FAMILIES: OnceLock<Vec<String>> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontFamily {
@@ -48,8 +51,17 @@ pub fn app_font_with_system_family(
             .map(str::trim)
             .filter(|family| !family.is_empty())
             .unwrap_or_else(|| app_font_family(choice)),
-        FontFamilyChoice::Inter | FontFamilyChoice::Manrope => app_font_family(choice),
+        FontFamilyChoice::Inter | FontFamilyChoice::Manrope => {
+            let requested = app_font_family(choice);
+            if is_font_available(requested) {
+                requested
+            } else {
+                eprintln!("font '{requested}' not available, falling back to .SystemUIFont");
+                ".SystemUIFont"
+            }
+        }
     };
+
     let mut font = gpui::font(family);
     let fallbacks = app_font_fallbacks(choice);
     if !fallbacks.is_empty() {
@@ -63,14 +75,65 @@ pub fn load_app_fonts(cx: &App) -> Result<()> {
         return Ok(());
     }
 
-    cx.text_system().add_fonts(vec![
-        Cow::Borrowed(include_bytes!("../../../assets/fonts/InterVariable.ttf").as_slice()),
-        Cow::Borrowed(include_bytes!("../../../assets/fonts/InterVariable-Italic.ttf").as_slice()),
-        Cow::Borrowed(
+    let font_files: &[(&str, &[u8])] = &[
+        (
+            "InterVariable.ttf",
+            include_bytes!("../../../assets/fonts/InterVariable.ttf").as_slice(),
+        ),
+        (
+            "InterVariable-Italic.ttf",
+            include_bytes!("../../../assets/fonts/InterVariable-Italic.ttf").as_slice(),
+        ),
+        (
+            "Manrope-VariableFont_wght.ttf",
             include_bytes!("../../../assets/fonts/manrope/Manrope-VariableFont_wght.ttf")
                 .as_slice(),
         ),
-    ])
+    ];
+
+    let mut loaded_count = 0;
+    for (name, bytes) in font_files {
+        match cx
+            .text_system()
+            .add_fonts(vec![Cow::Borrowed(*bytes)])
+        {
+            Ok(()) => {
+                loaded_count += 1;
+                eprintln!("loaded bundled font: {name}");
+            }
+            Err(error) => {
+                eprintln!("failed to load bundled font {name}: {error}");
+            }
+        }
+    }
+
+    let available = cx.text_system().all_font_names();
+    for family in ["Inter Variable", "Manrope"] {
+        if available.iter().any(|n| n == family) {
+            eprintln!("font family available: {family}");
+        } else {
+            eprintln!("WARNING: font family NOT available after loading: {family}");
+        }
+    }
+
+    BUNDLED_FONT_FAMILIES.set(available.clone()).ok();
+
+    if loaded_count == 0 {
+        eprintln!("WARNING: no bundled fonts loaded, will use system fallbacks");
+    }
+    Ok(())
+}
+
+pub fn is_font_available(family: &str) -> bool {
+    BUNDLED_FONT_FAMILIES
+        .get()
+        .map(|names| names.iter().any(|n| n == family))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+pub fn set_test_font_families(families: Vec<String>) {
+    BUNDLED_FONT_FAMILIES.set(families).ok();
 }
 
 pub fn should_load_bundled_fonts() -> bool {
@@ -104,6 +167,16 @@ mod tests {
     use super::*;
     use crate::storage::settings::default_app_settings;
 
+    fn ensure_test_fonts() {
+        let _ = BUNDLED_FONT_FAMILIES.set(vec![
+            "Inter Variable".to_string(),
+            "Inter".to_string(),
+            "Manrope".to_string(),
+            ".SystemUIFont".to_string(),
+            "Apple Color Emoji".to_string(),
+        ]);
+    }
+
     #[test]
     fn font_choices_map_to_gpui_families() {
         assert_eq!(app_font_family(FontFamilyChoice::Inter), "Inter Variable");
@@ -113,6 +186,7 @@ mod tests {
 
     #[test]
     fn app_font_includes_family_and_fallbacks() {
+        ensure_test_fonts();
         let font = app_font(FontFamilyChoice::Manrope);
 
         assert_eq!(font.family.to_string(), "Manrope");
@@ -134,6 +208,7 @@ mod tests {
 
     #[test]
     fn emoji_font_is_in_all_fallback_chains() {
+        ensure_test_fonts();
         let emoji = emoji_font_family();
         for choice in [
             FontFamilyChoice::Inter,
