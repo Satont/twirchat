@@ -77,11 +77,22 @@ pub fn should_load_bundled_fonts() -> bool {
     true
 }
 
+fn emoji_font_family() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Apple Color Emoji"
+    } else if cfg!(target_os = "windows") {
+        "Segoe UI Emoji"
+    } else {
+        "Noto Color Emoji"
+    }
+}
+
 fn app_font_fallbacks(choice: FontFamilyChoice) -> Vec<String> {
+    let emoji = emoji_font_family();
     match choice {
-        FontFamilyChoice::Inter => vec!["Inter", ".SystemUIFont"],
-        FontFamilyChoice::Manrope => vec!["Inter Variable", "Inter", ".SystemUIFont"],
-        FontFamilyChoice::System => vec!["Inter Variable", "Inter"],
+        FontFamilyChoice::Inter => vec!["Inter", ".SystemUIFont", emoji],
+        FontFamilyChoice::Manrope => vec!["Inter Variable", "Inter", ".SystemUIFont", emoji],
+        FontFamilyChoice::System => vec!["Inter Variable", "Inter", emoji],
     }
     .into_iter()
     .map(String::from)
@@ -116,8 +127,30 @@ mod tests {
                 "Inter Variable".to_string(),
                 "Inter".to_string(),
                 ".SystemUIFont".to_string(),
+                emoji_font_family().to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn emoji_font_is_in_all_fallback_chains() {
+        let emoji = emoji_font_family();
+        for choice in [
+            FontFamilyChoice::Inter,
+            FontFamilyChoice::Manrope,
+            FontFamilyChoice::System,
+        ] {
+            let font = app_font(choice);
+            let fallbacks = font
+                .fallbacks
+                .as_ref()
+                .map(FontFallbacks::fallback_list)
+                .unwrap_or_default();
+            assert!(
+                fallbacks.iter().any(|f| f == emoji),
+                "{choice:?} fallbacks should include {emoji}, got {fallbacks:?}"
+            );
+        }
     }
 
     #[test]

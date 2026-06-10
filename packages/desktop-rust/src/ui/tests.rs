@@ -80,9 +80,11 @@ fn visual_chat_page_matches_vue_reference() {
     let app_rs = fs::read_to_string("src/ui/shell/app.rs").expect("should read app.rs");
     assert!(app_rs.contains("Send a message"));
 
-    // Autocomplete & Emote picker buttons
-    assert!(chat_rs.contains("☺"));
-    assert!(chat_rs.contains("➤"));
+    // Autocomplete & Emote picker buttons — now use SVG icons instead of text glyphs
+    assert!(chat_rs.contains("EMOJI_ICON_KEY"));
+    assert!(chat_rs.contains("SEND_ICON_KEY"));
+    assert!(chat_rs.contains("EmbeddedSvg::new(EMOJI_ICON_KEY, EMOJI_ICON_SVG)"));
+    assert!(chat_rs.contains("EmbeddedSvg::new(SEND_ICON_KEY, SEND_ICON_SVG)"));
 }
 
 #[test]
@@ -296,7 +298,8 @@ fn watched_tab_rename_input_stays_inline_contract() {
     assert!(tabs_rs.contains("set_channel_tab_hovered"));
     assert!(tabs_rs.contains("let show_close = !is_home && (is_active || is_hovered);"));
     assert!(tabs_rs.contains(".when(show_close"));
-    assert!(tabs_rs.contains(".child(\"×\")"));
+    assert!(tabs_rs.contains("CLOSE_ICON_KEY"));
+    assert!(tabs_rs.contains("EmbeddedSvg::new(CLOSE_ICON_KEY, CLOSE_ICON_SVG)"));
     assert!(!tabs_rs.contains("✎"));
     assert!(tabs_rs.contains("MouseButton::Right"));
     assert!(tabs_rs.contains("watched_tab_context_menu_id"));
