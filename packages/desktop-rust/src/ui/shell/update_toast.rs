@@ -1,7 +1,11 @@
 use crate::app_state::{AppState, AppStateActions};
+use crate::ui::components::embedded_svg::EmbeddedSvg;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{App, Entity, IntoElement, RenderOnce, Rgba, Window, div, prelude::*, px};
+
+const CLOSE_ICON_KEY: &str = "ui-icon:close";
+const CLOSE_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/close.svg");
 
 #[derive(IntoElement)]
 pub struct UpdateToast {
@@ -110,7 +114,11 @@ impl RenderOnce for UpdateToast {
                                     .on_mouse_down(gpui::MouseButton::Left, move |_, _, cx| {
                                         state_entity.dismiss_update_toast(cx);
                                     })
-                                    .child("x"),
+                                    .child(
+                                        EmbeddedSvg::new(CLOSE_ICON_KEY, CLOSE_ICON_SVG)
+                                            .size(px(13.0))
+                                            .text_color(theme::text_muted()),
+                                    ),
                             ),
                     )
                     .when_some(progress, |el, progress| {

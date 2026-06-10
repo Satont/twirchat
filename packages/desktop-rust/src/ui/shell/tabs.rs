@@ -1,10 +1,14 @@
 use crate::app_state::{AppState, AppStateActions};
 use crate::models::Platform as ModelPlatform;
 use crate::protocol::types::Platform;
+use crate::ui::components::embedded_svg::EmbeddedSvg;
 use crate::ui::components::input::Input;
 use crate::ui::shared::format_compact_viewers;
 use crate::ui::theme;
 use gpui::{App, ClickEvent, Div, Entity, Focusable, Window, div, prelude::*, px};
+
+const CLOSE_ICON_KEY: &str = "ui-icon:close";
+const CLOSE_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/close.svg");
 
 const TAB_RENAME_INPUT_HEIGHT: f32 = 20.0;
 const TAB_RENAME_INPUT_MIN_WIDTH: f32 = 56.0;
@@ -245,7 +249,11 @@ pub(crate) fn bar(
                                     .hover(|s| {
                                         s.bg(theme::surface()).text_color(theme::text_primary())
                                     })
-                                    .child("×")
+                                    .child(
+                                        EmbeddedSvg::new(CLOSE_ICON_KEY, CLOSE_ICON_SVG)
+                                            .size(px(12.0))
+                                            .text_color(theme::text_muted()),
+                                    )
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         move |_event, _window, app| {

@@ -5,11 +5,18 @@ use crate::protocol::types::{
 };
 use crate::ui::chat::{AutocompleteUi, MessageRowContext, composer_reply_bar, message_row};
 use crate::ui::components::autocomplete_popup::AutocompletePopup;
+use crate::ui::components::embedded_svg::EmbeddedSvg;
 use crate::ui::components::input::Input;
 use crate::ui::shell::app::TwirChatApp;
 use crate::ui::theme;
 use gpui::{Div, Entity, Stateful, div, prelude::*, px, rgb, rgba};
 use std::collections::BTreeMap;
+
+const CLOSE_ICON_KEY: &str = "ui-icon:close";
+const SEND_ICON_KEY: &str = "ui-icon:send";
+
+const CLOSE_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/close.svg");
+const SEND_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/send.svg");
 
 #[derive(Clone)]
 struct WatchedComposerUi {
@@ -465,7 +472,11 @@ fn empty_panel(
                         .cursor_pointer()
                         .text_color(theme::text_muted())
                         .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
-                        .child("×")
+                        .child(
+                            EmbeddedSvg::new(CLOSE_ICON_KEY, CLOSE_ICON_SVG)
+                                .size(px(12.0))
+                                .text_color(theme::text_muted()),
+                        )
                         .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, app| {
                             state_entity.remove_chat_pane_for_active_tab(app, &panel_id);
                         }),
@@ -836,7 +847,11 @@ fn watched_composer(
                                 .justify_center()
                                 .cursor_pointer()
                                 .hover(|s| s.bg(rgb(0x6d28d9)))
-                                .child("➤")
+                                .child(
+                                    EmbeddedSvg::new(SEND_ICON_KEY, SEND_ICON_SVG)
+                                        .size(px(18.0))
+                                        .text_color(theme::text_primary()),
+                                )
                                 .on_mouse_down(gpui::MouseButton::Left, move |_, _, app| {
                                     let text = composer_input.read(app).text().to_string();
                                     if state_entity.queue_watched_channel_send(

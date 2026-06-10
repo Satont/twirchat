@@ -1,14 +1,15 @@
 use crate::app_state::{AppState, AppStateActions, OutgoingChatMessageStatus};
-use crate::runtime::config::RuntimeConfig;
-use crate::storage::Storage;
 use crate::chat::apply_alias;
 use crate::protocol::types::{
     Account, AppSettings, ChatMessageType, ChatTheme, Emote, FontFamilyChoice, ModerationAction,
     ModerationPresetKind, NormalizedChatMessage, Platform, PlatformStatus, SelfPingConfig,
 };
+use crate::runtime::config::RuntimeConfig;
+use crate::storage::Storage;
 use crate::ui::components::autocomplete_popup::{AutocompletePopup, AutocompleteSuggestion};
 use crate::ui::components::badge_icon::embedded_kick_badge_icon;
 use crate::ui::components::chat_emote_box_size;
+use crate::ui::components::embedded_svg::EmbeddedSvg;
 use crate::ui::components::emote_tooltip;
 use crate::ui::components::input::Input;
 use crate::ui::components::open_seven_tv_emote_url;
@@ -28,6 +29,18 @@ use gpui::{
 };
 use ui::WithScrollbar;
 use url::Url;
+
+const SEND_ICON_KEY: &str = "ui-icon:send";
+const EMOJI_ICON_KEY: &str = "ui-icon:emoji";
+const REPLY_ICON_KEY: &str = "ui-icon:reply";
+const CLOSE_ICON_KEY: &str = "ui-icon:close";
+const SEARCH_ICON_KEY: &str = "ui-icon:search";
+
+const SEND_ICON_SVG: &[u8] = include_bytes!("../../assets/icons/ui/send.svg");
+const EMOJI_ICON_SVG: &[u8] = include_bytes!("../../assets/icons/ui/emoji.svg");
+const REPLY_ICON_SVG: &[u8] = include_bytes!("../../assets/icons/ui/reply.svg");
+const CLOSE_ICON_SVG: &[u8] = include_bytes!("../../assets/icons/ui/close.svg");
+const SEARCH_ICON_SVG: &[u8] = include_bytes!("../../assets/icons/ui/search.svg");
 
 fn parse_timestamp(ts: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(ts) {
@@ -322,9 +335,7 @@ fn header(
                                                             )
                                                         {
                                                             let _ = state
-                                                                .clear_all_chat_messages(
-                                                                    &storage,
-                                                                );
+                                                                .clear_all_chat_messages(&storage);
                                                         }
                                                         cx.notify();
                                                     });
@@ -467,7 +478,11 @@ fn composer(
                                 .items_center()
                                 .justify_center()
                                 .hover(|s| s.bg(rgb(0x2a2a33)).text_color(theme::text_primary()))
-                                .child("☺"),
+                                .child(
+                                    EmbeddedSvg::new(EMOJI_ICON_KEY, EMOJI_ICON_SVG)
+                                        .size(px(18.0))
+                                        .text_color(theme::text_muted()),
+                                ),
                         )
                         .child(
                             div()
@@ -490,7 +505,15 @@ fn composer(
                                 .when(can_send, |button| {
                                     button.cursor_pointer().hover(|s| s.bg(rgb(0x6d28d9)))
                                 })
-                                .child("➤")
+                                .child(
+                                    EmbeddedSvg::new(SEND_ICON_KEY, SEND_ICON_SVG)
+                                        .size(px(18.0))
+                                        .text_color(if can_send {
+                                            theme::text_primary()
+                                        } else {
+                                            theme::text_muted()
+                                        }),
+                                )
                                 .on_mouse_down(gpui::MouseButton::Left, {
                                     let state_entity = state_entity.clone();
                                     let composer_input = composer_input.clone();
@@ -537,7 +560,11 @@ pub(crate) fn composer_reply_bar(
         .gap(px(6.0))
         .text_size(px(11.0))
         .text_color(theme::text_muted())
-        .child("↩")
+        .child(
+            EmbeddedSvg::new(REPLY_ICON_KEY, REPLY_ICON_SVG)
+                .size(px(11.0))
+                .text_color(theme::text_muted()),
+        )
         .child(
             div()
                 .min_w(px(0.0))
@@ -558,7 +585,11 @@ pub(crate) fn composer_reply_bar(
                 .text_color(theme::text_muted())
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::surface()).text_color(theme::text_primary()))
-                .child("×")
+                .child(
+                    EmbeddedSvg::new(CLOSE_ICON_KEY, CLOSE_ICON_SVG)
+                        .size(px(12.0))
+                        .text_color(theme::text_muted()),
+                )
                 .on_mouse_down(gpui::MouseButton::Left, on_cancel),
         )
 }
@@ -881,7 +912,11 @@ pub(crate) fn add_channel_modal(
                                 .cursor_pointer()
                                 .text_color(theme::text_muted())
                                 .hover(|s| s.text_color(theme::text_primary()))
-                                .child("×")
+                                .child(
+                                    EmbeddedSvg::new(CLOSE_ICON_KEY, CLOSE_ICON_SVG)
+                                        .size(px(14.0))
+                                        .text_color(theme::text_muted()),
+                                )
                                 .on_mouse_down(gpui::MouseButton::Left, {
                                     let state_entity = state_entity.clone();
                                     let add_channel_input = add_channel_input.clone();
@@ -1030,7 +1065,11 @@ fn add_channel_platform_button(
         )
         .child(platform_label(platform))
         .when(platform == Platform::Youtube && !enabled, |button| {
-            button.child("⌕")
+            button.child(
+                EmbeddedSvg::new(SEARCH_ICON_KEY, SEARCH_ICON_SVG)
+                    .size(px(12.0))
+                    .text_color(theme::text_muted()),
+            )
         })
         .on_mouse_down(gpui::MouseButton::Left, move |_, _, app| {
             if !enabled {
@@ -1564,7 +1603,11 @@ fn reply_preview(
             .overflow_hidden()
             .text_size(px((typography.font_size * 0.82).max(10.0)))
             .text_color(theme::text_muted())
-            .child("↩")
+            .child(
+                EmbeddedSvg::new(REPLY_ICON_KEY, REPLY_ICON_SVG)
+                    .size(px((typography.font_size * 0.82).max(10.0)))
+                    .text_color(theme::text_muted()),
+            )
             .child(
                 div()
                     .id(format!("reply-preview-author-{}", message.id))

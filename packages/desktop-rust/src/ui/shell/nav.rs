@@ -1,6 +1,23 @@
 use crate::app_state::{AppState, AppStateActions, MainSection};
+use crate::ui::components::embedded_svg::EmbeddedSvg;
 use crate::ui::theme;
 use gpui::{App, ClickEvent, Entity, Window, div, prelude::*, px, rgba};
+
+const CHAT_ICON_KEY: &str = "ui-icon:chat";
+const EVENTS_ICON_KEY: &str = "ui-icon:events";
+const PLATFORMS_ICON_KEY: &str = "ui-icon:platforms";
+const SETTINGS_ICON_KEY: &str = "ui-icon:settings";
+const LOGO_ICON_KEY: &str = "ui-icon:logo";
+const COLLAPSE_LEFT_KEY: &str = "ui-icon:collapse-left";
+const COLLAPSE_RIGHT_KEY: &str = "ui-icon:collapse-right";
+
+const CHAT_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/chat.svg");
+const EVENTS_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/events.svg");
+const PLATFORMS_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/platforms.svg");
+const SETTINGS_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/settings.svg");
+const LOGO_ICON_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/logo.svg");
+const COLLAPSE_LEFT_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/chevron-left.svg");
+const COLLAPSE_RIGHT_SVG: &[u8] = include_bytes!("../../../assets/icons/ui/chevron-right.svg");
 
 pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl IntoElement {
     let width = if state.sidebar_collapsed() {
@@ -24,10 +41,12 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
         .gap(px(4.0))
         .child(
             div()
-                .text_color(theme::accent())
                 .mb(px(12.0))
-                .text_size(px(20.0))
-                .child("✦"),
+                .child(
+                    EmbeddedSvg::new(LOGO_ICON_KEY, LOGO_ICON_SVG)
+                        .size(px(20.0))
+                        .text_color(theme::accent()),
+                ),
         )
         .child(
             div()
@@ -40,7 +59,8 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Chat,
-                    "💬",
+                    CHAT_ICON_KEY,
+                    CHAT_ICON_SVG,
                     "Chat",
                     None,
                 ))
@@ -48,7 +68,8 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Events,
-                    "⚡",
+                    EVENTS_ICON_KEY,
+                    EVENTS_ICON_SVG,
                     "Events",
                     if state.unread_events() > 0 {
                         Some(if state.unread_events() > 99 {
@@ -64,7 +85,8 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Platforms,
-                    "◉",
+                    PLATFORMS_ICON_KEY,
+                    PLATFORMS_ICON_SVG,
                     "Platforms",
                     connected_platforms_badge(state),
                 ))
@@ -72,7 +94,8 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
                     state,
                     state_entity.clone(),
                     MainSection::Settings,
-                    "⚙",
+                    SETTINGS_ICON_KEY,
+                    SETTINGS_ICON_SVG,
                     "Settings",
                     None,
                 )),
@@ -90,7 +113,8 @@ fn button(
     state: &AppState,
     state_entity: Entity<AppState>,
     section: MainSection,
-    icon: &'static str,
+    icon_key: &'static str,
+    icon_svg: &'static [u8],
     label: &'static str,
     badge: Option<String>,
 ) -> impl IntoElement {
@@ -101,8 +125,15 @@ fn button(
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px(17.0))
-        .child(icon);
+        .child(
+            EmbeddedSvg::new(icon_key, icon_svg)
+                .size(px(17.0))
+                .text_color(if active {
+                    theme::accent()
+                } else {
+                    rgba(0xffffff73)
+                }),
+        );
 
     if let Some(badge_text) = badge {
         item_inner = item_inner.child(
@@ -194,8 +225,12 @@ fn sidebar_toggle(state: &AppState, state_entity: Entity<AppState>) -> impl Into
             },
         )
         .child(if state.sidebar_collapsed() {
-            "›"
+            EmbeddedSvg::new(COLLAPSE_RIGHT_KEY, COLLAPSE_RIGHT_SVG)
+                .size(px(16.0))
+                .text_color(rgba(0xffffff59))
         } else {
-            "‹"
+            EmbeddedSvg::new(COLLAPSE_LEFT_KEY, COLLAPSE_LEFT_SVG)
+                .size(px(16.0))
+                .text_color(rgba(0xffffff59))
         })
 }
