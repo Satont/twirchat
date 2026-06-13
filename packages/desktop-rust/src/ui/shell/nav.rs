@@ -40,13 +40,11 @@ pub(crate) fn rail(state: &AppState, state_entity: Entity<AppState>) -> impl Int
         .items_center()
         .gap(px(4.0))
         .child(
-            div()
-                .mb(px(12.0))
-                .child(
-                    EmbeddedSvg::new(LOGO_ICON_KEY, LOGO_ICON_SVG)
-                        .size(px(20.0))
-                        .text_color(theme::accent()),
-                ),
+            div().mb(px(12.0)).child(
+                EmbeddedSvg::new(LOGO_ICON_KEY, LOGO_ICON_SVG)
+                    .size(px(20.0))
+                    .text_color(theme::accent()),
+            ),
         )
         .child(
             div()

@@ -89,10 +89,7 @@ pub fn load_app_fonts(cx: &App) -> Result<()> {
 
     let mut loaded_count = 0;
     for (name, bytes) in font_files {
-        match cx
-            .text_system()
-            .add_fonts(vec![Cow::Borrowed(*bytes)])
-        {
+        match cx.text_system().add_fonts(vec![Cow::Borrowed(*bytes)]) {
             Ok(()) => {
                 loaded_count += 1;
                 eprintln!("loaded bundled font: {name}");

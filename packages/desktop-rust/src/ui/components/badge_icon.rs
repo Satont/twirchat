@@ -19,9 +19,7 @@ fn get_or_render_badge(svg: &'static str, cache_key: &str, cx: &App) -> Option<A
     }
 
     let svg_renderer = cx.svg_renderer();
-    let image = svg_renderer
-        .render_single_frame(svg.as_bytes(), 2.0)
-        .ok()?;
+    let image = svg_renderer.render_single_frame(svg.as_bytes(), 2.0).ok()?;
 
     if let Ok(mut cache) = badge_cache().lock() {
         cache.insert(cache_key.to_string(), image.clone());

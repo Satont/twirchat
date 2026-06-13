@@ -185,6 +185,9 @@ pub enum UpdateEvent {
     Error {
         message: String,
     },
+    RetryableError {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -238,6 +241,7 @@ pub struct UpdateStatusSnapshot {
     pub skipped_hash: Option<String>,
     pub auto_check_updates: bool,
     pub auto_dismiss_after_ms: Option<u64>,
+    pub next_check_interval_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -250,6 +254,8 @@ pub struct UpdateState {
     skipped_hash: Option<String>,
     auto_check_updates: bool,
     auto_dismiss_after_ms: Option<u64>,
+    consecutive_errors: u32,
+    last_retryable_error: Option<String>,
 }
 
 impl Default for UpdateState {
@@ -263,6 +269,8 @@ impl Default for UpdateState {
             skipped_hash: None,
             auto_check_updates: true,
             auto_dismiss_after_ms: None,
+            consecutive_errors: 0,
+            last_retryable_error: None,
         }
     }
 }
@@ -284,6 +292,15 @@ impl UpdateState {
         }
     }
 
+    pub fn backoff_interval(&self) -> Duration {
+        match self.consecutive_errors {
+            0 => UPDATE_CHECK_INTERVAL,
+            1 => Duration::from_secs(15),
+            2 => Duration::from_secs(30),
+            _ => Duration::from_secs(60),
+        }
+    }
+
     pub fn apply(&mut self, event: UpdateEvent) -> Option<UpdateStatusPayload> {
         match event {
             UpdateEvent::Command(command) => self.apply_command(command),
@@ -295,6 +312,8 @@ impl UpdateState {
                 hash,
             } => self.apply_status(status, message, progress, hash),
             UpdateEvent::UpdateAvailable { version, hash } => {
+                self.consecutive_errors = 0;
+                self.last_retryable_error = None;
                 let stable_hash = stable_skip_identifier(version.as_deref(), hash);
                 if stable_hash
                     .as_ref()
@@ -308,9 +327,28 @@ impl UpdateState {
                 );
                 self.apply_status(UpdateStatus::UpdateAvailable, message, None, stable_hash)
             }
-            UpdateEvent::NoUpdate { source, message } => self.apply_no_update(source, message),
+            UpdateEvent::NoUpdate { source, message } => {
+                self.consecutive_errors = 0;
+                self.last_retryable_error = None;
+                self.apply_no_update(source, message)
+            }
             UpdateEvent::Error { message } => {
                 self.apply_status(UpdateStatus::Error, message, None, None)
+            }
+            UpdateEvent::RetryableError { message } => {
+                self.consecutive_errors += 1;
+                self.last_retryable_error = Some(message);
+                if self.consecutive_errors >= 5 {
+                    let emitted_message = self
+                        .last_retryable_error
+                        .clone()
+                        .unwrap_or_else(|| "Update check failed".to_string());
+                    self.consecutive_errors = 0;
+                    self.last_retryable_error = None;
+                    self.apply_status(UpdateStatus::Error, emitted_message, None, None)
+                } else {
+                    None
+                }
             }
         }
     }
@@ -334,6 +372,7 @@ impl UpdateState {
             skipped_hash: self.skipped_hash.clone(),
             auto_check_updates: self.auto_check_updates,
             auto_dismiss_after_ms: self.auto_dismiss_after_ms,
+            next_check_interval_ms: self.backoff_interval().as_millis() as u64,
         }
     }
 
@@ -518,7 +557,10 @@ impl UpdateRuntime {
                     message: "No updates available".to_string(),
                 });
             }
-            Err(UpdateEngineError::Offline(message)) | Err(UpdateEngineError::Failed(message)) => {
+            Err(UpdateEngineError::Offline(message)) => {
+                let _ = self.dispatch(UpdateEvent::RetryableError { message });
+            }
+            Err(UpdateEngineError::Failed(message)) => {
                 let _ = self.dispatch(UpdateEvent::Error { message });
             }
         }
@@ -1102,5 +1144,34 @@ mod tests {
             Some("https://github.com/Satont/twirchat/releases/latest/download")
         );
         assert_eq!(report.channel.as_deref(), Some("osx"));
+    }
+
+    #[test]
+    fn four_retryable_errors_do_not_emit_payload() {
+        let mut state = UpdateState::default();
+        for i in 1..=4 {
+            let payload = state.apply(UpdateEvent::RetryableError {
+                message: format!("retryable error {i}"),
+            });
+            assert!(payload.is_none(), "error {i} should be suppressed");
+        }
+        assert_eq!(state.consecutive_errors, 4);
+    }
+
+    #[test]
+    fn five_retryable_errors_emit_error_payload_and_reset_counter() {
+        let mut state = UpdateState::default();
+        for i in 1..=4 {
+            let _ = state.apply(UpdateEvent::RetryableError {
+                message: format!("retryable error {i}"),
+            });
+        }
+        let payload = state.apply(UpdateEvent::RetryableError {
+            message: "retryable error 5".to_string(),
+        });
+        assert!(payload.is_some());
+        assert_eq!(payload.unwrap().status, "error");
+        assert_eq!(state.consecutive_errors, 0);
+        assert!(state.last_retryable_error.is_none());
     }
 }

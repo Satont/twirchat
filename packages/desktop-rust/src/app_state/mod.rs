@@ -10,7 +10,7 @@ use crate::protocol::types::{
     PlatformStatusMode, ReplyAuthor, SplitDirection, WatchedChannel, WatchedChannelsLayout,
 };
 use crate::runtime::config::RuntimeConfig;
-use crate::runtime::update::UpdateStatusSnapshot;
+use crate::runtime::update::{UPDATE_CHECK_INTERVAL, UpdateStatusSnapshot};
 use crate::services::{
     BackendWsEvent, DesktopToBackendMessageKind, LifecycleEvent, ServiceEvent, UpdateStateEvent,
     WatchedChannelsEvent,
@@ -238,6 +238,7 @@ impl Default for AppState {
                 skipped_hash: None,
                 auto_check_updates: true,
                 auto_dismiss_after_ms: None,
+                next_check_interval_ms: UPDATE_CHECK_INTERVAL.as_millis() as u64,
             },
             settings: SettingsManager::new(default_app_settings()),
             platforms_panel: crate::ui::platforms::PlatformsPanel::new(),

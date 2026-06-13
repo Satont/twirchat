@@ -1,5 +1,5 @@
 use crate::app_state::{AppState, MainSection};
-use crate::runtime::update::UpdateStatusSnapshot;
+use crate::runtime::update::{UPDATE_CHECK_INTERVAL, UpdateStatusSnapshot};
 
 #[test]
 fn visual_main_shell_matches_vue_reference() {
@@ -44,6 +44,7 @@ fn visual_update_toast_states() {
         skipped_hash: None,
         auto_check_updates: true,
         auto_dismiss_after_ms: None,
+        next_check_interval_ms: UPDATE_CHECK_INTERVAL.as_millis() as u64,
     });
     let toast = state.update_state();
     assert!(toast.show);
@@ -64,6 +65,7 @@ fn visual_update_toast_states() {
         skipped_hash: None,
         auto_check_updates: true,
         auto_dismiss_after_ms: None,
+        next_check_interval_ms: UPDATE_CHECK_INTERVAL.as_millis() as u64,
     });
     assert_eq!(state.update_state().progress, Some(42.0));
 
@@ -77,6 +79,7 @@ fn visual_update_toast_states() {
         skipped_hash: None,
         auto_check_updates: true,
         auto_dismiss_after_ms: None,
+        next_check_interval_ms: UPDATE_CHECK_INTERVAL.as_millis() as u64,
     });
     assert_eq!(
         state.update_state().status.as_deref(),
