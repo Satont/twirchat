@@ -21,6 +21,7 @@ pub fn run_update_state_service(
     events: BusSender<ServiceEvent>,
 ) -> ServiceStopReport {
     let mut runtime = UpdateRuntime::new(UpdateState::default());
+    let mut poll_interval = poll_interval;
 
     loop {
         if cancellation.is_cancelled() {
@@ -85,6 +86,8 @@ pub fn run_update_state_service(
                 );
             }
         }
+
+        poll_interval = Duration::from_millis(runtime.snapshot().next_check_interval_ms);
     }
 }
 
