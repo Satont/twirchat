@@ -1174,4 +1174,92 @@ mod tests {
         assert_eq!(state.consecutive_errors, 0);
         assert!(state.last_retryable_error.is_none());
     }
+
+    #[test]
+    fn fifth_retryable_error_emits_error_payload_with_last_message() {
+        let mut state = UpdateState::default();
+        for i in 1..=4 {
+            let payload = state.apply(UpdateEvent::RetryableError {
+                message: format!("retryable error {i}"),
+            });
+            assert!(payload.is_none(), "error {i} should be suppressed");
+        }
+        let payload = state
+            .apply(UpdateEvent::RetryableError {
+                message: "retryable error 5".to_string(),
+            })
+            .expect("5th error should surface");
+        assert_eq!(payload.status, "error");
+        assert_eq!(payload.message, "retryable error 5");
+        assert_eq!(state.consecutive_errors, 0);
+        assert!(state.last_retryable_error.is_none());
+    }
+
+    #[test]
+    fn success_resets_retryable_error_counter() {
+        let mut state = UpdateState::default();
+        for i in 1..=3 {
+            let _ = state.apply(UpdateEvent::RetryableError {
+                message: format!("retryable error {i}"),
+            });
+        }
+        let _ = state.apply(UpdateEvent::NoUpdate {
+            source: UpdateCheckSource::Periodic,
+            message: "No updates available".to_string(),
+        });
+        assert_eq!(state.consecutive_errors, 0);
+        assert!(state.last_retryable_error.is_none());
+    }
+
+    #[test]
+    fn fatal_error_is_emitted_immediately() {
+        let mut state = UpdateState::default();
+        let payload = state
+            .apply(UpdateEvent::Error {
+                message: "fatal update error".to_string(),
+            })
+            .expect("fatal error should surface immediately");
+        assert_eq!(payload.status, "error");
+        assert_eq!(payload.message, "fatal update error");
+    }
+
+    #[test]
+    fn backoff_intervals_follow_expected_curve() {
+        let state = UpdateState::default();
+        assert_eq!(state.backoff_interval(), UPDATE_CHECK_INTERVAL);
+
+        let state = UpdateState {
+            consecutive_errors: 1,
+            ..UpdateState::default()
+        };
+        assert_eq!(state.backoff_interval(), Duration::from_secs(15));
+
+        let state = UpdateState {
+            consecutive_errors: 2,
+            ..UpdateState::default()
+        };
+        assert_eq!(state.backoff_interval(), Duration::from_secs(30));
+
+        for count in [3, 4, 5, 10] {
+            let state = UpdateState {
+                consecutive_errors: count,
+                ..UpdateState::default()
+            };
+            assert_eq!(
+                state.backoff_interval(),
+                Duration::from_secs(60),
+                "count {count} should cap at 60s"
+            );
+        }
+    }
+
+    #[test]
+    fn snapshot_contains_next_check_interval_ms() {
+        let state = UpdateState {
+            consecutive_errors: 2,
+            ..UpdateState::default()
+        };
+        let snapshot = state.snapshot();
+        assert_eq!(snapshot.next_check_interval_ms, 30_000);
+    }
 }
