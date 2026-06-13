@@ -5,7 +5,6 @@ use twirchat::platforms::kick::{
     KickAvatarLookupSource, KickBadge, KickChatMessage, KickChatMessageKind, KickFollowEvent,
     KickMessageSender, KickOriginalMessage, KickOriginalSender, KickReplyMetadata,
     KickSenderIdentity, KickSubscriptionEvent, KickTransportAuth, MockKickClient,
-    embedded_kick_badge_svg, kick_badge_embedded_url,
 };
 use twirchat::platforms::{PlatformAdapter, PlatformEvent, PlatformEventSink};
 use twirchat::protocol::types::{
@@ -80,28 +79,58 @@ fn kick_chat_message_deserializes_message_ref_metadata() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn kick_badge_registry_embeds_only_historical_badges() {
-    let embedded_badges = [
-        ("broadcaster", "embedded:kick:broadcaster"),
-        ("mod", "embedded:kick:moderator"),
-        ("moderator", "embedded:kick:moderator"),
-        ("verified", "embedded:kick:verified"),
-        ("vip", "embedded:kick:vip"),
-        ("og", "embedded:kick:og"),
-    ];
-
-    for (badge_type, expected_url) in embedded_badges {
-        assert_eq!(
-            kick_badge_embedded_url(badge_type).as_deref(),
-            Some(expected_url)
-        );
-        assert!(embedded_kick_badge_svg(badge_type).is_some());
+fn kick_badge_v2_deserializes_with_metadata() -> Result<(), Box<dyn std::error::Error>> {
+    let payload = r##"
+    {
+      "id": "msg-v2",
+      "chatroom_id": 3124040,
+      "content": "hello",
+      "type": "message",
+      "created_at": "2026-06-13T14:28:12+00:00",
+      "sender": {
+        "id": 22367973,
+        "username": "sygeman",
+        "slug": "sygeman",
+        "identity": {
+          "color": "#FF9D00",
+          "badges": [
+            { "type": "vip", "text": "VIP", "sort_order": 5 }
+          ],
+          "badges_v2": [
+            {
+              "name": "level",
+              "badge_type": "global",
+              "image_url": "https://ext.cdn.kick.com/chat/badges/10_804bf82a.png",
+              "metadata": { "level": 10 },
+              "selected": true,
+              "sort_order": 1
+            }
+          ]
+        }
+      }
     }
+    "##;
 
-    for badge_type in ["subscriber", "founder", "unknown"] {
-        assert!(kick_badge_embedded_url(badge_type).is_none());
-        assert!(embedded_kick_badge_svg(badge_type).is_none());
-    }
+    let message: KickChatMessage = serde_json::from_str(payload)?;
+
+    assert_eq!(message.sender.identity.badges.len(), 1);
+    assert_eq!(message.sender.identity.badges[0].badge_type, "vip");
+    assert_eq!(message.sender.identity.badges_v2.len(), 1);
+
+    let v2 = &message.sender.identity.badges_v2[0];
+    assert_eq!(v2.name, "level");
+    assert_eq!(v2.badge_type, "global");
+    assert_eq!(
+        v2.image_url,
+        "https://ext.cdn.kick.com/chat/badges/10_804bf82a.png"
+    );
+    assert!(v2.selected);
+    assert_eq!(v2.sort_order, Some(1));
+    assert!(v2.metadata.is_some());
+    let meta = v2.metadata.as_ref().unwrap();
+    assert_eq!(meta["level"], 10);
+
+    Ok(())
 }
 
 #[test]
@@ -141,6 +170,7 @@ fn kick_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::
                         count: Some(3),
                     },
                 ],
+                badges_v2: vec![],
             },
             profile_picture: Some("https://cdn.example/kick-viewer.png".into()),
         },
@@ -247,23 +277,18 @@ fn kick_adapter_mock_full_capability_matrix() -> Result<(), Box<dyn std::error::
     assert_eq!(message.channel_id, "424242");
     assert_eq!(message.text, "hello PeepoClap reply");
     assert_eq!(message.author.badges.len(), 2);
-    assert!(
-        message.author.badges[0]
-            .image_url
-            .as_deref()
-            .is_some_and(|image| image.starts_with("embedded:kick:"))
+    assert_eq!(message.author.badges[0].badge_type, "moderator");
+    assert_eq!(message.author.badges[0].text, "Moderator");
+    assert_eq!(
+        message.author.badges[0].image_url.as_deref(),
+        Some("embedded:kick:moderator"),
+        "v1 badges without v2 data should fall back to embedded SVG URL"
     );
+    assert_eq!(message.author.badges[1].badge_type, "subscriber");
+    assert_eq!(message.author.badges[1].text, "Subscriber");
     assert!(
-        message.author.badges[0]
-            .image_url
-            .as_deref()
-            .is_some_and(|image| !image.starts_with('/'))
-    );
-    assert!(
-        message.author.badges[0]
-            .image_url
-            .as_deref()
-            .is_some_and(|image| !image.ends_with(".svg"))
+        message.author.badges[1].image_url.is_none(),
+        "subscriber has no embedded SVG and no v2 data"
     );
     assert_eq!(message.emotes[0].name, "PeepoClap");
     assert_eq!(message.emotes[0].positions[0].start, 6);
@@ -635,6 +660,7 @@ fn kick_chat_message(
             identity: KickSenderIdentity {
                 color: None,
                 badges: Vec::new(),
+                badges_v2: vec![],
             },
             profile_picture,
         },

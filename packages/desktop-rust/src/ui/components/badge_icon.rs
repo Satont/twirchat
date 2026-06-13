@@ -1,8 +1,34 @@
 use crate::platforms::kick::{embedded_kick_badge_svg, kick_badge_embedded_url};
-use crate::ui::components::embedded_svg::EmbeddedSvg;
 use gpui::*;
+use std::sync::{Arc, Mutex, OnceLock};
 
 const KICK_BADGE_EMBEDDED_PREFIX: &str = "embedded:kick:";
+
+static RENDERED_BADGE_CACHE: OnceLock<Mutex<std::collections::HashMap<String, Arc<RenderImage>>>> =
+    OnceLock::new();
+
+fn badge_cache() -> &'static Mutex<std::collections::HashMap<String, Arc<RenderImage>>> {
+    RENDERED_BADGE_CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+fn get_or_render_badge(svg: &'static str, cache_key: &str, cx: &App) -> Option<Arc<RenderImage>> {
+    if let Ok(cache) = badge_cache().lock()
+        && let Some(cached) = cache.get(cache_key)
+    {
+        return Some(cached.clone());
+    }
+
+    let svg_renderer = cx.svg_renderer();
+    let image = svg_renderer
+        .render_single_frame(svg.as_bytes(), 2.0)
+        .ok()?;
+
+    if let Ok(mut cache) = badge_cache().lock() {
+        cache.insert(cache_key.to_string(), image.clone());
+    }
+
+    Some(image)
+}
 
 #[derive(IntoElement)]
 pub struct KickBadgeIcon {
@@ -27,10 +53,20 @@ impl KickBadgeIcon {
 }
 
 impl RenderOnce for KickBadgeIcon {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        EmbeddedSvg::new(self.cache_key, self.svg.as_bytes())
-            .size(self.size)
-            .text_color(rgba(0xffffffff))
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        if let Some(image) = get_or_render_badge(self.svg, &self.cache_key, cx) {
+            img(ImageSource::Render(image))
+                .w(self.size)
+                .h(self.size)
+                .object_fit(ObjectFit::Contain)
+                .into_any_element()
+        } else {
+            div()
+                .w(self.size)
+                .h(self.size)
+                .child(self.cache_key.clone())
+                .into_any_element()
+        }
     }
 }
 

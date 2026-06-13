@@ -104,6 +104,20 @@ pub struct KickBadge {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KickBadgeV2 {
+    pub name: String,
+    #[serde(rename = "badge_type")]
+    pub badge_type: String,
+    pub image_url: String,
+    #[serde(default)]
+    pub selected: bool,
+    #[serde(default)]
+    pub sort_order: Option<u64>,
+    #[serde(default)]
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KickEmote {
     pub id: String,
     pub name: String,
@@ -126,6 +140,8 @@ pub struct KickSenderIdentity {
     pub color: Option<String>,
     #[serde(default)]
     pub badges: Vec<KickBadge>,
+    #[serde(default)]
+    pub badges_v2: Vec<KickBadgeV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -737,6 +753,41 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
     fn normalize_message(&mut self, message: KickChatMessage) -> NormalizedChatMessage {
         let (text, emotes) = parse_kick_emotes(&message.content);
         let avatar_url = self.resolve_message_avatar(&message.sender);
+
+        let v2_lookup: std::collections::HashMap<&str, &KickBadgeV2> = message
+            .sender
+            .identity
+            .badges_v2
+            .iter()
+            .map(|b| (b.badge_type.as_str(), b))
+            .collect();
+
+        let mut v1_types = std::collections::HashSet::new();
+        let mut badges: Vec<Badge> = message
+            .sender
+            .identity
+            .badges
+            .into_iter()
+            .map(|badge| {
+                v1_types.insert(badge.badge_type.clone());
+                let image_url = v2_lookup
+                    .get(badge.badge_type.as_str())
+                    .map(|v2| v2.image_url.clone());
+                normalize_badge(badge, image_url)
+            })
+            .collect();
+
+        for v2 in &message.sender.identity.badges_v2 {
+            if !v1_types.contains(v2.badge_type.as_str()) {
+                badges.push(Badge {
+                    id: v2.name.clone(),
+                    badge_type: v2.name.clone(),
+                    text: v2.name.clone(),
+                    image_url: Some(v2.image_url.clone()),
+                });
+            }
+        }
+
         NormalizedChatMessage {
             id: message.id,
             platform: Platform::Kick,
@@ -757,13 +808,7 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
                 },
                 color: message.sender.identity.color,
                 avatar_url,
-                badges: message
-                    .sender
-                    .identity
-                    .badges
-                    .into_iter()
-                    .map(normalize_badge)
-                    .collect(),
+                badges,
             },
             text,
             emotes,
@@ -828,7 +873,10 @@ impl<C: KickChatClient> KickAdapter<'_, C> {
                 .unwrap_or_default()
         };
         let user_id = event.user_id.unwrap_or(event.user.id);
-        let timestamp = event.created_at.clone().unwrap_or_else(current_unix_timestamp_string);
+        let timestamp = event
+            .created_at
+            .clone()
+            .unwrap_or_else(current_unix_timestamp_string);
         NormalizedChatMessage {
             id: format!("kick:unban:{}:{}", user_id, timestamp),
             platform: Platform::Kick,
@@ -1130,9 +1178,9 @@ fn normalize_subscription_event(event: KickSubscriptionEvent) -> NormalizedEvent
     }
 }
 
-fn normalize_badge(badge: KickBadge) -> Badge {
+fn normalize_badge(badge: KickBadge, v2_image_url: Option<String>) -> Badge {
     let badge_type = badge.badge_type;
-    let image_url = kick_badge_embedded_url(&badge_type);
+    let image_url = v2_image_url.or_else(|| kick_badge_embedded_url(&badge_type));
 
     Badge {
         id: badge_type.clone(),

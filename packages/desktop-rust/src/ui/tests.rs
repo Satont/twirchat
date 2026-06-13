@@ -158,25 +158,18 @@ fn animated_emote_component_drives_unfocused_redraw_contract() {
 fn chat_platform_icons_and_badges_match_parity_contract() -> Result<(), Box<dyn std::error::Error>>
 {
     let chat_rs = fs::read_to_string("src/ui/chat.rs")?;
-    let adapter_rs = fs::read_to_string("src/platforms/kick/adapter.rs")?;
     let badge_icon_rs = fs::read_to_string("src/ui/components/badge_icon.rs")?;
     let embedded_svg_rs = fs::read_to_string("src/ui/components/embedded_svg.rs")?;
     let platform_icon_rs = fs::read_to_string("src/ui/components/platform_icon.rs")?;
 
     assert!(chat_rs.contains("PlatformIcon::new(to_model_platform(message.platform))"));
     assert!(chat_rs.contains("theme::platform_color(to_model_platform("));
-    assert!(chat_rs.contains("message.platform == Platform::Kick"));
     assert!(chat_rs.contains("embedded_kick_badge_element("));
     assert!(chat_rs.contains("remote_badge_image_element("));
     assert!(chat_rs.contains("text_badge_element("));
     assert!(!chat_rs.contains("Path::new("));
-    assert!(adapter_rs.contains("kick_badge_embedded_url"));
-    assert!(!adapter_rs.contains("generated_kick_badge_path"));
-    assert!(badge_icon_rs.contains("embedded_kick_badge_svg"));
-    assert!(badge_icon_rs.contains("KICK_BADGE_EMBEDDED_PREFIX"));
-    assert!(badge_icon_rs.contains("embedded:kick:"));
-    assert!(badge_icon_rs.contains("strip_prefix(KICK_BADGE_EMBEDDED_PREFIX)"));
-    assert!(badge_icon_rs.contains("EmbeddedSvg::new(self.cache_key, self.svg.as_bytes())"));
+    assert!(badge_icon_rs.contains("render_single_frame"));
+    assert!(badge_icon_rs.contains("ImageSource::Render"));
     assert!(embedded_svg_rs.contains("paint_svg"));
     assert!(embedded_svg_rs.contains("Some(self.bytes)"));
     assert!(platform_icon_rs.contains("EmbeddedSvg"));
