@@ -1,6 +1,6 @@
 import { getDb } from './db'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
-import type { UserChatHistoryCursor, UserChatHistoryPage } from '../shared/rpc'
+import type { UserChatHistoryCursor, UserChatHistoryPage } from '../bindings'
 
 const MAX_STORED = 1000
 const DEFAULT_LOAD_COUNT = 100
@@ -19,18 +19,17 @@ export const MessageStore = {
     const db = getDb()
 
     const rows = db
-      .query<{ data: string; created_at: number }, [number]>(
+      .prepare(
         `SELECT data, created_at FROM chat_messages
          ORDER BY created_at DESC
          LIMIT ?`,
       )
-      .all(limit)
+      .all(limit) as { data: string; created_at: number }[]
 
     return rows
       .map((row) => {
         try {
           const msg = JSON.parse(row.data) as NormalizedChatMessage
-          // Ensure timestamp is a proper Date (JSON stringify turns it into string)
           msg.timestamp = new Date(msg.timestamp)
           return msg
         } catch {
@@ -38,7 +37,7 @@ export const MessageStore = {
         }
       })
       .filter((m): m is NormalizedChatMessage => m !== null)
-      .reverse() // oldest first (newest last) to match chat display order
+      .reverse()
   },
 
   getByUser({
@@ -51,10 +50,7 @@ export const MessageStore = {
     const safeLimit = Math.max(1, Math.min(limit, MAX_USER_HISTORY_LOAD_COUNT))
 
     const rows = db
-      .query<
-        { id: string; data: string; created_at: number },
-        [string, string, number | null, number, number, string, number]
-      >(
+      .prepare(
         `SELECT id, data, created_at FROM chat_messages
          WHERE platform = ?
            AND author_id = ?
@@ -75,7 +71,7 @@ export const MessageStore = {
         cursor?.createdAt ?? 0,
         cursor?.id ?? '',
         safeLimit + 1,
-      )
+      ) as { id: string; data: string; created_at: number }[]
 
     const parsedRows = rows
       .map((row) => {
@@ -112,31 +108,29 @@ export const MessageStore = {
   save(msg: NormalizedChatMessage): void {
     const db = getDb()
 
-    db.run(
+    db.prepare(
       `INSERT OR REPLACE INTO chat_messages (id, platform, channel_id, author_id, author_name, text, type, created_at, data)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        msg.id,
-        msg.platform,
-        msg.channelId,
-        msg.author.id,
-        msg.author.displayName,
-        msg.text,
-        msg.type,
-        new Date(msg.timestamp).getTime(),
-        JSON.stringify(msg),
-      ],
+    ).run(
+      msg.id,
+      msg.platform,
+      msg.channelId,
+      msg.author.id,
+      msg.author.displayName,
+      msg.text,
+      msg.type,
+      new Date(msg.timestamp).getTime(),
+      JSON.stringify(msg),
     )
 
     // Trim to MAX_STORED — delete oldest rows beyond the limit
-    db.run(
+    db.prepare(
       `DELETE FROM chat_messages
        WHERE created_at <= (
          SELECT created_at FROM chat_messages
          ORDER BY created_at DESC
          LIMIT 1 OFFSET ?
        )`,
-      [MAX_STORED - 1],
-    )
+    ).run(MAX_STORED - 1)
   },
 }

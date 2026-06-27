@@ -16,7 +16,6 @@ import type {
   StreamStatusResponse,
 } from '@twirchat/shared/protocol'
 import { usePolling } from '../composables/usePolling'
-import { rpc } from '../main'
 
 const props = defineProps<{
   platform: 'twitch' | 'kick'
@@ -64,7 +63,7 @@ function onCategoryInput() {
   searchTimer = setTimeout(async () => {
     searchLoading.value = true
     try {
-      const res = (await rpc.request.searchCategories!({
+      const res = (await bindings.searchCategories!({
         platform: props.platform,
         query: categoryQuery.value,
       })) as SearchCategoriesResponse
@@ -91,7 +90,7 @@ async function loadStatus() {
   loading.value = true
   loadError.value = null
   try {
-    const s = (await rpc.request.getStreamStatus!({
+    const s = (await bindings.getStreamStatus!({
       channelId: props.channelId,
       platform: props.platform,
     })) as StreamStatusResponse
@@ -142,7 +141,7 @@ async function save() {
   saving.value = true
   saveError.value = null
   try {
-    await rpc.request.updateStream!({
+    await bindings.updateStream!({
       categoryId: editCategoryId.value,
       channelId: props.channelId,
       platform: props.platform,

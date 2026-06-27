@@ -1,0 +1,37 @@
+{
+  "name": "@twirchat/desktop",
+  "version": "0.0.1",
+  "exports": "./src/main.ts",
+  "desktop": {
+    "app": {
+      "name": "TwirChat",
+      "identifier": "dev.twirchat.app",
+      "icons": {
+        "macos": "./assets/icon.icns",
+        "windows": "./assets/icon.ico",
+        "linux": "./assets/icon.png"
+      }
+    },
+    "backend": "webview",
+    "output": {
+      "macos": "./dist/TwirChat.app",
+      "windows": "./dist/TwirChat",
+      "linux": "./dist/twirchat"
+    },
+    "release": {
+      "baseUrl": "https://github.com/Satont/twirchat/releases/latest/download/"
+    }
+  },
+  "imports": {
+    "@twirchat/shared": "../shared/index.ts",
+    "@twirchat/shared/": "../shared/"
+  },
+  "tasks": {
+    "dev": "deno run --allow-all --sloppy-imports src/main.ts",
+    "dev:hmr": "deno task build:views && deno task dev",
+    "start": "deno run --allow-all --sloppy-imports src/main.ts",
+    "build:views": "deno run -A npm:vite --config vite.main.config.ts build && deno run -A npm:vite --config vite.overlay.config.ts build",
+    "typecheck": "deno check --sloppy-imports src/main.ts",
+    "test": "deno test --allow-all --no-check --sloppy-imports tests/"
+  }
+}

@@ -52,9 +52,9 @@ function validateLayout(layout: WatchedChannelsLayout): void {
 export const WatchedChannelsLayoutStore = {
   get(tabId: string): WatchedChannelsLayout {
     const db = getDb()
-    const row = db
-      .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
-      .get(getKey(tabId))
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(getKey(tabId)) as
+      | { value: string }
+      | undefined
 
     if (!row) {
       const defaultLayout = createDefaultTabLayout(tabId)
@@ -85,15 +85,14 @@ export const WatchedChannelsLayoutStore = {
       },
     }
 
-    db.run(
+    db.prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      [getKey(tabId), JSON.stringify(layoutWithMeta)],
-    )
+    ).run(getKey(tabId), JSON.stringify(layoutWithMeta))
   },
 
   remove(tabId: string): void {
     const db = getDb()
-    db.run('DELETE FROM settings WHERE key = ?', [getKey(tabId)])
+    db.prepare('DELETE FROM settings WHERE key = ?').run(getKey(tabId))
   },
 
   canAddPanel(tabId: string): boolean {

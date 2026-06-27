@@ -30,27 +30,26 @@ function mapRow(row: DbRow): UserAlias {
 export const UserAliasStore = {
   findAll(): UserAlias[] {
     const db = getDb()
-    const rows = db.query<DbRow, []>('SELECT * FROM user_aliases').all()
+    const rows = db.prepare('SELECT * FROM user_aliases').all() as unknown as DbRow[]
     return rows.map(mapRow)
   },
 
   upsert(platform: Platform, platformUserId: string, alias: string): void {
     const db = getDb()
-    db.run(
+    db.prepare(
       `INSERT INTO user_aliases (platform, platform_user_id, alias)
        VALUES (?, ?, ?)
        ON CONFLICT(platform, platform_user_id) DO UPDATE SET
          alias = ?,
          updated_at = unixepoch()`,
-      [platform, platformUserId, alias, alias],
-    )
+    ).run(platform, platformUserId, alias, alias)
   },
 
   remove(platform: Platform, platformUserId: string): void {
     const db = getDb()
-    db.run('DELETE FROM user_aliases WHERE platform = ? AND platform_user_id = ?', [
+    db.prepare('DELETE FROM user_aliases WHERE platform = ? AND platform_user_id = ?').run(
       platform,
       platformUserId,
-    ])
+    )
   },
 }

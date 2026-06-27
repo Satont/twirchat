@@ -1,6 +1,5 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { rpc } from '../main'
 import type {
   LayoutNode,
   PanelNode,
@@ -52,7 +51,7 @@ export const useLayoutStore = defineStore('layout', () => {
     isLoading.value = true
     error.value = null
     try {
-      const saved = await rpc.request.getWatchedChannelsLayout?.({ tabId })
+      const saved = await bindings.getWatchedChannelsLayout?.({ tabId })
       layout.value = (saved as WatchedChannelsLayout | null | undefined) ?? null
     } catch (e) {
       error.value = String(e)
@@ -65,7 +64,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const saveLayout = async (): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.setWatchedChannelsLayout?.({
+      await bindings.setWatchedChannelsLayout?.({
         tabId: currentTabId.value,
         layout: layout.value,
       })
@@ -82,7 +81,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const splitPanel = async (panelId: string, direction: SplitDirection): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.splitPanel?.({ tabId: currentTabId.value, panelId, direction })
+      await bindings.splitPanel?.({ tabId: currentTabId.value, panelId, direction })
       await loadLayout(currentTabId.value)
     } catch (e) {
       error.value = String(e)
@@ -92,7 +91,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const removePanel = async (panelId: string): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.removePanel?.({ tabId: currentTabId.value, panelId })
+      await bindings.removePanel?.({ tabId: currentTabId.value, panelId })
       await loadLayout(currentTabId.value)
     } catch (e) {
       error.value = String(e)
@@ -102,7 +101,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const assignChannel = async (panelId: string, channelId: string | null): Promise<void> => {
     if (!layout.value || !currentTabId.value) return
     try {
-      await rpc.request.assignChannelToPanel?.({
+      await bindings.assignChannelToPanel?.({
         tabId: currentTabId.value,
         panelId,
         channelId,

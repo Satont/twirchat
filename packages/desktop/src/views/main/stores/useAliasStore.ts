@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Platform } from '@twirchat/shared/types'
-import type { UserAlias } from '../../../shared/rpc'
-import { rpc } from '../main'
+import type { UserAlias } from '../../../bindings'
 
 export const useAliasStore = defineStore('aliases', () => {
   const aliases = ref<UserAlias[]>([])
@@ -23,7 +22,7 @@ export const useAliasStore = defineStore('aliases', () => {
   }
 
   async function loadAliases(): Promise<void> {
-    const result = await rpc.request.getUserAliases()
+    const result = await bindings.getUserAliases()
     if (result !== undefined) aliases.value = result
   }
 
@@ -32,7 +31,7 @@ export const useAliasStore = defineStore('aliases', () => {
     platformUserId: string,
     alias: string,
   ): Promise<void> {
-    await rpc.request.setUserAlias({ platform, platformUserId, alias })
+    await bindings.setUserAlias({ platform, platformUserId, alias })
     if (!alias) {
       aliases.value = aliases.value.filter(
         (a) => !(a.platform === platform && a.platformUserId === platformUserId),
@@ -57,7 +56,7 @@ export const useAliasStore = defineStore('aliases', () => {
   }
 
   async function removeAlias(platform: Platform, platformUserId: string): Promise<void> {
-    await rpc.request.removeUserAlias({ platform, platformUserId })
+    await bindings.removeUserAlias({ platform, platformUserId })
     aliases.value = aliases.value.filter(
       (a) => !(a.platform === platform && a.platformUserId === platformUserId),
     )

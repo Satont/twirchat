@@ -1,4 +1,3 @@
-import { rpc } from '../main'
 import type {
   LegacyChatLayout,
   WatchedChannelsLayout,
@@ -110,7 +109,7 @@ export async function attemptMigration(): Promise<boolean> {
 
   // Check if layout exists in v2 format (indicates user already has new system)
   try {
-    const existing = await rpc.request.getWatchedChannelsLayout?.({ tabId: '' })
+    const existing = await bindings.getWatchedChannelsLayout?.({ tabId: '' })
     if (
       existing &&
       typeof existing === 'object' &&

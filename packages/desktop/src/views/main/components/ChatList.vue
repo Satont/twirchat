@@ -7,7 +7,6 @@ import ChatInput from './ChatInput.vue'
 import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
 import UserCardDialog from './UserCardDialog.vue'
-import { rpc } from '../main'
 import { platformColor } from '../../shared/utils/platform'
 import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
@@ -243,7 +242,7 @@ async function onSend(
 ) {
   await Promise.allSettled(
     targets.map((t) =>
-      rpc.request
+      bindings
         .sendMessage({
           channelId: t.channelLogin,
           platform: t.platform as Platform,
@@ -263,9 +262,7 @@ function onSendWatched(payload: { text: string; channelId: string; replyToMessag
 
 function onAppearanceChange(s: AppSettings) {
   emit('settings-change', s)
-  rpc.request
-    .saveSettings(s)
-    .catch((error) => console.warn('[ChatList] saveSettings failed:', error))
+  bindings.saveSettings(s).catch((error) => console.warn('[ChatList] saveSettings failed:', error))
 }
 </script>
 

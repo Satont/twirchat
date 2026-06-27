@@ -1,10 +1,9 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import { eventSource } from '../main'
 
 import type { Platform } from '@twirchat/shared/types'
 import type { SevenTVEmote } from '@twirchat/shared/protocol'
-
-import { rpc } from '../main'
 
 export const useEmoteStore = defineStore('emotes', () => {
   const emoteMap = ref<Map<string, SevenTVEmote[]>>(new Map())
@@ -63,18 +62,22 @@ export const useEmoteStore = defineStore('emotes', () => {
     if (listenersRegistered.value) return
     listenersRegistered.value = true
 
-    rpc.addMessageListener('channel_emotes_set', (payload) =>
-      _setEmotes(payload.platform, payload.channelId, payload.emotes),
-    )
-    rpc.addMessageListener('channel_emote_added', (payload) =>
-      _addEmote(payload.platform, payload.channelId, payload.emote),
-    )
-    rpc.addMessageListener('channel_emote_removed', (payload) =>
-      _removeEmote(payload.platform, payload.channelId, payload.emoteId),
-    )
-    rpc.addMessageListener('channel_emote_updated', (payload) =>
-      _updateEmote(payload.platform, payload.channelId, payload.emoteId, payload.newAlias),
-    )
+    eventSource.addEventListener('channel_emotes_set', (e: MessageEvent) => {
+      const payload = JSON.parse(e.data)
+      _setEmotes(payload.platform, payload.channelId, payload.emotes)
+    })
+    eventSource.addEventListener('channel_emote_added', (e: MessageEvent) => {
+      const payload = JSON.parse(e.data)
+      _addEmote(payload.platform, payload.channelId, payload.emote)
+    })
+    eventSource.addEventListener('channel_emote_removed', (e: MessageEvent) => {
+      const payload = JSON.parse(e.data)
+      _removeEmote(payload.platform, payload.channelId, payload.emoteId)
+    })
+    eventSource.addEventListener('channel_emote_updated', (e: MessageEvent) => {
+      const payload = JSON.parse(e.data)
+      _updateEmote(payload.platform, payload.channelId, payload.emoteId, payload.newAlias)
+    })
   }
 
   function loadEmotes(platform: string, channelId: string): Promise<void> {
@@ -93,7 +96,7 @@ export const useEmoteStore = defineStore('emotes', () => {
 
     const promise = (async () => {
       try {
-        const emotes = await rpc.request.getChannelEmotes({
+        const emotes = await bindings.getChannelEmotes({
           platform: platform as Platform,
           channelId,
         })

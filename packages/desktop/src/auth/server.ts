@@ -4,18 +4,13 @@ import { handleYouTubeCallback } from './youtube'
 import { handleTwitchCallback } from './twitch'
 import { handleKickCallback } from './kick'
 import { ChannelStore } from '../store/channel-store'
-import type { WebviewSender } from '../shared/rpc'
+import { pushEvent } from '../event-bus'
 import type { Platform } from '@twirchat/shared/types'
 
 const log = logger('auth-server')
 
-let server: ReturnType<typeof Bun.serve> | null = null
-let sendToView: WebviewSender | null = null
+let server: Deno.HttpServer | null = null
 let onAuthSuccessCallback: ((platform: Platform, channelSlug?: string) => void) | null = null
-
-export function setAuthServerRpcSender(sender: WebviewSender): void {
-  sendToView = sender
-}
 
 export function setOnAuthSuccessCallback(
   callback: (platform: Platform, channelSlug?: string) => void,
@@ -32,23 +27,19 @@ export function startAuthServer(): void {
     return
   }
 
-  server = Bun.serve({
-    async fetch(req) {
+  server = Deno.serve({
+    port: AUTH_SERVER_PORT,
+    async handler(req) {
       const url = new URL(req.url)
 
       try {
         if (url.pathname === '/auth/twitch/callback') {
           const result = await handleTwitchCallback(url)
 
-          // Save the channel to automatically join it
           ChannelStore.save('twitch', result.channelSlug)
 
-          // Notify the webview of successful authentication
-          if (sendToView) {
-            sendToView.auth_success(result.user)
-          }
+          pushEvent('auth_success', result.user)
 
-          // Trigger reconnection and auto-join the channel
           if (onAuthSuccessCallback) {
             onAuthSuccessCallback('twitch', result.channelSlug)
           }
@@ -58,15 +49,10 @@ export function startAuthServer(): void {
         if (url.pathname === '/auth/youtube/callback') {
           const result = await handleYouTubeCallback(url)
 
-          // Save the channel to automatically join it
           ChannelStore.save('youtube', result.channelSlug)
 
-          // Notify the webview of successful authentication
-          if (sendToView) {
-            sendToView.auth_success(result.user)
-          }
+          pushEvent('auth_success', result.user)
 
-          // Trigger reconnection and auto-join the channel
           if (onAuthSuccessCallback) {
             onAuthSuccessCallback('youtube', result.channelSlug)
           }
@@ -76,15 +62,10 @@ export function startAuthServer(): void {
         if (url.pathname === '/auth/kick/callback') {
           const result = await handleKickCallback(url)
 
-          // Save the channel to automatically join it
           ChannelStore.save('kick', result.channelSlug)
 
-          // Notify the webview of successful authentication
-          if (sendToView) {
-            sendToView.auth_success(result.user)
-          }
+          pushEvent('auth_success', result.user)
 
-          // Trigger reconnection and auto-join the channel
           if (onAuthSuccessCallback) {
             onAuthSuccessCallback('kick', result.channelSlug)
           }
@@ -101,14 +82,13 @@ export function startAuthServer(): void {
 
       return new Response('Not found', { status: 404 })
     },
-    port: AUTH_SERVER_PORT,
   })
 
   log.info(`OAuth server listening on port ${AUTH_SERVER_PORT}`)
 }
 
 export function stopAuthServer(): void {
-  server?.stop()
+  server?.shutdown()
   server = null
 }
 

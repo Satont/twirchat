@@ -2,7 +2,6 @@ import { computed, onMounted, type ComputedRef } from 'vue'
 
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
-import { rpc } from '../main'
 import { buildMessageParts, type MessagePart } from '../../shared/utils/messageParts'
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
@@ -21,7 +20,7 @@ async function fetchMentionColor(platform: string, username: string): Promise<vo
   }
 
   try {
-    const color = await rpc.request.getUsernameColor({
+    const color = await bindings.getUsernameColor({
       platform: platform as Platform,
       username,
     })

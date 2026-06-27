@@ -24,7 +24,6 @@
 
 import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
-import type { ServerWebSocket } from 'bun'
 import { existsSync } from 'node:fs'
 import { extname, join } from 'path'
 import { logger } from '@twirchat/shared/logger'
@@ -50,7 +49,7 @@ export type OverlayMessage =
 // Connected OBS browser-source WebSocket clients
 // ============================================================
 
-const clients = new Set<ServerWebSocket<unknown>>()
+const clients = new Set<WebSocket>()
 
 interface OverlayRuntimePaths {
   fontsDir: string | null
@@ -58,12 +57,9 @@ interface OverlayRuntimePaths {
 }
 
 // ============================================================
-// Public API — called from src/bun/index.ts
+// Public API — called from src/main.ts
 // ============================================================
 
-/**
- * Push a chat message to all connected overlay clients.
- */
 export function pushOverlayMessage(msg: NormalizedChatMessage): void {
   const payload: OverlayMessage = {
     data: { message: msg, parts: buildMessageParts(msg) },
@@ -80,9 +76,6 @@ export function pushOverlayMessage(msg: NormalizedChatMessage): void {
   }
 }
 
-/**
- * Push a chat event (follow, sub, raid…) to all connected overlay clients.
- */
 export function pushOverlayEvent(event: NormalizedEvent): void {
   const payload: OverlayMessage = { data: event, type: 'chat_event' }
   const json = JSON.stringify(payload, replacer)
@@ -96,9 +89,6 @@ export function pushOverlayEvent(event: NormalizedEvent): void {
   }
 }
 
-/**
- * Clear all messages in connected overlays.
- */
 export function clearOverlay(): void {
   const payload: OverlayMessage = { type: 'clear' }
   const json = JSON.stringify(payload)
@@ -116,11 +106,6 @@ export function clearOverlay(): void {
 // Server
 // ============================================================
 
-/**
- * Resolve the dist/overlay directory relative to this file.
- * Works both in development (src/overlay-server.ts) and after electrobun
- * copies the built assets.
- */
 export function resolveOverlayRuntimePaths(
   baseDir: string,
   pathExists: (path: string) => boolean = existsSync,
@@ -150,7 +135,7 @@ function createMissingResponse(kind: 'fonts' | 'overlay', pathname: string): Res
   })
 }
 
-function createFileResponse(filePath: string, contentType?: string): Response {
+async function createFileResponse(filePath: string, contentType?: string): Promise<Response> {
   if (!existsSync(filePath)) {
     log.warn('Overlay file not found', { filePath })
     return new Response('Not found', {
@@ -159,30 +144,44 @@ function createFileResponse(filePath: string, contentType?: string): Response {
     })
   }
 
-  return new Response(Bun.file(filePath), {
+  const data = await Deno.readFile(filePath)
+  return new Response(data, {
     headers: contentType ? { 'Content-Type': contentType } : undefined,
   })
 }
 
-export function startOverlayServer(
-  port: number = OVERLAY_SERVER_PORT,
-): ReturnType<typeof Bun.serve> {
-  const runtimePaths = resolveOverlayRuntimePaths(import.meta.dir)
+export function startOverlayServer(port: number = OVERLAY_SERVER_PORT): Deno.HttpServer {
+  const runtimePaths = resolveOverlayRuntimePaths(import.meta.dirname ?? new URL('.', import.meta.url).pathname)
 
   log.info('Resolved overlay runtime paths', {
     fontsDir: runtimePaths.fontsDir,
     overlayDir: runtimePaths.overlayDir,
   })
 
-  const server = Bun.serve({
-    fetch(req, server) {
-      // WebSocket upgrade (no path restriction — OBS connects to any path)
-      if (server.upgrade(req)) {
-        return undefined
-      }
-
+  const server = Deno.serve({
+    port,
+    handler(req) {
       const url = new URL(req.url)
       const pathname = url.pathname
+
+      // WebSocket upgrade
+      if (req.headers.get('upgrade') === 'websocket') {
+        const { socket, response } = Deno.upgradeWebSocket(req)
+
+        socket.onopen = () => {
+          clients.add(socket)
+          log.info(`Client connected (total: ${clients.size})`)
+        }
+        socket.onclose = () => {
+          clients.delete(socket)
+          log.info(`Client disconnected (total: ${clients.size})`)
+        }
+        socket.onmessage = () => {
+          // Overlay is receive-only; ignore any messages from the browser
+        }
+
+        return response
+      }
 
       if (pathname.startsWith('/fonts/')) {
         if (!runtimePaths.fontsDir) {
@@ -192,7 +191,6 @@ export function startOverlayServer(
         return createFileResponse(join(runtimePaths.fontsDir, pathname.slice('/fonts/'.length)))
       }
 
-      // Serve static assets from dist/overlay/assets/
       if (pathname.startsWith('/assets/')) {
         if (!runtimePaths.overlayDir) {
           return createMissingResponse('overlay', pathname)
@@ -212,25 +210,10 @@ export function startOverlayServer(
         return createMissingResponse('overlay', pathname)
       }
 
-      // Everything else → index.html (SPA entry, query params passed through)
       return createFileResponse(
         join(runtimePaths.overlayDir, 'index.html'),
         'text/html; charset=utf-8',
       )
-    },
-    port,
-    websocket: {
-      close(ws) {
-        clients.delete(ws)
-        log.info(`Client disconnected (total: ${clients.size})`)
-      },
-      message(_ws, _msg) {
-        // Overlay is receive-only; ignore any messages from the browser
-      },
-      open(ws) {
-        clients.add(ws)
-        log.info(`Client connected (total: ${clients.size})`)
-      },
     },
   })
 
@@ -244,7 +227,6 @@ export function startOverlayServer(
 // Helpers
 // ============================================================
 
-/** JSON.stringify replacer that converts Date → ISO string */
 function replacer(_key: string, value: unknown): unknown {
   if (value instanceof Date) {
     return value.toISOString()

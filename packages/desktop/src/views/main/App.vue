@@ -18,7 +18,6 @@ import AddChannelModal from './components/AddChannelModal.vue'
 import TabSelectorModal from './components/TabSelectorModal.vue'
 import type { TabItem } from './components/TabSelectorModal.vue'
 import { useHotkeys } from './composables/useHotkeys'
-import { rpc } from './main'
 import { attemptMigration } from './services/migration'
 import type {
   Account,
@@ -120,11 +119,11 @@ const youtubeAuthenticated = computed(() => accounts.value.some((a) => a.platfor
 async function loadInitialData() {
   try {
     const [accs, , setts, statList, watched] = await Promise.all([
-      rpc.request.getAccounts(),
+      bindings.getAccounts(),
       aliasStore.loadAliases(),
-      rpc.request.getSettings(),
-      rpc.request.getStatuses(),
-      rpc.request.getWatchedChannels(),
+      bindings.getSettings(),
+      bindings.getStatuses(),
+      bindings.getWatchedChannels(),
     ])
     if (accs !== undefined) {
       accountsStore.setAccounts(accs)
@@ -137,7 +136,7 @@ async function loadInitialData() {
     }
     if (watched !== undefined) {
       watchedChannels.value = watched
-      const persistedTabIds = await rpc.request.getTabChannelIds?.()
+      const persistedTabIds = await bindings.getTabChannelIds?.()
       if (persistedTabIds !== null && persistedTabIds !== undefined && persistedTabIds.length > 0) {
         tabChannelIds.value = new Set(
           persistedTabIds.filter((id) => watched.some((ch) => ch.id === id)),
@@ -145,7 +144,7 @@ async function loadInitialData() {
       } else {
         // Backward compat: first run or migration — use all watched channels
         tabChannelIds.value = new Set(watched.map((ch) => ch.id))
-        await rpc.request.setTabChannelIds?.({ ids: watched.map((ch) => ch.id) })
+        await bindings.setTabChannelIds?.({ ids: watched.map((ch) => ch.id) })
       }
     }
 
@@ -167,7 +166,7 @@ async function loadInitialData() {
       const nameMap = new Map<string, string[]>(tabChannelNames.value)
       for (const tabId of tabChannelIds.value) {
         try {
-          const layout = await rpc.request.getWatchedChannelsLayout?.({ tabId })
+          const layout = await bindings.getWatchedChannelsLayout?.({ tabId })
           if (layout) {
             const names = collectNames(layout.root, watchedChannels.value)
             if (names.length > 0) {
@@ -183,7 +182,7 @@ async function loadInitialData() {
 
     // Load current watched channel statuses (emitted before webview was ready)
     try {
-      const watchedStats = await rpc.request.getWatchedChannelStatuses()
+      const watchedStats = await bindings.getWatchedChannelStatuses()
       if (watchedStats !== undefined && watchedStats.length > 0) {
         const map = new Map<string, PlatformStatusInfo>(watchedStatuses.value)
         for (const { channelId, status } of watchedStats) {
@@ -202,7 +201,7 @@ async function loadInitialData() {
 
   // Load recent messages separately so a failure here doesn't block the rest
   try {
-    const recentMsgs = await rpc.request.getRecentMessages({})
+    const recentMsgs = await bindings.getRecentMessages({})
     if (recentMsgs !== undefined && recentMsgs.length > 0) {
       messages.value = [...recentMsgs]
     }
@@ -213,7 +212,7 @@ async function loadInitialData() {
   // Load buffered messages for all persisted watched channels
   for (const ch of watchedChannels.value) {
     try {
-      const msgs = await rpc.request.getWatchedChannelMessages({ id: ch.id })
+      const msgs = await bindings.getWatchedChannelMessages({ id: ch.id })
       if (msgs && msgs.length > 0) {
         watchedMessages.value.set(ch.id, msgs)
         triggerRef(watchedMessages)
@@ -309,7 +308,7 @@ useRpcListener(
   'auth_success',
   ({ platform, displayName }: { platform: string; username: string; displayName: string }) => {
     console.log(`[Auth] Authenticated as ${displayName} on ${platform}`)
-    rpc.request.getAccounts().then((a) => {
+    bindings.getAccounts().then((a) => {
       if (a !== undefined) accountsStore.setAccounts(a)
     })
   },
@@ -383,9 +382,9 @@ onMounted(() => {
 
 async function checkForUpdates() {
   try {
-    const result = await rpc.request.checkForUpdate()
+    const result = await bindings.checkForUpdate()
     if (result.updateAvailable) {
-      await rpc.request.downloadUpdate()
+      await bindings.downloadUpdate()
     }
   } catch (error) {
     console.warn('[Update] Failed to check for updates:', error)
@@ -394,7 +393,7 @@ async function checkForUpdates() {
 
 async function applyUpdate() {
   try {
-    await rpc.request.applyUpdate()
+    await bindings.applyUpdate()
   } catch (error) {
     console.error('[Update] Failed to apply update:', error)
   }
@@ -434,7 +433,7 @@ async function skipUpdate() {
   const hash = updateState.value.hash
   if (!hash) return
   try {
-    await rpc.request.skipUpdate({ hash })
+    await bindings.skipUpdate({ hash })
   } catch (error) {
     console.error('[Update] Failed to skip update:', error)
   }
@@ -453,7 +452,7 @@ async function doAddWatchedChannel(
   platform: 'twitch' | 'kick' | 'youtube',
   channelSlug: string,
 ): Promise<WatchedChannel> {
-  const ch = await rpc.request.addWatchedChannel({ channelSlug, platform })
+  const ch = await bindings.addWatchedChannel({ channelSlug, platform })
   if (!watchedChannels.value.find((c: WatchedChannel) => c.id === ch.id)) {
     watchedChannels.value = [...watchedChannels.value, ch]
   }
@@ -466,7 +465,7 @@ async function onAddChannel(platform: 'twitch' | 'kick' | 'youtube', channelSlug
   try {
     const ch = await doAddWatchedChannel(platform, channelSlug)
     tabChannelIds.value = new Set([...tabChannelIds.value, ch.id])
-    await rpc.request.setTabChannelIds?.({ ids: [...tabChannelIds.value] })
+    await bindings.setTabChannelIds?.({ ids: [...tabChannelIds.value] })
   } catch (error) {
     console.error('[App] addWatchedChannel failed:', error)
   }
@@ -480,18 +479,16 @@ function onTabReorder(fromId: string, toId: string) {
   ids.splice(fromIdx, 1)
   ids.splice(toIdx, 0, fromId)
   tabChannelIds.value = new Set(ids)
-  rpc.request
-    .setTabChannelIds?.({ ids })
-    .catch((e) => console.warn('[App] reorder tabs failed:', e))
+  bindings.setTabChannelIds?.({ ids }).catch((e) => console.warn('[App] reorder tabs failed:', e))
 }
 
 async function onRemoveChannel(id: string) {
   try {
     const ch = watchedChannels.value.find((c: WatchedChannel) => c.id === id)
-    await rpc.request.removeWatchedChannel({ id })
+    await bindings.removeWatchedChannel({ id })
     watchedChannels.value = watchedChannels.value.filter((c: WatchedChannel) => c.id !== id)
     tabChannelIds.value = new Set([...tabChannelIds.value].filter((i) => i !== id))
-    await rpc.request.setTabChannelIds?.({ ids: [...tabChannelIds.value] })
+    await bindings.setTabChannelIds?.({ ids: [...tabChannelIds.value] })
     watchedMessages.value = new Map([...watchedMessages.value].filter(([k]) => k !== id))
     watchedStatuses.value = new Map([...watchedStatuses.value].filter(([k]) => k !== id))
     if (ch && ch.platform !== 'youtube') {
@@ -508,7 +505,7 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
     return
   }
   try {
-    await rpc.request.sendWatchedChannelMessage({ id: channelId, text })
+    await bindings.sendWatchedChannelMessage({ id: channelId, text })
   } catch (error) {
     console.error('[App] sendWatchedChannelMessage failed:', error)
   }

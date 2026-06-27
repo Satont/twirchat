@@ -2,7 +2,6 @@ import { computed, readonly, ref, watch, type Ref } from 'vue'
 
 import type { UserCardMetadataResponse } from '@twirchat/shared/protocol'
 import type { Platform } from '@twirchat/shared/types'
-import { rpc } from '../main'
 
 export function useUserCardMetadata(
   platform: Ref<Platform>,
@@ -39,7 +38,7 @@ export function useUserCardMetadata(
     error.value = null
 
     try {
-      const response = await rpc.request.getUserCardMetadata({
+      const response = await bindings.getUserCardMetadata({
         platform: platform.value as 'twitch' | 'kick',
         platformUserId: platformUserId.value,
         username: username.value,

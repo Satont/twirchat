@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import type { Account, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
-import { rpc } from '../main'
 import StreamEditor from './StreamEditor.vue'
 import { useRpcListener } from '../composables/useRpcListener'
 import { platformColor } from '../../shared/utils/platform'
@@ -62,7 +61,7 @@ function addToast(platform: Platform, type: Toast['type'], message: string) {
 // ----------------------------------------------------------------
 
 useRpcListener('auth_success', async ({ platform, displayName }) => {
-  const updated = (await rpc.request.getAccounts!()) as Account[]
+  const updated = (await bindings.getAccounts!()) as Account[]
   emit('accounts-updated', updated)
   addToast(platform as Platform, 'success', `Connected as ${displayName}`)
 })
@@ -73,7 +72,7 @@ useRpcListener('auth_error', ({ platform, error }) => {
 onMounted(async () => {
   // Load persisted channels from the backend
   try {
-    const saved = (await rpc.request.getChannels!()) as Partial<Record<Platform, string[]>>
+    const saved = (await bindings.getChannels!()) as Partial<Record<Platform, string[]>>
     if (saved) {
       for (const platform of ['twitch', 'youtube', 'kick'] as Platform[]) {
         const slugs = saved[platform]
@@ -152,15 +151,15 @@ function avatarInitials(name: string): string {
 async function startAuth(platform: Platform) {
   authLoading.value[platform] = true
   try {
-    await rpc.request.authStart!({ platform })
+    await bindings.authStart!({ platform })
   } finally {
     authLoading.value[platform] = false
   }
 }
 
 async function logout(platform: Platform) {
-  await rpc.request.authLogout!({ platform })
-  const updated = (await rpc.request.getAccounts!()) as Account[]
+  await bindings.authLogout!({ platform })
+  const updated = (await bindings.getAccounts!()) as Account[]
   emit('accounts-updated', updated)
 }
 
@@ -171,7 +170,7 @@ async function joinChannel(platform: Platform) {
   }
   joiningChannel.value[platform] = true
   try {
-    await rpc.request.joinChannel!({ channelSlug: slug, platform })
+    await bindings.joinChannel!({ channelSlug: slug, platform })
     if (!(joinedChannels.value[platform] ?? []).includes(slug)) {
       joinedChannels.value[platform] = [...(joinedChannels.value[platform] ?? []), slug]
     }
@@ -189,7 +188,7 @@ async function joinChannel(platform: Platform) {
 }
 
 async function leaveChannel(platform: Platform, slug: string) {
-  await rpc.request.leaveChannel!({ channelSlug: slug, platform })
+  await bindings.leaveChannel!({ channelSlug: slug, platform })
   joinedChannels.value[platform] = (joinedChannels.value[platform] ?? []).filter((c) => c !== slug)
 }
 

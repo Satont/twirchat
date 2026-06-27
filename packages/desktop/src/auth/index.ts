@@ -1,7 +1,6 @@
 export {
   startAuthServer,
   stopAuthServer,
-  setAuthServerRpcSender,
   setOnAuthSuccessCallback,
   setOnAutoJoinChannelCallback,
 } from './server'

@@ -20,25 +20,25 @@ interface DbAccount {
 export const AccountStore = {
   delete(id: string): void {
     const db = getDb()
-    db.run('DELETE FROM accounts WHERE id = ?', [id])
+    db.prepare('DELETE FROM accounts WHERE id = ?').run(id)
   },
 
   deleteByPlatform(platform: Platform): void {
     const db = getDb()
-    db.run('DELETE FROM accounts WHERE platform = ?', [platform])
+    db.prepare('DELETE FROM accounts WHERE platform = ?').run(platform)
   },
 
   findAll(): Account[] {
     const db = getDb()
-    const rows = db.query<DbAccount, []>('SELECT * FROM accounts').all()
+    const rows = db.prepare('SELECT * FROM accounts').all() as unknown as DbAccount[]
     return rows.map(mapRow)
   },
 
   findByPlatform(platform: Platform): Account | null {
     const db = getDb()
-    const row = db
-      .query<DbAccount, [string]>('SELECT * FROM accounts WHERE platform = ? LIMIT 1')
-      .get(platform)
+    const row = db.prepare('SELECT * FROM accounts WHERE platform = ? LIMIT 1').get(platform) as
+      | DbAccount
+      | undefined
     if (!row) return null
     return mapRow(row)
   },
@@ -46,10 +46,8 @@ export const AccountStore = {
   getTokens(id: string): { accessToken: string; refreshToken?: string; expiresAt?: number } | null {
     const db = getDb()
     const row = db
-      .query<Pick<DbAccount, 'access_token' | 'refresh_token' | 'expires_at'>, [string]>(
-        'SELECT access_token, refresh_token, expires_at FROM accounts WHERE id = ?',
-      )
-      .get(id)
+      .prepare('SELECT access_token, refresh_token, expires_at FROM accounts WHERE id = ?')
+      .get(id) as Pick<DbAccount, 'access_token' | 'refresh_token' | 'expires_at'> | undefined
     if (!row) return null
     return {
       accessToken: decrypt(row.access_token),
@@ -60,15 +58,14 @@ export const AccountStore = {
 
   updateTokens(id: string, accessToken: string, refreshToken?: string, expiresAt?: number): void {
     const db = getDb()
-    db.run(
+    db.prepare(
       `UPDATE accounts SET
          access_token = ?,
          refresh_token = ?,
          expires_at = ?,
          updated_at = unixepoch()
        WHERE id = ?`,
-      [encrypt(accessToken), refreshToken ? encrypt(refreshToken) : null, expiresAt ?? null, id],
-    )
+    ).run(encrypt(accessToken), refreshToken ? encrypt(refreshToken) : null, expiresAt ?? null, id)
   },
 
   upsert(params: {
@@ -87,7 +84,7 @@ export const AccountStore = {
     const encryptedAccess = encrypt(params.accessToken)
     const encryptedRefresh = params.refreshToken ? encrypt(params.refreshToken) : null
 
-    db.run(
+    db.prepare(
       `INSERT INTO accounts
         (id, platform, platform_user_id, username, display_name, avatar_url,
          access_token, refresh_token, expires_at, scopes, updated_at)
@@ -102,18 +99,17 @@ export const AccountStore = {
          expires_at = excluded.expires_at,
          scopes = excluded.scopes,
          updated_at = unixepoch()`,
-      [
-        params.id,
-        params.platform,
-        params.platformUserId,
-        params.username,
-        params.displayName,
-        params.avatarUrl ?? null,
-        encryptedAccess,
-        encryptedRefresh,
-        params.expiresAt ?? null,
-        params.scopes ? JSON.stringify(params.scopes) : null,
-      ],
+    ).run(
+      params.id,
+      params.platform,
+      params.platformUserId,
+      params.username,
+      params.displayName,
+      params.avatarUrl ?? null,
+      encryptedAccess,
+      encryptedRefresh,
+      params.expiresAt ?? null,
+      params.scopes ? JSON.stringify(params.scopes) : null,
     )
   },
 }

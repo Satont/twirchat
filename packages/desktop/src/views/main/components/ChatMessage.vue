@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { rpc } from '../main'
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 import EmoteTooltip from './EmoteTooltip.vue'
 import { platformColor } from '../../shared/utils/platform'
@@ -91,7 +90,7 @@ function onMsgClick(e: MouseEvent): void {
   e.preventDefault()
   const url = anchor.dataset.href
   if (url) {
-    void rpc.request.openExternalUrl({ url })
+    void bindings.openExternalUrl({ url })
   }
 }
 

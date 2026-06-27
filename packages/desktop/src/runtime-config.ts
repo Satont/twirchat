@@ -35,11 +35,11 @@ export function setRuntimeConfig(config: Partial<RuntimeConfig>): void {
     ...runtimeConfig,
     ...config,
   }
-  // Приоритет: 1) явно заданный dbPath, 2) process.env.DB_PATH, 3) путь по умолчанию на основе nodeEnv
+  // Приоритет: 1) явно заданный dbPath, 2) Deno.env.DB_PATH, 3) путь по умолчанию на основе nodeEnv
   if (config.dbPath) {
     runtimeConfig.dbPath = config.dbPath
-  } else if (process.env['DB_PATH']) {
-    runtimeConfig.dbPath = process.env['DB_PATH']
+  } else if (Deno.env.get('DB_PATH')) {
+    runtimeConfig.dbPath = Deno.env.get('DB_PATH')!
   } else if (config.nodeEnv) {
     runtimeConfig.dbPath = getDefaultDbPath(config.nodeEnv)
   }

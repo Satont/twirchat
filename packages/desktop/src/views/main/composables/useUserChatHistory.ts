@@ -1,8 +1,7 @@
 import { readonly, ref, watch, type Ref } from 'vue'
 
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
-import type { UserChatHistoryCursor } from '../../../shared/rpc'
-import { rpc } from '../main'
+import type { UserChatHistoryCursor } from '../../../bindings'
 import { useRpcListener } from './useRpcListener'
 
 const PAGE_SIZE = 50
@@ -81,7 +80,7 @@ export function useUserChatHistory(
     error.value = null
 
     try {
-      const page = await rpc.request.getUserChatHistory({
+      const page = await bindings.getUserChatHistory({
         platform: platform.value,
         platformUserId: platformUserId.value,
         limit: PAGE_SIZE,
@@ -118,7 +117,7 @@ export function useUserChatHistory(
     const generation = requestGeneration.value
 
     try {
-      const page = await rpc.request.getUserChatHistory({
+      const page = await bindings.getUserChatHistory({
         platform: platform.value,
         platformUserId: platformUserId.value,
         limit: PAGE_SIZE,

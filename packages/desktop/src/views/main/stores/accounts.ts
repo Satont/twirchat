@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Account } from '@twirchat/shared/types'
-import { rpc } from '../main'
 
 export const useAccountsStore = defineStore('accounts', () => {
   const accounts = ref<Account[]>([])
@@ -10,7 +9,7 @@ export const useAccountsStore = defineStore('accounts', () => {
   async function loadAccounts(): Promise<void> {
     loading.value = true
     try {
-      const result = await rpc.request.getAccounts()
+      const result = await bindings.getAccounts()
       if (result !== undefined) {
         accounts.value = result
       }

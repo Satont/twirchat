@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Account, WatchedChannel } from '@twirchat/shared/types'
 import type { ChannelStatus, ChannelStatusRequest } from '@twirchat/shared/protocol'
-import { rpc } from '../main'
 
 export const useStreamStatusStore = defineStore('streamStatus', () => {
   const statusMap = ref<Map<string, ChannelStatus>>(new Map())
@@ -54,7 +53,7 @@ export const useStreamStatusStore = defineStore('streamStatus', () => {
     if (requests.length === 0) return
 
     try {
-      const res = await rpc.request.getChannelsStatus({ channels: requests })
+      const res = await bindings.getChannelsStatus({ channels: requests })
       if (res?.channels) {
         setStatuses(res.channels)
       }
