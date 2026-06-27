@@ -1,31 +1,31 @@
-import { createApp, ref } from 'vue'
-import { VList } from 'virtua/vue'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import { createApp, ref } from "vue";
+import { VList } from "virtua/vue";
+import type { NormalizedChatMessage } from "@twirchat/shared";
 
 function makeFakeMessage(i: number): NormalizedChatMessage {
   return {
     id: `test-${i}`,
-    platform: 'twitch',
-    channelId: 'test-channel',
+    platform: "twitch",
+    channelId: "test-channel",
     author: {
       id: `user-${i}`,
       displayName: `User${i}`,
       badges: [],
     },
-    text: `Message #${i}: ${Array(5).fill('Lorem ipsum').join(' ')}`,
+    text: `Message #${i}: ${Array(5).fill("Lorem ipsum").join(" ")}`,
     emotes: [],
     timestamp: new Date(),
-    type: 'message',
-  }
+    type: "message",
+  };
 }
 
 const messages = ref<NormalizedChatMessage[]>(
   Array.from({ length: 200 }, (_, i) => makeFakeMessage(i)),
-)
+);
 
 createApp({
   setup() {
-    return { messages }
+    return { messages };
   },
   template: `
     <VList :data="messages" :reverse="true" style="height:100vh">
@@ -38,4 +38,4 @@ createApp({
     </VList>
   `,
   components: { VList },
-}).mount('#harness')
+}).mount("#harness");

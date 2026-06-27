@@ -13,32 +13,32 @@
  *            https://github.com/KickEngineering/KickDevDocs/issues
  */
 
-import { logger } from '@twirchat/shared/logger'
+import { logger } from "@twirchat/shared";
 import {
-  ModerationException,
+  type BanResult,
+  type DeleteMessageResult,
   type KickBanRequest,
   type KickBanResponse,
   type KickUnbanRequest,
-  type BanResult,
-  type DeleteMessageResult,
-} from './types.ts'
+  ModerationException,
+} from "./types.ts";
 
-const log = logger('kick-moderation')
+const log = logger("kick-moderation");
 
 interface KickErrorResponse {
-  error?: string
-  errors?: Record<string, string[]>
-  message?: string
-  statusCode?: number
+  error?: string;
+  errors?: Record<string, string[]>;
+  message?: string;
+  statusCode?: number;
 }
 
 /**
  * Check if response is an error response
  */
 function isKickError(status: number, data: unknown): boolean {
-  if (!data || typeof data !== 'object') return status >= 400
-  const obj = data as Record<string, unknown>
-  return 'error' in obj || 'errors' in obj || status >= 400
+  if (!data || typeof data !== "object") return status >= 400;
+  const obj = data as Record<string, unknown>;
+  return "error" in obj || "errors" in obj || status >= 400;
 }
 
 /**
@@ -63,79 +63,91 @@ export async function banUser(
   channelId: string,
   request: KickBanRequest,
 ): Promise<BanResult> {
-  const isPermanent = request.duration_minutes === null || request.duration_minutes === undefined
+  const isPermanent = request.duration_minutes === null ||
+    request.duration_minutes === undefined;
 
   try {
     const body: Record<string, unknown> = {
       banned_user_id: request.banned_user_id,
       reason: request.reason,
-    }
+    };
 
     // Only include duration if provided (null = permanent)
     if (request.duration_minutes !== undefined) {
-      body.duration_minutes = request.duration_minutes
+      body.duration_minutes = request.duration_minutes;
     }
 
-    log.debug('Banning user on Kick', {
+    log.debug("Banning user on Kick", {
       channelId,
       userId: request.banned_user_id,
       isPermanent,
       duration: request.duration_minutes,
-    })
+    });
 
-    const res = await fetch(`https://api.kick.com/v1/channels/${channelId}/bans`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${kickToken}`,
-        'Content-Type': 'application/json',
+    const res = await fetch(
+      `https://api.kick.com/v1/channels/${channelId}/bans`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${kickToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    })
+    );
 
-    const data = (await res.json()) as KickBanResponse | KickErrorResponse
+    const data = (await res.json()) as KickBanResponse | KickErrorResponse;
 
     if (!res.ok || isKickError(res.status, data)) {
-      const error = data as KickErrorResponse
-      const errorCode = mapKickError(res.status, error.message || error.error)
+      const error = data as KickErrorResponse;
+      const errorCode = mapKickError(res.status, error.message || error.error);
 
-      log.warn('Kick ban failed', {
+      log.warn("Kick ban failed", {
         status: res.status,
         code: errorCode,
         message: error.message || error.error,
-      })
+      });
 
       throw new ModerationException(
         errorCode,
         res.status,
         `Failed to ban user on Kick: ${error.message || error.error}`,
-        { userId: request.banned_user_id, isPermanent, duration: request.duration_minutes },
-      )
+        {
+          userId: request.banned_user_id,
+          isPermanent,
+          duration: request.duration_minutes,
+        },
+      );
     }
 
-    const durationSeconds = request.duration_minutes ? request.duration_minutes * 60 : undefined
+    const durationSeconds = request.duration_minutes
+      ? request.duration_minutes * 60
+      : undefined;
 
-    log.info('User banned on Kick', {
+    log.info("User banned on Kick", {
       userId: request.banned_user_id,
       isPermanent,
       duration: request.duration_minutes,
-    })
+    });
 
     return {
-      platform: 'kick',
+      platform: "kick",
       success: true,
       userId: String(request.banned_user_id),
       isPermanent,
       durationSeconds,
       createdAt: new Date(),
-    }
+    };
   } catch (error) {
     if (error instanceof ModerationException) {
       return {
-        platform: 'kick',
+        platform: "kick",
         success: false,
         userId: String(request.banned_user_id),
         isPermanent,
-        durationSeconds: request.duration_minutes ? request.duration_minutes * 60 : undefined,
+        durationSeconds: request.duration_minutes
+          ? request.duration_minutes * 60
+          : undefined,
         createdAt: new Date(),
         error: {
           code: error.code,
@@ -143,11 +155,11 @@ export async function banUser(
           message: error.message,
           details: error.details,
         },
-      }
+      };
     }
 
-    log.error('Unexpected error during Kick ban', { error: String(error) })
-    throw error
+    log.error("Unexpected error during Kick ban", { error: String(error) });
+    throw error;
   }
 }
 
@@ -170,63 +182,69 @@ export async function deleteMessage(
   messageId: string,
 ): Promise<DeleteMessageResult> {
   try {
-    log.debug('Deleting message on Kick', {
+    log.debug("Deleting message on Kick", {
       channelId,
       messageId,
-    })
+    });
 
     // Attempt 1: Simple DELETE without body
-    let res = await fetch(`https://api.kick.com/v1/channels/${channelId}/messages/${messageId}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${kickToken}`,
-        'Content-Type': 'application/json',
+    let res = await fetch(
+      `https://api.kick.com/v1/channels/${channelId}/messages/${messageId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${kickToken}`,
+          "Content-Type": "application/json",
+        },
       },
-    })
+    );
 
     if (res.status === 400 || res.status === 422) {
       // Attempt 2: DELETE with message_id in body (if first attempt suggests it's needed)
-      const request = { message_id: messageId }
+      const request = { message_id: messageId };
 
-      res = await fetch(`https://api.kick.com/v1/channels/${channelId}/messages/${messageId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${kickToken}`,
-          'Content-Type': 'application/json',
+      res = await fetch(
+        `https://api.kick.com/v1/channels/${channelId}/messages/${messageId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${kickToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request),
         },
-        body: JSON.stringify(request),
-      })
+      );
     }
 
     if (!res.ok) {
-      const data = (await res.json()) as KickErrorResponse
-      const errorCode = mapKickError(res.status, data.message || data.error)
+      const data = (await res.json()) as KickErrorResponse;
+      const errorCode = mapKickError(res.status, data.message || data.error);
 
-      log.warn('Kick message delete failed', {
+      log.warn("Kick message delete failed", {
         status: res.status,
         code: errorCode,
-      })
+      });
 
       throw new ModerationException(
         errorCode,
         res.status,
         `Failed to delete message on Kick: ${data.message || data.error}`,
         { messageId },
-      )
+      );
     }
 
-    log.info('Message deleted on Kick', { messageId })
+    log.info("Message deleted on Kick", { messageId });
 
     return {
-      platform: 'kick',
+      platform: "kick",
       success: true,
       messageId,
       deletedAt: new Date(),
-    }
+    };
   } catch (error) {
     if (error instanceof ModerationException) {
       return {
-        platform: 'kick',
+        platform: "kick",
         success: false,
         messageId,
         error: {
@@ -235,11 +253,13 @@ export async function deleteMessage(
           message: error.message,
           details: error.details,
         },
-      }
+      };
     }
 
-    log.error('Unexpected error during Kick message delete', { error: String(error) })
-    throw error
+    log.error("Unexpected error during Kick message delete", {
+      error: String(error),
+    });
+    throw error;
   }
 }
 
@@ -260,51 +280,54 @@ export async function unbanUser(
   userId: number,
 ): Promise<DeleteMessageResult> {
   try {
-    const request: KickUnbanRequest = { banned_user_id: userId }
+    const request: KickUnbanRequest = { banned_user_id: userId };
 
-    log.debug('Unbanning user on Kick', {
+    log.debug("Unbanning user on Kick", {
       channelId,
       userId,
-    })
+    });
 
-    const res = await fetch(`https://api.kick.com/v1/channels/${channelId}/bans/${userId}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${kickToken}`,
-        'Content-Type': 'application/json',
+    const res = await fetch(
+      `https://api.kick.com/v1/channels/${channelId}/bans/${userId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${kickToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
       },
-      body: JSON.stringify(request),
-    })
+    );
 
     if (!res.ok) {
-      const data = (await res.json()) as KickErrorResponse
-      const errorCode = mapKickError(res.status, data.message || data.error)
+      const data = (await res.json()) as KickErrorResponse;
+      const errorCode = mapKickError(res.status, data.message || data.error);
 
-      log.warn('Kick unban failed', {
+      log.warn("Kick unban failed", {
         status: res.status,
         code: errorCode,
-      })
+      });
 
       throw new ModerationException(
         errorCode,
         res.status,
         `Failed to unban user on Kick: ${data.message || data.error}`,
         { userId },
-      )
+      );
     }
 
-    log.info('User unbanned on Kick', { userId })
+    log.info("User unbanned on Kick", { userId });
 
     return {
-      platform: 'kick',
+      platform: "kick",
       success: true,
       messageId: String(userId),
       deletedAt: new Date(),
-    }
+    };
   } catch (error) {
     if (error instanceof ModerationException) {
       return {
-        platform: 'kick',
+        platform: "kick",
         success: false,
         messageId: String(userId),
         error: {
@@ -313,11 +336,11 @@ export async function unbanUser(
           message: error.message,
           details: error.details,
         },
-      }
+      };
     }
 
-    log.error('Unexpected error during Kick unban', { error: String(error) })
-    throw error
+    log.error("Unexpected error during Kick unban", { error: String(error) });
+    throw error;
   }
 }
 
@@ -327,26 +350,28 @@ export async function unbanUser(
  * Kick doesn't document error codes well, so we infer from status and message content.
  */
 function mapKickError(status: number, message?: string): string {
-  const msg = message?.toLowerCase() || ''
+  const msg = message?.toLowerCase() || "";
 
   switch (status) {
     case 400:
-      return msg.includes('invalid') ? 'KICK_INVALID_PARAMETER' : 'KICK_BAD_REQUEST'
+      return msg.includes("invalid")
+        ? "KICK_INVALID_PARAMETER"
+        : "KICK_BAD_REQUEST";
     case 401:
-      return 'KICK_UNAUTHORIZED'
+      return "KICK_UNAUTHORIZED";
     case 403:
-      return 'KICK_FORBIDDEN'
+      return "KICK_FORBIDDEN";
     case 404:
-      return 'KICK_NOT_FOUND'
+      return "KICK_NOT_FOUND";
     case 409:
-      return 'KICK_CONFLICT'
+      return "KICK_CONFLICT";
     case 422:
-      return 'KICK_UNPROCESSABLE'
+      return "KICK_UNPROCESSABLE";
     case 429:
-      return 'KICK_RATE_LIMITED'
+      return "KICK_RATE_LIMITED";
     case 500:
-      return 'KICK_SERVER_ERROR'
+      return "KICK_SERVER_ERROR";
     default:
-      return 'KICK_UNKNOWN_ERROR'
+      return "KICK_UNKNOWN_ERROR";
   }
 }

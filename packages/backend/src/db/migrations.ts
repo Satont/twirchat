@@ -1,5 +1,7 @@
 import { logger } from '@twirchat/shared'
-import { sql } from 'bun'
+import postgres from 'postgres'
+
+const sql = postgres(Deno.env.get('DATABASE_URL')!)
 
 const log = logger('migrations')
 
@@ -52,6 +54,6 @@ export async function runMigrations(): Promise<void> {
     log.info('Migrations applied')
   } catch (e) {
     log.error('Failed to apply migrations', { err: String(e) })
-    process.exit(1)
+    Deno.exit(1)
   }
 }

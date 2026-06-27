@@ -1,22 +1,22 @@
-import { getDb } from './db'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
-import type { UserChatHistoryCursor, UserChatHistoryPage } from '../bindings'
+import { getDb } from "./db";
+import type { NormalizedChatMessage } from "@twirchat/shared";
+import type { UserChatHistoryCursor, UserChatHistoryPage } from "../bindings";
 
-const MAX_STORED = 1000
-const DEFAULT_LOAD_COUNT = 100
-const DEFAULT_USER_HISTORY_LOAD_COUNT = 50
-const MAX_USER_HISTORY_LOAD_COUNT = 100
+const MAX_STORED = 1000;
+const DEFAULT_LOAD_COUNT = 100;
+const DEFAULT_USER_HISTORY_LOAD_COUNT = 50;
+const MAX_USER_HISTORY_LOAD_COUNT = 100;
 
 interface GetByUserParams {
-  platform: NormalizedChatMessage['platform']
-  platformUserId: string
-  limit?: number
-  cursor?: UserChatHistoryCursor
+  platform: NormalizedChatMessage["platform"];
+  platformUserId: string;
+  limit?: number;
+  cursor?: UserChatHistoryCursor;
 }
 
 export const MessageStore = {
   getRecent(limit: number = DEFAULT_LOAD_COUNT): NormalizedChatMessage[] {
-    const db = getDb()
+    const db = getDb();
 
     const rows = db
       .prepare(
@@ -24,20 +24,20 @@ export const MessageStore = {
          ORDER BY created_at DESC
          LIMIT ?`,
       )
-      .all(limit) as { data: string; created_at: number }[]
+      .all(limit) as { data: string; created_at: number }[];
 
     return rows
       .map((row) => {
         try {
-          const msg = JSON.parse(row.data) as NormalizedChatMessage
-          msg.timestamp = new Date(msg.timestamp)
-          return msg
+          const msg = JSON.parse(row.data) as NormalizedChatMessage;
+          msg.timestamp = new Date(msg.timestamp);
+          return msg;
         } catch {
-          return null
+          return null;
         }
       })
       .filter((m): m is NormalizedChatMessage => m !== null)
-      .reverse()
+      .reverse();
   },
 
   getByUser({
@@ -46,8 +46,8 @@ export const MessageStore = {
     limit = DEFAULT_USER_HISTORY_LOAD_COUNT,
     cursor,
   }: GetByUserParams): UserChatHistoryPage {
-    const db = getDb()
-    const safeLimit = Math.max(1, Math.min(limit, MAX_USER_HISTORY_LOAD_COUNT))
+    const db = getDb();
+    const safeLimit = Math.max(1, Math.min(limit, MAX_USER_HISTORY_LOAD_COUNT));
 
     const rows = db
       .prepare(
@@ -69,44 +69,49 @@ export const MessageStore = {
         cursor?.createdAt ?? null,
         cursor?.createdAt ?? 0,
         cursor?.createdAt ?? 0,
-        cursor?.id ?? '',
+        cursor?.id ?? "",
         safeLimit + 1,
-      ) as { id: string; data: string; created_at: number }[]
+      ) as { id: string; data: string; created_at: number }[];
 
     const parsedRows = rows
       .map((row) => {
         try {
-          const msg = JSON.parse(row.data) as NormalizedChatMessage
-          msg.timestamp = new Date(msg.timestamp)
-          return { createdAt: row.created_at, id: row.id, message: msg }
+          const msg = JSON.parse(row.data) as NormalizedChatMessage;
+          msg.timestamp = new Date(msg.timestamp);
+          return { createdAt: row.created_at, id: row.id, message: msg };
         } catch {
-          return null
+          return null;
         }
       })
       .filter(
-        (entry): entry is { createdAt: number; id: string; message: NormalizedChatMessage } =>
-          entry !== null,
-      )
+        (
+          entry,
+        ): entry is {
+          createdAt: number;
+          id: string;
+          message: NormalizedChatMessage;
+        } => entry !== null,
+      );
 
-    const hasMore = parsedRows.length > safeLimit
-    const messages = hasMore ? parsedRows.slice(0, safeLimit) : parsedRows
+    const hasMore = parsedRows.length > safeLimit;
+    const messages = hasMore ? parsedRows.slice(0, safeLimit) : parsedRows;
 
-    const oldestEntry = messages.at(-1)
+    const oldestEntry = messages.at(-1);
 
     return {
       messages: messages.map((entry) => entry.message).reverse(),
       nextCursor: oldestEntry
         ? {
-            createdAt: oldestEntry.createdAt,
-            id: oldestEntry.id,
-          }
+          createdAt: oldestEntry.createdAt,
+          id: oldestEntry.id,
+        }
         : null,
       hasMore,
-    }
+    };
   },
 
   save(msg: NormalizedChatMessage): void {
-    const db = getDb()
+    const db = getDb();
 
     db.prepare(
       `INSERT OR REPLACE INTO chat_messages (id, platform, channel_id, author_id, author_name, text, type, created_at, data)
@@ -121,7 +126,7 @@ export const MessageStore = {
       msg.type,
       new Date(msg.timestamp).getTime(),
       JSON.stringify(msg),
-    )
+    );
 
     // Trim to MAX_STORED — delete oldest rows beyond the limit
     db.prepare(
@@ -131,6 +136,6 @@ export const MessageStore = {
          ORDER BY created_at DESC
          LIMIT 1 OFFSET ?
        )`,
-    ).run(MAX_STORED - 1)
+    ).run(MAX_STORED - 1);
   },
-}
+};

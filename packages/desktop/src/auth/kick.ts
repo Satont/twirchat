@@ -16,12 +16,16 @@
  *  - Desktop updates the account record in SQLite
  */
 
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
-import { AccountStore } from '../store/account-store'
-import { successPage } from './server'
-import { KICK_REDIRECT_URI } from '@twirchat/shared/constants'
-import { backendFetch } from '../runtime-config'
-import { logger } from '@twirchat/shared/logger'
+import {
+  generateCodeChallenge,
+  generateCodeVerifier,
+  generateState,
+} from "./pkce";
+import { AccountStore } from "../store/account-store";
+import { successPage } from "./server";
+import { KICK_REDIRECT_URI } from "@twirchat/shared";
+import { backendFetch } from "../runtime-config";
+import { logger } from "@twirchat/shared";
 import type {
   KickBuildUrlRequest,
   KickBuildUrlResponse,
@@ -29,24 +33,27 @@ import type {
   KickExchangeResponse,
   KickRefreshRequest,
   KickRefreshResponse,
-} from '@twirchat/shared'
+} from "@twirchat/shared";
 
-const log = logger('auth-kick')
+const log = logger("auth-kick");
 
 // ----------------------------------------------------------------
 // In-memory PKCE session store (state → { codeVerifier, expiresAt })
 // ----------------------------------------------------------------
 
-const pendingSessions = new Map<string, { codeVerifier: string; expiresAt: number }>()
+const pendingSessions = new Map<
+  string,
+  { codeVerifier: string; expiresAt: number }
+>();
 
-const SESSION_TTL_MS = 10 * 60 * 1000 // 10 minutes
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Clean up expired sessions periodically */
 function cleanupSessions(): void {
-  const now = Date.now()
+  const now = Date.now();
   for (const [state, session] of pendingSessions) {
     if (now > session.expiresAt) {
-      pendingSessions.delete(state)
+      pendingSessions.delete(state);
     }
   }
 }
@@ -61,42 +68,47 @@ function cleanupSessions(): void {
  * to build the Kick auth URL.
  */
 export function prepareKickAuth(): { codeChallenge: string; state: string } {
-  cleanupSessions()
+  cleanupSessions();
 
-  const codeVerifier = generateCodeVerifier()
-  const codeChallenge = generateCodeChallenge(codeVerifier)
-  const state = generateState()
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = generateState();
 
   pendingSessions.set(state, {
     codeVerifier,
     expiresAt: Date.now() + SESSION_TTL_MS,
-  })
+  });
 
-  return { codeChallenge, state }
+  return { codeChallenge, state };
 }
 
 /**
  * Requests the auth URL from backend by sending PKCE params.
  * Returns the URL to open in browser.
  */
-export async function getKickAuthUrl(codeChallenge: string, state: string): Promise<string> {
+export async function getKickAuthUrl(
+  codeChallenge: string,
+  state: string,
+): Promise<string> {
   const res = await backendFetch(`/api/auth/kick/start`, {
-    body: JSON.stringify({
-      codeChallenge,
-      state,
-      redirectUri: KICK_REDIRECT_URI,
-    } satisfies KickBuildUrlRequest),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  })
+    body: JSON.stringify(
+      {
+        codeChallenge,
+        state,
+        redirectUri: KICK_REDIRECT_URI,
+      } satisfies KickBuildUrlRequest,
+    ),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Kick auth URL request failed: ${res.status} ${body}`)
+    const body = await res.text();
+    throw new Error(`Kick auth URL request failed: ${res.status} ${body}`);
   }
 
-  const data = (await res.json()) as KickBuildUrlResponse
-  return data.url
+  const data = (await res.json()) as KickBuildUrlResponse;
+  return data.url;
 }
 
 /**
@@ -105,78 +117,86 @@ export async function getKickAuthUrl(codeChallenge: string, state: string): Prom
  * user info from Kick API, and persists the account in SQLite.
  */
 export async function handleKickCallback(url: URL): Promise<{
-  response: Response
-  user: { platform: 'kick'; username: string; displayName: string }
-  channelSlug: string
+  response: Response;
+  user: { platform: "kick"; username: string; displayName: string };
+  channelSlug: string;
 }> {
-  const code = url.searchParams.get('code')
-  const state = url.searchParams.get('state')
-  const error = url.searchParams.get('error')
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
 
   if (error) {
     throw new Error(
-      `Kick OAuth error: ${error} — ${url.searchParams.get('error_description') ?? ''}`,
-    )
+      `Kick OAuth error: ${error} — ${
+        url.searchParams.get("error_description") ?? ""
+      }`,
+    );
   }
 
   if (!code || !state) {
-    throw new Error('Missing code or state in Kick callback')
+    throw new Error("Missing code or state in Kick callback");
   }
 
-  const session = pendingSessions.get(state)
+  const session = pendingSessions.get(state);
   if (!session) {
-    throw new Error('Unknown or expired OAuth state')
+    throw new Error("Unknown or expired OAuth state");
   }
   if (Date.now() > session.expiresAt) {
-    pendingSessions.delete(state)
-    throw new Error('OAuth session expired')
+    pendingSessions.delete(state);
+    throw new Error("OAuth session expired");
   }
-  pendingSessions.delete(state)
+  pendingSessions.delete(state);
 
   // Exchange code for tokens via backend proxy
   const exchangeRes = await backendFetch(`/api/auth/kick/exchange`, {
-    body: JSON.stringify({
-      code,
-      codeVerifier: session.codeVerifier,
-      redirectUri: KICK_REDIRECT_URI,
-    } satisfies KickExchangeRequest),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  })
+    body: JSON.stringify(
+      {
+        code,
+        codeVerifier: session.codeVerifier,
+        redirectUri: KICK_REDIRECT_URI,
+      } satisfies KickExchangeRequest,
+    ),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
 
   if (!exchangeRes.ok) {
-    const body = await exchangeRes.text()
-    throw new Error(`Kick token exchange failed: ${exchangeRes.status} ${body}`)
+    const body = await exchangeRes.text();
+    throw new Error(
+      `Kick token exchange failed: ${exchangeRes.status} ${body}`,
+    );
   }
 
-  const tokens = (await exchangeRes.json()) as KickExchangeResponse
+  const tokens = (await exchangeRes.json()) as KickExchangeResponse;
 
   // Fetch user info from Kick API
-  const userRes = await fetch('https://api.kick.com/public/v1/users', {
+  const userRes = await fetch("https://api.kick.com/public/v1/users", {
     headers: { Authorization: `Bearer ${tokens.accessToken}` },
-  })
+  });
 
   if (!userRes.ok) {
-    throw new Error(`Kick user info request failed: ${userRes.status}`)
+    throw new Error(`Kick user info request failed: ${userRes.status}`);
   }
 
   const userData = (await userRes.json()) as {
     data: {
-      user_id: number
-      name: string
-      email?: string
-      profile_picture?: string
-    }[]
-    message: string
-  }
+      user_id: number;
+      name: string;
+      email?: string;
+      profile_picture?: string;
+    }[];
+    message: string;
+  };
 
   if (!userData.data || userData.data.length === 0) {
-    throw new Error('Kick user info response empty')
+    throw new Error("Kick user info response empty");
   }
 
-  const user = userData.data[0]!
+  const user = userData.data[0]!;
 
-  const expiresAt = tokens.expiresIn ? Math.floor(Date.now() / 1000) + tokens.expiresIn : undefined
+  const expiresAt = tokens.expiresIn
+    ? Math.floor(Date.now() / 1000) + tokens.expiresIn
+    : undefined;
 
   AccountStore.upsert({
     accessToken: tokens.accessToken,
@@ -184,26 +204,26 @@ export async function handleKickCallback(url: URL): Promise<{
     displayName: user.name,
     expiresAt,
     id: `kick:${user.user_id}`,
-    platform: 'kick',
+    platform: "kick",
     platformUserId: String(user.user_id),
     refreshToken: tokens.refreshToken,
     scopes: tokens.scope,
     username: user.name,
-  })
+  });
 
-  log.info(`Logged in as @${user.name}`)
+  log.info(`Logged in as @${user.name}`);
 
   return {
     channelSlug: user.name,
-    response: new Response(successPage('Kick'), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    response: new Response(successPage("Kick"), {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
     }),
     user: {
       displayName: user.name,
-      platform: 'kick' as const,
+      platform: "kick" as const,
       username: user.name,
     },
-  }
+  };
 }
 
 /**
@@ -211,29 +231,38 @@ export async function handleKickCallback(url: URL): Promise<{
  * Updates the stored tokens in SQLite and returns the new access token.
  */
 export async function refreshKickToken(accountId: string): Promise<string> {
-  const stored = AccountStore.getTokens(accountId)
+  const stored = AccountStore.getTokens(accountId);
   if (!stored?.refreshToken) {
-    throw new Error('No refresh token for Kick account')
+    throw new Error("No refresh token for Kick account");
   }
 
   const res = await backendFetch(`/api/auth/kick/refresh`, {
-    body: JSON.stringify({
-      refreshToken: stored.refreshToken,
-    } satisfies KickRefreshRequest),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  })
+    body: JSON.stringify(
+      {
+        refreshToken: stored.refreshToken,
+      } satisfies KickRefreshRequest,
+    ),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Kick token refresh failed: ${res.status} ${body}`)
+    const body = await res.text();
+    throw new Error(`Kick token refresh failed: ${res.status} ${body}`);
   }
 
-  const data = (await res.json()) as KickRefreshResponse
+  const data = (await res.json()) as KickRefreshResponse;
 
-  const expiresAt = data.expiresIn ? Math.floor(Date.now() / 1000) + data.expiresIn : undefined
+  const expiresAt = data.expiresIn
+    ? Math.floor(Date.now() / 1000) + data.expiresIn
+    : undefined;
 
-  AccountStore.updateTokens(accountId, data.accessToken, data.refreshToken, expiresAt)
+  AccountStore.updateTokens(
+    accountId,
+    data.accessToken,
+    data.refreshToken,
+    expiresAt,
+  );
 
-  return data.accessToken
+  return data.accessToken;
 }

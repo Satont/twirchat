@@ -1,26 +1,26 @@
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import type { Account } from '@twirchat/shared/types'
+import { defineStore } from "pinia";
+import { ref } from "vue";
+import type { Account } from "@twirchat/shared";
 
-export const useAccountsStore = defineStore('accounts', () => {
-  const accounts = ref<Account[]>([])
-  const loading = ref(false)
+export const useAccountsStore = defineStore("accounts", () => {
+  const accounts = ref<Account[]>([]);
+  const loading = ref(false);
 
   async function loadAccounts(): Promise<void> {
-    loading.value = true
+    loading.value = true;
     try {
-      const result = await bindings.getAccounts()
+      const result = await bindings.getAccounts();
       if (result !== undefined) {
-        accounts.value = result
+        accounts.value = result;
       }
     } finally {
-      loading.value = false
+      loading.value = false;
     }
   }
 
   function setAccounts(newAccounts: Account[]): void {
-    accounts.value = newAccounts
+    accounts.value = newAccounts;
   }
 
-  return { accounts, loading, loadAccounts, setAccounts }
-})
+  return { accounts, loading, loadAccounts, setAccounts };
+});

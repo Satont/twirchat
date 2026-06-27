@@ -1,0 +1,15 @@
+{
+  "deno.enable": true,
+  "deno.unstable": ["bare-node-builtins"],
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "editor.defaultFormatter": "denoland.vscode-deno",
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  }
+}

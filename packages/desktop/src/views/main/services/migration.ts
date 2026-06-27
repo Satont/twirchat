@@ -1,64 +1,65 @@
 import type {
-  LegacyChatLayout,
-  WatchedChannelsLayout,
   LayoutNode,
+  LegacyChatLayout,
   PanelNode,
-} from '@twirchat/shared/types'
+  WatchedChannelsLayout,
+} from "@twirchat/shared";
 
 // Migration marker stored in localStorage (browser side is OK for this)
-const MIGRATION_KEY = 'layout_migration_v1_to_v2_done'
+const MIGRATION_KEY = "layout_migration_v1_to_v2_done";
 
 /**
  * Check if migration has already been performed
  */
 export function hasMigrationBeenPerformed(): boolean {
   // localStorage is available in the browser context (views/main/)
-  if (typeof localStorage === 'undefined') return true // Skip if not in browser
-  return localStorage.getItem(MIGRATION_KEY) === 'true'
+  if (typeof localStorage === "undefined") return true; // Skip if not in browser
+  return localStorage.getItem(MIGRATION_KEY) === "true";
 }
 
 /**
  * Mark migration as completed
  */
 export function markMigrationCompleted(): void {
-  if (typeof localStorage === 'undefined') return
-  localStorage.setItem(MIGRATION_KEY, 'true')
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(MIGRATION_KEY, "true");
 }
 
 /**
  * Migrate legacy flat layout to hierarchical tree layout
  */
-export function migrateLegacyLayout(legacy: LegacyChatLayout): WatchedChannelsLayout {
+export function migrateLegacyLayout(
+  legacy: LegacyChatLayout,
+): WatchedChannelsLayout {
   // If combined mode, create single main panel
-  if (legacy.mode === 'combined') {
+  if (legacy.mode === "combined") {
     return {
       version: 2,
       root: {
-        type: 'panel',
+        type: "panel",
         id: crypto.randomUUID(),
-        content: { type: 'main' },
+        content: { type: "main" },
         flex: 100,
       },
       meta: {
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        migratedFrom: 'legacy',
+        migratedFrom: "legacy",
       },
-    }
+    };
   }
 
   // If split mode, convert splits to tree
   const panels: PanelNode[] = legacy.splits.map((split) => ({
-    type: 'panel',
+    type: "panel",
     id: split.id,
-    content:
-      split.type === 'channel' && split.channelId
-        ? { type: 'watched', channelId: split.channelId }
-        : split.type === 'combined'
-          ? { type: 'main' }
-          : { type: 'empty' },
+    content: split.type === "channel" && split.channelId
+      ? { type: "watched", channelId: split.channelId }
+      : split.type === "combined"
+      ? { type: "main" }
+      : { type: "empty" },
     flex: split.size,
-  }))
+  }));
 
   // If only one panel, return it directly
   if (panels.length === 1) {
@@ -68,19 +69,19 @@ export function migrateLegacyLayout(legacy: LegacyChatLayout): WatchedChannelsLa
       meta: {
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        migratedFrom: 'legacy',
+        migratedFrom: "legacy",
       },
-    }
+    };
   }
 
   // Create horizontal split for multiple panels
   const root: LayoutNode = {
-    type: 'split',
+    type: "split",
     id: crypto.randomUUID(),
-    direction: 'horizontal',
+    direction: "horizontal",
     children: panels,
     flex: 100,
-  }
+  };
 
   return {
     version: 2,
@@ -88,9 +89,9 @@ export function migrateLegacyLayout(legacy: LegacyChatLayout): WatchedChannelsLa
     meta: {
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      migratedFrom: 'legacy',
+      migratedFrom: "legacy",
     },
-  }
+  };
 }
 
 /**
@@ -104,25 +105,25 @@ export function migrateLegacyLayout(legacy: LegacyChatLayout): WatchedChannelsLa
  */
 export async function attemptMigration(): Promise<boolean> {
   if (hasMigrationBeenPerformed()) {
-    return false
+    return false;
   }
 
   // Check if layout exists in v2 format (indicates user already has new system)
   try {
-    const existing = await bindings.getWatchedChannelsLayout?.({ tabId: '' })
+    const existing = await bindings.getWatchedChannelsLayout?.({ tabId: "" });
     if (
       existing &&
-      typeof existing === 'object' &&
-      'version' in existing &&
+      typeof existing === "object" &&
+      "version" in existing &&
       existing.version === 2
     ) {
-      markMigrationCompleted()
-      return false
+      markMigrationCompleted();
+      return false;
     }
   } catch {
     // RPC might not be available yet
   }
 
-  markMigrationCompleted()
-  return false
+  markMigrationCompleted();
+  return false;
 }

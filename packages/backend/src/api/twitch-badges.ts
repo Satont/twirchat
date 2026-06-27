@@ -9,78 +9,85 @@
  * Example: { "subscriber/6": "https://static-cdn.jtvnw.net/badges/v1/<uuid>/1" }
  */
 
-import { logger } from '@twirchat/shared/logger'
-import type { TwitchBadgesResponse } from '@twirchat/shared'
-import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
+import { logger } from "@twirchat/shared";
+import type { TwitchBadgesResponse } from "@twirchat/shared";
+import { fetchTwitchHelixWithAppToken } from "./stream-status.ts";
 
-const log = logger('twitch-badges')
+const log = logger("twitch-badges");
 
 interface HelixBadgeSet {
-  set_id: string
+  set_id: string;
   versions: {
-    id: string
-    image_url_1x: string
-  }[]
+    id: string;
+    image_url_1x: string;
+  }[];
 }
 
 interface HelixBadgesBody {
-  data: HelixBadgeSet[]
+  data: HelixBadgeSet[];
 }
 
-function mergeHelixBadges(result: Record<string, string>, body: HelixBadgesBody): void {
+function mergeHelixBadges(
+  result: Record<string, string>,
+  body: HelixBadgesBody,
+): void {
   for (const set of body.data) {
     for (const version of set.versions) {
-      result[`${set.set_id}/${version.id}`] = version.image_url_1x
+      result[`${set.set_id}/${version.id}`] = version.image_url_1x;
     }
   }
 }
 
-export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse> {
-  const broadcasterLogin = url.searchParams.get('broadcasterLogin')
+export async function handleTwitchBadges(
+  url: URL,
+): Promise<TwitchBadgesResponse> {
+  const broadcasterLogin = url.searchParams.get("broadcasterLogin");
 
-  const badges: Record<string, string> = {}
+  const badges: Record<string, string> = {};
 
   // 1. Global badges
   const globalRes = await fetchTwitchHelixWithAppToken(
-    'https://api.twitch.tv/helix/chat/badges/global',
-  )
+    "https://api.twitch.tv/helix/chat/badges/global",
+  );
   if (!globalRes.ok) {
-    throw new Error(`Helix global badges failed: ${globalRes.status}`)
+    throw new Error(`Helix global badges failed: ${globalRes.status}`);
   }
-  const globalBody = (await globalRes.json()) as HelixBadgesBody
-  mergeHelixBadges(badges, globalBody)
-  log.info('Global badges fetched', {
+  const globalBody = (await globalRes.json()) as HelixBadgesBody;
+  mergeHelixBadges(badges, globalBody);
+  log.info("Global badges fetched", {
     count: globalBody.data.reduce((n, s) => n + s.versions.length, 0),
-  })
+  });
 
   // 2. Channel-specific badges (subscriber tiers, bits, custom, etc.)
   if (broadcasterLogin) {
     // Resolve login → broadcaster_id
     const userRes = await fetchTwitchHelixWithAppToken(
-      `https://api.twitch.tv/helix/users?login=${encodeURIComponent(broadcasterLogin)}`,
-    )
+      `https://api.twitch.tv/helix/users?login=${
+        encodeURIComponent(broadcasterLogin)
+      }`,
+    );
     if (userRes.ok) {
-      const userData = (await userRes.json()) as { data: { id: string }[] }
-      const broadcasterId = userData.data[0]?.id
+      const userData = (await userRes.json()) as { data: { id: string }[] };
+      const broadcasterId = userData.data[0]?.id;
       if (broadcasterId) {
         const chanRes = await fetchTwitchHelixWithAppToken(
           `https://api.twitch.tv/helix/chat/badges?broadcaster_id=${broadcasterId}`,
-        )
+        );
         if (chanRes.ok) {
-          const chanBody = (await chanRes.json()) as HelixBadgesBody
-          mergeHelixBadges(badges, chanBody)
-          log.info('Channel badges fetched', {
+          const chanBody = (await chanRes.json()) as HelixBadgesBody;
+          mergeHelixBadges(badges, chanBody);
+          log.info("Channel badges fetched", {
             channel: broadcasterLogin,
             count: chanBody.data.reduce((n, s) => n + s.versions.length, 0),
-          })
+          });
         }
       }
     }
   }
 
-  log.info('Badge cache ready', {
-    channel: broadcasterLogin ?? 'global-only',
+  log.info("Badge cache ready", {
+    channel: broadcasterLogin ?? "global-only",
     total: Object.keys(badges).length,
-  })
-  return { badges }
+  });
+  return { badges };
 }

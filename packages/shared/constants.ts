@@ -1,7 +1,7 @@
 // Ports - can be overridden via env vars
-export const AUTH_SERVER_PORT = parseInt(process.env['AUTH_SERVER_PORT'] ?? '45821')
-export const OVERLAY_SERVER_PORT = parseInt(process.env['OVERLAY_SERVER_PORT'] ?? '45823')
-export const KICK_WEBHOOK_PORT = parseInt(process.env['KICK_WEBHOOK_PORT'] ?? '45822')
+export const AUTH_SERVER_PORT = parseInt(Deno.env.get('AUTH_SERVER_PORT') ?? '45821')
+export const OVERLAY_SERVER_PORT = parseInt(Deno.env.get('OVERLAY_SERVER_PORT') ?? '45823')
+export const KICK_WEBHOOK_PORT = parseInt(Deno.env.get('KICK_WEBHOOK_PORT') ?? '45822')
 
 // Auth callbacks
 export const AUTH_CALLBACK_BASE = `http://localhost:${AUTH_SERVER_PORT}`
@@ -10,7 +10,7 @@ export const YOUTUBE_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/youtube/callback
 export const KICK_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/kick/callback`
 
 // App info
-export const APP_NAME = process.env['APP_NAME'] ?? 'TwirChat'
+export const APP_NAME = Deno.env.get('APP_NAME') ?? 'TwirChat'
 
 // Platform-specific constants (not secrets, just API endpoints)
 export const TWITCH_ANON_PREFIX = 'justinfan'

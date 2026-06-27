@@ -1,0 +1,9 @@
+{
+  "workspace": ["./packages/shared", "./packages/backend", "./packages/desktop"],
+  "tasks": {
+    "dev:backend": "deno task --cwd packages/backend dev",
+    "dev:desktop": "deno task --cwd packages/desktop dev",
+    "typecheck": "deno task --cwd packages/backend typecheck && deno task --cwd packages/desktop typecheck"
+  },
+  "allowScripts": ["npm:protobufjs@7.6.2", "npm:sharp@0.34.5", "npm:vue-demi@0.14.10"]
+}

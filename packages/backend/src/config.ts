@@ -13,19 +13,17 @@ const envSchema = z.object({
   TWITCH_REDIRECT_URI: z.string().url().default('http://localhost:3000/auth/twitch/callback'),
   YOUTUBE_CLIENT_ID: z.string().min(1, 'YOUTUBE_CLIENT_ID is required'),
   YOUTUBE_CLIENT_SECRET: z.string().min(1, 'YOUTUBE_CLIENT_SECRET is required'),
-  // Optional — enables the /api/youtube/resolve channel-ID caching endpoint.
-  // Get one at https://console.cloud.google.com/ → Credentials → API key.
   YOUTUBE_API_KEY: z.string().optional(),
 })
 
-const result = envSchema.safeParse(process.env)
+const result = envSchema.safeParse(Deno.env.toObject())
 
 if (!result.success) {
   console.error('[config] Invalid environment variables:')
   for (const issue of result.error.issues) {
     console.error(`  ${issue.path.join('.')}: ${issue.message}`)
   }
-  process.exit(1)
+  Deno.exit(1)
 }
 
 export const config = result.data

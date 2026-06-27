@@ -1,32 +1,39 @@
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce.ts'
-import { AccountStore, KickOAuthSessionStore } from '../db/index.ts'
-import { connectionManager } from '../ws/connection-manager.ts'
-import { subscribeKickEvents } from './kick-subscriptions.ts'
-import { config } from '../config.ts'
-import { logger } from '@twirchat/shared/logger'
-import type { KickBuildUrlResponse, KickExchangeResponse } from '@twirchat/shared'
+import {
+  generateCodeChallenge,
+  generateCodeVerifier,
+  generateState,
+} from "./pkce.ts";
+import { AccountStore, KickOAuthSessionStore } from "../db/index.ts";
+import { connectionManager } from "../ws/connection-manager.ts";
+import { subscribeKickEvents } from "./kick-subscriptions.ts";
+import { config } from "../config.ts";
+import { logger } from "@twirchat/shared";
+import type {
+  KickBuildUrlResponse,
+  KickExchangeResponse,
+} from "@twirchat/shared";
 
-const log = logger('kick-auth')
+const log = logger("kick-auth");
 
-const KICK_AUTH_URL = 'https://id.kick.com/oauth/authorize'
-const KICK_TOKEN_URL = 'https://id.kick.com/oauth/token'
+const KICK_AUTH_URL = "https://id.kick.com/oauth/authorize";
+const KICK_TOKEN_URL = "https://id.kick.com/oauth/token";
 
 interface KickTokenResponse {
-  access_token: string
-  refresh_token: string
-  expires_in: number
-  token_type: string
-  scope: string
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
+  scope: string;
 }
 
 interface KickUserResponse {
   data: {
-    user_id: number
-    name: string
-    email?: string
-    profile_picture?: string
-  }[]
-  message: string
+    user_id: number;
+    name: string;
+    email?: string;
+    profile_picture?: string;
+  }[];
+  message: string;
 }
 
 /**
@@ -41,14 +48,14 @@ export function buildKickAuthUrl(
   const params = new URLSearchParams({
     client_id: config.KICK_CLIENT_ID,
     code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
+    code_challenge_method: "S256",
     redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'user:read channel:read chat:write events:subscribe',
+    response_type: "code",
+    scope: "user:read channel:read chat:write events:subscribe",
     state,
-  })
+  });
 
-  return { url: `${KICK_AUTH_URL}?${params.toString()}` }
+  return { url: `${KICK_AUTH_URL}?${params.toString()}` };
 }
 
 /**
@@ -62,35 +69,35 @@ export async function exchangeKickCode(
 ): Promise<KickExchangeResponse> {
   const res = await fetch(KICK_TOKEN_URL, {
     body: new URLSearchParams({
-      grant_type: 'authorization_code',
+      grant_type: "authorization_code",
       client_id: config.KICK_CLIENT_ID,
       client_secret: config.KICK_CLIENT_SECRET,
       redirect_uri: redirectUri,
       code,
       code_verifier: codeVerifier,
     }),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    method: 'POST',
-  })
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: "POST",
+  });
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Kick token exchange failed: ${res.status} ${body}`)
+    const body = await res.text();
+    throw new Error(`Kick token exchange failed: ${res.status} ${body}`);
   }
 
   const data = (await res.json()) as {
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-    scope?: string
-  }
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
 
   return {
     accessToken: data.access_token,
     expiresIn: data.expires_in,
     refreshToken: data.refresh_token,
-    scope: data.scope ? data.scope.split(' ') : [],
-  }
+    scope: data.scope ? data.scope.split(" ") : [],
+  };
 }
 
 /**
@@ -98,23 +105,23 @@ export async function exchangeKickCode(
  * Used for backend-managed auth flow.
  */
 export async function startKickOAuth(clientSecret: string): Promise<string> {
-  const codeVerifier = generateCodeVerifier()
-  const codeChallenge = generateCodeChallenge(codeVerifier)
-  const state = generateState()
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = generateState();
 
-  await KickOAuthSessionStore.create({ clientSecret, codeVerifier, state })
+  await KickOAuthSessionStore.create({ clientSecret, codeVerifier, state });
 
   const params = new URLSearchParams({
     client_id: config.KICK_CLIENT_ID,
     code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
+    code_challenge_method: "S256",
     redirect_uri: config.KICK_REDIRECT_URI,
-    response_type: 'code',
-    scope: 'user:read channel:read chat:write',
+    response_type: "code",
+    scope: "user:read channel:read chat:write",
     state,
-  })
+  });
 
-  return `${KICK_AUTH_URL}?${params.toString()}`
+  return `${KICK_AUTH_URL}?${params.toString()}`;
 }
 
 export async function refreshKickToken(
@@ -122,80 +129,83 @@ export async function refreshKickToken(
 ): Promise<{ accessToken: string; refreshToken?: string; expiresIn?: number }> {
   const res = await fetch(KICK_TOKEN_URL, {
     body: new URLSearchParams({
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
       client_id: config.KICK_CLIENT_ID,
       client_secret: config.KICK_CLIENT_SECRET,
       refresh_token: refreshToken,
     }),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    method: 'POST',
-  })
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: "POST",
+  });
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Kick token refresh failed: ${res.status} ${body}`)
+    const body = await res.text();
+    throw new Error(`Kick token refresh failed: ${res.status} ${body}`);
   }
 
   const data = (await res.json()) as {
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-  }
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
 
   return {
     accessToken: data.access_token,
     expiresIn: data.expires_in,
     refreshToken: data.refresh_token,
-  }
+  };
 }
 
-export async function handleKickCallback(code: string, state: string): Promise<void> {
-  const session = await KickOAuthSessionStore.consume(state)
+export async function handleKickCallback(
+  code: string,
+  state: string,
+): Promise<void> {
+  const session = await KickOAuthSessionStore.consume(state);
   if (!session) {
-    throw new Error('Invalid or expired OAuth state')
+    throw new Error("Invalid or expired OAuth state");
   }
 
   // Exchange code for tokens
   const tokenRes = await fetch(KICK_TOKEN_URL, {
     body: new URLSearchParams({
-      grant_type: 'authorization_code',
+      grant_type: "authorization_code",
       client_id: config.KICK_CLIENT_ID,
       client_secret: config.KICK_CLIENT_SECRET,
       redirect_uri: config.KICK_REDIRECT_URI,
       code,
       code_verifier: session.codeVerifier,
     }),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    method: 'POST',
-  })
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: "POST",
+  });
 
   if (!tokenRes.ok) {
-    const body = await tokenRes.text()
-    throw new Error(`Kick token exchange failed: ${tokenRes.status} ${body}`)
+    const body = await tokenRes.text();
+    throw new Error(`Kick token exchange failed: ${tokenRes.status} ${body}`);
   }
 
-  const tokens = (await tokenRes.json()) as KickTokenResponse
+  const tokens = (await tokenRes.json()) as KickTokenResponse;
 
   // Fetch user info
-  const userRes = await fetch('https://api.kick.com/public/v1/user', {
+  const userRes = await fetch("https://api.kick.com/public/v1/user", {
     headers: {
       Authorization: `Bearer ${tokens.access_token}`,
-      'Client-ID': config.KICK_CLIENT_ID,
+      "Client-ID": config.KICK_CLIENT_ID,
     },
-  })
+  });
 
   if (!userRes.ok) {
-    throw new Error(`Failed to fetch Kick user: ${userRes.status}`)
+    throw new Error(`Failed to fetch Kick user: ${userRes.status}`);
   }
 
-  const user = (await userRes.json()) as KickUserResponse
-  const userData = user.data[0]
+  const user = (await userRes.json()) as KickUserResponse;
+  const userData = user.data[0];
   if (!userData) {
-    throw new Error('Kick user info response empty')
+    throw new Error("Kick user info response empty");
   }
 
-  const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000)
-  const scopes = tokens.scope ? tokens.scope.split(' ') : []
+  const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+  const scopes = tokens.scope ? tokens.scope.split(" ") : [];
 
   // Persist account in Postgres
   await AccountStore.upsert({
@@ -203,27 +213,27 @@ export async function handleKickCallback(code: string, state: string): Promise<v
     avatarUrl: userData.profile_picture,
     clientSecret: session.clientSecret,
     displayName: userData.name,
-    platform: 'kick',
+    platform: "kick",
     platformUserId: String(userData.user_id),
     refreshToken: tokens.refresh_token,
     scopes,
     tokenExpiresAt,
     username: userData.name,
-  })
+  });
 
   // Subscribe to Kick webhook events for this user's channel
   try {
-    await subscribeKickEvents(tokens.access_token, config.KICK_CLIENT_ID)
+    await subscribeKickEvents(tokens.access_token, config.KICK_CLIENT_ID);
   } catch (error) {
-    log.error('Failed to subscribe to Kick events', { err: String(error) })
+    log.error("Failed to subscribe to Kick events", { err: String(error) });
     // Non-fatal: auth still succeeded; events subscription can be retried later
   }
 
   // Push auth_success to desktop via WS
   connectionManager.send(session.clientSecret, {
     displayName: userData.name,
-    platform: 'kick',
-    type: 'auth_success',
+    platform: "kick",
+    type: "auth_success",
     username: userData.name,
-  })
+  });
 }

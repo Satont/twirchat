@@ -8,31 +8,32 @@
  *            https://dev.twitch.tv/docs/api/reference#get-moderators
  */
 
-import { config } from '../../config.ts'
-import { logger } from '@twirchat/shared/logger'
+import { config } from "../../config.ts";
+import { logger } from "@twirchat/shared";
 import {
+  type BanResult,
+  type DeleteMessageResult,
+  type IsModerator,
   ModerationException,
   type TwitchBanRequest,
   type TwitchBanResponse,
   type TwitchModeratorResponse,
-  type BanResult,
-  type DeleteMessageResult,
-  type IsModerator,
-} from './types.ts'
+} from "./types.ts";
 
-const log = logger('twitch-moderation')
+const log = logger("twitch-moderation");
 
 interface HelixErrorResponse {
-  error: string
-  status: number
-  message: string
+  error: string;
+  status: number;
+  message: string;
 }
 
 /**
  * Check if response is an error response
  */
 function isHelixError(data: unknown): data is HelixErrorResponse {
-  return typeof data === 'object' && data !== null && 'error' in data && 'status' in data
+  return typeof data === "object" && data !== null && "error" in data &&
+    "status" in data;
 }
 
 /**
@@ -55,77 +56,83 @@ export async function banUser(
   moderatorUserId: string,
   request: TwitchBanRequest,
 ): Promise<BanResult> {
-  const isPermanent = request.duration === null || request.duration === undefined
+  const isPermanent = request.duration === null ||
+    request.duration === undefined;
 
   try {
     const body = {
       user_id: request.user_id,
       reason: request.reason,
       duration: request.duration,
-    }
+    };
 
-    log.debug('Banning user', {
+    log.debug("Banning user", {
       broadcasterUserId,
       userId: request.user_id,
       isPermanent,
       duration: request.duration,
-    })
+    });
 
     const res = await fetch(
       `https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${broadcasterUserId}&moderator_id=${moderatorUserId}`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${broadcasterToken}`,
-          'Client-Id': config.TWITCH_CLIENT_ID,
-          'Content-Type': 'application/json',
+          "Client-Id": config.TWITCH_CLIENT_ID,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
       },
-    )
+    );
 
-    const data = (await res.json()) as TwitchBanResponse | HelixErrorResponse
+    const data = (await res.json()) as TwitchBanResponse | HelixErrorResponse;
 
     if (!res.ok || isHelixError(data)) {
       const error = isHelixError(data)
         ? data
-        : { error: 'unknown', status: res.status, message: res.statusText }
-      const errorCode = mapHelixError(res.status, error.message)
+        : { error: "unknown", status: res.status, message: res.statusText };
+      const errorCode = mapHelixError(res.status, error.message);
 
-      log.warn('Ban failed', {
+      log.warn("Ban failed", {
         status: res.status,
         code: errorCode,
         message: error.message,
-      })
+      });
 
-      throw new ModerationException(errorCode, res.status, `Failed to ban user: ${error.message}`, {
-        userId: request.user_id,
-        isPermanent,
-        duration: request.duration,
-      })
+      throw new ModerationException(
+        errorCode,
+        res.status,
+        `Failed to ban user: ${error.message}`,
+        {
+          userId: request.user_id,
+          isPermanent,
+          duration: request.duration,
+        },
+      );
     }
 
-    const result = data as TwitchBanResponse
-    const banData = result.data[0]
+    const result = data as TwitchBanResponse;
+    const banData = result.data[0];
 
-    log.info('User banned', {
+    log.info("User banned", {
       userId: request.user_id,
       isPermanent,
       duration: request.duration,
-    })
+    });
 
     return {
-      platform: 'twitch',
+      platform: "twitch",
       success: true,
       userId: request.user_id,
       isPermanent,
       durationSeconds: request.duration ?? undefined,
       createdAt: new Date(banData?.created_at ?? Date.now()),
-    }
+    };
   } catch (error) {
     if (error instanceof ModerationException) {
       return {
-        platform: 'twitch',
+        platform: "twitch",
         success: false,
         userId: request.user_id,
         isPermanent,
@@ -137,11 +144,11 @@ export async function banUser(
           message: error.message,
           details: error.details,
         },
-      }
+      };
     }
 
-    log.error('Unexpected error during ban', { error: String(error) })
-    throw error
+    log.error("Unexpected error during ban", { error: String(error) });
+    throw error;
   }
 }
 
@@ -166,49 +173,49 @@ export async function deleteMessage(
   messageId: string,
 ): Promise<DeleteMessageResult> {
   try {
-    log.debug('Deleting message', {
+    log.debug("Deleting message", {
       broadcasterUserId,
       messageId,
-    })
+    });
 
     const res = await fetch(
       `https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${broadcasterUserId}&moderator_id=${moderatorUserId}&message_id=${messageId}`,
       {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
           Authorization: `Bearer ${broadcasterToken}`,
-          'Client-Id': config.TWITCH_CLIENT_ID,
+          "Client-Id": config.TWITCH_CLIENT_ID,
         },
       },
-    )
+    );
 
     if (!res.ok) {
-      const errorCode = mapHelixError(res.status, res.statusText)
-      log.warn('Delete message failed', {
+      const errorCode = mapHelixError(res.status, res.statusText);
+      log.warn("Delete message failed", {
         status: res.status,
         code: errorCode,
-      })
+      });
 
       throw new ModerationException(
         errorCode,
         res.status,
         `Failed to delete message: ${res.statusText}`,
         { messageId },
-      )
+      );
     }
 
-    log.info('Message deleted', { messageId })
+    log.info("Message deleted", { messageId });
 
     return {
-      platform: 'twitch',
+      platform: "twitch",
       success: true,
       messageId,
       deletedAt: new Date(),
-    }
+    };
   } catch (error) {
     if (error instanceof ModerationException) {
       return {
-        platform: 'twitch',
+        platform: "twitch",
         success: false,
         messageId,
         error: {
@@ -217,11 +224,13 @@ export async function deleteMessage(
           message: error.message,
           details: error.details,
         },
-      }
+      };
     }
 
-    log.error('Unexpected error during message delete', { error: String(error) })
-    throw error
+    log.error("Unexpected error during message delete", {
+      error: String(error),
+    });
+    throw error;
   }
 }
 
@@ -242,53 +251,53 @@ export async function isModerator(
   userId: string,
 ): Promise<IsModerator> {
   try {
-    log.debug('Checking moderator status', {
+    log.debug("Checking moderator status", {
       broadcasterUserId,
       userId,
-    })
+    });
 
     const res = await fetch(
       `https://api.twitch.tv/helix/moderation/moderators?broadcaster_id=${broadcasterUserId}&user_id=${userId}`,
       {
         headers: {
           Authorization: `Bearer ${broadcasterToken}`,
-          'Client-Id': config.TWITCH_CLIENT_ID,
+          "Client-Id": config.TWITCH_CLIENT_ID,
         },
       },
-    )
+    );
 
     if (!res.ok) {
-      const errorCode = mapHelixError(res.status, res.statusText)
-      log.warn('Moderator check failed', {
+      const errorCode = mapHelixError(res.status, res.statusText);
+      log.warn("Moderator check failed", {
         status: res.status,
         code: errorCode,
-      })
+      });
 
       throw new ModerationException(
         errorCode,
         res.status,
         `Failed to check moderator status: ${res.statusText}`,
         { userId },
-      )
+      );
     }
 
-    const data = (await res.json()) as TwitchModeratorResponse
-    const isMod = data.data.length > 0
+    const data = (await res.json()) as TwitchModeratorResponse;
+    const isMod = data.data.length > 0;
 
-    log.debug('Moderator status checked', {
+    log.debug("Moderator status checked", {
       userId,
       isModerator: isMod,
-    })
+    });
 
     return {
-      platform: 'twitch',
+      platform: "twitch",
       userId,
       isModerator: isMod,
-    }
+    };
   } catch (error) {
     if (error instanceof ModerationException) {
       return {
-        platform: 'twitch',
+        platform: "twitch",
         userId,
         isModerator: false,
         error: {
@@ -297,11 +306,13 @@ export async function isModerator(
           message: error.message,
           details: error.details,
         },
-      }
+      };
     }
 
-    log.error('Unexpected error during moderator check', { error: String(error) })
-    throw error
+    log.error("Unexpected error during moderator check", {
+      error: String(error),
+    });
+    throw error;
   }
 }
 
@@ -313,24 +324,26 @@ export async function isModerator(
 function mapHelixError(status: number, message: string): string {
   switch (status) {
     case 400:
-      return message.includes('Invalid') ? 'TWITCH_INVALID_PARAMETER' : 'TWITCH_BAD_REQUEST'
+      return message.includes("Invalid")
+        ? "TWITCH_INVALID_PARAMETER"
+        : "TWITCH_BAD_REQUEST";
     case 401:
-      return 'TWITCH_UNAUTHORIZED'
+      return "TWITCH_UNAUTHORIZED";
     case 403:
-      return message.includes('moderator')
-        ? 'TWITCH_NOT_MODERATOR'
-        : 'TWITCH_INSUFFICIENT_PERMISSIONS'
+      return message.includes("moderator")
+        ? "TWITCH_NOT_MODERATOR"
+        : "TWITCH_INSUFFICIENT_PERMISSIONS";
     case 404:
-      return 'TWITCH_NOT_FOUND'
+      return "TWITCH_NOT_FOUND";
     case 409:
-      return 'TWITCH_CONFLICT'
+      return "TWITCH_CONFLICT";
     case 422:
-      return 'TWITCH_UNPROCESSABLE'
+      return "TWITCH_UNPROCESSABLE";
     case 429:
-      return 'TWITCH_RATE_LIMITED'
+      return "TWITCH_RATE_LIMITED";
     case 500:
-      return 'TWITCH_SERVER_ERROR'
+      return "TWITCH_SERVER_ERROR";
     default:
-      return 'TWITCH_UNKNOWN_ERROR'
+      return "TWITCH_UNKNOWN_ERROR";
   }
 }

@@ -10,34 +10,38 @@
  * keeping client secrets server-side for security.
  */
 
-import { BasePlatformAdapter } from '../base-adapter'
-import type { Badge, NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
-import { StaticAuthProvider } from '@twurple/auth'
-import { ChatClient } from '@twurple/chat'
-import type { ChatMessage, UserNotice } from '@twurple/chat'
-import { LogLevel } from '@twurple/chat'
-import { getBackendUrl } from '../../runtime-config'
-import { AccountStore } from '../../store/account-store'
-import { MessageStore } from '../../store/message-store'
-import { refreshTwitchToken } from '../../auth/twitch'
-import type { TwitchBadgesResponse } from '@twirchat/shared/types'
-import { logger } from '@twirchat/shared/logger'
-import { resolveTwitchAvatarUrl } from './avatar-cache'
+import { BasePlatformAdapter } from "../base-adapter";
+import type {
+  Badge,
+  NormalizedChatMessage,
+  NormalizedEvent,
+} from "@twirchat/shared";
+import { StaticAuthProvider } from "@twurple/auth";
+import { ChatClient } from "@twurple/chat";
+import type { ChatMessage, UserNotice } from "@twurple/chat";
+import { LogLevel } from "@twurple/chat";
+import { getBackendUrl } from "../../runtime-config";
+import { AccountStore } from "../../store/account-store";
+import { MessageStore } from "../../store/message-store";
+import { refreshTwitchToken } from "../../auth/twitch";
+import type { TwitchBadgesResponse } from "@twirchat/shared";
+import { logger } from "@twirchat/shared";
+import { resolveTwitchAvatarUrl } from "./avatar-cache";
 
-const log = logger('twitch')
+const log = logger("twitch");
 
 interface LocalTwitchSentMessageParams {
-  channelId: string
-  text: string
+  channelId: string;
+  text: string;
   author: {
-    avatarUrl?: string
-    displayName: string
-    id: string
-    username?: string
-  }
-  id?: string
-  reply?: NormalizedChatMessage['reply']
-  timestamp?: Date
+    avatarUrl?: string;
+    displayName: string;
+    id: string;
+    username?: string;
+  };
+  id?: string;
+  reply?: NormalizedChatMessage["reply"];
+  timestamp?: Date;
 }
 
 export function createLocalTwitchSentMessage(
@@ -53,13 +57,14 @@ export function createLocalTwitchSentMessage(
     },
     channelId: params.channelId.toLowerCase(),
     emotes: [],
-    id: params.id ?? `local:twitch:${params.channelId.toLowerCase()}:${crypto.randomUUID()}`,
-    platform: 'twitch',
+    id: params.id ??
+      `local:twitch:${params.channelId.toLowerCase()}:${crypto.randomUUID()}`,
+    platform: "twitch",
     text: params.text,
     timestamp: params.timestamp ?? new Date(),
-    type: 'message',
+    type: "message",
     ...(params.reply ? { reply: params.reply } : {}),
-  }
+  };
 }
 
 // ============================================================
@@ -67,57 +72,59 @@ export function createLocalTwitchSentMessage(
 // ============================================================
 
 export class TwitchAdapter extends BasePlatformAdapter {
-  readonly platform = 'twitch' as const
+  readonly platform = "twitch" as const;
 
-  private chatClient: ChatClient | null = null
-  private badgeRefreshInterval: ReturnType<typeof setInterval> | null = null
-  private channelName = ''
-  private shouldReconnect = true
-  private isConnected = false
+  private chatClient: ChatClient | null = null;
+  private badgeRefreshInterval: ReturnType<typeof setInterval> | null = null;
+  private channelName = "";
+  private shouldReconnect = true;
+  private isConnected = false;
 
   /** "setId/version" → imageUrl_1x, populated from backend /api/twitch/badges */
-  private badgeCache = new Map<string, string>()
+  private badgeCache = new Map<string, string>();
 
-  private anonymous = true
-  private accessToken: string | null = null
-  private accountId: string | null = null
-  private displayName: string | null = null
-  private login: string | null = null
-  private platformUserId: string | null = null
+  private anonymous = true;
+  private accessToken: string | null = null;
+  private accountId: string | null = null;
+  private displayName: string | null = null;
+  private login: string | null = null;
+  private platformUserId: string | null = null;
 
   async connect(channelName: string): Promise<void> {
-    this.channelName = channelName.toLowerCase()
-    this.shouldReconnect = true
-    this.isConnected = false
+    this.channelName = channelName.toLowerCase();
+    this.shouldReconnect = true;
+    this.isConnected = false;
 
-    this.anonymous = true
-    this.accessToken = null
-    this.accountId = null
-    this.displayName = null
-    this.login = null
-    this.platformUserId = null
+    this.anonymous = true;
+    this.accessToken = null;
+    this.accountId = null;
+    this.displayName = null;
+    this.login = null;
+    this.platformUserId = null;
 
     // Check for stored account
-    const account = AccountStore.findByPlatform('twitch')
+    const account = AccountStore.findByPlatform("twitch");
     if (account) {
-      const tokens = AccountStore.getTokens(account.id)
+      const tokens = AccountStore.getTokens(account.id);
       if (tokens?.accessToken) {
-        this.anonymous = false
-        this.accessToken = tokens.accessToken
-        this.accountId = account.id
-        this.displayName = account.displayName
-        this.login = account.username
-        this.platformUserId = account.platformUserId
+        this.anonymous = false;
+        this.accessToken = tokens.accessToken;
+        this.accountId = account.id;
+        this.displayName = account.displayName;
+        this.login = account.username;
+        this.platformUserId = account.platformUserId;
 
         // Check if token needs refresh before connecting
-        const now = Math.floor(Date.now() / 1000)
+        const now = Math.floor(Date.now() / 1000);
         if (tokens.expiresAt && tokens.expiresAt < now + 300) {
-          log.info('[Twitch] Token expired or expiring soon, refreshing...')
+          log.info("[Twitch] Token expired or expiring soon, refreshing...");
           try {
-            this.accessToken = await refreshTwitchToken(account.id)
-            log.info('[Twitch] Token refreshed successfully')
+            this.accessToken = await refreshTwitchToken(account.id);
+            log.info("[Twitch] Token refreshed successfully");
           } catch (error) {
-            log.error('[Twitch] Failed to refresh token', { error: String(error) })
+            log.error("[Twitch] Failed to refresh token", {
+              error: String(error),
+            });
             // Continue with existing token, will retry on 401
           }
         }
@@ -125,84 +132,93 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     if (this.anonymous) {
-      this.accessToken = null
-      log.info(`[Twitch] Connecting anonymously to #${this.channelName}`)
+      this.accessToken = null;
+      log.info(`[Twitch] Connecting anonymously to #${this.channelName}`);
     } else {
-      log.info(`[Twitch] Connecting as @${this.login} to #${this.channelName}`)
+      log.info(`[Twitch] Connecting as @${this.login} to #${this.channelName}`);
     }
 
-    this.emit('status', {
+    this.emit("status", {
       channelLogin: this.channelName,
-      mode: this.anonymous ? 'anonymous' : 'authenticated',
-      platform: 'twitch',
-      status: 'connecting',
-    })
+      mode: this.anonymous ? "anonymous" : "authenticated",
+      platform: "twitch",
+      status: "connecting",
+    });
 
     // Initial badge fetch + schedule refresh every 5 minutes
-    await this.fetchBadges()
-    this.badgeRefreshInterval = setInterval(() => void this.fetchBadges(), 5 * 60 * 1000)
+    await this.fetchBadges();
+    this.badgeRefreshInterval = setInterval(
+      () => void this.fetchBadges(),
+      5 * 60 * 1000,
+    );
 
-    await this.connectChatClient()
+    await this.connectChatClient();
   }
 
   async disconnect(): Promise<void> {
-    this.shouldReconnect = false
-    this.clearTimers()
+    this.shouldReconnect = false;
+    this.clearTimers();
 
     if (this.chatClient) {
-      await this.chatClient.quit()
-      this.chatClient = null
+      await this.chatClient.quit();
+      this.chatClient = null;
     }
 
-    this.isConnected = false
+    this.isConnected = false;
 
-    this.emit('status', {
+    this.emit("status", {
       channelLogin: this.channelName,
-      mode: this.anonymous ? 'anonymous' : 'authenticated',
-      platform: 'twitch',
-      status: 'disconnected',
-    })
+      mode: this.anonymous ? "anonymous" : "authenticated",
+      platform: "twitch",
+      status: "disconnected",
+    });
   }
 
-  async sendMessage(channelId: string, text: string, replyToMessageId?: string): Promise<void> {
+  async sendMessage(
+    channelId: string,
+    text: string,
+    replyToMessageId?: string,
+  ): Promise<void> {
     if (this.anonymous) {
-      throw new Error('Cannot send messages in anonymous mode. Please log in to Twitch.')
+      throw new Error(
+        "Cannot send messages in anonymous mode. Please log in to Twitch.",
+      );
     }
     if (!this.chatClient) {
-      throw new Error('Twitch chat client not initialized')
+      throw new Error("Twitch chat client not initialized");
     }
     if (!this.isConnected) {
-      throw new Error('Twitch chat not connected')
+      throw new Error("Twitch chat not connected");
     }
 
     // Ensure token is fresh before sending
-    await this.refreshTokenIfNeeded()
+    await this.refreshTokenIfNeeded();
 
     try {
       await this.chatClient.say(
         channelId,
         text,
         replyToMessageId ? { replyTo: replyToMessageId } : undefined,
-      )
-      this.emitLocalSentMessage(channelId, text, replyToMessageId)
+      );
+      this.emitLocalSentMessage(channelId, text, replyToMessageId);
     } catch (error) {
       // If we get an auth error, try to refresh and retry once
       if (this.isAuthError(error)) {
-        log.info('[Twitch] Auth error on send, attempting refresh...')
-        const refreshed = await this.refreshTokenIfNeeded()
+        log.info("[Twitch] Auth error on send, attempting refresh...");
+        const refreshed = await this.refreshTokenIfNeeded();
         if (refreshed && this.chatClient) {
           // Reconnect with new token
-          await this.reconnectWithNewToken()
+          await this.reconnectWithNewToken();
           await this.chatClient.say(
             channelId,
             text,
             replyToMessageId ? { replyTo: replyToMessageId } : undefined,
-          )
-          this.emitLocalSentMessage(channelId, text, replyToMessageId)
-          return
+          );
+          this.emitLocalSentMessage(channelId, text, replyToMessageId);
+          return;
         }
       }
-      throw error
+      throw error;
     }
   }
 
@@ -214,24 +230,24 @@ export class TwitchAdapter extends BasePlatformAdapter {
     try {
       if (this.chatClient) {
         try {
-          await this.chatClient.quit()
+          await this.chatClient.quit();
         } catch {
           // ignore errors from already-closed client
         }
-        this.chatClient = null
+        this.chatClient = null;
       }
 
-      let authProvider: StaticAuthProvider | undefined
+      let authProvider: StaticAuthProvider | undefined;
 
       if (!this.anonymous && this.accessToken) {
         // For authenticated mode, we need a client ID
         // We'll use a placeholder since StaticAuthProvider requires it
         // The actual validation is done server-side
         authProvider = new StaticAuthProvider(
-          'twirchat-desktop', // Placeholder client ID - actual validation on backend
+          "twirchat-desktop", // Placeholder client ID - actual validation on backend
           this.accessToken,
-          ['chat:read', 'chat:edit'],
-        )
+          ["chat:read", "chat:edit"],
+        );
       }
 
       this.chatClient = new ChatClient({
@@ -241,314 +257,330 @@ export class TwitchAdapter extends BasePlatformAdapter {
         logger: {
           custom: (level, message) => {
             if (level === LogLevel.ERROR) {
-              log.error(`[Twurple] ${message}`)
+              log.error(`[Twurple] ${message}`);
             } else if (level === LogLevel.WARNING) {
-              log.warn(`[Twurple] ${message}`)
+              log.warn(`[Twurple] ${message}`);
             }
             // INFO and DEBUG suppressed — avoids raw IRC message spam
           },
         },
-      })
+      });
 
-      this.setupEventHandlers()
+      this.setupEventHandlers();
 
-      await this.chatClient.connect()
+      await this.chatClient.connect();
     } catch (error) {
-      log.error('[Twitch] Failed to connect', { error: String(error) })
-      this.handleDisconnect()
+      log.error("[Twitch] Failed to connect", { error: String(error) });
+      this.handleDisconnect();
     }
   }
 
   private setupEventHandlers(): void {
     if (!this.chatClient) {
-      return
+      return;
     }
 
     // Connection successful
     this.chatClient.onConnect(() => {
-      log.info(`[Twitch] Connected to chat`)
-    })
+      log.info(`[Twitch] Connected to chat`);
+    });
 
     // Joined channel
     this.chatClient.onJoin((channel, user) => {
       if (user === this.login) {
-        log.info(`[Twitch] Joined ${channel}`)
-        this.isConnected = true
-        this.emit('status', {
+        log.info(`[Twitch] Joined ${channel}`);
+        this.isConnected = true;
+        this.emit("status", {
           channelLogin: this.channelName,
-          mode: this.anonymous ? 'anonymous' : 'authenticated',
-          platform: 'twitch',
-          status: 'connected',
-        })
+          mode: this.anonymous ? "anonymous" : "authenticated",
+          platform: "twitch",
+          status: "connected",
+        });
       }
-    })
+    });
 
     // Disconnected
     this.chatClient.onDisconnect((manually, reason) => {
-      log.warn(`[Twitch] Disconnected${reason ? `: ${reason}` : ''}`)
-      this.isConnected = false
-      this.handleDisconnect()
-    })
+      log.warn(`[Twitch] Disconnected${reason ? `: ${reason}` : ""}`);
+      this.isConnected = false;
+      this.handleDisconnect();
+    });
 
     // Authentication failure
     this.chatClient.onAuthenticationFailure((text, retryCount) => {
-      log.error(`[Twitch] Authentication failure: ${text} (retry ${retryCount})`)
+      log.error(
+        `[Twitch] Authentication failure: ${text} (retry ${retryCount})`,
+      );
 
       // Try to refresh token on auth failure
       if (!this.anonymous && retryCount === 0) {
-        void this.handleAuthFailure()
+        void this.handleAuthFailure();
       }
-    })
+    });
 
     // Messages (also handles bits/cheers — msg.bits > 0 means a cheer)
     this.chatClient.onMessage((channel, user, text, msg) => {
-      void this.handleChatMessage(msg)
+      void this.handleChatMessage(msg);
       if (msg.bits > 0) {
-        this.handleCheerEvent(msg)
+        this.handleCheerEvent(msg);
       }
-    })
+    });
 
     // Actions (/me)
     this.chatClient.onAction((channel, user, text, msg) => {
-      void this.handleChatMessage(msg, true)
-    })
+      void this.handleChatMessage(msg, true);
+    });
 
     // Subscriptions
     this.chatClient.onSub((channel, user, subInfo, msg) => {
-      this.handleSubEvent(msg, 'sub', subInfo)
-    })
+      this.handleSubEvent(msg, "sub", subInfo);
+    });
 
     // Resubscriptions
     this.chatClient.onResub((channel, user, subInfo, msg) => {
-      this.handleSubEvent(msg, 'resub', subInfo)
-    })
+      this.handleSubEvent(msg, "resub", subInfo);
+    });
 
     // Sub gifts
     this.chatClient.onSubGift((channel, user, subInfo, msg) => {
-      this.handleSubGiftEvent(msg, user, subInfo)
-    })
+      this.handleSubGiftEvent(msg, user, subInfo);
+    });
 
     // Raids
     this.chatClient.onRaid((channel, user, raidInfo, msg) => {
-      this.handleRaidEvent(msg, raidInfo)
-    })
+      this.handleRaidEvent(msg, raidInfo);
+    });
 
     // Ban/timeout events (optional, for moderation features)
     this.chatClient.onBan((channel, user, _msg) => {
-      log.info(`[Twitch] ${user} was banned from ${channel}`)
-    })
+      log.info(`[Twitch] ${user} was banned from ${channel}`);
+    });
 
     this.chatClient.onTimeout((channel, user, duration, _msg) => {
-      log.info(`[Twitch] ${user} was timed out for ${duration}s from ${channel}`)
-    })
+      log.info(
+        `[Twitch] ${user} was timed out for ${duration}s from ${channel}`,
+      );
+    });
   }
 
   private handleDisconnect(): void {
-    this.isConnected = false
+    this.isConnected = false;
 
-    this.emit('status', {
+    this.emit("status", {
       channelLogin: this.channelName,
-      mode: this.anonymous ? 'anonymous' : 'authenticated',
-      platform: 'twitch',
-      status: 'disconnected',
-    })
+      mode: this.anonymous ? "anonymous" : "authenticated",
+      platform: "twitch",
+      status: "disconnected",
+    });
 
     if (this.shouldReconnect) {
-      log.info('[Twitch] Reconnecting in 5s...')
+      log.info("[Twitch] Reconnecting in 5s...");
       setTimeout(() => {
-        void this.connectChatClient()
-      }, 5000)
+        void this.connectChatClient();
+      }, 5000);
     }
   }
 
   private async handleAuthFailure(): Promise<void> {
     if (!this.accountId) {
-      return
+      return;
     }
 
     try {
-      log.info('[Twitch] Attempting token refresh after auth failure...')
-      this.accessToken = await refreshTwitchToken(this.accountId)
-      log.info('[Twitch] Token refreshed, reconnecting...')
-      await this.reconnectWithNewToken()
+      log.info("[Twitch] Attempting token refresh after auth failure...");
+      this.accessToken = await refreshTwitchToken(this.accountId);
+      log.info("[Twitch] Token refreshed, reconnecting...");
+      await this.reconnectWithNewToken();
     } catch (error) {
-      log.error('[Twitch] Token refresh failed', { error: String(error) })
+      log.error("[Twitch] Token refresh failed", { error: String(error) });
     }
   }
 
   private async reconnectWithNewToken(): Promise<void> {
     if (!this.accessToken) {
-      return
+      return;
     }
 
     // Disconnect current client
     if (this.chatClient) {
-      await this.chatClient.quit()
-      this.chatClient = null
+      await this.chatClient.quit();
+      this.chatClient = null;
     }
 
     // Reconnect with new token
-    await this.connectChatClient()
+    await this.connectChatClient();
   }
 
   private async refreshTokenIfNeeded(): Promise<boolean> {
     if (this.anonymous || !this.accountId) {
-      return false
+      return false;
     }
 
-    const tokens = AccountStore.getTokens(this.accountId)
+    const tokens = AccountStore.getTokens(this.accountId);
     if (!tokens?.refreshToken) {
-      return false
+      return false;
     }
 
-    const now = Math.floor(Date.now() / 1000)
+    const now = Math.floor(Date.now() / 1000);
     if (tokens.expiresAt && tokens.expiresAt < now + 300) {
-      log.info('[Twitch] Token expired or expiring soon, refreshing...')
+      log.info("[Twitch] Token expired or expiring soon, refreshing...");
       try {
-        this.accessToken = await refreshTwitchToken(this.accountId)
-        log.info('[Twitch] Token refreshed successfully')
-        return true
+        this.accessToken = await refreshTwitchToken(this.accountId);
+        log.info("[Twitch] Token refreshed successfully");
+        return true;
       } catch (error) {
-        log.error('[Twitch] Failed to refresh token', { error: String(error) })
-        return false
+        log.error("[Twitch] Failed to refresh token", { error: String(error) });
+        return false;
       }
     }
-    return false
+    return false;
   }
 
   private isAuthError(err: unknown): boolean {
     if (err instanceof Error) {
-      const msg = err.message.toLowerCase()
+      const msg = err.message.toLowerCase();
       return (
-        msg.includes('401') ||
-        msg.includes('authentication') ||
-        msg.includes('auth') ||
-        msg.includes('token') ||
-        msg.includes('unauthorized')
-      )
+        msg.includes("401") ||
+        msg.includes("authentication") ||
+        msg.includes("auth") ||
+        msg.includes("token") ||
+        msg.includes("unauthorized")
+      );
     }
-    return false
+    return false;
   }
 
-  private emitLocalSentMessage(channelId: string, text: string, replyToMessageId?: string): void {
+  private emitLocalSentMessage(
+    channelId: string,
+    text: string,
+    replyToMessageId?: string,
+  ): void {
     try {
-      const displayName = this.displayName ?? this.login
+      const displayName = this.displayName ?? this.login;
       if (!displayName) {
         log.warn(
-          '[Twitch] Sent message succeeded but account identity is unavailable for local echo',
+          "[Twitch] Sent message succeeded but account identity is unavailable for local echo",
           {
             channelId,
           },
-        )
-        return
+        );
+        return;
       }
 
       const reply = replyToMessageId
         ? this.findReplyContext(channelId, replyToMessageId)
-        : undefined
+        : undefined;
 
       this.emit(
-        'message',
+        "message",
         createLocalTwitchSentMessage({
           author: {
-            avatarUrl: AccountStore.findByPlatform('twitch')?.avatarUrl,
+            avatarUrl: AccountStore.findByPlatform("twitch")?.avatarUrl,
             displayName,
-            id: this.platformUserId ?? this.accountId ?? this.login ?? 'twitch-self',
+            id: this.platformUserId ?? this.accountId ?? this.login ??
+              "twitch-self",
             username: this.login ?? undefined,
           },
           channelId,
           reply,
           text,
         }),
-      )
+      );
     } catch (error) {
-      log.error('[Twitch] Failed to emit local sent message', {
+      log.error("[Twitch] Failed to emit local sent message", {
         channelId,
         error: String(error),
-      })
+      });
     }
   }
 
   private findReplyContext(
     channelId: string,
     replyToMessageId: string,
-  ): NormalizedChatMessage['reply'] | undefined {
+  ): NormalizedChatMessage["reply"] | undefined {
     const replyTarget = MessageStore.getRecent(250).find(
       (message) =>
-        message.platform === 'twitch' &&
+        message.platform === "twitch" &&
         message.channelId === channelId.toLowerCase() &&
         message.id === replyToMessageId,
-    )
+    );
 
     if (!replyTarget) {
-      return undefined
+      return undefined;
     }
 
     return {
       parentAuthor: {
         displayName: replyTarget.author.displayName,
         id: replyTarget.author.id,
-        username: replyTarget.author.username ?? '',
+        username: replyTarget.author.username ?? "",
       },
       parentMessageId: replyTarget.id,
       parentMessageText: replyTarget.text,
-    }
+    };
   }
 
-  private async handleChatMessage(msg: ChatMessage, isAction = false): Promise<void> {
-    const channel = msg.target
-    const { text } = msg
-    const { tags } = msg
+  private async handleChatMessage(
+    msg: ChatMessage,
+    isAction = false,
+  ): Promise<void> {
+    const channel = msg.target;
+    const { text } = msg;
+    const { tags } = msg;
 
-    const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? msg.userInfo.userName
-    const color = tags.get('color') || undefined
-    const msgId = tags.get('id') ?? `${Date.now()}`
-    const timestamp = msg.date
-    const avatarUrl = await resolveTwitchAvatarUrl({ authorId: userId })
+    const userId = tags.get("user-id") ?? "";
+    const displayName = tags.get("display-name") ?? msg.userInfo.userName;
+    const color = tags.get("color") || undefined;
+    const msgId = tags.get("id") ?? `${Date.now()}`;
+    const timestamp = msg.date;
+    const avatarUrl = await resolveTwitchAvatarUrl({ authorId: userId });
 
-    const replyParentMsgId = tags.get('reply-parent-msg-id')
-    const replyParentMsgBody = tags.get('reply-parent-msg-body')
-    const replyParentUserLogin = tags.get('reply-parent-user-login')
-    const replyParentDisplayName = tags.get('reply-parent-display-name') ?? replyParentUserLogin
-    const replyParentUserId = tags.get('reply-parent-user-id')
+    const replyParentMsgId = tags.get("reply-parent-msg-id");
+    const replyParentMsgBody = tags.get("reply-parent-msg-body");
+    const replyParentUserLogin = tags.get("reply-parent-user-login");
+    const replyParentDisplayName = tags.get("reply-parent-display-name") ??
+      replyParentUserLogin;
+    const replyParentUserId = tags.get("reply-parent-user-id");
 
     // Parse emotes from the parsed message
-    const emotes: NormalizedChatMessage['emotes'] = []
+    const emotes: NormalizedChatMessage["emotes"] = [];
     if (msg.emoteOffsets) {
       for (const [emoteId, offsets] of msg.emoteOffsets) {
         const positions = offsets.map((offset: string) => {
-          const [start, end] = offset.split('-').map(Number)
-          return { end: end ?? 0, start: start ?? 0 }
-        })
+          const [start, end] = offset.split("-").map(Number);
+          return { end: end ?? 0, start: start ?? 0 };
+        });
 
         // Get emote name from first position
-        const firstPos = positions[0]
-        const emoteName = firstPos ? text.slice(firstPos.start, (firstPos.end ?? 0) + 1) : ''
+        const firstPos = positions[0];
+        const emoteName = firstPos
+          ? text.slice(firstPos.start, (firstPos.end ?? 0) + 1)
+          : "";
 
         emotes.push({
           id: emoteId,
-          imageUrl: `https://static-cdn.jtvnw.net/emoticons/v2/${emoteId}/default/dark/1.0`,
+          imageUrl:
+            `https://static-cdn.jtvnw.net/emoticons/v2/${emoteId}/default/dark/1.0`,
           name: emoteName,
           positions,
-        })
+        });
       }
     }
 
     // Parse badges
-    const badges: Badge[] = []
-    const badgesTag = tags.get('badges')
+    const badges: Badge[] = [];
+    const badgesTag = tags.get("badges");
     if (badgesTag) {
-      for (const badge of badgesTag.split(',')) {
-        const [badgeId, version] = badge.split('/')
+      for (const badge of badgesTag.split(",")) {
+        const [badgeId, version] = badge.split("/");
         if (badgeId) {
-          const cacheKey = `${badgeId}/${version ?? '1'}`
+          const cacheKey = `${badgeId}/${version ?? "1"}`;
           badges.push({
             id: cacheKey,
             imageUrl: this.badgeCache.get(cacheKey),
             text: badgeId,
             type: badgeId,
-          })
+          });
         }
       }
     }
@@ -562,59 +594,59 @@ export class TwitchAdapter extends BasePlatformAdapter {
         id: userId,
         username: msg.userInfo.userName,
       },
-      channelId: channel.replace('#', ''),
+      channelId: channel.replace("#", ""),
       emotes,
       id: msgId,
-      platform: 'twitch',
+      platform: "twitch",
       text,
       timestamp,
-      type: isAction ? 'action' : 'message',
+      type: isAction ? "action" : "message",
       ...(replyParentMsgId && replyParentMsgBody && replyParentUserId
         ? {
-            reply: {
-              parentAuthor: {
-                displayName: replyParentDisplayName ?? replyParentUserLogin ?? '',
-                id: replyParentUserId,
-                username: replyParentUserLogin ?? '',
-              },
-              parentMessageId: replyParentMsgId,
-              parentMessageText: replyParentMsgBody,
+          reply: {
+            parentAuthor: {
+              displayName: replyParentDisplayName ?? replyParentUserLogin ?? "",
+              id: replyParentUserId,
+              username: replyParentUserLogin ?? "",
             },
-          }
+            parentMessageId: replyParentMsgId,
+            parentMessageText: replyParentMsgBody,
+          },
+        }
         : {}),
-    }
+    };
 
-    this.emit('message', normalized)
+    this.emit("message", normalized);
   }
 
   private handleSubEvent(
     msg: UserNotice,
-    type: 'sub' | 'resub',
+    type: "sub" | "resub",
     subInfo: { months: number; plan?: string },
   ): void {
-    const { tags } = msg
-    const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? 'unknown'
-    const channelId = msg.channelId ?? ''
+    const { tags } = msg;
+    const userId = tags.get("user-id") ?? "";
+    const displayName = tags.get("display-name") ?? "unknown";
+    const channelId = msg.channelId ?? "";
 
     const event: NormalizedEvent = {
       data: {
         channelId,
         months: subInfo.months,
-        subPlan: tags.get('msg-param-sub-plan'),
-        systemMsg: tags.get('system-msg')?.replace(/\\s/g, ' '),
+        subPlan: tags.get("msg-param-sub-plan"),
+        systemMsg: tags.get("system-msg")?.replace(/\\s/g, " "),
       },
       id: `twitch:${type}:${userId}:${Date.now()}`,
-      platform: 'twitch',
+      platform: "twitch",
       timestamp: new Date(),
       type,
       user: {
         displayName,
         id: userId,
       },
-    }
+    };
 
-    this.emit('event', event)
+    this.emit("event", event);
   }
 
   private handleSubGiftEvent(
@@ -622,107 +654,110 @@ export class TwitchAdapter extends BasePlatformAdapter {
     recipient: string,
     subInfo: { months: number; plan?: string },
   ): void {
-    const { tags } = msg
-    const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? 'unknown'
-    const channelId = msg.channelId ?? ''
+    const { tags } = msg;
+    const userId = tags.get("user-id") ?? "";
+    const displayName = tags.get("display-name") ?? "unknown";
+    const channelId = msg.channelId ?? "";
 
     const event: NormalizedEvent = {
       data: {
         channelId,
         months: subInfo.months,
         recipientDisplayName: recipient,
-        recipientId: tags.get('msg-param-recipient-id'),
-        subPlan: tags.get('msg-param-sub-plan'),
-        systemMsg: tags.get('system-msg')?.replace(/\\s/g, ' '),
+        recipientId: tags.get("msg-param-recipient-id"),
+        subPlan: tags.get("msg-param-sub-plan"),
+        systemMsg: tags.get("system-msg")?.replace(/\\s/g, " "),
       },
       id: `twitch:subgift:${userId}:${Date.now()}`,
-      platform: 'twitch',
+      platform: "twitch",
       timestamp: new Date(),
-      type: 'gift_sub',
+      type: "gift_sub",
       user: {
         displayName,
         id: userId,
       },
-    }
+    };
 
-    this.emit('event', event)
+    this.emit("event", event);
   }
 
-  private handleRaidEvent(msg: UserNotice, raidInfo: { viewerCount: number }): void {
-    const { tags } = msg
-    const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? 'unknown'
-    const channelId = msg.channelId ?? ''
+  private handleRaidEvent(
+    msg: UserNotice,
+    raidInfo: { viewerCount: number },
+  ): void {
+    const { tags } = msg;
+    const userId = tags.get("user-id") ?? "";
+    const displayName = tags.get("display-name") ?? "unknown";
+    const channelId = msg.channelId ?? "";
 
     const event: NormalizedEvent = {
       data: {
         channelId,
-        systemMsg: tags.get('system-msg')?.replace(/\\s/g, ' '),
+        systemMsg: tags.get("system-msg")?.replace(/\\s/g, " "),
         viewerCount: raidInfo.viewerCount,
       },
       id: `twitch:raid:${userId}:${Date.now()}`,
-      platform: 'twitch',
+      platform: "twitch",
       timestamp: new Date(),
-      type: 'raid',
+      type: "raid",
       user: {
         displayName,
         id: userId,
       },
-    }
+    };
 
-    this.emit('event', event)
+    this.emit("event", event);
   }
 
   private handleCheerEvent(msg: ChatMessage): void {
-    const { tags } = msg
-    const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? msg.userInfo.userName
-    const bits = parseInt(tags.get('bits') ?? '0', 10)
+    const { tags } = msg;
+    const userId = tags.get("user-id") ?? "";
+    const displayName = tags.get("display-name") ?? msg.userInfo.userName;
+    const bits = parseInt(tags.get("bits") ?? "0", 10);
 
     const event: NormalizedEvent = {
       data: {
         bits,
-        channelId: msg.channelId ?? '',
+        channelId: msg.channelId ?? "",
         message: msg.text,
       },
       id: `twitch:bits:${userId}:${Date.now()}`,
-      platform: 'twitch',
+      platform: "twitch",
       timestamp: new Date(),
-      type: 'bits',
+      type: "bits",
       user: {
         displayName,
         id: userId,
       },
-    }
+    };
 
-    this.emit('event', event)
+    this.emit("event", event);
   }
 
   private async fetchBadges(): Promise<void> {
-    const url = new URL(`${getBackendUrl()}/api/twitch/badges`)
+    const url = new URL(`${getBackendUrl()}/api/twitch/badges`);
     if (this.channelName) {
-      url.searchParams.set('broadcasterLogin', this.channelName)
+      url.searchParams.set("broadcasterLogin", this.channelName);
     }
 
     try {
-      const res = await fetch(url.toString())
+      const res = await fetch(url.toString());
       if (!res.ok) {
-        log.warn(`[Twitch] Badge fetch failed: ${res.status}`)
-        return
+        log.warn(`[Twitch] Badge fetch failed: ${res.status}`);
+        return;
       }
-      const data = (await res.json()) as TwitchBadgesResponse
-      this.badgeCache = new Map(Object.entries(data.badges))
-      log.info(`[Twitch] Badge cache updated: ${this.badgeCache.size} entries`)
+      const data = (await res.json()) as TwitchBadgesResponse;
+      this.badgeCache = new Map(Object.entries(data.badges));
+      log.info(`[Twitch] Badge cache updated: ${this.badgeCache.size} entries`);
     } catch (error) {
-      log.warn('[Twitch] Badge fetch error', { error: String(error) })
+      log.warn("[Twitch] Badge fetch error", { error: String(error) });
     }
   }
 
   private clearTimers(): void {
     if (this.badgeRefreshInterval) {
-      clearInterval(this.badgeRefreshInterval)
-      this.badgeRefreshInterval = null
+      clearInterval(this.badgeRefreshInterval);
+      this.badgeRefreshInterval = null;
     }
   }
 }

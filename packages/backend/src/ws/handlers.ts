@@ -1,161 +1,171 @@
-import type { ServerWebSocket } from 'bun'
-import type { DesktopToBackendMessage } from '@twirchat/shared'
-import { connectionManager } from './connection-manager.ts'
-import type { WsData } from './connection-manager.ts'
-import { ClientStore } from '../db/index.ts'
-import { startKickOAuth } from '../auth/kick.ts'
-import { buildTwitchAuthUrl } from '../auth/twitch.ts'
-import { AccountStore } from '../db/index.ts'
-import { logger } from '@twirchat/shared/logger'
-import { config } from '../config.ts'
-import { sevenTVManager } from '../seventv/index.ts'
-import type { BackendToDesktopMessage } from '@twirchat/shared'
+import type { ServerWebSocket } from "bun";
+import type { DesktopToBackendMessage } from "@twirchat/shared";
+import { connectionManager } from "./connection-manager.ts";
+import type { WsData } from "./connection-manager.ts";
+import { ClientStore } from "../db/index.ts";
+import { startKickOAuth } from "../auth/kick.ts";
+import { buildTwitchAuthUrl } from "../auth/twitch.ts";
+import { AccountStore } from "../db/index.ts";
+import { logger } from "@twirchat/shared";
+import { config } from "../config.ts";
+import { sevenTVManager } from "../seventv/index.ts";
+import type { BackendToDesktopMessage } from "@twirchat/shared";
 
-const log = logger('ws')
+const log = logger("ws");
 
 // Setup 7TV manager to send messages to clients
 sevenTVManager.sendToClient = (clientSecret: string, message: unknown) => {
-  connectionManager.send(clientSecret, message as BackendToDesktopMessage)
-}
+  connectionManager.send(clientSecret, message as BackendToDesktopMessage);
+};
 
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
-  log.info('WebSocket opened', { client: ws.data.clientSecret.slice(0, 8) })
-  connectionManager.register(ws)
-  await ClientStore.touch(ws.data.clientSecret)
+  log.info("WebSocket opened", { client: ws.data.clientSecret.slice(0, 8) });
+  connectionManager.register(ws);
+  await ClientStore.touch(ws.data.clientSecret);
 }
 
 export function handleWsClose(ws: ServerWebSocket<WsData>): void {
-  connectionManager.remove(ws)
+  connectionManager.remove(ws);
   // Cleanup 7TV subscriptions for this client
-  sevenTVManager.cleanupClient(ws.data.clientSecret)
+  sevenTVManager.cleanupClient(ws.data.clientSecret);
 }
 
 export async function handleWsMessage(
   ws: ServerWebSocket<WsData>,
   raw: string | Buffer,
 ): Promise<void> {
-  let msg: DesktopToBackendMessage
+  let msg: DesktopToBackendMessage;
 
   try {
-    msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString()) as DesktopToBackendMessage
+    msg = JSON.parse(
+      typeof raw === "string" ? raw : raw.toString(),
+    ) as DesktopToBackendMessage;
   } catch {
-    ws.send(JSON.stringify({ message: 'Invalid JSON', type: 'error' }))
-    return
+    ws.send(JSON.stringify({ message: "Invalid JSON", type: "error" }));
+    return;
   }
 
   switch (msg.type) {
-    case 'ping': {
-      ws.send(JSON.stringify({ type: 'pong' }))
-      break
+    case "ping": {
+      ws.send(JSON.stringify({ type: "pong" }));
+      break;
     }
 
-    case 'auth_start': {
-      if (msg.platform === 'kick') {
+    case "auth_start": {
+      if (msg.platform === "kick") {
         try {
-          const url = await startKickOAuth(ws.data.clientSecret)
-          ws.send(JSON.stringify({ platform: 'kick', type: 'auth_url', url }))
+          const url = await startKickOAuth(ws.data.clientSecret);
+          ws.send(JSON.stringify({ platform: "kick", type: "auth_url", url }));
         } catch (error) {
           ws.send(
             JSON.stringify({
-              type: 'auth_error',
-              platform: 'kick',
+              type: "auth_error",
+              platform: "kick",
               error: String(error),
             }),
-          )
+          );
         }
       } else {
         ws.send(
           JSON.stringify({
             message: `auth_start: unsupported platform ${msg.platform}`,
-            type: 'error',
+            type: "error",
           }),
-        )
+        );
       }
-      break
+      break;
     }
 
-    case 'auth_start_twitch': {
+    case "auth_start_twitch": {
       try {
         // Legacy WS-based flow - uses backend redirect URI
-        const { url } = buildTwitchAuthUrl(msg.codeChallenge, msg.state, config.TWITCH_REDIRECT_URI)
-        ws.send(JSON.stringify({ platform: 'twitch', type: 'auth_url', url }))
+        const { url } = buildTwitchAuthUrl(
+          msg.codeChallenge,
+          msg.state,
+          config.TWITCH_REDIRECT_URI,
+        );
+        ws.send(JSON.stringify({ platform: "twitch", type: "auth_url", url }));
       } catch (error) {
         ws.send(
           JSON.stringify({
-            type: 'auth_error',
-            platform: 'twitch',
+            type: "auth_error",
+            platform: "twitch",
             error: String(error),
           }),
-        )
+        );
       }
-      break
+      break;
     }
 
-    case 'auth_logout': {
+    case "auth_logout": {
       try {
-        await AccountStore.delete(ws.data.clientSecret, msg.platform)
-        log.info('Logout', {
+        await AccountStore.delete(ws.data.clientSecret, msg.platform);
+        log.info("Logout", {
           client: ws.data.clientSecret.slice(0, 8),
           platform: msg.platform,
-        })
+        });
       } catch (error) {
         ws.send(
           JSON.stringify({
-            type: 'error',
+            type: "error",
             message: `auth_logout failed: ${String(error)}`,
           }),
-        )
+        );
       }
-      break
+      break;
     }
 
-    case 'send_message': {
+    case "send_message": {
       // Send_message via backend will be handled per-platform when platform adapters are added server-side
       ws.send(
         JSON.stringify({
-          message: 'send_message not yet supported',
-          type: 'error',
+          message: "send_message not yet supported",
+          type: "error",
         }),
-      )
-      break
+      );
+      break;
     }
 
-    case 'channel_join':
-    case 'channel_leave': {
+    case "channel_join":
+    case "channel_leave": {
       // Channel tracking — no-op for now, will be used for backend-managed subscriptions
-      break
+      break;
     }
 
-    case 'seventv_subscribe': {
+    case "seventv_subscribe": {
       try {
         await sevenTVManager.subscribeClient(
           ws.data.clientSecret,
           msg.platform,
           msg.channelId,
           msg.platformUserId,
-        )
+        );
       } catch (error) {
-        log.error('7TV subscribe error', { error: String(error) })
+        log.error("7TV subscribe error", { error: String(error) });
         ws.send(
           JSON.stringify({
-            type: 'error',
+            type: "error",
             message: `7TV subscribe failed: ${String(error)}`,
           }),
-        )
+        );
       }
-      break
+      break;
     }
 
-    case 'seventv_unsubscribe': {
+    case "seventv_unsubscribe": {
       try {
-        sevenTVManager.unsubscribeClient(ws.data.clientSecret, msg.platform, msg.channelId)
+        sevenTVManager.unsubscribeClient(
+          ws.data.clientSecret,
+          msg.platform,
+          msg.channelId,
+        );
       } catch (error) {
-        log.error('7TV unsubscribe error', { error: String(error) })
+        log.error("7TV unsubscribe error", { error: String(error) });
       }
-      break
+      break;
     }
 
-    case 'seventv_resubscribe': {
+    case "seventv_resubscribe": {
       // Handle reconnect - client sends list of channels to resubscribe
       try {
         for (const sub of msg.subscriptions) {
@@ -164,21 +174,21 @@ export async function handleWsMessage(
             sub.platform,
             sub.channelId,
             sub.platformUserId,
-          )
+          );
         }
       } catch (error) {
-        log.error('7TV resubscribe error', { error: String(error) })
+        log.error("7TV resubscribe error", { error: String(error) });
       }
-      break
+      break;
     }
 
     default: {
       ws.send(
         JSON.stringify({
-          type: 'error',
+          type: "error",
           message: `Unknown message type: ${(msg as { type: string }).type}`,
         }),
-      )
+      );
     }
   }
 }

@@ -1,0 +1,27 @@
+{
+  "name": "@twirchat/backend",
+  "version": "0.0.1",
+  "exports": "./src/index.ts",
+  "compilerOptions": {
+    "lib": [
+      "deno.ns",
+      "dom",
+      "dom.iterable"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "elysia": "npm:elysia",
+    "postgres": "npm:postgres",
+    "zod": "npm:zod",
+    "@urql/core": "npm:@urql/core",
+    "graphql": "npm:graphql",
+    "@graphql-typed-document-node/core": "npm:@graphql-typed-document-node/core"
+  },
+  "tasks": {
+    "dev": "deno run --env-file=.env --allow-all --watch --sloppy-imports src/index.ts",
+    "start": "deno run --env-file=.env --allow-all --sloppy-imports src/index.ts",
+    "typecheck": "deno check --sloppy-imports src/index.ts",
+    "test": "deno test --allow-all --no-check --sloppy-imports tests/"
+  }
+}

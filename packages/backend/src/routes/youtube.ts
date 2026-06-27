@@ -14,92 +14,110 @@
  *   4. Fall back to channels?forUsername=  (legacy custom URL, 1 quota unit)
  */
 
-import { YoutubeChannelCacheStore } from '../db/index.ts'
-import { json } from './utils.ts'
-import { config } from '../config.ts'
-import { logger } from '@twirchat/shared/logger'
+import { YoutubeChannelCacheStore } from "../db/index.ts";
+import { json } from "./utils.ts";
+import { config } from "../config.ts";
+import { logger } from "@twirchat/shared";
 
-const log = logger('youtube-resolve')
+const log = logger("youtube-resolve");
 
-const YT_API = 'https://www.googleapis.com/youtube/v3'
+const YT_API = "https://www.googleapis.com/youtube/v3";
 
 export const youtubeRoutes = {
-  '/api/youtube/resolve': {
+  "/api/youtube/resolve": {
     async GET(req: Request) {
-      const url = new URL(req.url)
-      const raw = url.searchParams.get('handle')
+      const url = new URL(req.url);
+      const raw = url.searchParams.get("handle");
       if (!raw) {
-        return json({ error: 'Missing required query param: handle' }, 400)
+        return json({ error: "Missing required query param: handle" }, 400);
       }
 
       // Normalise: strip leading @, trim whitespace
-      const handle = raw.replace(/^@/, '').trim()
+      const handle = raw.replace(/^@/, "").trim();
       if (!handle) {
-        return json({ error: 'handle must not be empty' }, 400)
+        return json({ error: "handle must not be empty" }, 400);
       }
 
       // 1. Already a channel ID — return directly, no API call needed
       if (/^UC/i.test(handle)) {
-        log.debug('handle is already a channel ID', { handle })
-        return json({ channelId: handle })
+        log.debug("handle is already a channel ID", { handle });
+        return json({ channelId: handle });
       }
 
       // 2. Cache hit
-      const cached = await YoutubeChannelCacheStore.get(handle)
+      const cached = await YoutubeChannelCacheStore.get(handle);
       if (cached) {
-        log.debug('cache hit', { channelId: cached, handle })
-        return json({ channelId: cached })
+        log.debug("cache hit", { channelId: cached, handle });
+        return json({ channelId: cached });
       }
 
       // 3. Resolve via API key
       if (!config.YOUTUBE_API_KEY) {
-        return json({ error: 'YOUTUBE_API_KEY is not configured on the server' }, 503)
+        return json({
+          error: "YOUTUBE_API_KEY is not configured on the server",
+        }, 503);
       }
 
-      const channelId = await resolveHandle(handle, config.YOUTUBE_API_KEY)
+      const channelId = await resolveHandle(handle, config.YOUTUBE_API_KEY);
       if (!channelId) {
-        return json({ error: `Could not resolve "${handle}" to a YouTube channel` }, 404)
+        return json({
+          error: `Could not resolve "${handle}" to a YouTube channel`,
+        }, 404);
       }
 
-      await YoutubeChannelCacheStore.upsert(handle, channelId)
-      log.info('resolved and cached', { channelId, handle })
-      return json({ channelId })
+      await YoutubeChannelCacheStore.upsert(handle, channelId);
+      log.info("resolved and cached", { channelId, handle });
+      return json({ channelId });
     },
   },
-} as const
+} as const;
 
 // ---------------------------------------------------------------------------
 
-async function resolveHandle(handle: string, apiKey: string): Promise<string | null> {
+async function resolveHandle(
+  handle: string,
+  apiKey: string,
+): Promise<string | null> {
   // Try @handle first
-  const forHandle = await ytChannels(`forHandle=${encodeURIComponent(handle)}`, apiKey)
+  const forHandle = await ytChannels(
+    `forHandle=${encodeURIComponent(handle)}`,
+    apiKey,
+  );
   if (forHandle) {
-    return forHandle
+    return forHandle;
   }
 
   // Fall back to legacy forUsername
-  const forUsername = await ytChannels(`forUsername=${encodeURIComponent(handle)}`, apiKey)
-  return forUsername
+  const forUsername = await ytChannels(
+    `forUsername=${encodeURIComponent(handle)}`,
+    apiKey,
+  );
+  return forUsername;
 }
 
-async function ytChannels(queryParam: string, apiKey: string): Promise<string | null> {
-  const url = `${YT_API}/channels?part=id&${queryParam}&key=${encodeURIComponent(apiKey)}`
+async function ytChannels(
+  queryParam: string,
+  apiKey: string,
+): Promise<string | null> {
+  const url = `${YT_API}/channels?part=id&${queryParam}&key=${
+    encodeURIComponent(apiKey)
+  }`;
   try {
-    const res = await fetch(url)
+    const res = await fetch(url);
     if (!res.ok) {
-      const body = await res.text()
-      log.warn('YouTube channels API error', {
+      const body = await res.text();
+      log.warn("YouTube channels API error", {
         body: body.slice(0, 300),
         status: res.status,
-      })
-      return null
+      });
+      return null;
     }
     const data = (await res.json()) as {
-      items?: { id: string }[]
-    }
-    return data.items?.[0]?.id ?? null
+      items?: { id: string }[];
+    };
+    return data.items?.[0]?.id ?? null;
   } catch (error) {
-    log.error('YouTube channels API fetch failed', { error: String(error) })
-    return null
+    log.error("YouTube channels API fetch failed", { error: String(error) });
+    return null;
   }
 }

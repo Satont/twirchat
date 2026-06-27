@@ -1,4 +1,6 @@
-import { sql } from 'bun'
+import postgres from 'postgres'
+
+const sql = postgres(Deno.env.get('DATABASE_URL')!)
 
 export interface DesktopClient {
   secret: string

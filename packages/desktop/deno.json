@@ -2,6 +2,17 @@
   "name": "@twirchat/desktop",
   "version": "0.0.1",
   "exports": "./src/main.ts",
+  "compilerOptions": {
+    "lib": [
+      "deno.ns",
+      "deno.window",
+      "deno.unstable",
+      "deno.desktop",
+      "dom",
+      "dom.iterable"
+    ],
+    "strict": true
+  },
   "desktop": {
     "app": {
       "name": "TwirChat",
@@ -22,14 +33,36 @@
       "baseUrl": "https://github.com/Satont/twirchat/releases/latest/download/"
     }
   },
+  "exclude": [
+    "../../worktrees/**",
+    "../../.worktrees/**",
+    "../../node_modules/**",
+    "../../.opencode/**",
+    "dist/**"
+  ],
   "imports": {
+    "@bufbuild/protobuf": "npm:@bufbuild/protobuf",
+    "@grpc/grpc-js": "npm:@grpc/grpc-js",
+    "@twurple/api": "npm:@twurple/api",
+    "@twurple/auth": "npm:@twurple/auth",
+    "@twurple/chat": "npm:@twurple/chat",
+    "reka-ui": "npm:reka-ui",
+    "splitpanes": "npm:splitpanes",
+    "virtua": "npm:virtua",
+    "vue": "npm:vue",
+    "youtubei.js": "npm:youtubei.js",
+    "@vitejs/plugin-vue": "npm:@vitejs/plugin-vue",
+    "pinia": "npm:pinia",
+    "vite": "npm:vite",
+    "vite-svg-loader": "npm:vite-svg-loader",
+    "vue-tsc": "npm:vue-tsc",
     "@twirchat/shared": "../shared/index.ts",
     "@twirchat/shared/": "../shared/"
   },
   "tasks": {
-    "dev": "deno run --allow-all --sloppy-imports src/main.ts",
-    "dev:hmr": "deno task build:views && deno task dev",
-    "start": "deno run --allow-all --sloppy-imports src/main.ts",
+    "dev": "deno desktop --sloppy-imports --allow-all --env-file=.env src/main.ts",
+    "dev:hmr": "deno desktop --sloppy-imports --hmr --allow-all --env-file=.env src/main.ts",
+    "start": "deno desktop --sloppy-imports --allow-all --env-file=.env src/main.ts",
     "build:views": "deno run -A npm:vite --config vite.main.config.ts build && deno run -A npm:vite --config vite.overlay.config.ts build",
     "typecheck": "deno check --sloppy-imports src/main.ts",
     "test": "deno test --allow-all --no-check --sloppy-imports tests/"

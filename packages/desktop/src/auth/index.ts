@@ -1,6 +1,7 @@
 export {
   startAuthServer,
   stopAuthServer,
+  handleAuthRequest,
   setOnAuthSuccessCallback,
   setOnAutoJoinChannelCallback,
 } from './server'

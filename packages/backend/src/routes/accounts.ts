@@ -1,7 +1,6 @@
 import { AccountStore } from '../db/index.ts'
 import { requireClient } from './utils.ts'
 import { json } from './utils.ts'
-import type { BunRequest } from 'bun'
 import type {
   AccountsResponse,
   Platform,
@@ -29,12 +28,12 @@ export const accountRoutes = {
   },
 
   '/api/accounts/:platform': {
-    async DELETE(req: BunRequest<'/api/accounts/:platform'>) {
+    async DELETE(req: Request) {
       const auth = await requireClient(req)
       if (auth instanceof Response) {
         return auth
       }
-      const { platform } = req.params
+      const { platform } = (req as unknown as { params: { platform: string } }).params
       await AccountStore.delete(auth.clientSecret, platform)
       return json({ ok: true })
     },
