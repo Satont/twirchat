@@ -4,6 +4,9 @@ node_modules
 # output
 out
 dist
+!packages/desktop/dist/
+!packages/desktop/dist/main/
+!packages/desktop/dist/main/.gitkeep
 *.tgz
 
 # code coverage

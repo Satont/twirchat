@@ -1,0 +1,13 @@
+build/*
+!build/config.yml
+dist/*
+!dist/main/
+dist/main/*
+!dist/main/.gitkeep
+bin
+node_modules
+artifacts
+dist
+!dist/
+!dist/main/
+!dist/main/.gitkeep

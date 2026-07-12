@@ -1,0 +1,28 @@
+version: '3'
+
+tasks:
+  build:
+    cmds:
+      - task: build:main
+      - go build -o bin/twirchat .
+
+  build:main:
+    cmds:
+      - bun run build:main
+
+  build:overlay:
+    cmds:
+      - bun run build:overlay
+
+  build:views:
+    cmds:
+      - task: build:main
+      - task: build:overlay
+
+  dev:main:
+    cmds:
+      - bun run dev:main
+
+  run:
+    cmds:
+      - go run .
