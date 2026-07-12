@@ -5,6 +5,7 @@ import { rpc } from '../main'
 import StreamEditor from './StreamEditor.vue'
 import { useRpcListener } from '../composables/useRpcListener'
 import { platformColor } from '../../shared/utils/platform'
+import { applySavedChannels } from '../utils/channel-connections'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
@@ -64,6 +65,10 @@ function addToast(platform: Platform, type: Toast['type'], message: string) {
 useRpcListener('auth_success', async ({ platform, displayName }) => {
   const updated = (await rpc.request.getAccounts!()) as Account[]
   emit('accounts-updated', updated)
+  const saved = (await rpc.request.getChannels!()) as Partial<Record<Platform, string[]>>
+  if (saved) {
+    applySavedChannels(joinedChannels.value, saved)
+  }
   addToast(platform as Platform, 'success', `Connected as ${displayName}`)
 })
 useRpcListener('auth_error', ({ platform, error }) => {
@@ -74,14 +79,7 @@ onMounted(async () => {
   // Load persisted channels from the backend
   try {
     const saved = (await rpc.request.getChannels!()) as Partial<Record<Platform, string[]>>
-    if (saved) {
-      for (const platform of ['twitch', 'youtube', 'kick'] as Platform[]) {
-        const slugs = saved[platform]
-        if (slugs && slugs.length > 0) {
-          joinedChannels.value[platform] = slugs
-        }
-      }
-    }
+    if (saved) applySavedChannels(joinedChannels.value, saved)
   } catch (error) {
     console.warn('[PlatformsPanel] Failed to load persisted channels:', error)
   }

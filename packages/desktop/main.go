@@ -13,6 +13,7 @@ import (
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/bridge"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
+	kickchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/kick"
 	twitchchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/twitch"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -44,9 +45,14 @@ func main() {
 	}
 	bridge.RegisterStorageHandlers(requestHandlers, host.Storage())
 	events := bridge.NewEventPublisher(bridge.WailsEventEmitter{})
+	backendClient, err := backend.NewHTTPClient(backendURL(), host.ClientSecret(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 	twitchService, err := twitchchat.NewService(twitchchat.Config{
 		Storage: host.Storage(),
 		Events:  bridge.NewTwitchEvents(events),
+		Badges:  twitchchat.NewBackendBadgeResolver(backendClient),
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -54,11 +60,16 @@ func main() {
 	if err := host.AddService(twitchService); err != nil {
 		log.Fatal(err)
 	}
-	bridge.RegisterTwitchHandlers(requestHandlers, twitchService)
-	backendClient, err := backend.NewHTTPClient(backendURL(), host.ClientSecret(), nil)
+	kickService, err := kickchat.NewService(kickchat.Config{
+		Storage: host.Storage(), Backend: backendClient, Events: bridge.NewTwitchEvents(events),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := host.AddService(kickService); err != nil {
+		log.Fatal(err)
+	}
+	bridge.RegisterTwitchHandlers(requestHandlers, twitchService, kickService)
 	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
 	authService, err := auth.NewService(auth.Config{
 		Address:          "127.0.0.1:45821",

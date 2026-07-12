@@ -78,6 +78,7 @@ type Config struct {
 	Storage   *storage.Storage
 	Events    Events
 	NewClient ClientFactory
+	Badges    BadgeResolver
 }
 
 // Service reconnects saved Twitch channels, persists incoming messages and
@@ -86,6 +87,7 @@ type Service struct {
 	storage   *storage.Storage
 	events    Events
 	newClient ClientFactory
+	badges    BadgeResolver
 
 	mu          sync.Mutex
 	account     *contracts.Account
@@ -109,10 +111,14 @@ func NewService(config Config) (*Service, error) {
 	if config.NewClient == nil {
 		config.NewClient = newIRCClient
 	}
+	if config.Badges == nil {
+		config.Badges = passthroughBadgeResolver{}
+	}
 	return &Service{
 		storage:   config.Storage,
 		events:    config.Events,
 		newClient: config.NewClient,
+		badges:    config.Badges,
 		channels:  make(map[string]struct{}),
 		statuses:  make(map[string]contracts.PlatformStatusInfo),
 	}, nil
@@ -235,6 +241,10 @@ func (s *Service) Send(ctx context.Context, channel, text, replyToMessageID stri
 	} else {
 		client.Reply(channel, replyToMessageID, text)
 	}
+	badges := []contracts.Badge{broadcasterBadge()}
+	if resolved, err := s.badges.Resolve(ctx, channel, badges); err == nil {
+		badges = resolved
+	}
 
 	message := contracts.NormalizedChatMessage{
 		ID:        "local:twitch:" + channel + ":" + uuid.NewString(),
@@ -244,7 +254,7 @@ func (s *Service) Send(ctx context.Context, channel, text, replyToMessageID stri
 			ID:          credentials.PlatformUserID,
 			Username:    credentials.Username,
 			DisplayName: credentials.DisplayName,
-			Badges:      []contracts.Badge{},
+			Badges:      badges,
 		},
 		Text:      text,
 		Emotes:    []contracts.Emote{},
@@ -363,13 +373,18 @@ func (s *Service) onConnect() {
 }
 
 func (s *Service) onMessage(incoming IncomingMessage) {
+	badges, err := s.badges.Resolve(s.serviceContext(), incoming.Channel, incoming.Author.Badges)
+	if err != nil {
+		s.emitStatus(normalizeChannel(incoming.Channel), "error", fmt.Sprintf("resolve Twitch badges: %v", err))
+		badges = incoming.Author.Badges
+	}
 	message := contracts.NormalizedChatMessage{
 		ID:        incoming.ID,
 		Platform:  contracts.PlatformTwitch,
 		ChannelID: normalizeChannel(incoming.Channel),
 		Author: contracts.ChatAuthor{
 			ID: incoming.Author.ID, Username: incoming.Author.Username, DisplayName: incoming.Author.DisplayName,
-			Color: incoming.Author.Color, Badges: incoming.Author.Badges,
+			Color: incoming.Author.Color, Badges: badges,
 		},
 		Text: incoming.Text, Timestamp: incoming.Timestamp.UTC(), Type: "message", Reply: incoming.Reply,
 		Emotes: make([]contracts.Emote, 0, len(incoming.Emotes)),

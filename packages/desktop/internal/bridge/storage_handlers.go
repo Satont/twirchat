@@ -163,6 +163,12 @@ func RegisterStorageHandlers(registry *HandlerRegistry, store *storage.Storage) 
 	registry.Register(contracts.RequestGetChannelEmotes, func(context.Context, any) (any, error) {
 		return []contracts.SevenTVEmote{}, nil
 	})
+	// The historical cache returns null until a message from this username has
+	// been observed. Keep that valid no-colour state instead of rejecting the
+	// mention parser while the platform colour cache is being populated.
+	registry.Register(contracts.RequestGetUsernameColor, func(context.Context, any) (any, error) {
+		return nil, nil
+	})
 }
 
 func decodeParams(value any, target any) error {

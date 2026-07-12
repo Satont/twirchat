@@ -60,4 +60,11 @@ func TestRegisterStorageHandlersServesVueBootstrapRequests(t *testing.T) {
 	if got, want := tabIDs.([]string), []string{"watched-1", "watched-2"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("getTabChannelIds = %#v, want %#v", got, want)
 	}
+	color, err := service.Call(contracts.GatewayRequest{Method: contracts.RequestGetUsernameColor, Params: map[string]any{"platform": "twitch", "username": "unknown"}})
+	if err != nil {
+		t.Fatalf("getUsernameColor error = %v", err)
+	}
+	if color != nil {
+		t.Errorf("getUsernameColor = %#v, want nil", color)
+	}
 }

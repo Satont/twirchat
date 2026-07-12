@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -17,6 +18,48 @@ func RegisterBackendHandlers(
 	client *backend.HTTPClient,
 	store *storage.Storage,
 ) {
+	registry.Register(contracts.RequestGetUserCardMetadata, func(ctx context.Context, params any) (any, error) {
+		var input contracts.UserCardMetadataParams
+		if err := decodeParams(params, &input); err != nil {
+			return nil, err
+		}
+		if input.Platform != contracts.PlatformTwitch && input.Platform != contracts.PlatformKick {
+			return nil, fmt.Errorf("get user card metadata: unsupported platform %q", input.Platform)
+		}
+		if input.PlatformUserID == "" {
+			return nil, fmt.Errorf("get user card metadata: platform user ID is required")
+		}
+		body := map[string]any{
+			"platform": input.Platform, "platformUserId": input.PlatformUserID, "username": input.Username,
+			"channelId": input.ChannelID, "channelSlug": input.ChannelSlug,
+		}
+		if input.Platform == contracts.PlatformTwitch {
+			account, err := store.FindAccountByPlatform(ctx, contracts.PlatformTwitch)
+			if err != nil {
+				return nil, fmt.Errorf("get user card metadata: find Twitch account: %w", err)
+			}
+			if account != nil {
+				tokens, found, err := store.AccountTokens(ctx, account.ID)
+				if err != nil {
+					return nil, fmt.Errorf("get user card metadata: read Twitch token: %w", err)
+				}
+				if found {
+					body["twitchAuth"] = map[string]any{
+						"accessToken": tokens.AccessToken, "platformUserId": account.PlatformUserID, "scopes": account.Scopes,
+					}
+				}
+			}
+		}
+		var response json.RawMessage
+		if err := client.PostJSON(ctx, "/api/user-card-metadata", body, &response); err != nil {
+			return nil, fmt.Errorf("get user card metadata: %w", err)
+		}
+		var metadata map[string]any
+		if err := json.Unmarshal(response, &metadata); err != nil {
+			return nil, fmt.Errorf("get user card metadata: decode backend response: %w", err)
+		}
+		return metadata, nil
+	})
 	registry.Register(contracts.RequestGetStreamStatus, func(ctx context.Context, params any) (any, error) {
 		var input contracts.StreamStatusParams
 		if err := decodeParams(params, &input); err != nil {

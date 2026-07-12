@@ -141,7 +141,7 @@ func TestServiceConnectsStoredChannelPersistsIncomingMessageAndSendsLocalEcho(t 
 	if got := client.sent; len(got) != 1 || got[0] != (sentMessage{channel: "streamer", text: "hello chat"}) {
 		t.Fatalf("sent = %#v", got)
 	}
-	if got := events.lastMessage(); got.Text != "hello chat" || got.Author.ID != "1" || got.Type != "message" {
+	if got := events.lastMessage(); got.Text != "hello chat" || got.Author.ID != "1" || got.Type != "message" || len(got.Author.Badges) != 1 || got.Author.Badges[0].ID != "broadcaster/1" {
 		t.Fatalf("local echo = %#v", got)
 	}
 }
