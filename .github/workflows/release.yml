@@ -35,10 +35,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || \
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "$REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
 
   desktop:
     needs: [version, release]
