@@ -101,7 +101,8 @@ jobs:
         working-directory: packages/desktop
         shell: bash
         run: |
-          GO_LDFLAGS="-s -w -X main.version=${{ needs.version.outputs.version }}" wails3 build
+          export GO_LDFLAGS="-s -w -X main.version=${{ needs.version.outputs.version }}"
+          wails3 build
           test -f "bin/${{ matrix.main_exe }}"
       - name: Build macOS application bundle
         if: matrix.target == 'osx'
