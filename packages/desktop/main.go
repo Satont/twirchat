@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 
 	"github.com/Satont/twirchat/packages/desktop/internal/app"
 	"github.com/Satont/twirchat/packages/desktop/internal/auth"
@@ -15,13 +16,18 @@ import (
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	kickchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/kick"
 	twitchchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/twitch"
+	"github.com/Satont/twirchat/packages/desktop/internal/update"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:dist/main
 var assets embed.FS
 
+var version = "dev"
+
 func main() {
+	update.RunProductionStartup()
+	version = update.Version(version)
 	rootContext, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
@@ -30,6 +36,13 @@ func main() {
 		log.Fatal(err)
 	}
 	requestHandlers := bridge.NewHandlerRegistry()
+	config := loadRuntimeConfig()
+	feed := updateFeedURL()
+	updaterManager, err := update.NewVelopackManager(feed)
+	if err != nil {
+		log.Fatal(err)
+	}
+	updater := update.NewService(version, updaterManager)
 
 	host, err := app.New(app.Config{
 		Assets:     assets,
@@ -37,7 +50,7 @@ func main() {
 		Name:       "TwirChat",
 		ProfileDir: profileDir,
 		WailsServices: []application.Service{
-			application.NewService(bridge.NewDesktopService(requestHandlers)),
+			application.NewService(bridge.NewDesktopService(requestHandlers, true)),
 		},
 	})
 	if err != nil {
@@ -45,7 +58,8 @@ func main() {
 	}
 	bridge.RegisterStorageHandlers(requestHandlers, host.Storage())
 	events := bridge.NewEventPublisher(bridge.WailsEventEmitter{})
-	backendClient, err := backend.NewHTTPClient(backendURL(), host.ClientSecret(), nil)
+	bridge.RegisterUpdateHandlers(requestHandlers, updater, events)
+	backendClient, err := backend.NewHTTPClient(config.BackendURL, host.ClientSecret(), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,8 +86,8 @@ func main() {
 	bridge.RegisterTwitchHandlers(requestHandlers, twitchService, kickService)
 	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
 	authService, err := auth.NewService(auth.Config{
-		Address:          "127.0.0.1:45821",
-		CallbackHost:     "localhost",
+		Address:          config.AuthAddress,
+		CallbackHost:     config.AuthCallbackHost,
 		Backend:          backendClient,
 		Browser:          auth.BrowserFunc(openExternalURL),
 		IdentityResolver: auth.ProviderIdentityResolver{},
@@ -108,11 +122,9 @@ func main() {
 	}
 }
 
-func backendURL() string {
-	if value := os.Getenv("TWIRCHAT_BACKEND_URL"); value != "" {
-		return value
-	}
-	return "http://127.0.0.1:3000"
+func updateFeedURL() string {
+	channel := map[string]string{"linux": "linux", "windows": "win", "darwin": "osx"}[runtime.GOOS]
+	return "https://github.com/Satont/twirchat/releases/latest/download/releases." + channel + ".json"
 }
 
 func openExternalURL(url string) error {

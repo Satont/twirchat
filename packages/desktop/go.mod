@@ -6,6 +6,7 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/gempir/go-twitch-irc/v4 v4.4.1
 	github.com/google/uuid v1.6.0
+	github.com/quaadgras/velopack-go v0.0.1358
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.117
 	modernc.org/sqlite v1.53.0
 )

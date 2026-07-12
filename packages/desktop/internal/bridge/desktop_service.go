@@ -55,13 +55,19 @@ func (r *HandlerRegistry) get(method contracts.RequestMethod) (RequestHandler, b
 type DesktopService struct {
 	context  context.Context
 	registry *HandlerRegistry
+	updates  bool
 	mu       sync.RWMutex
 }
 
-func NewDesktopService(registry *HandlerRegistry) *DesktopService {
+func NewDesktopService(registry *HandlerRegistry, updates ...bool) *DesktopService {
+	available := false
+	if len(updates) > 0 {
+		available = updates[0]
+	}
 	return &DesktopService{
 		context:  context.Background(),
 		registry: registry,
+		updates:  available,
 	}
 }
 
@@ -87,5 +93,5 @@ func (s *DesktopService) Call(request contracts.GatewayRequest) (any, error) {
 }
 
 func (s *DesktopService) Capabilities() contracts.ApplicationCapabilities {
-	return contracts.ApplicationCapabilities{Updates: false}
+	return contracts.ApplicationCapabilities{Updates: s.updates}
 }

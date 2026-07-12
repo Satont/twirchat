@@ -18,6 +18,7 @@ const (
 	eventChannelEmoteUpdated   = "channel_emote_updated"
 	eventWatchedChannelMessage = "watched_channel_message"
 	eventWatchedChannelStatus  = "watched_channel_status"
+	eventUpdateStatus          = "update_status"
 )
 
 // EventEmitter is a narrow Wails event seam for bridge unit tests.
@@ -105,4 +106,12 @@ func (p *EventPublisher) EmitWatchedChannelMessage(payload contracts.WatchedChan
 
 func (p *EventPublisher) EmitWatchedChannelStatus(payload contracts.WatchedChannelStatus) bool {
 	return p.events.Emit(eventWatchedChannelStatus, payload)
+}
+
+func (p *EventPublisher) EmitUpdateStatus(status, message string, progress *uint) bool {
+	payload := map[string]any{"status": status, "message": message}
+	if progress != nil {
+		payload["progress"] = *progress
+	}
+	return p.events.Emit(eventUpdateStatus, payload)
 }
