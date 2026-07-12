@@ -76,13 +76,6 @@ jobs:
       - uses: arduino/setup-task@v2
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '8.0.x' }
-      - name: Install Wails and Velopack
-        shell: bash
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117
-          dotnet tool install --global vpk
-          echo "$HOME/go/bin" >> "$GITHUB_PATH"
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
       - name: Linux WebKitGTK 6 build dependencies and UPX
         if: matrix.target == 'linux'
         shell: bash
@@ -91,6 +84,13 @@ jobs:
           sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev upx-ucl
           pkg-config --modversion gtk4
           pkg-config --modversion webkitgtk-6.0
+      - name: Install Wails and Velopack
+        shell: bash
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117
+          dotnet tool install --global vpk
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
       - name: Windows UPX
         if: matrix.target == 'win'
         shell: pwsh
