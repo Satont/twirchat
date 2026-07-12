@@ -33,7 +33,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             channel: linux
             target: linux
             main_exe: twirchat
@@ -69,9 +69,14 @@ jobs:
           dotnet tool install --global vpk
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-      - name: Linux webview dependencies and UPX
+      - name: Linux WebKitGTK 6 build dependencies and UPX
         if: matrix.target == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev upx-ucl
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev upx-ucl
+          pkg-config --modversion gtk4
+          pkg-config --modversion webkitgtk-6.0
       - name: Windows UPX
         if: matrix.target == 'win'
         shell: pwsh
@@ -82,7 +87,7 @@ jobs:
         working-directory: packages/desktop
         shell: bash
         run: |
-          wails3 build -ldflags="-s -w -X main.version=${{ needs.version.outputs.version }}"
+          GO_LDFLAGS="-s -w -X main.version=${{ needs.version.outputs.version }}" wails3 build
           test -f bin/twirchat || test -f bin/twirchat.exe || test -d bin/TwirChat.app
       - name: Compress executable with UPX
         if: matrix.upx

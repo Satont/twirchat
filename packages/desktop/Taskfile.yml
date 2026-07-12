@@ -4,7 +4,7 @@ tasks:
   build:
     cmds:
       - task: build:main
-      - go build -o bin/twirchat .
+      - go build -ldflags "$GO_LDFLAGS" -o bin/twirchat .
 
   build:main:
     cmds:
