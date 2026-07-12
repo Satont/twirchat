@@ -115,6 +115,7 @@ jobs:
           app='bin/TwirChat.app'
           rm -rf "$app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          printf 'Preserve macOS resources in the Velopack bundle.\n' > "$app/Contents/Resources/artifact-sentinel.txt"
           go build -ldflags "-s -w -X main.version=$VERSION" -o "$app/Contents/MacOS/TwirChat" .
           cat > "$app/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
@@ -166,5 +167,5 @@ jobs:
         run: |
           mkdir -p velopack
           vpk download github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --channel "${{ matrix.channel }}" --outputDir velopack || true
-          vpk "[osx]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin --mainExe "TwirChat.app" --channel "${{ matrix.channel }}" --outputDir velopack
+          vpk "[osx]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin/TwirChat.app --mainExe TwirChat --channel "${{ matrix.channel }}" --outputDir velopack
           vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --publish --merge --tag "$TAG" --channel "${{ matrix.channel }}" --outputDir velopack
