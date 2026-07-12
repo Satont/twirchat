@@ -22,12 +22,14 @@
 ### Task 1: Version and Velopack startup contract
 
 **Files:**
+
 - Modify: `packages/desktop/main.go`
 - Create: `packages/desktop/internal/update/service.go`
 - Create: `packages/desktop/internal/update/service_test.go`
 - Modify: `packages/desktop/go.mod`, `packages/desktop/go.sum`
 
 **Interfaces:**
+
 - Produces `update.NewService(update.Config)`, implementing app `Start`/`Stop` and bridge updater operations.
 - Produces `main.version`, defaulting to `dev`; release builds overwrite it with Go linker `-X`.
 
@@ -40,6 +42,7 @@
 ### Task 2: Restore real updater bridge and Vue capability
 
 **Files:**
+
 - Modify: `packages/desktop/internal/bridge/events.go`
 - Create: `packages/desktop/internal/bridge/update_handlers.go`
 - Create: `packages/desktop/internal/bridge/update_handlers_test.go`
@@ -49,6 +52,7 @@
 - Test: `packages/desktop/tests/update-capability.test.ts`
 
 **Interfaces:**
+
 - Consumes `update.Service.Check`, `Download`, `Apply`, `Skip`.
 - Produces handlers for `checkForUpdate`, `downloadUpdate`, `applyUpdate`, `skipUpdate` and `update_status` Wails events.
 
@@ -61,6 +65,7 @@
 ### Task 3: Deterministic Wails artifact contract
 
 **Files:**
+
 - Modify: `packages/desktop/Taskfile.yml`
 - Modify: `packages/desktop/build/config.yml`
 - Create: `packages/desktop/internal/release/contract.go`
@@ -68,6 +73,7 @@
 - Create: `packages/desktop/cmd/release-contract/main.go`
 
 **Interfaces:**
+
 - Produces `release-contract verify --target <linux-x64|win-x64|macos-universal> --version <semver> --artifact <path>`.
 - Expects Wails assets, correct executable name and injected version.
 
@@ -79,11 +85,13 @@
 ### Task 4: Replace GitHub Actions desktop build and Velopack publish jobs
 
 **Files:**
+
 - Modify: `.github/workflows/release.yml`
 - Modify: `README.md`
 - Modify: `RELEASE.md`
 
 **Interfaces:**
+
 - Consumes target artifacts produced by Task 3.
 - Produces release assets and feeds with same Velopack ID/channels as the Rust release.
 
@@ -98,6 +106,7 @@
 ### Task 5: Migration and release acceptance checks
 
 **Files:**
+
 - Create: `docs/release-checklist-wails-velopack.md`
 - Modify: `.github/workflows/release.yml`
 
