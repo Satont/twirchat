@@ -52,18 +52,21 @@ jobs:
             target: linux
             main_exe: twirchat
             runtime: linux-x64
+            cgo_ldflags: ''
             upx: true
           - os: windows-latest
             channel: win
             target: win
             main_exe: twirchat.exe
             runtime: win-x64
+            cgo_ldflags: -lntdll
             upx: true
           - os: macos-latest
             channel: osx
             target: osx
             main_exe: TwirChat
             runtime: ''
+            cgo_ldflags: ''
             upx: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -105,6 +108,7 @@ jobs:
         shell: bash
         run: |
           export GO_LDFLAGS="-s -w -X main.version=${{ needs.version.outputs.version }}"
+          export CGO_LDFLAGS="${{ matrix.cgo_ldflags }}"
           wails3 build
           test -f "bin/${{ matrix.main_exe }}"
       - name: Build macOS application bundle
