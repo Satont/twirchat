@@ -19,6 +19,8 @@ func (e *recordingEvents) Status(status contracts.PlatformStatusInfo) {
 	e.statuses = append(e.statuses, status)
 }
 
+func (e *recordingEvents) Message(contracts.NormalizedChatMessage) {}
+
 func TestServiceStartsSavedKickChannelAndSendsWithAccountToken(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("kick-service-test"))
