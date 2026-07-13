@@ -81,7 +81,7 @@ function messageModerationPlatform(): ModerationPlatform | undefined {
     @pointermove.stop.prevent="onPointerMove"
     @pointerup.stop.prevent="onPointerEnd"
   >
-    <span class="moderation-rail-fill" :style="{ width: `${distance}px` }" />
+    <span v-if="distance > 0" class="moderation-rail-fill" :style="{ width: `${distance}px` }" />
     <span class="moderation-rail-handle" aria-hidden="true">⠿</span>
     <span v-if="preview" class="moderation-rail-preview">{{ preview.label }}</span>
   </div>
