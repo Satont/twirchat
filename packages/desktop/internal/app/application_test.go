@@ -100,11 +100,11 @@ func TestMainWindowOptionsUsesFramelessWindowsWithSystemDecorations(t *testing.T
 	}
 }
 
-func TestMainWindowOptionsUsesFramelessMacChrome(t *testing.T) {
+func TestMainWindowOptionsKeepsNativeMacFrameForTrafficLights(t *testing.T) {
 	options := mainWindowOptions("TwirChat", "darwin")
 
-	if !options.Frameless {
-		t.Fatal("Frameless = false, want true")
+	if options.Frameless {
+		t.Fatal("Frameless = true, want false so macOS retains native traffic-light controls")
 	}
 	if !options.Mac.TitleBar.AppearsTransparent || !options.Mac.TitleBar.FullSizeContent {
 		t.Fatalf("Mac title bar = %+v, want transparent full-size content", options.Mac.TitleBar)

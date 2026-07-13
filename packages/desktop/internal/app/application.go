@@ -105,7 +105,6 @@ func mainWindowOptions(name, platform string) application.WebviewWindowOptions {
 			DisableFramelessWindowDecorations: false,
 		}
 	case "darwin":
-		options.Frameless = true
 		options.Mac = application.MacWindow{
 			TitleBar:                 application.MacTitleBarHidden,
 			InvisibleTitleBarHeight: compactTitleBarHeight,
