@@ -10,6 +10,7 @@ import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import UserContextMenu from './UserContextMenu.vue'
 import { useMessageParsing } from '../composables/useMessageParsing'
 import { resolveBadgeImage } from '../utils/badge-image'
+import { chatMessageStyle } from '../utils/chat-message-style'
 
 const props = defineProps<{
   message: NormalizedChatMessage
@@ -142,7 +143,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
     v-if="isSystemMessage"
     class="msg msg-system"
     :class="[`platform-${message.platform}`, `action-${systemAction}`]"
-    :style="{ '--font-size': `${props.fontSize ?? 14}px` }"
+    :style="chatMessageStyle(props.fontSize)"
   >
     <!-- Action icon: +/−/~ colored pill -->
     <div class="system-action-icon" :class="`action-icon-${systemAction}`">
@@ -173,7 +174,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
     v-else-if="props.chatTheme === 'compact'"
     class="msg msg-compact"
     :class="[`platform-${message.platform}`, { 'self-ping': isSelfPing }]"
-    :style="{ '--font-size': `${props.fontSize ?? 14}px`, ...selfPingStyle }"
+    :style="{ ...chatMessageStyle(props.fontSize), ...selfPingStyle }"
     @click="onMsgClick"
   >
     <span
@@ -357,7 +358,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       message.type === 'action' ? 'is-action' : '',
       { 'self-ping': isSelfPing },
     ]"
-    :style="{ '--font-size': `${props.fontSize ?? 14}px`, ...selfPingStyle }"
+    :style="{ ...chatMessageStyle(props.fontSize), ...selfPingStyle }"
     @click="onMsgClick"
   >
     <!-- Platform colour stripe -->
@@ -583,9 +584,16 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: var(--platform-icon-size, 12px);
+  height: var(--platform-icon-size, 12px);
   flex-shrink: 0;
   opacity: 0.85;
   line-height: 1;
+}
+
+.platform-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 .msg-compact .platform-icon {
@@ -645,21 +653,32 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
   display: flex;
   align-items: center;
   gap: 3px;
+  line-height: 1;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--badge-size, 16px);
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .badge img {
-  width: 14px;
-  height: 14px;
-  vertical-align: middle;
-  display: inline-block;
+  display: block;
+  width: auto;
+  max-width: 4em;
+  height: var(--badge-size, 16px);
+  object-fit: contain;
 }
 
 .badge-svg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: var(--badge-size, 16px);
+  height: var(--badge-size, 16px);
 }
 
 .badge-svg :deep(svg) {
@@ -668,11 +687,14 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 }
 
 .badge-text {
-  font-size: 10px;
-  padding: 1px 4px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--badge-size, 16px);
+  font-size: calc(var(--badge-size, 16px) - 4px);
+  padding: 0.08em 0.35em;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
-  line-height: 1.4;
+  line-height: 1;
 }
 
 .author {

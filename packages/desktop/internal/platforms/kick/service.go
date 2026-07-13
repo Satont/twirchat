@@ -183,23 +183,38 @@ type pusherEnvelope struct {
 	Event string          `json:"event"`
 	Data  json.RawMessage `json:"data"`
 }
+
+type kickBadgeV1 struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type kickBadgeV2 struct {
+	Name      string          `json:"name"`
+	BadgeType string          `json:"badge_type"`
+	ImageURL  string          `json:"image_url"`
+	Metadata  json.RawMessage `json:"metadata"`
+	Selected  bool            `json:"selected"`
+	SortOrder int             `json:"sort_order"`
+}
+
+type kickIdentity struct {
+	Color    string        `json:"color"`
+	Badges   []kickBadgeV1 `json:"badges"`
+	BadgesV2 []kickBadgeV2 `json:"badges_v2"`
+}
+
 type pusherChatMessage struct {
 	ID         string `json:"id"`
 	ChatroomID int64  `json:"chatroom_id"`
 	Content    string `json:"content"`
 	CreatedAt  string `json:"created_at"`
 	Sender     struct {
-		ID             int64  `json:"id"`
-		Username       string `json:"username"`
-		Slug           string `json:"slug"`
-		ProfilePicture string `json:"profile_picture"`
-		Identity       struct {
-			Color  string `json:"color"`
-			Badges []struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"badges"`
-		} `json:"identity"`
+		ID             int64        `json:"id"`
+		Username       string       `json:"username"`
+		Slug           string       `json:"slug"`
+		ProfilePicture string       `json:"profile_picture"`
+		Identity       kickIdentity `json:"identity"`
 	} `json:"sender"`
 }
 
@@ -254,15 +269,7 @@ func (s *Service) handlePusherMessage(ctx context.Context, channel string, raw j
 	if err != nil {
 		timestamp = time.Now().UTC()
 	}
-	badges := make([]contracts.Badge, 0, len(incoming.Sender.Identity.Badges))
-	for _, badge := range incoming.Sender.Identity.Badges {
-		badges = append(badges, contracts.Badge{
-			ID:       badge.Type,
-			Type:     badge.Type,
-			Text:     badge.Text,
-			ImageURL: embeddedBadgeURL(badge.Type),
-		})
-	}
+	badges := normalizeBadges(incoming.Sender.Identity.Badges, incoming.Sender.Identity.BadgesV2)
 	message := contracts.NormalizedChatMessage{ID: incoming.ID, Platform: contracts.PlatformKick, ChannelID: channel, Author: contracts.ChatAuthor{ID: fmt.Sprint(incoming.Sender.ID), Username: incoming.Sender.Username, DisplayName: incoming.Sender.Username, Color: incoming.Sender.Identity.Color, AvatarURL: incoming.Sender.ProfilePicture, Badges: badges}, Text: incoming.Content, Emotes: []contracts.Emote{}, Timestamp: timestamp, Type: "message"}
 	if message.ID == "" {
 		message.ID = fmt.Sprintf("kick:%d:%d", incoming.ChatroomID, timestamp.UnixNano())
