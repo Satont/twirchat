@@ -27,6 +27,7 @@ import { desktopApi } from './services/desktop-api'
 import { shouldCheckForUpdates } from './services/update-capability'
 import { resolveWindowChromePlatform } from './services/window-chrome'
 import { mergeChatMessageSnapshot } from './utils/chat-message-buffer'
+import { filterHomeChatMessages } from './utils/chat-send-targets'
 import type {
   Account,
   AppSettings,
@@ -239,7 +240,10 @@ async function loadInitialData() {
   try {
     const recentMsgs = await rpc.request.getRecentMessages({})
     if (recentMsgs !== undefined && recentMsgs.length > 0) {
-      messages.value = mergeChatMessageSnapshot(messages.value, recentMsgs)
+      messages.value = mergeChatMessageSnapshot(
+        messages.value,
+        filterHomeChatMessages(recentMsgs, accounts.value),
+      )
     }
   } catch (error) {
     console.warn('[App] Failed to load recent messages:', error)
@@ -325,7 +329,10 @@ const DOWNLOAD_IN_PROGRESS_STATUSES = new Set([
 ])
 
 useRpcListener('chat_message', (msg: NormalizedChatMessage) => {
-  messages.value = mergeChatMessageSnapshot(messages.value, [msg])
+  messages.value = mergeChatMessageSnapshot(
+    messages.value,
+    filterHomeChatMessages([msg], accounts.value),
+  )
 })
 
 useRpcListener('chat_moderation', (outcome) => {
@@ -422,7 +429,10 @@ useRpcListener(
             channelId,
             mergeChatMessageSnapshot(watched, channelMessages, 200),
           )
-          messages.value = mergeChatMessageSnapshot(messages.value, recentMessages)
+          messages.value = mergeChatMessageSnapshot(
+            messages.value,
+            filterHomeChatMessages(recentMessages, accounts.value),
+          )
         })
         .catch((error) => console.warn('[App] refresh rejected watched message failed:', error))
     }

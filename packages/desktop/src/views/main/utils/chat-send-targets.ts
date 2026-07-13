@@ -12,7 +12,7 @@ export interface ChatMessageTarget extends ChatSendTarget {
 
 // The home composer always sends as the connected account to that account's
 // own channel. Watched channels are read targets and must never replace this.
-export function ownChatSendTargets(accounts: Account[]): ChatSendTarget[] {
+export function ownChatSendTargets(accounts: readonly Account[]): ChatSendTarget[] {
   return accounts.flatMap((account) => {
     if (
       (account.platform !== 'twitch' && account.platform !== 'kick') ||
@@ -22,6 +22,28 @@ export function ownChatSendTargets(accounts: Account[]): ChatSendTarget[] {
     }
     return [{ platform: account.platform, channelLogin: account.username }]
   })
+}
+
+function chatChannelKey(platform: Platform, channelLogin: string): string {
+  return `${platform}:${channelLogin.trim().toLowerCase()}`
+}
+
+// My channels belongs only to the channel of each connected account. The
+// transport also receives watched-channel messages, so filter its shared event
+// stream before it reaches the home chat buffer.
+export function filterHomeChatMessages(
+  messages: readonly NormalizedChatMessage[],
+  accounts: readonly Account[],
+): NormalizedChatMessage[] {
+  const ownChannels = new Set(
+    ownChatSendTargets(accounts).map((target) =>
+      chatChannelKey(target.platform, target.channelLogin),
+    ),
+  )
+
+  return messages.filter((message) =>
+    ownChannels.has(chatChannelKey(message.platform, message.channelId)),
+  )
 }
 
 export function createChatMessageTargets(
