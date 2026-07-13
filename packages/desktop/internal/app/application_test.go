@@ -89,6 +89,46 @@ func TestNewConfiguresHostWithoutStartingServices(t *testing.T) {
 	}
 }
 
+func TestMainWindowOptionsUsesFramelessWindowsWithSystemDecorations(t *testing.T) {
+	options := mainWindowOptions("TwirChat", "windows")
+
+	if !options.Frameless {
+		t.Fatal("Frameless = false, want true")
+	}
+	if options.Windows.DisableFramelessWindowDecorations {
+		t.Fatal("DisableFramelessWindowDecorations = true, want false")
+	}
+}
+
+func TestMainWindowOptionsUsesFramelessMacChrome(t *testing.T) {
+	options := mainWindowOptions("TwirChat", "darwin")
+
+	if !options.Frameless {
+		t.Fatal("Frameless = false, want true")
+	}
+	if !options.Mac.TitleBar.AppearsTransparent || !options.Mac.TitleBar.FullSizeContent {
+		t.Fatalf("Mac title bar = %+v, want transparent full-size content", options.Mac.TitleBar)
+	}
+	if options.Mac.TitleBar.Hide {
+		t.Fatal("Mac title bar is hidden, want native traffic-light controls")
+	}
+	if options.Mac.InvisibleTitleBarHeight != compactTitleBarHeight {
+		t.Fatalf(
+			"InvisibleTitleBarHeight = %d, want %d",
+			options.Mac.InvisibleTitleBarHeight,
+			compactTitleBarHeight,
+		)
+	}
+}
+
+func TestMainWindowOptionsKeepsLinuxNativeFrame(t *testing.T) {
+	options := mainWindowOptions("TwirChat", "linux")
+
+	if options.Frameless {
+		t.Fatal("Frameless = true, want false")
+	}
+}
+
 func TestNewKeepsWailsServicesForBinding(t *testing.T) {
 	host, err := New(Config{
 		Assets:     fstest.MapFS{"index.html": {Data: []byte("<html></html>")}},
