@@ -186,6 +186,8 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           : "${BACKEND_URL:?BACKEND_URL repository variable or secret must be configured for release builds}"
+          bun run build:main
+          test -f "dist/main/index.html"
           app='bin/TwirChat.app'
           rm -rf "$app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"

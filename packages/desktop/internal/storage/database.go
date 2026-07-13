@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -85,7 +86,12 @@ func sqliteDSN(path string) string {
 	parameters.Add("_pragma", "journal_mode(WAL)")
 	parameters.Add("_pragma", "foreign_keys(1)")
 
-	return (&url.URL{Scheme: "file", Path: path, RawQuery: parameters.Encode()}).String()
+	uriPath := strings.ReplaceAll(path, `\`, "/")
+	if len(uriPath) >= 3 && uriPath[1] == ':' && uriPath[2] == '/' {
+		uriPath = "/" + uriPath
+	}
+
+	return (&url.URL{Scheme: "file", Path: uriPath, RawQuery: parameters.Encode()}).String()
 }
 
 // Path returns the SQLite path under the Wails profile directory.

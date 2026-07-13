@@ -75,6 +75,14 @@ func TestOpenInitializesFreshProfileDatabaseWithWALAndForeignKeys(t *testing.T) 
 	}
 }
 
+func TestSQLiteDSNUsesAnAuthorityFreeFileURIForWindowsPaths(t *testing.T) {
+	got := sqliteDSN(`C:\Users\Docker\AppData\Roaming\TwirChat\twirchat.sqlite`)
+	want := "file:///C:/Users/Docker/AppData/Roaming/TwirChat/twirchat.sqlite?_pragma=journal_mode%28WAL%29&_pragma=foreign_keys%281%29"
+	if got != want {
+		t.Errorf("sqliteDSN() = %q, want %q", got, want)
+	}
+}
+
 func TestClientSecretIsCreatedOncePerProfile(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStorage(t)
