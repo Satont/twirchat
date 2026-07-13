@@ -26,6 +26,11 @@ var assets embed.FS
 var version = "dev"
 
 func main() {
+	if buildBackendURL == "" {
+		if err := loadDotEnv(); err != nil {
+			log.Fatal(err)
+		}
+	}
 	update.RunProductionStartup()
 	version = update.Version(version)
 	rootContext, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
