@@ -957,6 +957,9 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 }
 
 .msg-compact .compact-time {
+  display: inline-block;
+  width: 8ch;
+  font-variant-numeric: tabular-nums;
   margin-right: 4px;
   margin-left: 0;
 }
