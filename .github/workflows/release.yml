@@ -157,7 +157,11 @@ jobs:
         shell: bash
         run: |
           : "${BACKEND_URL:?BACKEND_URL repository variable or secret must be configured for release builds}"
-          export GO_LDFLAGS="-s -w -X main.version=${{ needs.version.outputs.version }} -X main.buildBackendURL=${BACKEND_URL}"
+          goLdflags="-s -w -X main.version=${{ needs.version.outputs.version }} -X main.buildBackendURL=${BACKEND_URL}"
+          if [[ "${{ matrix.target }}" == 'win' ]]; then
+            goLdflags="$goLdflags -H windowsgui"
+          fi
+          export GO_LDFLAGS="$goLdflags"
           export CGO_LDFLAGS="${{ matrix.cgo_ldflags }}"
           wails3 build
           if [[ "${{ matrix.target }}" == 'win' && -f bin/twirchat && ! -f bin/twirchat.exe ]]; then

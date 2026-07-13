@@ -17,3 +17,11 @@ test('Windows release stages all MinGW runtimes required by Velopack', async () 
     "Copy-Item -LiteralPath $runtimeDll -Destination (Join-Path 'bin' $runtimeDllName)",
   )
 })
+
+test('Windows release builds a GUI-subsystem executable', async () => {
+  const workflow = await Bun.file(
+    resolve(import.meta.dir, '../../../.github/workflows/release.yml'),
+  ).text()
+
+  expect(workflow).toContain('goLdflags="$goLdflags -H windowsgui"')
+})
