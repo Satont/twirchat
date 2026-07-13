@@ -21,6 +21,7 @@ type recordingEvents struct {
 	mu       sync.Mutex
 	statuses []contracts.PlatformStatusInfo
 	messages []contracts.NormalizedChatMessage
+	outcomes []contracts.ModerationOutcome
 }
 
 func TestServiceSubscribesAndEnrichesEachNativeTwitchChannelWithSevenTV(t *testing.T) {
@@ -81,6 +82,12 @@ func (e *recordingEvents) Message(message contracts.NormalizedChatMessage) {
 	e.messages = append(e.messages, message)
 }
 
+func (e *recordingEvents) Moderation(outcome contracts.ModerationOutcome) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.outcomes = append(e.outcomes, outcome)
+}
+
 func (e *recordingEvents) lastStatus() contracts.PlatformStatusInfo {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -93,15 +100,23 @@ func (e *recordingEvents) lastMessage() contracts.NormalizedChatMessage {
 	return e.messages[len(e.messages)-1]
 }
 
+func (e *recordingEvents) lastOutcome() contracts.ModerationOutcome {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.outcomes[len(e.outcomes)-1]
+}
+
 type fakeClient struct {
-	onConnect func()
-	onMessage func(IncomingMessage)
-	onNotice  func(Notice)
-	onSay     func(string, string)
-	connect   func() error
-	joined    []string
-	departed  []string
-	sent      []sentMessage
+	onConnect       func()
+	onMessage       func(IncomingMessage)
+	onNotice        func(Notice)
+	onMessageDelete func(DeletedMessage)
+	onUserSanction  func(UserSanction)
+	onSay           func(string, string)
+	connect         func() error
+	joined          []string
+	departed        []string
+	sent            []sentMessage
 }
 
 type sentMessage struct {
@@ -131,6 +146,10 @@ func (r *recordingSevenTV) Enrich(message contracts.NormalizedChatMessage) contr
 func (c *fakeClient) OnConnect(handler func())                { c.onConnect = handler }
 func (c *fakeClient) OnMessage(handler func(IncomingMessage)) { c.onMessage = handler }
 func (c *fakeClient) OnNotice(handler func(Notice))           { c.onNotice = handler }
+func (c *fakeClient) OnMessageDelete(handler func(DeletedMessage)) {
+	c.onMessageDelete = handler
+}
+func (c *fakeClient) OnUserSanction(handler func(UserSanction)) { c.onUserSanction = handler }
 func (c *fakeClient) Join(channel string)                     { c.joined = append(c.joined, channel) }
 func (c *fakeClient) Depart(channel string)                   { c.departed = append(c.departed, channel) }
 func (c *fakeClient) Say(channel, text string) {
@@ -152,6 +171,60 @@ func (c *fakeClient) Disconnect() error               { return nil }
 func (c *fakeClient) connected()                      { c.onConnect() }
 func (c *fakeClient) receive(message IncomingMessage) { c.onMessage(message) }
 func (c *fakeClient) notice(notice Notice)            { c.onNotice(notice) }
+func (c *fakeClient) deleteMessage(message DeletedMessage) {
+	c.onMessageDelete(message)
+}
+func (c *fakeClient) sanction(sanction UserSanction) { c.onUserSanction(sanction) }
+
+func TestServicePublishesTwitchModerationOutcomesFromIRC(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("twitch-moderation-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.UpsertAccount(ctx, contracts.Account{
+		ID: "twitch:1", Platform: contracts.PlatformTwitch, Username: "viewer",
+	}, storage.AccountTokens{AccessToken: "access-token"}); err != nil {
+		t.Fatalf("UpsertAccount() error = %v", err)
+	}
+	if err := store.SaveChannel(ctx, contracts.PlatformTwitch, "streamer"); err != nil {
+		t.Fatalf("SaveChannel() error = %v", err)
+	}
+	client := &fakeClient{}
+	events := &recordingEvents{}
+	service, err := NewService(Config{
+		Storage: store, Events: events, NewClient: func(Credentials) (Client, error) { return client, nil },
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	if err := service.Start(ctx); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	t.Cleanup(func() { _ = service.Stop(context.Background()) })
+
+	client.deleteMessage(DeletedMessage{Channel: "#streamer", MessageID: "message-1"})
+	if got, want := events.lastOutcome(), (contracts.ModerationOutcome{
+		Platform: contracts.PlatformTwitch, ChannelID: "streamer", Action: "delete_message", MessageID: "message-1",
+	}); got != want {
+		t.Fatalf("delete outcome = %#v, want %#v", got, want)
+	}
+
+	client.sanction(UserSanction{Channel: "streamer", TargetUserID: "viewer-2", DurationSeconds: 600})
+	if got, want := events.lastOutcome(), (contracts.ModerationOutcome{
+		Platform: contracts.PlatformTwitch, ChannelID: "streamer", Action: "timeout", TargetUserID: "viewer-2", DurationSeconds: 600,
+	}); got != want {
+		t.Fatalf("timeout outcome = %#v, want %#v", got, want)
+	}
+
+	client.sanction(UserSanction{Channel: "streamer", TargetUserID: "viewer-2"})
+	if got, want := events.lastOutcome(), (contracts.ModerationOutcome{
+		Platform: contracts.PlatformTwitch, ChannelID: "streamer", Action: "ban", TargetUserID: "viewer-2",
+	}); got != want {
+		t.Fatalf("ban outcome = %#v, want %#v", got, want)
+	}
+}
 
 func TestServiceConnectsStoredChannelPersistsIncomingMessageAndSendsThroughAPI(t *testing.T) {
 	ctx := context.Background()

@@ -1,6 +1,7 @@
 import type {
   NormalizedChatMessage,
   NormalizedEvent,
+  ModerationOutcome,
   Platform,
   PlatformStatusInfo,
 } from '@twirchat/shared/types'
@@ -10,6 +11,7 @@ import { Events } from '@wailsio/runtime'
 export type DesktopEventMap = {
   chat_message: NormalizedChatMessage
   chat_event: NormalizedEvent
+  chat_moderation: ModerationOutcome
   platform_status: PlatformStatusInfo
   auth_url: { platform: Platform; url: string }
   auth_success: { platform: Platform; username: string; displayName: string }

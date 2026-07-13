@@ -105,4 +105,7 @@ export enum RequestMethod {
     RequestRemovePanel = "removePanel",
     RequestAssignChannelToPanel = "assignChannelToPanel",
     RequestSplitPanel = "splitPanel",
+    RequestResolveAvatar = "resolveAvatar",
+    RequestGetModerationCapabilities = "getModerationCapabilities",
+    RequestModerateMessage = "moderateMessage",
 };

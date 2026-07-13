@@ -17,7 +17,7 @@ const TWITCH_TOKEN = 'test-twitch-token'
 const TWITCH_BROADCASTER_ID = '123456'
 const TWITCH_MODERATOR_ID = '654321'
 const KICK_TOKEN = 'test-kick-token'
-const KICK_CHANNEL_ID = '999'
+const KICK_BROADCASTER_USER_ID = 999
 
 // ============================================================
 // Twitch Tests
@@ -191,18 +191,20 @@ describe('Twitch Moderation', () => {
 
 describe('Kick Moderation', () => {
   it('should ban a user permanently on Kick', async () => {
-    global.fetch = mock(async () =>
-      Response.json({
-        data: {
-          user_id: 1,
-          banned_user_id: 999,
-          duration_minutes: null,
-        },
-      }),
-    ) as unknown as typeof global.fetch
+    global.fetch = mock(async (input: string | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://api.kick.com/public/v1/moderation/bans')
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        broadcaster_user_id: KICK_BROADCASTER_USER_ID,
+        user_id: 999,
+        reason: 'Harassment',
+      })
+      return Response.json({ data: {} })
+    }) as unknown as typeof global.fetch
 
-    const result = await Kick.banUser(KICK_TOKEN, KICK_CHANNEL_ID, {
-      banned_user_id: 999,
+    const result = await Kick.banUser(KICK_TOKEN, {
+      broadcaster_user_id: KICK_BROADCASTER_USER_ID,
+      user_id: 999,
       reason: 'Harassment',
     })
 
@@ -212,19 +214,20 @@ describe('Kick Moderation', () => {
   })
 
   it('should timeout a user for 5 minutes on Kick', async () => {
-    global.fetch = mock(async () =>
-      Response.json({
-        data: {
-          user_id: 1,
-          banned_user_id: 999,
-          duration_minutes: 5,
-        },
-      }),
-    ) as unknown as typeof global.fetch
+    global.fetch = mock(async (input: string | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://api.kick.com/public/v1/moderation/bans')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        broadcaster_user_id: KICK_BROADCASTER_USER_ID,
+        user_id: 999,
+        duration: 5,
+      })
+      return Response.json({ data: {} })
+    }) as unknown as typeof global.fetch
 
-    const result = await Kick.banUser(KICK_TOKEN, KICK_CHANNEL_ID, {
-      banned_user_id: 999,
-      duration_minutes: 5,
+    const result = await Kick.banUser(KICK_TOKEN, {
+      broadcaster_user_id: KICK_BROADCASTER_USER_ID,
+      user_id: 999,
+      duration: 5,
     })
 
     expect(result.success).toBe(true)
@@ -241,8 +244,9 @@ describe('Kick Moderation', () => {
       ),
     ) as unknown as typeof global.fetch
 
-    const result = await Kick.banUser(KICK_TOKEN, KICK_CHANNEL_ID, {
-      banned_user_id: 999,
+    const result = await Kick.banUser(KICK_TOKEN, {
+      broadcaster_user_id: KICK_BROADCASTER_USER_ID,
+      user_id: 999,
     })
 
     expect(result.success).toBe(false)
@@ -250,11 +254,13 @@ describe('Kick Moderation', () => {
   })
 
   it('should delete a message on Kick', async () => {
-    global.fetch = mock(
-      async () => new Response(null, { status: 204 }),
-    ) as unknown as typeof global.fetch
+    global.fetch = mock(async (input: string | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://api.kick.com/public/v1/chat/msg-kick-123')
+      expect(init?.method).toBe('DELETE')
+      return new Response(null, { status: 204 })
+    }) as unknown as typeof global.fetch
 
-    const result = await Kick.deleteMessage(KICK_TOKEN, KICK_CHANNEL_ID, 'msg-kick-123')
+    const result = await Kick.deleteMessage(KICK_TOKEN, 'msg-kick-123')
 
     expect(result.success).toBe(true)
     expect(result.messageId).toBe('msg-kick-123')
@@ -270,20 +276,10 @@ describe('Kick Moderation', () => {
       ),
     ) as unknown as typeof global.fetch
 
-    const result = await Kick.deleteMessage(KICK_TOKEN, KICK_CHANNEL_ID, 'msg-invalid')
+    const result = await Kick.deleteMessage(KICK_TOKEN, 'msg-invalid')
 
     expect(result.success).toBe(false)
     expect(result.error?.code).toBe('KICK_NOT_FOUND')
-  })
-
-  it('should unban a user on Kick', async () => {
-    global.fetch = mock(
-      async () => new Response(null, { status: 200 }),
-    ) as unknown as typeof global.fetch
-
-    const result = await Kick.unbanUser(KICK_TOKEN, KICK_CHANNEL_ID, 999)
-
-    expect(result.success).toBe(true)
   })
 })
 

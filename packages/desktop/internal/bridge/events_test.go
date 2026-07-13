@@ -41,6 +41,7 @@ func TestDesktopServiceEmitsHistoricalEventNames(t *testing.T) {
 	publisher.EmitChannelEmoteUpdated(contracts.ChannelEmoteUpdated{Platform: contracts.PlatformTwitch})
 	publisher.EmitWatchedChannelMessage(contracts.WatchedChannelMessage{ChannelID: "watched-1"})
 	publisher.EmitWatchedChannelStatus(contracts.WatchedChannelStatus{ChannelID: "watched-1"})
+	publisher.EmitChatModeration(contracts.ModerationOutcome{Action: "delete_message"})
 
 	want := []string{
 		"chat_message",
@@ -55,6 +56,7 @@ func TestDesktopServiceEmitsHistoricalEventNames(t *testing.T) {
 		"channel_emote_updated",
 		"watched_channel_message",
 		"watched_channel_status",
+		"chat_moderation",
 	}
 	if len(emitter.events) != len(want) {
 		t.Fatalf("event count = %d, want %d", len(emitter.events), len(want))

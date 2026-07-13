@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 import EmoteTooltip from './EmoteTooltip.vue'
 import { platformColor } from '../../shared/utils/platform'
@@ -7,10 +7,14 @@ import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import UserContextMenu from './UserContextMenu.vue'
+import MessageModerationRail from './MessageModerationRail.vue'
 import { useMessageParsing } from '../composables/useMessageParsing'
 import { resolveBadgeImage } from '../utils/badge-image'
 import { chatMessageStyle } from '../utils/chat-message-style'
 import { openExternalUrl } from '../services/external-url'
+import { useAvatarCache } from '../composables/useAvatarCache'
+import type { ResolvedModerationOutcome } from '../composables/useModerationOutcomes'
+import type { ModerationDragAction } from '../utils/moderation-drag'
 
 const props = defineProps<{
   message: NormalizedChatMessage
@@ -26,16 +30,52 @@ const props = defineProps<{
   selfPingEnabled?: boolean
   selfPingColor?: string
   alias?: string
+  showModerationRail?: boolean
+  moderationPending?: boolean
+  moderationOutcome?: ResolvedModerationOutcome
 }>()
 
 const emit = defineEmits<{
   reply: [message: NormalizedChatMessage]
+  moderate: [message: NormalizedChatMessage, action: ModerationDragAction]
 }>()
 
 const { messageParts, processText } = useMessageParsing(props.message)
+const { avatarUrlFor, ensureAvatar } = useAvatarCache()
+const avatarImageReady = ref(false)
+const avatarLoadFailed = ref(false)
+const avatarURL = computed(() => avatarUrlFor(props.message))
+
+watch(
+  () => [
+    props.message.platform,
+    props.message.author.id,
+    props.message.author.username,
+    props.message.author.avatarUrl,
+    avatarURL.value,
+  ],
+  () => {
+    avatarImageReady.value = false
+    avatarLoadFailed.value = false
+    ensureAvatar(props.message)
+  },
+  { immediate: true },
+)
+
+function onAvatarLoad(): void {
+  avatarImageReady.value = true
+}
+
+function onAvatarError(): void {
+  avatarLoadFailed.value = true
+}
 
 function onReply() {
   emit('reply', props.message)
+}
+
+function onModerate(action: ModerationDragAction): void {
+  emit('moderate', props.message, action)
 }
 
 const isSystemMessage = computed(() => props.message.type === 'system')
@@ -181,6 +221,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       {
         'delivery-pending': message.delivery?.state === 'pending',
         'delivery-failed': message.delivery?.state === 'failed',
+        'moderation-outcome': props.moderationOutcome,
         'self-ping': isSelfPing,
       },
     ]"
@@ -191,6 +232,12 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       v-if="props.showPlatformColorStripe !== false"
       class="platform-stripe"
       :style="{ background: platformColor(message.platform) }"
+    />
+    <MessageModerationRail
+      v-if="props.showModerationRail && !props.moderationOutcome"
+      :disabled="props.moderationPending"
+      :message="message"
+      @moderate="onModerate"
     />
 
     <!-- Reply preview: sits above the message row as its own line -->
@@ -214,6 +261,27 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       <span v-if="props.showTimestamp" class="timestamp compact-time">{{
         formatTime(message.timestamp)
       }}</span>
+
+      <!-- Fallback stays visible while a background lookup and image load complete. -->
+      <span v-if="props.showAvatar !== false" class="avatar-wrap compact-avatar-wrap">
+        <span
+          v-if="!avatarImageReady || avatarLoadFailed"
+          class="avatar avatar-fallback"
+          :style="{ background: message.author.color ?? '#444' }"
+          aria-hidden="true"
+        >
+          {{ initials(message.author.displayName) }}
+        </span>
+        <img
+          v-if="avatarURL && !avatarLoadFailed"
+          class="avatar"
+          :class="{ 'avatar-loading': !avatarImageReady }"
+          :src="avatarURL"
+          :alt="message.author.displayName"
+          @error="onAvatarError"
+          @load="onAvatarLoad"
+        />
+      </span>
 
       <!-- Platform icon -->
       <span
@@ -277,7 +345,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         :channel-slug="props.channelSlug"
         :display-name="message.author.displayName"
         :username="message.author.username"
-        :avatar-url="message.author.avatarUrl"
+        :avatar-url="avatarURL"
         :current-alias="props.alias"
       >
         <span class="author" :style="message.author.color ? { color: message.author.color } : {}">{{
@@ -306,6 +374,9 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         :title="message.delivery.error"
       >
         Not sent: {{ message.delivery.error }}
+      </span>
+      <span v-if="props.moderationOutcome" class="moderation-outcome-label">
+        {{ props.moderationOutcome.label }}
       </span>
     </div>
 
@@ -376,6 +447,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       {
         'delivery-pending': message.delivery?.state === 'pending',
         'delivery-failed': message.delivery?.state === 'failed',
+        'moderation-outcome': props.moderationOutcome,
         'self-ping': isSelfPing,
       },
     ]"
@@ -388,6 +460,12 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       class="platform-stripe"
       :style="{ background: platformColor(message.platform) }"
       :title="message.platform"
+    />
+    <MessageModerationRail
+      v-if="props.showModerationRail && !props.moderationOutcome"
+      :disabled="props.moderationPending"
+      :message="message"
+      @moderate="onModerate"
     />
 
     <!-- Platform icon -->
@@ -408,19 +486,23 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 
     <!-- Avatar -->
     <div v-if="props.showAvatar !== false" class="avatar-wrap">
-      <img
-        v-if="message.author.avatarUrl"
-        class="avatar"
-        :src="message.author.avatarUrl"
-        :alt="message.author.displayName"
-      />
       <div
-        v-else
+        v-if="!avatarImageReady || avatarLoadFailed"
         class="avatar avatar-fallback"
         :style="{ background: message.author.color ?? '#444' }"
+        aria-hidden="true"
       >
         {{ initials(message.author.displayName) }}
       </div>
+      <img
+        v-if="avatarURL && !avatarLoadFailed"
+        class="avatar"
+        :class="{ 'avatar-loading': !avatarImageReady }"
+        :src="avatarURL"
+        :alt="message.author.displayName"
+        @error="onAvatarError"
+        @load="onAvatarLoad"
+      />
     </div>
 
     <!-- Body -->
@@ -476,7 +558,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           :channel-slug="props.channelSlug"
           :display-name="message.author.displayName"
           :username="message.author.username"
-          :avatar-url="message.author.avatarUrl"
+          :avatar-url="avatarURL"
           :current-alias="props.alias"
         >
           <span
@@ -514,6 +596,9 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         :title="message.delivery.error"
       >
         Not sent: {{ message.delivery.error }}
+      </span>
+      <span v-if="props.moderationOutcome" class="moderation-outcome-label">
+        {{ props.moderationOutcome.label }}
       </span>
     </div>
 
@@ -605,6 +690,17 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
   background: rgba(239, 68, 68, 0.08);
 }
 
+.moderation-outcome {
+  opacity: 0.48;
+}
+
+.moderation-outcome-label {
+  color: var(--c-text-2, #8b8b99);
+  font-size: 0.82em;
+  font-style: italic;
+  margin-left: 0.35em;
+}
+
 .delivery-error {
   display: block;
   color: #f87171;
@@ -659,6 +755,9 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 .avatar-wrap {
   flex-shrink: 0;
   margin-top: 1px;
+  position: relative;
+  width: 28px;
+  height: 28px;
 }
 
 .avatar {
@@ -667,6 +766,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
   border-radius: 50%;
   object-fit: cover;
   display: block;
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.12s ease;
+}
+
+.avatar-loading {
+  opacity: 0;
 }
 
 .avatar-fallback {
@@ -962,6 +1068,23 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
   font-variant-numeric: tabular-nums;
   margin-right: 4px;
   margin-left: 0;
+}
+
+.msg-compact .compact-avatar-wrap {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  margin: 0 3px 0 0;
+  vertical-align: middle;
+}
+
+.msg-compact .compact-avatar-wrap .avatar {
+  width: 18px;
+  height: 18px;
+}
+
+.msg-compact .compact-avatar-wrap .avatar-fallback {
+  font-size: 8px;
 }
 
 .msg-compact .author {

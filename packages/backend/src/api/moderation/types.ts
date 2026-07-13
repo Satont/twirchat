@@ -64,31 +64,14 @@ export interface TwitchModeratorResponse {
 // ============================================================
 
 export interface KickBanRequest {
-  /** User ID of the user to ban/timeout */
-  banned_user_id: number
-  /** Duration in minutes (null/omitted = permanent ban, number = timeout) */
-  duration_minutes?: number | null
+  /** Broadcaster whose chat the action applies to. */
+  broadcaster_user_id: number
+  /** User ID of the user to ban/timeout. */
+  user_id: number
+  /** Timeout in whole minutes; omit for a permanent ban. */
+  duration?: number
   /** Reason for the ban/timeout (optional) */
   reason?: string
-}
-
-export interface KickBanResponse {
-  data: {
-    user_id: number
-    banned_user_id: number
-    duration_minutes?: number | null
-    reason?: string
-  }
-}
-
-export interface KickDeleteMessageRequest {
-  /** Message ID to delete */
-  message_id: string
-}
-
-export interface KickUnbanRequest {
-  /** User ID of the user to unban */
-  banned_user_id: number
 }
 
 // ============================================================

@@ -61,6 +61,19 @@ export interface NormalizedChatMessage {
   }
 }
 
+export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
+
+// A live moderation notification, emitted separately from chat messages. It
+// stays session-only so persisted message history remains provider-authored.
+export interface ModerationOutcome {
+  platform: 'twitch' | 'kick'
+  channelId: string
+  action: ModerationAction
+  messageId?: string
+  targetUserId?: string
+  durationSeconds?: number
+}
+
 export interface NormalizedEvent {
   id: string
   platform: Platform

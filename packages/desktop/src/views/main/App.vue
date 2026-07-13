@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, triggerRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRpcListener } from './composables/useRpcListener'
+import { useModerationOutcomes } from './composables/useModerationOutcomes'
 import { useAccountsStore } from './stores/accounts'
 import { useAliasStore } from './stores/useAliasStore'
 import { useSettingsStore } from './stores/settings'
@@ -44,6 +45,7 @@ const aliasStore = useAliasStore()
 const settingsStore = useSettingsStore()
 const channelStatusStore = useChannelStatusStore()
 const streamStatusStore = useStreamStatusStore()
+const { apply: applyModerationOutcome } = useModerationOutcomes()
 
 const { accounts } = storeToRefs(accountsStore)
 const { settings } = storeToRefs(settingsStore)
@@ -294,6 +296,10 @@ const DOWNLOAD_IN_PROGRESS_STATUSES = new Set([
 
 useRpcListener('chat_message', (msg: NormalizedChatMessage) => {
   messages.value = mergeChatMessageSnapshot(messages.value, [msg])
+})
+
+useRpcListener('chat_moderation', (outcome) => {
+  applyModerationOutcome(outcome)
 })
 
 useRpcListener('chat_event', (ev: NormalizedEvent) => {

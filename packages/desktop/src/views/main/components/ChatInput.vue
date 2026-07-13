@@ -13,7 +13,7 @@ import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import { parseToken, replaceToken, useAutocomplete } from '../composables/useAutocomplete'
 import { useAliasStore } from '../stores/useAliasStore'
 import { resolveUserCardCommand, type UserCardTarget } from '../utils/chatCommands'
-import { ownChatSendTargets } from '../utils/chat-send-targets'
+import { createChatMessageTargets, ownChatSendTargets } from '../utils/chat-send-targets'
 import AutocompletePopup from './AutocompletePopup.vue'
 import { PopoverContent, PopoverRoot, PopoverTrigger } from 'reka-ui'
 import EmotePicker from './EmotePicker.vue'
@@ -181,7 +181,10 @@ const canSend = computed(() => {
   if (props.watchedChannel) {
     return !isDisabled.value
   }
-  return sendablePlatforms.value.some((p) => isEnabled(p.platform))
+  return (
+    createChatMessageTargets(sendablePlatforms.value, text.value, isEnabled, props.replyTarget)
+      .length > 0
+  )
 })
 
 function send() {
@@ -220,14 +223,12 @@ function send() {
       replyToMessageId: props.replyTarget?.id,
     })
   } else {
-    const targets = sendablePlatforms.value
-      .filter((p) => isEnabled(p.platform))
-      .map((p) => ({
-        channelLogin: p.channelLogin!,
-        platform: p.platform,
-        text: trimmed,
-        replyToMessageId: props.replyTarget?.id,
-      }))
+    const targets = createChatMessageTargets(
+      sendablePlatforms.value,
+      trimmed,
+      isEnabled,
+      props.replyTarget,
+    )
     if (targets.length === 0) {
       return
     }

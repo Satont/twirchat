@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
@@ -19,6 +20,7 @@ import (
 type recordingEvents struct {
 	statuses []contracts.PlatformStatusInfo
 	messages []contracts.NormalizedChatMessage
+	outcomes []contracts.ModerationOutcome
 }
 
 func (e *recordingEvents) Status(status contracts.PlatformStatusInfo) {
@@ -27,6 +29,68 @@ func (e *recordingEvents) Status(status contracts.PlatformStatusInfo) {
 
 func (e *recordingEvents) Message(message contracts.NormalizedChatMessage) {
 	e.messages = append(e.messages, message)
+}
+
+func (e *recordingEvents) Moderation(outcome contracts.ModerationOutcome) {
+	e.outcomes = append(e.outcomes, outcome)
+}
+
+func TestParsePusherModerationOutcomeUsesOnlyValidCurrentFrames(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+
+	deleted, ok := parsePusherModerationOutcome(
+		"kick-channel",
+		`App\Events\MessageDeletedEvent`,
+		json.RawMessage(`{"message":{"id":"message-1"}}`),
+		now,
+	)
+	if !ok {
+		t.Fatal("delete outcome was not recognized")
+	}
+	if want := (contracts.ModerationOutcome{
+		Platform: contracts.PlatformKick, ChannelID: "kick-channel", Action: "delete_message", MessageID: "message-1",
+	}); deleted != want {
+		t.Fatalf("delete outcome = %#v, want %#v", deleted, want)
+	}
+
+	timeout, ok := parsePusherModerationOutcome(
+		"kick-channel",
+		`App\Events\UserBannedEvent`,
+		json.RawMessage(`{"user":{"id":42},"expires_at":"2026-07-13T12:10:00Z"}`),
+		now,
+	)
+	if !ok {
+		t.Fatal("timeout outcome was not recognized")
+	}
+	if want := (contracts.ModerationOutcome{
+		Platform: contracts.PlatformKick, ChannelID: "kick-channel", Action: "timeout", TargetUserID: "42", DurationSeconds: 600,
+	}); timeout != want {
+		t.Fatalf("timeout outcome = %#v, want %#v", timeout, want)
+	}
+
+	ban, ok := parsePusherModerationOutcome(
+		"kick-channel",
+		`App\Events\UserBannedEvent`,
+		json.RawMessage(`{"user":{"id":42}}`),
+		now,
+	)
+	if !ok {
+		t.Fatal("ban outcome was not recognized")
+	}
+	if want := (contracts.ModerationOutcome{
+		Platform: contracts.PlatformKick, ChannelID: "kick-channel", Action: "ban", TargetUserID: "42",
+	}); ban != want {
+		t.Fatalf("ban outcome = %#v, want %#v", ban, want)
+	}
+
+	if _, ok := parsePusherModerationOutcome(
+		"kick-channel",
+		`App\Events\UserBannedEvent`,
+		json.RawMessage(`{"user":{"id":42},"expires_at":"not-a-date"}`),
+		now,
+	); ok {
+		t.Fatal("malformed Pusher moderation payload produced an outcome")
+	}
 }
 
 func TestServiceStartsSavedKickChannelAndSendsWithAccountToken(t *testing.T) {

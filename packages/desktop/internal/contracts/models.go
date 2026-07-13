@@ -40,6 +40,39 @@ type ChatAuthor struct {
 	Badges      []Badge `json:"badges"`
 }
 
+// AvatarResolution is the cached provider avatar result returned to the Vue
+// renderer. An empty URL is a successful negative lookup, not an error.
+type AvatarResolution struct {
+	AvatarURL string `json:"avatarUrl,omitempty"`
+}
+
+// ModerationCapabilities controls whether a watched-channel message exposes
+// the moderation rail. My Channels intentionally renders the rail regardless.
+type ModerationCapabilities struct {
+	CanModerate bool `json:"canModerate"`
+}
+
+type ModerationActionError struct {
+	Message string `json:"message"`
+}
+
+type ModerationActionResult struct {
+	Success bool                   `json:"success"`
+	Error   *ModerationActionError `json:"error,omitempty"`
+}
+
+// ModerationOutcome describes one confirmed moderation action. It is emitted
+// to the frontend for live, session-only rendering and is never stored as a
+// chat message.
+type ModerationOutcome struct {
+	Platform        Platform `json:"platform"`
+	ChannelID       string   `json:"channelId"`
+	Action          string   `json:"action"`
+	MessageID       string   `json:"messageId,omitempty"`
+	TargetUserID    string   `json:"targetUserId,omitempty"`
+	DurationSeconds int      `json:"durationSeconds,omitempty"`
+}
+
 type ReplyAuthor struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`
