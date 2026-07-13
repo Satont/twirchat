@@ -110,6 +110,9 @@ jobs:
           export GO_LDFLAGS="-s -w -X main.version=${{ needs.version.outputs.version }}"
           export CGO_LDFLAGS="${{ matrix.cgo_ldflags }}"
           wails3 build
+          if [[ "${{ matrix.target }}" == 'win' && -f bin/twirchat && ! -f bin/twirchat.exe ]]; then
+            mv bin/twirchat bin/twirchat.exe
+          fi
           test -f "bin/${{ matrix.main_exe }}"
       - name: Build macOS application bundle
         if: matrix.target == 'osx'
@@ -160,6 +163,10 @@ jobs:
         run: |
           mkdir -p velopack
           vpk download github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --channel "${{ matrix.channel }}" --outputDir velopack || true
+          if find velopack -name "releases.${{ matrix.channel }}.json" -exec grep -q "\"Version\":\"$VERSION\"" {} \;; then
+            echo "${{ matrix.channel }} $VERSION is already published; preserving the existing release."
+            exit 0
+          fi
           vpk "[${{ matrix.target }}]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin --mainExe "${{ matrix.main_exe }}" --channel "${{ matrix.channel }}" --outputDir velopack --runtime "${{ matrix.runtime }}"
           vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --publish --merge --tag "$TAG" --channel "${{ matrix.channel }}" --outputDir velopack
       - name: Package and publish macOS Velopack release
@@ -173,5 +180,9 @@ jobs:
         run: |
           mkdir -p velopack
           vpk download github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --channel "${{ matrix.channel }}" --outputDir velopack || true
+          if find velopack -name "releases.${{ matrix.channel }}.json" -exec grep -q "\"Version\":\"$VERSION\"" {} \;; then
+            echo "${{ matrix.channel }} $VERSION is already published; preserving the existing release."
+            exit 0
+          fi
           vpk "[osx]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin/TwirChat.app --mainExe TwirChat --channel "${{ matrix.channel }}" --outputDir velopack
           vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --publish --merge --tag "$TAG" --channel "${{ matrix.channel }}" --outputDir velopack
