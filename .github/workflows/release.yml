@@ -27,19 +27,39 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
-  release:
+  changelog:
     needs: version
     runs-on: ubuntu-latest
+    outputs:
+      body: ${{ steps.notes.outputs.body }}
     steps:
-      - name: Create the GitHub release when needed
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header --output release-notes.md
+      - id: notes
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo "$REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          {
+            echo 'body<<EOF'
+            cat release-notes.md
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: [version, changelog]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Release ${{ needs.version.outputs.tag }}
+          body: ${{ needs.changelog.outputs.body }}
+          target_commitish: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
   desktop:
     needs: [version, release]
@@ -163,12 +183,14 @@ jobs:
         run: |
           mkdir -p velopack
           vpk download github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --channel "${{ matrix.channel }}" --outputDir velopack || true
-          if find velopack -name "releases.${{ matrix.channel }}.json" -exec grep -q "\"Version\":\"$VERSION\"" {} \;; then
+          if gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"; then
             echo "${{ matrix.channel }} $VERSION is already published; preserving the existing release."
             exit 0
           fi
           vpk "[${{ matrix.target }}]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin --mainExe "${{ matrix.main_exe }}" --channel "${{ matrix.channel }}" --outputDir velopack --runtime "${{ matrix.runtime }}"
           vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --publish --merge --tag "$TAG" --channel "${{ matrix.channel }}" --outputDir velopack
+          gh release upload "$TAG" velopack/* --repo "${{ github.repository }}" --clobber
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"
       - name: Package and publish macOS Velopack release
         if: matrix.target == 'osx'
         working-directory: packages/desktop
@@ -180,9 +202,11 @@ jobs:
         run: |
           mkdir -p velopack
           vpk download github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --channel "${{ matrix.channel }}" --outputDir velopack || true
-          if find velopack -name "releases.${{ matrix.channel }}.json" -exec grep -q "\"Version\":\"$VERSION\"" {} \;; then
+          if gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"; then
             echo "${{ matrix.channel }} $VERSION is already published; preserving the existing release."
             exit 0
           fi
           vpk "[osx]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin/TwirChat.app --mainExe TwirChat --channel "${{ matrix.channel }}" --outputDir velopack
           vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --publish --merge --tag "$TAG" --channel "${{ matrix.channel }}" --outputDir velopack
+          gh release upload "$TAG" velopack/* --repo "${{ github.repository }}" --clobber
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"
