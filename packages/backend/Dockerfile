@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Build the binary
-FROM oven/bun:1 AS builder
+FROM oven/bun:canary AS builder
 
 WORKDIR /app
 
