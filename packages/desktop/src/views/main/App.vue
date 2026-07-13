@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, triggerRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, triggerRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { System } from '@wailsio/runtime'
 import { useRpcListener } from './composables/useRpcListener'
@@ -54,13 +54,32 @@ const { accounts } = storeToRefs(accountsStore)
 const { settings } = storeToRefs(settingsStore)
 const { statuses } = storeToRefs(channelStatusStore)
 
-const nativePlatform = System.IsWindows() ? 'windows' : System.IsMac() ? 'darwin' : 'linux'
-const windowChromePlatform = resolveWindowChromePlatform({
-  nativePlatform,
-  isDevelopment: import.meta.env.DEV,
-  search: window.location.search,
+const WAILS_RUNTIME_CONFIG_READY = 'wails:runtime-config-ready'
+
+function detectNativePlatform() {
+  return System.IsWindows() ? 'windows' : System.IsMac() ? 'darwin' : 'linux'
+}
+
+const nativePlatform = ref(detectNativePlatform())
+
+function refreshNativePlatform() {
+  nativePlatform.value = detectNativePlatform()
+}
+
+window.addEventListener(WAILS_RUNTIME_CONFIG_READY, refreshNativePlatform)
+
+onUnmounted(() => {
+  window.removeEventListener(WAILS_RUNTIME_CONFIG_READY, refreshNativePlatform)
 })
-const hasCompactWindowChrome = windowChromePlatform !== 'native'
+
+const windowChromePlatform = computed(() =>
+  resolveWindowChromePlatform({
+    nativePlatform: nativePlatform.value,
+    isDevelopment: import.meta.env.DEV,
+    search: window.location.search,
+  }),
+)
+const hasCompactWindowChrome = computed(() => windowChromePlatform.value !== 'native')
 
 // Sync theme class to body for Teleported components
 watch(
