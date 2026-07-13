@@ -2,6 +2,7 @@ package kick
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,18 +12,22 @@ import (
 
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
+	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
 )
 
 type recordingEvents struct {
 	statuses []contracts.PlatformStatusInfo
+	messages []contracts.NormalizedChatMessage
 }
 
 func (e *recordingEvents) Status(status contracts.PlatformStatusInfo) {
 	e.statuses = append(e.statuses, status)
 }
 
-func (e *recordingEvents) Message(contracts.NormalizedChatMessage) {}
+func (e *recordingEvents) Message(message contracts.NormalizedChatMessage) {
+	e.messages = append(e.messages, message)
+}
 
 func TestServiceStartsSavedKickChannelAndSendsWithAccountToken(t *testing.T) {
 	ctx := context.Background()
@@ -142,4 +147,53 @@ func TestParseKickEmotesLeavesMalformedMarkersAsText(t *testing.T) {
 	if len(emotes) != 0 {
 		t.Fatalf("emotes = %#v, want none", emotes)
 	}
+}
+
+func TestServiceParsesAndEnrichesIncomingKickMessageWithSevenTV(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("kick-7tv-service-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	server := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(server.Close)
+	backendClient, err := backend.NewHTTPClient(server.URL, "secret", server.Client())
+	if err != nil {
+		t.Fatalf("NewHTTPClient() error = %v", err)
+	}
+	events := &recordingEvents{}
+	service, err := NewService(Config{Storage: store, Events: events, Backend: backendClient, SevenTV: &recordingSevenTV{}})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	raw := json.RawMessage(`{
+		"id":"kick-message-7tv","chatroom_id":1,"content":"[emote:7:Peepo] MyEmote","created_at":"2026-07-13T10:00:00Z",
+		"sender":{"id":2,"username":"Viewer","slug":"viewer","profile_picture":"","identity":{"color":"","badges":[],"badges_v2":[]}}
+	}`)
+	service.handlePusherMessage(ctx, "kick-channel", raw)
+	if got, want := len(events.messages), 1; got != want {
+		t.Fatalf("messages = %#v, want one", events.messages)
+	}
+	message := events.messages[0]
+	if got, want := message.Text, "Peepo MyEmote"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+	if got, want := message.Emotes, []contracts.Emote{
+		{ID: "7", Name: "Peepo", ImageURL: "https://files.kick.com/emotes/7/fullsize", Positions: []contracts.EmotePosition{{Start: 0, End: 4}}},
+		{ID: "7tv-1", Name: "MyEmote", ImageURL: "https://cdn.test/7tv.webp", Positions: []contracts.EmotePosition{{Start: 6, End: 12}}},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("emotes = %#v, want %#v", got, want)
+	}
+}
+
+type recordingSevenTV struct{}
+
+func (*recordingSevenTV) Subscribe(context.Context, seventv.Subscription)         {}
+func (*recordingSevenTV) Unsubscribe(context.Context, contracts.Platform, string) {}
+func (*recordingSevenTV) Enrich(message contracts.NormalizedChatMessage) contracts.NormalizedChatMessage {
+	message.Emotes = append(message.Emotes, contracts.Emote{
+		ID: "7tv-1", Name: "MyEmote", ImageURL: "https://cdn.test/7tv.webp", Positions: []contracts.EmotePosition{{Start: 6, End: 12}},
+	})
+	return message
 }

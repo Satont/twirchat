@@ -13,6 +13,7 @@ import (
 
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
+	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
 	twitchirc "github.com/gempir/go-twitch-irc/v4"
 	"github.com/google/uuid"
@@ -96,6 +97,7 @@ type Config struct {
 	NewClient      ClientFactory
 	Badges         BadgeResolver
 	ConnectTimeout time.Duration
+	SevenTV        seventv.ChannelService
 }
 
 // Service reconnects saved Twitch channels, persists incoming messages and
@@ -106,6 +108,7 @@ type Service struct {
 	newClient ClientFactory
 	badges    BadgeResolver
 	backend   *backend.HTTPClient
+	sevenTV   seventv.ChannelService
 
 	mu             sync.Mutex
 	account        *contracts.Account
@@ -142,6 +145,7 @@ func NewService(config Config) (*Service, error) {
 		newClient:      config.NewClient,
 		badges:         config.Badges,
 		backend:        config.Backend,
+		sevenTV:        config.SevenTV,
 		channels:       make(map[string]struct{}),
 		statuses:       make(map[string]contracts.PlatformStatusInfo),
 		connectTimeout: config.ConnectTimeout,
@@ -209,6 +213,10 @@ func (s *Service) Join(ctx context.Context, channel string) error {
 	if err := s.storage.SaveChannel(ctx, contracts.PlatformTwitch, channel); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	credentials := s.credentials
+	s.mu.Unlock()
+	s.subscribeSevenTV(ctx, channel, credentials)
 	log.Printf("twitch chat: join requested channel=%s", channel)
 
 	s.mu.Lock()
@@ -235,6 +243,9 @@ func (s *Service) Leave(ctx context.Context, channel string) error {
 	}
 	if err := s.storage.RemoveChannel(ctx, contracts.PlatformTwitch, channel); err != nil {
 		return err
+	}
+	if s.sevenTV != nil {
+		s.sevenTV.Unsubscribe(ctx, contracts.PlatformTwitch, channel)
 	}
 	log.Printf("twitch chat: leave requested channel=%s", channel)
 	s.mu.Lock()
@@ -372,6 +383,9 @@ func (s *Service) connectSavedChannels(ctx context.Context, force bool) error {
 				PlatformUserID: account.PlatformUserID, Username: account.Username,
 			}
 		}
+	}
+	for _, channel := range channels {
+		s.subscribeSevenTV(ctx, channel, credentials)
 	}
 	if credentials.AccessToken == "" {
 		log.Printf("twitch chat: cannot connect channels=%s: no authenticated access token", strings.Join(channels, ","))
@@ -521,11 +535,30 @@ func (s *Service) onMessage(incoming IncomingMessage) {
 			Positions: []contracts.EmotePosition{{Start: emote.Start, End: emote.End}},
 		})
 	}
+	if s.sevenTV != nil {
+		message = s.sevenTV.Enrich(message)
+	}
 	if err := s.storage.SaveMessage(s.serviceContext(), message); err != nil {
 		s.emitStatus(message.ChannelID, "error", fmt.Sprintf("persist Twitch message: %v", err))
 		return
 	}
 	s.events.Message(message)
+}
+
+func (s *Service) subscribeSevenTV(ctx context.Context, channel string, credentials Credentials) {
+	if s.sevenTV == nil {
+		return
+	}
+	platformUserID := ""
+	if normalizeChannel(credentials.Username) == normalizeChannel(channel) {
+		platformUserID = credentials.PlatformUserID
+	}
+	s.sevenTV.Subscribe(ctx, seventv.Subscription{
+		Platform:           contracts.PlatformTwitch,
+		ChannelID:          channel,
+		CanonicalChannelID: channel,
+		PlatformUserID:     platformUserID,
+	})
 }
 
 func (s *Service) onNotice(notice Notice) {

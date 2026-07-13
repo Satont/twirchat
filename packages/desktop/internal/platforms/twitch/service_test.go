@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
+	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
 )
 
@@ -19,6 +21,52 @@ type recordingEvents struct {
 	mu       sync.Mutex
 	statuses []contracts.PlatformStatusInfo
 	messages []contracts.NormalizedChatMessage
+}
+
+func TestServiceSubscribesAndEnrichesEachNativeTwitchChannelWithSevenTV(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("twitch-7tv-service-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.UpsertAccount(ctx, contracts.Account{
+		ID: "twitch:1", Platform: contracts.PlatformTwitch, PlatformUserID: "42", Username: "viewer",
+	}, storage.AccountTokens{AccessToken: "access-token"}); err != nil {
+		t.Fatalf("UpsertAccount() error = %v", err)
+	}
+	if err := store.SaveChannel(ctx, contracts.PlatformTwitch, "streamer"); err != nil {
+		t.Fatalf("SaveChannel() error = %v", err)
+	}
+	client := &fakeClient{}
+	sevenTV := &recordingSevenTV{}
+	events := &recordingEvents{}
+	service, err := NewService(Config{
+		Storage: store, Events: events, SevenTV: sevenTV,
+		NewClient: func(Credentials) (Client, error) { return client, nil },
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	if err := service.Start(ctx); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	t.Cleanup(func() { _ = service.Stop(context.Background()) })
+	if got, want := sevenTV.subscriptions, []seventv.Subscription{{
+		Platform: contracts.PlatformTwitch, ChannelID: "streamer", CanonicalChannelID: "streamer",
+	}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("7TV subscriptions = %#v, want %#v", got, want)
+	}
+
+	client.receive(IncomingMessage{
+		ID: "message-7tv", Channel: "streamer", Text: "MyEmote", Timestamp: time.Now(),
+		Author: Author{ID: "2", Username: "viewer", DisplayName: "Viewer"},
+	})
+	if got, want := events.lastMessage().Emotes, []contracts.Emote{{
+		ID: "7tv-1", Name: "MyEmote", ImageURL: "https://cdn.test/7tv.webp", Positions: []contracts.EmotePosition{{Start: 0, End: 6}},
+	}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("enriched emotes = %#v, want %#v", got, want)
+	}
 }
 
 func (e *recordingEvents) Status(status contracts.PlatformStatusInfo) {
@@ -59,6 +107,25 @@ type fakeClient struct {
 type sentMessage struct {
 	channel string
 	text    string
+}
+
+type recordingSevenTV struct {
+	subscriptions []seventv.Subscription
+	inputs        []contracts.NormalizedChatMessage
+}
+
+func (r *recordingSevenTV) Subscribe(_ context.Context, subscription seventv.Subscription) {
+	r.subscriptions = append(r.subscriptions, subscription)
+}
+
+func (*recordingSevenTV) Unsubscribe(context.Context, contracts.Platform, string) {}
+
+func (r *recordingSevenTV) Enrich(message contracts.NormalizedChatMessage) contracts.NormalizedChatMessage {
+	r.inputs = append(r.inputs, message)
+	message.Emotes = append(message.Emotes, contracts.Emote{
+		ID: "7tv-1", Name: "MyEmote", ImageURL: "https://cdn.test/7tv.webp", Positions: []contracts.EmotePosition{{Start: 0, End: 6}},
+	})
+	return message
 }
 
 func (c *fakeClient) OnConnect(handler func())                { c.onConnect = handler }

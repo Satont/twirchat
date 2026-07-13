@@ -24,7 +24,12 @@ export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   await ClientStore.touch(ws.data.clientSecret)
 }
 
-export function handleWsClose(ws: ServerWebSocket<WsData>): void {
+export function handleWsClose(ws: ServerWebSocket<WsData>, code: number, reason: string): void {
+  log.info('WebSocket closed', {
+    client: ws.data.clientSecret.slice(0, 8),
+    code,
+    reason,
+  })
   connectionManager.remove(ws)
   // Cleanup 7TV subscriptions for this client
   sevenTVManager.cleanupClient(ws.data.clientSecret)

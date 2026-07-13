@@ -66,8 +66,8 @@ const server = Bun.serve<WsData>({
   },
 
   websocket: {
-    close(ws) {
-      handleWsClose(ws)
+    close(ws, code, reason) {
+      handleWsClose(ws, code, reason)
     },
     message(ws, message) {
       void handleWsMessage(ws, message)

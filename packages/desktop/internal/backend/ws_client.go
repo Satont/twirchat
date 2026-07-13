@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -15,6 +16,9 @@ import (
 const (
 	defaultReconnectInitial = 3 * time.Second
 	defaultReconnectMaximum = 30 * time.Second
+	// 7TV emote-set snapshots can exceed coder/websocket's 32 KiB default.
+	// Keep a finite limit because this is still an untrusted network boundary.
+	maxBackendMessageBytes = 4 << 20
 )
 
 // Message is a validated backend WebSocket envelope. Data preserves payloads
@@ -137,6 +141,7 @@ func (c *WSClient) run(ctx context.Context, done chan struct{}) {
 			HTTPHeader: http.Header{"X-Client-Secret": []string{c.config.ClientSecret}},
 		})
 		if err == nil {
+			connection.SetReadLimit(maxBackendMessageBytes)
 			c.mu.Lock()
 			c.connection = connection
 			c.mu.Unlock()
@@ -145,6 +150,12 @@ func (c *WSClient) run(ctx context.Context, done chan struct{}) {
 				c.config.OnConnected(ctx)
 			}
 			err = c.readUntilClosed(ctx, connection)
+			if err != nil {
+				log.Printf(
+					"backend websocket: read ended close_status=%d error=%v context_error=%v",
+					websocket.CloseStatus(err), err, ctx.Err(),
+				)
+			}
 			_ = connection.Close(websocket.StatusGoingAway, "reconnect")
 			c.mu.Lock()
 			if c.connection == connection {

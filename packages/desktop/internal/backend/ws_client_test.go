@@ -68,6 +68,52 @@ func TestWSClientSendsClientSecretAndDeliversMessages(t *testing.T) {
 	}
 }
 
+func TestWSClientDeliversBackendMessagesLargerThanTheDefaultReadLimit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := websocket.Accept(writer, request, nil)
+		if err != nil {
+			t.Errorf("Accept() error = %v", err)
+			return
+		}
+		defer connection.CloseNow()
+		if err := wsjson.Write(request.Context(), connection, map[string]any{
+			"type": "seventv_emote_set",
+			"emotes": []map[string]string{{
+				"alias": strings.Repeat("x", 40<<10),
+			}},
+		}); err != nil {
+			t.Errorf("Write() error = %v", err)
+		}
+		<-request.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	messages := make(chan Message, 1)
+	client, err := NewWSClient(WSConfig{
+		URL:          "ws" + strings.TrimPrefix(server.URL, "http"),
+		ClientSecret: "desktop-secret",
+		OnMessage: func(message Message) {
+			messages <- message
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewWSClient() error = %v", err)
+	}
+	if err := client.Start(context.Background()); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	t.Cleanup(func() { _ = client.Stop(context.Background()) })
+
+	select {
+	case message := <-messages:
+		if got, want := message.Type, "seventv_emote_set"; got != want {
+			t.Errorf("message type = %q, want %q", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("client did not deliver the large backend message")
+	}
+}
+
 func TestWSClientDoesNotReconnectAfterStop(t *testing.T) {
 	var mu sync.Mutex
 	attempts := 0

@@ -16,6 +16,7 @@ import (
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	kickchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/kick"
 	twitchchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/twitch"
+	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
 	"github.com/Satont/twirchat/packages/desktop/internal/update"
 	"github.com/Satont/twirchat/packages/desktop/internal/watched"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -73,11 +74,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	sevenTVService, err := seventv.NewService(seventv.Config{
+		BackendURL: config.BackendURL, ClientSecret: host.ClientSecret(), Events: events, Messages: watchedManager,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := host.AddService(sevenTVService); err != nil {
+		log.Fatal(err)
+	}
 	twitchService, err := twitchchat.NewService(twitchchat.Config{
 		Storage: host.Storage(),
 		Events:  watchedManager,
 		Backend: backendClient,
 		Badges:  twitchchat.NewBackendBadgeResolver(backendClient),
+		SevenTV: sevenTVService,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -86,7 +97,7 @@ func main() {
 		log.Fatal(err)
 	}
 	kickService, err := kickchat.NewService(kickchat.Config{
-		Storage: host.Storage(), Backend: backendClient, Events: watchedManager,
+		Storage: host.Storage(), Backend: backendClient, Events: watchedManager, SevenTV: sevenTVService,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -105,6 +116,7 @@ func main() {
 	}
 	bridge.RegisterTwitchHandlers(requestHandlers, twitchService, kickService)
 	bridge.RegisterWatchedChannelHandlers(requestHandlers, watchedManager)
+	bridge.RegisterSevenTVHandlers(requestHandlers, sevenTVService)
 	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
 	authService, err := auth.NewService(auth.Config{
 		Address:          config.AuthAddress,

@@ -16,6 +16,7 @@ import (
 
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
+	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
 	"github.com/coder/websocket"
 )
@@ -39,11 +40,13 @@ type Config struct {
 	Events     Events
 	Backend    *backend.HTTPClient
 	ChatAPIURL string
+	SevenTV    seventv.ChannelService
 }
 type Service struct {
 	storage     *storage.Storage
 	events      Events
 	backend     *backend.HTTPClient
+	sevenTV     seventv.ChannelService
 	chatAPIURL  string
 	client      *http.Client
 	mu          sync.Mutex
@@ -60,7 +63,7 @@ func NewService(config Config) (*Service, error) {
 	if config.ChatAPIURL == "" {
 		config.ChatAPIURL = defaultChatAPIURL
 	}
-	return &Service{storage: config.Storage, events: config.Events, backend: config.Backend, chatAPIURL: config.ChatAPIURL, client: http.DefaultClient, channels: map[string]int64{}, chatrooms: map[string]int64{}, connections: map[string]*websocket.Conn{}, statuses: map[string]contracts.PlatformStatusInfo{}}, nil
+	return &Service{storage: config.Storage, events: config.Events, backend: config.Backend, chatAPIURL: config.ChatAPIURL, sevenTV: config.SevenTV, client: http.DefaultClient, channels: map[string]int64{}, chatrooms: map[string]int64{}, connections: map[string]*websocket.Conn{}, statuses: map[string]contracts.PlatformStatusInfo{}}, nil
 }
 func (s *Service) Start(ctx context.Context) error {
 	channels, err := s.storage.ChannelsByPlatform(ctx, contracts.PlatformKick)
@@ -104,6 +107,9 @@ func (s *Service) Leave(ctx context.Context, channel string) error {
 	log.Printf("kick chat: leave requested channel=%s", channel)
 	if err := s.storage.RemoveChannel(ctx, contracts.PlatformKick, channel); err != nil {
 		return err
+	}
+	if s.sevenTV != nil {
+		s.sevenTV.Unsubscribe(ctx, contracts.PlatformKick, channel)
 	}
 	s.emit(channel, "disconnected", "")
 	return nil
@@ -205,6 +211,11 @@ func (s *Service) connect(ctx context.Context, channel string) error {
 	s.channels[channel] = response.BroadcasterUserID
 	s.chatrooms[channel] = response.ChatroomID
 	s.mu.Unlock()
+	if s.sevenTV != nil {
+		s.sevenTV.Subscribe(ctx, seventv.Subscription{
+			Platform: contracts.PlatformKick, ChannelID: channel, CanonicalChannelID: fmt.Sprint(response.BroadcasterUserID),
+		})
+	}
 	s.emit(channel, "connected", "")
 	log.Printf("kick chat: chatroom resolved channel=%s broadcaster=%d chatroom=%d", channel, response.BroadcasterUserID, response.ChatroomID)
 	go s.runPusher(ctx, channel, response.ChatroomID)
@@ -330,6 +341,9 @@ func (s *Service) handlePusherMessage(ctx context.Context, channel string, raw j
 	message := contracts.NormalizedChatMessage{ID: incoming.ID, Platform: contracts.PlatformKick, ChannelID: channel, Author: contracts.ChatAuthor{ID: fmt.Sprint(incoming.Sender.ID), Username: incoming.Sender.Username, DisplayName: incoming.Sender.Username, Color: incoming.Sender.Identity.Color, AvatarURL: incoming.Sender.ProfilePicture, Badges: badges}, Text: text, Emotes: emotes, Timestamp: timestamp, Type: "message"}
 	if message.ID == "" {
 		message.ID = fmt.Sprintf("kick:%d:%d", incoming.ChatroomID, timestamp.UnixNano())
+	}
+	if s.sevenTV != nil {
+		message = s.sevenTV.Enrich(message)
 	}
 	if err := s.storage.SaveMessage(ctx, message); err != nil {
 		s.emit(channel, "error", fmt.Sprintf("persist Kick chat message: %v", err))
