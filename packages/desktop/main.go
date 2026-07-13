@@ -1,0 +1,145 @@
+package main
+
+import (
+	"context"
+	"embed"
+	"log"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+
+	"github.com/Satont/twirchat/packages/desktop/internal/app"
+	"github.com/Satont/twirchat/packages/desktop/internal/auth"
+	"github.com/Satont/twirchat/packages/desktop/internal/backend"
+	"github.com/Satont/twirchat/packages/desktop/internal/bridge"
+	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
+	kickchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/kick"
+	twitchchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/twitch"
+	"github.com/Satont/twirchat/packages/desktop/internal/update"
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
+//go:embed all:dist/main
+var assets embed.FS
+
+var version = "dev"
+
+func main() {
+	update.RunProductionStartup()
+	version = update.Version(version)
+	rootContext, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	profileDir, err := profileDirectory()
+	if err != nil {
+		log.Fatal(err)
+	}
+	requestHandlers := bridge.NewHandlerRegistry()
+	config := loadRuntimeConfig()
+	feed := updateFeedURL()
+	updaterManager, err := update.NewVelopackManager(feed)
+	if err != nil {
+		log.Fatal(err)
+	}
+	updater := update.NewService(version, updaterManager)
+
+	host, err := app.New(app.Config{
+		Assets:     assets,
+		Context:    rootContext,
+		Name:       "TwirChat",
+		ProfileDir: profileDir,
+		WailsServices: []application.Service{
+			application.NewService(bridge.NewDesktopService(requestHandlers, true)),
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	bridge.RegisterStorageHandlers(requestHandlers, host.Storage())
+	events := bridge.NewEventPublisher(bridge.WailsEventEmitter{})
+	bridge.RegisterUpdateHandlers(requestHandlers, updater, events)
+	backendClient, err := backend.NewHTTPClient(config.BackendURL, host.ClientSecret(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	twitchService, err := twitchchat.NewService(twitchchat.Config{
+		Storage: host.Storage(),
+		Events:  bridge.NewTwitchEvents(events),
+		Badges:  twitchchat.NewBackendBadgeResolver(backendClient),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := host.AddService(twitchService); err != nil {
+		log.Fatal(err)
+	}
+	kickService, err := kickchat.NewService(kickchat.Config{
+		Storage: host.Storage(), Backend: backendClient, Events: bridge.NewTwitchEvents(events),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := host.AddService(kickService); err != nil {
+		log.Fatal(err)
+	}
+	bridge.RegisterTwitchHandlers(requestHandlers, twitchService, kickService)
+	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
+	authService, err := auth.NewService(auth.Config{
+		Address:          config.AuthAddress,
+		CallbackHost:     config.AuthCallbackHost,
+		Backend:          backendClient,
+		Browser:          auth.BrowserFunc(openExternalURL),
+		IdentityResolver: auth.ProviderIdentityResolver{},
+		Storage:          host.Storage(),
+		Events: auth.Events{
+			OnAuthURL: func(payload contracts.AuthURL) {
+				events.EmitAuthURL(payload)
+			},
+			OnAuthSuccess: func(payload contracts.AuthSuccess) {
+				events.EmitAuthSuccess(payload)
+				if payload.Platform == contracts.PlatformTwitch {
+					if err := twitchService.RefreshCredentials(host.Context()); err != nil {
+						log.Printf("connect Twitch chat after OAuth: %v", err)
+					}
+				}
+			},
+			OnAuthError: func(payload contracts.AuthError) {
+				events.EmitAuthError(payload)
+			},
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := host.AddService(authService); err != nil {
+		log.Fatal(err)
+	}
+	bridge.RegisterAuthHandlers(requestHandlers, authService, host.Storage())
+
+	if err := host.Start(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func updateFeedURL() string {
+	channel := map[string]string{"linux": "linux", "windows": "win", "darwin": "osx"}[runtime.GOOS]
+	return "https://github.com/Satont/twirchat/releases/latest/download/releases." + channel + ".json"
+}
+
+func openExternalURL(url string) error {
+	wailsApp := application.Get()
+	if wailsApp == nil {
+		return os.ErrNotExist
+	}
+	return wailsApp.Browser.OpenURL(url)
+}
+
+func profileDirectory() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configDir, "TwirChat"), nil
+}

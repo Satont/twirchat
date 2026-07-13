@@ -17,6 +17,7 @@
     "**/gen/**",
     "**/*.d.ts",
     "**/coverage/**",
+    "**/frontend/bindings/**",
     "**/.opencode/**",
     "**/*.graphql",
     "**/*.proto",

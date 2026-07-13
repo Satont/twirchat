@@ -1,0 +1,31 @@
+version: '3'
+
+info:
+  companyName: TwirChat
+  productName: TwirChat
+  productIdentifier: dev.twirchat.app
+  description: Multi-platform chat manager for streamers
+  version: 0.0.1
+
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - node_modules
+      - dist
+    file:
+      - .DS_Store
+      - .gitignore
+    watched_extension:
+      - '*.go'
+    git_ignore: true
+  executes:
+    - cmd: wails3 task build:main
+      type: blocking
+    - cmd: wails3 task dev:main
+      type: background
+    - cmd: wails3 task run
+      type: primary
