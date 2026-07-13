@@ -13,6 +13,7 @@ import { resolveBadgeImage } from '../utils/badge-image'
 import { chatMessageStyle } from '../utils/chat-message-style'
 import { openExternalUrl } from '../services/external-url'
 import { useAvatarCache } from '../composables/useAvatarCache'
+import type { ResolvedModerationOutcome } from '../composables/useModerationOutcomes'
 import type { ModerationDragAction } from '../utils/moderation-drag'
 
 const props = defineProps<{
@@ -31,6 +32,7 @@ const props = defineProps<{
   alias?: string
   showModerationRail?: boolean
   moderationPending?: boolean
+  moderationOutcome?: ResolvedModerationOutcome
 }>()
 
 const emit = defineEmits<{
@@ -219,6 +221,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       {
         'delivery-pending': message.delivery?.state === 'pending',
         'delivery-failed': message.delivery?.state === 'failed',
+        'moderation-outcome': props.moderationOutcome,
         'self-ping': isSelfPing,
       },
     ]"
@@ -231,7 +234,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       :style="{ background: platformColor(message.platform) }"
     />
     <MessageModerationRail
-      v-if="props.showModerationRail"
+      v-if="props.showModerationRail && !props.moderationOutcome"
       :disabled="props.moderationPending"
       :message="message"
       @moderate="onModerate"
@@ -372,6 +375,9 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       >
         Not sent: {{ message.delivery.error }}
       </span>
+      <span v-if="props.moderationOutcome" class="moderation-outcome-label">
+        {{ props.moderationOutcome.label }}
+      </span>
     </div>
 
     <div style="position: absolute; right: 0; top: 0">
@@ -441,6 +447,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       {
         'delivery-pending': message.delivery?.state === 'pending',
         'delivery-failed': message.delivery?.state === 'failed',
+        'moderation-outcome': props.moderationOutcome,
         'self-ping': isSelfPing,
       },
     ]"
@@ -455,7 +462,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       :title="message.platform"
     />
     <MessageModerationRail
-      v-if="props.showModerationRail"
+      v-if="props.showModerationRail && !props.moderationOutcome"
       :disabled="props.moderationPending"
       :message="message"
       @moderate="onModerate"
@@ -590,6 +597,9 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       >
         Not sent: {{ message.delivery.error }}
       </span>
+      <span v-if="props.moderationOutcome" class="moderation-outcome-label">
+        {{ props.moderationOutcome.label }}
+      </span>
     </div>
 
     <!-- Reply button: always in DOM, shown via CSS hover on .msg -->
@@ -678,6 +688,17 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 .delivery-failed {
   border-left: 2px solid #ef4444;
   background: rgba(239, 68, 68, 0.08);
+}
+
+.moderation-outcome {
+  opacity: 0.48;
+}
+
+.moderation-outcome-label {
+  color: var(--c-text-2, #8b8b99);
+  font-size: 0.82em;
+  font-style: italic;
+  margin-left: 0.35em;
 }
 
 .delivery-error {

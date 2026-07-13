@@ -61,6 +61,18 @@ type ModerationActionResult struct {
 	Error   *ModerationActionError `json:"error,omitempty"`
 }
 
+// ModerationOutcome describes one confirmed moderation action. It is emitted
+// to the frontend for live, session-only rendering and is never stored as a
+// chat message.
+type ModerationOutcome struct {
+	Platform        Platform `json:"platform"`
+	ChannelID       string   `json:"channelId"`
+	Action          string   `json:"action"`
+	MessageID       string   `json:"messageId,omitempty"`
+	TargetUserID    string   `json:"targetUserId,omitempty"`
+	DurationSeconds int      `json:"durationSeconds,omitempty"`
+}
+
 type ReplyAuthor struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`

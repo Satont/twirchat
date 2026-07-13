@@ -69,11 +69,28 @@ type Notice struct {
 	Message string
 }
 
+// DeletedMessage is Twitch IRC's CLEARMSG projection. It only applies to the
+// exact message identifier carried by the server.
+type DeletedMessage struct {
+	Channel   string
+	MessageID string
+}
+
+// UserSanction is Twitch IRC's CLEARCHAT projection. A positive duration is a
+// timeout; an absent duration is a permanent ban.
+type UserSanction struct {
+	Channel         string
+	TargetUserID    string
+	DurationSeconds int
+}
+
 // Client captures the gempir IRC operations used by the lifecycle service.
 type Client interface {
 	OnConnect(func())
 	OnMessage(func(IncomingMessage))
 	OnNotice(func(Notice))
+	OnMessageDelete(func(DeletedMessage))
+	OnUserSanction(func(UserSanction))
 	Join(string)
 	Depart(string)
 	Say(string, string)
@@ -87,6 +104,7 @@ type ClientFactory func(Credentials) (Client, error)
 // Events keeps Wails event delivery outside the transport implementation.
 type Events interface {
 	Message(contracts.NormalizedChatMessage)
+	Moderation(contracts.ModerationOutcome)
 	Status(contracts.PlatformStatusInfo)
 }
 
@@ -412,6 +430,8 @@ func (s *Service) connectSavedChannels(ctx context.Context, force bool) error {
 	client.OnConnect(func() { s.onConnect(client) })
 	client.OnMessage(s.onMessage)
 	client.OnNotice(s.onNotice)
+	client.OnMessageDelete(s.onMessageDelete)
+	client.OnUserSanction(s.onUserSanction)
 
 	s.mu.Lock()
 	s.account = account
@@ -570,6 +590,31 @@ func (s *Service) onNotice(notice Notice) {
 	s.emitStatus(channel, "error", notice.Message)
 }
 
+func (s *Service) onMessageDelete(deleted DeletedMessage) {
+	channel := normalizeChannel(deleted.Channel)
+	if channel == "" || strings.TrimSpace(deleted.MessageID) == "" {
+		return
+	}
+	s.events.Moderation(contracts.ModerationOutcome{
+		Platform: contracts.PlatformTwitch, ChannelID: channel, Action: "delete_message", MessageID: deleted.MessageID,
+	})
+}
+
+func (s *Service) onUserSanction(sanction UserSanction) {
+	channel := normalizeChannel(sanction.Channel)
+	if channel == "" || strings.TrimSpace(sanction.TargetUserID) == "" {
+		return
+	}
+	action := "ban"
+	if sanction.DurationSeconds > 0 {
+		action = "timeout"
+	}
+	s.events.Moderation(contracts.ModerationOutcome{
+		Platform: contracts.PlatformTwitch, ChannelID: channel, Action: action,
+		TargetUserID: sanction.TargetUserID, DurationSeconds: sanction.DurationSeconds,
+	})
+}
+
 func isDeliveryFailure(msgID string) bool {
 	return strings.HasPrefix(msgID, "msg_") ||
 		strings.Contains(msgID, "banned") ||
@@ -681,6 +726,20 @@ func (c *ircClient) OnMessage(handler func(IncomingMessage)) {
 func (c *ircClient) OnNotice(handler func(Notice)) {
 	c.client.OnNoticeMessage(func(notice twitchirc.NoticeMessage) {
 		handler(Notice{Channel: notice.Channel, MsgID: notice.MsgID, Message: notice.Message})
+	})
+}
+
+func (c *ircClient) OnMessageDelete(handler func(DeletedMessage)) {
+	c.client.OnClearMessage(func(message twitchirc.ClearMessage) {
+		handler(DeletedMessage{Channel: message.Channel, MessageID: message.TargetMsgID})
+	})
+}
+
+func (c *ircClient) OnUserSanction(handler func(UserSanction)) {
+	c.client.OnClearChatMessage(func(message twitchirc.ClearChatMessage) {
+		handler(UserSanction{
+			Channel: message.Channel, TargetUserID: message.TargetUserID, DurationSeconds: message.BanDuration,
+		})
 	})
 }
 

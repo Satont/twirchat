@@ -31,6 +31,7 @@ type Chat interface {
 // routing rules testable without a native application.
 type Events interface {
 	EmitChatMessage(contracts.NormalizedChatMessage) bool
+	EmitChatModeration(contracts.ModerationOutcome) bool
 	EmitPlatformStatus(contracts.PlatformStatusInfo) bool
 	EmitWatchedChannelMessage(contracts.WatchedChannelMessage) bool
 	EmitWatchedChannelStatus(contracts.WatchedChannelStatus) bool
@@ -223,6 +224,12 @@ func (m *Manager) Message(message contracts.NormalizedChatMessage) {
 	for _, channel := range m.matching(message.Platform, message.ChannelID) {
 		m.events.EmitWatchedChannelMessage(contracts.WatchedChannelMessage{ChannelID: channel.ID, Message: message})
 	}
+}
+
+// Moderation is passed to platform services as their live moderation-action
+// sink. The frontend resolves the outcome against its visible messages.
+func (m *Manager) Moderation(outcome contracts.ModerationOutcome) {
+	m.events.EmitChatModeration(outcome)
 }
 
 // Status is passed to the underlying Twitch/Kick services as their event sink.

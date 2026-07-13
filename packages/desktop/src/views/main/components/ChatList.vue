@@ -12,6 +12,7 @@ import { desktopApi } from '../services/desktop-api'
 import { platformColor } from '../../shared/utils/platform'
 import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
+import { useModerationOutcomes } from '../composables/useModerationOutcomes'
 import type { UserCardTarget } from '../utils/chatCommands'
 import { ownChatSendTargets } from '../utils/chat-send-targets'
 import type { ModerationDragAction } from '../utils/moderation-drag'
@@ -84,6 +85,7 @@ const showMenu = ref(false)
 const watchedModerationAllowed = ref(false)
 const moderationPendingMessageIDs = ref(new Set<string>())
 const moderationToast = ref<{ kind: 'error' | 'success'; text: string } | null>(null)
+const { apply: applyModerationOutcome, outcomeFor: moderationOutcomeFor } = useModerationOutcomes()
 let moderationToastTimeout: ReturnType<typeof setTimeout> | undefined
 let moderationCapabilityRequest = 0
 
@@ -182,6 +184,17 @@ async function onModerate(
       platform,
       targetUserId: message.author.id,
       ...(action.action === 'timeout' ? { durationSeconds: action.durationSeconds } : {}),
+    })
+    applyModerationOutcome({
+      action: action.action,
+      channelId: message.channelId,
+      platform,
+      ...(action.action === 'delete_message'
+        ? { messageId: message.id }
+        : {
+            targetUserId: message.author.id,
+            ...(action.action === 'timeout' ? { durationSeconds: action.durationSeconds } : {}),
+          }),
     })
     showModerationToast('success', action.label)
   } catch (error) {
@@ -586,7 +599,8 @@ function onAppearanceChange(s: AppSettings) {
             :accounts="accounts"
             :self-ping-enabled="settings?.selfPing?.enabled"
             :self-ping-color="settings?.selfPing?.color"
-            :show-moderation-rail="canShowModerationRail(item)"
+            :moderation-outcome="moderationOutcomeFor(item)"
+            :show-moderation-rail="canShowModerationRail(item) && !moderationOutcomeFor(item)"
             :moderation-pending="moderationPendingMessageIDs.has(item.id)"
             @reply="onReply"
             @moderate="onModerate"

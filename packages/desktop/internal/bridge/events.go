@@ -8,6 +8,7 @@ import (
 const (
 	eventChatMessage           = "chat_message"
 	eventChatEvent             = "chat_event"
+	eventChatModeration        = "chat_moderation"
 	eventPlatformStatus        = "platform_status"
 	eventAuthURL               = "auth_url"
 	eventAuthSuccess           = "auth_success"
@@ -66,6 +67,10 @@ func (p *EventPublisher) EmitChatMessage(payload contracts.NormalizedChatMessage
 
 func (p *EventPublisher) EmitChatEvent(payload contracts.NormalizedEvent) bool {
 	return p.events.Emit(eventChatEvent, payload)
+}
+
+func (p *EventPublisher) EmitChatModeration(payload contracts.ModerationOutcome) bool {
+	return p.events.Emit(eventChatModeration, payload)
 }
 
 func (p *EventPublisher) EmitPlatformStatus(payload contracts.PlatformStatusInfo) bool {

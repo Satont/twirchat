@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ var ErrDeliveryRejected = errors.New("Kick rejected chat message")
 type Events interface {
 	Status(contracts.PlatformStatusInfo)
 	Message(contracts.NormalizedChatMessage)
+	Moderation(contracts.ModerationOutcome)
 }
 type Config struct {
 	Storage    *storage.Storage
@@ -319,7 +321,68 @@ func (s *Service) runPusher(ctx context.Context, channel string, chatroomID int6
 			_ = connection.Write(ctx, websocket.MessageText, data)
 		case `App\Events\ChatMessageEvent`:
 			s.handlePusherMessage(ctx, channel, envelope.Data)
+		case `App\Events\MessageDeletedEvent`, `App\Events\UserBannedEvent`:
+			if outcome, ok := parsePusherModerationOutcome(channel, envelope.Event, envelope.Data, time.Now().UTC()); ok {
+				s.events.Moderation(outcome)
+			}
 		}
+	}
+}
+
+// parsePusherModerationOutcome handles the moderation subset of the existing
+// public chatroom Pusher stream. Kick does not document it as a stable API, so
+// malformed frames are ignored instead of producing an incorrect chat state.
+func parsePusherModerationOutcome(
+	channel, event string,
+	raw json.RawMessage,
+	now time.Time,
+) (contracts.ModerationOutcome, bool) {
+	if channel == "" {
+		return contracts.ModerationOutcome{}, false
+	}
+	var encoded string
+	if err := json.Unmarshal(raw, &encoded); err == nil {
+		raw = []byte(encoded)
+	}
+
+	switch event {
+	case `App\Events\MessageDeletedEvent`:
+		var payload struct {
+			Message struct {
+				ID string `json:"id"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil || payload.Message.ID == "" {
+			return contracts.ModerationOutcome{}, false
+		}
+		return contracts.ModerationOutcome{
+			Platform: contracts.PlatformKick, ChannelID: channel, Action: "delete_message", MessageID: payload.Message.ID,
+		}, true
+	case `App\Events\UserBannedEvent`:
+		var payload struct {
+			User struct {
+				ID int64 `json:"id"`
+			} `json:"user"`
+			ExpiresAt *time.Time `json:"expires_at"`
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil || payload.User.ID == 0 {
+			return contracts.ModerationOutcome{}, false
+		}
+		outcome := contracts.ModerationOutcome{
+			Platform: contracts.PlatformKick, ChannelID: channel, Action: "ban", TargetUserID: fmt.Sprint(payload.User.ID),
+		}
+		if payload.ExpiresAt == nil {
+			return outcome, true
+		}
+		seconds := int(math.Ceil(payload.ExpiresAt.Sub(now).Seconds()))
+		if seconds <= 0 {
+			return contracts.ModerationOutcome{}, false
+		}
+		outcome.Action = "timeout"
+		outcome.DurationSeconds = seconds
+		return outcome, true
+	default:
+		return contracts.ModerationOutcome{}, false
 	}
 }
 
