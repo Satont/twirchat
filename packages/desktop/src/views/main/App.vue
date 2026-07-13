@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, triggerRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { System } from '@wailsio/runtime'
 import { useRpcListener } from './composables/useRpcListener'
 import { useModerationOutcomes } from './composables/useModerationOutcomes'
 import { useAccountsStore } from './stores/accounts'
@@ -18,11 +19,13 @@ import type { WatchedLiveStatus } from './components/ChannelTabBar.vue'
 import AddChannelModal from './components/AddChannelModal.vue'
 import TabSelectorModal from './components/TabSelectorModal.vue'
 import type { TabItem } from './components/TabSelectorModal.vue'
+import AppTitleBar from './components/AppTitleBar.vue'
 import { useHotkeys } from './composables/useHotkeys'
 import { rpc } from './main'
 import { attemptMigration } from './services/migration'
 import { desktopApi } from './services/desktop-api'
 import { shouldCheckForUpdates } from './services/update-capability'
+import { resolveWindowChromePlatform } from './services/window-chrome'
 import { mergeChatMessageSnapshot } from './utils/chat-message-buffer'
 import type {
   Account,
@@ -50,6 +53,14 @@ const { apply: applyModerationOutcome } = useModerationOutcomes()
 const { accounts } = storeToRefs(accountsStore)
 const { settings } = storeToRefs(settingsStore)
 const { statuses } = storeToRefs(channelStatusStore)
+
+const nativePlatform = System.IsWindows() ? 'windows' : System.IsMac() ? 'darwin' : 'linux'
+const windowChromePlatform = resolveWindowChromePlatform({
+  nativePlatform,
+  isDevelopment: import.meta.env.DEV,
+  search: window.location.search,
+})
+const hasCompactWindowChrome = windowChromePlatform !== 'native'
 
 // Sync theme class to body for Teleported components
 watch(
@@ -540,289 +551,292 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
 </script>
 
 <template>
-  <div
-    class="app"
-    :class="[
-      settings?.theme ?? 'dark',
-      settings?.fontFamily ? `font-${settings.fontFamily}` : 'font-inter',
-    ]"
-  >
-    <!-- Left icon navigation -->
-    <nav class="nav-rail" :class="{ collapsed: sidebarCollapsed }">
-      <div class="nav-logo">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <rect x="2" y="3" width="20" height="14" rx="3" fill="currentColor" opacity=".9" />
-          <path
-            d="M7 21h10M12 17v4"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-        </svg>
-      </div>
-
-      <div class="nav-items">
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'chat' }"
-          title="Chat"
-          @click="switchTab('chat')"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          <span class="nav-label">Chat</span>
-        </button>
-
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'events' }"
-          title="Events"
-          @click="switchTab('events')"
-        >
-          <div class="nav-item-inner">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <span v-if="unreadEvents > 0" class="badge">{{
-              unreadEvents > 99 ? '99+' : unreadEvents
-            }}</span>
-          </div>
-          <span class="nav-label">Events</span>
-        </button>
-
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'platforms' }"
-          title="Platforms"
-          @click="switchTab('platforms')"
-        >
-          <div class="nav-item-inner">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path
-                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
-              />
-            </svg>
-            <span v-if="connectedAccountsCount > 0" class="badge badge-green">
-              {{ connectedAccountsCount }}
-            </span>
-          </div>
-          <span class="nav-label">Platforms</span>
-        </button>
-
-        <button
-          class="nav-item"
-          :class="{ active: activeTab === 'settings' }"
-          title="Settings"
-          @click="switchTab('settings')"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="12" cy="12" r="3" />
+  <div class="window-shell" :class="{ 'compact-window-chrome': hasCompactWindowChrome }">
+    <AppTitleBar v-if="hasCompactWindowChrome" :platform="windowChromePlatform" />
+    <div
+      class="app"
+      :class="[
+        settings?.theme ?? 'dark',
+        settings?.fontFamily ? `font-${settings.fontFamily}` : 'font-inter',
+      ]"
+    >
+      <!-- Left icon navigation -->
+      <nav class="nav-rail" :class="{ collapsed: sidebarCollapsed }">
+        <div class="nav-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="3" width="20" height="14" rx="3" fill="currentColor" opacity=".9" />
             <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              d="M7 21h10M12 17v4"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
             />
           </svg>
-          <span class="nav-label">Settings</span>
-        </button>
-      </div>
-
-      <!-- Collapse toggle button -->
-      <button
-        class="nav-collapse-btn"
-        :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-        @click="toggleSidebar"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          :class="{ 'icon-flipped': sidebarCollapsed }"
-        >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-      </button>
-    </nav>
-
-    <!-- Main content area -->
-    <main class="content">
-      <!-- Channel tab bar for watched channels -->
-      <ChannelTabBar
-        v-if="activeTab === 'chat'"
-        :watched-channels="tabWatchedChannels"
-        :active-tab-id="activeWatchedTab"
-        :watched-statuses="watchedStatuses"
-        :watched-live-statuses="watchedLiveStatuses"
-        :tab-channel-names="tabChannelNames"
-        @select-tab="activeWatchedTab = $event"
-        @add-channel="showAddModal = true"
-        @remove-channel="onRemoveChannel"
-        @reorder="onTabReorder"
-      />
-
-      <!-- Home tab: combined chat across all own channels -->
-      <ChatList
-        v-if="activeTab === 'chat' && activeWatchedTab === 'home' && settings"
-        :messages="messages"
-        :settings="settings"
-        :accounts="accounts"
-        :statuses="statuses"
-        @settings-change="onSettingsChange"
-      />
-
-      <!-- Watched channel tab: per-tab independent layout -->
-      <WatchedChannelsView
-        v-if="activeTab === 'chat' && activeWatchedTab !== 'home' && settings"
-        :tab-id="activeWatchedTab"
-        :messages="messages"
-        :settings="settings"
-        :accounts="accounts"
-        :statuses="statuses"
-        :watched-messages="watchedMessages"
-        :watched-statuses="watchedStatuses"
-        :watched-channels="watchedChannels"
-        :on-add-watched-channel="doAddWatchedChannel"
-        @tab-channels-updated="onTabChannelsUpdated"
-        @settings-change="onSettingsChange"
-        @send-watched="onSendWatched"
-      />
-
-      <EventsFeed v-show="activeTab === 'events'" :events="events" />
-
-      <PlatformsPanel
-        v-show="activeTab === 'platforms'"
-        :accounts="accounts"
-        :statuses="statuses"
-        @accounts-updated="accountsStore.setAccounts($event)"
-      />
-
-      <SettingsPanel
-        v-show="activeTab === 'settings'"
-        :settings="settings"
-        @saved="onSettingsSaved"
-        @change="onSettingsChange"
-      />
-    </main>
-
-    <!-- Add channel modal -->
-    <AddChannelModal
-      data-testid="add-channel-modal"
-      v-if="showAddModal"
-      :youtube-authenticated="youtubeAuthenticated"
-      @confirm="onAddChannel"
-      @cancel="showAddModal = false"
-    />
-
-    <TabSelectorModal
-      v-if="showTabSelector"
-      :tabs="tabSelectorItems"
-      :active-tab-id="activeWatchedTab"
-      @select="
-        (id) => {
-          activeWatchedTab = id
-          activeTab = 'chat'
-        }
-      "
-      @close="showTabSelector = false"
-    />
-
-    <!-- Update notification toast -->
-    <div v-if="updateState.show" class="update-toast">
-      <div class="update-content">
-        <div class="update-icon">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <path d="M3 3v5h5" />
-            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-            <path d="M16 16h5v5" />
-          </svg>
         </div>
-        <div class="update-info">
-          <div class="update-title">{{ updateState.message }}</div>
-          <div v-if="updateState.progress !== undefined" class="update-progress">
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: updateState.progress + '%' }" />
+
+        <div class="nav-items">
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'chat' }"
+            title="Chat"
+            @click="switchTab('chat')"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span class="nav-label">Chat</span>
+          </button>
+
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'events' }"
+            title="Events"
+            @click="switchTab('events')"
+          >
+            <div class="nav-item-inner">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span v-if="unreadEvents > 0" class="badge">{{
+                unreadEvents > 99 ? '99+' : unreadEvents
+              }}</span>
             </div>
-            <span class="progress-text">{{ updateState.progress }}%</span>
-          </div>
+            <span class="nav-label">Events</span>
+          </button>
+
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'platforms' }"
+            title="Platforms"
+            @click="switchTab('platforms')"
+          >
+            <div class="nav-item-inner">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path
+                  d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                />
+              </svg>
+              <span v-if="connectedAccountsCount > 0" class="badge badge-green">
+                {{ connectedAccountsCount }}
+              </span>
+            </div>
+            <span class="nav-label">Platforms</span>
+          </button>
+
+          <button
+            class="nav-item"
+            :class="{ active: activeTab === 'settings' }"
+            title="Settings"
+            @click="switchTab('settings')"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              />
+            </svg>
+            <span class="nav-label">Settings</span>
+          </button>
         </div>
+
+        <!-- Collapse toggle button -->
         <button
-          v-if="updateState.status === 'download-complete'"
-          class="update-btn"
-          @click="applyUpdate"
+          class="nav-collapse-btn"
+          :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          @click="toggleSidebar"
         >
-          Restart
-        </button>
-        <button
-          v-if="updateState.status === 'update-available' && updateState.hash"
-          class="update-btn update-btn-skip"
-          @click="skipUpdate"
-        >
-          Skip
-        </button>
-        <button class="update-close" @click="dismissUpdate">
           <svg
-            width="14"
-            height="14"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :class="{ 'icon-flipped': sidebarCollapsed }"
           >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+            <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
+      </nav>
+
+      <!-- Main content area -->
+      <main class="content">
+        <!-- Channel tab bar for watched channels -->
+        <ChannelTabBar
+          v-if="activeTab === 'chat'"
+          :watched-channels="tabWatchedChannels"
+          :active-tab-id="activeWatchedTab"
+          :watched-statuses="watchedStatuses"
+          :watched-live-statuses="watchedLiveStatuses"
+          :tab-channel-names="tabChannelNames"
+          @select-tab="activeWatchedTab = $event"
+          @add-channel="showAddModal = true"
+          @remove-channel="onRemoveChannel"
+          @reorder="onTabReorder"
+        />
+
+        <!-- Home tab: combined chat across all own channels -->
+        <ChatList
+          v-if="activeTab === 'chat' && activeWatchedTab === 'home' && settings"
+          :messages="messages"
+          :settings="settings"
+          :accounts="accounts"
+          :statuses="statuses"
+          @settings-change="onSettingsChange"
+        />
+
+        <!-- Watched channel tab: per-tab independent layout -->
+        <WatchedChannelsView
+          v-if="activeTab === 'chat' && activeWatchedTab !== 'home' && settings"
+          :tab-id="activeWatchedTab"
+          :messages="messages"
+          :settings="settings"
+          :accounts="accounts"
+          :statuses="statuses"
+          :watched-messages="watchedMessages"
+          :watched-statuses="watchedStatuses"
+          :watched-channels="watchedChannels"
+          :on-add-watched-channel="doAddWatchedChannel"
+          @tab-channels-updated="onTabChannelsUpdated"
+          @settings-change="onSettingsChange"
+          @send-watched="onSendWatched"
+        />
+
+        <EventsFeed v-show="activeTab === 'events'" :events="events" />
+
+        <PlatformsPanel
+          v-show="activeTab === 'platforms'"
+          :accounts="accounts"
+          :statuses="statuses"
+          @accounts-updated="accountsStore.setAccounts($event)"
+        />
+
+        <SettingsPanel
+          v-show="activeTab === 'settings'"
+          :settings="settings"
+          @saved="onSettingsSaved"
+          @change="onSettingsChange"
+        />
+      </main>
+
+      <!-- Add channel modal -->
+      <AddChannelModal
+        data-testid="add-channel-modal"
+        v-if="showAddModal"
+        :youtube-authenticated="youtubeAuthenticated"
+        @confirm="onAddChannel"
+        @cancel="showAddModal = false"
+      />
+
+      <TabSelectorModal
+        v-if="showTabSelector"
+        :tabs="tabSelectorItems"
+        :active-tab-id="activeWatchedTab"
+        @select="
+          (id) => {
+            activeWatchedTab = id
+            activeTab = 'chat'
+          }
+        "
+        @close="showTabSelector = false"
+      />
+
+      <!-- Update notification toast -->
+      <div v-if="updateState.show" class="update-toast">
+        <div class="update-content">
+          <div class="update-icon">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+              <path d="M16 16h5v5" />
+            </svg>
+          </div>
+          <div class="update-info">
+            <div class="update-title">{{ updateState.message }}</div>
+            <div v-if="updateState.progress !== undefined" class="update-progress">
+              <div class="progress-bar">
+                <div class="progress-fill" :style="{ width: updateState.progress + '%' }" />
+              </div>
+              <span class="progress-text">{{ updateState.progress }}%</span>
+            </div>
+          </div>
+          <button
+            v-if="updateState.status === 'download-complete'"
+            class="update-btn"
+            @click="applyUpdate"
+          >
+            Restart
+          </button>
+          <button
+            v-if="updateState.status === 'update-available' && updateState.hash"
+            class="update-btn update-btn-skip"
+            @click="skipUpdate"
+          >
+            Skip
+          </button>
+          <button class="update-close" @click="dismissUpdate">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -890,12 +904,31 @@ body {
 </style>
 
 <style scoped>
+.window-shell {
+  background: #0f0f11;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.window-shell.compact-window-chrome {
+  --wails-resize: all;
+
+  display: flex;
+  flex-direction: column;
+}
+
 .app {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   background: #0f0f11;
   color: #e2e2e8;
+}
+
+.window-shell.compact-window-chrome .app {
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }
 
 /* Light theme overrides */

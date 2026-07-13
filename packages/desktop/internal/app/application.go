@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"runtime"
 	"sync"
 
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
@@ -45,6 +46,8 @@ type Application struct {
 	shutdownOnce sync.Once
 }
 
+const compactTitleBarHeight = 32
+
 // New configures an application without creating a native window or starting services.
 func New(config Config) (*Application, error) {
 	if config.Assets == nil {
@@ -82,14 +85,33 @@ func New(config Config) (*Application, error) {
 		storage:       store,
 		clientSecret:  clientSecret,
 		wailsServices: append([]application.Service(nil), config.WailsServices...),
-		windowOptions: application.WebviewWindowOptions{
-			Name:   "main",
-			Title:  config.Name,
-			URL:    "/",
-			Width:  1200,
-			Height: 800,
-		},
+		windowOptions: mainWindowOptions(config.Name, runtime.GOOS),
 	}, nil
+}
+
+func mainWindowOptions(name, platform string) application.WebviewWindowOptions {
+	options := application.WebviewWindowOptions{
+		Name:   "main",
+		Title:  name,
+		URL:    "/",
+		Width:  1200,
+		Height: 800,
+	}
+
+	switch platform {
+	case "windows":
+		options.Frameless = true
+		options.Windows = application.WindowsWindow{
+			DisableFramelessWindowDecorations: false,
+		}
+	case "darwin":
+		options.Mac = application.MacWindow{
+			TitleBar:                 application.MacTitleBarHidden,
+			InvisibleTitleBarHeight: compactTitleBarHeight,
+		}
+	}
+
+	return options
 }
 
 func (a *Application) Name() string {
