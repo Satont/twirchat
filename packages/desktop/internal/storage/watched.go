@@ -188,6 +188,49 @@ func (s *Storage) LoadWatchedLayout(
 	return layout, true, nil
 }
 
+// LoadOrCreateWatchedLayout returns a tab's saved layout or creates the
+// single-channel default used by the legacy desktop client. A layout is only
+// created for an existing watched-channel ID, so migration and invalid-tab
+// lookups retain their "not found" semantics.
+func (s *Storage) LoadOrCreateWatchedLayout(
+	ctx context.Context,
+	tabID string,
+) (contracts.WatchedChannelsLayout, bool, error) {
+	layout, found, err := s.LoadWatchedLayout(ctx, tabID)
+	if err != nil || found {
+		return layout, found, err
+	}
+
+	channel, err := s.WatchedChannel(ctx, tabID)
+	if err != nil {
+		return contracts.WatchedChannelsLayout{}, false, err
+	}
+	if channel == nil {
+		return contracts.WatchedChannelsLayout{}, false, nil
+	}
+
+	panelID, err := newUUID()
+	if err != nil {
+		return contracts.WatchedChannelsLayout{}, false, fmt.Errorf("create default watched layout: generate panel ID: %w", err)
+	}
+	layout = contracts.WatchedChannelsLayout{
+		Version: 2,
+		Root: contracts.LayoutNode{
+			Type: "panel",
+			ID:   panelID,
+			Content: &contracts.PanelContent{
+				Type:      "watched",
+				ChannelID: channel.ID,
+			},
+			Flex: 100,
+		},
+	}
+	if err := s.SaveWatchedLayout(ctx, tabID, layout); err != nil {
+		return contracts.WatchedChannelsLayout{}, false, fmt.Errorf("create default watched layout for tab %q: %w", tabID, err)
+	}
+	return layout, true, nil
+}
+
 // DeleteWatchedLayout removes a watched-channel layout by tab ID.
 func (s *Storage) DeleteWatchedLayout(ctx context.Context, tabID string) error {
 	if _, err := s.db.ExecContext(

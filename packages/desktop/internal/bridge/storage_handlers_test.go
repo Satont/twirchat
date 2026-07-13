@@ -68,3 +68,39 @@ func TestRegisterStorageHandlersServesVueBootstrapRequests(t *testing.T) {
 		t.Errorf("getUsernameColor = %#v, want nil", color)
 	}
 }
+
+func TestGetWatchedChannelsLayoutCreatesDefaultLayoutForNewTab(t *testing.T) {
+	store, err := storage.Open(context.Background(), t.TempDir(), storage.WithMachineID("bridge-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	registry := NewHandlerRegistry()
+	RegisterStorageHandlers(registry, store)
+	service := NewDesktopService(registry)
+
+	created, err := service.Call(contracts.GatewayRequest{
+		Method: contracts.RequestAddWatchedChannel,
+		Params: map[string]any{"platform": "twitch", "channelSlug": "stray228"},
+	})
+	if err != nil {
+		t.Fatalf("addWatchedChannel error = %v", err)
+	}
+	channel := created.(contracts.WatchedChannel)
+
+	value, err := service.Call(contracts.GatewayRequest{
+		Method: contracts.RequestGetWatchedChannelsLayout,
+		Params: map[string]any{"tabId": channel.ID},
+	})
+	if err != nil {
+		t.Fatalf("getWatchedChannelsLayout error = %v", err)
+	}
+	layout, ok := value.(contracts.WatchedChannelsLayout)
+	if !ok {
+		t.Fatalf("getWatchedChannelsLayout = %#v, want a default layout", value)
+	}
+	if layout.Version != 2 || layout.Root.Type != "panel" || layout.Root.Content == nil ||
+		layout.Root.Content.Type != "watched" || layout.Root.Content.ChannelID != channel.ID {
+		t.Errorf("default watched layout = %#v, want a panel for %q", layout, channel.ID)
+	}
+}

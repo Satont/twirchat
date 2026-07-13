@@ -110,7 +110,7 @@ func RegisterStorageHandlers(registry *HandlerRegistry, store *storage.Storage) 
 		if err := decodeParams(params, &input); err != nil {
 			return nil, err
 		}
-		layout, found, err := store.LoadWatchedLayout(ctx, input.TabID)
+		layout, found, err := store.LoadOrCreateWatchedLayout(ctx, input.TabID)
 		if err != nil || !found {
 			return nil, err
 		}
