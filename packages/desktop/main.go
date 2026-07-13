@@ -17,6 +17,7 @@ import (
 	kickchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/kick"
 	twitchchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/twitch"
 	"github.com/Satont/twirchat/packages/desktop/internal/update"
+	"github.com/Satont/twirchat/packages/desktop/internal/watched"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -61,8 +62,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	bridge.RegisterStorageHandlers(requestHandlers, host.Storage())
 	events := bridge.NewEventPublisher(bridge.WailsEventEmitter{})
+	watchedManager, err := watched.NewManager(watched.Config{Storage: host.Storage(), Events: events})
+	if err != nil {
+		log.Fatal(err)
+	}
+	bridge.RegisterStorageHandlers(requestHandlers, host.Storage())
 	bridge.RegisterUpdateHandlers(requestHandlers, updater, events)
 	backendClient, err := backend.NewHTTPClient(config.BackendURL, host.ClientSecret(), nil)
 	if err != nil {
@@ -70,7 +75,7 @@ func main() {
 	}
 	twitchService, err := twitchchat.NewService(twitchchat.Config{
 		Storage: host.Storage(),
-		Events:  bridge.NewTwitchEvents(events),
+		Events:  watchedManager,
 		Badges:  twitchchat.NewBackendBadgeResolver(backendClient),
 	})
 	if err != nil {
@@ -80,7 +85,7 @@ func main() {
 		log.Fatal(err)
 	}
 	kickService, err := kickchat.NewService(kickchat.Config{
-		Storage: host.Storage(), Backend: backendClient, Events: bridge.NewTwitchEvents(events),
+		Storage: host.Storage(), Backend: backendClient, Events: watchedManager,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -88,7 +93,17 @@ func main() {
 	if err := host.AddService(kickService); err != nil {
 		log.Fatal(err)
 	}
+	if err := watchedManager.SetChat(contracts.PlatformTwitch, twitchService); err != nil {
+		log.Fatal(err)
+	}
+	if err := watchedManager.SetChat(contracts.PlatformKick, kickService); err != nil {
+		log.Fatal(err)
+	}
+	if err := host.AddService(watchedManager); err != nil {
+		log.Fatal(err)
+	}
 	bridge.RegisterTwitchHandlers(requestHandlers, twitchService, kickService)
+	bridge.RegisterWatchedChannelHandlers(requestHandlers, watchedManager)
 	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
 	authService, err := auth.NewService(auth.Config{
 		Address:          config.AuthAddress,

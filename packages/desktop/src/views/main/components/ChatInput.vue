@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type {
+  Account,
   NormalizedChatMessage,
   PlatformStatusInfo,
   WatchedChannel,
@@ -12,11 +13,13 @@ import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import { parseToken, replaceToken, useAutocomplete } from '../composables/useAutocomplete'
 import { useAliasStore } from '../stores/useAliasStore'
 import { resolveUserCardCommand, type UserCardTarget } from '../utils/chatCommands'
+import { ownChatSendTargets } from '../utils/chat-send-targets'
 import AutocompletePopup from './AutocompletePopup.vue'
 import { PopoverContent, PopoverRoot, PopoverTrigger } from 'reka-ui'
 import EmotePicker from './EmotePicker.vue'
 
 const props = defineProps<{
+  accounts: Account[]
   statuses: Map<string, PlatformStatusInfo>
   /** When set, input is scoped to this watched channel */
   watchedChannel?: WatchedChannel | null
@@ -56,12 +59,8 @@ const currentChannelInfo = computed((): { platform: string; channelId: string } 
   if (props.watchedChannel) {
     return { platform: props.watchedChannel.platform, channelId: props.watchedChannel.channelSlug }
   }
-  for (const info of props.statuses.values()) {
-    if (info.channelLogin && info.status === 'connected') {
-      return { platform: info.platform, channelId: info.channelLogin }
-    }
-  }
-  return null
+  const target = ownChatSendTargets(props.accounts)[0]
+  return target ? { platform: target.platform, channelId: target.channelLogin } : null
 })
 
 watch(showEmotePicker, async (isPickerOpen) => {
@@ -123,13 +122,19 @@ const connectedPlatforms = computed(() => {
   if (props.watchedChannel) {
     return []
   }
-  const result: PlatformStatusInfo[] = []
-  for (const info of props.statuses.values()) {
-    if ((info.status === 'connected' || info.status === 'connecting') && info.channelLogin) {
-      result.push(info)
+  return ownChatSendTargets(props.accounts).map((target) => {
+    const exactStatus = [...props.statuses.values()].find(
+      (info) =>
+        info.platform === target.platform &&
+        info.channelLogin?.toLowerCase() === target.channelLogin.toLowerCase(),
+    )
+    return {
+      platform: target.platform,
+      channelLogin: target.channelLogin,
+      status: exactStatus?.status ?? 'connected',
+      mode: exactStatus?.mode ?? 'authenticated',
     }
-  }
-  return result
+  })
 })
 
 const sendablePlatforms = computed(() =>

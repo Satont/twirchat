@@ -12,6 +12,7 @@ import { platformColor } from '../../shared/utils/platform'
 import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
 import type { UserCardTarget } from '../utils/chatCommands'
+import { ownChatSendTargets } from '../utils/chat-send-targets'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
@@ -130,49 +131,9 @@ const activeMessages = computed<NormalizedChatMessage[]>(() => {
   return props.messages
 })
 
-// Connected channels: derived from statuses map — twitch/kick only (backend channels-status API)
-const connectedChannels = computed<ChannelStatusRequest[]>(() => {
-  const result: ChannelStatusRequest[] = []
-  for (const [, info] of props.statuses) {
-    if (
-      (info.status === 'connected' || info.status === 'connecting') &&
-      info.channelLogin &&
-      (info.platform === 'twitch' || info.platform === 'kick')
-    ) {
-      result.push({ channelLogin: info.channelLogin, platform: info.platform as 'twitch' | 'kick' })
-    }
-  }
-  return result
-})
-
-// Auto-connected channels for Kick: when user is authenticated, their own channel is auto-connected
-const autoConnectedChannels = computed<ChannelStatusRequest[]>(() => {
-  const result: ChannelStatusRequest[] = []
-  for (const account of props.accounts) {
-    // For Kick, when authenticated, auto-connect to user's own channel
-    if (account.platform === 'kick') {
-      // Check if this channel is not already in connectedChannels (case-insensitive)
-      const alreadyConnected = connectedChannels.value.some(
-        (ch) =>
-          ch.platform === account.platform &&
-          ch.channelLogin.toLowerCase() === account.username.toLowerCase(),
-      )
-      if (!alreadyConnected) {
-        result.push({
-          channelLogin: account.username,
-          platform: account.platform as 'twitch' | 'kick',
-        })
-      }
-    }
-  }
-  return result
-})
-
-// All channels to display: connected + auto-connected
-const allChannels = computed<ChannelStatusRequest[]>(() => [
-  ...connectedChannels.value,
-  ...autoConnectedChannels.value,
-])
+// The combined "My channels" view is owned by the connected accounts. A
+// watched channel has its own tab and must not replace an account target here.
+const allChannels = computed<ChannelStatusRequest[]>(() => ownChatSendTargets(props.accounts))
 
 // Channels shown in the bar: merge allChannels with store-fetched statuses.
 // This ensures the bar is visible immediately when a channel is joined, even if
@@ -462,11 +423,18 @@ function onAppearanceChange(s: AppSettings) {
                 ? 'Connecting…'
                 : watchedChannelStatus?.status === 'connected'
                   ? 'No messages yet'
-                  : 'Connecting…'
+                  : watchedChannelStatus?.status === 'error'
+                    ? 'Connection failed'
+                    : 'Waiting for connection…'
             }}
           </p>
           <p class="empty-hint">
-            Messages from <strong>{{ watchedChannel.displayName }}</strong> will appear here.
+            <template v-if="watchedChannelStatus?.status === 'error'">
+              {{ watchedChannelStatus.error || 'The chat transport returned an unknown error.' }}
+            </template>
+            <template v-else>
+              Messages from <strong>{{ watchedChannel.displayName }}</strong> will appear here.
+            </template>
           </p>
         </template>
 
@@ -533,6 +501,7 @@ function onAppearanceChange(s: AppSettings) {
 
     <!-- Chat input -->
     <ChatInput
+      :accounts="accounts"
       :statuses="statuses"
       :watched-channel="watchedChannel"
       :watched-channel-status="watchedChannelStatus"

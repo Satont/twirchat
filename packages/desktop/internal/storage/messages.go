@@ -59,6 +59,15 @@ func (s *Storage) SaveMessage(ctx context.Context, message contracts.NormalizedC
 	return nil
 }
 
+// DeleteMessage removes a locally optimistic message after the chat provider
+// explicitly rejects delivery. Missing messages are already reconciled.
+func (s *Storage) DeleteMessage(ctx context.Context, id string) error {
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM chat_messages WHERE id = ?", id); err != nil {
+		return fmt.Errorf("delete message %q: %w", id, err)
+	}
+	return nil
+}
+
 // RecentMessages returns messages oldest first for direct chat rendering.
 func (s *Storage) RecentMessages(ctx context.Context, limit int) ([]contracts.NormalizedChatMessage, error) {
 	if limit <= 0 {

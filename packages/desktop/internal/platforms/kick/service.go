@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -59,6 +60,7 @@ func (s *Service) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("kick chat: service start persisted_channels=%d", len(channels))
 	for _, channel := range channels {
 		if err := s.connect(ctx, channel); err != nil {
 			return err
@@ -78,6 +80,10 @@ func (s *Service) Stop(context.Context) error {
 }
 func (s *Service) Join(ctx context.Context, channel string) error {
 	channel = normalize(channel)
+	if channel == "" {
+		return errors.New("join Kick channel: channel slug is required")
+	}
+	log.Printf("kick chat: join requested channel=%s", channel)
 	if err := s.storage.SaveChannel(ctx, contracts.PlatformKick, channel); err != nil {
 		return err
 	}
@@ -85,6 +91,10 @@ func (s *Service) Join(ctx context.Context, channel string) error {
 }
 func (s *Service) Leave(ctx context.Context, channel string) error {
 	channel = normalize(channel)
+	if channel == "" {
+		return errors.New("leave Kick channel: channel slug is required")
+	}
+	log.Printf("kick chat: leave requested channel=%s", channel)
 	if err := s.storage.RemoveChannel(ctx, contracts.PlatformKick, channel); err != nil {
 		return err
 	}
@@ -93,6 +103,13 @@ func (s *Service) Leave(ctx context.Context, channel string) error {
 }
 func (s *Service) Send(ctx context.Context, channel, text, _ string) error {
 	channel = normalize(channel)
+	if channel == "" {
+		return errors.New("send Kick message: channel is required")
+	}
+	if strings.TrimSpace(text) == "" {
+		return errors.New("send Kick message: text is required")
+	}
+	log.Printf("kick chat: send requested channel=%s", channel)
 	account, err := s.storage.FindAccountByPlatform(ctx, contracts.PlatformKick)
 	if err != nil {
 		return err
@@ -148,19 +165,25 @@ func (s *Service) Statuses() []contracts.PlatformStatusInfo {
 	return result
 }
 func (s *Service) connect(ctx context.Context, channel string) error {
+	log.Printf("kick chat: resolve chatroom channel=%s", channel)
 	var response kickChatroom
 	if err := s.backend.GetJSON(ctx, "/api/kick/chatroom?slug="+channel, &response); err != nil {
+		log.Printf("kick chat: resolve chatroom failed channel=%s error=%v", channel, err)
 		s.emit(channel, "error", err.Error())
 		return err
 	}
 	if response.BroadcasterUserID == 0 {
-		return errors.New("connect Kick chat: backend returned no broadcaster ID")
+		err := errors.New("connect Kick chat: backend returned no broadcaster ID")
+		log.Printf("kick chat: resolve chatroom failed channel=%s error=%v", channel, err)
+		s.emit(channel, "error", err.Error())
+		return err
 	}
 	s.mu.Lock()
 	s.channels[channel] = response.BroadcasterUserID
 	s.chatrooms[channel] = response.ChatroomID
 	s.mu.Unlock()
 	s.emit(channel, "connected", "")
+	log.Printf("kick chat: chatroom resolved channel=%s broadcaster=%d chatroom=%d", channel, response.BroadcasterUserID, response.ChatroomID)
 	go s.runPusher(ctx, channel, response.ChatroomID)
 	return nil
 }
@@ -169,6 +192,11 @@ func (s *Service) emit(channel, status, failure string) {
 	s.mu.Lock()
 	s.statuses[channel] = payload
 	s.mu.Unlock()
+	if failure == "" {
+		log.Printf("kick chat: status channel=%s status=%s", channel, status)
+	} else {
+		log.Printf("kick chat: status channel=%s status=%s error=%s", channel, status, failure)
+	}
 	s.events.Status(payload)
 }
 func normalize(channel string) string {
@@ -219,8 +247,10 @@ type pusherChatMessage struct {
 }
 
 func (s *Service) runPusher(ctx context.Context, channel string, chatroomID int64) {
+	log.Printf("kick chat: pusher dialing channel=%s chatroom=%d", channel, chatroomID)
 	connection, _, err := websocket.Dial(ctx, pusherURL, nil)
 	if err != nil {
+		log.Printf("kick chat: pusher dial failed channel=%s error=%v", channel, err)
 		s.emit(channel, "error", fmt.Sprintf("connect Kick chat stream: %v", err))
 		return
 	}
@@ -232,6 +262,7 @@ func (s *Service) runPusher(ctx context.Context, channel string, chatroomID int6
 		_, payload, err := connection.Read(ctx)
 		if err != nil {
 			if ctx.Err() == nil {
+				log.Printf("kick chat: pusher read failed channel=%s error=%v", channel, err)
 				s.emit(channel, "error", fmt.Sprintf("read Kick chat stream: %v", err))
 			}
 			return
@@ -242,8 +273,10 @@ func (s *Service) runPusher(ctx context.Context, channel string, chatroomID int6
 		}
 		switch envelope.Event {
 		case "pusher:connection_established":
+			log.Printf("kick chat: pusher connected channel=%s chatroom=%d", channel, chatroomID)
 			data, _ := json.Marshal(map[string]any{"event": "pusher:subscribe", "data": map[string]any{"auth": "", "channel": fmt.Sprintf("chatrooms.%d.v2", chatroomID)}})
 			if err := connection.Write(ctx, websocket.MessageText, data); err != nil {
+				log.Printf("kick chat: pusher subscribe failed channel=%s error=%v", channel, err)
 				s.emit(channel, "error", fmt.Sprintf("subscribe Kick chat stream: %v", err))
 				return
 			}

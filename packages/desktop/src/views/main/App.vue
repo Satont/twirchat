@@ -376,6 +376,17 @@ useRpcListener(
   'watched_channel_status',
   ({ channelId, status }: { channelId: string; status: PlatformStatusInfo }) => {
     watchedStatuses.value = new Map(watchedStatuses.value).set(channelId, status)
+    if (status.status === 'error') {
+      void Promise.all([
+        rpc.request.getWatchedChannelMessages({ id: channelId }),
+        rpc.request.getRecentMessages({}),
+      ])
+        .then(([channelMessages, recentMessages]) => {
+          watchedMessages.value = new Map(watchedMessages.value).set(channelId, channelMessages)
+          messages.value = recentMessages
+        })
+        .catch((error) => console.warn('[App] refresh rejected watched message failed:', error))
+    }
   },
 )
 

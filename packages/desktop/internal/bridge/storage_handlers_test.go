@@ -2,11 +2,58 @@ package bridge
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
 )
+
+type recordingWatchedRuntime struct {
+	added    []contracts.AddWatchedChannelParams
+	statuses []contracts.WatchedChannelStatus
+}
+
+func (r *recordingWatchedRuntime) Add(
+	_ context.Context,
+	platform contracts.Platform,
+	channelSlug string,
+) (contracts.WatchedChannel, error) {
+	r.added = append(r.added, contracts.AddWatchedChannelParams{Platform: platform, ChannelSlug: channelSlug})
+	return contracts.WatchedChannel{ID: "watched-1", Platform: platform, ChannelSlug: channelSlug}, nil
+}
+
+func (*recordingWatchedRuntime) Remove(context.Context, string) error { return nil }
+func (*recordingWatchedRuntime) Send(context.Context, string, string, string) error {
+	return nil
+}
+func (*recordingWatchedRuntime) Messages(context.Context, string) ([]contracts.NormalizedChatMessage, error) {
+	return nil, nil
+}
+func (r *recordingWatchedRuntime) Statuses() []contracts.WatchedChannelStatus {
+	return r.statuses
+}
+
+func TestRegisterWatchedChannelHandlersStartsRuntimeForAddedChannel(t *testing.T) {
+	registry := NewHandlerRegistry()
+	runtime := &recordingWatchedRuntime{}
+	RegisterWatchedChannelHandlers(registry, runtime)
+	service := NewDesktopService(registry)
+
+	result, err := service.Call(contracts.GatewayRequest{
+		Method: contracts.RequestAddWatchedChannel,
+		Params: map[string]any{"platform": "twitch", "channelSlug": "stray228"},
+	})
+	if err != nil {
+		t.Fatalf("addWatchedChannel error = %v", err)
+	}
+	if got, want := runtime.added, []contracts.AddWatchedChannelParams{{Platform: contracts.PlatformTwitch, ChannelSlug: "stray228"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("runtime added = %#v, want %#v", got, want)
+	}
+	if channel := result.(contracts.WatchedChannel); channel.ID != "watched-1" {
+		t.Fatalf("addWatchedChannel result = %#v", channel)
+	}
+}
 
 func TestRegisterStorageHandlersServesVueBootstrapRequests(t *testing.T) {
 	store, err := storage.Open(context.Background(), t.TempDir(), storage.WithMachineID("bridge-test"))
