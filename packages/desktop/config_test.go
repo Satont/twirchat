@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+func TestUpdateFeedURLUsesVelopackReleaseDirectory(t *testing.T) {
+	const want = "https://github.com/Satont/twirchat/releases/latest/download"
+
+	for _, platform := range []string{"linux", "windows", "darwin"} {
+		if got := updateFeedURLFor(platform); got != want {
+			t.Errorf("updateFeedURLFor(%q) = %q, want %q", platform, got, want)
+		}
+	}
+}
+
 func TestRuntimeConfigReadsEnvironmentOverrides(t *testing.T) {
 	t.Setenv("TWIRCHAT_BACKEND_URL", "http://backend.test:9000")
 	t.Setenv("TWIRCHAT_AUTH_ADDRESS", "127.0.0.1:4999")

@@ -128,8 +128,14 @@ func main() {
 }
 
 func updateFeedURL() string {
-	channel := map[string]string{"linux": "linux", "windows": "win", "darwin": "osx"}[runtime.GOOS]
-	return "https://github.com/Satont/twirchat/releases/latest/download/releases." + channel + ".json"
+	return updateFeedURLFor(runtime.GOOS)
+}
+
+// updateFeedURLFor returns the directory that Velopack uses as its HTTP update
+// source. UpdateManager appends releases.<channel>.json itself; passing the
+// JSON filename here makes it request a non-existent nested URL.
+func updateFeedURLFor(_ string) string {
+	return "https://github.com/Satont/twirchat/releases/latest/download"
 }
 
 func openExternalURL(url string) error {
