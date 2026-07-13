@@ -164,17 +164,20 @@ jobs:
             mv bin/twirchat bin/twirchat.exe
           fi
           test -f "bin/${{ matrix.main_exe }}"
-      - name: Stage MinGW GCC runtime
+      - name: Stage MinGW runtime dependencies
         if: matrix.target == 'win'
         working-directory: packages/desktop
         shell: pwsh
         run: |
           $gccDirectory = Split-Path -Parent (Get-Command gcc).Source
-          $runtimeDll = Join-Path $gccDirectory 'libgcc_s_seh-1.dll'
-          if (-not (Test-Path -LiteralPath $runtimeDll)) {
-            throw "MinGW GCC runtime libgcc_s_seh-1.dll was not found beside $gccDirectory."
+          $runtimeDlls = 'libgcc_s_seh-1.dll', 'libwinpthread-1.dll'
+          foreach ($runtimeDllName in $runtimeDlls) {
+            $runtimeDll = Join-Path $gccDirectory $runtimeDllName
+            if (-not (Test-Path -LiteralPath $runtimeDll)) {
+              throw "MinGW runtime $runtimeDllName was not found beside $gccDirectory."
+            }
+            Copy-Item -LiteralPath $runtimeDll -Destination (Join-Path 'bin' $runtimeDllName)
           }
-          Copy-Item -LiteralPath $runtimeDll -Destination bin/libgcc_s_seh-1.dll
       - name: Build macOS application bundle
         if: matrix.target == 'osx'
         working-directory: packages/desktop
