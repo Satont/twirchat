@@ -22,15 +22,10 @@ const dialogOpen = ref(false)
 function openDialog() {
   dialogOpen.value = true
 }
-
-function onContextMenu(event: MouseEvent): void {
-  event.preventDefault()
-  openDialog()
-}
 </script>
 
 <template>
-  <span class="user-card-trigger" @contextmenu="onContextMenu">
+  <span class="user-card-trigger" @click="openDialog">
     <slot />
   </span>
 
