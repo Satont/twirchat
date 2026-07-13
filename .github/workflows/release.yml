@@ -169,9 +169,10 @@ jobs:
         working-directory: packages/desktop
         shell: pwsh
         run: |
-          $runtimeDll = (& gcc -print-file-name=libgcc_s_seh-1.dll).Trim()
-          if ($runtimeDll -eq 'libgcc_s_seh-1.dll' -or -not (Test-Path -LiteralPath $runtimeDll)) {
-            throw 'MinGW GCC runtime libgcc_s_seh-1.dll was not found.'
+          $gccDirectory = Split-Path -Parent (Get-Command gcc).Source
+          $runtimeDll = Join-Path $gccDirectory 'libgcc_s_seh-1.dll'
+          if (-not (Test-Path -LiteralPath $runtimeDll)) {
+            throw "MinGW GCC runtime libgcc_s_seh-1.dll was not found beside $gccDirectory."
           }
           Copy-Item -LiteralPath $runtimeDll -Destination bin/libgcc_s_seh-1.dll
       - name: Build macOS application bundle
