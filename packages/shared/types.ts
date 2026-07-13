@@ -50,6 +50,15 @@ export interface NormalizedChatMessage {
       displayName: string
     }
   }
+  /**
+   * Desktop-only delivery state for a message that has not yet been replaced
+   * by the provider's durable chat event. It is never persisted or sent to
+   * the backend protocol.
+   */
+  delivery?: {
+    state: 'pending' | 'confirmed' | 'failed'
+    error?: string
+  }
 }
 
 export interface NormalizedEvent {

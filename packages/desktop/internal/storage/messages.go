@@ -68,6 +68,17 @@ func (s *Storage) DeleteMessage(ctx context.Context, id string) error {
 	return nil
 }
 
+// PurgeLegacyOptimisticMessages removes only local echoes created by the old
+// IRC send path. New delivery state intentionally lives in the Vue process
+// until a provider event is persisted, so these rows can never be valid chat
+// history.
+func (s *Storage) PurgeLegacyOptimisticMessages(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM chat_messages WHERE id LIKE 'local:twitch:%'"); err != nil {
+		return fmt.Errorf("purge legacy optimistic messages: %w", err)
+	}
+	return nil
+}
+
 // RecentMessages returns messages oldest first for direct chat rendering.
 func (s *Storage) RecentMessages(ctx context.Context, limit int) ([]contracts.NormalizedChatMessage, error) {
 	if limit <= 0 {

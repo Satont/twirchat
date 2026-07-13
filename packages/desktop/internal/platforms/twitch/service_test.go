@@ -2,11 +2,15 @@ package twitch
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
 )
@@ -82,7 +86,7 @@ func (c *fakeClient) connected()                      { c.onConnect() }
 func (c *fakeClient) receive(message IncomingMessage) { c.onMessage(message) }
 func (c *fakeClient) notice(notice Notice)            { c.onNotice(notice) }
 
-func TestServiceConnectsStoredChannelPersistsIncomingMessageAndSendsLocalEcho(t *testing.T) {
+func TestServiceConnectsStoredChannelPersistsIncomingMessageAndSendsThroughAPI(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("twitch-service-test"))
 	if err != nil {
@@ -95,6 +99,7 @@ func TestServiceConnectsStoredChannelPersistsIncomingMessageAndSendsLocalEcho(t 
 		PlatformUserID: "1",
 		Username:       "justovich",
 		DisplayName:    "Justovich",
+		Scopes:         []string{"user:write:chat"},
 	}
 	if err := store.UpsertAccount(ctx, account, storage.AccountTokens{AccessToken: "access-token"}); err != nil {
 		t.Fatalf("UpsertAccount() error = %v", err)
@@ -110,9 +115,33 @@ func TestServiceConnectsStoredChannelPersistsIncomingMessageAndSendsLocalEcho(t 
 	}}
 	t.Cleanup(func() { close(releaseConnect) })
 	events := &recordingEvents{}
+	backendServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/twitch/send-message" {
+			http.NotFound(writer, request)
+			return
+		}
+		var payload struct {
+			ChannelLogin string `json:"channelLogin"`
+			Message      string `json:"message"`
+			SenderID     string `json:"senderId"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Errorf("decode send request: %v", err)
+		}
+		if payload.ChannelLogin != "streamer" || payload.Message != "hello chat" || payload.SenderID != "1" {
+			t.Errorf("send payload = %#v", payload)
+		}
+		_, _ = writer.Write([]byte(`{"sent":true,"messageId":"message-2"}`))
+	}))
+	t.Cleanup(backendServer.Close)
+	backendClient, err := backend.NewHTTPClient(backendServer.URL, "secret", backendServer.Client())
+	if err != nil {
+		t.Fatalf("NewHTTPClient() error = %v", err)
+	}
 	service, err := NewService(Config{
 		Storage: store,
 		Events:  events,
+		Backend: backendClient,
 		NewClient: func(credentials Credentials) (Client, error) {
 			if credentials.Username != "justovich" || credentials.AccessToken != "access-token" {
 				t.Fatalf("credentials = %#v", credentials)
@@ -155,28 +184,14 @@ func TestServiceConnectsStoredChannelPersistsIncomingMessageAndSendsLocalEcho(t 
 	if err != nil || len(recent) != 1 || recent[0].ID != "message-1" {
 		t.Fatalf("RecentMessages() = %#v, %v", recent, err)
 	}
-	client.onSay = func(channel, text string) {
-		messages, err := store.RecentMessages(ctx, 10)
-		if err != nil {
-			t.Errorf("RecentMessages() before IRC write error = %v", err)
-			return
-		}
-		for _, message := range messages {
-			if message.ChannelID == channel && message.Text == text && strings.HasPrefix(message.ID, "local:twitch:") {
-				return
-			}
-		}
-		t.Errorf("optimistic message %q for channel %q was not saved before IRC write", text, channel)
-	}
-
 	if err := service.Send(ctx, "streamer", "hello chat", ""); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
-	if got := client.sent; len(got) != 1 || got[0] != (sentMessage{channel: "streamer", text: "hello chat"}) {
-		t.Fatalf("sent = %#v", got)
+	if got := client.sent; len(got) != 0 {
+		t.Fatalf("IRC sent = %#v, want no IRC writes", got)
 	}
-	if got := events.lastMessage(); got.Text != "hello chat" || got.Author.ID != "1" || got.Type != "message" || len(got.Author.Badges) != 1 || got.Author.Badges[0].ID != "broadcaster/1" {
-		t.Fatalf("local echo = %#v", got)
+	if messages, err := store.RecentMessages(ctx, 10); err != nil || len(messages) != 1 || messages[0].ID != "message-1" {
+		t.Fatalf("local API optimistic echo persisted = %#v, error = %v", messages, err)
 	}
 }
 
@@ -227,7 +242,7 @@ func TestServiceReportsConnectionTimeoutInsteadOfLeavingChannelConnecting(t *tes
 	t.Fatalf("last status = %#v, want connection timeout error", events.lastStatus())
 }
 
-func TestServiceReportsTwitchDeliveryRejectionForTheTargetChannel(t *testing.T) {
+func TestServiceReportsTwitchServerNoticeForTheTargetChannel(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("twitch-notice-test"))
 	if err != nil {
@@ -239,21 +254,32 @@ func TestServiceReportsTwitchDeliveryRejectionForTheTargetChannel(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	if err := store.SaveMessage(ctx, contracts.NormalizedChatMessage{
-		ID: "local:twitch:stray228:pending", Platform: contracts.PlatformTwitch, ChannelID: "stray228",
-		Author: contracts.ChatAuthor{DisplayName: "viewer", Badges: []contracts.Badge{}}, Text: "will be rejected",
-		Emotes: []contracts.Emote{}, Timestamp: time.Now().UTC(), Type: "message",
-	}); err != nil {
-		t.Fatalf("SaveMessage() error = %v", err)
-	}
-	service.trackPendingMessage("stray228", "local:twitch:stray228:pending")
-
 	service.onNotice(Notice{Channel: "stray228", MsgID: "msg_rejected", Message: "Your message was not sent."})
 	status := events.lastStatus()
 	if status.ChannelLogin != "stray228" || status.Status != "error" || status.Error != "Your message was not sent." {
 		t.Fatalf("delivery rejection status = %#v", status)
 	}
-	if messages, err := store.RecentMessages(ctx, 10); err != nil || len(messages) != 0 {
-		t.Fatalf("rejected optimistic message remains = %#v, error = %v", messages, err)
+}
+
+func TestServiceRequiresHelixChatWriteScopeBeforeSending(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("twitch-scope-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.UpsertAccount(ctx, contracts.Account{
+		ID: "twitch:1", Platform: contracts.PlatformTwitch, PlatformUserID: "1", Username: "viewer",
+		Scopes: []string{"chat:read", "chat:edit"},
+	}, storage.AccountTokens{AccessToken: "access-token"}); err != nil {
+		t.Fatalf("UpsertAccount() error = %v", err)
+	}
+	service, err := NewService(Config{Storage: store, Events: &recordingEvents{}})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	err = service.Send(ctx, "streamer", "hello", "")
+	if err == nil || !strings.Contains(err.Error(), "Reconnect Twitch") {
+		t.Fatalf("Send() error = %v, want reconnect guidance", err)
 	}
 }

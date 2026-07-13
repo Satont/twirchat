@@ -47,7 +47,6 @@
 - Recorded non-actionable proof in `.omo/evidence/task-4-panic-index.md`.
 - Focused verification passed: `cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging -- --nocapture`.
 
-
 ## 2026-05-31 - Task 7 chat aggregation/history performance
 
 - F-007 was addressed by adding borrowed aggregation accessors: `inject_message_ref` avoids cloning the enriched message on direct hot-path ingestion, and `recent_messages` avoids cloning the full recent buffer for read-only callers. Owned APIs remain for compatibility and snapshot/replay semantics.

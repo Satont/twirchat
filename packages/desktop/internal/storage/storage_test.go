@@ -695,6 +695,27 @@ func TestWatchedChannelLayoutsRoundTripAsJSON(t *testing.T) {
 	}
 }
 
+func TestPurgeLegacyOptimisticMessagesLeavesProviderHistoryUntouched(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStorage(t)
+	for _, id := range []string{"local:twitch:stray228:old", "provider-message"} {
+		if err := store.SaveMessage(ctx, contracts.NormalizedChatMessage{
+			ID: id, Platform: contracts.PlatformTwitch, ChannelID: "stray228",
+			Author: contracts.ChatAuthor{DisplayName: "Viewer", Badges: []contracts.Badge{}}, Text: id,
+			Emotes: []contracts.Emote{}, Timestamp: time.Now().UTC(), Type: "message",
+		}); err != nil {
+			t.Fatalf("SaveMessage(%q) error = %v", id, err)
+		}
+	}
+	if err := store.PurgeLegacyOptimisticMessages(ctx); err != nil {
+		t.Fatalf("PurgeLegacyOptimisticMessages() error = %v", err)
+	}
+	messages, err := store.RecentMessages(ctx, 10)
+	if err != nil || len(messages) != 1 || messages[0].ID != "provider-message" {
+		t.Fatalf("RecentMessages() = %#v, %v", messages, err)
+	}
+}
+
 func messageIDs(messages []contracts.NormalizedChatMessage) []string {
 	ids := make([]string, 0, len(messages))
 	for _, message := range messages {

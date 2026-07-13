@@ -1,28 +1,34 @@
 # Desktop Rust Audit and Fix Plan
 
 ## TL;DR
+
 > **Summary**: Audit all of `packages/desktop-rust` for Rust correctness, panic/index safety, performance, async/concurrency hazards, and AI-agent-safe Rust patterns; fix every validated issue with regression evidence.
 > **Deliverables**:
+>
 > - Baseline verification report with command outputs and exit codes
 > - Severity-ranked finding log for all audited subsystems
 > - Fixes for validated P0/P1/P2 issues and justified P3 tooling/style issues
 > - Regression tests or targeted verification for every fix
 > - Final full verification evidence and reusable Rust guardrails for future agents
-> **Effort**: XL
-> **Parallel**: YES - 5 waves
-> **Critical Path**: Baseline verification → read-only audit log → serialized subsystem fixes → final full verification → multi-agent review
+>   **Effort**: XL
+>   **Parallel**: YES - 5 waves
+>   **Critical Path**: Baseline verification → read-only audit log → serialized subsystem fixes → final full verification → multi-agent review
 
 ## Context
+
 ### Original Request
+
 User asked in Russian to go through all `desktop-rust`, find Rust antipatterns, performance improvement opportunities, and potential bugs such as index/array overflow, without missing mistakes, and to identify best Rust patterns for AI agents.
 
 ### Interview Summary
+
 - Scope is `packages/desktop-rust` plus package-level Cargo/workspace verification needed to validate it.
 - User selected **audit + fix all validated issues + regression tests**.
 - User selected **Max Safe** strictness: formatter, clippy `-D warnings`, full tests, packaging verification; Miri/property/fuzz only where feasible and isolated.
 - User selected **Rust-first**: behavior changes are allowed when safer/faster and tested; existing parity tests remain regression guards but TypeScript parity is not allowed to weaken Rust safety.
 
 ### Metis Review (gaps addressed)
+
 - Added severity tiers so “fix all antipatterns” does not become an unbounded rewrite.
 - Added baseline verification before edits to avoid confusing pre-existing failures with regressions.
 - Added read-only audit waves before fix waves.
@@ -32,10 +38,13 @@ User asked in Russian to go through all `desktop-rust`, find Rust antipatterns, 
 - Added evidence requirement for performance changes.
 
 ## Work Objectives
+
 ### Core Objective
+
 Make `packages/desktop-rust` safer and more idiomatic by finding and fixing validated Rust correctness, panic-safety, indexing, async/concurrency, storage, packaging, UI, and performance issues while preserving or explicitly documenting tested Rust-first behavior changes.
 
 ### Deliverables
+
 - `.omo/evidence/task-1-baseline.md`
 - `.omo/evidence/task-2-finding-log.md`
 - `.omo/evidence/task-3-storage-db.md`
@@ -49,6 +58,7 @@ Make `packages/desktop-rust` safer and more idiomatic by finding and fixing vali
 - `.omo/evidence/task-11-final-verification.md`
 
 ### Definition of Done (verifiable conditions with commands)
+
 - Baseline and final verification evidence exists under `.omo/evidence/`.
 - Every validated P0/P1/P2 finding is fixed or has a documented non-fix reason in the finding log.
 - Every correctness/panic/index/behavior-change fix has a regression test or targeted command proving the issue cannot recur.
@@ -62,6 +72,7 @@ Make `packages/desktop-rust` safer and more idiomatic by finding and fixing vali
 - No tests rely on live Twitch/Kick/YouTube/OAuth services.
 
 ### Must Have
+
 - Severity rubric:
   - P0: panic/data loss/memory safety/security/unchecked index or overflow reachable from user, config, network, DB, file, or package input.
   - P1: correctness/concurrency/runtime bug, poisoned-lock crash, invalid state transition, recoverable error treated as panic.
@@ -73,6 +84,7 @@ Make `packages/desktop-rust` safer and more idiomatic by finding and fixing vali
 - Contract tests for any change to persisted DB schema, config formats, overlay params, RPC/event payloads, packaging paths, or release artifact layout.
 
 ### Must NOT Have (guardrails, AI slop patterns, scope boundaries)
+
 - No broad architecture rewrite unless tied to a validated P0/P1 issue.
 - No drive-by cleanup outside files owned by the active task.
 - No live platform/API calls in tests.
@@ -82,7 +94,9 @@ Make `packages/desktop-rust` safer and more idiomatic by finding and fixing vali
 - No final completion before F1-F4 review agents approve and the user explicitly says okay.
 
 ## Verification Strategy
+
 > ZERO HUMAN INTERVENTION - all verification is agent-executed.
+
 - Test decision: tests-after with regression-first where a failing test can be written before the fix; framework is Rust `cargo test` plus package verification.
 - QA policy: Every task has agent-executed happy and failure/edge scenarios.
 - Evidence: `.omo/evidence/task-{N}-{slug}.{ext}`
@@ -100,7 +114,9 @@ Make `packages/desktop-rust` safer and more idiomatic by finding and fixing vali
   ```
 
 ## Execution Strategy
+
 ### Parallel Execution Waves
+
 > Target: 5-8 tasks per wave. <3 per wave (except final) = under-splitting.
 > Extract shared dependencies as Wave-1 tasks for max parallelism.
 
@@ -111,6 +127,7 @@ Wave 4: Task 11 — final verification and evidence consolidation. Parallel: NO.
 Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user okay before completion.
 
 ### Dependency Matrix (full, all tasks)
+
 - Task 1 blocks Tasks 2-11.
 - Task 2 blocks Tasks 3-10.
 - Task 4 blocks Task 8 for any packaging-test extension.
@@ -119,6 +136,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
 - F1-F4 block completion and require explicit user approval.
 
 ### Agent Dispatch Summary (wave → task count → categories)
+
 - Wave 1 → 2 tasks → `unspecified-high`, `deep`
 - Wave 2 → 4 tasks → `deep`, `unspecified-high`
 - Wave 3 → 4 tasks → `deep`, `unspecified-high`, `quick`
@@ -126,6 +144,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
 - Wave 5 → 4 review tasks → `oracle`, `unspecified-high`, `deep`
 
 ## TODOs
+
 > Implementation + Test = ONE task. Never separate.
 > EVERY task MUST have: Agent Profile + Parallelization + QA Scenarios.
 
@@ -152,6 +171,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] No source file changes are present after the task except evidence files.
 
   **QA Scenarios** (MANDATORY - task incomplete without these):
+
   ```
   Scenario: Baseline full command set
     Tool: Bash
@@ -192,6 +212,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] Finding log states which files/modules are owned by Tasks 3-10 to prevent edit overlap.
 
   **QA Scenarios**:
+
   ```
   Scenario: Full package audit coverage
     Tool: Bash
@@ -233,6 +254,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] `cargo clippy --manifest-path packages/desktop-rust/Cargo.toml --all-targets --all-features -- -D warnings` passes or pre-existing baseline failure is explicitly unchanged.
 
   **QA Scenarios**:
+
   ```
   Scenario: Corrupt database recovery
     Tool: Bash
@@ -272,6 +294,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml packaging -- --nocapture` passes.
 
   **QA Scenarios**:
+
   ```
   Scenario: Malformed packaging config cannot panic
     Tool: Bash
@@ -313,6 +336,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml overlay -- --nocapture` passes.
 
   **QA Scenarios**:
+
   ```
   Scenario: Overlay happy path broadcast
     Tool: Bash
@@ -355,6 +379,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] Focused commands pass for protocol/backend/auth/platform tests, using one Cargo test filter per command: `protocol`, `backend_ws`, `auth`, `twitch_adapter`, `kick_adapter`, and `youtube_adapter`.
 
   **QA Scenarios**:
+
   ```
   Scenario: Protocol happy path round trip
     Tool: Bash
@@ -396,6 +421,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] `cargo test --manifest-path packages/desktop-rust/Cargo.toml chat_domain -- --nocapture` passes.
 
   **QA Scenarios**:
+
   ```
   Scenario: Chat behavior preserved under load
     Tool: Bash
@@ -438,6 +464,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] `bun run package:desktop-rust:verify` passes or unchanged baseline failure is documented with exact reason.
 
   **QA Scenarios**:
+
   ```
   Scenario: Packaging happy path contract
     Tool: Bash
@@ -480,6 +507,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] Focused UI commands pass, using one Cargo test filter per command: `ui_visuals`, `tab_behavior`, and `user_card`.
 
   **QA Scenarios**:
+
   ```
   Scenario: UI happy path renders expected state
     Tool: Bash
@@ -521,6 +549,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] `.omo/evidence/task-10-tooling-guardrails.md` states whether Miri/property/fuzz was added or deferred and why.
 
   **QA Scenarios**:
+
   ```
   Scenario: Guardrails do not break normal verification
     Tool: Bash
@@ -563,6 +592,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - [ ] `.omo/evidence/task-11-final-verification.md` exists.
 
   **QA Scenarios**:
+
   ```
   Scenario: Final mandatory verification
     Tool: Bash
@@ -580,9 +610,11 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   **Commit**: NO | Message: `chore(desktop-rust): record final verification` | Files: [.omo/evidence/task-11-final-verification.md]
 
 ## Final Verification Wave (MANDATORY — after ALL implementation tasks)
+
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
 > **Never mark F1-F4 as checked before getting user's okay.** Rejection or user feedback -> fix -> re-run -> present again -> wait for okay.
+
 - [x] F1. Plan Compliance Audit — oracle
   - Prompt: Verify every TODO acceptance criterion and QA scenario was executed or has documented non-actionable evidence. Check `.omo/evidence/task-*.md`, final command outputs, and finding log closure. Verdict must be APPROVE/REJECT.
   - Evidence: `.omo/evidence/f1-plan-compliance.md`
@@ -597,6 +629,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
   - Evidence: `.omo/evidence/f4-scope-fidelity.md`
 
 ## Commit Strategy
+
 - Commit after each successful fix wave if the executor is instructed to commit.
 - Commit message examples:
   - `fix(desktop-rust): harden storage error handling`
@@ -606,6 +639,7 @@ Wave 5: F1-F4 — final independent review agents. Parallel: YES; wait for user 
 - Do not commit baseline-only evidence unless the execution workflow explicitly commits `.omo/evidence` files.
 
 ## Success Criteria
+
 - Finding log covers every file and risk category listed in this plan.
 - All validated P0/P1/P2 issues are fixed or explicitly marked non-actionable with proof.
 - Final mandatory commands pass.

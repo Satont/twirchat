@@ -5,6 +5,7 @@ import { handleTwitchBadges } from '../api/twitch-badges.ts'
 import { fetchTwitchUserById } from '../api/twitch-users.ts'
 import { handleChannelsStatus, InvalidChannelsStatusRequestError } from '../api/channels-status.ts'
 import { handleKickChatroom } from '../api/kick-chatroom.ts'
+import { handleTwitchSendMessage } from '../api/twitch-send-message.ts'
 import { json, requireClient } from './utils.ts'
 import { logger } from '@twirchat/shared/logger'
 
@@ -77,6 +78,20 @@ export const streamRoutes = {
         return json(result)
       } catch (err) {
         log.error('twitch/badges failed', { err: String(err) })
+        return json({ error: String(err) }, 500)
+      }
+    },
+  },
+  '/api/twitch/send-message': {
+    async POST(req: Request) {
+      const auth = await requireClient(req)
+      if (auth instanceof Response) return auth
+      try {
+        // A Twitch HTTP 200 may still contain is_sent=false. Preserve it for
+        // the desktop so it can display the provider's exact rejection.
+        return json(await handleTwitchSendMessage(req))
+      } catch (err) {
+        log.error('twitch/send-message failed', { err: String(err) })
         return json({ error: String(err) }, 500)
       }
     },

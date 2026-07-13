@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { rpc } from '../main'
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 import EmoteTooltip from './EmoteTooltip.vue'
 import { platformColor } from '../../shared/utils/platform'
@@ -11,6 +10,7 @@ import UserContextMenu from './UserContextMenu.vue'
 import { useMessageParsing } from '../composables/useMessageParsing'
 import { resolveBadgeImage } from '../utils/badge-image'
 import { chatMessageStyle } from '../utils/chat-message-style'
+import { openExternalUrl } from '../services/external-url'
 
 const props = defineProps<{
   message: NormalizedChatMessage
@@ -101,7 +101,9 @@ function onMsgClick(e: MouseEvent): void {
   e.preventDefault()
   const url = anchor.dataset.href
   if (url) {
-    void rpc.request.openExternalUrl({ url })
+    void openExternalUrl(url).catch((error: unknown) => {
+      console.error('Failed to open external URL', error)
+    })
   }
 }
 
@@ -144,6 +146,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
     class="msg msg-system"
     :class="[`platform-${message.platform}`, `action-${systemAction}`]"
     :style="chatMessageStyle(props.fontSize)"
+    @click="onMsgClick"
   >
     <!-- Action icon: +/−/~ colored pill -->
     <div class="system-action-icon" :class="`action-icon-${systemAction}`">
@@ -173,7 +176,14 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
   <div
     v-else-if="props.chatTheme === 'compact'"
     class="msg msg-compact"
-    :class="[`platform-${message.platform}`, { 'self-ping': isSelfPing }]"
+    :class="[
+      `platform-${message.platform}`,
+      {
+        'delivery-pending': message.delivery?.state === 'pending',
+        'delivery-failed': message.delivery?.state === 'failed',
+        'self-ping': isSelfPing,
+      },
+    ]"
     :style="{ ...chatMessageStyle(props.fontSize), ...selfPingStyle }"
     @click="onMsgClick"
   >
@@ -290,6 +300,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           />
         </template>
       </span>
+      <span
+        v-if="message.delivery?.state === 'failed'"
+        class="delivery-error"
+        :title="message.delivery.error"
+      >
+        Not sent: {{ message.delivery.error }}
+      </span>
     </div>
 
     <div style="position: absolute; right: 0; top: 0">
@@ -356,7 +373,11 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
     :class="[
       `platform-${message.platform}`,
       message.type === 'action' ? 'is-action' : '',
-      { 'self-ping': isSelfPing },
+      {
+        'delivery-pending': message.delivery?.state === 'pending',
+        'delivery-failed': message.delivery?.state === 'failed',
+        'self-ping': isSelfPing,
+      },
     ]"
     :style="{ ...chatMessageStyle(props.fontSize), ...selfPingStyle }"
     @click="onMsgClick"
@@ -487,6 +508,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           />
         </template>
       </span>
+      <span
+        v-if="message.delivery?.state === 'failed'"
+        class="delivery-error"
+        :title="message.delivery.error"
+      >
+        Not sent: {{ message.delivery.error }}
+      </span>
     </div>
 
     <!-- Reply button: always in DOM, shown via CSS hover on .msg -->
@@ -566,6 +594,22 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 
 .msg.self-ping:hover {
   filter: brightness(1.08);
+}
+
+.delivery-pending {
+  opacity: 0.52;
+}
+
+.delivery-failed {
+  border-left: 2px solid #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.delivery-error {
+  display: block;
+  color: #f87171;
+  font-size: 0.82em;
+  margin-top: 2px;
 }
 
 /* Platform stripe on left edge */

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { TooltipArrow, TooltipContent, TooltipProvider, TooltipRoot, TooltipTrigger } from 'reka-ui'
 import type { Emote } from '@twirchat/shared/types'
-import { rpc } from '../main'
+import { openExternalUrl } from '../services/external-url'
 
 const props = defineProps<{
   emote: Emote
@@ -10,8 +10,10 @@ const props = defineProps<{
 
 const emoteUrl = computed(() => `https://7tv.app/emotes/${props.emote.id}`)
 
-async function openEmotePage(): Promise<void> {
-  await rpc.request.openExternalUrl({ url: emoteUrl.value })
+function openEmotePage(): void {
+  void openExternalUrl(emoteUrl.value).catch((error: unknown) => {
+    console.error('Failed to open emote URL', error)
+  })
 }
 </script>
 

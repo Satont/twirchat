@@ -22,6 +22,7 @@ import { rpc } from './main'
 import { attemptMigration } from './services/migration'
 import { desktopApi } from './services/desktop-api'
 import { shouldCheckForUpdates } from './services/update-capability'
+import { mergeChatMessageSnapshot } from './utils/chat-message-buffer'
 import type {
   Account,
   AppSettings,
@@ -206,7 +207,7 @@ async function loadInitialData() {
   try {
     const recentMsgs = await rpc.request.getRecentMessages({})
     if (recentMsgs !== undefined && recentMsgs.length > 0) {
-      messages.value = [...recentMsgs]
+      messages.value = mergeChatMessageSnapshot(messages.value, recentMsgs)
     }
   } catch (error) {
     console.warn('[App] Failed to load recent messages:', error)
@@ -217,7 +218,8 @@ async function loadInitialData() {
     try {
       const msgs = await rpc.request.getWatchedChannelMessages({ id: ch.id })
       if (msgs && msgs.length > 0) {
-        watchedMessages.value.set(ch.id, msgs)
+        const current = watchedMessages.value.get(ch.id) ?? []
+        watchedMessages.value.set(ch.id, mergeChatMessageSnapshot(current, msgs, 200))
         triggerRef(watchedMessages)
       }
     } catch {
@@ -291,8 +293,7 @@ const DOWNLOAD_IN_PROGRESS_STATUSES = new Set([
 ])
 
 useRpcListener('chat_message', (msg: NormalizedChatMessage) => {
-  messages.value.push(msg)
-  if (messages.value.length > 500) messages.value.splice(0, messages.value.length - 500)
+  messages.value = mergeChatMessageSnapshot(messages.value, [msg])
 })
 
 useRpcListener('chat_event', (ev: NormalizedEvent) => {
@@ -365,9 +366,7 @@ useRpcListener(
   'watched_channel_message',
   ({ channelId, message }: { channelId: string; message: NormalizedChatMessage }) => {
     const prev = watchedMessages.value.get(channelId) ?? []
-    prev.push(message)
-    if (prev.length > 200) prev.splice(0, prev.length - 200)
-    watchedMessages.value.set(channelId, prev)
+    watchedMessages.value.set(channelId, mergeChatMessageSnapshot(prev, [message], 200))
     triggerRef(watchedMessages)
   },
 )
@@ -382,8 +381,12 @@ useRpcListener(
         rpc.request.getRecentMessages({}),
       ])
         .then(([channelMessages, recentMessages]) => {
-          watchedMessages.value = new Map(watchedMessages.value).set(channelId, channelMessages)
-          messages.value = recentMessages
+          const watched = watchedMessages.value.get(channelId) ?? []
+          watchedMessages.value = new Map(watchedMessages.value).set(
+            channelId,
+            mergeChatMessageSnapshot(watched, channelMessages, 200),
+          )
+          messages.value = mergeChatMessageSnapshot(messages.value, recentMessages)
         })
         .catch((error) => console.warn('[App] refresh rejected watched message failed:', error))
     }

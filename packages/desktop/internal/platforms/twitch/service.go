@@ -3,6 +3,7 @@ package twitch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
 	twitchirc "github.com/gempir/go-twitch-irc/v4"
@@ -90,6 +92,7 @@ type Events interface {
 type Config struct {
 	Storage        *storage.Storage
 	Events         Events
+	Backend        *backend.HTTPClient
 	NewClient      ClientFactory
 	Badges         BadgeResolver
 	ConnectTimeout time.Duration
@@ -102,19 +105,19 @@ type Service struct {
 	events    Events
 	newClient ClientFactory
 	badges    BadgeResolver
+	backend   *backend.HTTPClient
 
-	mu              sync.Mutex
-	account         *contracts.Account
-	channels        map[string]struct{}
-	client          Client
-	connected       bool
-	connecting      bool
-	credentials     Credentials
-	statuses        map[string]contracts.PlatformStatusInfo
-	connectTimeout  time.Duration
-	pendingMessages map[string][]string
-	ctx             context.Context
-	started         bool
+	mu             sync.Mutex
+	account        *contracts.Account
+	channels       map[string]struct{}
+	client         Client
+	connected      bool
+	connecting     bool
+	credentials    Credentials
+	statuses       map[string]contracts.PlatformStatusInfo
+	connectTimeout time.Duration
+	ctx            context.Context
+	started        bool
 }
 
 func NewService(config Config) (*Service, error) {
@@ -134,14 +137,14 @@ func NewService(config Config) (*Service, error) {
 		config.ConnectTimeout = defaultConnectTimeout
 	}
 	return &Service{
-		storage:         config.Storage,
-		events:          config.Events,
-		newClient:       config.NewClient,
-		badges:          config.Badges,
-		channels:        make(map[string]struct{}),
-		statuses:        make(map[string]contracts.PlatformStatusInfo),
-		connectTimeout:  config.ConnectTimeout,
-		pendingMessages: make(map[string][]string),
+		storage:        config.Storage,
+		events:         config.Events,
+		newClient:      config.NewClient,
+		badges:         config.Badges,
+		backend:        config.Backend,
+		channels:       make(map[string]struct{}),
+		statuses:       make(map[string]contracts.PlatformStatusInfo),
+		connectTimeout: config.ConnectTimeout,
 	}, nil
 }
 
@@ -154,6 +157,9 @@ func (s *Service) Start(ctx context.Context) error {
 	s.started = true
 	s.ctx = ctx
 	s.mu.Unlock()
+	if err := s.storage.PurgeLegacyOptimisticMessages(ctx); err != nil {
+		return fmt.Errorf("start Twitch service: %w", err)
+	}
 	log.Printf("twitch chat: service start")
 	return s.connectSavedChannels(ctx, false)
 }
@@ -251,57 +257,80 @@ func (s *Service) Send(ctx context.Context, channel, text, replyToMessageID stri
 		return errors.New("send Twitch message: text is required")
 	}
 	log.Printf("twitch chat: send requested channel=%s reply=%t", channel, replyToMessageID != "")
-	s.mu.Lock()
-	client := s.client
-	connected := s.connected
-	credentials := s.credentials
-	s.mu.Unlock()
-	if credentials.AccessToken == "" {
+	account, err := s.storage.FindAccountByPlatform(ctx, contracts.PlatformTwitch)
+	if err != nil {
+		return fmt.Errorf("send Twitch message: load Twitch account: %w", err)
+	}
+	if account == nil {
 		return errors.New("send Twitch message: authenticate with Twitch before sending messages")
 	}
-	if client == nil || !connected {
-		return errors.New("send Twitch message: Twitch chat is not connected")
+	if !hasScope(account.Scopes, "user:write:chat") {
+		return errors.New("send Twitch message: Reconnect Twitch to grant the user:write:chat permission")
 	}
-	messageID := "local:twitch:" + channel + ":" + uuid.NewString()
-	badges := []contracts.Badge{broadcasterBadge()}
-	if resolved, err := s.badges.Resolve(ctx, channel, badges); err == nil {
-		badges = resolved
+	if s.backend == nil {
+		return errors.New("send Twitch message: backend API client is unavailable")
 	}
-
-	message := contracts.NormalizedChatMessage{
-		ID:        messageID,
-		Platform:  contracts.PlatformTwitch,
-		ChannelID: channel,
-		Author: contracts.ChatAuthor{
-			ID:          credentials.PlatformUserID,
-			Username:    credentials.Username,
-			DisplayName: credentials.DisplayName,
-			Badges:      badges,
-		},
-		Text:      text,
-		Emotes:    []contracts.Emote{},
-		Timestamp: time.Now().UTC(),
-		Type:      "message",
+	tokens, found, err := s.storage.AccountTokens(ctx, account.ID)
+	if err != nil {
+		return fmt.Errorf("send Twitch message: load Twitch credentials: %w", err)
 	}
-	if message.Author.ID == "" {
-		message.Author.ID = credentials.AccountID
+	if !found || tokens.AccessToken == "" {
+		return errors.New("send Twitch message: credentials are unavailable")
 	}
-	if replyToMessageID != "" {
-		message.Reply = s.replyContext(ctx, replyToMessageID)
+	if account.PlatformUserID == "" {
+		return errors.New("send Twitch message: authenticated account has no Twitch user ID")
 	}
-	if err := s.storage.SaveMessage(ctx, message); err != nil {
-		return fmt.Errorf("persist sent Twitch message: %w", err)
+	var response struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Sent    bool   `json:"sent"`
 	}
-	// Persist and register the local echo before sending bytes to IRC. Twitch can
-	// reject a message quickly enough for NOTICE to otherwise race this write.
-	s.trackPendingMessage(channel, messageID)
-	if replyToMessageID == "" {
-		client.Say(channel, text)
-	} else {
-		client.Reply(channel, replyToMessageID, text)
+	request := struct {
+		AccessToken      string `json:"accessToken"`
+		ChannelLogin     string `json:"channelLogin"`
+		Message          string `json:"message"`
+		ReplyToMessageID string `json:"replyToMessageId,omitempty"`
+		SenderID         string `json:"senderId"`
+	}{
+		AccessToken: tokens.AccessToken, ChannelLogin: channel, Message: text,
+		ReplyToMessageID: replyToMessageID, SenderID: account.PlatformUserID,
 	}
-	s.events.Message(message)
+	if err := s.backend.PostJSON(ctx, "/api/twitch/send-message", request, &response); err != nil {
+		return fmt.Errorf("send Twitch message through API: %w", deliveryError(err))
+	}
+	if !response.Sent {
+		if response.Message == "" {
+			response.Message = "Twitch did not accept the message"
+		}
+		if response.Code != "" {
+			return fmt.Errorf("send Twitch message: %s (%s)", response.Message, response.Code)
+		}
+		return fmt.Errorf("send Twitch message: %s", response.Message)
+	}
 	return nil
+}
+
+func hasScope(scopes []string, required string) bool {
+	for _, scope := range scopes {
+		if scope == required {
+			return true
+		}
+	}
+	return false
+}
+
+func deliveryError(err error) error {
+	var statusError *backend.HTTPStatusError
+	if !errors.As(err, &statusError) {
+		return err
+	}
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal([]byte(statusError.Body), &payload) == nil && payload.Error != "" {
+		return errors.New(payload.Error)
+	}
+	return err
 }
 
 // Statuses returns the latest immutable snapshot used by the Vue bootstrap
@@ -505,59 +534,7 @@ func (s *Service) onNotice(notice Notice) {
 	if channel == "" || !isDeliveryFailure(notice.MsgID) {
 		return
 	}
-	if messageID := s.takePendingMessage(channel); messageID != "" {
-		if err := s.storage.DeleteMessage(s.serviceContext(), messageID); err != nil {
-			log.Printf("twitch chat: remove rejected optimistic message id=%s: %v", messageID, err)
-		} else {
-			log.Printf("twitch chat: removed rejected optimistic message id=%s channel=%s", messageID, channel)
-		}
-	}
 	s.emitStatus(channel, "error", notice.Message)
-}
-
-func (s *Service) trackPendingMessage(channel, id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	pending := append(s.pendingMessages[channel], id)
-	if len(pending) > 20 {
-		pending = pending[len(pending)-20:]
-	}
-	s.pendingMessages[channel] = pending
-}
-
-func (s *Service) takePendingMessage(channel string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	pending := s.pendingMessages[channel]
-	if len(pending) == 0 {
-		return ""
-	}
-	index := len(pending) - 1
-	id := pending[index]
-	if index == 0 {
-		delete(s.pendingMessages, channel)
-	} else {
-		s.pendingMessages[channel] = pending[:index]
-	}
-	return id
-}
-
-func (s *Service) forgetPendingMessage(channel, id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	pending := s.pendingMessages[channel]
-	for index := len(pending) - 1; index >= 0; index-- {
-		if pending[index] != id {
-			continue
-		}
-		pending = append(pending[:index], pending[index+1:]...)
-		break
-	}
-	if len(pending) == 0 {
-		delete(s.pendingMessages, channel)
-	} else {
-		s.pendingMessages[channel] = pending
-	}
 }
 
 func isDeliveryFailure(msgID string) bool {

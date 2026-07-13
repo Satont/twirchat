@@ -13,6 +13,13 @@ import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
 import type { UserCardTarget } from '../utils/chatCommands'
 import { ownChatSendTargets } from '../utils/chat-send-targets'
+import {
+  confirmDelivery,
+  createPendingMessage,
+  failDelivery,
+  reconcilePendingMessages,
+  type DeliveryMessage,
+} from '../utils/message-delivery'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
@@ -54,6 +61,7 @@ const emit = defineEmits<{
 
 const vlistRef = ref<VListHandle | null>(null)
 const isAtBottom = ref(true)
+const deliveryMessages = ref<DeliveryMessage[]>([])
 
 function onVListScroll(offset: number) {
   // offset = scrollTop from top. At bottom when scrollTop + viewportSize ≈ scrollSize.
@@ -124,12 +132,22 @@ const selectedUserCardAlias = computed(() => {
 })
 
 // ---- Active messages (home vs watched) ----
-const activeMessages = computed<NormalizedChatMessage[]>(() => {
-  if (props.watchedChannel) {
-    return props.watchedMessages ?? []
-  }
-  return props.messages
-})
+const providerMessages = computed<NormalizedChatMessage[]>(() =>
+  props.watchedChannel ? (props.watchedMessages ?? []) : props.messages,
+)
+
+const activeMessages = computed<NormalizedChatMessage[]>(() => [
+  ...providerMessages.value,
+  ...deliveryMessages.value,
+])
+
+watch(
+  providerMessages,
+  (messages) => {
+    deliveryMessages.value = reconcilePendingMessages(deliveryMessages.value, messages)
+  },
+  { deep: true },
+)
 
 // The combined "My channels" view is owned by the connected accounts. A
 // watched channel has its own tab and must not replace an account target here.
@@ -202,24 +220,91 @@ function formatViewers(n: number): string {
 async function onSend(
   targets: { platform: string; channelLogin: string; text: string; replyToMessageId?: string }[],
 ) {
-  await Promise.allSettled(
-    targets.map((t) =>
-      rpc.request
-        .sendMessage({
-          channelId: t.channelLogin,
-          platform: t.platform as Platform,
-          text: t.text,
-          replyToMessageId: t.replyToMessageId,
-        })
-        .catch((error) => console.warn(`[ChatInput] send failed on ${t.platform}:`, error)),
+  await Promise.all(
+    targets.map((target) =>
+      submitDelivery(
+        target.platform as Platform,
+        target.channelLogin,
+        target.text,
+        target.replyToMessageId,
+      ),
     ),
   )
   replyTarget.value = null
 }
 
-function onSendWatched(payload: { text: string; channelId: string; replyToMessageId?: string }) {
-  emit('send-watched', payload)
+async function onSendWatched(payload: {
+  text: string
+  channelId: string
+  replyToMessageId?: string
+}) {
+  if (!props.watchedChannel) return
+  await submitDelivery(
+    props.watchedChannel.platform,
+    props.watchedChannel.channelSlug,
+    payload.text,
+    payload.replyToMessageId,
+    props.watchedChannel.id,
+  )
   replyTarget.value = null
+}
+
+function deliveryErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(/^Error:\s*/, '').replace(/^send (Twitch|Kick) message:\s*/i, '')
+}
+
+function pendingReply(): NormalizedChatMessage['reply'] | undefined {
+  const target = replyTarget.value
+  if (!target) return undefined
+  return {
+    parentMessageId: target.id,
+    parentMessageText: target.text,
+    parentAuthor: {
+      id: target.author.id,
+      username: target.author.username ?? target.author.displayName,
+      displayName: target.author.displayName,
+    },
+  }
+}
+
+async function submitDelivery(
+  platform: Platform,
+  channelId: string,
+  text: string,
+  replyToMessageId?: string,
+  watchedChannelID?: string,
+): Promise<void> {
+  const account = props.accounts.find((candidate) => candidate.platform === platform)
+  if (!account || (platform !== 'twitch' && platform !== 'kick')) {
+    console.warn(
+      `[ChatInput] cannot prepare ${platform} optimistic message: no authenticated account`,
+    )
+    return
+  }
+  const message = createPendingMessage({
+    account,
+    channelId,
+    text,
+    reply: pendingReply(),
+  })
+  deliveryMessages.value = [...deliveryMessages.value, message]
+  try {
+    if (watchedChannelID) {
+      await rpc.request.sendWatchedChannelMessage({
+        id: watchedChannelID,
+        text,
+        replyToMessageId,
+      })
+    } else {
+      await rpc.request.sendMessage({ channelId, platform, text, replyToMessageId })
+    }
+    deliveryMessages.value = confirmDelivery(deliveryMessages.value, message.id)
+  } catch (error) {
+    const reason = deliveryErrorMessage(error)
+    deliveryMessages.value = failDelivery(deliveryMessages.value, message.id, reason)
+    console.warn(`[ChatInput] send failed on ${platform}: ${reason}`)
+  }
 }
 
 function onAppearanceChange(s: AppSettings) {

@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf16"
 
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
@@ -22,6 +24,11 @@ const (
 	defaultChatAPIURL = "https://api.kick.com/public/v1/chat"
 	pusherURL         = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=twirchat&version=1.0&flash=false"
 )
+
+// ErrDeliveryRejected identifies a provider response that deliberately refused
+// a chat message (for example follower-only mode). Callers can show its text
+// directly instead of presenting an opaque HTTP status.
+var ErrDeliveryRejected = errors.New("Kick rejected chat message")
 
 type Events interface {
 	Status(contracts.PlatformStatusInfo)
@@ -151,7 +158,23 @@ func (s *Service) Send(ctx context.Context, channel, text, _ string) error {
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("send Kick message: API returned HTTP %d", response.StatusCode)
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 4<<10))
+		if readErr != nil {
+			return fmt.Errorf("send Kick message: read API rejection: %w", readErr)
+		}
+		var payload struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(body, &payload)
+		message := strings.TrimSpace(payload.Message)
+		if message == "" {
+			message = strings.TrimSpace(payload.Error)
+		}
+		if message == "" {
+			message = fmt.Sprintf("Kick API returned HTTP %d", response.StatusCode)
+		}
+		return fmt.Errorf("send Kick message: %w: %s", ErrDeliveryRejected, message)
 	}
 	return nil
 }
@@ -303,7 +326,8 @@ func (s *Service) handlePusherMessage(ctx context.Context, channel string, raw j
 		timestamp = time.Now().UTC()
 	}
 	badges := normalizeBadges(incoming.Sender.Identity.Badges, incoming.Sender.Identity.BadgesV2)
-	message := contracts.NormalizedChatMessage{ID: incoming.ID, Platform: contracts.PlatformKick, ChannelID: channel, Author: contracts.ChatAuthor{ID: fmt.Sprint(incoming.Sender.ID), Username: incoming.Sender.Username, DisplayName: incoming.Sender.Username, Color: incoming.Sender.Identity.Color, AvatarURL: incoming.Sender.ProfilePicture, Badges: badges}, Text: incoming.Content, Emotes: []contracts.Emote{}, Timestamp: timestamp, Type: "message"}
+	text, emotes := parseKickEmotes(incoming.Content)
+	message := contracts.NormalizedChatMessage{ID: incoming.ID, Platform: contracts.PlatformKick, ChannelID: channel, Author: contracts.ChatAuthor{ID: fmt.Sprint(incoming.Sender.ID), Username: incoming.Sender.Username, DisplayName: incoming.Sender.Username, Color: incoming.Sender.Identity.Color, AvatarURL: incoming.Sender.ProfilePicture, Badges: badges}, Text: text, Emotes: emotes, Timestamp: timestamp, Type: "message"}
 	if message.ID == "" {
 		message.ID = fmt.Sprintf("kick:%d:%d", incoming.ChatroomID, timestamp.UnixNano())
 	}
@@ -312,4 +336,60 @@ func (s *Service) handlePusherMessage(ctx context.Context, channel string, raw j
 		return
 	}
 	s.events.Message(message)
+}
+
+func parseKickEmotes(content string) (string, []contracts.Emote) {
+	var clean strings.Builder
+	emotes := make([]contracts.Emote, 0)
+	rest := content
+	cleanPosition := 0
+
+	for {
+		start := strings.Index(rest, "[emote:")
+		if start < 0 {
+			clean.WriteString(rest)
+			break
+		}
+
+		prefix := rest[:start]
+		clean.WriteString(prefix)
+		cleanPosition += utf16CodeUnits(prefix)
+
+		tagRest := rest[start:]
+		end := strings.IndexByte(tagRest, ']')
+		if end < 0 {
+			clean.WriteString(tagRest)
+			break
+		}
+
+		tag := tagRest[:end+1]
+		inner := tag[len("[emote:") : len(tag)-1]
+		id, name, valid := strings.Cut(inner, ":")
+		if !valid || id == "" || name == "" {
+			clean.WriteString(tag)
+			cleanPosition += utf16CodeUnits(tag)
+			rest = tagRest[end+1:]
+			continue
+		}
+
+		nameLength := utf16CodeUnits(name)
+		clean.WriteString(name)
+		emotes = append(emotes, contracts.Emote{
+			ID:       id,
+			Name:     name,
+			ImageURL: "https://files.kick.com/emotes/" + id + "/fullsize",
+			Positions: []contracts.EmotePosition{{
+				Start: cleanPosition,
+				End:   cleanPosition + nameLength - 1,
+			}},
+		})
+		cleanPosition += nameLength
+		rest = tagRest[end+1:]
+	}
+
+	return clean.String(), emotes
+}
+
+func utf16CodeUnits(value string) int {
+	return len(utf16.Encode([]rune(value)))
 }

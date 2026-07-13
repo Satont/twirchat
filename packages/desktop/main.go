@@ -76,6 +76,7 @@ func main() {
 	twitchService, err := twitchchat.NewService(twitchchat.Config{
 		Storage: host.Storage(),
 		Events:  watchedManager,
+		Backend: backendClient,
 		Badges:  twitchchat.NewBackendBadgeResolver(backendClient),
 	})
 	if err != nil {

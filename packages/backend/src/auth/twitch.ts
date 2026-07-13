@@ -21,6 +21,7 @@ import type {
 const TWITCH_SCOPES = [
   'chat:read',
   'chat:edit',
+  'user:write:chat',
   'channel:read:subscriptions',
   'channel:read:redemptions',
   'moderator:read:followers',

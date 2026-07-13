@@ -21,6 +21,7 @@
 ### Task 1: Update UpdateState/UpdateEvent with retry counting and backoff
 
 **Files:**
+
 - Modify: `packages/desktop-rust/src/runtime/update.rs:167-188` (add `RetryableError` variant)
 - Modify: `packages/desktop-rust/src/runtime/update.rs:230-253` (add fields to `UpdateState`, `UpdateStatusSnapshot`)
 - Modify: `packages/desktop-rust/src/runtime/update.rs:255-429` (update `Default`, `apply`, `snapshot`, helpers)
@@ -45,9 +46,11 @@ fn four_retryable_errors_do_not_emit_payload() {
 ```
 
 Run:
+
 ```bash
 cd /home/satont/Documents/Projects/chat/packages/desktop-rust && cargo test four_retryable_errors_do_not_emit_payload -- --nocapture
 ```
+
 Expected: FAIL due to unknown `RetryableError` variant and unknown `consecutive_errors` field.
 
 - [ ] **Step 2: Add RetryableError variant and state fields**
@@ -232,9 +235,11 @@ fn run_check(&mut self, source: UpdateCheckSource) {
 ```
 
 Run:
+
 ```bash
 cd /home/satont/Documents/Projects/chat/packages/desktop-rust && cargo test four_retryable_errors_do_not_emit_payload -- --nocapture
 ```
+
 Expected: PASS.
 
 - [ ] **Step 3: Commit**
@@ -249,6 +254,7 @@ git commit -m "feat(runtime): add retryable error counting and backoff interval"
 ### Task 2: Wire backoff interval into update_state service loop
 
 **Files:**
+
 - Modify: `packages/desktop-rust/src/services/update_state.rs:16-89`
 
 - [ ] **Step 1: Write the failing test**
@@ -317,9 +323,11 @@ This covers both explicit commands and timeouts.
 3. Ensure the initial `poll_interval` is used only for the first `recv_timeout`.
 
 Run:
+
 ```bash
 cd /home/satont/Documents/Projects/chat/packages/desktop-rust && cargo test --test runtime -- --nocapture
 ```
+
 Expected: PASS (or existing failures unrelated to this change).
 
 - [ ] **Step 3: Commit**
@@ -334,6 +342,7 @@ git commit -m "feat(services): use update state's backoff interval for periodic 
 ### Task 3: Add unit tests for retry/backoff behavior
 
 **Files:**
+
 - Modify: `packages/desktop-rust/src/runtime/update.rs` inside `mod tests`
 
 - [ ] **Step 1: Write the failing tests**
@@ -418,9 +427,11 @@ fn snapshot_contains_next_check_interval_ms() {
 ```
 
 Run:
+
 ```bash
 cd /home/satont/Documents/Projects/chat/packages/desktop-rust && cargo test update::tests:: -- --nocapture
 ```
+
 Expected: FAIL because tests reference new fields/messages.
 
 - [ ] **Step 2: Adjust implementation for test correctness**
@@ -446,9 +457,11 @@ fn fatal_error_is_emitted_immediately() {
 ```
 
 Run:
+
 ```bash
 cd /home/satont/Documents/Projects/chat/packages/desktop-rust && cargo test update::tests:: -- --nocapture
 ```
+
 Expected: PASS.
 
 - [ ] **Step 3: Run full package test suite**
@@ -456,6 +469,7 @@ Expected: PASS.
 ```bash
 cd /home/satont/Documents/Projects/chat/packages/desktop-rust && cargo test
 ```
+
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
@@ -476,7 +490,9 @@ git commit -m "test(runtime): add retry counting and backoff interval tests"
 ## Verification
 
 Run before finishing:
+
 ```bash
 cd /home/satont/Documents/Projects/chat/packages/desktop-rust && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test
 ```
+
 Expected: clean formatting, no clippy warnings, all tests pass.

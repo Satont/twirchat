@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
@@ -74,7 +74,7 @@ jobs:
             target: linux
             main_exe: twirchat
             runtime: linux-x64
-            cgo_ldflags: ""
+            cgo_ldflags: ''
             upx: true
           - os: windows-latest
             channel: win
@@ -87,22 +87,22 @@ jobs:
             channel: osx
             target: osx
             main_exe: TwirChat
-            runtime: ""
-            cgo_ldflags: ""
+            runtime: ''
+            cgo_ldflags: ''
             upx: false
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-go@v5
-        with: { go-version: "1.26.x" }
+        with: { go-version: '1.26.x' }
       - uses: oven-sh/setup-bun@v2
-        with: { bun-version-file: ".bun-version" }
+        with: { bun-version-file: '.bun-version' }
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ github.token }}
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: "8.0.x" }
+        with: { dotnet-version: '8.0.x' }
       - name: Linux WebKitGTK 6 build dependencies and UPX
         if: matrix.target == 'linux'
         shell: bash
