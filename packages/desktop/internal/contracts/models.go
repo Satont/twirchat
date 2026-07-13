@@ -40,6 +40,27 @@ type ChatAuthor struct {
 	Badges      []Badge `json:"badges"`
 }
 
+// AvatarResolution is the cached provider avatar result returned to the Vue
+// renderer. An empty URL is a successful negative lookup, not an error.
+type AvatarResolution struct {
+	AvatarURL string `json:"avatarUrl,omitempty"`
+}
+
+// ModerationCapabilities controls whether a watched-channel message exposes
+// the moderation rail. My Channels intentionally renders the rail regardless.
+type ModerationCapabilities struct {
+	CanModerate bool `json:"canModerate"`
+}
+
+type ModerationActionError struct {
+	Message string `json:"message"`
+}
+
+type ModerationActionResult struct {
+	Success bool                   `json:"success"`
+	Error   *ModerationActionError `json:"error,omitempty"`
+}
+
 type ReplyAuthor struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`

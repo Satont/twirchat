@@ -47,6 +47,21 @@ export interface UserChatHistoryPage {
   hasMore: boolean
 }
 
+export type ModerationPlatform = 'twitch' | 'kick'
+export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
+
+export interface AvatarResolution {
+  avatarUrl?: string
+}
+
+export interface ModerationCapabilities {
+  canModerate: boolean
+}
+
+export interface ModerationActionResult {
+  success: boolean
+}
+
 type LegacyRequestMap = {
   getAccounts: { params: void; response: Account[] }
   getSettings: { params: void; response: AppSettings }
@@ -65,6 +80,25 @@ type LegacyRequestMap = {
   sendMessage: {
     params: { platform: Platform; channelId: string; text: string; replyToMessageId?: string }
     response: void
+  }
+  resolveAvatar: {
+    params: { platform: ModerationPlatform; authorId: string; username?: string }
+    response: AvatarResolution
+  }
+  getModerationCapabilities: {
+    params: { platform: ModerationPlatform; channelSlug: string }
+    response: ModerationCapabilities
+  }
+  moderateMessage: {
+    params: {
+      platform: ModerationPlatform
+      channelSlug: string
+      messageId: string
+      targetUserId: string
+      action: ModerationAction
+      durationSeconds?: number
+    }
+    response: ModerationActionResult
   }
   getStreamStatus: {
     params: { platform: 'twitch' | 'kick'; channelId: string }
@@ -193,6 +227,9 @@ const requestMethods = {
   joinChannel: RequestMethod.RequestJoinChannel,
   leaveChannel: RequestMethod.RequestLeaveChannel,
   sendMessage: RequestMethod.RequestSendMessage,
+  resolveAvatar: RequestMethod.RequestResolveAvatar,
+  getModerationCapabilities: RequestMethod.RequestGetModerationCapabilities,
+  moderateMessage: RequestMethod.RequestModerateMessage,
   getStreamStatus: RequestMethod.RequestGetStreamStatus,
   updateStream: RequestMethod.RequestUpdateStream,
   searchCategories: RequestMethod.RequestSearchCategories,
@@ -251,6 +288,9 @@ export function createDesktopApi(binding: GeneratedDesktopBinding = generatedBin
       joinChannel: (params) => call('joinChannel', params),
       leaveChannel: (params) => call('leaveChannel', params),
       sendMessage: (params) => call('sendMessage', params),
+      resolveAvatar: (params) => call('resolveAvatar', params),
+      getModerationCapabilities: (params) => call('getModerationCapabilities', params),
+      moderateMessage: (params) => call('moderateMessage', params),
       getStreamStatus: (params) => call('getStreamStatus', params),
       updateStream: (params) => call('updateStream', params),
       searchCategories: (params) => call('searchCategories', params),

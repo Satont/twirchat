@@ -4,6 +4,7 @@ import { handleWsClose, handleWsMessage, handleWsOpen } from './ws/handlers.ts'
 import { authRoutes } from './routes/auth.ts'
 import { accountRoutes } from './routes/accounts.ts'
 import { streamRoutes } from './routes/stream.ts'
+import { moderationRoutes } from './routes/moderation.ts'
 import { userCardRoutes } from './routes/user-card.ts'
 import { webhookRoutes } from './routes/webhooks.ts'
 import { youtubeRoutes } from './routes/youtube.ts'
@@ -59,6 +60,7 @@ const server = Bun.serve<WsData>({
     ...authRoutes,
     ...accountRoutes,
     ...streamRoutes,
+    ...moderationRoutes,
     ...userCardRoutes,
     ...webhookRoutes,
     ...youtubeRoutes,

@@ -45,6 +45,9 @@ const (
 	RequestRemovePanel               RequestMethod = "removePanel"
 	RequestAssignChannelToPanel      RequestMethod = "assignChannelToPanel"
 	RequestSplitPanel                RequestMethod = "splitPanel"
+	RequestResolveAvatar             RequestMethod = "resolveAvatar"
+	RequestGetModerationCapabilities RequestMethod = "getModerationCapabilities"
+	RequestModerateMessage           RequestMethod = "moderateMessage"
 )
 
 // GatewayRequest is the single Wails binding method input. Params intentionally
@@ -79,6 +82,36 @@ type SendMessageParams struct {
 	ChannelID        string   `json:"channelId"`
 	Text             string   `json:"text"`
 	ReplyToMessageID string   `json:"replyToMessageId,omitempty"`
+}
+
+// ResolveAvatarParams intentionally contains only public author metadata.
+// Provider credentials stay in the Go process and are never sent to Vue.
+type ResolveAvatarParams struct {
+	Platform Platform `json:"platform"`
+	AuthorID string   `json:"authorId"`
+	Username string   `json:"username,omitempty"`
+}
+
+type ModerationCapabilitiesParams struct {
+	Platform    Platform `json:"platform"`
+	ChannelSlug string   `json:"channelSlug"`
+}
+
+type ModerationAction string
+
+const (
+	ModerationActionDeleteMessage ModerationAction = "delete_message"
+	ModerationActionTimeout       ModerationAction = "timeout"
+	ModerationActionBan           ModerationAction = "ban"
+)
+
+type ModerateMessageParams struct {
+	Platform        Platform         `json:"platform"`
+	ChannelSlug     string           `json:"channelSlug"`
+	MessageID       string           `json:"messageId"`
+	TargetUserID    string           `json:"targetUserId"`
+	Action          ModerationAction `json:"action"`
+	DurationSeconds *int             `json:"durationSeconds,omitempty"`
 }
 
 type StreamStatusParams struct {

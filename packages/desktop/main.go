@@ -11,6 +11,7 @@ import (
 
 	"github.com/Satont/twirchat/packages/desktop/internal/app"
 	"github.com/Satont/twirchat/packages/desktop/internal/auth"
+	"github.com/Satont/twirchat/packages/desktop/internal/avatar"
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/bridge"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
@@ -74,6 +75,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	avatarResolver, err := avatar.NewResolver(avatar.Config{Backend: backendClient})
+	if err != nil {
+		log.Fatal(err)
+	}
 	sevenTVService, err := seventv.NewService(seventv.Config{
 		BackendURL: config.BackendURL, ClientSecret: host.ClientSecret(), Events: events, Messages: watchedManager,
 	})
@@ -118,6 +123,8 @@ func main() {
 	bridge.RegisterWatchedChannelHandlers(requestHandlers, watchedManager)
 	bridge.RegisterSevenTVHandlers(requestHandlers, sevenTVService)
 	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
+	bridge.RegisterAvatarHandlers(requestHandlers, avatarResolver)
+	bridge.RegisterModerationHandlers(requestHandlers, backendClient, host.Storage())
 	authService, err := auth.NewService(auth.Config{
 		Address:          config.AuthAddress,
 		CallbackHost:     config.AuthCallbackHost,

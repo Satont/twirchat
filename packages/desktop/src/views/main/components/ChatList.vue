@@ -8,11 +8,13 @@ import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
 import UserCardDialog from './UserCardDialog.vue'
 import { rpc } from '../main'
+import { desktopApi } from '../services/desktop-api'
 import { platformColor } from '../../shared/utils/platform'
 import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
 import type { UserCardTarget } from '../utils/chatCommands'
 import { ownChatSendTargets } from '../utils/chat-send-targets'
+import type { ModerationDragAction } from '../utils/moderation-drag'
 import {
   confirmDelivery,
   createPendingMessage,
@@ -79,6 +81,11 @@ const replyTarget = ref<NormalizedChatMessage | null>(null)
 const selectedUserCardTarget = ref<UserCardTarget | null>(null)
 const isUserCardDialogOpen = ref(false)
 const showMenu = ref(false)
+const watchedModerationAllowed = ref(false)
+const moderationPendingMessageIDs = ref(new Set<string>())
+const moderationToast = ref<{ kind: 'error' | 'success'; text: string } | null>(null)
+let moderationToastTimeout: ReturnType<typeof setTimeout> | undefined
+let moderationCapabilityRequest = 0
 
 function onReply(msg: NormalizedChatMessage) {
   replyTarget.value = msg
@@ -90,6 +97,100 @@ function getChannelSlugForPlatform(platform: Platform): string | undefined {
   }
 
   return props.statuses.get(platform)?.channelLogin
+}
+
+function moderationPlatform(platform: Platform): 'twitch' | 'kick' | undefined {
+  return platform === 'twitch' || platform === 'kick' ? platform : undefined
+}
+
+function canShowModerationRail(message: NormalizedChatMessage): boolean {
+  if (
+    !moderationPlatform(message.platform) ||
+    message.type === 'system' ||
+    message.delivery ||
+    !message.id ||
+    !message.author.id
+  ) {
+    return false
+  }
+  return !props.watchedChannel || watchedModerationAllowed.value
+}
+
+function showModerationToast(kind: 'error' | 'success', text: string): void {
+  moderationToast.value = { kind, text }
+  if (moderationToastTimeout) clearTimeout(moderationToastTimeout)
+  moderationToastTimeout = setTimeout(() => {
+    moderationToast.value = null
+  }, 3_500)
+}
+
+async function refreshWatchedModerationCapability(): Promise<void> {
+  const requestID = ++moderationCapabilityRequest
+  const watched = props.watchedChannel
+  const platform = watched ? moderationPlatform(watched.platform) : undefined
+  const account = platform ? props.accounts.find((item) => item.platform === platform) : undefined
+  if (!watched || !platform || !account) {
+    watchedModerationAllowed.value = false
+    return
+  }
+
+  try {
+    const capabilities = await desktopApi.request.getModerationCapabilities({
+      channelSlug: watched.channelSlug,
+      platform,
+    })
+    if (requestID === moderationCapabilityRequest) {
+      watchedModerationAllowed.value = capabilities.canModerate
+    }
+  } catch {
+    if (requestID === moderationCapabilityRequest) watchedModerationAllowed.value = false
+  }
+}
+
+watch(
+  () => [
+    props.watchedChannel?.id,
+    props.watchedChannel?.platform,
+    props.watchedChannel?.channelSlug,
+    props.accounts.map((account) => `${account.platform}:${account.id}`).join('|'),
+  ],
+  () => {
+    void refreshWatchedModerationCapability()
+  },
+  { immediate: true },
+)
+
+async function onModerate(
+  message: NormalizedChatMessage,
+  action: ModerationDragAction,
+): Promise<void> {
+  const platform = moderationPlatform(message.platform)
+  if (!platform) return
+  const channelSlug =
+    props.watchedChannel?.channelSlug ?? getChannelSlugForPlatform(platform) ?? message.channelId
+  if (!channelSlug) {
+    showModerationToast('error', 'Could not determine the channel for this moderation action.')
+    return
+  }
+
+  moderationPendingMessageIDs.value = new Set([...moderationPendingMessageIDs.value, message.id])
+  try {
+    await desktopApi.request.moderateMessage({
+      action: action.action,
+      channelSlug,
+      messageId: message.id,
+      platform,
+      targetUserId: message.author.id,
+      ...(action.action === 'timeout' ? { durationSeconds: action.durationSeconds } : {}),
+    })
+    showModerationToast('success', action.label)
+  } catch (error) {
+    showModerationToast('error', deliveryErrorMessage(error))
+  } finally {
+    const pending = new Set(moderationPendingMessageIDs.value)
+    pending.delete(message.id)
+    moderationPendingMessageIDs.value = pending
+  }
 }
 
 function onOpenUserCard(target: UserCardTarget) {
@@ -454,6 +555,14 @@ function onAppearanceChange(s: AppSettings) {
 
     <!-- Messages + scroll pill wrapper -->
     <div class="chat-list-wrapper">
+      <div
+        v-if="moderationToast"
+        class="moderation-toast"
+        :class="`moderation-toast-${moderationToast.kind}`"
+        role="status"
+      >
+        {{ moderationToast.text }}
+      </div>
       <VList
         v-if="activeMessages.length > 0"
         ref="vlistRef"
@@ -477,7 +586,10 @@ function onAppearanceChange(s: AppSettings) {
             :accounts="accounts"
             :self-ping-enabled="settings?.selfPing?.enabled"
             :self-ping-color="settings?.selfPing?.color"
+            :show-moderation-rail="canShowModerationRail(item)"
+            :moderation-pending="moderationPendingMessageIDs.has(item.id)"
             @reply="onReply"
+            @moderate="onModerate"
           />
         </template>
       </VList>
@@ -627,6 +739,31 @@ function onAppearanceChange(s: AppSettings) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.moderation-toast {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 7px 10px;
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  z-index: 20;
+}
+
+.moderation-toast-success {
+  background: rgba(22, 101, 52, 0.96);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.moderation-toast-error {
+  background: rgba(153, 27, 27, 0.96);
+  border-color: rgba(248, 113, 113, 0.4);
 }
 
 .chat-header {

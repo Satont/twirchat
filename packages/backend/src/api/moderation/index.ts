@@ -21,5 +21,4 @@ export interface ModerationService {
   twitchIsModerator: typeof import('./twitch.ts').isModerator
   kickBan: typeof import('./kick.ts').banUser
   kickDeleteMessage: typeof import('./kick.ts').deleteMessage
-  kickUnbanUser: typeof import('./kick.ts').unbanUser
 }

@@ -44,7 +44,8 @@ export function buildKickAuthUrl(
     code_challenge_method: 'S256',
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'user:read channel:read chat:write events:subscribe',
+    scope:
+      'user:read channel:read chat:write events:subscribe moderation:chat_message:manage moderation:ban',
     state,
   })
 
