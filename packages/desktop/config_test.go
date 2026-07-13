@@ -16,6 +16,15 @@ func TestRuntimeConfigReadsEnvironmentOverrides(t *testing.T) {
 	}
 }
 
+func TestRuntimeConfigReadsLegacyAuthServerPort(t *testing.T) {
+	t.Setenv("TWIRCHAT_AUTH_ADDRESS", "")
+	t.Setenv("AUTH_SERVER_PORT", "4998")
+
+	if config := loadRuntimeConfig(); config.AuthAddress != "127.0.0.1:4998" {
+		t.Fatalf("AuthAddress = %q, want legacy AUTH_SERVER_PORT value", config.AuthAddress)
+	}
+}
+
 func TestRuntimeConfigUsesBuildBackendURLWhenRuntimeEnvironmentIsMissing(t *testing.T) {
 	t.Setenv("TWIRCHAT_BACKEND_URL", "")
 	previousBuildBackendURL := buildBackendURL

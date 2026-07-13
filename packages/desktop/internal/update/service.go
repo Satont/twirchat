@@ -15,7 +15,17 @@ func (velopackStartup) RunAutoApply() { velopack.Run(velopack.App{AutoApplyOnSta
 // RunStartup processes Velopack launch/update arguments before Wails starts.
 func RunStartup(runner StartupRunner) { runner.RunAutoApply() }
 
-func RunProductionStartup() { RunStartup(velopackStartup{}) }
+// RunProductionStartup processes Velopack launch arguments only for a binary
+// carrying a release version. `go run` uses the default dev value and executes
+// from the Go build cache, which is not a Velopack installation.
+func RunProductionStartup(version string) { runProductionStartup(version, velopackStartup{}) }
+
+func runProductionStartup(version string, runner StartupRunner) {
+	if Version(version) == "dev" {
+		return
+	}
+	RunStartup(runner)
+}
 
 // Version normalises the linker value used by both development and release builds.
 func Version(value string) string {
@@ -30,6 +40,32 @@ type Manager interface {
 	Download(func(uint)) error
 	Apply() error
 }
+
+type ManagerFactory func(feed string) (Manager, error)
+
+// ManagerForVersion avoids touching Velopack while Wails runs from `go run`.
+// The native locator only works for a package installed by Velopack.
+func ManagerForVersion(version, feed string, factory ManagerFactory) (Manager, bool, error) {
+	if Version(version) == "dev" {
+		return disabledManager{}, false, nil
+	}
+	manager, err := factory(feed)
+	if err != nil {
+		return nil, false, err
+	}
+	return manager, true, nil
+}
+
+type disabledManager struct{}
+
+func (disabledManager) Check() (string, bool, error) { return "", false, nil }
+func (disabledManager) Download(func(uint)) error {
+	return errors.New("updates are unavailable in a development build")
+}
+func (disabledManager) Apply() error {
+	return errors.New("updates are unavailable in a development build")
+}
+
 type CheckResult struct {
 	UpdateAvailable bool   `json:"updateAvailable"`
 	Version         string `json:"version,omitempty"`

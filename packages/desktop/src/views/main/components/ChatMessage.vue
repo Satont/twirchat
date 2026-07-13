@@ -9,6 +9,7 @@ import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import UserContextMenu from './UserContextMenu.vue'
 import { useMessageParsing } from '../composables/useMessageParsing'
+import { resolveBadgeImage } from '../utils/badge-image'
 
 const props = defineProps<{
   message: NormalizedChatMessage
@@ -67,6 +68,14 @@ const brokenBadges = ref(new Set<string>())
 
 function onBadgeError(id: string): void {
   brokenBadges.value = new Set([...brokenBadges.value, id])
+}
+
+function badgeImage(imageUrl: string | undefined): string | undefined {
+  return resolveBadgeImage(imageUrl)
+}
+
+function isSvgBadge(imageUrl: string | undefined): boolean {
+  return badgeImage(imageUrl)?.startsWith('<svg') === true
 }
 
 function formatTime(ts: Date): string {
@@ -231,13 +240,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           :title="badge.type"
         >
           <span
-            v-if="badge.imageUrl && badge.imageUrl.startsWith('<svg')"
+            v-if="isSvgBadge(badge.imageUrl)"
             class="badge-svg"
-            v-html="scopeBadgeSvg(badge.imageUrl, badge.id)"
+            v-html="scopeBadgeSvg(badgeImage(badge.imageUrl) ?? '', badge.id)"
           />
           <img
-            v-else-if="badge.imageUrl && !brokenBadges.has(badge.id)"
-            :src="badge.imageUrl"
+            v-else-if="badgeImage(badge.imageUrl) && !brokenBadges.has(badge.id)"
+            :src="badgeImage(badge.imageUrl)"
             :alt="badge.text"
             @error="onBadgeError(badge.id)"
           />
@@ -416,13 +425,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
             :title="badge.type"
           >
             <span
-              v-if="badge.imageUrl && badge.imageUrl.startsWith('<svg')"
+              v-if="isSvgBadge(badge.imageUrl)"
               class="badge-svg"
-              v-html="badge.imageUrl"
+              v-html="scopeBadgeSvg(badgeImage(badge.imageUrl) ?? '', badge.id)"
             />
             <img
-              v-else-if="badge.imageUrl && !brokenBadges.has(badge.id)"
-              :src="badge.imageUrl"
+              v-else-if="badgeImage(badge.imageUrl) && !brokenBadges.has(badge.id)"
+              :src="badgeImage(badge.imageUrl)"
               :alt="badge.text"
               @error="onBadgeError(badge.id)"
             />

@@ -256,7 +256,12 @@ func (s *Service) handlePusherMessage(ctx context.Context, channel string, raw j
 	}
 	badges := make([]contracts.Badge, 0, len(incoming.Sender.Identity.Badges))
 	for _, badge := range incoming.Sender.Identity.Badges {
-		badges = append(badges, contracts.Badge{ID: badge.Type, Type: badge.Type, Text: badge.Text})
+		badges = append(badges, contracts.Badge{
+			ID:       badge.Type,
+			Type:     badge.Type,
+			Text:     badge.Text,
+			ImageURL: embeddedBadgeURL(badge.Type),
+		})
 	}
 	message := contracts.NormalizedChatMessage{ID: incoming.ID, Platform: contracts.PlatformKick, ChannelID: channel, Author: contracts.ChatAuthor{ID: fmt.Sprint(incoming.Sender.ID), Username: incoming.Sender.Username, DisplayName: incoming.Sender.Username, Color: incoming.Sender.Identity.Color, AvatarURL: incoming.Sender.ProfilePicture, Badges: badges}, Text: incoming.Content, Emotes: []contracts.Emote{}, Timestamp: timestamp, Type: "message"}
 	if message.ID == "" {

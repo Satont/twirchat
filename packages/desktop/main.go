@@ -31,7 +31,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	update.RunProductionStartup()
+	update.RunProductionStartup(version)
 	version = update.Version(version)
 	rootContext, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -43,7 +43,7 @@ func main() {
 	requestHandlers := bridge.NewHandlerRegistry()
 	config := loadRuntimeConfig()
 	feed := updateFeedURL()
-	updaterManager, err := update.NewVelopackManager(feed)
+	updaterManager, updatesEnabled, err := update.ManagerForVersion(version, feed, update.NewVelopackManager)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func main() {
 		Name:       "TwirChat",
 		ProfileDir: profileDir,
 		WailsServices: []application.Service{
-			application.NewService(bridge.NewDesktopService(requestHandlers, true)),
+			application.NewService(bridge.NewDesktopService(requestHandlers, updatesEnabled)),
 		},
 	})
 	if err != nil {

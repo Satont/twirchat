@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -19,9 +20,19 @@ var buildBackendURL string
 func loadRuntimeConfig() runtimeConfig {
 	return runtimeConfig{
 		BackendURL:       envOr("TWIRCHAT_BACKEND_URL", envOr("CHATRIX_BACKEND_URL", valueOr(buildBackendURL, "http://127.0.0.1:3000"))),
-		AuthAddress:      envOr("TWIRCHAT_AUTH_ADDRESS", "127.0.0.1:45821"),
+		AuthAddress:      authAddress(),
 		AuthCallbackHost: envOr("TWIRCHAT_AUTH_CALLBACK_HOST", "localhost"),
 	}
+}
+
+func authAddress() string {
+	if address := os.Getenv("TWIRCHAT_AUTH_ADDRESS"); address != "" {
+		return address
+	}
+	if port := os.Getenv("AUTH_SERVER_PORT"); port != "" {
+		return net.JoinHostPort("127.0.0.1", port)
+	}
+	return "127.0.0.1:45821"
 }
 
 func loadDotEnv() error {
