@@ -47,9 +47,8 @@ func TestSetupLoggerWritesReadableTextFile(t *testing.T) {
 	if len(logEntries) != 1 {
 		t.Fatalf("log file count = %d, want 1", len(logEntries))
 	}
-	if logEntries[0].IsDir() ||
-		!regexp.MustCompile(`^twirchat\d{8}T\d{6}\.\d{9}Z\.log$`).MatchString(logEntries[0].Name()) {
-		t.Fatalf("log file name = %q, want twirchat<timestamp>.log", logEntries[0].Name())
+	if logEntries[0].IsDir() || logEntries[0].Name() != "twirchat.log" {
+		t.Fatalf("log file name = %q, want twirchat.log", logEntries[0].Name())
 	}
 
 	content, err := os.ReadFile(filepath.Join(profileDir, "logs", entries[0].Name(), logEntries[0].Name()))

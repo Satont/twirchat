@@ -13,16 +13,13 @@ import (
 )
 
 const (
-	logDirectoryName     = "logs"
-	logDayLayout         = "2006-01-02"
-	logTimestampLayout   = "20060102T150405.000000000Z"
-	logFileNamePrefix    = "twirchat"
-	logFileNameExtension = ".log"
+	logDirectoryName = "logs"
+	logDayLayout     = "2006-01-02"
+	logFileName      = "twirchat.log"
 )
 
 // SetupLogger configures the process-wide logger to write readable text records
-// to both stderr and a timestamped file grouped by UTC day within the profile
-// directory.
+// to both stderr and one file per UTC day within the profile directory.
 func SetupLogger(profileDir string) (func() error, error) {
 	now := time.Now().UTC()
 	logDir := filepath.Join(profileDir, logDirectoryName, now.Format(logDayLayout))
@@ -30,7 +27,6 @@ func SetupLogger(profileDir string) (func() error, error) {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
-	logFileName := logFileNamePrefix + now.Format(logTimestampLayout) + logFileNameExtension
 	file, err := os.OpenFile(filepath.Join(logDir, logFileName), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open log file: %w", err)
