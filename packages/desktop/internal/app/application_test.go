@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -126,6 +128,39 @@ func TestMainWindowOptionsKeepsLinuxNativeFrame(t *testing.T) {
 
 	if options.Frameless {
 		t.Fatal("Frameless = true, want false")
+	}
+}
+
+func TestWailsOptionsUseGlobalDebugLogger(t *testing.T) {
+	previousDefault := slog.Default()
+	var output bytes.Buffer
+	globalLogger := slog.New(slog.NewTextHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(globalLogger)
+	t.Cleanup(func() {
+		slog.SetDefault(previousDefault)
+	})
+
+	host, err := New(Config{
+		Assets:     fstest.MapFS{"index.html": {Data: []byte("<html></html>")}},
+		Context:    context.Background(),
+		Name:       "TwirChat",
+		ProfileDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(host.Shutdown)
+
+	options := host.wailsOptions()
+	if options.LogLevel != slog.LevelDebug {
+		t.Fatalf("Wails LogLevel = %v, want %v", options.LogLevel, slog.LevelDebug)
+	}
+	if options.Logger == nil {
+		t.Fatal("Wails Logger = nil, want global logger")
+	}
+	options.Logger.Debug("framework diagnostics enabled")
+	if !strings.Contains(output.String(), "component=wails") {
+		t.Fatalf("Wails logger output = %q, want component=wails", output.String())
 	}
 }
 

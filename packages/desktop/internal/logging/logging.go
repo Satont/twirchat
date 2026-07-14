@@ -32,9 +32,10 @@ func SetupLogger(profileDir string) (func() error, error) {
 		return nil, fmt.Errorf("open log file: %w", err)
 	}
 
+	handlerOptions := &slog.HandlerOptions{Level: slog.LevelDebug}
 	handler := slogmulti.Fanout(
-		slog.NewTextHandler(os.Stderr, nil),
-		slog.NewTextHandler(file, nil),
+		slog.NewTextHandler(os.Stderr, handlerOptions),
+		slog.NewTextHandler(file, handlerOptions),
 	)
 	slog.SetDefault(slog.New(handler))
 

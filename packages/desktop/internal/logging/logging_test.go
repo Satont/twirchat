@@ -25,6 +25,7 @@ func TestSetupLoggerWritesReadableTextFile(t *testing.T) {
 	})
 
 	slog.Info("logger configured", "channel", "satont")
+	slog.Debug("logger debug configured", "component", "wails")
 	if err := closeLogger(); err != nil {
 		t.Fatalf("close logger: %v", err)
 	}
@@ -57,5 +58,8 @@ func TestSetupLoggerWritesReadableTextFile(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "level=INFO msg=\"logger configured\" channel=satont") {
 		t.Fatalf("unexpected text log: %s", content)
+	}
+	if !strings.Contains(string(content), "level=DEBUG msg=\"logger debug configured\" component=wails") {
+		t.Fatalf("debug log was not written: %s", content)
 	}
 }

@@ -1,6 +1,11 @@
 package update
 
-import "testing"
+import (
+	"bytes"
+	"log/slog"
+	"strings"
+	"testing"
+)
 
 type recordingStartup struct{ called bool }
 
@@ -27,6 +32,38 @@ func TestRunProductionStartupRunsVelopackForReleaseBuild(t *testing.T) {
 	runProductionStartup("0.8.1", runner)
 	if !runner.called {
 		t.Fatal("runProductionStartup() did not call Velopack for a release build")
+	}
+}
+
+func TestVelopackAppMapsNativeLogsToGlobalSlog(t *testing.T) {
+	previousDefault := slog.Default()
+	var output bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() {
+		slog.SetDefault(previousDefault)
+	})
+
+	config := newVelopackApp()
+	if !config.AutoApplyOnStartup {
+		t.Fatal("AutoApplyOnStartup = false, want true")
+	}
+	if config.Logger == nil {
+		t.Fatal("Velopack Logger = nil")
+	}
+	config.Logger("trace", "prepare delta")
+	config.Logger("info", "download release")
+	config.Logger("warning", "retry package")
+	config.Logger("error", "apply failed")
+
+	for _, want := range []string{
+		"level=DEBUG msg=\"prepare delta\" component=velopack",
+		"level=INFO msg=\"download release\" component=velopack",
+		"level=WARN msg=\"retry package\" component=velopack",
+		"level=ERROR msg=\"apply failed\" component=velopack",
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("Velopack output = %q, want %q", output.String(), want)
+		}
 	}
 }
 

@@ -64,7 +64,10 @@ func run(profileDir string) error {
 			return fmt.Errorf("load environment: %w", err)
 		}
 	}
+	slog.Info("start desktop application", "version", update.Version(version), "os", runtime.GOOS, "arch", runtime.GOARCH)
+	slog.Info("start Velopack startup", "version", update.Version(version))
 	update.RunProductionStartup(version)
+	slog.Info("Velopack startup complete", "version", update.Version(version))
 	version = update.Version(version)
 	rootContext, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()

@@ -160,8 +160,41 @@ func (a *Application) Start() error {
 		return errors.New("application has already started")
 	}
 
-	nativeApp := application.New(application.Options{
+	slog.Info("create Wails application", "component", "wails")
+	nativeApp := application.New(a.wailsOptions())
+	slog.Info("Wails application created", "component", "wails")
+	slog.Info(
+		"request main WebView2 window",
+		"component", "wails",
+		"name", a.windowOptions.Name,
+		"width", a.windowOptions.Width,
+		"height", a.windowOptions.Height,
+		"frameless", a.windowOptions.Frameless,
+	)
+	nativeApp.Window.NewWithOptions(a.windowOptions)
+	slog.Info("main WebView2 window requested", "component", "wails")
+
+	if err := a.startServices(); err != nil {
+		return err
+	}
+
+	a.started = true
+	slog.Info("start Wails event loop", "component", "wails")
+	if err := nativeApp.Run(); err != nil {
+		slog.Error("Wails event loop failed", "component", "wails", "error", err)
+		a.Shutdown()
+		return err
+	}
+	slog.Info("Wails event loop stopped", "component", "wails")
+
+	return nil
+}
+
+func (a *Application) wailsOptions() application.Options {
+	return application.Options{
 		Name:     a.name,
+		Logger:   slog.Default().With("component", "wails"),
+		LogLevel: slog.LevelDebug,
 		Services: a.wailsServices,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(a.assets),
@@ -170,20 +203,7 @@ func (a *Application) Start() error {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 		OnShutdown: a.Shutdown,
-	})
-	nativeApp.Window.NewWithOptions(a.windowOptions)
-
-	if err := a.startServices(); err != nil {
-		return err
 	}
-
-	a.started = true
-	if err := nativeApp.Run(); err != nil {
-		a.Shutdown()
-		return err
-	}
-
-	return nil
 }
 
 func (a *Application) startServices() error {

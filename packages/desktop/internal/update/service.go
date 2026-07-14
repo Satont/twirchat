@@ -2,6 +2,9 @@ package update
 
 import (
 	"errors"
+	"log/slog"
+	"strings"
+
 	"github.com/quaadgras/velopack-go/velopack"
 )
 
@@ -10,7 +13,25 @@ type StartupRunner interface{ RunAutoApply() }
 
 type velopackStartup struct{}
 
-func (velopackStartup) RunAutoApply() { velopack.Run(velopack.App{AutoApplyOnStartup: true}) }
+func (velopackStartup) RunAutoApply() { velopack.Run(newVelopackApp()) }
+
+func newVelopackApp() velopack.App {
+	return velopack.App{AutoApplyOnStartup: true, Logger: logVelopack}
+}
+
+func logVelopack(level, message string) {
+	logger := slog.Default().With("component", "velopack")
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "trace", "debug":
+		logger.Debug(message)
+	case "warn", "warning":
+		logger.Warn(message)
+	case "error":
+		logger.Error(message)
+	default:
+		logger.Info(message)
+	}
+}
 
 // RunStartup processes Velopack launch/update arguments before Wails starts.
 func RunStartup(runner StartupRunner) { runner.RunAutoApply() }
