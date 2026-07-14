@@ -10,7 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -85,7 +85,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("restore watched channels: %w", err)
 	}
-	log.Printf("watched chat: restoring %d persisted channel(s)", len(channels))
+	slog.Info("restore watched channels", "count", len(channels))
 	for _, channel := range channels {
 		m.remember(channel)
 		m.connect(ctx, channel, "restore")
@@ -133,7 +133,7 @@ func (m *Manager) Add(
 		return contracts.WatchedChannel{}, fmt.Errorf("add watched channel %q: %w", slug, err)
 	}
 	m.remember(channel)
-	log.Printf("watched chat: add channel id=%s platform=%s slug=%s", channel.ID, channel.Platform, channel.ChannelSlug)
+	slog.Info("add watched channel", "id", channel.ID, "platform", channel.Platform, "slug", channel.ChannelSlug)
 	m.connect(ctx, channel, "add")
 	return channel, nil
 }
@@ -167,7 +167,7 @@ func (m *Manager) Remove(ctx context.Context, id string) error {
 			return fmt.Errorf("leave %s watched channel %q: %w", channel.Platform, channel.ChannelSlug, err)
 		}
 	}
-	log.Printf("watched chat: remove channel id=%s platform=%s slug=%s", channel.ID, channel.Platform, channel.ChannelSlug)
+	slog.Info("remove watched channel", "id", channel.ID, "platform", channel.Platform, "slug", channel.ChannelSlug)
 	return nil
 }
 
@@ -182,7 +182,7 @@ func (m *Manager) Send(ctx context.Context, id, text, replyToMessageID string) e
 	if chat == nil {
 		return fmt.Errorf("send watched message: platform %q is not available", channel.Platform)
 	}
-	log.Printf("watched chat: send message id=%s platform=%s slug=%s", id, channel.Platform, channel.ChannelSlug)
+	slog.Info("send watched message", "id", id, "platform", channel.Platform, "slug", channel.ChannelSlug)
 	return chat.Send(ctx, channel.ChannelSlug, text, replyToMessageID)
 }
 
@@ -247,13 +247,33 @@ func (m *Manager) connect(ctx context.Context, channel contracts.WatchedChannel,
 	chat := m.chatFor(channel.Platform)
 	if chat == nil {
 		failure := fmt.Sprintf("%s chat is not available in this build", channel.Platform)
-		log.Printf("watched chat: %s failed id=%s platform=%s slug=%s: %s", reason, channel.ID, channel.Platform, channel.ChannelSlug, failure)
+		slog.Error(
+			"watched channel connection failed",
+			"reason", reason,
+			"id", channel.ID,
+			"platform", channel.Platform,
+			"slug", channel.ChannelSlug,
+			"error", failure,
+		)
 		m.publishStatus(channel, "error", failure)
 		return
 	}
-	log.Printf("watched chat: %s connect id=%s platform=%s slug=%s", reason, channel.ID, channel.Platform, channel.ChannelSlug)
+	slog.Info(
+		"connect watched channel",
+		"reason", reason,
+		"id", channel.ID,
+		"platform", channel.Platform,
+		"slug", channel.ChannelSlug,
+	)
 	if err := chat.Join(ctx, channel.ChannelSlug); err != nil {
-		log.Printf("watched chat: %s connect failed id=%s platform=%s slug=%s: %v", reason, channel.ID, channel.Platform, channel.ChannelSlug, err)
+		slog.Error(
+			"watched channel connection failed",
+			"reason", reason,
+			"id", channel.ID,
+			"platform", channel.Platform,
+			"slug", channel.ChannelSlug,
+			"error", err,
+		)
 		m.publishStatus(channel, "error", err.Error())
 	}
 }

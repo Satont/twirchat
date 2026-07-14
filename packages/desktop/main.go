@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"embed"
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/bridge"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
+	"github.com/Satont/twirchat/packages/desktop/internal/logging"
 	kickchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/kick"
 	twitchchat "github.com/Satont/twirchat/packages/desktop/internal/platforms/twitch"
 	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
@@ -29,9 +31,37 @@ var assets embed.FS
 var version = "dev"
 
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
+	profileDir, err := profileDirectory()
+	if err != nil {
+		slog.Error("resolve profile directory", "error", err)
+		return 1
+	}
+	closeLogger, err := logging.SetupLogger(profileDir)
+	if err != nil {
+		slog.Error("configure logging", "error", err)
+		return 1
+	}
+	defer func() {
+		if err := closeLogger(); err != nil {
+			slog.Error("close log file", "error", err)
+		}
+	}()
+
+	if err := run(profileDir); err != nil {
+		slog.Error("application startup failed", "error", err)
+		return 1
+	}
+	return 0
+}
+
+func run(profileDir string) error {
 	if buildBackendURL == "" {
 		if err := loadDotEnv(); err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("load environment: %w", err)
 		}
 	}
 	update.RunProductionStartup(version)
@@ -39,16 +69,12 @@ func main() {
 	rootContext, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	profileDir, err := profileDirectory()
-	if err != nil {
-		log.Fatal(err)
-	}
 	requestHandlers := bridge.NewHandlerRegistry()
 	config := loadRuntimeConfig()
 	feed := updateFeedURL()
 	updaterManager, updatesEnabled, err := update.ManagerForVersion(version, feed, update.NewVelopackManager)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize update manager: %w", err)
 	}
 	updater := update.NewService(version, updaterManager)
 
@@ -62,31 +88,34 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize application: %w", err)
 	}
+	defer host.Shutdown()
+
 	events := bridge.NewEventPublisher(bridge.WailsEventEmitter{})
 	watchedManager, err := watched.NewManager(watched.Config{Storage: host.Storage(), Events: events})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize watched channels: %w", err)
 	}
 	bridge.RegisterStorageHandlers(requestHandlers, host.Storage())
 	bridge.RegisterUpdateHandlers(requestHandlers, updater, events)
+
 	backendClient, err := backend.NewHTTPClient(config.BackendURL, host.ClientSecret(), nil)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize backend client: %w", err)
 	}
 	avatarResolver, err := avatar.NewResolver(avatar.Config{Backend: backendClient})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize avatar resolver: %w", err)
 	}
 	sevenTVService, err := seventv.NewService(seventv.Config{
 		BackendURL: config.BackendURL, ClientSecret: host.ClientSecret(), Events: events, Messages: watchedManager,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize 7TV service: %w", err)
 	}
 	if err := host.AddService(sevenTVService); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("register 7TV service: %w", err)
 	}
 	twitchService, err := twitchchat.NewService(twitchchat.Config{
 		Storage: host.Storage(),
@@ -96,28 +125,28 @@ func main() {
 		SevenTV: sevenTVService,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize Twitch service: %w", err)
 	}
 	if err := host.AddService(twitchService); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("register Twitch service: %w", err)
 	}
 	kickService, err := kickchat.NewService(kickchat.Config{
 		Storage: host.Storage(), Backend: backendClient, Events: watchedManager, SevenTV: sevenTVService,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize Kick service: %w", err)
 	}
 	if err := host.AddService(kickService); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("register Kick service: %w", err)
 	}
 	if err := watchedManager.SetChat(contracts.PlatformTwitch, twitchService); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("register Twitch watched chat: %w", err)
 	}
 	if err := watchedManager.SetChat(contracts.PlatformKick, kickService); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("register Kick watched chat: %w", err)
 	}
 	if err := host.AddService(watchedManager); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("register watched channels: %w", err)
 	}
 	bridge.RegisterTwitchHandlers(requestHandlers, twitchService, kickService)
 	bridge.RegisterWatchedChannelHandlers(requestHandlers, watchedManager)
@@ -140,7 +169,7 @@ func main() {
 				events.EmitAuthSuccess(payload)
 				if payload.Platform == contracts.PlatformTwitch {
 					if err := twitchService.RefreshCredentials(host.Context()); err != nil {
-						log.Printf("connect Twitch chat after OAuth: %v", err)
+						slog.Error("connect Twitch chat after OAuth", "error", err)
 					}
 				}
 			},
@@ -150,16 +179,17 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize authentication service: %w", err)
 	}
 	if err := host.AddService(authService); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("register authentication service: %w", err)
 	}
 	bridge.RegisterAuthHandlers(requestHandlers, authService, host.Storage())
 
 	if err := host.Start(); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("start desktop application: %w", err)
 	}
+	return nil
 }
 
 func updateFeedURL() string {

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -182,7 +182,7 @@ func (s *Service) Start(ctx context.Context) error {
 	if err := s.storage.PurgeLegacyOptimisticMessages(ctx); err != nil {
 		return fmt.Errorf("start Twitch service: %w", err)
 	}
-	log.Printf("twitch chat: service start")
+	slog.Info("start Twitch chat service")
 	return s.connectSavedChannels(ctx, false)
 }
 
@@ -208,7 +208,7 @@ func (s *Service) Stop(context.Context) error {
 // RefreshCredentials reconnects saved channels after the OAuth callback has
 // written a new Twitch account to the encrypted local profile.
 func (s *Service) RefreshCredentials(ctx context.Context) error {
-	log.Printf("twitch chat: refreshing authenticated IRC credentials")
+	slog.Info("refresh Twitch IRC credentials")
 	s.mu.Lock()
 	client := s.client
 	s.client = nil
@@ -235,7 +235,7 @@ func (s *Service) Join(ctx context.Context, channel string) error {
 	credentials := s.credentials
 	s.mu.Unlock()
 	s.subscribeSevenTV(ctx, channel, credentials)
-	log.Printf("twitch chat: join requested channel=%s", channel)
+	slog.Info("join Twitch channel", "channel", channel)
 
 	s.mu.Lock()
 	s.channels[channel] = struct{}{}
@@ -265,7 +265,7 @@ func (s *Service) Leave(ctx context.Context, channel string) error {
 	if s.sevenTV != nil {
 		s.sevenTV.Unsubscribe(ctx, contracts.PlatformTwitch, channel)
 	}
-	log.Printf("twitch chat: leave requested channel=%s", channel)
+	slog.Info("leave Twitch channel", "channel", channel)
 	s.mu.Lock()
 	delete(s.channels, channel)
 	client := s.client
@@ -285,7 +285,7 @@ func (s *Service) Send(ctx context.Context, channel, text, replyToMessageID stri
 	if strings.TrimSpace(text) == "" {
 		return errors.New("send Twitch message: text is required")
 	}
-	log.Printf("twitch chat: send requested channel=%s reply=%t", channel, replyToMessageID != "")
+	slog.Info("send Twitch message", "channel", channel, "is_reply", replyToMessageID != "")
 	account, err := s.storage.FindAccountByPlatform(ctx, contracts.PlatformTwitch)
 	if err != nil {
 		return fmt.Errorf("send Twitch message: load Twitch account: %w", err)
@@ -381,10 +381,10 @@ func (s *Service) connectSavedChannels(ctx context.Context, force bool) error {
 		return err
 	}
 	if len(channels) == 0 {
-		log.Printf("twitch chat: no persisted channels to connect")
+		slog.Info("no persisted Twitch channels to connect")
 		return nil
 	}
-	log.Printf("twitch chat: prepare IRC connection force=%t channels=%s", force, strings.Join(channels, ","))
+	slog.Info("prepare Twitch IRC connection", "force", force, "channels", strings.Join(channels, ","))
 	account, err := s.storage.FindAccountByPlatform(ctx, contracts.PlatformTwitch)
 	if err != nil {
 		return err
@@ -406,7 +406,7 @@ func (s *Service) connectSavedChannels(ctx context.Context, force bool) error {
 		s.subscribeSevenTV(ctx, channel, credentials)
 	}
 	if credentials.AccessToken == "" {
-		log.Printf("twitch chat: cannot connect channels=%s: no authenticated access token", strings.Join(channels, ","))
+		slog.Error("cannot connect Twitch IRC without authenticated access token", "channels", strings.Join(channels, ","))
 		for _, channel := range channels {
 			s.emitStatus(channel, "error", "authenticate with Twitch before connecting to chat")
 		}
@@ -443,7 +443,7 @@ func (s *Service) connectSavedChannels(ctx context.Context, force bool) error {
 		client.Join(channel)
 	}
 	s.mu.Unlock()
-	log.Printf("twitch chat: IRC Connect starting account=%s channels=%s", credentials.Username, strings.Join(channels, ","))
+	slog.Info("start Twitch IRC connection", "account", credentials.Username, "channels", strings.Join(channels, ","))
 	for _, channel := range channels {
 		s.emitStatus(channel, "connecting", "")
 	}
@@ -455,9 +455,9 @@ func (s *Service) connectSavedChannels(ctx context.Context, force bool) error {
 func (s *Service) runConnect(client Client) {
 	err := client.Connect()
 	if err == nil {
-		log.Printf("twitch chat: IRC Connect returned without an error")
+		slog.Info("Twitch IRC connection ended")
 	} else {
-		log.Printf("twitch chat: IRC Connect returned error: %v", err)
+		slog.Error("Twitch IRC connection ended", "error", err)
 	}
 	s.mu.Lock()
 	if s.client != client {
@@ -495,7 +495,7 @@ func (s *Service) onConnect(client Client) {
 	s.connecting = false
 	channels := s.channelNamesLocked()
 	s.mu.Unlock()
-	log.Printf("twitch chat: IRC connected channels=%s", strings.Join(channels, ","))
+	slog.Info("Twitch IRC connected", "channels", strings.Join(channels, ","))
 	for _, channel := range channels {
 		s.emitStatus(channel, "connected", "")
 	}
@@ -512,9 +512,9 @@ func (s *Service) armConnectTimeout(client Client) {
 		s.connecting = false
 		channels := s.channelNamesLocked()
 		s.mu.Unlock()
-		log.Printf("twitch chat: IRC connection timed out after %s channels=%s", s.connectTimeout, strings.Join(channels, ","))
+		slog.Error("Twitch IRC connection timed out", "timeout", s.connectTimeout, "channels", strings.Join(channels, ","))
 		if err := client.Disconnect(); err != nil && !errors.Is(err, twitchirc.ErrConnectionIsNotOpen) {
-			log.Printf("twitch chat: disconnect timed out IRC client: %v", err)
+			slog.Error("disconnect timed out Twitch IRC client", "error", err)
 		}
 		for _, channel := range channels {
 			s.emitStatus(channel, "error", fmt.Sprintf("Twitch IRC connection timed out after %s", s.connectTimeout))
@@ -583,7 +583,7 @@ func (s *Service) subscribeSevenTV(ctx context.Context, channel string, credenti
 
 func (s *Service) onNotice(notice Notice) {
 	channel := normalizeChannel(notice.Channel)
-	log.Printf("twitch chat: server notice channel=%s msg_id=%s message=%s", channel, notice.MsgID, notice.Message)
+	slog.Warn("Twitch IRC server notice", "channel", channel, "message_id", notice.MsgID, "message", notice.Message)
 	if channel == "" || !isDeliveryFailure(notice.MsgID) {
 		return
 	}
@@ -630,9 +630,9 @@ func (s *Service) emitStatus(channel, status, failure string) {
 	s.statuses[channel] = payload
 	s.mu.Unlock()
 	if failure == "" {
-		log.Printf("twitch chat: status channel=%s status=%s", channel, status)
+		slog.Info("Twitch chat status", "channel", channel, "status", status)
 	} else {
-		log.Printf("twitch chat: status channel=%s status=%s error=%s", channel, status, failure)
+		slog.Error("Twitch chat status", "channel", channel, "status", status, "error", failure)
 	}
 	s.events.Status(payload)
 }
@@ -746,7 +746,7 @@ func (c *ircClient) OnUserSanction(handler func(UserSanction)) {
 func (c *ircClient) Join(channel string)   { c.client.Join(channel) }
 func (c *ircClient) Depart(channel string) { c.client.Depart(channel) }
 func (c *ircClient) Say(channel, text string) {
-	log.Printf("twitch chat: IRC write PRIVMSG channel=%s bytes=%d", normalizeChannel(channel), len(text))
+	slog.Info("write Twitch IRC PRIVMSG", "channel", normalizeChannel(channel), "bytes", len(text))
 	c.client.Say(channel, text)
 }
 func (c *ircClient) Reply(channel, parentID, text string) { c.client.Reply(channel, parentID, text) }

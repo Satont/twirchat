@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -58,7 +58,7 @@ func (c *HTTPClient) doJSON(ctx context.Context, method, path string, input, out
 	if err != nil {
 		return err
 	}
-	log.Printf("backend http: request method=%s path=%s", method, path)
+	slog.Info("backend HTTP request", "method", method, "path", path)
 	var body io.Reader
 	if input != nil {
 		encoded, err := json.Marshal(input)
@@ -79,11 +79,11 @@ func (c *HTTPClient) doJSON(ctx context.Context, method, path string, input, out
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		log.Printf("backend http: request failed method=%s path=%s error=%v", method, path, err)
+		slog.Error("backend HTTP request failed", "method", method, "path", path, "error", err)
 		return fmt.Errorf("backend %s %s: %w", method, path, err)
 	}
 	defer response.Body.Close()
-	log.Printf("backend http: response method=%s path=%s status=%d", method, path, response.StatusCode)
+	slog.Info("backend HTTP response", "method", method, "path", path, "status", response.StatusCode)
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		data, readErr := io.ReadAll(io.LimitReader(response.Body, maxErrorBodyBytes))
 		if readErr != nil {

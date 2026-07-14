@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"runtime"
 	"sync"
 
@@ -106,7 +106,7 @@ func mainWindowOptions(name, platform string) application.WebviewWindowOptions {
 		}
 	case "darwin":
 		options.Mac = application.MacWindow{
-			TitleBar:                 application.MacTitleBarHidden,
+			TitleBar:                application.MacTitleBarHidden,
 			InvisibleTitleBarHeight: compactTitleBarHeight,
 		}
 	}
@@ -210,7 +210,7 @@ func (a *Application) Shutdown() {
 
 func (a *Application) closeStorage() {
 	if err := a.storage.Close(); err != nil {
-		log.Printf("close profile storage: %v", err)
+		slog.Error("close profile storage", "error", err)
 	}
 }
 

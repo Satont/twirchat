@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -151,9 +151,11 @@ func (c *WSClient) run(ctx context.Context, done chan struct{}) {
 			}
 			err = c.readUntilClosed(ctx, connection)
 			if err != nil {
-				log.Printf(
-					"backend websocket: read ended close_status=%d error=%v context_error=%v",
-					websocket.CloseStatus(err), err, ctx.Err(),
+				slog.Info(
+					"backend WebSocket read ended",
+					"close_status", websocket.CloseStatus(err),
+					"error", err,
+					"context_error", ctx.Err(),
 				)
 			}
 			_ = connection.Close(websocket.StatusGoingAway, "reconnect")
