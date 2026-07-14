@@ -12,20 +12,25 @@ import (
 	slogmulti "github.com/samber/slog-multi"
 )
 
-const logFileName = "twirchat.log"
+const (
+	logDirectoryName     = "logs"
+	logDayLayout         = "2006-01-02"
+	logTimestampLayout   = "20060102T150405.000000000Z"
+	logFileNamePrefix    = "twirchat"
+	logFileNameExtension = ".log"
+)
 
 // SetupLogger configures the process-wide logger to write readable text records
-// to both stderr and a timestamped file within the profile directory.
+// to both stderr and a timestamped file grouped by UTC day within the profile
+// directory.
 func SetupLogger(profileDir string) (func() error, error) {
-	logDir := filepath.Join(
-		profileDir,
-		"logs",
-		time.Now().UTC().Format("20060102T150405.000000000Z"),
-	)
+	now := time.Now().UTC()
+	logDir := filepath.Join(profileDir, logDirectoryName, now.Format(logDayLayout))
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
+	logFileName := logFileNamePrefix + now.Format(logTimestampLayout) + logFileNameExtension
 	file, err := os.OpenFile(filepath.Join(logDir, logFileName), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open log file: %w", err)

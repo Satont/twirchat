@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -35,8 +36,23 @@ func TestSetupLoggerWritesReadableTextFile(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("log directory count = %d, want 1", len(entries))
 	}
+	if !entries[0].IsDir() || !regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`).MatchString(entries[0].Name()) {
+		t.Fatalf("daily log directory = %q, want YYYY-MM-DD", entries[0].Name())
+	}
 
-	content, err := os.ReadFile(filepath.Join(profileDir, "logs", entries[0].Name(), "twirchat.log"))
+	logEntries, err := os.ReadDir(filepath.Join(profileDir, "logs", entries[0].Name()))
+	if err != nil {
+		t.Fatalf("read daily log directory: %v", err)
+	}
+	if len(logEntries) != 1 {
+		t.Fatalf("log file count = %d, want 1", len(logEntries))
+	}
+	if logEntries[0].IsDir() ||
+		!regexp.MustCompile(`^twirchat\d{8}T\d{6}\.\d{9}Z\.log$`).MatchString(logEntries[0].Name()) {
+		t.Fatalf("log file name = %q, want twirchat<timestamp>.log", logEntries[0].Name())
+	}
+
+	content, err := os.ReadFile(filepath.Join(profileDir, "logs", entries[0].Name(), logEntries[0].Name()))
 	if err != nil {
 		t.Fatalf("read log file: %v", err)
 	}
