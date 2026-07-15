@@ -4,8 +4,8 @@ import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
 import { rpc } from '../main'
 import { buildMessageParts, type MessagePart } from '../../shared/utils/messageParts'
+import { renderMessageText } from '../../shared/utils/message-text'
 
-const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
 
 export const mentionColorCache = new Map<string, string | null>()
@@ -38,34 +38,6 @@ async function fetchMentionColor(platform: string, username: string): Promise<vo
   }
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function linkifyText(escaped: string): string {
-  return escaped.replace(URL_REGEX, (url) => {
-    const safeUrl = url.replace(/"/g, '&quot;')
-    return `<a class="msg-link" href="#" data-href="${safeUrl}" title="${safeUrl}">${url}</a>`
-  })
-}
-
-function highlightMentions(escaped: string, platform: string): string {
-  return escaped.replace(MENTION_REGEX, (match, username) => {
-    const key = makeMentionKey(platform, username)
-    const color = mentionColorCache.get(key)
-    if (color) {
-      return `<span class="mention" style="color: ${color}; font-weight: 600;">${match}</span>`
-    }
-
-    void fetchMentionColor(platform, username)
-    return match
-  })
-}
-
 export function useMessageParsing(message: NormalizedChatMessage): {
   messageParts: ComputedRef<MessagePart[]>
   processText: (text: string) => string
@@ -73,10 +45,7 @@ export function useMessageParsing(message: NormalizedChatMessage): {
   const messageParts = computed((): MessagePart[] => buildMessageParts(message))
 
   function processText(text: string): string {
-    let result = escapeHtml(text)
-    result = linkifyText(result)
-    result = highlightMentions(result, message.platform)
-    return result
+    return renderMessageText(text, message.platform, mentionColorCache)
   }
 
   onMounted(() => {
