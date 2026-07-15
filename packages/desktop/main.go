@@ -84,7 +84,7 @@ func run(profileDir string) error {
 	host, err := app.New(app.Config{
 		Assets:     assets,
 		Context:    rootContext,
-		Name:       "TwirChat",
+		Name:       wailsApplicationNameFor(version),
 		ProfileDir: profileDir,
 		WailsServices: []application.Service{
 			application.NewService(bridge.NewDesktopService(requestHandlers, updatesEnabled)),
@@ -220,5 +220,22 @@ func profileDirectory() (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(configDir, "TwirChat"), nil
+	return profileDirectoryFor(configDir, version), nil
+}
+
+func profileDirectoryFor(configDir, buildVersion string) string {
+	profileName := "TwirChat"
+	if update.Version(buildVersion) == "dev" {
+		profileName += "-dev"
+	}
+
+	return filepath.Join(configDir, profileName)
+}
+
+func wailsApplicationNameFor(buildVersion string) string {
+	if update.Version(buildVersion) == "dev" {
+		return "TwirChat-dev"
+	}
+
+	return "TwirChat"
 }

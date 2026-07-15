@@ -16,6 +16,26 @@ func TestUpdateFeedURLUsesVelopackReleaseDirectory(t *testing.T) {
 	}
 }
 
+func TestProfileDirectoryUsesSeparateDirectoryForDevelopmentBuilds(t *testing.T) {
+	configDir := t.TempDir()
+
+	if got, want := profileDirectoryFor(configDir, "dev"), filepath.Join(configDir, "TwirChat-dev"); got != want {
+		t.Errorf("development profile directory = %q, want %q", got, want)
+	}
+	if got, want := profileDirectoryFor(configDir, "0.10.8"), filepath.Join(configDir, "TwirChat"); got != want {
+		t.Errorf("production profile directory = %q, want %q", got, want)
+	}
+}
+
+func TestWailsApplicationNameUsesSeparateDevelopmentIdentity(t *testing.T) {
+	if got, want := wailsApplicationNameFor("dev"), "TwirChat-dev"; got != want {
+		t.Errorf("development Wails application name = %q, want %q", got, want)
+	}
+	if got, want := wailsApplicationNameFor("0.10.8"), "TwirChat"; got != want {
+		t.Errorf("production Wails application name = %q, want %q", got, want)
+	}
+}
+
 func TestRuntimeConfigReadsEnvironmentOverrides(t *testing.T) {
 	t.Setenv("TWIRCHAT_BACKEND_URL", "http://backend.test:9000")
 	t.Setenv("TWIRCHAT_AUTH_ADDRESS", "127.0.0.1:4999")

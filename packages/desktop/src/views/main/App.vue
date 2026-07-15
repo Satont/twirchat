@@ -25,6 +25,7 @@ import { rpc } from './main'
 import { attemptMigration } from './services/migration'
 import { desktopApi } from './services/desktop-api'
 import { shouldCheckForUpdates } from './services/update-capability'
+import { checkForAvailableUpdate } from './services/update-workflow'
 import { resolveWindowChromePlatform } from './services/window-chrome'
 import { mergeChatMessageSnapshot } from './utils/chat-message-buffer'
 import { filterHomeChatMessages } from './utils/chat-send-targets'
@@ -167,6 +168,9 @@ async function loadInitialData() {
     }
     if (setts !== undefined) {
       settings.value = setts
+      void shouldCheckForUpdates(desktopApi, setts.autoCheckUpdates !== false).then((enabled) => {
+        if (enabled) void checkForUpdates()
+      })
     }
     if (statList !== undefined) {
       channelStatusStore.setStatuses(statList)
@@ -439,20 +443,42 @@ useRpcListener(
   },
 )
 
-onMounted(() => {
-  void shouldCheckForUpdates(desktopApi).then((enabled) => {
-    if (enabled) void checkForUpdates()
-  })
-})
-
 async function checkForUpdates() {
   try {
-    const result = await rpc.request.checkForUpdate()
+    const result = await checkForAvailableUpdate(rpc.request)
     if (result.updateAvailable) {
-      await rpc.request.downloadUpdate()
+      updateState.value = {
+        message: result.version ? `Update ${result.version} is available` : 'Update is available',
+        show: true,
+        status: 'update-available',
+      }
     }
   } catch (error) {
     console.warn('[Update] Failed to check for updates:', error)
+  }
+}
+
+async function downloadUpdate() {
+  updateState.value = {
+    ...updateState.value,
+    message: 'Downloading update',
+    show: true,
+    status: 'downloading',
+  }
+
+  try {
+    const result = await rpc.request.downloadUpdate()
+    if (!result.success) {
+      throw new Error(result.error ?? 'Failed to download update')
+    }
+  } catch (error) {
+    updateState.value = {
+      ...updateState.value,
+      message: 'Failed to download update',
+      show: true,
+      status: 'error',
+    }
+    console.error('[Update] Failed to download update:', error)
   }
 }
 
@@ -838,6 +864,13 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
               <span class="progress-text">{{ updateState.progress }}%</span>
             </div>
           </div>
+          <button
+            v-if="updateState.status === 'update-available'"
+            class="update-btn"
+            @click="downloadUpdate"
+          >
+            Download
+          </button>
           <button
             v-if="updateState.status === 'download-complete'"
             class="update-btn"

@@ -2,7 +2,13 @@ export interface UpdateCapabilitySource {
   capabilities(): Promise<{ updates: boolean }>
 }
 
-// The initial Wails release deliberately has no updater implementation.
-export async function shouldCheckForUpdates(source: UpdateCapabilitySource): Promise<boolean> {
+export async function shouldCheckForUpdates(
+  source: UpdateCapabilitySource,
+  automaticallyEnabled = true,
+): Promise<boolean> {
+  if (!automaticallyEnabled) {
+    return false
+  }
+
   return (await source.capabilities()).updates
 }
