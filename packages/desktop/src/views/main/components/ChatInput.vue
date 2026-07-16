@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type {
   Account,
   AppSettings,
@@ -15,7 +15,7 @@ import { parseToken, replaceToken, useAutocomplete } from '../composables/useAut
 import { useAliasStore } from '../stores/useAliasStore'
 import { resolveUserCardCommand, type UserCardTarget } from '../utils/chatCommands'
 import { createChatMessageTargets, ownChatSendTargets } from '../utils/chat-send-targets'
-import { textareaHeight } from '../utils/chat-textarea'
+import { textareaHeight, textareaHeightBounds } from '../utils/chat-textarea'
 import AutocompletePopup from './AutocompletePopup.vue'
 import { PopoverContent, PopoverRoot, PopoverTrigger } from 'reka-ui'
 import EmotePicker from './EmotePicker.vue'
@@ -68,17 +68,25 @@ const currentChannelInfo = computed((): { platform: string; channelId: string } 
 
 const watchedConnectionText = computed((): string => {
   const channel = props.watchedChannel?.displayName ?? 'channel'
-  switch (props.watchedChannelStatus?.status) {
+  return connectionStatusText(
+    props.watchedChannelStatus?.status,
+    channel,
+    props.watchedChannelStatus?.error,
+  )
+})
+
+function connectionStatusText(status: string | undefined, channel: string, error?: string): string {
+  switch (status) {
     case 'connecting':
       return `Connecting to ${channel}…`
     case 'disconnected':
       return `${channel} disconnected`
     case 'error':
-      return props.watchedChannelStatus.error || `Could not connect to ${channel}`
+      return error || `Could not connect to ${channel}`
     default:
       return ''
   }
-})
+}
 
 watch(showEmotePicker, async (isPickerOpen) => {
   if (isPickerOpen) {
@@ -123,9 +131,14 @@ function resizeTextarea(): void {
   if (!el) {
     return
   }
+  const bounds = textareaHeightBounds(getComputedStyle(el))
+  el.style.minHeight = `${bounds.minHeight}px`
+  el.style.maxHeight = `${bounds.maxHeight}px`
   el.style.height = '0px'
-  el.style.height = `${textareaHeight(el.scrollHeight)}px`
+  el.style.height = `${textareaHeight(el.scrollHeight, bounds)}px`
 }
+
+onMounted(resizeTextarea)
 
 watch(text, () => void nextTick(resizeTextarea))
 
@@ -150,9 +163,14 @@ const connectedPlatforms = computed(() => {
       channelLogin: target.channelLogin,
       status: exactStatus?.status ?? 'connected',
       mode: exactStatus?.mode ?? 'authenticated',
+      error: exactStatus?.error,
     }
   })
 })
+
+const homeConnectionStatuses = computed(() =>
+  connectedPlatforms.value.filter((platform) => platform.status !== 'connected'),
+)
 
 const sendablePlatforms = computed(() =>
   connectedPlatforms.value.filter((p) => p.mode === 'authenticated'),
@@ -352,6 +370,22 @@ function placeholderText(): string {
     >
       <span class="connection-state-dot" aria-hidden="true" />
       <span>{{ watchedConnectionText }}</span>
+    </div>
+
+    <div
+      v-if="!watchedChannel && homeConnectionStatuses.length > 0"
+      class="connection-state connection-state-home"
+      role="status"
+    >
+      <span
+        v-for="p in homeConnectionStatuses"
+        :key="p.platform"
+        class="connection-state-item"
+        :class="`connection-state-${p.status}`"
+      >
+        <span class="connection-state-dot" aria-hidden="true" />
+        <span>{{ connectionStatusText(p.status, p.channelLogin, p.error) }}</span>
+      </span>
     </div>
 
     <!-- Watched channel: single fixed chip -->
@@ -605,6 +639,17 @@ function placeholderText(): string {
   gap: 6px;
 }
 
+.connection-state-home {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.connection-state-item {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
 .connection-state-dot {
   background: currentColor;
   border-radius: 50%;
@@ -690,7 +735,7 @@ function placeholderText(): string {
 .chat-textarea {
   box-sizing: border-box;
   flex: 1;
-  min-height: 36px;
+  min-height: calc(1lh + 18px);
   resize: none;
   background: var(--c-surface-2, #1f1f24);
   border: 1px solid var(--c-border, #2a2a33);
@@ -700,7 +745,7 @@ function placeholderText(): string {
   font-size: 13px;
   line-height: 1.5;
   padding: 8px 12px;
-  max-height: 120px;
+  max-height: min(120px, calc(5lh + 18px));
   overflow-y: auto;
   outline: none;
   transition: border-color 0.15s;

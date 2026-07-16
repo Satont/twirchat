@@ -162,7 +162,7 @@ func RegisterStorageHandlers(registry *HandlerRegistry, store *storage.Storage) 
 	// service replaces this snapshot handler when it is started; returning the
 	// real empty state keeps the Vue emote store from retrying a missing RPC.
 	registry.Register(contracts.RequestGetChannelEmotes, func(context.Context, any) (any, error) {
-		return []contracts.SevenTVEmote{}, nil
+		return []contracts.EmoteCatalogEntry{}, nil
 	})
 	// The historical cache returns null until a message from this username has
 	// been observed. Keep that valid no-colour state instead of rejecting the

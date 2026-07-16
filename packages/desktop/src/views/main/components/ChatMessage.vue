@@ -250,7 +250,10 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
     />
 
     <!-- Reply preview: sits above the message row as its own line -->
-    <div v-if="message.reply" class="reply-preview compact-reply">
+    <div
+      v-if="message.reply && !props.moderationOutcome?.isTombstone"
+      class="reply-preview compact-reply"
+    >
       <span class="reply-icon">↩</span>
       <span class="reply-author">{{ message.reply.parentAuthor.displayName }}</span
       >:
@@ -524,7 +527,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
     <!-- Body -->
     <div class="msg-body">
       <!-- Reply Preview -->
-      <div v-if="message.reply" class="reply-preview">
+      <div v-if="message.reply && !props.moderationOutcome?.isTombstone" class="reply-preview">
         <span class="reply-icon">↩</span>
         <span class="reply-author">{{ message.reply.parentAuthor.displayName }}</span
         >:
