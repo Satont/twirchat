@@ -1,6 +1,5 @@
 import { nextTick, ref, type Ref } from 'vue'
-
-const SCROLL_AT_BOTTOM_THRESHOLD = 40
+import { isChatNearBottom } from '../utils/chat-scroll'
 
 export function useChatScroll(listEl: Ref<HTMLElement | null>): {
   isAtBottom: Ref<boolean>
@@ -14,7 +13,7 @@ export function useChatScroll(listEl: Ref<HTMLElement | null>): {
     if (!listEl.value) return
 
     const { scrollTop, scrollHeight, clientHeight } = listEl.value
-    isAtBottom.value = scrollHeight - scrollTop - clientHeight < SCROLL_AT_BOTTOM_THRESHOLD
+    isAtBottom.value = isChatNearBottom(scrollHeight, scrollTop, clientHeight)
   }
 
   function scrollToBottom(smooth = true): void {

@@ -36,6 +36,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'content-load': []
   reply: [message: NormalizedChatMessage]
   moderate: [message: NormalizedChatMessage, action: ModerationDragAction]
 }>()
@@ -68,6 +69,10 @@ function onAvatarLoad(): void {
 
 function onAvatarError(): void {
   avatarLoadFailed.value = true
+}
+
+function onContentLoad(): void {
+  emit('content-load')
 }
 
 function onReply() {
@@ -201,6 +206,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
             :src="part.emote.imageUrl"
             :alt="part.emote.name"
             :title="part.emote.name"
+            @load="onContentLoad"
           />
         </EmoteTooltip>
         <span v-else-if="part.type === 'text' && part.content" v-html="processText(part.content)" />
@@ -360,6 +366,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
               :src="part.emote.imageUrl"
               :alt="part.emote.name"
               :title="part.emote.name"
+              @load="onContentLoad"
             />
           </EmoteTooltip>
           <span
@@ -582,6 +589,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
               :src="part.emote.imageUrl"
               :alt="part.emote.name"
               :title="part.emote.name"
+              @load="onContentLoad"
             />
           </EmoteTooltip>
           <span

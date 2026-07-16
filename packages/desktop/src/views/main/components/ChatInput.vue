@@ -15,6 +15,7 @@ import { parseToken, replaceToken, useAutocomplete } from '../composables/useAut
 import { useAliasStore } from '../stores/useAliasStore'
 import { resolveUserCardCommand, type UserCardTarget } from '../utils/chatCommands'
 import { createChatMessageTargets, ownChatSendTargets } from '../utils/chat-send-targets'
+import { textareaHeight } from '../utils/chat-textarea'
 import AutocompletePopup from './AutocompletePopup.vue'
 import { PopoverContent, PopoverRoot, PopoverTrigger } from 'reka-ui'
 import EmotePicker from './EmotePicker.vue'
@@ -103,16 +104,16 @@ function onEmoteSelect(alias: string): void {
   void nextTick(() => textareaEl.value?.focus())
 }
 
-function resizeTextarea() {
+function resizeTextarea(): void {
   const el = textareaEl.value
   if (!el) {
     return
   }
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  el.style.height = '0px'
+  el.style.height = `${textareaHeight(el.scrollHeight)}px`
 }
 
-watch(text, () => nextTick(resizeTextarea))
+watch(text, () => void nextTick(resizeTextarea))
 
 watch(text, () => {
   commandError.value = ''
@@ -639,7 +640,9 @@ function placeholderText(): string {
 }
 
 .chat-textarea {
+  box-sizing: border-box;
   flex: 1;
+  min-height: 36px;
   resize: none;
   background: var(--c-surface-2, #1f1f24);
   border: 1px solid var(--c-border, #2a2a33);
@@ -693,8 +696,8 @@ function placeholderText(): string {
 
 .emote-btn {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   border: none;
   background: transparent;
