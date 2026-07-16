@@ -12,7 +12,8 @@ import (
 var defaultSettings = json.RawMessage(`{
   "theme":"dark","chatTheme":"modern","fontFamily":"inter","fontSize":14,
   "showPlatformColorStripe":true,"showPlatformIcon":true,"showTimestamp":true,
-  "showAvatars":true,"showBadges":true,"platformFilter":"all","autoCheckUpdates":false,
+  "showAvatars":true,"showBadges":true,"showChannelLabel":true,"emoteSessionCache":true,
+  "platformFilter":"all","autoCheckUpdates":false,
   "hotkeys":{"newTab":"ctrl+t","nextTab":"ctrl+tab","prevTab":"alt+arrowleft","tabSelector":"ctrl+l"},
   "overlay":{"background":"transparent","textColor":"#ffffff","fontSize":14,"fontFamily":"inter","maxMessages":20,"messageTimeout":0,"showPlatformIcon":true,"showAvatar":true,"showBadges":true,"animation":"slide","position":"bottom","port":45823},
   "chatLayout":{"version":1,"mode":"combined","splits":[{"id":"default","type":"combined","size":100}]},
@@ -33,7 +34,7 @@ func RegisterStorageHandlers(registry *HandlerRegistry, store *storage.Storage) 
 		if !found {
 			data = defaultSettings
 		}
-		return jsonObject(data)
+		return mergeSettings(data)
 	})
 	registry.Register(contracts.RequestSaveSettings, func(ctx context.Context, params any) (any, error) {
 		data, err := json.Marshal(params)
@@ -188,4 +189,33 @@ func jsonObject(data json.RawMessage) (map[string]any, error) {
 		return nil, fmt.Errorf("decode stored settings: %w", err)
 	}
 	return value, nil
+}
+
+func mergeSettings(data json.RawMessage) (map[string]any, error) {
+	defaults, err := jsonObject(defaultSettings)
+	if err != nil {
+		return nil, fmt.Errorf("decode default settings: %w", err)
+	}
+	stored, err := jsonObject(data)
+	if err != nil {
+		return nil, err
+	}
+	return mergeObjects(defaults, stored), nil
+}
+
+func mergeObjects(defaults, stored map[string]any) map[string]any {
+	merged := make(map[string]any, len(defaults)+len(stored))
+	for key, value := range defaults {
+		merged[key] = value
+	}
+	for key, value := range stored {
+		defaultObject, defaultIsObject := merged[key].(map[string]any)
+		storedObject, storedIsObject := value.(map[string]any)
+		if defaultIsObject && storedIsObject {
+			merged[key] = mergeObjects(defaultObject, storedObject)
+			continue
+		}
+		merged[key] = value
+	}
+	return merged
 }

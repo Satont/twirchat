@@ -79,6 +79,9 @@ func TestNewConfiguresHostWithoutStartingServices(t *testing.T) {
 	if got := host.WindowOptions(); got.Title != "TwirChat" || got.Width != 1200 || got.Height != 800 {
 		t.Errorf("WindowOptions() = %+v, want title TwirChat and size 1200x800", got)
 	}
+	if got := host.WindowOptions(); got.MinWidth != 720 || got.MinHeight != 520 {
+		t.Errorf("minimum window size = %dx%d, want 720x520", got.MinWidth, got.MinHeight)
+	}
 	if service.starts != 0 {
 		t.Errorf("service starts = %d, want 0 before Start", service.starts)
 	}

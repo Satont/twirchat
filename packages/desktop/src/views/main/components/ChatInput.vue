@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import type {
   Account,
+  AppSettings,
   NormalizedChatMessage,
   PlatformStatusInfo,
   WatchedChannel,
@@ -20,6 +21,7 @@ import EmotePicker from './EmotePicker.vue'
 
 const props = defineProps<{
   accounts: Account[]
+  settings: AppSettings
   statuses: Map<string, PlatformStatusInfo>
   /** When set, input is scoped to this watched channel */
   watchedChannel?: WatchedChannel | null
@@ -328,7 +330,7 @@ function placeholderText(): string {
     </div>
 
     <!-- Watched channel: single fixed chip -->
-    <div v-if="watchedChannel" class="input-targets">
+    <div v-if="settings.showChannelLabel && watchedChannel" class="input-targets">
       <div
         class="target-btn"
         :class="{
@@ -369,7 +371,10 @@ function placeholderText(): string {
     </div>
 
     <!-- Home tab: per-platform chips -->
-    <div v-else-if="connectedPlatforms.length > 0" class="input-targets">
+    <div
+      v-else-if="settings.showChannelLabel && connectedPlatforms.length > 0"
+      class="input-targets"
+    >
       <button
         v-for="p in connectedPlatforms"
         :key="p.platform"

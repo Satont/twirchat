@@ -158,6 +158,8 @@ export interface AppSettings {
   showTimestamp: boolean
   showAvatars: boolean
   showBadges: boolean
+  showChannelLabel: boolean
+  emoteSessionCache: boolean
   platformFilter: Platform[] | 'all'
   hotkeys: HotkeySettings
   overlay: OverlayConfig
@@ -212,6 +214,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   platformFilter: 'all',
   showAvatars: true,
   showBadges: true,
+  showChannelLabel: true,
+  emoteSessionCache: true,
   showPlatformColorStripe: true,
   showPlatformIcon: true,
   showTimestamp: true,
