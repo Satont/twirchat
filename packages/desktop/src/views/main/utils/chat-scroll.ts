@@ -1,4 +1,4 @@
-export const CHAT_BOTTOM_TOLERANCE = 40
+export const CHAT_BOTTOM_TOLERANCE = 64
 
 export function isChatNearBottom(
   scrollSize: number,
