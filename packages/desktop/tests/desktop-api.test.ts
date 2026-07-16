@@ -80,6 +80,33 @@ test('exposes the disabled update capability', async () => {
   await expect(api.capabilities()).resolves.toEqual({ updates: false })
 })
 
+test('returns source-tagged channel emotes from the Wails gateway', async () => {
+  const api = createDesktopApi({
+    Call: async (request) => {
+      if (request.method === 'getChannelEmotes') {
+        return [
+          {
+            id: '7tv-1',
+            alias: 'чё',
+            name: 'чё',
+            imageUrl: 'https://cdn.test/7tv.webp',
+            animated: false,
+            zeroWidth: false,
+            aspectRatio: 1,
+            source: 'seventv',
+          },
+        ]
+      }
+      return undefined
+    },
+    Capabilities: async () => ({ updates: false }),
+  })
+
+  const emotes = await api.request.getChannelEmotes({ platform: 'kick', channelId: 'channel-1' })
+
+  expect(emotes[0]?.source).toBe('seventv')
+})
+
 test('preserves legacy message listener registration and removal', () => {
   let listener: ((payload: { id: string }) => void) | undefined
   let cleanedUp = false
