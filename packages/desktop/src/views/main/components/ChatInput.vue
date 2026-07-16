@@ -66,6 +66,20 @@ const currentChannelInfo = computed((): { platform: string; channelId: string } 
   return target ? { platform: target.platform, channelId: target.channelLogin } : null
 })
 
+const watchedConnectionText = computed((): string => {
+  const channel = props.watchedChannel?.displayName ?? 'channel'
+  switch (props.watchedChannelStatus?.status) {
+    case 'connecting':
+      return `Connecting to ${channel}…`
+    case 'disconnected':
+      return `${channel} disconnected`
+    case 'error':
+      return props.watchedChannelStatus.error || `Could not connect to ${channel}`
+    default:
+      return ''
+  }
+})
+
 watch(showEmotePicker, async (isPickerOpen) => {
   if (isPickerOpen) {
     await nextTick()
@@ -330,6 +344,16 @@ function placeholderText(): string {
       </button>
     </div>
 
+    <div
+      v-if="watchedChannel && watchedChannelStatus && watchedChannelStatus.status !== 'connected'"
+      class="connection-state"
+      :class="`connection-state-${watchedChannelStatus?.status}`"
+      role="status"
+    >
+      <span class="connection-state-dot" aria-hidden="true" />
+      <span>{{ watchedConnectionText }}</span>
+    </div>
+
     <!-- Watched channel: single fixed chip -->
     <div v-if="settings.showChannelLabel && watchedChannel" class="input-targets">
       <div
@@ -570,6 +594,29 @@ function placeholderText(): string {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.connection-state {
+  align-items: center;
+  color: var(--c-text-2, #8b8b99);
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.connection-state-dot {
+  background: currentColor;
+  border-radius: 50%;
+  height: 6px;
+  width: 6px;
+}
+
+.connection-state-connecting {
+  color: #fbbf24;
+}
+
+.connection-state-error {
+  color: #fca5a5;
 }
 
 .target-btn {
