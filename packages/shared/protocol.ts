@@ -24,6 +24,19 @@ export interface SevenTVEmote {
   imageUrl: string
 }
 
+export type EmoteSource = 'channel' | 'seventv' | 'collectibles' | 'global'
+
+export interface EmoteCatalogEntry {
+  id: string
+  alias: string
+  name: string
+  imageUrl: string
+  animated: boolean
+  zeroWidth: boolean
+  aspectRatio: number
+  source: EmoteSource
+}
+
 // ============================================================
 // Backend → Desktop
 // ============================================================

@@ -183,6 +183,26 @@ type SevenTVEmote struct {
 	ImageURL    string  `json:"imageUrl"`
 }
 
+type EmoteSource string
+
+const (
+	EmoteSourceChannel      EmoteSource = "channel"
+	EmoteSourceSevenTV      EmoteSource = "seventv"
+	EmoteSourceCollectibles EmoteSource = "collectibles"
+	EmoteSourceGlobal       EmoteSource = "global"
+)
+
+type EmoteCatalogEntry struct {
+	ID          string      `json:"id"`
+	Alias       string      `json:"alias"`
+	Name        string      `json:"name"`
+	ImageURL    string      `json:"imageUrl"`
+	Animated    bool        `json:"animated"`
+	ZeroWidth   bool        `json:"zeroWidth"`
+	AspectRatio float64     `json:"aspectRatio"`
+	Source      EmoteSource `json:"source"`
+}
+
 type WatchedChannel struct {
 	ID          string   `json:"id"`
 	Platform    Platform `json:"platform"`

@@ -12,8 +12,8 @@ import type {
 import type {
   ChannelStatusRequest,
   ChannelsStatusResponse,
+  EmoteCatalogEntry,
   SearchCategoriesResponse,
-  SevenTVEmote,
   StreamStatusResponse,
   UpdateStreamRequest,
   UpdateStreamResponse,
@@ -129,7 +129,10 @@ type LegacyRequestMap = {
   getUserCardMetadata: { params: UserCardMetadataRequest; response: UserCardMetadataResponse }
   getStatuses: { params: void; response: PlatformStatusInfo[] }
   getUsernameColor: { params: { platform: Platform; username: string }; response: string | null }
-  getChannelEmotes: { params: { platform: Platform; channelId: string }; response: SevenTVEmote[] }
+  getChannelEmotes: {
+    params: { platform: Platform; channelId: string }
+    response: EmoteCatalogEntry[]
+  }
   checkForUpdate: {
     params: void
     response: { updateAvailable: boolean; version?: string; currentVersion: string }

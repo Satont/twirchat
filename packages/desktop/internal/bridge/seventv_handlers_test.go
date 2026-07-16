@@ -22,7 +22,11 @@ func TestRegisterSevenTVHandlersReturnsChannelScopedEmotesToVue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getChannelEmotes error = %v", err)
 	}
-	if got, want := result, runtime.emotes; !reflect.DeepEqual(got, want) {
+	want := []contracts.EmoteCatalogEntry{{
+		ID: "7tv-1", Alias: "чё", Name: "чё", ImageURL: "https://cdn.test/7tv.webp", AspectRatio: 1,
+		Source: contracts.EmoteSourceSevenTV,
+	}}
+	if got := result; !reflect.DeepEqual(got, want) {
 		t.Fatalf("getChannelEmotes = %#v, want %#v", got, want)
 	}
 	if got, want := runtime.platform, contracts.PlatformKick; got != want {
