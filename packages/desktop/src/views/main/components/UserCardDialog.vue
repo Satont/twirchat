@@ -9,8 +9,10 @@ import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import { platformColor } from '../../shared/utils/platform'
 import { useModerationOutcomes } from '../composables/useModerationOutcomes'
 import { desktopApi, type ModerationAction, type ModerationPlatform } from '../services/desktop-api'
+import { openExternalUrl } from '../services/external-url'
 import { useUserCardMetadata } from '../composables/useUserCardMetadata'
 import { useAliasStore } from '../stores/useAliasStore'
+import { publicChannelURL } from '../utils/public-channel-url'
 import UserChatHistoryPanel from './UserChatHistoryPanel.vue'
 
 interface Props {
@@ -70,6 +72,11 @@ const platformIcon = computed(() => {
 })
 
 const titleHandle = computed(() => props.username ?? props.platformUserId)
+const publicChannelUrl = computed(() => {
+  return props.username ? publicChannelURL(props.platform, props.username) : undefined
+})
+const openingPublicChannel = ref(false)
+const publicChannelError = ref<string | null>(null)
 
 type UserModerationAction = Extract<ModerationAction, 'timeout' | 'ban'>
 
@@ -345,6 +352,20 @@ async function handleRemoveAlias() {
 function initials(name: string): string {
   return name.slice(0, 2).toUpperCase()
 }
+
+async function openPublicChannel(): Promise<void> {
+  if (!publicChannelUrl.value) return
+
+  openingPublicChannel.value = true
+  publicChannelError.value = null
+  try {
+    await openExternalUrl(publicChannelUrl.value)
+  } catch (cause) {
+    publicChannelError.value = moderationErrorText(cause)
+  } finally {
+    openingPublicChannel.value = false
+  }
+}
 </script>
 
 <template>
@@ -400,11 +421,25 @@ function initials(name: string): string {
             <button class="dialog-btn-save" @click="handleSaveAlias">Save</button>
           </div>
           <div class="dialog-actions dialog-actions-inline">
+            <button
+              v-if="publicChannelUrl"
+              class="dialog-btn-cancel"
+              :disabled="openingPublicChannel"
+              @click="void openPublicChannel()"
+            >
+              {{ openingPublicChannel ? 'Opening…' : 'Open channel' }}
+            </button>
             <button class="dialog-btn-cancel" @click="open = false">Close</button>
             <button v-if="currentAlias" class="dialog-btn-danger" @click="handleRemoveAlias">
               Remove alias
             </button>
           </div>
+          <p v-if="publicChannelError" class="user-card-channel-error">
+            {{ publicChannelError }}
+            <button class="user-card-metadata-inline-btn" @click="void openPublicChannel()">
+              Retry
+            </button>
+          </p>
         </div>
 
         <div class="user-card-section">
@@ -650,6 +685,15 @@ function initials(name: string): string {
   font-size: 14px;
   font-weight: 700;
   color: var(--c-text, #e2e2e8);
+}
+
+.user-card-channel-error {
+  align-items: center;
+  color: #fca5a5;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  margin: 10px 0 0;
 }
 
 .user-card-moderation-state {
