@@ -2,43 +2,57 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import type { Platform } from '@twirchat/shared/types'
-import type { SevenTVEmote } from '@twirchat/shared/protocol'
+import type { EmoteCatalogEntry, SevenTVEmote } from '@twirchat/shared/protocol'
 
-import { rpc } from '../main'
+import { rpc } from '../services/desktop-api'
 
 export const useEmoteStore = defineStore('emotes', () => {
-  const emoteMap = ref<Map<string, SevenTVEmote[]>>(new Map())
+  const emoteMap = ref<Map<string, EmoteCatalogEntry[]>>(new Map())
   const inflight = ref<Map<string, Promise<void>>>(new Map())
   const listenersRegistered = ref(false)
 
-  function _setEmotes(platform: Platform, channelId: string, emotes: SevenTVEmote[]): void {
+  function setCatalog(platform: string, channelId: string, emotes: EmoteCatalogEntry[]): void {
     const key = `${platform}:${channelId}`
     const next = new Map(emoteMap.value)
     next.set(key, emotes)
     emoteMap.value = next
   }
 
-  function _addEmote(platform: Platform, channelId: string, emote: SevenTVEmote): void {
-    const key = `${platform}:${channelId}`
-    const next = new Map(emoteMap.value)
-    next.set(key, [...(emoteMap.value.get(key) ?? []), emote])
-    emoteMap.value = next
+  function sevenTVEntry(emote: SevenTVEmote): EmoteCatalogEntry {
+    return { ...emote, source: 'seventv' }
   }
 
-  function _removeEmote(platform: Platform, channelId: string, emoteId: string): void {
+  function setSevenTVEmotes(platform: Platform, channelId: string, emotes: SevenTVEmote[]): void {
+    const key = `${platform}:${channelId}`
+    const existing = emoteMap.value.get(key) ?? []
+    setCatalog(platform, channelId, [
+      ...existing.filter((entry) => entry.source !== 'seventv'),
+      ...emotes.map(sevenTVEntry),
+    ])
+  }
+
+  function addSevenTVEmote(platform: Platform, channelId: string, emote: SevenTVEmote): void {
+    const key = `${platform}:${channelId}`
+    const existing = emoteMap.value.get(key) ?? []
+    setCatalog(platform, channelId, [
+      ...existing.filter((entry) => entry.source !== 'seventv' || entry.id !== emote.id),
+      sevenTVEntry(emote),
+    ])
+  }
+
+  function removeSevenTVEmote(platform: Platform, channelId: string, emoteId: string): void {
     const key = `${platform}:${channelId}`
     const existing = emoteMap.value.get(key)
     if (!existing) return
 
-    const next = new Map(emoteMap.value)
-    next.set(
-      key,
-      existing.filter((e: SevenTVEmote) => e.id !== emoteId),
+    setCatalog(
+      platform,
+      channelId,
+      existing.filter((entry) => entry.source !== 'seventv' || entry.id !== emoteId),
     )
-    emoteMap.value = next
   }
 
-  function _updateEmote(
+  function updateSevenTVEmote(
     platform: Platform,
     channelId: string,
     emoteId: string,
@@ -48,15 +62,14 @@ export const useEmoteStore = defineStore('emotes', () => {
     const existing = emoteMap.value.get(key)
     if (!existing) return
 
-    const next = new Map(emoteMap.value)
-    next.set(
-      key,
-      existing.map((e: SevenTVEmote) => {
-        if (e.id !== emoteId) return e
-        return Object.assign({}, e, { alias: newAlias })
+    setCatalog(
+      platform,
+      channelId,
+      existing.map((entry) => {
+        if (entry.source !== 'seventv' || entry.id !== emoteId) return entry
+        return Object.assign({}, entry, { alias: newAlias })
       }),
     )
-    emoteMap.value = next
   }
 
   function ensureListeners(): void {
@@ -64,26 +77,24 @@ export const useEmoteStore = defineStore('emotes', () => {
     listenersRegistered.value = true
 
     rpc.addMessageListener('channel_emotes_set', (payload) =>
-      _setEmotes(payload.platform, payload.channelId, payload.emotes),
+      setSevenTVEmotes(payload.platform, payload.channelId, payload.emotes),
     )
     rpc.addMessageListener('channel_emote_added', (payload) =>
-      _addEmote(payload.platform, payload.channelId, payload.emote),
+      addSevenTVEmote(payload.platform, payload.channelId, payload.emote),
     )
     rpc.addMessageListener('channel_emote_removed', (payload) =>
-      _removeEmote(payload.platform, payload.channelId, payload.emoteId),
+      removeSevenTVEmote(payload.platform, payload.channelId, payload.emoteId),
     )
     rpc.addMessageListener('channel_emote_updated', (payload) =>
-      _updateEmote(payload.platform, payload.channelId, payload.emoteId, payload.newAlias),
+      updateSevenTVEmote(payload.platform, payload.channelId, payload.emoteId, payload.newAlias),
     )
   }
 
-  function loadEmotes(platform: string, channelId: string): Promise<void> {
+  function loadEmotes(platform: string, channelId: string, useSessionCache = true): Promise<void> {
     ensureListeners()
 
     const key = `${platform}:${channelId}`
-    const existing = emoteMap.value.get(key)
-
-    if (existing && existing.length > 0) {
+    if (useSessionCache && emoteMap.value.has(key)) {
       return Promise.resolve()
     }
 
@@ -97,11 +108,7 @@ export const useEmoteStore = defineStore('emotes', () => {
           platform: platform as Platform,
           channelId,
         })
-        if (emotes.length > 0) {
-          const next = new Map(emoteMap.value)
-          next.set(key, emotes)
-          emoteMap.value = next
-        }
+        setCatalog(platform, channelId, emotes)
       } catch (err) {
         console.warn('[useEmoteStore] Failed to load emotes:', platform, channelId, err)
       } finally {
@@ -118,6 +125,11 @@ export const useEmoteStore = defineStore('emotes', () => {
     inflight,
     listenersRegistered,
     ensureListeners,
+    setCatalog,
+    setSevenTVEmotes,
+    addSevenTVEmote,
+    removeSevenTVEmote,
+    updateSevenTVEmote,
     loadEmotes,
   }
 })

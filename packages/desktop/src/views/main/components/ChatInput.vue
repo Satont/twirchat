@@ -503,10 +503,11 @@ function placeholderText(): string {
           class="emote-picker-popover"
         >
           <EmotePicker
-            v-if="currentChannelInfo"
+            v-if="showEmotePicker && currentChannelInfo"
             ref="emotePickerRef"
             :platform="currentChannelInfo.platform"
             :channel-id="currentChannelInfo.channelId"
+            :use-session-cache="settings.emoteSessionCache"
             @select="onEmoteSelect"
           />
         </PopoverContent>
