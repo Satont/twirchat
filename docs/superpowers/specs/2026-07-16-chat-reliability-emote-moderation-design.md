@@ -146,16 +146,16 @@ action is omitted.
 
 ## 4. Component boundaries
 
-| Unit | Responsibility |
-| --- | --- |
-| `ChatList` / scroll composable | Virtual-list follow state and scroll-to-latest visibility. |
-| `ChatInput` | Composer display, keyboard handling, label/status rendering. |
-| Connection-status composable | Per-channel transition normalization and notification de-duplication. |
-| `EmotePicker` | Categorized, virtualized rendering and search. |
-| `useEmoteCatalog` | Session cache, source grouping, native fetches, and 7TV event updates. |
-| Native platform/emote services | Resolve platform catalog entries and forward 7TV mutations. |
-| Moderation outcome store | Convert a deletion into a context-preserving tombstone. |
-| `UserCardDialog` | Capability-gated moderation and external channel actions. |
+| Unit                           | Responsibility                                                         |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `ChatList` / scroll composable | Virtual-list follow state and scroll-to-latest visibility.             |
+| `ChatInput`                    | Composer display, keyboard handling, label/status rendering.           |
+| Connection-status composable   | Per-channel transition normalization and notification de-duplication.  |
+| `EmotePicker`                  | Categorized, virtualized rendering and search.                         |
+| `useEmoteCatalog`              | Session cache, source grouping, native fetches, and 7TV event updates. |
+| Native platform/emote services | Resolve platform catalog entries and forward 7TV mutations.            |
+| Moderation outcome store       | Convert a deletion into a context-preserving tombstone.                |
+| `UserCardDialog`               | Capability-gated moderation and external channel actions.              |
 
 The frontend continues to communicate with native services through the current
 Wails bridge. No Bun, filesystem, or provider client is imported into Vue
