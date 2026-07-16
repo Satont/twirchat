@@ -7,6 +7,7 @@ import type {
 
 export interface ResolvedModerationOutcome {
   action: ModerationAction
+  isTombstone?: boolean
   label: string
 }
 
@@ -15,18 +16,32 @@ export interface ModerationOutcomeStore {
   outcomeFor(message: NormalizedChatMessage): ResolvedModerationOutcome | undefined
 }
 
-export function createModerationOutcomeStore(): ModerationOutcomeStore {
-  const deletedMessages = new Map<string, ResolvedModerationOutcome>()
+const DELETED_MESSAGE_RETENTION_MS = 300_000
+
+type RetainedDeletion = {
+  expiresAt: number
+  resolved: ResolvedModerationOutcome
+}
+
+export function createModerationOutcomeStore(now: () => number = Date.now): ModerationOutcomeStore {
+  const deletedMessages = new Map<string, RetainedDeletion>()
   const userSanctions = new Map<string, ResolvedModerationOutcome>()
   const revision = ref(0)
 
   function apply(outcome: ModerationOutcome): void {
+    pruneExpiredDeletions()
+
     if (outcome.action === 'delete_message') {
       if (!outcome.messageId) return
-      deletedMessages.set(messageKey(outcome.platform, outcome.messageId), {
-        action: 'delete_message',
-        label: '(message deleted)',
-      })
+      const key = messageKey(outcome.platform, outcome.messageId)
+      const retained: RetainedDeletion = {
+        expiresAt: now() + DELETED_MESSAGE_RETENTION_MS,
+        resolved: { action: 'delete_message', isTombstone: true, label: '(message deleted)' },
+      }
+      deletedMessages.set(key, retained)
+      setTimeout(() => {
+        if (deletedMessages.get(key) === retained && pruneExpiredDeletions()) revision.value++
+      }, DELETED_MESSAGE_RETENTION_MS)
       revision.value++
       return
     }
@@ -41,10 +56,22 @@ export function createModerationOutcomeStore(): ModerationOutcomeStore {
   function outcomeFor(message: NormalizedChatMessage): ResolvedModerationOutcome | undefined {
     // Make render calls react to a live outcome without mutating the message.
     void revision.value
+    if (pruneExpiredDeletions()) revision.value++
     return (
-      deletedMessages.get(messageKey(message.platform, message.id)) ??
+      deletedMessages.get(messageKey(message.platform, message.id))?.resolved ??
       userSanctions.get(userKey(message.platform, message.channelId, message.author.id))
     )
+  }
+
+  function pruneExpiredDeletions(): boolean {
+    const timestamp = now()
+    let changed = false
+    for (const [key, retained] of deletedMessages) {
+      if (retained.expiresAt > timestamp) continue
+      deletedMessages.delete(key)
+      changed = true
+    }
+    return changed
   }
 
   return { apply, outcomeFor }

@@ -33,6 +33,7 @@ test('resolves exact deletion and channel-scoped user sanctions without mutating
   })
   expect(outcomes.outcomeFor(deleted)).toEqual({
     action: 'delete_message',
+    isTombstone: true,
     label: '(message deleted)',
   })
   expect(outcomes.outcomeFor(sameAuthor)).toBeUndefined()
@@ -50,6 +51,25 @@ test('resolves exact deletion and channel-scoped user sanctions without mutating
   })
   expect(outcomes.outcomeFor(otherAuthor)).toBeUndefined()
   expect(deleted).not.toHaveProperty('moderation')
+})
+
+test('expires deleted-message tombstones after five minutes', () => {
+  let now = 0
+  const outcomes = createModerationOutcomeStore(() => now)
+
+  outcomes.apply({
+    action: 'delete_message',
+    channelId: 'streamer',
+    messageId: 'message-1',
+    platform: 'twitch',
+  })
+  expect(outcomes.outcomeFor(message())).toMatchObject({
+    action: 'delete_message',
+    isTombstone: true,
+  })
+
+  now += 300_001
+  expect(outcomes.outcomeFor(message())).toBeUndefined()
 })
 
 test('uses a permanent ban when no valid timeout duration is supplied', () => {

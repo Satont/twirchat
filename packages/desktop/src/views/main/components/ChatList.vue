@@ -631,7 +631,10 @@ function onAppearanceChange(s: AppSettings) {
             :self-ping-enabled="settings?.selfPing?.enabled"
             :self-ping-color="settings?.selfPing?.color"
             :moderation-outcome="moderationOutcomeFor(item)"
-            :show-moderation-rail="canShowModerationRail(item) && !moderationOutcomeFor(item)"
+            :show-moderation-rail="
+              canShowModerationRail(item) &&
+              (!moderationOutcomeFor(item) || moderationOutcomeFor(item)?.isTombstone)
+            "
             :moderation-pending="moderationPendingMessageIDs.has(item.id)"
             @reply="onReply"
             @moderate="onModerate"

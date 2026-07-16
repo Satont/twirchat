@@ -240,7 +240,10 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       :style="{ background: platformColor(message.platform) }"
     />
     <MessageModerationRail
-      v-if="props.showModerationRail && !props.moderationOutcome"
+      v-if="
+        props.showModerationRail &&
+        (!props.moderationOutcome || props.moderationOutcome.isTombstone)
+      "
       :disabled="props.moderationPending"
       :message="message"
       @moderate="onModerate"
@@ -347,6 +350,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         v-else
         :platform="message.platform"
         :platform-user-id="message.author.id"
+        :message-id="message.id"
         :channel-id="message.channelId"
         :channel-slug="props.channelSlug"
         :display-name="message.author.displayName"
@@ -358,7 +362,9 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           props.alias ?? message.author.displayName
         }}</span> </UserContextMenu
       ><span class="compact-sep">: </span
-      ><span class="msg-text" :class="{ italic: message.type === 'action' }">
+      ><span v-if="props.moderationOutcome?.isTombstone" class="deleted-message-body"
+        >Message deleted</span
+      ><span v-else class="msg-text" :class="{ italic: message.type === 'action' }">
         <template v-for="(part, index) in messageParts" :key="index">
           <EmoteTooltip v-if="part.type === 'emote' && part.emote" :emote="part.emote">
             <img
@@ -387,7 +393,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       </span>
     </div>
 
-    <div style="position: absolute; right: 0; top: 0">
+    <div v-if="!props.moderationOutcome?.isTombstone" style="position: absolute; right: 0; top: 0">
       <button class="reply-btn compact-reply-btn" title="Reply to message" @click.stop="onReply">
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -469,7 +475,10 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       :title="message.platform"
     />
     <MessageModerationRail
-      v-if="props.showModerationRail && !props.moderationOutcome"
+      v-if="
+        props.showModerationRail &&
+        (!props.moderationOutcome || props.moderationOutcome.isTombstone)
+      "
       :disabled="props.moderationPending"
       :message="message"
       @moderate="onModerate"
@@ -561,6 +570,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           v-else
           :platform="message.platform"
           :platform-user-id="message.author.id"
+          :message-id="message.id"
           :channel-id="message.channelId"
           :channel-slug="props.channelSlug"
           :display-name="message.author.displayName"
@@ -581,7 +591,10 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       </div>
 
       <!-- Message text -->
-      <span class="msg-text" :class="{ italic: message.type === 'action' }">
+      <span v-if="props.moderationOutcome?.isTombstone" class="deleted-message-body">
+        Message deleted
+      </span>
+      <span v-else class="msg-text" :class="{ italic: message.type === 'action' }">
         <template v-for="(part, index) in messageParts" :key="index">
           <EmoteTooltip v-if="part.type === 'emote' && part.emote" :emote="part.emote">
             <img
@@ -611,7 +624,12 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
     </div>
 
     <!-- Reply button: always in DOM, shown via CSS hover on .msg -->
-    <button class="reply-btn" title="Reply to message" @click.stop="onReply">
+    <button
+      v-if="!props.moderationOutcome?.isTombstone"
+      class="reply-btn"
+      title="Reply to message"
+      @click.stop="onReply"
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="14"
@@ -630,6 +648,7 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 
     <!-- Copy button: always in DOM, shown via CSS hover on .msg -->
     <button
+      v-if="!props.moderationOutcome?.isTombstone"
       class="copy-btn"
       :class="{ success: copySuccess }"
       title="Copy message"
@@ -869,6 +888,11 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
 
 .msg-text {
   color: var(--c-text, #e2e2e8);
+}
+
+.deleted-message-body {
+  color: var(--c-text-2, #8b8b99);
+  font-style: italic;
 }
 
 :deep(.msg-link) {

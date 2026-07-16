@@ -7,6 +7,8 @@ import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import { platformColor } from '../../shared/utils/platform'
+import { useModerationOutcomes } from '../composables/useModerationOutcomes'
+import { desktopApi, type ModerationAction, type ModerationPlatform } from '../services/desktop-api'
 import { useUserCardMetadata } from '../composables/useUserCardMetadata'
 import { useAliasStore } from '../stores/useAliasStore'
 import UserChatHistoryPanel from './UserChatHistoryPanel.vue'
@@ -14,6 +16,7 @@ import UserChatHistoryPanel from './UserChatHistoryPanel.vue'
 interface Props {
   platform: Platform
   platformUserId: string
+  messageId?: string
   channelId?: string
   channelSlug?: string
   displayName: string
@@ -26,6 +29,7 @@ const props = defineProps<Props>()
 const open = defineModel<boolean>('open', { required: true })
 
 const aliasStore = useAliasStore()
+const { apply: applyModerationOutcome } = useModerationOutcomes()
 const aliasValue = ref('')
 const aliasInput = ref<HTMLInputElement | null>(null)
 const platformRef = toRef(props, 'platform')
@@ -34,7 +38,13 @@ const usernameRef = toRef(props, 'username')
 const channelIdRef = toRef(props, 'channelId')
 const channelSlugRef = toRef(props, 'channelSlug')
 
-const { metadata, loading, error, reload, supportedByCard } = useUserCardMetadata(
+const {
+  metadata,
+  loading,
+  error: metadataError,
+  reload,
+  supportedByCard,
+} = useUserCardMetadata(
   platformRef,
   platformUserIdRef,
   usernameRef,
@@ -60,6 +70,105 @@ const platformIcon = computed(() => {
 })
 
 const titleHandle = computed(() => props.username ?? props.platformUserId)
+
+type UserModerationAction = Extract<ModerationAction, 'timeout' | 'ban'>
+
+const moderationChecking = ref(false)
+const moderationAllowed = ref<boolean | null>(null)
+const moderationError = ref<string | null>(null)
+const moderationAction = ref<UserModerationAction | null>(null)
+const moderationFeedback = ref<{ kind: 'error' | 'success'; text: string } | null>(null)
+
+const moderationPlatform = computed<ModerationPlatform | undefined>(() => {
+  return props.platform === 'twitch' || props.platform === 'kick' ? props.platform : undefined
+})
+
+const moderationInputError = computed((): string | undefined => {
+  if (!moderationPlatform.value) return 'Moderation is available for Twitch and Kick only.'
+  if (!props.channelSlug) return 'No channel context is available for this user.'
+  if (!props.messageId) return 'Open this card from a chat message to moderate this user.'
+  return undefined
+})
+
+const moderationDisabledReason = computed((): string | undefined => {
+  if (moderationInputError.value) return moderationInputError.value
+  if (moderationChecking.value) return 'Checking moderation permissions…'
+  if (moderationError.value) return moderationError.value
+  if (moderationAllowed.value === false)
+    return 'You do not have moderation permission in this channel.'
+  return undefined
+})
+
+function moderationErrorText(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
+}
+
+async function loadModerationCapabilities(): Promise<void> {
+  const platform = moderationPlatform.value
+  const channelSlug = props.channelSlug
+  if (!open.value || !platform || !channelSlug || !props.messageId) return
+
+  moderationChecking.value = true
+  moderationError.value = null
+  try {
+    const capabilities = await desktopApi.request.getModerationCapabilities({
+      channelSlug,
+      platform,
+    })
+    moderationAllowed.value = capabilities.canModerate
+  } catch (cause) {
+    moderationAllowed.value = false
+    moderationError.value = moderationErrorText(cause)
+  } finally {
+    moderationChecking.value = false
+  }
+}
+
+async function moderateUser(action: UserModerationAction): Promise<void> {
+  const platform = moderationPlatform.value
+  const channelSlug = props.channelSlug
+  const messageId = props.messageId
+  if (!platform || !channelSlug || !messageId || moderationDisabledReason.value) return
+
+  moderationAction.value = action
+  moderationFeedback.value = null
+  try {
+    await desktopApi.request.moderateMessage({
+      action,
+      channelSlug,
+      messageId,
+      platform,
+      targetUserId: props.platformUserId,
+      ...(action === 'timeout' ? { durationSeconds: 600 } : {}),
+    })
+    applyModerationOutcome({
+      action,
+      channelId: props.channelId ?? channelSlug,
+      platform,
+      targetUserId: props.platformUserId,
+      ...(action === 'timeout' ? { durationSeconds: 600 } : {}),
+    })
+    moderationFeedback.value = {
+      kind: 'success',
+      text: action === 'timeout' ? 'Timed out for 10 minutes.' : 'User banned.',
+    }
+  } catch (cause) {
+    moderationFeedback.value = { kind: 'error', text: moderationErrorText(cause) }
+  } finally {
+    moderationAction.value = null
+  }
+}
+
+watch(
+  () => [open.value, props.platform, props.channelSlug, props.messageId],
+  ([isOpen]) => {
+    moderationAllowed.value = null
+    moderationError.value = null
+    moderationFeedback.value = null
+    if (isOpen) void loadModerationCapabilities()
+  },
+  { immediate: true },
+)
 
 function formatAbsoluteDate(value: string | null | undefined): string | null {
   if (!value) return null
@@ -299,6 +408,37 @@ function initials(name: string): string {
         </div>
 
         <div class="user-card-section">
+          <h4 class="user-card-metadata-title">Moderation</h4>
+          <p class="dialog-description">Actions apply to this user in the message channel.</p>
+          <p v-if="moderationDisabledReason" class="user-card-moderation-state">
+            {{ moderationDisabledReason }}
+          </p>
+          <p
+            v-if="moderationFeedback"
+            class="user-card-moderation-state"
+            :class="`user-card-moderation-state-${moderationFeedback.kind}`"
+          >
+            {{ moderationFeedback.text }}
+          </p>
+          <div class="user-card-moderation-actions">
+            <button
+              class="dialog-btn-timeout"
+              :disabled="Boolean(moderationDisabledReason) || moderationAction !== null"
+              @click="void moderateUser('timeout')"
+            >
+              {{ moderationAction === 'timeout' ? 'Timing out…' : 'Timeout 10m' }}
+            </button>
+            <button
+              class="dialog-btn-danger"
+              :disabled="Boolean(moderationDisabledReason) || moderationAction !== null"
+              @click="void moderateUser('ban')"
+            >
+              {{ moderationAction === 'ban' ? 'Banning…' : 'Ban' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="user-card-section">
           <div class="user-card-metadata-header">
             <div>
               <h4 class="user-card-metadata-title">Account metadata</h4>
@@ -319,8 +459,11 @@ function initials(name: string): string {
             Metadata is not supported for this platform yet.
           </div>
           <div v-else-if="loading" class="user-card-metadata-state">Loading metadata…</div>
-          <div v-else-if="error" class="user-card-metadata-state user-card-metadata-state-error">
-            <span>{{ error }}</span>
+          <div
+            v-else-if="metadataError"
+            class="user-card-metadata-state user-card-metadata-state-error"
+          >
+            <span>{{ metadataError }}</span>
             <button class="user-card-metadata-inline-btn" @click="void reload()">Retry</button>
           </div>
           <dl v-else-if="metadata" class="user-card-metadata-list">
@@ -509,6 +652,26 @@ function initials(name: string): string {
   color: var(--c-text, #e2e2e8);
 }
 
+.user-card-moderation-state {
+  color: var(--c-text-2, #8b8b99);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+
+.user-card-moderation-state-error {
+  color: #fca5a5;
+}
+
+.user-card-moderation-state-success {
+  color: #86efac;
+}
+
+.user-card-moderation-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .user-card-metadata-refresh,
 .user-card-metadata-inline-btn {
   border: none;
@@ -616,7 +779,8 @@ function initials(name: string): string {
 
 .dialog-btn-cancel,
 .dialog-btn-save,
-.dialog-btn-danger {
+.dialog-btn-danger,
+.dialog-btn-timeout {
   padding: 6px 14px;
   border-radius: 4px;
   cursor: pointer;
@@ -651,5 +815,20 @@ function initials(name: string): string {
 
 .dialog-btn-danger:hover {
   background: rgba(255, 80, 80, 0.2);
+}
+
+.dialog-btn-timeout {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
+}
+
+.dialog-btn-timeout:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.24);
+}
+
+.dialog-btn-danger:disabled,
+.dialog-btn-timeout:disabled {
+  cursor: default;
+  opacity: 0.48;
 }
 </style>
