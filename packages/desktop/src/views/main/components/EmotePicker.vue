@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { VList } from 'virtua/vue'
-import type { SevenTVEmote } from '@twirchat/shared/protocol'
+import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
 import { useEmoteStore } from '../stores/emoteStore'
-import { fuzzyFilter } from '../utils/fuzzyFilter'
+import { groupEmoteCatalog } from '../utils/emote-catalog'
 
 const ITEMS_PER_ROW = 7
 
 const props = defineProps<{
   platform: string
   channelId: string
+  useSessionCache: boolean
 }>()
 
 const emit = defineEmits<{
@@ -21,13 +22,17 @@ const searchQuery = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const listRef = ref<InstanceType<typeof VList> | null>(null)
 
+type PickerRow =
+  | { kind: 'heading'; source: EmoteSource; label: string }
+  | { kind: 'emotes'; source: EmoteSource; entries: EmoteCatalogEntry[] }
+
 onMounted(() => {
-  void emoteStore.loadEmotes(props.platform, props.channelId)
+  void emoteStore.loadEmotes(props.platform, props.channelId, props.useSessionCache)
 })
 
 const cacheKey = computed(() => `${props.platform}:${props.channelId}`)
 
-const allEmotes = computed((): SevenTVEmote[] => {
+const allEmotes = computed((): EmoteCatalogEntry[] => {
   return emoteStore.emoteMap.get(cacheKey.value) ?? []
 })
 
@@ -35,20 +40,24 @@ const isLoading = computed((): boolean => {
   return allEmotes.value.length === 0 && !emoteStore.emoteMap.has(cacheKey.value)
 })
 
-const filteredEmotes = computed(() => {
-  const mapped = allEmotes.value.map((e) => Object.assign({}, e, { label: e.alias }))
-  return fuzzyFilter(mapped, searchQuery.value)
-})
+const emoteGroups = computed(() => groupEmoteCatalog(allEmotes.value, searchQuery.value))
 
-const emoteRows = computed(() => {
-  const rows: (typeof filteredEmotes.value)[] = []
-  for (let i = 0; i < filteredEmotes.value.length; i += ITEMS_PER_ROW) {
-    rows.push(filteredEmotes.value.slice(i, i + ITEMS_PER_ROW))
+const pickerRows = computed<PickerRow[]>(() => {
+  const rows: PickerRow[] = []
+  for (const group of emoteGroups.value) {
+    rows.push({ kind: 'heading', source: group.source, label: group.label })
+    for (let index = 0; index < group.entries.length; index += ITEMS_PER_ROW) {
+      rows.push({
+        kind: 'emotes',
+        source: group.source,
+        entries: group.entries.slice(index, index + ITEMS_PER_ROW),
+      })
+    }
   }
   return rows
 })
 
-watch(emoteRows, () => {
+watch(pickerRows, () => {
   listRef.value?.scrollToIndex(0)
 })
 
@@ -86,14 +95,17 @@ defineExpose({
       <span class="state-spinner" />
       Loading…
     </div>
-    <div v-else-if="filteredEmotes.length === 0" class="emote-picker-state">No emotes found</div>
+    <div v-else-if="emoteGroups.length === 0" class="emote-picker-state">No emotes found</div>
     <div v-else class="emote-picker-grid-container">
-      <VList ref="listRef" :data="emoteRows" style="height: 340px" class="emote-grid-list">
+      <VList ref="listRef" :data="pickerRows" class="emote-grid-list">
         <template #default="{ item: row }">
-          <div class="emote-row">
+          <div v-if="row.kind === 'heading'" class="emote-group-heading">
+            {{ row.label }}
+          </div>
+          <div v-else class="emote-row">
             <div
-              v-for="emote in row"
-              :key="emote.id"
+              v-for="emote in row.entries"
+              :key="`${emote.source}:${emote.id}`"
               class="emote-cell"
               :title="emote.alias"
               @click="emit('select', emote.alias)"
@@ -177,7 +189,16 @@ defineExpose({
 }
 
 .emote-grid-list {
-  /* height set inline via style prop */
+  height: 340px;
+}
+
+.emote-group-heading {
+  color: var(--c-text-2, #8b8b99);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 10px 10px 4px;
+  text-transform: uppercase;
 }
 
 .emote-row {

@@ -361,6 +361,18 @@ useRpcListener('platform_status', (s: PlatformStatusInfo) => {
   channelStatusStore.setStatus(s.platform, s)
 })
 
+useRpcListener('channel_emote_added', ({ channelId, emote }) => {
+  showEmoteNotice(`7TV: ${emote.alias} added to ${channelId}`)
+})
+
+useRpcListener('channel_emote_removed', ({ channelId }) => {
+  showEmoteNotice(`7TV emote removed from ${channelId}`)
+})
+
+useRpcListener('channel_emote_updated', ({ channelId, newAlias }) => {
+  showEmoteNotice(`7TV emote renamed to ${newAlias} in ${channelId}`)
+})
+
 useRpcListener(
   'auth_success',
   ({ platform, displayName }: { platform: string; username: string; displayName: string }) => {
@@ -459,6 +471,10 @@ useRpcListener(
 function showConnectionNotice(channelKey: string, status: PlatformStatusInfo): void {
   const nextNotice = connectionNoticeStore.observe(channelKey.toLowerCase(), status)
   if (nextNotice) showTransientNotice(nextNotice, nextNotice.durationMs)
+}
+
+function showEmoteNotice(text: string): void {
+  showTransientNotice({ kind: 'info', text }, 3_000)
 }
 
 async function checkForUpdates() {
