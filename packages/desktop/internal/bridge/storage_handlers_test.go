@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -12,6 +13,28 @@ import (
 type recordingWatchedRuntime struct {
 	added    []contracts.AddWatchedChannelParams
 	statuses []contracts.WatchedChannelStatus
+}
+
+func TestGetSettingsBackfillsNewChatAppearanceDefaults(t *testing.T) {
+	store, err := storage.Open(context.Background(), t.TempDir(), storage.WithMachineID("bridge-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.SaveSettings(context.Background(), json.RawMessage(`{"theme":"light"}`)); err != nil {
+		t.Fatalf("SaveSettings() error = %v", err)
+	}
+
+	registry := NewHandlerRegistry()
+	RegisterStorageHandlers(registry, store)
+	settings, err := NewDesktopService(registry).Call(contracts.GatewayRequest{Method: contracts.RequestGetSettings})
+	if err != nil {
+		t.Fatalf("getSettings error = %v", err)
+	}
+	got := settings.(map[string]any)
+	if got["showChannelLabel"] != true || got["emoteSessionCache"] != true {
+		t.Errorf("getSettings = %#v, want new appearance defaults", got)
+	}
 }
 
 func (r *recordingWatchedRuntime) Add(

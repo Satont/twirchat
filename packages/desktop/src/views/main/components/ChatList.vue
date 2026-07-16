@@ -26,13 +26,14 @@ import {
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
-import type {
-  Account,
-  AppSettings,
-  NormalizedChatMessage,
-  Platform,
-  PlatformStatusInfo,
-  WatchedChannel,
+import {
+  DEFAULT_SETTINGS,
+  type Account,
+  type AppSettings,
+  type NormalizedChatMessage,
+  type Platform,
+  type PlatformStatusInfo,
+  type WatchedChannel,
 } from '@twirchat/shared/types'
 import type { ChannelStatus, ChannelStatusRequest } from '@twirchat/shared/protocol'
 
@@ -713,6 +714,7 @@ function onAppearanceChange(s: AppSettings) {
     <!-- Chat input -->
     <ChatInput
       :accounts="accounts"
+      :settings="settings ?? DEFAULT_SETTINGS"
       :statuses="statuses"
       :watched-channel="watchedChannel"
       :watched-channel-status="watchedChannelStatus"

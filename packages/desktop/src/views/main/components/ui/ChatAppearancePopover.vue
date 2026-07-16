@@ -128,6 +128,28 @@ const fontSize = computed({
               <span class="ap-switch-thumb" />
             </span>
           </label>
+          <label class="ap-toggle-row">
+            <span class="ap-toggle-name">Channel label</span>
+            <span class="ap-switch">
+              <input
+                type="checkbox"
+                :checked="settings.showChannelLabel"
+                @change="patch({ showChannelLabel: ($event.target as HTMLInputElement).checked })"
+              />
+              <span class="ap-switch-thumb" />
+            </span>
+          </label>
+          <label class="ap-toggle-row">
+            <span class="ap-toggle-name">Session emote cache</span>
+            <span class="ap-switch">
+              <input
+                type="checkbox"
+                :checked="settings.emoteSessionCache"
+                @change="patch({ emoteSessionCache: ($event.target as HTMLInputElement).checked })"
+              />
+              <span class="ap-switch-thumb" />
+            </span>
+          </label>
         </div>
       </div>
 

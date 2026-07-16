@@ -96,6 +96,8 @@ func mainWindowOptions(name, platform string) application.WebviewWindowOptions {
 		URL:    "/",
 		Width:  1200,
 		Height: 800,
+		MinWidth:  720,
+		MinHeight: 520,
 	}
 
 	switch platform {
