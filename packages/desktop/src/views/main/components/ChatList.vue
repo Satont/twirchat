@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VList } from 'virtua/vue'
 import type { VListHandle } from 'virtua/vue'
 import ChatMessage from './ChatMessage.vue'
@@ -15,6 +15,7 @@ import { useStreamStatusStore } from '../stores/streamStatus'
 import { useModerationOutcomes } from '../composables/useModerationOutcomes'
 import type { UserCardTarget } from '../utils/chatCommands'
 import { ownChatSendTargets } from '../utils/chat-send-targets'
+import { isChatNearBottom } from '../utils/chat-scroll'
 import type { ModerationDragAction } from '../utils/moderation-drag'
 import {
   confirmDelivery,
@@ -66,17 +67,43 @@ const emit = defineEmits<{
 const vlistRef = ref<VListHandle | null>(null)
 const isAtBottom = ref(true)
 const deliveryMessages = ref<DeliveryMessage[]>([])
+let firstFollowFrame: number | undefined
+let secondFollowFrame: number | undefined
 
 function onVListScroll(offset: number) {
-  // offset = scrollTop from top. At bottom when scrollTop + viewportSize ≈ scrollSize.
   const handle = vlistRef.value
   if (!handle) return
-  isAtBottom.value = handle.scrollSize - offset - handle.viewportSize < 40
+  isAtBottom.value = isChatNearBottom(handle.scrollSize, offset, handle.viewportSize)
 }
 
-function scrollToBottom() {
+function scrollToBottom(): void {
   const len = activeMessages.value.length
-  if (len > 0) vlistRef.value?.scrollToIndex(len - 1, { align: 'end' })
+  if (len === 0) return
+  isAtBottom.value = true
+  vlistRef.value?.scrollToIndex(len - 1, { align: 'end' })
+}
+
+function cancelQueuedFollow(): void {
+  if (firstFollowFrame !== undefined) cancelAnimationFrame(firstFollowFrame)
+  if (secondFollowFrame !== undefined) cancelAnimationFrame(secondFollowFrame)
+  firstFollowFrame = undefined
+  secondFollowFrame = undefined
+}
+
+function followLatestAfterLayout(): void {
+  if (!isAtBottom.value) return
+  cancelQueuedFollow()
+  void nextTick(() => {
+    scrollToBottom()
+    firstFollowFrame = requestAnimationFrame(() => {
+      firstFollowFrame = undefined
+      if (!isAtBottom.value) return
+      secondFollowFrame = requestAnimationFrame(() => {
+        secondFollowFrame = undefined
+        if (isAtBottom.value) scrollToBottom()
+      })
+    })
+  })
 }
 
 const replyTarget = ref<NormalizedChatMessage | null>(null)
@@ -280,21 +307,24 @@ const displayedChannels = computed<ChannelStatus[]>(() =>
 )
 
 onMounted(() => {
-  scrollToBottom()
+  followLatestAfterLayout()
 })
+
+onBeforeUnmount(cancelQueuedFollow)
 
 // Auto-scroll to bottom when new messages arrive and user is already at bottom
 let initialScrollDone = false
 watch(
   () => activeMessages.value.length,
   (len) => {
+    const shouldFollow = isAtBottom.value
     if (!initialScrollDone && len > 0) {
       initialScrollDone = true
-      scrollToBottom()
+      followLatestAfterLayout()
       return
     }
-    if (isAtBottom.value) {
-      scrollToBottom()
+    if (shouldFollow) {
+      followLatestAfterLayout()
     }
   },
   { flush: 'post' },
@@ -605,6 +635,7 @@ function onAppearanceChange(s: AppSettings) {
             :moderation-pending="moderationPendingMessageIDs.has(item.id)"
             @reply="onReply"
             @moderate="onModerate"
+            @content-load="followLatestAfterLayout"
           />
         </template>
       </VList>
