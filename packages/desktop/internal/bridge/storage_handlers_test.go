@@ -95,6 +95,13 @@ func TestRegisterStorageHandlersServesVueBootstrapRequests(t *testing.T) {
 	if got := accounts.([]contracts.Account); len(got) != 0 {
 		t.Errorf("getAccounts = %#v, want empty account list", got)
 	}
+	catalog, err := service.Call(contracts.GatewayRequest{Method: contracts.RequestGetChannelEmotes})
+	if err != nil {
+		t.Fatalf("getChannelEmotes error = %v", err)
+	}
+	if got := catalog.([]contracts.EmoteCatalogEntry); len(got) != 0 {
+		t.Errorf("getChannelEmotes = %#v, want empty catalog", got)
+	}
 	settings, err := service.Call(contracts.GatewayRequest{Method: contracts.RequestGetSettings})
 	if err != nil {
 		t.Fatalf("getSettings error = %v", err)

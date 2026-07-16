@@ -9,6 +9,7 @@ import { rpc } from '../services/desktop-api'
 export const useEmoteStore = defineStore('emotes', () => {
   const emoteMap = ref<Map<string, EmoteCatalogEntry[]>>(new Map())
   const inflight = ref<Map<string, Promise<void>>>(new Map())
+  const sevenTVVersions = ref<Map<string, number>>(new Map())
   const listenersRegistered = ref(false)
 
   function setCatalog(platform: string, channelId: string, emotes: EmoteCatalogEntry[]): void {
@@ -22,8 +23,15 @@ export const useEmoteStore = defineStore('emotes', () => {
     return { ...emote, source: 'seventv' }
   }
 
+  function markSevenTVMutation(key: string): void {
+    const next = new Map(sevenTVVersions.value)
+    next.set(key, (next.get(key) ?? 0) + 1)
+    sevenTVVersions.value = next
+  }
+
   function setSevenTVEmotes(platform: Platform, channelId: string, emotes: SevenTVEmote[]): void {
     const key = `${platform}:${channelId}`
+    markSevenTVMutation(key)
     const existing = emoteMap.value.get(key) ?? []
     setCatalog(platform, channelId, [
       ...existing.filter((entry) => entry.source !== 'seventv'),
@@ -33,6 +41,7 @@ export const useEmoteStore = defineStore('emotes', () => {
 
   function addSevenTVEmote(platform: Platform, channelId: string, emote: SevenTVEmote): void {
     const key = `${platform}:${channelId}`
+    markSevenTVMutation(key)
     const existing = emoteMap.value.get(key) ?? []
     setCatalog(platform, channelId, [
       ...existing.filter((entry) => entry.source !== 'seventv' || entry.id !== emote.id),
@@ -42,6 +51,7 @@ export const useEmoteStore = defineStore('emotes', () => {
 
   function removeSevenTVEmote(platform: Platform, channelId: string, emoteId: string): void {
     const key = `${platform}:${channelId}`
+    markSevenTVMutation(key)
     const existing = emoteMap.value.get(key)
     if (!existing) return
 
@@ -59,6 +69,7 @@ export const useEmoteStore = defineStore('emotes', () => {
     newAlias: string,
   ): void {
     const key = `${platform}:${channelId}`
+    markSevenTVMutation(key)
     const existing = emoteMap.value.get(key)
     if (!existing) return
 
@@ -102,13 +113,22 @@ export const useEmoteStore = defineStore('emotes', () => {
       return inflight.value.get(key)!
     }
 
+    const sevenTVVersion = sevenTVVersions.value.get(key) ?? 0
+
     const promise = (async () => {
       try {
         const emotes = await rpc.request.getChannelEmotes({
           platform: platform as Platform,
           channelId,
         })
-        setCatalog(platform, channelId, emotes)
+        const liveSevenTV =
+          sevenTVVersions.value.get(key) === sevenTVVersion
+            ? undefined
+            : (emoteMap.value.get(key) ?? []).filter((entry) => entry.source === 'seventv')
+        setCatalog(platform, channelId, [
+          ...emotes.filter((entry) => entry.source !== 'seventv'),
+          ...(liveSevenTV ?? emotes.filter((entry) => entry.source === 'seventv')),
+        ])
       } catch (err) {
         console.warn('[useEmoteStore] Failed to load emotes:', platform, channelId, err)
       } finally {

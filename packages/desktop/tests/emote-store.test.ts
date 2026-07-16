@@ -23,6 +23,18 @@ function entry(source: EmoteCatalogEntry['source'], id: string): EmoteCatalogEnt
   }
 }
 
+function sevenTVEmote(id: string) {
+  return {
+    id,
+    alias: id,
+    name: id,
+    imageUrl: `https://cdn.test/${id}.webp`,
+    animated: false,
+    zeroWidth: false,
+    aspectRatio: 1,
+  }
+}
+
 test('uses the completed session cache unless the preference requests a reload', async () => {
   let calls = 0
   rpc.request.getChannelEmotes = async () => {
@@ -48,4 +60,24 @@ test('a 7TV removal leaves a same-id channel emote intact', () => {
   store.removeSevenTVEmote('kick', 'channel', 'same-id')
 
   expect(store.emoteMap.get('kick:channel')).toEqual([entry('channel', 'same-id')])
+})
+
+test('keeps a live 7TV mutation that arrives while a catalog request is pending', async () => {
+  let resolveFetch: ((emotes: EmoteCatalogEntry[]) => void) | undefined
+  rpc.request.getChannelEmotes = () =>
+    new Promise<EmoteCatalogEntry[]>((resolve) => {
+      resolveFetch = resolve
+    })
+  setActivePinia(createPinia())
+  const store = useEmoteStore()
+
+  const loading = store.loadEmotes('kick', 'channel', false)
+  store.addSevenTVEmote('kick', 'channel', sevenTVEmote('live'))
+  resolveFetch?.([entry('channel', 'channel'), entry('seventv', 'stale')])
+  await loading
+
+  expect(store.emoteMap.get('kick:channel')).toEqual([
+    entry('channel', 'channel'),
+    entry('seventv', 'live'),
+  ])
 })

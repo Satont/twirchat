@@ -19,3 +19,9 @@ test('applies local and native moderation outcomes to both chat themes', () => {
   )
   expect(chatMessageSource).toContain('v-if="!props.moderationOutcome?.isTombstone"')
 })
+
+test('does not render reply text for deleted-message tombstones in either chat theme', () => {
+  expect(chatMessageSource).toContain(
+    'v-if="message.reply && !props.moderationOutcome?.isTombstone"',
+  )
+})
