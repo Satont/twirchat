@@ -7,6 +7,7 @@ import UserCardDialog from './UserCardDialog.vue'
 interface Props {
   platform: Platform
   platformUserId: string
+  messageId?: string
   channelId?: string
   channelSlug?: string
   displayName: string
@@ -33,6 +34,7 @@ function openDialog() {
     v-model:open="dialogOpen"
     :platform="platform"
     :platform-user-id="platformUserId"
+    :message-id="messageId"
     :channel-id="channelId"
     :channel-slug="channelSlug"
     :display-name="displayName"

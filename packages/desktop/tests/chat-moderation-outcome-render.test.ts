@@ -12,5 +12,10 @@ test('applies local and native moderation outcomes to both chat themes', () => {
   expect(chatMessageSource).toContain('moderationOutcome')
   expect(chatMessageSource).toContain('moderation-outcome')
   expect(chatMessageSource).toContain('moderationOutcome.label')
-  expect(chatMessageSource).toContain('!props.moderationOutcome')
+  expect(chatMessageSource).toContain('isTombstone')
+  expect(chatMessageSource).toContain('Message deleted')
+  expect(chatMessageSource).toContain(
+    '!props.moderationOutcome || props.moderationOutcome.isTombstone',
+  )
+  expect(chatMessageSource).toContain('v-if="!props.moderationOutcome?.isTombstone"')
 })
