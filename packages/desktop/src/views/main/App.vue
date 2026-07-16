@@ -4,6 +4,8 @@ import { storeToRefs } from 'pinia'
 import { System } from '@wailsio/runtime'
 import { useRpcListener } from './composables/useRpcListener'
 import { useModerationOutcomes } from './composables/useModerationOutcomes'
+import { createConnectionNoticeStore } from './composables/useConnectionNotice'
+import { useTransientNotice } from './composables/useTransientNotice'
 import { useAccountsStore } from './stores/accounts'
 import { useAliasStore } from './stores/useAliasStore'
 import { useSettingsStore } from './stores/settings'
@@ -20,6 +22,7 @@ import AddChannelModal from './components/AddChannelModal.vue'
 import TabSelectorModal from './components/TabSelectorModal.vue'
 import type { TabItem } from './components/TabSelectorModal.vue'
 import AppTitleBar from './components/AppTitleBar.vue'
+import ChatNotice from './components/ChatNotice.vue'
 import { useHotkeys } from './composables/useHotkeys'
 import { rpc } from './main'
 import { attemptMigration } from './services/migration'
@@ -55,6 +58,8 @@ const { apply: applyModerationOutcome } = useModerationOutcomes()
 const { accounts } = storeToRefs(accountsStore)
 const { settings } = storeToRefs(settingsStore)
 const { statuses } = storeToRefs(channelStatusStore)
+const connectionNoticeStore = createConnectionNoticeStore()
+const { notice: transientNotice, show: showTransientNotice } = useTransientNotice()
 
 const WAILS_RUNTIME_CONFIG_READY = 'wails:runtime-config-ready'
 
@@ -352,6 +357,7 @@ useRpcListener('chat_event', (ev: NormalizedEvent) => {
 })
 
 useRpcListener('platform_status', (s: PlatformStatusInfo) => {
+  showConnectionNotice(`${s.platform}:${s.channelLogin ?? s.platform}`, s)
   channelStatusStore.setStatus(s.platform, s)
 })
 
@@ -421,6 +427,13 @@ useRpcListener(
 useRpcListener(
   'watched_channel_status',
   ({ channelId, status }: { channelId: string; status: PlatformStatusInfo }) => {
+    const channelSlug = watchedChannels.value.find(
+      (channel) => channel.id === channelId,
+    )?.channelSlug
+    showConnectionNotice(
+      `${status.platform}:${channelSlug ?? status.channelLogin ?? channelId}`,
+      status,
+    )
     watchedStatuses.value = new Map(watchedStatuses.value).set(channelId, status)
     if (status.status === 'error') {
       void Promise.all([
@@ -442,6 +455,11 @@ useRpcListener(
     }
   },
 )
+
+function showConnectionNotice(channelKey: string, status: PlatformStatusInfo): void {
+  const nextNotice = connectionNoticeStore.observe(channelKey.toLowerCase(), status)
+  if (nextNotice) showTransientNotice(nextNotice, nextNotice.durationMs)
+}
 
 async function checkForUpdates() {
   try {
@@ -607,6 +625,7 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
 
 <template>
   <div class="window-shell" :class="{ 'compact-window-chrome': hasCompactWindowChrome }">
+    <ChatNotice :notice="transientNotice" />
     <AppTitleBar v-if="hasCompactWindowChrome" :platform="windowChromePlatform" />
     <div
       class="app"
