@@ -120,6 +120,21 @@ const watchedLiveStatuses = computed<Map<string, WatchedLiveStatus>>(() => {
   return map
 })
 
+/** Total live viewers across own connected channels (twitch/kick — see channels-status API). */
+const homeViewerCount = computed(() => {
+  let total = 0
+  let anyLive = false
+  for (const acc of accounts.value) {
+    if (acc.platform !== 'twitch' && acc.platform !== 'kick') continue
+    const status = streamStatusStore.getStatus(acc.platform, acc.username)
+    if (status?.isLive) {
+      anyLive = true
+      total += status.viewerCount ?? 0
+    }
+  }
+  return anyLive ? total : undefined
+})
+
 const tabSelectorItems = computed<TabItem[]>(() => {
   const items: TabItem[] = [{ id: 'home', label: 'My channels' }]
   for (const ch of tabWatchedChannels.value) {
@@ -799,6 +814,7 @@ async function onSendWatched({ text, channelId }: { text: string; channelId?: st
           :active-tab-id="activeWatchedTab"
           :watched-statuses="watchedStatuses"
           :watched-live-statuses="watchedLiveStatuses"
+          :home-viewer-count="homeViewerCount"
           :tab-channel-names="tabChannelNames"
           @select-tab="activeWatchedTab = $event"
           @add-channel="showAddModal = true"

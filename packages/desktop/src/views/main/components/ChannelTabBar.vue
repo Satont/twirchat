@@ -17,6 +17,8 @@ const props = defineProps<{
   watchedStatuses: Map<string, PlatformStatusInfo>
   /** ChannelId → live status info (from shared stream status store) */
   watchedLiveStatuses: Map<string, WatchedLiveStatus>
+  /** Total viewers across own live channels, shown on the "My channels" tab */
+  homeViewerCount?: number
   tabChannelNames?: Map<string, string[]>
 }>()
 
@@ -102,6 +104,9 @@ function onDragEnd() {
         <polyline points="9 22 9 12 15 12 15 22" />
       </svg>
       <span class="tab-label">My channels</span>
+      <span v-if="homeViewerCount !== undefined" class="tab-viewers">
+        {{ formatViewers(homeViewerCount) }}
+      </span>
     </button>
 
     <!-- Watched channel tabs -->
