@@ -91,13 +91,13 @@ func New(config Config) (*Application, error) {
 
 func mainWindowOptions(name, platform string) application.WebviewWindowOptions {
 	options := application.WebviewWindowOptions{
-		Name:   "main",
-		Title:  name,
-		URL:    "/",
-		Width:  1200,
-		Height: 800,
-		MinWidth:  720,
-		MinHeight: 520,
+		Name:      "main",
+		Title:     name,
+		URL:       "/",
+		Width:     1200,
+		Height:    800,
+		MinWidth:  200,
+		MinHeight: 200,
 	}
 
 	switch platform {
