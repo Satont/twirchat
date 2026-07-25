@@ -4,6 +4,7 @@ import { AccountStore } from '@desktop/store/account-store'
 import { MessageStore } from '@desktop/store/message-store'
 import { SettingsStore } from '@desktop/store/settings-store'
 import { UserAliasStore } from '@desktop/store/user-alias-store'
+import { WindowStateStore } from '@desktop/store/window-state-store'
 import { DEFAULT_SETTINGS, type NormalizedChatMessage } from '@twirchat/shared/types'
 import { existsSync, unlinkSync } from 'node:fs'
 
@@ -449,5 +450,50 @@ describe('MessageStore', () => {
     })
 
     expect(result.messages.map((message) => message.id)).toEqual(['valid-1'])
+  })
+})
+
+describe('WindowStateStore', () => {
+  beforeEach(() => {
+    if (existsSync(TEST_DB)) {
+      unlinkSync(TEST_DB)
+    }
+    initDb(TEST_DB)
+  })
+
+  afterEach(() => {
+    if (existsSync(TEST_DB)) {
+      unlinkSync(TEST_DB)
+    }
+  })
+
+  test('returns null when nothing was saved', () => {
+    expect(WindowStateStore.get()).toBeNull()
+  })
+
+  test('roundtrips a saved window frame', () => {
+    const frame = { height: 900, width: 1440, x: 120, y: -40 }
+    WindowStateStore.set(frame)
+    expect(WindowStateStore.get()).toEqual(frame)
+  })
+
+  test('overwrites the previous frame', () => {
+    WindowStateStore.set({ height: 600, width: 800, x: 0, y: 0 })
+    WindowStateStore.set({ height: 900, width: 1440, x: 50, y: 60 })
+    expect(WindowStateStore.get()).toEqual({ height: 900, width: 1440, x: 50, y: 60 })
+  })
+
+  test('returns null for corrupted JSON', () => {
+    getDb().run('INSERT INTO settings (key, value) VALUES (?, ?)', ['window_state', '{'])
+    expect(WindowStateStore.get()).toBeNull()
+  })
+
+  test('returns null for implausibly small sizes', () => {
+    WindowStateStore.set({ height: 900, width: 1440, x: 0, y: 0 })
+    getDb().run('UPDATE settings SET value = ? WHERE key = ?', [
+      JSON.stringify({ height: 10, width: 10, x: 0, y: 0 }),
+      'window_state',
+    ])
+    expect(WindowStateStore.get()).toBeNull()
   })
 })

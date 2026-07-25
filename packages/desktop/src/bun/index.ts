@@ -54,6 +54,7 @@ import {
   MessageStore,
   SettingsStore,
   UsernameColorCache,
+  WindowStateStore,
 } from '../store'
 import { UserAliasStore } from '../store/user-alias-store'
 import { BackendConnection } from '../backend-connection'
@@ -892,12 +893,37 @@ async function resolveWindowUrl(): Promise<string> {
 
 const windowUrl = await resolveWindowUrl()
 
+const DEFAULT_WINDOW_FRAME = { height: 800, width: 1200, x: 0, y: 0 }
+const savedWindowFrame = WindowStateStore.get()
+if (savedWindowFrame) {
+  log.info('Restoring window frame', { ...savedWindowFrame })
+}
+
 const win = new BrowserWindow({
-  frame: { height: 800, width: 1200, x: 0, y: 0 },
+  frame: savedWindowFrame ?? DEFAULT_WINDOW_FRAME,
   rpc,
   title: 'TwirChat',
   url: windowUrl,
 })
+
+// Debounced: move/resize fire continuously while dragging, each save is a SQLite write.
+let windowStateSaveTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleWindowStateSave(): void {
+  if (windowStateSaveTimer) {
+    clearTimeout(windowStateSaveTimer)
+  }
+  windowStateSaveTimer = setTimeout(() => {
+    windowStateSaveTimer = null
+    try {
+      WindowStateStore.set(win.getFrame())
+    } catch (err) {
+      log.warn('Failed to persist window state', { error: String(err) })
+    }
+  }, 500)
+}
+
+win.on('move', scheduleWindowStateSave)
+win.on('resize', scheduleWindowStateSave)
 
 if (channel === 'dev') {
   win.webview.openDevTools()

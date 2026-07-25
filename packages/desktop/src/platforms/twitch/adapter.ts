@@ -71,6 +71,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   private chatClient: ChatClient | null = null
   private badgeRefreshInterval: ReturnType<typeof setInterval> | null = null
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   private channelName = ''
   private shouldReconnect = true
   private isConnected = false
@@ -89,6 +90,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.channelName = channelName.toLowerCase()
     this.shouldReconnect = true
     this.isConnected = false
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
+    }
 
     this.anonymous = true
     this.accessToken = null
@@ -271,22 +276,39 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     // Joined channel
     this.chatClient.onJoin((channel, user) => {
-      if (user === this.login) {
-        log.info(`[Twitch] Joined ${channel}`)
-        this.isConnected = true
-        this.emit('status', {
-          channelLogin: this.channelName,
-          mode: this.anonymous ? 'anonymous' : 'authenticated',
-          platform: 'twitch',
-          status: 'connected',
-        })
+      if (channel.replace('#', '').toLowerCase() !== this.channelName) {
+        return
       }
+
+      // Anonymous sessions connect as justinfan* and can't be matched by login,
+      // so the first join in our own channel is ours.
+      const isSelf = this.anonymous || user.toLowerCase() === (this.login ?? '').toLowerCase()
+      if (!isSelf || this.isConnected) {
+        return
+      }
+
+      log.info(`[Twitch] Joined ${channel}`)
+      this.isConnected = true
+      this.emit('status', {
+        channelLogin: this.channelName,
+        mode: this.anonymous ? 'anonymous' : 'authenticated',
+        platform: 'twitch',
+        status: 'connected',
+      })
     })
 
     // Disconnected
     this.chatClient.onDisconnect((manually, reason) => {
       log.warn(`[Twitch] Disconnected${reason ? `: ${reason}` : ''}`)
       this.isConnected = false
+
+      // Intentional quit (teardown in connectChatClient / reconnectWithNewToken /
+      // disconnect()) — treating it as a real disconnect stacks reconnect timers
+      // and loops "disconnected" status emissions forever.
+      if (manually) {
+        return
+      }
+
       this.handleDisconnect()
     })
 
@@ -354,8 +376,17 @@ export class TwitchAdapter extends BasePlatformAdapter {
     })
 
     if (this.shouldReconnect) {
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout)
+      }
       log.info('[Twitch] Reconnecting in 5s...')
-      setTimeout(() => {
+      this.reconnectTimeout = setTimeout(() => {
+        this.reconnectTimeout = null
+        // Twurple may have reconnected on its own while the timer was pending —
+        // don't tear down a healthy client just to rebuild it.
+        if (this.isConnected) {
+          return
+        }
         void this.connectChatClient()
       }, 5000)
     }
@@ -723,6 +754,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
     if (this.badgeRefreshInterval) {
       clearInterval(this.badgeRefreshInterval)
       this.badgeRefreshInterval = null
+    }
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
     }
   }
 }
