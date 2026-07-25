@@ -527,6 +527,18 @@ export class TwitchAdapter extends BasePlatformAdapter {
   }
 
   private async handleChatMessage(msg: ChatMessage, isAction = false): Promise<void> {
+    // Messages only arrive after a successful join — recover the status if the
+    // matching onJoin was missed (e.g. join fired before handlers attached).
+    if (!this.isConnected) {
+      this.isConnected = true
+      this.emit('status', {
+        channelLogin: this.channelName,
+        mode: this.anonymous ? 'anonymous' : 'authenticated',
+        platform: 'twitch',
+        status: 'connected',
+      })
+    }
+
     const channel = msg.target
     const { text } = msg
     const { tags } = msg

@@ -102,6 +102,7 @@ export class KickAdapter extends BasePlatformAdapter {
   async connect(channelSlug: string): Promise<void> {
     this.channelSlug = channelSlug
     this.shouldReconnect = true
+    this.clearTimers()
 
     // Check for stored account
     const account = AccountStore.findByPlatform('kick')
@@ -138,10 +139,23 @@ export class KickAdapter extends BasePlatformAdapter {
       status: 'connecting',
     })
 
-    const info = await this.fetchChatroomId(channelSlug)
-    this.chatroomId = info.chatroomId
-    this.broadcasterUserId = info.broadcasterUserId
-    await this.connectPusher()
+    try {
+      const info = await this.fetchChatroomId(channelSlug)
+      this.chatroomId = info.chatroomId
+      this.broadcasterUserId = info.broadcasterUserId
+      await this.connectPusher()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      log.error('[Kick] Failed to connect', { error: errorMessage })
+      this.emit('status', {
+        channelLogin: channelSlug,
+        error: errorMessage,
+        mode: this.anonymous ? 'anonymous' : 'authenticated',
+        platform: 'kick',
+        status: 'error',
+      })
+      this.scheduleReconnect()
+    }
   }
 
   getBroadcasterUserId(): number | null {
@@ -314,9 +328,15 @@ export class KickAdapter extends BasePlatformAdapter {
     })
 
     ws.addEventListener('close', (event) => {
+      // Close of a stale socket torn down in connectPusher()/disconnect() —
+      // only the current socket drives status and reconnect.
+      if (this.ws !== ws) {
+        return
+      }
+
       log.warn(`[Kick] Pusher disconnected: ${event.code} ${event.reason}`)
       this.isConnected = false
-      this.clearTimers()
+      this.ws = null
 
       this.emit('status', {
         channelLogin: this.channelSlug,
@@ -325,10 +345,7 @@ export class KickAdapter extends BasePlatformAdapter {
         status: 'disconnected',
       })
 
-      if (this.shouldReconnect) {
-        log.info('[Kick] Reconnecting in 5s...')
-        this.reconnectTimeout = setTimeout(() => void this.connectPusher(), 5000)
-      }
+      this.scheduleReconnect()
     })
 
     ws.addEventListener('error', (err) => {
@@ -337,6 +354,12 @@ export class KickAdapter extends BasePlatformAdapter {
   }
 
   private handlePusherEvent(event: PusherEvent): void {
+    // Chatroom events only arrive over an active subscription — recover the
+    // status if subscription_succeeded was missed after a reconnect.
+    if (!event.event.startsWith('pusher') && !this.isConnected) {
+      this.emitConnected()
+    }
+
     switch (event.event) {
       case 'pusher:connection_established': {
         this.subscribeToChatroom()
@@ -350,13 +373,7 @@ export class KickAdapter extends BasePlatformAdapter {
 
       case 'pusher_internal:subscription_succeeded': {
         log.info(`[Kick] Subscribed to chatroom ${this.chatroomId}`)
-        this.isConnected = true
-        this.emit('status', {
-          channelLogin: this.channelSlug,
-          mode: this.anonymous ? 'anonymous' : 'authenticated',
-          platform: 'kick',
-          status: 'connected',
-        })
+        this.emitConnected()
         break
       }
 
@@ -466,6 +483,30 @@ export class KickAdapter extends BasePlatformAdapter {
       clearTimeout(this.reconnectTimeout)
       this.reconnectTimeout = null
     }
+  }
+
+  private scheduleReconnect(): void {
+    if (!this.shouldReconnect) {
+      return
+    }
+    this.clearTimers()
+    log.info('[Kick] Reconnecting in 5s...')
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null
+      // Full connect(): a failed initial connect may have no chatroomId yet,
+      // and the slug→chatroom mapping can change between attempts.
+      void this.connect(this.channelSlug)
+    }, 5000)
+  }
+
+  private emitConnected(): void {
+    this.isConnected = true
+    this.emit('status', {
+      channelLogin: this.channelSlug,
+      mode: this.anonymous ? 'anonymous' : 'authenticated',
+      platform: 'kick',
+      status: 'connected',
+    })
   }
 }
 

@@ -60,6 +60,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   private innertube: Awaited<ReturnType<typeof Innertube.create>> | null = null
   private liveChat: LiveChatInstance | null = null
   private isAuthenticated = false
+  private lastStatus: 'connecting' | 'connected' | 'disconnected' | 'error' = 'connecting'
 
   // For sending messages via official API
   private liveChatId: string | null = null
@@ -103,6 +104,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     status: 'connecting' | 'connected' | 'disconnected' | 'error',
     error?: string,
   ): void {
+    this.lastStatus = status
     this.emit('status', {
       channelLogin: this.channelId,
       mode: this.isAuthenticated ? 'authenticated' : 'anonymous',
@@ -297,6 +299,12 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   }
 
   private handleChatAction(action: ChatAction): void {
+    // Chat updates only arrive over a live chat session — recover the status
+    // if it regressed to a non-connected state without a real teardown.
+    if (this.lastStatus !== 'connected' && this.shouldReconnect) {
+      this.emitStatus('connected')
+    }
+
     if (action.type !== 'AddChatItemAction') {
       return
     }
