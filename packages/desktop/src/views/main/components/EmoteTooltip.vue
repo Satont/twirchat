@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TooltipArrow, TooltipContent, TooltipProvider, TooltipRoot, TooltipTrigger } from 'reka-ui'
+import { TooltipArrow, TooltipContent, TooltipRoot, TooltipTrigger } from 'reka-ui'
 import type { Emote } from '@twirchat/shared/types'
 import { openExternalUrl } from '../services/external-url'
 
@@ -18,45 +18,43 @@ function openEmotePage(): void {
 </script>
 
 <template>
-  <TooltipProvider :delay-duration="300">
-    <TooltipRoot>
-      <TooltipTrigger as-child>
-        <slot />
-      </TooltipTrigger>
-      <TooltipContent side="top" :side-offset="8" class="emote-tooltip">
-        <div class="emote-tooltip-content">
-          <div class="emote-preview">
-            <img :src="emote.imageUrl" :alt="emote.name" class="emote-preview-img" />
-          </div>
-
-          <div class="emote-info">
-            <div class="emote-name">{{ emote.name }}</div>
-
-            <a :href="emoteUrl" target="_blank" class="emote-link" @click.prevent="openEmotePage">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <line x1="10" y1="14" x2="21" y2="3"></line>
-              </svg>
-              View on 7TV
-            </a>
-          </div>
+  <TooltipRoot>
+    <TooltipTrigger as-child>
+      <slot />
+    </TooltipTrigger>
+    <TooltipContent side="top" :side-offset="8" class="emote-tooltip">
+      <div class="emote-tooltip-content">
+        <div class="emote-preview">
+          <img :src="emote.imageUrl" :alt="emote.name" class="emote-preview-img" />
         </div>
 
-        <TooltipArrow class="emote-tooltip-arrow" />
-      </TooltipContent>
-    </TooltipRoot>
-  </TooltipProvider>
+        <div class="emote-info">
+          <div class="emote-name">{{ emote.name }}</div>
+
+          <a :href="emoteUrl" target="_blank" class="emote-link" @click.prevent="openEmotePage">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            View on 7TV
+          </a>
+        </div>
+      </div>
+
+      <TooltipArrow class="emote-tooltip-arrow" />
+    </TooltipContent>
+  </TooltipRoot>
 </template>
 
 <style>

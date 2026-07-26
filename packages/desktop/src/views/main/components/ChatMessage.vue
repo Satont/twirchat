@@ -6,9 +6,9 @@ import { platformColor } from '../../shared/utils/platform'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
-import UserContextMenu from './UserContextMenu.vue'
 import MessageModerationRail from './MessageModerationRail.vue'
 import { useMessageParsing } from '../composables/useMessageParsing'
+import type { UserCardTarget } from '../utils/chatCommands'
 import { resolveBadgeImage } from '../utils/badge-image'
 import { chatMessageStyle } from '../utils/chat-message-style'
 import { openExternalUrl } from '../services/external-url'
@@ -37,6 +37,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'content-load': []
+  'open-user-card': [target: UserCardTarget]
   reply: [message: NormalizedChatMessage]
   moderate: [message: NormalizedChatMessage, action: ModerationDragAction]
 }>()
@@ -77,6 +78,20 @@ function onContentLoad(): void {
 
 function onReply() {
   emit('reply', props.message)
+}
+
+function onOpenUserCard(): void {
+  emit('open-user-card', {
+    platform: props.message.platform,
+    platformUserId: props.message.author.id,
+    messageId: props.message.id,
+    channelId: props.message.channelId,
+    channelSlug: props.channelSlug,
+    displayName: props.message.author.displayName,
+    username: props.message.author.username,
+    avatarUrl: avatarURL.value,
+    currentAlias: props.alias,
+  })
 }
 
 function onModerate(action: ModerationDragAction): void {
@@ -349,22 +364,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
           :style="message.author.color ? { color: message.author.color } : {}"
           >{{ message.author.displayName }}</span
         ></template
-      ><UserContextMenu
+      ><span
         v-else
-        :platform="message.platform"
-        :platform-user-id="message.author.id"
-        :message-id="message.id"
-        :channel-id="message.channelId"
-        :channel-slug="props.channelSlug"
-        :display-name="message.author.displayName"
-        :username="message.author.username"
-        :avatar-url="avatarURL"
-        :current-alias="props.alias"
-      >
-        <span class="author" :style="message.author.color ? { color: message.author.color } : {}">{{
-          props.alias ?? message.author.displayName
-        }}</span> </UserContextMenu
-      ><span class="compact-sep">: </span
+        class="author"
+        :style="message.author.color ? { color: message.author.color } : {}"
+        @click.stop="onOpenUserCard"
+        >{{ props.alias ?? message.author.displayName }}</span
+      >{{ ' ' }}<span class="compact-sep">: </span
       ><span v-if="props.moderationOutcome?.isTombstone" class="deleted-message-body"
         >Message deleted</span
       ><span v-else class="msg-text" :class="{ italic: message.type === 'action' }">
@@ -569,24 +575,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
             >{{ message.author.displayName }}</span
           >
         </template>
-        <UserContextMenu
+        <span
           v-else
-          :platform="message.platform"
-          :platform-user-id="message.author.id"
-          :message-id="message.id"
-          :channel-id="message.channelId"
-          :channel-slug="props.channelSlug"
-          :display-name="message.author.displayName"
-          :username="message.author.username"
-          :avatar-url="avatarURL"
-          :current-alias="props.alias"
+          class="author"
+          :style="message.author.color ? { color: message.author.color } : {}"
+          @click.stop="onOpenUserCard"
+          >{{ props.alias ?? message.author.displayName }}</span
         >
-          <span
-            class="author"
-            :style="message.author.color ? { color: message.author.color } : {}"
-            >{{ props.alias ?? message.author.displayName }}</span
-          >
-        </UserContextMenu>
 
         <span v-if="props.showTimestamp" class="timestamp">{{
           formatTime(message.timestamp)

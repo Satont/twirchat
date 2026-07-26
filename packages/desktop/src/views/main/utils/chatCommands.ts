@@ -3,6 +3,7 @@ import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 export interface UserCardTarget {
   platform: Platform
   platformUserId: string
+  messageId?: string
   channelId?: string
   channelSlug?: string
   displayName: string

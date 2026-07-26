@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { VList } from 'virtua/vue'
 import type { VListHandle } from 'virtua/vue'
+import { TooltipProvider } from 'reka-ui'
 import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 import Tooltip from './ui/Tooltip.vue'
@@ -283,13 +284,12 @@ const activeMessages = computed<NormalizedChatMessage[]>(() => [
   ...deliveryMessages.value,
 ])
 
-watch(
-  providerMessages,
-  (messages) => {
-    deliveryMessages.value = reconcilePendingMessages(deliveryMessages.value, messages)
-  },
-  { deep: true },
-)
+// Message arrays are always replaced (never mutated in place) by
+// mergeChatMessageSnapshot, so a shallow watch is enough. A deep watch would
+// traverse the whole buffer on every incoming message.
+watch(providerMessages, (messages) => {
+  deliveryMessages.value = reconcilePendingMessages(deliveryMessages.value, messages)
+})
 
 // The combined "My channels" view is owned by the connected accounts. A
 // watched channel has its own tab and must not replace an account target here.
@@ -607,41 +607,46 @@ function onAppearanceChange(s: AppSettings) {
       >
         {{ moderationToast.text }}
       </div>
-      <VList
-        v-if="activeMessages.length > 0"
-        ref="vlistRef"
-        class="chat-list"
-        :data="activeMessages"
-        @scroll="onVListScroll"
-      >
-        <template #default="{ item }">
-          <ChatMessage
-            :key="item.id"
-            :message="item"
-            :channel-slug="getChannelSlugForPlatform(item.platform)"
-            :alias="getAliasForMessage(item)"
-            :show-platform-color-stripe="watchedChannel ? false : settings?.showPlatformColorStripe"
-            :show-platform-icon="watchedChannel ? false : settings?.showPlatformIcon"
-            :show-timestamp="settings?.showTimestamp"
-            :show-avatar="settings?.showAvatars"
-            :show-badges="settings?.showBadges"
-            :font-size="settings?.fontSize"
-            :chat-theme="settings?.chatTheme"
-            :accounts="accounts"
-            :self-ping-enabled="settings?.selfPing?.enabled"
-            :self-ping-color="settings?.selfPing?.color"
-            :moderation-outcome="moderationOutcomeFor(item)"
-            :show-moderation-rail="
-              canShowModerationRail(item) &&
-              (!moderationOutcomeFor(item) || moderationOutcomeFor(item)?.isTombstone)
-            "
-            :moderation-pending="moderationPendingMessageIDs.has(item.id)"
-            @reply="onReply"
-            @moderate="onModerate"
-            @content-load="followLatestAfterLayout"
-          />
-        </template>
-      </VList>
+      <TooltipProvider v-if="activeMessages.length > 0" :delay-duration="300">
+        <VList
+          ref="vlistRef"
+          class="chat-list"
+          :data="activeMessages"
+          :buffer-size="400"
+          @scroll="onVListScroll"
+        >
+          <template #default="{ item }">
+            <ChatMessage
+              :key="item.id"
+              :message="item"
+              :channel-slug="getChannelSlugForPlatform(item.platform)"
+              :alias="getAliasForMessage(item)"
+              :show-platform-color-stripe="
+                watchedChannel ? false : settings?.showPlatformColorStripe
+              "
+              :show-platform-icon="watchedChannel ? false : settings?.showPlatformIcon"
+              :show-timestamp="settings?.showTimestamp"
+              :show-avatar="settings?.showAvatars"
+              :show-badges="settings?.showBadges"
+              :font-size="settings?.fontSize"
+              :chat-theme="settings?.chatTheme"
+              :accounts="accounts"
+              :self-ping-enabled="settings?.selfPing?.enabled"
+              :self-ping-color="settings?.selfPing?.color"
+              :moderation-outcome="moderationOutcomeFor(item)"
+              :show-moderation-rail="
+                canShowModerationRail(item) &&
+                (!moderationOutcomeFor(item) || moderationOutcomeFor(item)?.isTombstone)
+              "
+              :moderation-pending="moderationPendingMessageIDs.has(item.id)"
+              @open-user-card="onOpenUserCard"
+              @reply="onReply"
+              @moderate="onModerate"
+              @content-load="followLatestAfterLayout"
+            />
+          </template>
+        </VList>
+      </TooltipProvider>
 
       <!-- Empty state -->
       <div v-else class="empty-state chat-list">
@@ -765,6 +770,7 @@ function onAppearanceChange(s: AppSettings) {
       v-model:open="isUserCardDialogOpen"
       :platform="selectedUserCardTarget.platform"
       :platform-user-id="selectedUserCardTarget.platformUserId"
+      :message-id="selectedUserCardTarget.messageId"
       :channel-id="selectedUserCardTarget.channelId"
       :channel-slug="selectedUserCardTarget.channelSlug"
       :display-name="selectedUserCardTarget.displayName"
