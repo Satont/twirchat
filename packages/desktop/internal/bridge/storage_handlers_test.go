@@ -35,6 +35,9 @@ func TestGetSettingsBackfillsNewChatAppearanceDefaults(t *testing.T) {
 	if got["showChannelLabel"] != true || got["emoteSessionCache"] != true {
 		t.Errorf("getSettings = %#v, want new appearance defaults", got)
 	}
+	if got["autoCheckUpdates"] != true {
+		t.Errorf("getSettings autoCheckUpdates = %#v, want true (startup update checks enabled by default)", got["autoCheckUpdates"])
+	}
 }
 
 func (r *recordingWatchedRuntime) Add(

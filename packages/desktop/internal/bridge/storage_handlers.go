@@ -13,7 +13,7 @@ var defaultSettings = json.RawMessage(`{
   "theme":"dark","chatTheme":"modern","fontFamily":"inter","fontSize":14,
   "showPlatformColorStripe":true,"showPlatformIcon":true,"showTimestamp":true,
   "showAvatars":true,"showBadges":true,"showChannelLabel":true,"emoteSessionCache":true,
-  "platformFilter":"all","autoCheckUpdates":false,
+  "platformFilter":"all","autoCheckUpdates":true,
   "hotkeys":{"newTab":"ctrl+t","nextTab":"ctrl+tab","prevTab":"alt+arrowleft","tabSelector":"ctrl+l"},
   "overlay":{"background":"transparent","textColor":"#ffffff","fontSize":14,"fontFamily":"inter","maxMessages":20,"messageTimeout":0,"showPlatformIcon":true,"showAvatar":true,"showBadges":true,"animation":"slide","position":"bottom","port":45823},
   "chatLayout":{"version":1,"mode":"combined","splits":[{"id":"default","type":"combined","size":100}]},
