@@ -25,6 +25,9 @@ import (
 const (
 	defaultChatAPIURL = "https://api.kick.com/public/v1/chat"
 	pusherURL         = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=twirchat&version=1.0&flash=false"
+
+	defaultReconnectInitial = 3 * time.Second
+	defaultReconnectMaximum = 30 * time.Second
 )
 
 // ErrDeliveryRejected identifies a provider response that deliberately refused
@@ -42,7 +45,11 @@ type Config struct {
 	Events     Events
 	Backend    *backend.HTTPClient
 	ChatAPIURL string
-	SevenTV    seventv.ChannelService
+	// PusherURL is a test hook, like ChatAPIURL — production uses the package default.
+	PusherURL        string
+	ReconnectInitial time.Duration
+	ReconnectMaximum time.Duration
+	SevenTV          seventv.ChannelService
 }
 type Service struct {
 	storage     *storage.Storage
@@ -50,12 +57,18 @@ type Service struct {
 	backend     *backend.HTTPClient
 	sevenTV     seventv.ChannelService
 	chatAPIURL  string
+	pusherURL   string
 	client      *http.Client
 	mu          sync.Mutex
+	ctx         context.Context
 	channels    map[string]int64
 	chatrooms   map[string]int64
 	connections map[string]*websocket.Conn
+	cancels     map[string]context.CancelFunc
 	statuses    map[string]contracts.PlatformStatusInfo
+
+	reconnectInitial time.Duration
+	reconnectMaximum time.Duration
 }
 
 func NewService(config Config) (*Service, error) {
@@ -65,9 +78,30 @@ func NewService(config Config) (*Service, error) {
 	if config.ChatAPIURL == "" {
 		config.ChatAPIURL = defaultChatAPIURL
 	}
-	return &Service{storage: config.Storage, events: config.Events, backend: config.Backend, chatAPIURL: config.ChatAPIURL, sevenTV: config.SevenTV, client: http.DefaultClient, channels: map[string]int64{}, chatrooms: map[string]int64{}, connections: map[string]*websocket.Conn{}, statuses: map[string]contracts.PlatformStatusInfo{}}, nil
+	if config.PusherURL == "" {
+		config.PusherURL = pusherURL
+	}
+	if config.ReconnectInitial <= 0 {
+		config.ReconnectInitial = defaultReconnectInitial
+	}
+	if config.ReconnectMaximum <= 0 {
+		config.ReconnectMaximum = defaultReconnectMaximum
+	}
+	if config.ReconnectMaximum < config.ReconnectInitial {
+		config.ReconnectMaximum = config.ReconnectInitial
+	}
+	return &Service{
+		storage: config.Storage, events: config.Events, backend: config.Backend, chatAPIURL: config.ChatAPIURL,
+		pusherURL: config.PusherURL, sevenTV: config.SevenTV, client: http.DefaultClient,
+		channels: map[string]int64{}, chatrooms: map[string]int64{}, connections: map[string]*websocket.Conn{},
+		cancels: map[string]context.CancelFunc{}, statuses: map[string]contracts.PlatformStatusInfo{},
+		reconnectInitial: config.ReconnectInitial, reconnectMaximum: config.ReconnectMaximum,
+	}, nil
 }
 func (s *Service) Start(ctx context.Context) error {
+	s.mu.Lock()
+	s.ctx = ctx
+	s.mu.Unlock()
 	channels, err := s.storage.ChannelsByPlatform(ctx, contracts.PlatformKick)
 	if err != nil {
 		return err
@@ -84,7 +118,12 @@ func (s *Service) Stop(context.Context) error {
 	s.mu.Lock()
 	connections := s.connections
 	s.connections = map[string]*websocket.Conn{}
+	cancels := s.cancels
+	s.cancels = map[string]context.CancelFunc{}
 	s.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
 	for _, connection := range connections {
 		_ = connection.Close(websocket.StatusNormalClosure, "shutdown")
 	}
@@ -112,6 +151,18 @@ func (s *Service) Leave(ctx context.Context, channel string) error {
 	}
 	if s.sevenTV != nil {
 		s.sevenTV.Unsubscribe(ctx, contracts.PlatformKick, channel)
+	}
+	s.mu.Lock()
+	cancel := s.cancels[channel]
+	delete(s.cancels, channel)
+	connection := s.connections[channel]
+	delete(s.connections, channel)
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if connection != nil {
+		_ = connection.Close(websocket.StatusNormalClosure, "leave channel")
 	}
 	s.emit(channel, "disconnected", "")
 	return nil
@@ -225,7 +276,7 @@ func (s *Service) connect(ctx context.Context, channel string) error {
 		"broadcaster_id", response.BroadcasterUserID,
 		"chatroom_id", response.ChatroomID,
 	)
-	go s.runPusher(ctx, channel, response.ChatroomID)
+	s.startPusher(channel, response.ChatroomID)
 	return nil
 }
 func (s *Service) emit(channel, status, failure string) {
@@ -287,26 +338,71 @@ type pusherChatMessage struct {
 	} `json:"sender"`
 }
 
+// startPusher owns the reconnect loop for a channel. The loop runs on the
+// service context (not the caller's request context) and is replaced wholesale
+// on re-connect so at most one loop per channel ever runs.
+func (s *Service) startPusher(channel string, chatroomID int64) {
+	s.mu.Lock()
+	if cancel := s.cancels[channel]; cancel != nil {
+		cancel()
+	}
+	base := s.ctx
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithCancel(base)
+	s.cancels[channel] = cancel
+	s.mu.Unlock()
+	go s.runPusher(ctx, channel, chatroomID)
+}
+
 func (s *Service) runPusher(ctx context.Context, channel string, chatroomID int64) {
+	delay := s.reconnectInitial
+	for {
+		established, err := s.pumpPusher(ctx, channel, chatroomID)
+		if ctx.Err() != nil {
+			return
+		}
+		if established {
+			delay = s.reconnectInitial
+		}
+		slog.Error("Kick chat stream ended", "channel", channel, "error", err)
+		s.emit(channel, "error", err.Error())
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+		delay = min(delay*2, s.reconnectMaximum)
+		s.emit(channel, "connecting", "")
+	}
+}
+
+// pumpPusher dials the chat stream and reads until the connection drops.
+// established reports whether the stream got as far as a subscribe attempt,
+// which resets the reconnect backoff.
+func (s *Service) pumpPusher(ctx context.Context, channel string, chatroomID int64) (bool, error) {
 	slog.Info("dial Kick chat stream", "channel", channel, "chatroom_id", chatroomID)
-	connection, _, err := websocket.Dial(ctx, pusherURL, nil)
+	connection, _, err := websocket.Dial(ctx, s.pusherURL, nil)
 	if err != nil {
-		slog.Error("dial Kick chat stream failed", "channel", channel, "error", err)
-		s.emit(channel, "error", fmt.Sprintf("connect Kick chat stream: %v", err))
-		return
+		return false, fmt.Errorf("connect Kick chat stream: %w", err)
 	}
 	s.mu.Lock()
 	s.connections[channel] = connection
 	s.mu.Unlock()
-	defer func() { _ = connection.CloseNow(); s.mu.Lock(); delete(s.connections, channel); s.mu.Unlock() }()
+	established := false
+	defer func() {
+		_ = connection.CloseNow()
+		s.mu.Lock()
+		if s.connections[channel] == connection {
+			delete(s.connections, channel)
+		}
+		s.mu.Unlock()
+	}()
 	for {
 		_, payload, err := connection.Read(ctx)
 		if err != nil {
-			if ctx.Err() == nil {
-				slog.Error("read Kick chat stream failed", "channel", channel, "error", err)
-				s.emit(channel, "error", fmt.Sprintf("read Kick chat stream: %v", err))
-			}
-			return
+			return established, fmt.Errorf("read Kick chat stream: %w", err)
 		}
 		var envelope pusherEnvelope
 		if err := json.Unmarshal(payload, &envelope); err != nil {
@@ -315,12 +411,13 @@ func (s *Service) runPusher(ctx context.Context, channel string, chatroomID int6
 		switch envelope.Event {
 		case "pusher:connection_established":
 			slog.Info("Kick chat stream connected", "channel", channel, "chatroom_id", chatroomID)
+			established = true
 			data, _ := json.Marshal(map[string]any{"event": "pusher:subscribe", "data": map[string]any{"auth": "", "channel": fmt.Sprintf("chatrooms.%d.v2", chatroomID)}})
 			if err := connection.Write(ctx, websocket.MessageText, data); err != nil {
-				slog.Error("subscribe Kick chat stream failed", "channel", channel, "error", err)
-				s.emit(channel, "error", fmt.Sprintf("subscribe Kick chat stream: %v", err))
-				return
+				return established, fmt.Errorf("subscribe Kick chat stream: %w", err)
 			}
+		case "pusher_internal:subscription_succeeded":
+			s.emit(channel, "connected", "")
 		case "pusher:ping":
 			data, _ := json.Marshal(map[string]any{"event": "pusher:pong", "data": map[string]any{}})
 			_ = connection.Write(ctx, websocket.MessageText, data)
