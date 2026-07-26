@@ -8,12 +8,11 @@ const [chatListSource, moderationRailSource] = await Promise.all([
 ])
 
 test('keeps platform decorations in My channels and hides them in watched channel panes', () => {
-  expect(chatListSource).toContain(
-    ':show-platform-color-stripe="watchedChannel ? false : settings?.showPlatformColorStripe"',
+  const compact = chatListSource.replace(/\s+/g, '')
+  expect(compact).toContain(
+    ':show-platform-color-stripe="watchedChannel?false:settings?.showPlatformColorStripe"',
   )
-  expect(chatListSource).toContain(
-    ':show-platform-icon="watchedChannel ? false : settings?.showPlatformIcon"',
-  )
+  expect(compact).toContain(':show-platform-icon="watchedChannel?false:settings?.showPlatformIcon"')
 })
 
 test('does not render the moderation rail fill until a moderation gesture starts', () => {
