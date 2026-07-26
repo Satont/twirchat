@@ -187,6 +187,8 @@ func run(profileDir string) error {
 	if err := host.AddService(authService); err != nil {
 		return fmt.Errorf("register authentication service: %w", err)
 	}
+	twitchService.SetTokenRefresher(authService)
+	kickService.SetTokenRefresher(authService)
 	bridge.RegisterAuthHandlers(requestHandlers, authService, host.Storage())
 
 	if err := host.Start(); err != nil {

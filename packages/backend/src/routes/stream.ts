@@ -5,7 +5,7 @@ import { handleTwitchBadges } from '../api/twitch-badges.ts'
 import { fetchTwitchUserById } from '../api/twitch-users.ts'
 import { handleChannelsStatus, InvalidChannelsStatusRequestError } from '../api/channels-status.ts'
 import { handleKickChatroom } from '../api/kick-chatroom.ts'
-import { handleTwitchSendMessage } from '../api/twitch-send-message.ts'
+import { handleTwitchSendMessage, TwitchAPIError } from '../api/twitch-send-message.ts'
 import { json, requireClient } from './utils.ts'
 import { logger } from '@twirchat/shared/logger'
 
@@ -91,6 +91,9 @@ export const streamRoutes = {
         // the desktop so it can display the provider's exact rejection.
         return json(await handleTwitchSendMessage(req))
       } catch (err) {
+        if (err instanceof TwitchAPIError) {
+          return json({ error: err.message }, err.status)
+        }
         log.error('twitch/send-message failed', { err: String(err) })
         return json({ error: String(err) }, 500)
       }

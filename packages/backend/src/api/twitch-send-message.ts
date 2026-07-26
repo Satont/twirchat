@@ -11,6 +11,16 @@ export interface TwitchSendMessageResult {
   sent: boolean
 }
 
+export class TwitchAPIError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'TwitchAPIError'
+  }
+}
+
 interface TwitchSendMessageRequest {
   accessToken?: unknown
   channelLogin?: unknown
@@ -68,7 +78,10 @@ export async function handleTwitchSendMessage(request: Request): Promise<TwitchS
   })
   if (!response.ok) {
     const body = (await response.text()).slice(0, 300)
-    throw new Error(`Twitch send message failed: HTTP ${response.status}${body ? `: ${body}` : ''}`)
+    throw new TwitchAPIError(
+      response.status,
+      `Twitch send message failed: HTTP ${response.status}${body ? `: ${body}` : ''}`,
+    )
   }
 
   const payload = (await response.json()) as {

@@ -423,3 +423,65 @@ func TestServiceRequiresHelixChatWriteScopeBeforeSending(t *testing.T) {
 		t.Fatalf("Send() error = %v, want reconnect guidance", err)
 	}
 }
+
+type stubTokenRefresher struct {
+	store *storage.Storage
+	calls int
+}
+
+func (r *stubTokenRefresher) Refresh(ctx context.Context, accountID string) error {
+	r.calls++
+	return r.store.UpdateAccountTokens(ctx, accountID, storage.AccountTokens{AccessToken: "fresh-token"})
+}
+
+func TestServiceRefreshesTwitchTokenAfterUnauthorized(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("twitch-refresh-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	refreshToken := "refresh-token"
+	if err := store.UpsertAccount(ctx, contracts.Account{
+		ID: "twitch:1", Platform: contracts.PlatformTwitch, PlatformUserID: "1", Username: "viewer",
+		Scopes: []string{"user:write:chat"},
+	}, storage.AccountTokens{AccessToken: "stale-token", RefreshToken: &refreshToken}); err != nil {
+		t.Fatalf("UpsertAccount() error = %v", err)
+	}
+	backendServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/twitch/send-message" {
+			http.NotFound(writer, request)
+			return
+		}
+		var payload struct {
+			AccessToken string `json:"accessToken"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Errorf("decode send request: %v", err)
+		}
+		if payload.AccessToken != "fresh-token" {
+			writer.WriteHeader(http.StatusUnauthorized)
+			_, _ = writer.Write([]byte(`{"error":"Twitch send message failed: HTTP 401"}`))
+			return
+		}
+		_, _ = writer.Write([]byte(`{"sent":true,"messageId":"message-1"}`))
+	}))
+	t.Cleanup(backendServer.Close)
+	backendClient, err := backend.NewHTTPClient(backendServer.URL, "secret", backendServer.Client())
+	if err != nil {
+		t.Fatalf("NewHTTPClient() error = %v", err)
+	}
+	refresher := &stubTokenRefresher{store: store}
+	service, err := NewService(Config{
+		Storage: store, Events: &recordingEvents{}, Backend: backendClient, Refresher: refresher,
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	if err := service.Send(ctx, "streamer", "hello", ""); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if refresher.calls != 1 {
+		t.Fatalf("refresher calls = %d, want 1", refresher.calls)
+	}
+}

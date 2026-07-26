@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Satont/twirchat/packages/desktop/internal/auth"
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
@@ -116,6 +117,9 @@ type Config struct {
 	Badges         BadgeResolver
 	ConnectTimeout time.Duration
 	SevenTV        seventv.ChannelService
+	// Refresher renews expired OAuth credentials before sends and reconnects.
+	// Optional: tests may leave it nil.
+	Refresher auth.TokenRefresher
 }
 
 // Service reconnects saved Twitch channels, persists incoming messages and
@@ -139,6 +143,7 @@ type Service struct {
 	connectTimeout time.Duration
 	ctx            context.Context
 	started        bool
+	refresher      auth.TokenRefresher
 }
 
 func NewService(config Config) (*Service, error) {
@@ -164,6 +169,7 @@ func NewService(config Config) (*Service, error) {
 		badges:         config.Badges,
 		backend:        config.Backend,
 		sevenTV:        config.SevenTV,
+		refresher:      config.Refresher,
 		channels:       make(map[string]struct{}),
 		statuses:       make(map[string]contracts.PlatformStatusInfo),
 		connectTimeout: config.ConnectTimeout,
@@ -299,7 +305,7 @@ func (s *Service) Send(ctx context.Context, channel, text, replyToMessageID stri
 	if s.backend == nil {
 		return errors.New("send Twitch message: backend API client is unavailable")
 	}
-	tokens, found, err := s.storage.AccountTokens(ctx, account.ID)
+	tokens, found, err := auth.EnsureFreshTokens(ctx, s.storage, s.tokenRefresher(), account.ID)
 	if err != nil {
 		return fmt.Errorf("send Twitch message: load Twitch credentials: %w", err)
 	}
@@ -309,6 +315,69 @@ func (s *Service) Send(ctx context.Context, channel, text, replyToMessageID stri
 	if account.PlatformUserID == "" {
 		return errors.New("send Twitch message: authenticated account has no Twitch user ID")
 	}
+	sent, err := s.postChatMessage(ctx, account, tokens.AccessToken, channel, text, replyToMessageID)
+	if err != nil && isUnauthorizedBackendError(err) && s.refreshAccount(ctx, account.ID) {
+		tokens, found, err = auth.ReloadTokens(ctx, s.storage, account.ID)
+		if err != nil {
+			return fmt.Errorf("send Twitch message: load Twitch credentials: %w", err)
+		}
+		if found {
+			sent, err = s.postChatMessage(ctx, account, tokens.AccessToken, channel, text, replyToMessageID)
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("send Twitch message through API: %w", deliveryError(err))
+	}
+	if !sent.Sent {
+		if sent.Message == "" {
+			sent.Message = "Twitch did not accept the message"
+		}
+		if sent.Code != "" {
+			return fmt.Errorf("send Twitch message: %s (%s)", sent.Message, sent.Code)
+		}
+		return fmt.Errorf("send Twitch message: %s", sent.Message)
+	}
+	return nil
+}
+
+// SetTokenRefresher wires the OAuth refresher after construction, since the
+// auth service is built after the platform services in main.
+func (s *Service) SetTokenRefresher(refresher auth.TokenRefresher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refresher = refresher
+}
+
+func (s *Service) tokenRefresher() auth.TokenRefresher {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.refresher
+}
+
+func (s *Service) refreshAccount(ctx context.Context, accountID string) bool {
+	refresher := s.tokenRefresher()
+	if refresher == nil {
+		return false
+	}
+	if err := refresher.Refresh(ctx, accountID); err != nil {
+		slog.Error("refresh Twitch token after 401", "account", accountID, "error", err)
+		return false
+	}
+	slog.Info("refreshed Twitch token after 401", "account", accountID)
+	return true
+}
+
+type chatMessageResult struct {
+	Code    string
+	Message string
+	Sent    bool
+}
+
+func (s *Service) postChatMessage(
+	ctx context.Context,
+	account *contracts.Account,
+	accessToken, channel, text, replyToMessageID string,
+) (chatMessageResult, error) {
 	var response struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
@@ -321,22 +390,18 @@ func (s *Service) Send(ctx context.Context, channel, text, replyToMessageID stri
 		ReplyToMessageID string `json:"replyToMessageId,omitempty"`
 		SenderID         string `json:"senderId"`
 	}{
-		AccessToken: tokens.AccessToken, ChannelLogin: channel, Message: text,
+		AccessToken: accessToken, ChannelLogin: channel, Message: text,
 		ReplyToMessageID: replyToMessageID, SenderID: account.PlatformUserID,
 	}
 	if err := s.backend.PostJSON(ctx, "/api/twitch/send-message", request, &response); err != nil {
-		return fmt.Errorf("send Twitch message through API: %w", deliveryError(err))
+		return chatMessageResult{}, err
 	}
-	if !response.Sent {
-		if response.Message == "" {
-			response.Message = "Twitch did not accept the message"
-		}
-		if response.Code != "" {
-			return fmt.Errorf("send Twitch message: %s (%s)", response.Message, response.Code)
-		}
-		return fmt.Errorf("send Twitch message: %s", response.Message)
-	}
-	return nil
+	return chatMessageResult{Code: response.Code, Message: response.Message, Sent: response.Sent}, nil
+}
+
+func isUnauthorizedBackendError(err error) bool {
+	var statusError *backend.HTTPStatusError
+	return errors.As(err, &statusError) && statusError.StatusCode == 401
 }
 
 func hasScope(scopes []string, required string) bool {
@@ -391,7 +456,7 @@ func (s *Service) connectSavedChannels(ctx context.Context, force bool) error {
 	}
 	credentials := Credentials{}
 	if account != nil {
-		tokens, found, err := s.storage.AccountTokens(ctx, account.ID)
+		tokens, found, err := auth.EnsureFreshTokens(ctx, s.storage, s.tokenRefresher(), account.ID)
 		if err != nil {
 			return err
 		}

@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/Satont/twirchat/packages/desktop/internal/auth"
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	"github.com/Satont/twirchat/packages/desktop/internal/seventv"
@@ -45,6 +46,9 @@ type Config struct {
 	Events     Events
 	Backend    *backend.HTTPClient
 	ChatAPIURL string
+	// Refresher renews expired OAuth credentials before sends and after a 401.
+	// Optional: tests and anonymous-only setups may leave it nil.
+	Refresher auth.TokenRefresher
 	// PusherURL is a test hook, like ChatAPIURL — production uses the package default.
 	PusherURL        string
 	ReconnectInitial time.Duration
@@ -59,6 +63,7 @@ type Service struct {
 	chatAPIURL  string
 	pusherURL   string
 	client      *http.Client
+	refresher   auth.TokenRefresher
 	mu          sync.Mutex
 	ctx         context.Context
 	channels    map[string]int64
@@ -92,7 +97,7 @@ func NewService(config Config) (*Service, error) {
 	}
 	return &Service{
 		storage: config.Storage, events: config.Events, backend: config.Backend, chatAPIURL: config.ChatAPIURL,
-		pusherURL: config.PusherURL, sevenTV: config.SevenTV, client: http.DefaultClient,
+		pusherURL: config.PusherURL, sevenTV: config.SevenTV, client: http.DefaultClient, refresher: config.Refresher,
 		channels: map[string]int64{}, chatrooms: map[string]int64{}, connections: map[string]*websocket.Conn{},
 		cancels: map[string]context.CancelFunc{}, statuses: map[string]contracts.PlatformStatusInfo{},
 		reconnectInitial: config.ReconnectInitial, reconnectMaximum: config.ReconnectMaximum,
@@ -183,7 +188,7 @@ func (s *Service) Send(ctx context.Context, channel, text, _ string) error {
 	if account == nil {
 		return errors.New("send Kick message: authenticate with Kick before sending messages")
 	}
-	tokens, found, err := s.storage.AccountTokens(ctx, account.ID)
+	tokens, found, err := auth.EnsureFreshTokens(ctx, s.storage, s.refresher, account.ID)
 	if err != nil {
 		return err
 	}
@@ -201,26 +206,23 @@ func (s *Service) Send(ctx context.Context, channel, text, _ string) error {
 		broadcaster = s.channels[channel]
 		s.mu.Unlock()
 	}
-	body, err := json.Marshal(map[string]any{"broadcaster_user_id": broadcaster, "content": text, "type": "user"})
+	status, body, err := s.postMessage(ctx, broadcaster, text, tokens.AccessToken)
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.chatAPIURL, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
-	request.Header.Set("Content-Type", "application/json")
-	response, err := s.client.Do(request)
-	if err != nil {
-		return fmt.Errorf("send Kick message: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		body, readErr := io.ReadAll(io.LimitReader(response.Body, 4<<10))
-		if readErr != nil {
-			return fmt.Errorf("send Kick message: read API rejection: %w", readErr)
+	if status == http.StatusUnauthorized && s.refreshAccount(ctx, account.ID) {
+		tokens, found, err = auth.ReloadTokens(ctx, s.storage, account.ID)
+		if err != nil {
+			return err
 		}
+		if found {
+			status, body, err = s.postMessage(ctx, broadcaster, text, tokens.AccessToken)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if status < 200 || status >= 300 {
 		var payload struct {
 			Error   string `json:"error"`
 			Message string `json:"message"`
@@ -231,11 +233,61 @@ func (s *Service) Send(ctx context.Context, channel, text, _ string) error {
 			message = strings.TrimSpace(payload.Error)
 		}
 		if message == "" {
-			message = fmt.Sprintf("Kick API returned HTTP %d", response.StatusCode)
+			message = fmt.Sprintf("Kick API returned HTTP %d", status)
 		}
 		return fmt.Errorf("send Kick message: %w: %s", ErrDeliveryRejected, message)
 	}
 	return nil
+}
+
+// SetTokenRefresher wires the OAuth refresher after construction, since the
+// auth service is built after the platform services in main.
+func (s *Service) SetTokenRefresher(refresher auth.TokenRefresher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refresher = refresher
+}
+
+func (s *Service) refreshAccount(ctx context.Context, accountID string) bool {
+	s.mu.Lock()
+	refresher := s.refresher
+	s.mu.Unlock()
+	if refresher == nil {
+		return false
+	}
+	if err := refresher.Refresh(ctx, accountID); err != nil {
+		slog.Error("refresh Kick token after 401", "account", accountID, "error", err)
+		return false
+	}
+	slog.Info("refreshed Kick token after 401", "account", accountID)
+	return true
+}
+
+func (s *Service) postMessage(
+	ctx context.Context,
+	broadcaster int64,
+	text, accessToken string,
+) (int, []byte, error) {
+	body, err := json.Marshal(map[string]any{"broadcaster_user_id": broadcaster, "content": text, "type": "user"})
+	if err != nil {
+		return 0, nil, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.chatAPIURL, bytes.NewReader(body))
+	if err != nil {
+		return 0, nil, err
+	}
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := s.client.Do(request)
+	if err != nil {
+		return 0, nil, fmt.Errorf("send Kick message: %w", err)
+	}
+	defer response.Body.Close()
+	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 4<<10))
+	if err != nil {
+		return 0, nil, fmt.Errorf("send Kick message: read API rejection: %w", err)
+	}
+	return response.StatusCode, responseBody, nil
 }
 func (s *Service) Statuses() []contracts.PlatformStatusInfo {
 	s.mu.Lock()

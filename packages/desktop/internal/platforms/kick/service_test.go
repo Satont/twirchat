@@ -475,3 +475,115 @@ func (*recordingSevenTV) Enrich(message contracts.NormalizedChatMessage) contrac
 	})
 	return message
 }
+
+type stubTokenRefresher struct {
+	store *storage.Storage
+	calls int
+}
+
+func (r *stubTokenRefresher) Refresh(ctx context.Context, accountID string) error {
+	r.calls++
+	return r.store.UpdateAccountTokens(ctx, accountID, storage.AccountTokens{AccessToken: "fresh-token"})
+}
+
+func TestServiceRefreshesKickTokenAfterUnauthorized(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("kick-refresh-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	refreshToken := "refresh-token"
+	if err := store.UpsertAccount(ctx, contracts.Account{ID: "kick:1", Platform: contracts.PlatformKick, PlatformUserID: "1", Username: "satont", DisplayName: "Satont"}, storage.AccountTokens{AccessToken: "stale-token", RefreshToken: &refreshToken}); err != nil {
+		t.Fatalf("UpsertAccount() error = %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/kick/chatroom":
+			_, _ = writer.Write([]byte(`{"chatroomId":44,"broadcasterUserId":1}`))
+		case "/chat":
+			if request.Header.Get("Authorization") != "Bearer fresh-token" {
+				writer.WriteHeader(http.StatusUnauthorized)
+				_, _ = writer.Write([]byte(`{"message":"Unauthorized"}`))
+				return
+			}
+			_, _ = writer.Write([]byte(`{}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	t.Cleanup(server.Close)
+	backendClient, err := backend.NewHTTPClient(server.URL, "secret", server.Client())
+	if err != nil {
+		t.Fatalf("NewHTTPClient() error = %v", err)
+	}
+	refresher := &stubTokenRefresher{store: store}
+	service, err := NewService(Config{
+		Storage: store, Events: &recordingEvents{}, Backend: backendClient, ChatAPIURL: server.URL + "/chat",
+		PusherURL: pusherWSURL(quietPusherServer(t)), Refresher: refresher,
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	t.Cleanup(func() { _ = service.Stop(context.Background()) })
+	if err := service.Send(ctx, "satont", "hello", ""); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if refresher.calls != 1 {
+		t.Fatalf("refresher calls = %d, want 1", refresher.calls)
+	}
+}
+
+func TestServiceRefreshesExpiredKickTokenBeforeSending(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, t.TempDir(), storage.WithMachineID("kick-expired-test"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	refreshToken := "refresh-token"
+	expiresAt := time.Now().Add(-time.Hour).Unix()
+	if err := store.UpsertAccount(ctx, contracts.Account{ID: "kick:1", Platform: contracts.PlatformKick, PlatformUserID: "1", Username: "satont", DisplayName: "Satont"}, storage.AccountTokens{AccessToken: "stale-token", RefreshToken: &refreshToken, ExpiresAt: &expiresAt}); err != nil {
+		t.Fatalf("UpsertAccount() error = %v", err)
+	}
+	chatRequests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/kick/chatroom":
+			_, _ = writer.Write([]byte(`{"chatroomId":44,"broadcasterUserId":1}`))
+		case "/chat":
+			chatRequests++
+			if request.Header.Get("Authorization") != "Bearer fresh-token" {
+				writer.WriteHeader(http.StatusUnauthorized)
+				_, _ = writer.Write([]byte(`{"message":"Unauthorized"}`))
+				return
+			}
+			_, _ = writer.Write([]byte(`{}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	t.Cleanup(server.Close)
+	backendClient, err := backend.NewHTTPClient(server.URL, "secret", server.Client())
+	if err != nil {
+		t.Fatalf("NewHTTPClient() error = %v", err)
+	}
+	refresher := &stubTokenRefresher{store: store}
+	service, err := NewService(Config{
+		Storage: store, Events: &recordingEvents{}, Backend: backendClient, ChatAPIURL: server.URL + "/chat",
+		PusherURL: pusherWSURL(quietPusherServer(t)), Refresher: refresher,
+	})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	t.Cleanup(func() { _ = service.Stop(context.Background()) })
+	if err := service.Send(ctx, "satont", "hello", ""); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if refresher.calls != 1 {
+		t.Fatalf("refresher calls = %d, want 1 proactive refresh", refresher.calls)
+	}
+	if chatRequests != 1 {
+		t.Fatalf("chat requests = %d, want 1 (no 401 retry after proactive refresh)", chatRequests)
+	}
+}
