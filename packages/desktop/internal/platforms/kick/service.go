@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	defaultChatAPIURL = "https://api.kick.com/public/v1/chat"
-	pusherURL         = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=twirchat&version=1.0&flash=false"
+	defaultChatAPIURL        = "https://api.kick.com/public/v1/chat"
+	defaultActiveChattersURL = "https://web.kick.com/api/v1/channels"
+	pusherURL                = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=twirchat&version=1.0&flash=false"
 
 	defaultReconnectInitial = 3 * time.Second
 	defaultReconnectMaximum = 30 * time.Second
@@ -42,10 +43,11 @@ type Events interface {
 	Moderation(contracts.ModerationOutcome)
 }
 type Config struct {
-	Storage    *storage.Storage
-	Events     Events
-	Backend    *backend.HTTPClient
-	ChatAPIURL string
+	Storage           *storage.Storage
+	Events            Events
+	Backend           *backend.HTTPClient
+	ChatAPIURL        string
+	ActiveChattersURL string
 	// Refresher renews expired OAuth credentials before sends and after a 401.
 	// Optional: tests and anonymous-only setups may leave it nil.
 	Refresher auth.TokenRefresher
@@ -56,21 +58,22 @@ type Config struct {
 	SevenTV          seventv.ChannelService
 }
 type Service struct {
-	storage     *storage.Storage
-	events      Events
-	backend     *backend.HTTPClient
-	sevenTV     seventv.ChannelService
-	chatAPIURL  string
-	pusherURL   string
-	client      *http.Client
-	refresher   auth.TokenRefresher
-	mu          sync.Mutex
-	ctx         context.Context
-	channels    map[string]int64
-	chatrooms   map[string]int64
-	connections map[string]*websocket.Conn
-	cancels     map[string]context.CancelFunc
-	statuses    map[string]contracts.PlatformStatusInfo
+	storage           *storage.Storage
+	events            Events
+	backend           *backend.HTTPClient
+	sevenTV           seventv.ChannelService
+	chatAPIURL        string
+	activeChattersURL string
+	pusherURL         string
+	client            *http.Client
+	refresher         auth.TokenRefresher
+	mu                sync.Mutex
+	ctx               context.Context
+	channels          map[string]int64
+	chatrooms         map[string]int64
+	connections       map[string]*websocket.Conn
+	cancels           map[string]context.CancelFunc
+	statuses          map[string]contracts.PlatformStatusInfo
 
 	reconnectInitial time.Duration
 	reconnectMaximum time.Duration
@@ -82,6 +85,9 @@ func NewService(config Config) (*Service, error) {
 	}
 	if config.ChatAPIURL == "" {
 		config.ChatAPIURL = defaultChatAPIURL
+	}
+	if config.ActiveChattersURL == "" {
+		config.ActiveChattersURL = defaultActiveChattersURL
 	}
 	if config.PusherURL == "" {
 		config.PusherURL = pusherURL
@@ -97,7 +103,8 @@ func NewService(config Config) (*Service, error) {
 	}
 	return &Service{
 		storage: config.Storage, events: config.Events, backend: config.Backend, chatAPIURL: config.ChatAPIURL,
-		pusherURL: config.PusherURL, sevenTV: config.SevenTV, client: http.DefaultClient, refresher: config.Refresher,
+		activeChattersURL: config.ActiveChattersURL,
+		pusherURL:         config.PusherURL, sevenTV: config.SevenTV, client: http.DefaultClient, refresher: config.Refresher,
 		channels: map[string]int64{}, chatrooms: map[string]int64{}, connections: map[string]*websocket.Conn{},
 		cancels: map[string]context.CancelFunc{}, statuses: map[string]contracts.PlatformStatusInfo{},
 		reconnectInitial: config.ReconnectInitial, reconnectMaximum: config.ReconnectMaximum,
@@ -195,16 +202,15 @@ func (s *Service) Send(ctx context.Context, channel, text, _ string) error {
 	if !found {
 		return errors.New("send Kick message: credentials are unavailable")
 	}
-	s.mu.Lock()
-	broadcaster := s.channels[channel]
-	s.mu.Unlock()
-	if broadcaster == 0 {
+	broadcaster, found := s.cachedChannelID(channel)
+	if !found {
 		if err := s.connect(ctx, channel); err != nil {
 			return err
 		}
-		s.mu.Lock()
-		broadcaster = s.channels[channel]
-		s.mu.Unlock()
+		broadcaster, found = s.cachedChannelID(channel)
+		if !found {
+			return errors.New("send Kick message: broadcaster ID is unavailable")
+		}
 	}
 	status, body, err := s.postMessage(ctx, broadcaster, text, tokens.AccessToken)
 	if err != nil {
@@ -312,10 +318,7 @@ func (s *Service) connect(ctx context.Context, channel string) error {
 		s.emit(channel, "error", err.Error())
 		return err
 	}
-	s.mu.Lock()
-	s.channels[channel] = response.BroadcasterUserID
-	s.chatrooms[channel] = response.ChatroomID
-	s.mu.Unlock()
+	s.cacheChannelIDs(channel, response.BroadcasterUserID, response.ChatroomID)
 	if s.sevenTV != nil {
 		s.sevenTV.Subscribe(ctx, seventv.Subscription{
 			Platform: contracts.PlatformKick, ChannelID: channel, CanonicalChannelID: fmt.Sprint(response.BroadcasterUserID),
