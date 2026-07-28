@@ -51,7 +51,7 @@ type recordingEvents struct {
 }
 
 func (e *recordingEvents) EmitChatMessage(contracts.NormalizedChatMessage) bool { return true }
-func (e *recordingEvents) EmitChatModeration(contracts.ModerationOutcome) bool { return true }
+func (e *recordingEvents) EmitChatModeration(contracts.ModerationOutcome) bool  { return true }
 func (e *recordingEvents) EmitPlatformStatus(contracts.PlatformStatusInfo) bool { return true }
 func (e *recordingEvents) EmitWatchedChannelMessage(message contracts.WatchedChannelMessage) bool {
 	e.mu.Lock()

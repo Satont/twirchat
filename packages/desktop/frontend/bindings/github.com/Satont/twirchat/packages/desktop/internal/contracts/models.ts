@@ -95,6 +95,7 @@ export enum RequestMethod {
     RequestAddWatchedChannel = "addWatchedChannel",
     RequestRemoveWatchedChannel = "removeWatchedChannel",
     RequestGetWatchedChannelMessages = "getWatchedChannelMessages",
+    RequestGetChatters = "getChatters",
     RequestSendWatchedChannelMessage = "sendWatchedChannelMessage",
     RequestGetWatchedChannelStatuses = "getWatchedChannelStatuses",
     RequestOpenExternalURL = "openExternalUrl",

@@ -35,6 +35,7 @@ const (
 	RequestAddWatchedChannel         RequestMethod = "addWatchedChannel"
 	RequestRemoveWatchedChannel      RequestMethod = "removeWatchedChannel"
 	RequestGetWatchedChannelMessages RequestMethod = "getWatchedChannelMessages"
+	RequestGetChatters               RequestMethod = "getChatters"
 	RequestSendWatchedChannelMessage RequestMethod = "sendWatchedChannelMessage"
 	RequestGetWatchedChannelStatuses RequestMethod = "getWatchedChannelStatuses"
 	RequestOpenExternalURL           RequestMethod = "openExternalUrl"
