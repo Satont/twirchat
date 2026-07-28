@@ -8,9 +8,12 @@ import ChatInput from './ChatInput.vue'
 import Tooltip from './ui/Tooltip.vue'
 import ChatAppearancePopover from './ui/ChatAppearancePopover.vue'
 import UserCardDialog from './UserCardDialog.vue'
+import ChattersDialog from './ChattersDialog.vue'
 import { rpc } from '../main'
 import { desktopApi } from '../services/desktop-api'
+import type { ChattersTarget } from '../services/desktop-api'
 import { platformColor } from '../../shared/utils/platform'
+import { buildChattersTargets } from '../utils/chatters'
 import { useAliasStore } from '../stores/useAliasStore'
 import { useStreamStatusStore } from '../stores/streamStatus'
 import { useModerationOutcomes } from '../composables/useModerationOutcomes'
@@ -28,6 +31,7 @@ import {
 import KickIcon from '../../../assets/icons/platforms/kick.svg'
 import TwitchIcon from '../../../assets/icons/platforms/twitch.svg'
 import YoutubeIcon from '../../../assets/icons/platforms/youtube.svg'
+import UsersIcon from '../../../assets/icons/ui/users.svg'
 import {
   DEFAULT_SETTINGS,
   type Account,
@@ -110,6 +114,7 @@ function followLatestAfterLayout(): void {
 const replyTarget = ref<NormalizedChatMessage | null>(null)
 const selectedUserCardTarget = ref<UserCardTarget | null>(null)
 const isUserCardDialogOpen = ref(false)
+const isChattersDialogOpen = ref(false)
 const showMenu = ref(false)
 const watchedModerationAllowed = ref(false)
 const moderationPendingMessageIDs = ref(new Set<string>())
@@ -294,6 +299,10 @@ watch(providerMessages, (messages) => {
 // The combined "My channels" view is owned by the connected accounts. A
 // watched channel has its own tab and must not replace an account target here.
 const allChannels = computed<ChannelStatusRequest[]>(() => ownChatSendTargets(props.accounts))
+
+const chattersTargets = computed<ChattersTarget[]>(() =>
+  buildChattersTargets(props.watchedChannel, allChannels.value),
+)
 
 // Channels shown in the bar: merge allChannels with store-fetched statuses.
 // This ensures the bar is visible immediately when a channel is joined, even if
@@ -557,6 +566,16 @@ function onAppearanceChange(s: AppSettings) {
           >{{ activeMessages.length }} messages</span
         >
 
+        <!-- Chatters dialog button (shown when the pane has twitch/kick targets) -->
+        <button
+          v-if="chattersTargets.length > 0"
+          class="panel-action-btn"
+          title="Chatters"
+          @click.stop="isChattersDialogOpen = true"
+        >
+          <UsersIcon width="14" height="14" />
+        </button>
+
         <!-- Appearance popup button -->
         <ChatAppearancePopover v-if="settings" :settings="settings" @change="onAppearanceChange" />
 
@@ -763,6 +782,12 @@ function onAppearanceChange(s: AppSettings) {
       @open-user-card="onOpenUserCard"
       @send="onSend"
       @send-watched="onSendWatched"
+    />
+
+    <ChattersDialog
+      v-if="chattersTargets.length > 0"
+      v-model:open="isChattersDialogOpen"
+      :targets="chattersTargets"
     />
 
     <UserCardDialog
