@@ -153,6 +153,10 @@ func run(profileDir string) error {
 	}
 	bridge.RegisterTwitchHandlers(requestHandlers, twitchService, kickService)
 	bridge.RegisterWatchedChannelHandlers(requestHandlers, watchedManager)
+	bridge.RegisterChattersHandlers(requestHandlers, map[contracts.Platform]bridge.ChattersProvider{
+		contracts.PlatformTwitch: twitchService,
+		contracts.PlatformKick:   kickService,
+	})
 	bridge.RegisterSevenTVHandlers(requestHandlers, sevenTVService)
 	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
 	bridge.RegisterAvatarHandlers(requestHandlers, avatarResolver)

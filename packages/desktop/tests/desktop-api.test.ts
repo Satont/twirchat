@@ -30,6 +30,95 @@ test('serializes legacy request names and arguments through the Wails gateway', 
   })
 })
 
+test('serializes chatters requests with all targets through the Wails gateway', async () => {
+  let receivedRequest: unknown
+  const api = createDesktopApi({
+    Call: async (request) => {
+      receivedRequest = request
+      return undefined
+    },
+    Capabilities: async () => ({ updates: false }),
+  })
+
+  await api.request.getChatters({
+    targets: [
+      { platform: 'twitch', channelSlug: 'streamer' },
+      { platform: 'kick', channelSlug: 'kicker' },
+    ],
+  })
+
+  expect(receivedRequest).toEqual({
+    method: 'getChatters',
+    params: {
+      targets: [
+        { platform: 'twitch', channelSlug: 'streamer' },
+        { platform: 'kick', channelSlug: 'kicker' },
+      ],
+    },
+  })
+})
+
+test('returns per-channel chatters results unchanged from the Wails gateway', async () => {
+  const chattersResponse = {
+    results: [
+      {
+        platform: 'twitch',
+        channelSlug: 'streamer',
+        total: 2,
+        groups: [
+          {
+            role: 'broadcaster',
+            users: [{ userId: 'user-1', username: 'streamer', displayName: 'Streamer' }],
+          },
+          {
+            role: 'chatters',
+            users: [{ username: 'viewer', displayName: 'Viewer', avatarUrl: 'avatar.webp' }],
+          },
+        ],
+      },
+      {
+        platform: 'kick',
+        channelSlug: 'kicker',
+        total: 0,
+        groups: [],
+        error: 'Reconnect Kick to read chatters.',
+      },
+    ],
+  }
+  const api = createDesktopApi({
+    Call: async (request) => {
+      if (request.method === 'getChatters') {
+        return chattersResponse
+      }
+      return undefined
+    },
+    Capabilities: async () => ({ updates: false }),
+  })
+
+  const result = await api.request.getChatters({
+    targets: [
+      { platform: 'twitch', channelSlug: 'streamer' },
+      { platform: 'kick', channelSlug: 'kicker' },
+    ],
+  })
+
+  expect(result).toBe(chattersResponse)
+})
+
+test('preserves chatters request rejections from the Wails binding', async () => {
+  const unavailable = new Error(
+    'desktop request "getChatters" is unavailable: service has not been ported',
+  )
+  const api = createDesktopApi({
+    Call: async () => Promise.reject(unavailable),
+    Capabilities: async () => ({ updates: false }),
+  })
+
+  await expect(
+    api.request.getChatters({ targets: [{ platform: 'twitch', channelSlug: 'streamer' }] }),
+  ).rejects.toBe(unavailable)
+})
+
 test('converts ISO timestamps to Date for chat and history responses', async () => {
   const api = createDesktopApi({
     Call: async (request) => {

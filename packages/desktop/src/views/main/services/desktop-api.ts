@@ -49,6 +49,36 @@ export interface UserChatHistoryPage {
 
 export type ModerationPlatform = 'twitch' | 'kick'
 export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
+export type ChatterRole = 'broadcaster' | 'moderators' | 'vips' | 'ogs' | 'bots' | 'chatters'
+
+export interface ChatterUser {
+  userId?: string
+  username: string
+  displayName: string
+  avatarUrl?: string
+}
+
+export interface ChatterGroup {
+  role: ChatterRole
+  users: ChatterUser[]
+}
+
+export interface ChattersTarget {
+  platform: 'twitch' | 'kick'
+  channelSlug: string
+}
+
+export interface ChannelChatters {
+  platform: 'twitch' | 'kick'
+  channelSlug: string
+  total: number
+  groups: ChatterGroup[]
+  error?: string
+}
+
+export interface ChattersResponse {
+  results: ChannelChatters[]
+}
 
 export interface AvatarResolution {
   avatarUrl?: string
@@ -147,6 +177,7 @@ type LegacyRequestMap = {
   }
   removeWatchedChannel: { params: { id: string }; response: void }
   getWatchedChannelMessages: { params: { id: string }; response: NormalizedChatMessage[] }
+  getChatters: { params: { targets: ChattersTarget[] }; response: ChattersResponse }
   sendWatchedChannelMessage: {
     params: { id: string; text: string; replyToMessageId?: string }
     response: void
@@ -251,6 +282,7 @@ const requestMethods = {
   addWatchedChannel: RequestMethod.RequestAddWatchedChannel,
   removeWatchedChannel: RequestMethod.RequestRemoveWatchedChannel,
   getWatchedChannelMessages: RequestMethod.RequestGetWatchedChannelMessages,
+  getChatters: RequestMethod.RequestGetChatters,
   sendWatchedChannelMessage: RequestMethod.RequestSendWatchedChannelMessage,
   getWatchedChannelStatuses: RequestMethod.RequestGetWatchedChannelStatuses,
   openExternalUrl: RequestMethod.RequestOpenExternalURL,
@@ -321,6 +353,7 @@ export function createDesktopApi(binding: GeneratedDesktopBinding = generatedBin
         const messages = await call('getWatchedChannelMessages', params)
         return messages.map(toChatMessage)
       },
+      getChatters: (params) => call('getChatters', params),
       sendWatchedChannelMessage: (params) => call('sendWatchedChannelMessage', params),
       getWatchedChannelStatuses: () => call('getWatchedChannelStatuses', undefined),
       openExternalUrl: (params) => call('openExternalUrl', params),
