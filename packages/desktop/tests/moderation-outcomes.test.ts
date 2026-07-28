@@ -53,6 +53,36 @@ test('resolves exact deletion and channel-scoped user sanctions without mutating
   expect(deleted).not.toHaveProperty('moderation')
 })
 
+test('user sanctions strike only messages sent before the sanction', () => {
+  let now = Date.parse('2026-07-28T12:00:00Z')
+  const outcomes = createModerationOutcomeStore(() => now)
+  const before = message({ id: 'message-before', timestamp: new Date(now - 60_000) })
+  const after = message({ id: 'message-after', timestamp: new Date(now + 60_000) })
+
+  outcomes.apply({
+    action: 'timeout',
+    channelId: 'streamer',
+    durationSeconds: 300,
+    platform: 'twitch',
+    targetUserId: 'viewer-1',
+  })
+
+  expect(outcomes.outcomeFor(before)).toEqual({
+    action: 'timeout',
+    label: '(timed out for 5m)',
+  })
+  expect(outcomes.outcomeFor(after)).toBeUndefined()
+
+  now += 60_000
+  outcomes.apply({
+    action: 'ban',
+    channelId: 'streamer',
+    platform: 'twitch',
+    targetUserId: 'viewer-1',
+  })
+  expect(outcomes.outcomeFor(after)).toEqual({ action: 'ban', label: '(banned)' })
+})
+
 test('expires deleted-message tombstones after five minutes', () => {
   let now = 0
   const outcomes = createModerationOutcomeStore(() => now)

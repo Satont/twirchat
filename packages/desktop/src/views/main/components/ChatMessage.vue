@@ -371,9 +371,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
         @click.stop="onOpenUserCard"
         >{{ props.alias ?? message.author.displayName }}</span
       >{{ ' ' }}<span class="compact-sep">: </span
-      ><span v-if="props.moderationOutcome?.isTombstone" class="deleted-message-body"
-        >Message deleted</span
-      ><span v-else class="msg-text" :class="{ italic: message.type === 'action' }">
+      ><span
+        class="msg-text"
+        :class="{
+          deleted: props.moderationOutcome?.isTombstone,
+          italic: message.type === 'action',
+        }"
+      >
         <template v-for="(part, index) in messageParts" :key="index">
           <EmoteTooltip v-if="part.type === 'emote' && part.emote" :emote="part.emote">
             <img
@@ -589,10 +593,13 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
       </div>
 
       <!-- Message text -->
-      <span v-if="props.moderationOutcome?.isTombstone" class="deleted-message-body">
-        Message deleted
-      </span>
-      <span v-else class="msg-text" :class="{ italic: message.type === 'action' }">
+      <span
+        class="msg-text"
+        :class="{
+          deleted: props.moderationOutcome?.isTombstone,
+          italic: message.type === 'action',
+        }"
+      >
         <template v-for="(part, index) in messageParts" :key="index">
           <EmoteTooltip v-if="part.type === 'emote' && part.emote" :emote="part.emote">
             <img
@@ -888,9 +895,8 @@ function scopeBadgeSvg(svgString: string, badgeId: string): string {
   color: var(--c-text, #e2e2e8);
 }
 
-.deleted-message-body {
-  color: var(--c-text-2, #8b8b99);
-  font-style: italic;
+.msg-text.deleted {
+  text-decoration: line-through;
 }
 
 :deep(.msg-link) {

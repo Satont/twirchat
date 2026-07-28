@@ -17,15 +17,23 @@ export interface ModerationOutcomeStore {
 }
 
 const DELETED_MESSAGE_RETENTION_MS = 300_000
+// Provider timestamps can lag the local clock; a sanction still applies to
+// messages stamped slightly before it was observed.
+const SANCTION_CLOCK_SKEW_MS = 10_000
 
 type RetainedDeletion = {
   expiresAt: number
   resolved: ResolvedModerationOutcome
 }
 
+type RetainedSanction = {
+  appliedAt: number
+  resolved: ResolvedModerationOutcome
+}
+
 export function createModerationOutcomeStore(now: () => number = Date.now): ModerationOutcomeStore {
   const deletedMessages = new Map<string, RetainedDeletion>()
-  const userSanctions = new Map<string, ResolvedModerationOutcome>()
+  const userSanctions = new Map<string, RetainedSanction>()
   const revision = ref(0)
 
   function apply(outcome: ModerationOutcome): void {
@@ -49,7 +57,10 @@ export function createModerationOutcomeStore(now: () => number = Date.now): Mode
     if (!outcome.targetUserId) return
     const sanction = sanctionFor(outcome)
     if (!sanction) return
-    userSanctions.set(userKey(outcome.platform, outcome.channelId, outcome.targetUserId), sanction)
+    userSanctions.set(userKey(outcome.platform, outcome.channelId, outcome.targetUserId), {
+      appliedAt: now(),
+      resolved: sanction,
+    })
     revision.value++
   }
 
@@ -57,10 +68,16 @@ export function createModerationOutcomeStore(now: () => number = Date.now): Mode
     // Make render calls react to a live outcome without mutating the message.
     void revision.value
     if (pruneExpiredDeletions()) revision.value++
-    return (
-      deletedMessages.get(messageKey(message.platform, message.id))?.resolved ??
-      userSanctions.get(userKey(message.platform, message.channelId, message.author.id))
+    const deletion = deletedMessages.get(messageKey(message.platform, message.id))
+    if (deletion) return deletion.resolved
+    const sanction = userSanctions.get(
+      userKey(message.platform, message.channelId, message.author.id),
     )
+    if (!sanction) return undefined
+    // A sanction strikes only the messages that existed when it was applied;
+    // anything the author sends afterwards renders normally.
+    if (message.timestamp.getTime() > sanction.appliedAt + SANCTION_CLOCK_SKEW_MS) return undefined
+    return sanction.resolved
   }
 
   function pruneExpiredDeletions(): boolean {

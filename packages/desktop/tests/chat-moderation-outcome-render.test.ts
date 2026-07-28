@@ -13,11 +13,19 @@ test('applies local and native moderation outcomes to both chat themes', () => {
   expect(chatMessageSource).toContain('moderation-outcome')
   expect(chatMessageSource).toContain('moderationOutcome.label')
   expect(chatMessageSource).toContain('isTombstone')
-  expect(chatMessageSource).toContain('Message deleted')
   expect(chatMessageSource).toContain(
     '!props.moderationOutcome || props.moderationOutcome.isTombstone',
   )
   expect(chatMessageSource).toContain('v-if="!props.moderationOutcome?.isTombstone"')
+})
+
+test('keeps deleted message content visible, struck through, in both chat themes', () => {
+  const occurrences = chatMessageSource.split(
+    'deleted: props.moderationOutcome?.isTombstone',
+  ).length
+  expect(occurrences).toBe(3)
+  expect(chatMessageSource).toContain('.msg-text.deleted')
+  expect(chatMessageSource).toContain('text-decoration: line-through')
 })
 
 test('does not render reply text for deleted-message tombstones in either chat theme', () => {

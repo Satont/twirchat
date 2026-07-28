@@ -156,7 +156,6 @@ func run(profileDir string) error {
 	bridge.RegisterSevenTVHandlers(requestHandlers, sevenTVService)
 	bridge.RegisterBackendHandlers(requestHandlers, backendClient, host.Storage())
 	bridge.RegisterAvatarHandlers(requestHandlers, avatarResolver)
-	bridge.RegisterModerationHandlers(requestHandlers, backendClient, host.Storage())
 	authService, err := auth.NewService(auth.Config{
 		Address:          config.AuthAddress,
 		CallbackHost:     config.AuthCallbackHost,
@@ -190,6 +189,7 @@ func run(profileDir string) error {
 	twitchService.SetTokenRefresher(authService)
 	kickService.SetTokenRefresher(authService)
 	bridge.RegisterAuthHandlers(requestHandlers, authService, host.Storage())
+	bridge.RegisterModerationHandlers(requestHandlers, backendClient, host.Storage(), authService)
 
 	if err := host.Start(); err != nil {
 		return fmt.Errorf("start desktop application: %w", err)

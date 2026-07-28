@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Satont/twirchat/packages/desktop/internal/auth"
 	"github.com/Satont/twirchat/packages/desktop/internal/backend"
 	"github.com/Satont/twirchat/packages/desktop/internal/contracts"
 	"github.com/Satont/twirchat/packages/desktop/internal/storage"
@@ -28,13 +29,14 @@ func RegisterModerationHandlers(
 	registry *HandlerRegistry,
 	client *backend.HTTPClient,
 	store *storage.Storage,
+	refresher auth.TokenRefresher,
 ) {
 	registry.Register(contracts.RequestGetModerationCapabilities, func(ctx context.Context, params any) (any, error) {
 		var input contracts.ModerationCapabilitiesParams
 		if err := decodeParams(params, &input); err != nil {
 			return nil, err
 		}
-		body, err := moderationBody(ctx, store, input.Platform, input.ChannelSlug)
+		body, err := moderationBody(ctx, store, refresher, input.Platform, input.ChannelSlug)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +51,7 @@ func RegisterModerationHandlers(
 		if err := decodeParams(params, &input); err != nil {
 			return nil, err
 		}
-		body, err := moderationBody(ctx, store, input.Platform, input.ChannelSlug)
+		body, err := moderationBody(ctx, store, refresher, input.Platform, input.ChannelSlug)
 		if err != nil {
 			return nil, err
 		}
@@ -74,6 +76,7 @@ func RegisterModerationHandlers(
 func moderationBody(
 	ctx context.Context,
 	store *storage.Storage,
+	refresher auth.TokenRefresher,
 	platform contracts.Platform,
 	channelSlug string,
 ) (moderationRequestBody, error) {
@@ -90,7 +93,7 @@ func moderationBody(
 	if account == nil {
 		return moderationRequestBody{}, fmt.Errorf("moderation: authenticate with %s before moderating", platform)
 	}
-	tokens, found, err := store.AccountTokens(ctx, account.ID)
+	tokens, found, err := auth.EnsureFreshTokens(ctx, store, refresher, account.ID)
 	if err != nil {
 		return moderationRequestBody{}, fmt.Errorf("moderation: read %s credentials: %w", platform, err)
 	}
