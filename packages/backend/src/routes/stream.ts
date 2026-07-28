@@ -6,6 +6,7 @@ import { fetchTwitchUserById } from '../api/twitch-users.ts'
 import { handleChannelsStatus, InvalidChannelsStatusRequestError } from '../api/channels-status.ts'
 import { handleKickChatroom } from '../api/kick-chatroom.ts'
 import { handleTwitchSendMessage, TwitchAPIError } from '../api/twitch-send-message.ts'
+import { handleTwitchChatters, TwitchChattersError } from '../api/twitch-chatters.ts'
 import { json, requireClient } from './utils.ts'
 import { logger } from '@twirchat/shared/logger'
 
@@ -96,6 +97,23 @@ export const streamRoutes = {
         }
         log.error('twitch/send-message failed', { err: String(err) })
         return json({ error: String(err) }, 500)
+      }
+    },
+  },
+  '/api/twitch/chatters': {
+    async POST(req: Request) {
+      const auth = await requireClient(req)
+      if (auth instanceof Response) return auth
+      try {
+        return json(await handleTwitchChatters(req))
+      } catch (err) {
+        if (err instanceof TwitchChattersError) {
+          return json({ error: err.message }, err.status)
+        }
+        log.error('twitch/chatters failed', {
+          err: err instanceof Error ? err.name : 'unknown error',
+        })
+        return json({ error: 'twitch/chatters failed' }, 502)
       }
     },
   },

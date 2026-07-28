@@ -26,6 +26,7 @@ const TWITCH_SCOPES = [
   'channel:read:redemptions',
   'moderator:read:followers',
   'moderator:read:moderators',
+  'moderator:read:chatters',
   'moderator:manage:chat_messages',
   'moderator:manage:banned_users',
   'bits:read',

@@ -14,6 +14,7 @@ test('OAuth URLs request every moderation scope required by the desktop rail', (
   expect(twitchScopes).toEqual(
     expect.arrayContaining([
       'moderator:read:moderators',
+      'moderator:read:chatters',
       'moderator:manage:chat_messages',
       'moderator:manage:banned_users',
     ]),
