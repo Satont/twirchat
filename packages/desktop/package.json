@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "bun run dev:wails",
     "dev:wails": "wails3 dev -config build/config.yml",
+    "dev:gpuix": "bun --hot src/gpuix/main.tsx",
+    "start:gpuix": "bun src/gpuix/main.tsx",
+    "typecheck:gpuix": "tsc --noEmit -p tsconfig.gpuix.json",
     "dev:main": "vite --config vite.main.config.ts",
     "build": "wails3 build",
     "build:main": "vite build --config vite.main.config.ts",
@@ -17,6 +20,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.11.0",
+    "@gpuix/react": "0.7.0",
     "@grpc/grpc-js": "1.14.3",
     "@twirchat/shared": "workspace:*",
     "@twurple/api": "8.0.3",
@@ -24,6 +28,7 @@
     "@twurple/chat": "8.0.3",
     "@wailsio/runtime": "3.0.0-alpha.97",
     "electrobun": "1.18.1",
+    "react": "^19.2.4",
     "reka-ui": "2.9.2",
     "splitpanes": "4.0.4",
     "virtua": "0.49.0",
@@ -34,6 +39,7 @@
     "@bufbuild/buf": "1.66.1",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
+    "@types/react": "^19.2.0",
     "@typescript/native-preview": "catalog:",
     "@vitejs/plugin-vue": "6.0.5",
     "pinia": "3.0.4",

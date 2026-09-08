@@ -1,10 +1,19 @@
 # TwirChat Desktop
 
-Electrobun + Vue 3 desktop application. Multi-platform chat aggregator for Twitch, YouTube, Kick.
+Wails v3 (Go) + Vue 3 desktop application. Multi-platform chat aggregator for Twitch, YouTube, Kick.
+
+> **Note (2026-09)**: this file describes the legacy Electrobun/Vue layout, much of
+> which is still accurate for `src/`. Two current facts: the active production
+> stack is **Wails v3 + Go** (`main.go`, `internal/`, frontend in `src/views/main`
+> via Vite), and there is an in-progress **GPUIX port** living in **`src/gpuix/`**
+> (React + GPUI, no webview — see `src/gpuix/README.md` for its architecture and
+> known limitations). GPUIX entry: `bun run dev:gpuix`, typecheck
+> `bun run typecheck:gpuix` (`tsconfig.gpuix.json`, excluded from the main
+> tsconfig).
 
 ## OVERVIEW
 
-Desktop app with two view targets: main window (Electrobun webview) and overlay (OBS browser source). Main process runs Bun; views are Vue 3 SFCs built with Vite.
+Desktop app with two view targets: main window (Wails webview) and overlay (OBS browser source). The GPUIX variant renders natively via GPUI with no webview.
 
 ## STRUCTURE
 

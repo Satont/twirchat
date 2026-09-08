@@ -4,7 +4,6 @@
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
-    "allowJs": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -14,9 +13,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@gpuix/react",
     "types": ["bun", "node"],
     "paths": {
       "@desktop/*": ["./src/*"],
@@ -24,6 +22,6 @@
       "@twirchat/shared/*": ["../shared/*"]
     }
   },
-  "include": ["src/**/*", "index.ts", "electrobun.config.ts"],
-  "exclude": ["overlay", "node_modules", "src/gpuix"]
+  "include": ["src/gpuix/**/*", "src/views/shared/utils/**/*", "src/views/main/utils/**/*"],
+  "exclude": ["node_modules"]
 }
