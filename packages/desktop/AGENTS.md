@@ -1,222 +1,103 @@
 # TwirChat Desktop
 
-Electrobun + Vue 3 desktop application. Multi-platform chat aggregator for Twitch, YouTube, Kick.
+GPUIX (React + GPUI) desktop application. Multi-platform chat aggregator for Twitch, YouTube, Kick.
 
 ## OVERVIEW
 
-Desktop app with two view targets: main window (Electrobun webview) and overlay (OBS browser source). Main process runs Bun; views are Vue 3 SFCs built with Vite.
+Single Bun process hosts everything: the backend logic (SQLite, platform
+adapters, backend WS, OAuth, OBS overlay server) and the React UI rendered
+natively by [GPUIX](https://gpuix.dev) (GPUI, Zed's GPU framework) — **no
+webview, no DOM, no Electron**. The OBS overlay stays a Vue app (OBS needs
+HTML) and is served by `src/overlay-server.ts`.
 
 ## STRUCTURE
 
 ```
 src/
-├── bun/index.ts              # Electrobun main process entry
-├── index.ts                  # Alternate entry (legacy)
+├── gpuix/                  # THE desktop app (React + GPUIX)
+│   ├── main.tsx            # Entry: boots backend, render(<App/>)
+│   ├── backend/            # In-process "RPC" bridge
+│   │   ├── server.ts       # Boot: DB, adapters, WS, auth, overlay (globalThis singleton)
+│   │   ├── api.ts          # DesktopApi — every request method (ex-Wails gateway)
+│   │   ├── events.ts       # DesktopEventMap typed emitter
+│   │   └── context.ts      # React: useBackend(), useBackendEvent()
+│   ├── state/              # Observable stores (useSyncExternalStore)
+│   │   ├── app.ts          # settings/accounts/messages/watched/emotes/notices…
+│   │   ├── layout.ts       # Per-tab watched-channel split layouts
+│   │   ├── caches.ts       # Avatar + mention-color session caches
+│   │   ├── image-cache.ts  # Remote images → disk (GPUI can't fetch http on Linux)
+│   │   ├── create-store.ts # Store factory (macrotask-deferred notifications!)
+│   │   ├── focus.ts        # Text-editor focus tracking (hotkey suppression)
+│   │   └── hotkeys.ts      # Global hotkeys (Ctrl+K, Ctrl+Tab…)
+│   ├── components/         # React UI (ChatView, ChatMessage, panels, dialogs…)
+│   ├── theme.ts / theme-context.ts  # Design tokens (ported CSS vars)
+│   ├── icons.ts            # Monochrome SVG sources for <svg>
+│   ├── message-tokens.ts   # Message → flex-wrap token list (emotes/links/mentions)
+│   └── README.md           # Detailed GPUIX architecture + known limitations
+├── store/                  # SQLite (bun:sqlite): accounts, settings, messages…
+├── platforms/              # Twitch (twurple) / Kick (pusher) / YouTube (gRPC)
+├── chat/aggregator.ts      # Dedup + 7TV enrichment
+├── watched-channels/       # WatchedChannelManager (per-channel adapters)
+├── seventv/                # 7TV emote service (via backend WS)
+├── auth/                   # PKCE OAuth flows + local callback server
+├── backend-connection.ts   # WS client to the backend service
+├── overlay-server.ts       # OBS overlay HTTP+WS (port 45823)
+├── shared/rpc.ts           # WebviewSender + history DTOs (legacy, small)
 ├── views/
-│   ├── main/                 # Main window Vue app
-│   │   ├── main.ts          # Webview entry (Electroview RPC + Vue mount)
-│   │   ├── App.vue          # Root component
-│   │   └── components/      # ChatList, ChatMessage, Sidebar
-│   └── overlay/             # OBS overlay Vue app
-│       ├── main.ts          # Overlay entry (WS client, no Electrobun)
-│       └── App.vue
-├── shared/rpc.ts            # TwirChatRPCSchema + WebviewSender types
-├── overlay-server.ts        # Bun.serve: serves overlay + WS push
-├── backend-connection.ts    # WS client to backend
-├── store/                   # SQLite (bun:sqlite)
-│   ├── db.ts               # DB init + migrations
-│   ├── account-store.ts    # Encrypted tokens
-│   ├── settings-store.ts   # App settings
-│   └── client-secret.ts    # Generated client secret
-├── chat/
-│   └── aggregator.ts       # Message dedup + routing
-├── platforms/              # Platform adapters
-│   ├── base-adapter.ts     # BasePlatformAdapter interface
-│   ├── twitch/adapter.ts   # Twurple client
-│   ├── kick/adapter.ts     # Pusher WS
-│   └── youtube/adapter.ts  # youtubei.js (Innertube)
-└── auth/                   # OAuth flows
-    ├── server.ts           # Local PKCE callback server
-    └── pkce.ts             # PKCE helpers
+│   ├── overlay/            # OBS overlay Vue app (vite build → dist/overlay)
+│   ├── main/utils/         # Shared pure-TS utils (used by gpuix components)
+│   └── shared/utils/       # messageParts / message-text / platform colors
+└── runtime-config.ts       # Backend URLs, client secret, backendFetch
 ```
 
 ## WHERE TO LOOK
 
-| Task                 | Location                                 | Notes                             |
-| -------------------- | ---------------------------------------- | --------------------------------- |
-| Add platform adapter | `src/platforms/{name}/adapter.ts`        | Extend BasePlatformAdapter        |
-| Register adapter     | `src/bun/index.ts`                       | Add to `adapterRegistry`          |
-| Add RPC method       | `src/shared/rpc.ts` + `src/bun/index.ts` | Update schema + implement handler |
-| Change main UI       | `src/views/main/components/*.vue`        | Vue SFC components                |
-| Change overlay       | `src/views/overlay/App.vue`              | OBS overlay display               |
-| Fix auth flow        | `src/auth/server.ts`                     | PKCE callback handling            |
-| DB schema change     | `src/store/db.ts`                        | Run migrations in `initDb()`      |
-| Add overlay message  | `src/overlay-server.ts`                  | `pushOverlayMessage()`            |
-
-## ENTRY POINTS
-
-| File                        | Purpose                 | When It Runs                     |
-| --------------------------- | ----------------------- | -------------------------------- |
-| `src/bun/index.ts`          | Electrobun main process | Production & `bun run start`     |
-| `src/views/main/main.ts`    | Main window webview     | HMR dev (port 5173) or built     |
-| `src/views/overlay/main.ts` | Overlay webview         | Built + served by overlay-server |
-| `src/overlay-server.ts`     | Overlay HTTP+WS server  | Started from bun/index.ts        |
-
-## CONVENTIONS
-
-**Electrobun RPC**
-
-- Schema defined in `src/shared/rpc.ts`
-- Bun side: `defineElectrobunRPC<TwirChatRPCSchema>("bun", { handlers: { requests: {...} }})`
-- View side: `Electroview.defineRPC<TwirChatRPCSchema>()`
-- Cast workaround: `const sendToView = rpc.send as unknown as WebviewSender`
-
-**Platform Adapters**
-
-```typescript
-class MyAdapter extends BasePlatformAdapter {
-  readonly platform = 'myplatform' as const
-
-  async connect(channelSlug: string): Promise<void> {
-    // Connect to platform
-    this.emit('status', { platform: this.platform, state: 'connected' })
-  }
-
-  async disconnect(): Promise<void> {}
-
-  async sendMessage(channelId: string, text: string): Promise<void> {
-    // Optional: implement sending
-  }
-}
-```
-
-**Error Handling**
-
-```typescript
-// Log and rethrow for RPC handlers
-try {
-  const result = await fetchData()
-  return result
-} catch (err) {
-  log.error('Failed to fetch', { error: String(err) })
-  throw err // Let RPC catch and return error
-}
-
-// Fire-and-forget background tasks
-void backgroundTask().catch((e) => log.error('Task failed', { error: String(e) }))
-```
-
-**Type Checking**
-
-- Use `vue-tsc --noEmit` (NOT `tsgo`) for Vue SFC compatibility
-- Configured in `package.json` script
-
-## RPC Architecture
-
-TwirChat desktop uses Electrobun RPC for all communication between the main process (Bun) and the webview (browser context).
-
-### Core Rule
-
-**NEVER import Bun modules into frontend code. Always use RPC for persistence and server-side operations.**
-
-**Forbidden in frontend (`src/views/`):**
-
-- `bun:sqlite` - Use RPC `get*`, `set*` methods instead
-- `node:fs` - Use RPC for file operations
-- Direct store imports from `src/store/` - These use SQLite via Bun
-
-**Correct approach:**
-
-```typescript
-// ❌ WRONG - This will crash the browser
-import { ChatLayoutStore } from '../../store/chat-layout-store'
-const layout = ChatLayoutStore.get()
-
-// ✅ CORRECT - Use RPC
-const layout = await rpc.request.getWatchedChannelsLayout()
-```
-
-### Why This Rule Exists
-
-The desktop app has two distinct runtime environments:
-
-1. **Main process** (`src/bun/`): Full Bun/Node.js access, SQLite, file system
-2. **Webview** (`src/views/`): Browser context, no Bun APIs
-
-Vite can bundle code, but Bun modules like `bun:sqlite` will throw runtime errors in the browser.
-
-### Pattern: Server-Side Store + RPC
-
-For any new persistence feature:
-
-1. **Create server-side store** (`src/store/*-store.ts`):
-   - Uses `bun:sqlite` via `getDb()`
-   - Exported functions for CRUD operations
-
-2. **Add RPC methods** (`src/shared/rpc.ts` + `src/bun/index.ts`):
-   - Define request types in RPC schema
-   - Implement handlers in bun/index.ts using server-side store
-
-3. **Use in frontend** (`src/views/main/*.vue`):
-   - Call `rpc.request.*` methods
-   - Store data in reactive refs/composables
-   - Never import server-side stores directly
-
-## ANTI-PATTERNS (THIS PACKAGE)
-
-- **NEVER** use HTTP polling for YouTube — use gRPC only (see `src/platforms/youtube/`)
-- **DON'T** edit generated files: `src/platforms/youtube/gen/*` — change proto and regenerate
-- **DON'T** use `defineElectrobunRPC` from `electrobun/view` — use `Electroview.defineRPC`
-- **AVOID** synchronous crypto for tokens — use async AES-GCM (see crypto.ts notes)
-- **DON'T** remove `waitForSocket()` in `main.ts` — prevents RPC timeout on startup
+| Task                     | Location                                   | Notes                                |
+| ------------------------ | ------------------------------------------ | ------------------------------------ |
+| Add UI component         | `src/gpuix/components/`                    | Follow BRIEFING patterns in README   |
+| Add backend API method   | `src/gpuix/backend/api.ts`                 | Mirror semantics of legacy handlers  |
+| Add backend event        | `src/gpuix/backend/events.ts` + `server.ts`| Typed DesktopEventMap                |
+| Change chat rendering    | `src/gpuix/components/ChatMessage.tsx`     | Token-based flex-wrap rows           |
+| Change overlay           | `src/views/overlay/App.vue`                | OBS overlay (still Vue)              |
+| DB schema change         | `src/store/db.ts`                          | Migrations in `initDb()`             |
+| Platform adapter         | `src/platforms/{name}/adapter.ts`          | BasePlatformAdapter                  |
 
 ## COMMANDS
 
 ```bash
-# Development with HMR (Vite dev server + Electrobun)
-bun run dev:hmr
-
-# Production build
-bun run build:prod
-
-# Type check only
-bun run typecheck
-
-# Run tests
+bun run dev           # bun --hot src/gpuix/main.tsx (remounts React on save)
+bun run start         # plain run
+bun run build         # overlay vite build + bun build --compile
+bun run build:overlay # overlay only (dist/overlay, port 45823)
+bun run typecheck     # tsc -p tsconfig.json && tsc -p tsconfig.gpuix.json
 bun test tests/
-
-# Generate YouTube protobuf types
-cd src/platforms/youtube && bunx @bufbuild/buf generate
 ```
 
-## NOTES
+Debug helpers: `GPUIX_BACKGROUND=1` (no focus steal), `TWIRCHAT_GPUIX_START_MAIN_TAB=…`,
+`TWIRCHAT_GPUIX_START_TAB=…`, dev chat injection `POST :45824/dev/inject-chat`.
 
-**Overlay Server**
+## CONVENTIONS
 
-- Runs on `OVERLAY_SERVER_PORT` (45823)
-- OBS URL: `http://localhost:45823/?bg=transparent&fontSize=14`
-- Built files served from `dist/overlay/` (no HMR)
+- **UI → backend only via the bridge** (`useBackend()` / stores fed by
+  `wireBackendToStores`). Components never import `src/store` or adapters
+  directly — same rule as the old webview RPC boundary, kept for portability.
+- **No DOM APIs**: no localStorage (use `backend.api.getUiState/setUiState`),
+  no navigator.clipboard (use `backend.api.copyText`), no document/window.
+- **Store notifications are macrotask-deferred** (`create-store.ts`) — GPUI
+  panics on reentrant view updates if a store triggers a sync render inside
+  an event callback. Don't expect synchronous repaint after `.set()`.
+- **Remote images** go through `ui/RemoteImage.tsx` (disk cache) — GPUI's
+  Linux build can't load http(s).
+- Format/lint: `bun run fix` (oxfmt + oxlint) after changes.
 
-**Client Secret**
+## ANTI-PATTERNS
 
-- Generated on first launch, stored in `client-secret.ts`
-- Sent to backend via `X-Client-Secret` header
-- Partial logging: `secret.slice(0, 8)` for debugging
+- **NEVER** use HTTP polling for YouTube — gRPC only (`src/platforms/youtube/`)
+- **DON'T** edit generated files: `src/platforms/youtube/gen/*`
+- **DON'T** import Vue/reka-ui/pinia in gpuix code — the main window is React;
+  Vue remains only in `src/views/overlay/`
+- **DON'T** render remote URLs with plain `<img>` — use `<RemoteImage>`
+- **DON'T** call store `.set()` inside a synchronous render path; the store
+  handles deferred notification itself
 
-**Platform-Specific**
-
-- Linux: CEF bundling required (WebKitGTK lacks crypto.subtle)
-- YouTube: Requires authentication (no anonymous mode currently)
-
-## DEPENDENCIES
-
-Key dependencies and why:
-
-- `electrobun` - Desktop framework (Bun + Webview)
-- `vue` - UI framework
-- `@twurple/*` - Twitch API/chat
-- `youtubei.js` - YouTube Innertube API
-- `@bufbuild/protobuf` - YouTube gRPC
-- `reka-ui` - Vue UI primitives
-
-See root AGENTS.md for Bun-first API guidelines.
+See `src/gpuix/README.md` for the full architecture and known GPUIX limitations.
