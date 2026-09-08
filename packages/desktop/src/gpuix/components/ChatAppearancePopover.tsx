@@ -9,6 +9,7 @@ import { useState } from 'react'
 import type { AppSettings } from '@twirchat/shared/types'
 
 import { useBackend } from '../backend/context'
+import { useOverlayClose } from '../state/overlays'
 import { settingsStore } from '../state/app'
 import { accent } from '../theme'
 import { useTheme } from '../theme-context'
@@ -22,6 +23,7 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
   const backend = useBackend()
   const [open, setOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
+  useOverlayClose(open, () => setOpen(false))
 
   const patch = (partial: Partial<AppSettings>) => {
     const next = { ...settings, ...partial }

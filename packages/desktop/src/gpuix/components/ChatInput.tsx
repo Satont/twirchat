@@ -7,7 +7,8 @@
  * consume the key before the popup sees it.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 
 import { trackTextInputFocus } from '../state/focus'
 import type {
@@ -65,9 +66,18 @@ function connectionStatusText(status: string | undefined, channel: string, error
 export function ChatInput(props: ChatInputProps) {
   const theme = useTheme()
   const aliases = useStore(aliasesStore)
+  const renderer = useGpuixRequired()
+  const textareaRef = useRef<PublicInstance | null>(null)
   const [text, setText] = useState('')
   const [commandError, setCommandError] = useState('')
   const [emotePickerOpen, setEmotePickerOpen] = useState(false)
+
+  // Focus the composer when a reply is initiated (matches the Vue build).
+  useEffect(() => {
+    if (props.replyTarget && textareaRef.current) {
+      renderer.focusElement?.(textareaRef.current.id)
+    }
+  }, [props.replyTarget, renderer])
 
   const aliasMap = useMemo(() => {
     const map = new Map<import('@twirchat/shared/types').Platform, Map<string, string>>()
@@ -427,12 +437,12 @@ export function ChatInput(props: ChatInputProps) {
             }}
           >
             <textarea
+              ref={textareaRef}
               testId="chat-input"
               value={text}
               placeholder={placeholderText()}
               minRows={1}
               maxRows={5}
-              autoFocus
               onChange={(event) => {
                 setText(event.value ?? '')
                 setCommandError('')

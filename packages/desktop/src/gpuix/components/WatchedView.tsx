@@ -20,6 +20,7 @@ import { tabChannelNamesStore, watchedChannelsStore } from '../state/app'
 import {
   allPanels,
   assignChannel,
+  layoutRevisionStore,
   layoutStore,
   loadLayout,
   removePanel,
@@ -39,6 +40,7 @@ export function WatchedView({ tabId }: { tabId: string }) {
   const backend = useBackend()
   const theme = useTheme()
   const layouts = useStore(layoutStore)
+  const layoutRevision = useStore(layoutRevisionStore)
   const watchedChannels = useStore(watchedChannelsStore)
 
   const state = layouts.get(tabId)
@@ -89,7 +91,10 @@ export function WatchedView({ tabId }: { tabId: string }) {
 
   return (
     <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
-      <SplitNodeView node={layout.root} tabId={tabId} />
+      {/* Keyed by the layout revision: a full remount of the pane tree after
+          split/remove/assign works around GPUI occasionally not painting a
+          freshly mounted subtree inside an already painted tree. */}
+      <SplitNodeView key={`${tabId}:${layoutRevision}`} node={layout.root} tabId={tabId} />
     </div>
   )
 }

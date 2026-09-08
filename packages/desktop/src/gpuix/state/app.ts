@@ -29,46 +29,60 @@ import { filterHomeChatMessages } from '../../views/main/utils/chat-send-targets
 
 // ── Simple stores ───────────────────────────────────────────────────────────
 
-export const settingsStore = createStore<AppSettings | null>(null)
-export const accountsStore = createStore<Account[]>([])
-export const aliasesStore = createStore<UserAlias[]>([])
+export const settingsStore = createStore<AppSettings | null>(null, 'settings')
+export const accountsStore = createStore<Account[]>([], 'accounts')
+export const aliasesStore = createStore<UserAlias[]>([], 'aliases')
 /** platform → status */
-export const channelStatusStore = createStore<Partial<Record<Platform, PlatformStatusInfo>>>({})
-export const watchedChannelsStore = createStore<WatchedChannel[]>([])
+export const channelStatusStore = createStore<Partial<Record<Platform, PlatformStatusInfo>>>(
+  {},
+  'channelStatuses',
+)
+export const watchedChannelsStore = createStore<WatchedChannel[]>([], 'watchedChannels')
 /** channelId → messages (oldest first, capped at 200) */
-export const watchedMessagesStore = createStore<Map<string, NormalizedChatMessage[]>>(new Map())
+export const watchedMessagesStore = createStore<Map<string, NormalizedChatMessage[]>>(
+  new Map(),
+  'watchedMessages',
+)
 /** channelId → status */
-export const watchedStatusesStore = createStore<Map<string, PlatformStatusInfo>>(new Map())
-export const eventsStore = createStore<NormalizedEvent[]>([])
-export const unreadEventsStore = createStore(0)
+export const watchedStatusesStore = createStore<Map<string, PlatformStatusInfo>>(
+  new Map(),
+  'watchedStatuses',
+)
+export const eventsStore = createStore<NormalizedEvent[]>([], 'events')
+export const unreadEventsStore = createStore(0, 'unreadEvents')
 /** 'platform:login' → stream status */
-export const streamStatusStore = createStore<Map<string, ChannelStatus>>(new Map())
+export const streamStatusStore = createStore<Map<string, ChannelStatus>>(
+  new Map(),
+  'streamStatuses',
+)
 /** 'platform:channelId' → emote catalog */
-export const emoteStore = createStore<Map<string, EmoteCatalogEntry[]>>(new Map())
+export const emoteStore = createStore<Map<string, EmoteCatalogEntry[]>>(new Map(), 'emotes')
 
 export type MainTab = 'chat' | 'events' | 'platforms' | 'settings'
 export const activeTabStore = createStore<MainTab>(
   (process.env.TWIRCHAT_GPUIX_START_MAIN_TAB as MainTab | undefined) ?? 'chat',
+  'activeMainTab',
 )
-export const tabChannelIdsStore = createStore<string[]>([])
+export const tabChannelIdsStore = createStore<string[]>([], 'tabChannelIds')
 /** 'home' or a watched channel id */
 export const activeWatchedTabStore = createStore<string>(
   process.env.TWIRCHAT_GPUIX_START_TAB ?? 'home',
+  'activeWatchedTab',
 )
 /** tabId → channel display names shown in the tab label (from the layout tree) */
-export const tabChannelNamesStore = createStore<Map<string, string[]>>(new Map())
+export const tabChannelNamesStore = createStore<Map<string, string[]>>(new Map(), 'tabChannelNames')
 
 export interface TransientNotice {
   kind: 'info' | 'success' | 'error'
   text: string
 }
-export const noticeStore = createStore<TransientNotice | null>(null)
+export const noticeStore = createStore<TransientNotice | null>(null, 'notice')
 
 // ── Home chat buffer ────────────────────────────────────────────────────────
 // Own-channel messages only (see chat-send-targets.ts), capped at 500.
 
 const HOME_BUFFER_LIMIT = 500
-const homeBuffer = createStore<NormalizedChatMessage[]>([])
+const homeBuffer = createStore<NormalizedChatMessage[]>([], 'homeMessages')
 export { homeBuffer as homeMessagesStore }
 
 export function appendHomeMessages(incoming: NormalizedChatMessage[]): void {
@@ -93,7 +107,7 @@ const deletedMessages = new Map<
   { expiresAt: number; resolved: ResolvedModerationOutcome }
 >()
 const userSanctions = new Map<string, { appliedAt: number; resolved: ResolvedModerationOutcome }>()
-export const moderationRevisionStore = createStore(0)
+export const moderationRevisionStore = createStore(0, 'moderationRevision')
 
 function moderationMessageKey(platform: string, messageId: string): string {
   return `${platform}:${messageId}`

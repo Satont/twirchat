@@ -39,7 +39,35 @@ function scheduleNotification(listener: () => void): void {
   }, 0)
 }
 
-export function createStore<T>(initial: T): Store<T> {
+export function createStore<T>(initial: T, persistKey?: string): Store<T> {
+  // Desktop `bun --hot` re-evaluates the whole module graph on every save, so
+  // module-level stores would reset to their initial value. Pin named stores
+  // on globalThis: the second evaluation returns the SAME store instance with
+  // all its state (the backend singleton works the same way).
+  if (persistKey) {
+    const registry = storeRegistry()
+    const existing = registry.get(persistKey)
+    if (existing) return existing as Store<T>
+    const created = buildStore(initial)
+    registry.set(persistKey, created as Store<unknown>)
+    return created
+  }
+  return buildStore(initial)
+}
+
+const REGISTRY_KEY = '__twirchatGpuixStores'
+
+interface StoreRegistryGlobal {
+  [REGISTRY_KEY]?: Map<string, Store<unknown>>
+}
+
+function storeRegistry(): Map<string, Store<unknown>> {
+  const g = globalThis as StoreRegistryGlobal
+  g[REGISTRY_KEY] ??= new Map()
+  return g[REGISTRY_KEY]
+}
+
+function buildStore<T>(initial: T): Store<T> {
   let state = initial
   const listeners = new Set<() => void>()
 

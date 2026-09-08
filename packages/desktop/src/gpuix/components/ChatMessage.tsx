@@ -19,7 +19,8 @@ import { platformColor, semantic } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
-import { Icon, PlatformIcon } from './ui/Icon'
+import { PlatformIcon } from './ui/Icon'
+import { icons } from '../icons'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 import { MessageText, MessageTokens } from './MessageText'
@@ -32,6 +33,15 @@ function badgeSize(fontSize: number): number {
 
 function platformIconSize(fontSize: number): number {
   return Math.max(9, Math.round(fontSize * 0.85))
+}
+
+// Avatars scale with the chat font size (28/18px at the 14px default).
+function modernAvatarSize(fontSize: number): number {
+  return Math.max(14, Math.round(fontSize * 2))
+}
+
+function compactAvatarSize(fontSize: number): number {
+  return Math.max(12, Math.round(fontSize * 1.3))
 }
 
 export function formatMessageTime(ts: Date): string {
@@ -114,11 +124,13 @@ function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size
     )
   }
   if (resolved) {
+    // Square tight box: Vue uses width:auto so the box hugs the image. Twitch
+    // badges are square; `contain` keeps wider images undistorted.
     return (
       <RemoteImage
         url={resolved}
         objectFit="contain"
-        style={{ height: size, width: size * 2, maxWidth: 64, flexShrink: 0 }}
+        style={{ height: size, width: size, flexShrink: 0 }}
       />
     )
   }
@@ -214,18 +226,76 @@ function ReplyPreview({ message, fontSize }: { message: NormalizedChatMessage; f
   )
 }
 
-// ── Hover action buttons ────────────────────────────────────────────────────
+// ── Action buttons (reply / copy) ───────────────────────────────────────────
+// Hover-reveal via COLOR toggling — the only pattern that survives GPUI's
+// hit-test quirks (all verified with automation): buttons are always mounted
+// and absolutely positioned (no mounts → no spurious-leave cascade), their
+// own enter/leave works, and hidden buttons are painted fully transparent.
+// A hidden button keeps its hitbox (positioned boxes always take hits), so it
+// reveals on approach before any click lands; the trade-off is that the thin
+// button strip is not text-selectable.
+
+function ActionButton({
+  visible,
+  onHoverChange,
+  onClick,
+  testId,
+  icon,
+  color,
+  bg,
+}: {
+  visible: boolean
+  onHoverChange: (hovered: boolean) => void
+  onClick: () => void
+  testId: string
+  icon: string
+  color: string
+  bg?: string
+}) {
+  return (
+    <div
+      testId={testId}
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
+      onClick={onClick}
+      style={{
+        borderRadius: 4,
+        padding: 3,
+        cursor: 'pointer',
+        display: 'flex',
+        backgroundColor: visible ? (bg ?? 'rgba(255, 255, 255, 0.1)') : 'transparent',
+        hover: { backgroundColor: 'rgba(255, 255, 255, 0.15)' },
+      }}
+    >
+      <svg
+        source={icon}
+        style={{
+          width: 13,
+          height: 13,
+          flexShrink: 0,
+          color: visible ? color : 'transparent',
+        }}
+      />
+    </div>
+  )
+}
 
 function HoverActions({
+  rowHovered,
   onReply,
   onCopy,
   copySuccess,
 }: {
+  rowHovered: boolean
   onReply: () => void
   onCopy: () => void
   copySuccess: boolean
 }) {
   const theme = useTheme()
+  const [replyHover, setReplyHover] = useState(false)
+  const [copyHover, setCopyHover] = useState(false)
+  const visible = rowHovered || replyHover || copyHover
+
   return (
     <div
       style={{
@@ -236,48 +306,27 @@ function HoverActions({
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 2,
         userSelect: 'none',
       }}
     >
-      <div
-        testId="msg-reply"
+      <ActionButton
+        visible={visible}
+        onHoverChange={setReplyHover}
         onClick={onReply}
-        style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.1)',
-          borderRadius: 4,
-          paddingTop: 4,
-          paddingBottom: 4,
-          paddingLeft: 6,
-          paddingRight: 6,
-          cursor: 'pointer',
-          display: 'flex',
-          hover: { backgroundColor: 'rgba(255, 255, 255, 0.15)' },
-        }}
-      >
-        <Icon name="reply" size={14} color={theme.text2} />
-      </div>
-      <div
-        testId="msg-copy"
+        testId="msg-reply"
+        icon={icons.reply}
+        color={theme.text2}
+      />
+      <ActionButton
+        visible={visible}
+        onHoverChange={setCopyHover}
         onClick={onCopy}
-        style={{
-          backgroundColor: copySuccess ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-          borderRadius: 4,
-          paddingTop: 4,
-          paddingBottom: 4,
-          paddingLeft: 6,
-          paddingRight: 6,
-          cursor: 'pointer',
-          display: 'flex',
-          hover: { backgroundColor: 'rgba(255, 255, 255, 0.15)' },
-        }}
-      >
-        <Icon
-          name={copySuccess ? 'check' : 'copy'}
-          size={14}
-          color={copySuccess ? semantic.successSoft : theme.text2}
-        />
-      </div>
+        testId="msg-copy"
+        icon={copySuccess ? icons.check : icons.copy}
+        color={copySuccess ? semantic.successSoft : theme.text2}
+        bg={copySuccess ? 'rgba(74, 222, 128, 0.2)' : undefined}
+      />
     </div>
   )
 }
@@ -483,7 +532,8 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
             flexDirection: 'row',
             flexWrap: 'wrap',
             alignItems: 'center',
-            columnGap: 4,
+            // No columnGap: word tokens carry their own trailing spaces, and
+            // structural elements use explicit margins (same as the Vue CSS).
             rowGap: 1,
           }}
         >
@@ -496,17 +546,26 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
                 whiteSpace: 'nowrap',
                 width: 56,
                 flexShrink: 0,
+                marginRight: 4,
               }}
             >
               {formatMessageTime(message.timestamp)}
             </Text>
           ) : null}
-          {props.showAvatar !== false ? <Avatar message={message} size={18} /> : null}
+          {props.showAvatar !== false ? (
+            <div style={{ marginRight: 3, flexShrink: 0, display: 'flex' }}>
+              <Avatar message={message} size={compactAvatarSize(fontSize)} />
+            </div>
+          ) : null}
           {props.showPlatformIcon ? (
-            <PlatformIcon platform={message.platform} size={platformIconSize(fontSize)} />
+            <div style={{ marginRight: 3, flexShrink: 0, display: 'flex' }}>
+              <PlatformIcon platform={message.platform} size={platformIconSize(fontSize)} />
+            </div>
           ) : null}
           {props.showBadges !== false ? (
-            <BadgeList badges={message.author.badges ?? []} size={badgeSize(fontSize)} />
+            <div style={{ marginRight: 3, flexShrink: 0, display: 'flex' }}>
+              <BadgeList badges={message.author.badges ?? []} size={badgeSize(fontSize)} />
+            </div>
           ) : null}
           <Text
             onClick={openUserCard}
@@ -537,15 +596,15 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
               {props.moderationOutcome.label}
             </Text>
           ) : null}
+          {!isTombstone ? (
+            <HoverActions
+              rowHovered={hovered}
+              onReply={() => props.onReply?.(message)}
+              onCopy={copyMessage}
+              copySuccess={copySuccess}
+            />
+          ) : null}
         </div>
-
-        {hovered && !isTombstone ? (
-          <HoverActions
-            onReply={() => props.onReply?.(message)}
-            onCopy={copyMessage}
-            copySuccess={copySuccess}
-          />
-        ) : null}
 
         {/* Paint order = document order: the rail sits last so its fill and
             preview draw above the row content. */}
@@ -603,7 +662,7 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
 
       {props.showAvatar !== false ? (
         <div style={{ marginTop: 1, flexShrink: 0 }}>
-          <Avatar message={message} size={28} />
+          <Avatar message={message} size={modernAvatarSize(fontSize)} />
         </div>
       ) : null}
 
@@ -649,6 +708,14 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
               {formatMessageTime(message.timestamp)}
             </Text>
           ) : null}
+          {!isTombstone ? (
+            <HoverActions
+              rowHovered={hovered}
+              onReply={() => props.onReply?.(message)}
+              onCopy={copyMessage}
+              copySuccess={copySuccess}
+            />
+          ) : null}
         </div>
 
         <MessageText
@@ -677,14 +744,6 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           </Text>
         ) : null}
       </div>
-
-      {hovered && !isTombstone ? (
-        <HoverActions
-          onReply={() => props.onReply?.(message)}
-          onCopy={copyMessage}
-          copySuccess={copySuccess}
-        />
-      ) : null}
 
       {/* Paint order = document order: the rail sits last so its fill and
           preview draw above the row content. */}

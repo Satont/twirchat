@@ -17,8 +17,8 @@ type AvatarLookup = (params: {
 
 type ColorLookup = (params: { platform: Platform; username: string }) => Promise<string | null>
 
-export const avatarRevisionStore = createStore(0)
-export const mentionColorRevisionStore = createStore(0)
+export const avatarRevisionStore = createStore(0, 'avatarRevision')
+export const mentionColorRevisionStore = createStore(0, 'mentionColorRevision')
 
 const avatarUrls = new Map<string, string>()
 const avatarRequested = new Set<string>()

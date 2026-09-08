@@ -9,6 +9,7 @@ import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
 import { useBackend } from '../backend/context'
 import { emoteStore, loadEmotes } from '../state/app'
 import { trackTextInputFocus } from '../state/focus'
+import { pushOverlayClose } from '../state/overlays'
 import { useStore } from '../state/create-store'
 import { useTheme } from '../theme-context'
 import { groupEmoteCatalog } from '../../views/main/utils/emote-catalog'
@@ -48,6 +49,8 @@ export function EmotePicker({
   useEffect(() => {
     void loadEmotes(backend, platform, channelId, useSessionCache)
   }, [backend, platform, channelId, useSessionCache])
+
+  useEffect(() => pushOverlayClose(onClose), [onClose])
 
   const pickerRows = useMemo((): PickerRow[] => {
     const groups = groupEmoteCatalog(allEmotes, searchQuery)

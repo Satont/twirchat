@@ -78,12 +78,11 @@ export function TabSelectorModal({
                 setSelectedIndex((i) => Math.min(filtered.length - 1, i + 1))
               } else if (event.key === 'up') {
                 setSelectedIndex((i) => Math.max(0, i - 1))
-              } else if (event.key === 'enter') {
-                pick(selected)
               } else if (event.key === 'escape') {
                 onClose()
               }
             }}
+            onSubmit={() => pick(selected)}
             theme={{ caret: '#a78bfa' }}
             style={{ flexGrow: 1, minWidth: 0, fontSize: 14, color: theme.text }}
           />

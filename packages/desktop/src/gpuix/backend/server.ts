@@ -315,6 +315,20 @@ function boot(): DesktopBackend {
           events.emit('chat_message', { ...body, timestamp: new Date(body.timestamp) })
           return new Response('ok')
         }
+        if (url.pathname === '/dev/hook' && req.method === 'POST') {
+          // Dev-only: let the UI layer register debug actions (see main.tsx).
+          const body = (await req.json()) as { action: string; payload?: unknown }
+          const hook = (
+            globalThis as {
+              __twirchatDevHook?: (action: string, payload?: unknown) => Promise<unknown>
+            }
+          ).__twirchatDevHook
+          if (!hook) return new Response('no hook', { status: 404 })
+          const result = await hook(body.action, body.payload)
+          return new Response(JSON.stringify(result ?? null), {
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
         return new Response('not found', { status: 404 })
       },
     })

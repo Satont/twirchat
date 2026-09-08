@@ -22,7 +22,13 @@ export interface LayoutState {
 }
 
 /** tabId → layout state */
-export const layoutStore = createStore<Map<string, LayoutState>>(new Map())
+export const layoutStore = createStore<Map<string, LayoutState>>(new Map(), 'layouts')
+/**
+ * Bumped after every layout MUTATION (split/remove/assign). GPUI sometimes
+ * fails to paint a freshly mounted pane subtree inside an already painted
+ * tree; keying the pane tree by this revision forces a clean remount.
+ */
+export const layoutRevisionStore = createStore(0, 'layoutRevision')
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -88,6 +94,7 @@ export async function splitPanel(
   try {
     await backend.api.splitPanel({ tabId, panelId, direction })
     await loadLayout(backend, tabId)
+    layoutRevisionStore.set((v) => v + 1)
   } catch (error) {
     console.warn('[layout] split failed:', error)
   }
@@ -101,6 +108,7 @@ export async function removePanel(
   try {
     await backend.api.removePanel({ tabId, panelId })
     await loadLayout(backend, tabId)
+    layoutRevisionStore.set((v) => v + 1)
   } catch (error) {
     console.warn('[layout] remove failed:', error)
   }
@@ -115,6 +123,7 @@ export async function assignChannel(
   try {
     await backend.api.assignChannelToPanel({ tabId, panelId, channelId })
     await loadLayout(backend, tabId)
+    layoutRevisionStore.set((v) => v + 1)
   } catch (error) {
     console.warn('[layout] assign failed:', error)
   }

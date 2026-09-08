@@ -60,11 +60,24 @@ export function MessageModerationRail({
         left: 0,
         top: 0,
         bottom: 0,
-        width: 16,
+        width: 14,
         cursor: disabled ? 'default' : 'ew-resize',
         userSelect: 'none',
       }}
     >
+      {/* Always-visible grip line, centered vertically */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 4,
+          top: 8,
+          bottom: 8,
+          width: 3,
+          borderRadius: 2,
+          backgroundColor:
+            dragStartX.current !== null || hovered ? theme.text2 : 'rgba(139, 139, 153, 0.35)',
+        }}
+      />
       {distance > 0 ? (
         <div
           style={{
@@ -79,19 +92,6 @@ export function MessageModerationRail({
             pointerEvents: 'none',
           }}
         />
-      ) : null}
-      {hovered || dragStartX.current !== null ? (
-        <Text
-          style={{
-            fontSize: 12,
-            color: theme.text2,
-            opacity: 0.75,
-            paddingLeft: 2,
-            userSelect: 'none',
-          }}
-        >
-          ⠿
-        </Text>
       ) : null}
       {preview ? (
         <div

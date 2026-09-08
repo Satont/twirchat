@@ -19,7 +19,7 @@ const resolved = new Map<string, string>()
 const failed = new Map<string, number>() // url → timestamp of last failure
 const inflight = new Set<string>()
 
-export const imageCacheRevisionStore = createStore(0)
+export const imageCacheRevisionStore = createStore(0, 'imageCacheRevision')
 
 const FAILURE_RETRY_MS = 5 * 60 * 1000
 

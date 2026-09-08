@@ -34,6 +34,7 @@ import {
 import { accent, platformColor, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { ownChatSendTargets } from '../../views/main/utils/chat-send-targets'
+import { useOverlayClose } from '../state/overlays'
 import { buildChattersTargets } from '../../views/main/utils/chatters'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import {
@@ -256,6 +257,7 @@ export function ChatView({
   const [userCardTarget, setUserCardTarget] = useState<UserCardTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  useOverlayClose(menuOpen, () => setMenuOpen(false))
   const [watchedModerationAllowed, setWatchedModerationAllowed] = useState(false)
   const [moderationPendingIds, setModerationPendingIds] = useState<Set<string>>(new Set())
 
@@ -521,7 +523,11 @@ export function ChatView({
                 fontSize: 13,
                 fontWeight: 700,
                 color: theme.text2,
-                flexShrink: 0,
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flexShrink: 1,
               }}
             >
               {watchedChannel.displayName.toUpperCase()}
@@ -538,7 +544,8 @@ export function ChatView({
                     style={{
                       fontSize: 11,
                       color: theme.text2,
-                      flexShrink: 0,
+                      minWidth: 0,
+                      flexShrink: 1,
                       maxWidth: 100,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -747,41 +754,45 @@ export function ChatView({
             {activeMessages.map((message) => {
               const outcome = moderationOutcomeFor(message)
               return (
-                <ChatMessage
-                  key={message.id}
-                  message={message}
-                  channelSlug={getChannelSlugForPlatform(message.platform)}
-                  alias={aliasFor(message)}
-                  showPlatformColorStripe={
-                    watchedChannel ? false : settings?.showPlatformColorStripe
-                  }
-                  showPlatformIcon={watchedChannel ? false : settings?.showPlatformIcon}
-                  showTimestamp={settings?.showTimestamp}
-                  showAvatar={settings?.showAvatars}
-                  showBadges={settings?.showBadges}
-                  fontSize={settings?.fontSize}
-                  chatTheme={settings?.chatTheme}
-                  accounts={accounts}
-                  selfPingEnabled={settings?.selfPing?.enabled}
-                  selfPingColor={settings?.selfPing?.color}
-                  moderationOutcome={outcome}
-                  onOpenUserCard={(target) =>
-                    setUserCardTarget({
-                      ...target,
-                      channelSlug: target.channelSlug ?? getChannelSlugForPlatform(target.platform),
-                    })
-                  }
-                  onReply={setReplyTarget}
-                  moderationRail={
-                    canShowModerationRail(message) && (!outcome || outcome.isTombstone) ? (
-                      <MessageModerationRail
-                        disabled={moderationPendingIds.has(message.id)}
-                        platform={moderationPlatform(message.platform)!}
-                        onModerate={(action) => void onModerate(message, action)}
-                      />
-                    ) : undefined
-                  }
-                />
+                // Plain block wrapper: flex containers shrink to content in
+                // virtual-list rows, block divs stretch to the list width.
+                <div key={message.id} style={{ width: '100%' }}>
+                  <ChatMessage
+                    message={message}
+                    channelSlug={getChannelSlugForPlatform(message.platform)}
+                    alias={aliasFor(message)}
+                    showPlatformColorStripe={
+                      watchedChannel ? false : settings?.showPlatformColorStripe
+                    }
+                    showPlatformIcon={watchedChannel ? false : settings?.showPlatformIcon}
+                    showTimestamp={settings?.showTimestamp}
+                    showAvatar={settings?.showAvatars}
+                    showBadges={settings?.showBadges}
+                    fontSize={settings?.fontSize}
+                    chatTheme={settings?.chatTheme}
+                    accounts={accounts}
+                    selfPingEnabled={settings?.selfPing?.enabled}
+                    selfPingColor={settings?.selfPing?.color}
+                    moderationOutcome={outcome}
+                    onOpenUserCard={(target) =>
+                      setUserCardTarget({
+                        ...target,
+                        channelSlug:
+                          target.channelSlug ?? getChannelSlugForPlatform(target.platform),
+                      })
+                    }
+                    onReply={setReplyTarget}
+                    moderationRail={
+                      canShowModerationRail(message) && (!outcome || outcome.isTombstone) ? (
+                        <MessageModerationRail
+                          disabled={moderationPendingIds.has(message.id)}
+                          platform={moderationPlatform(message.platform)!}
+                          onModerate={(action) => void onModerate(message, action)}
+                        />
+                      ) : undefined
+                    }
+                  />
+                </div>
               )
             })}
           </virtual-list>

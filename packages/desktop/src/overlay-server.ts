@@ -118,7 +118,7 @@ export function clearOverlay(): void {
 
 /**
  * Resolve the dist/overlay directory relative to this file.
- * Works both in development (src/overlay-server.ts) and after electrobun
+ * Works both in development (src/overlay-server.ts) and in packaged builds
  * copies the built assets.
  */
 export function resolveOverlayRuntimePaths(

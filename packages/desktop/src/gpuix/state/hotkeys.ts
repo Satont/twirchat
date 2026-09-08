@@ -7,6 +7,7 @@ import type { EventPayload } from '@gpuix/react'
 
 import { activeTabStore, activeWatchedTabStore, settingsStore, tabChannelIdsStore } from './app'
 import { isTextInputFocused } from './focus'
+import { closeTopOverlay } from './overlays'
 
 export interface HotkeyUiActions {
   openAddChannel: () => void
@@ -63,6 +64,15 @@ function cycleTab(direction: 1 | -1): void {
 
 export function handleGlobalKeyDown(event: EventPayload): void {
   if (!uiActions) return
+
+  // ESC closes the topmost overlay. Inputs inside overlays handle their own
+  // ESC (element callbacks fire first), so only handle it here when no text
+  // editor is focused — otherwise both would fire.
+  if (event.key === 'escape') {
+    if (!isTextInputFocused()) closeTopOverlay()
+    return
+  }
+
   if (isTextInputFocused()) return
 
   const modifiers = event.modifiers

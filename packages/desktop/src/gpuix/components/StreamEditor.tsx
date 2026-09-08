@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CategorySearchResult } from '@twirchat/shared/protocol'
 
 import { useBackend } from '../backend/context'
+import { useOverlayClose } from '../state/overlays'
 import { accent, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
@@ -48,6 +49,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
   // ── Category search ────────────────────────────────────────────────────
   const [categoryQuery, setCategoryQuery] = useState('')
   const [categoryResults, setCategoryResults] = useState<CategorySearchResult[]>([])
+  useOverlayClose(categoryResults.length > 0, () => setCategoryResults([]))
   const [searchLoading, setSearchLoading] = useState(false)
   const [focusedField, setFocusedField] = useState<'title' | 'category' | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

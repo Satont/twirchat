@@ -5,9 +5,9 @@ React directly onto GPUI (Zed's GPU framework) — **no Electron, no webview, no
 one Bun process for everything.
 
 ```bash
-bun run dev:gpuix        # bun --hot src/gpuix/main.tsx (remounts React on save)
-bun run start:gpuix      # plain run
-bun run typecheck:gpuix  # tsc -p tsconfig.gpuix.json
+bun run dev              # bun --hot src/gpuix/main.tsx (remounts React on save)
+bun run start            # plain run
+bun run typecheck        # tsc -p tsconfig.json && tsc -p tsconfig.gpuix.json
 ```
 
 ## Architecture
@@ -75,6 +75,10 @@ in-process facade with exactly the same shape as the Wails gateway:
 > and a render→`applyBatch` inside a GPUI event callback panics the Rust side
 > ("cannot update GpuixView while it is already being updated"). Don't call
 > store `.set()` expecting synchronous repaint from an event handler.
+>
+> **Hot reload persistence**: desktop `bun --hot` re-evaluates the whole module
+> graph on save, so every named store is pinned on `globalThis`
+> (`create-store.ts` registry) — remounts keep messages, settings, tabs, caches.
 
 ### Virtual scroll
 
@@ -116,6 +120,12 @@ served by `src/overlay-server.ts` (started by the GPUIX backend too).
 is already being updated`). Real mouse input is unaffected; keyboard
   automation (`press`, `fill`, `ctrl+tab`…) works. Track
   https://github.com/remorses/gpuix before relying on mouse automation on Linux.
+- **Freshly mounted subtrees sometimes don't paint** (elements exist in the
+  retained tree with correct bounds, but no pixels until restart) — hit it on
+  newly split panes. Workaround: `layoutRevisionStore` remounts the whole pane
+  tree after every layout mutation.
+- **GIF emotes pause while the window is unfocused** — GPUI stops advancing
+  animation frames for inactive windows; animation resumes on focus.
 - **No drag-reorder of tabs / drag-dock of panels** — GPUI pointer capture
   routes moves only to the pressed element, so cross-element hit testing is
   impossible. Splits/resizes/assignments work via buttons, hotkeys
