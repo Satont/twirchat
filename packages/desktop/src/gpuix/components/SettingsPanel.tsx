@@ -84,6 +84,11 @@ export function SettingsPanel() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [recordingAction, setRecordingAction] = useState<keyof HotkeySettings | null>(null)
+  const [appVersion, setAppVersion] = useState('…')
+
+  useEffect(() => {
+    void backend.api.getAppVersion().then(setAppVersion)
+  }, [backend])
 
   // Feedback-loop guard (Vue ignorePropSync): our own live-preview pushes into
   // the store must not reset local, external store changes do.
@@ -338,7 +343,28 @@ export function SettingsPanel() {
 
           {/* Updates */}
           <Section title="Updates" desc="Automatic update settings">
-            <FormRow first last label="Auto-check for updates" hint="Check on app startup">
+            <FormRow first label="Version" hint="Currently installed version">
+              <Text style={{ fontSize: 13, color: theme.text2 }}>{appVersion}</Text>
+            </FormRow>
+            <FormRow label="Check now" hint="Look for updates on the release feed">
+              <div
+                onClick={() => void backend.api.checkForUpdate()}
+                style={{
+                  paddingTop: 6,
+                  paddingBottom: 6,
+                  paddingLeft: 12,
+                  paddingRight: 12,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface2,
+                  cursor: 'pointer',
+                }}
+              >
+                <Text style={{ fontSize: 13, color: theme.text }}>Check for updates</Text>
+              </div>
+            </FormRow>
+            <FormRow last label="Auto-check for updates" hint="Check on app startup">
               <Switch
                 checked={local.autoCheckUpdates ?? false}
                 onChange={(value) =>

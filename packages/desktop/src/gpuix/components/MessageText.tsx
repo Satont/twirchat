@@ -19,9 +19,11 @@ import { useFont, useTheme } from '../theme-context'
 import { EmoteTooltip } from './ui/EmoteTooltip'
 import { RemoteImage } from './ui/RemoteImage'
 
-const EMOTE_HEIGHT = 24
-const EMOTE_MAX_WIDTH = 72
-const SYSTEM_EMOTE_HEIGHT = 20
+// Emote height scales with the chat font (2.3x ≈ 32px at the 14px default,
+// like the avatar size). Wide emotes cap at 3x their height.
+const EMOTE_SCALE = 2.3
+const SYSTEM_EMOTE_SCALE = 1.5
+const EMOTE_MAX_RATIO = 3
 
 export const MessageTokens = memo(function MessageTokens({
   message,
@@ -50,17 +52,14 @@ export const MessageTokens = memo(function MessageTokens({
 
   const baseColor = isSystem ? theme.text2 : theme.text
   const textOpacity = deleted ? 0.5 : isAction ? 0.85 : 1
-  const emoteSize = isSystem ? SYSTEM_EMOTE_HEIGHT : EMOTE_HEIGHT
+  const emoteSize = Math.round(fontSize * (isSystem ? SYSTEM_EMOTE_SCALE : EMOTE_SCALE))
   const lineHeight = Math.round(fontSize * 1.45)
 
   return tokens.map((token, index) => {
     if (token.kind === 'emote') {
       const ratio =
         token.emote.aspectRatio && token.emote.aspectRatio > 0 ? token.emote.aspectRatio : 1
-      const width = Math.min(
-        EMOTE_MAX_WIDTH * (emoteSize / EMOTE_HEIGHT),
-        Math.round(emoteSize * ratio),
-      )
+      const width = Math.min(Math.round(emoteSize * EMOTE_MAX_RATIO), Math.round(emoteSize * ratio))
       return (
         <EmoteTooltip key={index} emote={token.emote}>
           <RemoteImage

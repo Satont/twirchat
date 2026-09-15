@@ -249,12 +249,13 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
   const [showAddForm, setShowAddForm] = useState(false)
 
   const isMain = panel.content.type === 'main'
+  const isEmpty = panel.content.type === 'empty'
   const channelId = panel.content.type === 'watched' ? panel.content.channelId : null
   const watchedChannel = channelId
     ? (watchedChannels.find((ch) => ch.id === channelId) ?? null)
     : null
 
-  const showForm = panel.content.type === 'empty' || showAddForm
+  const showForm = isEmpty || showAddForm
 
   return (
     <div
@@ -306,7 +307,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
           >
             <div style={{ maxWidth: 260, width: '100%' }}>
               <AddChannelForm
-                cancelable={panel.content.type === 'watched' && showAddForm}
+                cancelable={isEmpty || (panel.content.type === 'watched' && showAddForm)}
                 onConfirm={(platform, slug) => {
                   void (async () => {
                     try {
@@ -323,7 +324,11 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
                     }
                   })()
                 }}
-                onCancel={() => setShowAddForm(false)}
+                onCancel={() => {
+                  // An empty pane has no channel to fall back to — cancel removes it.
+                  if (isEmpty) void removePanel(backend, tabId, panel.id)
+                  else setShowAddForm(false)
+                }}
               />
             </div>
           </div>

@@ -46,6 +46,8 @@ import {
 import { UserAliasStore } from '../../store/user-alias-store'
 import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
 import { backendFetch } from '../../runtime-config'
+import { APP_VERSION } from '../../build-info'
+import { createUpdater } from './updater'
 import {
   getKickAuthUrl,
   getTwitchAuthUrl,
@@ -157,7 +159,8 @@ export interface DesktopApi {
   getStatuses(): Promise<PlatformStatusInfo[]>
   getUsernameColor(params: { platform: Platform; username: string }): Promise<string | null>
   getChannelEmotes(params: { platform: Platform; channelId: string }): Promise<EmoteCatalogEntry[]>
-  /** Updates are handled by the Wails/Velopack build; the GPUIX build reports "no update". */
+  /** Velopack updater; dev/unpackaged builds always report "no update". */
+  getAppVersion(): Promise<string>
   checkForUpdate(): Promise<{ updateAvailable: boolean; version?: string; currentVersion: string }>
   downloadUpdate(): Promise<{ success: boolean; error?: string }>
   applyUpdate(): Promise<void>
@@ -483,6 +486,7 @@ function countPanels(node: LayoutNode): number {
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   const { aggregator, backendConn, watchedChannelManager, currentStatuses } = ctx
+  const updater = createUpdater(ctx.events)
 
   const getSevenTvTwitchPlatformUserId = (channelSlug: string): string | undefined => {
     const twitchAccount = AccountStore.findByPlatform('twitch')
@@ -734,14 +738,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return sevenTVService.getEmotes(platform, channelId) as unknown as EmoteCatalogEntry[]
     },
 
-    // The GPUIX build has no updater (releases stay on the Wails build).
-    checkForUpdate: async () => ({ updateAvailable: false, currentVersion: 'dev' }),
-    downloadUpdate: async () => ({
-      success: false,
-      error: 'Updates are not available in this build',
-    }),
-    applyUpdate: async () => {},
-    skipUpdate: async () => {},
+    getAppVersion: async () => APP_VERSION,
+    checkForUpdate: () => updater.check(),
+    downloadUpdate: () => updater.download(),
+    applyUpdate: () => updater.apply(),
+    skipUpdate: ({ hash }) => updater.skip(hash),
 
     getWatchedChannels: async () => watchedChannelManager.getAll(),
 

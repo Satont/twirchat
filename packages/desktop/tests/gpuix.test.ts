@@ -143,9 +143,8 @@ describe('image cache (GPUI cannot load http(s) on Linux)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'twirchat-imgcache-'))
     setRuntimeConfig({ dbPath: join(dir, 'db.sqlite') })
 
-    const { cachedImagePath, ensureImage, imageCacheRevisionStore } = await import(
-      '../src/gpuix/state/image-cache'
-    )
+    const { cachedImagePath, ensureImage, imageCacheRevisionStore } =
+      await import('../src/gpuix/state/image-cache')
     const url = `http://127.0.0.1:${server.port}/avatar.png`
 
     expect(cachedImagePath(url)).toBeUndefined()

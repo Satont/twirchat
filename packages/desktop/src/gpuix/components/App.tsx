@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from '@gpuix/react'
 
-import { useBackend } from '../backend/context'
+import { useBackend, useBackendEvent } from '../backend/context'
 import { useStore } from '../state/create-store'
 import {
   accountsStore,
@@ -86,6 +86,123 @@ function ChatNotice() {
         <div style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.dot }} />
         <Text style={{ fontSize: 13, color: palette.text }}>{notice.text}</Text>
       </motion.div>
+    </div>
+  )
+}
+
+/**
+ * Update notification toast (port of App.vue's update-toast). Driven by the
+ * backend's `update_status` events: 'checking' / 'update-available' /
+ * 'downloading' (progress) / 'download-complete' / 'applying' /
+ * 'no-update' / 'update-error'.
+ */
+function UpdateToast() {
+  const backend = useBackend()
+  const [update, setUpdate] = useState<{
+    status: string
+    message: string
+    progress?: number
+    hash?: string
+  } | null>(null)
+  const [dismissed, setDismissed] = useState(false)
+
+  useBackendEvent('update_status', (status) => {
+    setUpdate(status)
+    setDismissed(false)
+  })
+
+  // 'no-update' and errors are informational — auto-hide them.
+  useEffect(() => {
+    if (!update || dismissed) return
+    if (update.status !== 'no-update' && update.status !== 'update-error') return
+    const timer = setTimeout(() => setDismissed(true), 5000)
+    return () => clearTimeout(timer)
+  }, [update, dismissed])
+
+  if (!update || dismissed) return null
+
+  const buttonStyle = {
+    paddingTop: 6,
+    paddingBottom: 6,
+    paddingLeft: 12,
+    paddingRight: 12,
+    borderRadius: 6,
+    backgroundColor: '#9147ff',
+    cursor: 'pointer' as const,
+  }
+  const secondaryButtonStyle = {
+    ...buttonStyle,
+    backgroundColor: '#26262c',
+    borderWidth: 1,
+    borderColor: '#333339',
+  }
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 12,
+        bottom: 12,
+        pointerEvents: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        minWidth: 240,
+        maxWidth: 340,
+        backgroundColor: '#1a1a1e',
+        borderWidth: 1,
+        borderColor: '#333339',
+        borderRadius: 10,
+        padding: 12,
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={{ flexGrow: 1, fontSize: 13, color: '#e4e4e7' }}>
+          {update.status === 'downloading' && typeof update.progress === 'number'
+            ? `${update.message} — ${Math.round(update.progress)}%`
+            : update.message}
+        </Text>
+        <Text
+          style={{ fontSize: 13, color: '#8b8b99', cursor: 'pointer' }}
+          onClick={() => setDismissed(true)}
+        >
+          ✕
+        </Text>
+      </div>
+      {update.status === 'downloading' ? (
+        <div style={{ height: 4, borderRadius: 2, backgroundColor: '#26262c', overflow: 'hidden' }}>
+          <div
+            style={{
+              width: `${Math.round(update.progress ?? 0)}%`,
+              height: '100%',
+              backgroundColor: '#9147ff',
+            }}
+          />
+        </div>
+      ) : null}
+      {update.status === 'update-available' ? (
+        <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
+          <div style={buttonStyle} onClick={() => void backend.api.downloadUpdate()}>
+            <Text style={{ fontSize: 13, color: '#ffffff' }}>Download</Text>
+          </div>
+          <div
+            style={secondaryButtonStyle}
+            onClick={() => {
+              if (update.hash) void backend.api.skipUpdate({ hash: update.hash })
+              setDismissed(true)
+            }}
+          >
+            <Text style={{ fontSize: 13, color: '#e4e4e7' }}>Skip</Text>
+          </div>
+        </div>
+      ) : null}
+      {update.status === 'download-complete' ? (
+        <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
+          <div style={buttonStyle} onClick={() => void backend.api.applyUpdate()}>
+            <Text style={{ fontSize: 13, color: '#ffffff' }}>Restart to apply</Text>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -280,6 +397,7 @@ export function App() {
           ) : null}
 
           <ChatNotice />
+          <UpdateToast />
         </div>
       </FontContext.Provider>
     </ThemeContext.Provider>

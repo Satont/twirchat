@@ -52,15 +52,15 @@ src/
 
 ## WHERE TO LOOK
 
-| Task                     | Location                                   | Notes                                |
-| ------------------------ | ------------------------------------------ | ------------------------------------ |
-| Add UI component         | `src/gpuix/components/`                    | Follow BRIEFING patterns in README   |
-| Add backend API method   | `src/gpuix/backend/api.ts`                 | Mirror semantics of legacy handlers  |
-| Add backend event        | `src/gpuix/backend/events.ts` + `server.ts`| Typed DesktopEventMap                |
-| Change chat rendering    | `src/gpuix/components/ChatMessage.tsx`     | Token-based flex-wrap rows           |
-| Change overlay           | `src/views/overlay/App.vue`                | OBS overlay (still Vue)              |
-| DB schema change         | `src/store/db.ts`                          | Migrations in `initDb()`             |
-| Platform adapter         | `src/platforms/{name}/adapter.ts`          | BasePlatformAdapter                  |
+| Task                   | Location                                    | Notes                               |
+| ---------------------- | ------------------------------------------- | ----------------------------------- |
+| Add UI component       | `src/gpuix/components/`                     | Follow BRIEFING patterns in README  |
+| Add backend API method | `src/gpuix/backend/api.ts`                  | Mirror semantics of legacy handlers |
+| Add backend event      | `src/gpuix/backend/events.ts` + `server.ts` | Typed DesktopEventMap               |
+| Change chat rendering  | `src/gpuix/components/ChatMessage.tsx`      | Token-based flex-wrap rows          |
+| Change overlay         | `src/views/overlay/App.vue`                 | OBS overlay (still Vue)             |
+| DB schema change       | `src/store/db.ts`                           | Migrations in `initDb()`            |
+| Platform adapter       | `src/platforms/{name}/adapter.ts`           | BasePlatformAdapter                 |
 
 ## COMMANDS
 

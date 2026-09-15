@@ -18,7 +18,13 @@ import { logger } from '@twirchat/shared/logger'
 
 import { initDb } from '../../store/db'
 import { getClientSecret } from '../../store/client-secret'
-import { AccountStore, ChannelStore, MessageStore, UsernameColorCache } from '../../store'
+import {
+  AccountStore,
+  ChannelStore,
+  MessageStore,
+  SettingsStore,
+  UsernameColorCache,
+} from '../../store'
 import { BackendConnection } from '../../backend-connection'
 import { ChatAggregator } from '../../chat/aggregator'
 import { pushOverlayEvent, pushOverlayMessage, startOverlayServer } from '../../overlay-server'
@@ -29,6 +35,8 @@ import { sevenTVService } from '../../seventv'
 import { WatchedChannelManager } from '../../watched-channels/manager'
 import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
 import { setRuntimeConfig } from '../../runtime-config'
+import { BACKEND_URL } from '../../build-info'
+import { runVelopackStartup } from './updater'
 import type { WebviewSender } from '../../shared/rpc'
 
 import { createDesktopEvents, type DesktopEvents } from './events'
@@ -60,10 +68,13 @@ function openBrowser(url: string): void {
 function boot(): DesktopBackend {
   log.info('Starting GPUIX backend...')
 
-  // Runtime config: env-based (Bun auto-loads .env). Defaults target a local backend.
+  // Velopack install/update/restart hooks — must run before anything else.
+  runVelopackStartup()
+
+  // Runtime config: baked in at release build (--define), env overridable in dev.
   const nodeEnv = process.env.NODE_ENV ?? 'development'
   setRuntimeConfig({
-    backendUrl: process.env.CHATRIX_BACKEND_URL ?? 'http://127.0.0.1:3000',
+    backendUrl: BACKEND_URL,
     backendWsUrl: process.env.CHATRIX_BACKEND_WS_URL ?? 'ws://127.0.0.1:3000/ws',
     nodeEnv,
   })
@@ -153,6 +164,13 @@ function boot(): DesktopBackend {
     events,
     openBrowser,
   })
+
+  // Auto-check on startup (auto-downloads; the toast offers "restart to apply").
+  if (SettingsStore.get().autoCheckUpdates) {
+    void api.checkForUpdate().then((result) => {
+      if (result.updateAvailable) void api.downloadUpdate()
+    })
+  }
 
   // ── Adapter events → stores / overlay / UI ────────────────────────────────
 

@@ -32,12 +32,12 @@ also download the standalone `.AppImage` directly from the
 
 ### macOS
 
-1. Download the latest macOS Velopack `.pkg` from
+1. Download the latest macOS Velopack `.pkg` (Apple Silicon only) from
    [Releases](https://github.com/Satont/twirchat/releases/latest).
 2. Run the package installer. The packaged app bundle is `TwirChat.app`.
 
 ## Updates
 
-Packaged desktop builds initialize Velopack at startup, check the platform feed on startup and
-periodically while automatic checks are enabled, show an in-app update toast when a stable update is
-available, and can download the update before restarting to apply it.
+Packaged desktop builds initialize Velopack at startup, check the platform feed on startup while
+automatic checks are enabled, show an in-app update toast when a stable update is available, and
+can download the update before restarting to apply it.
