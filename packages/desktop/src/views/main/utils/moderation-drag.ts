@@ -1,4 +1,4 @@
-import type { ModerationAction, ModerationPlatform } from '../services/desktop-api'
+import type { ModerationAction, ModerationPlatform } from '../../../gpuix/backend/api'
 
 const activationDistance = 32
 const deleteDistance = 80

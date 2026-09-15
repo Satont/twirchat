@@ -26,7 +26,7 @@ import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
 import type { ServerWebSocket } from 'bun'
 import { existsSync } from 'node:fs'
-import { extname, join } from 'path'
+import { dirname, extname, join } from 'path'
 import { logger } from '@twirchat/shared/logger'
 import { buildMessageParts, type MessagePart } from './views/shared/utils/messageParts'
 
@@ -118,21 +118,26 @@ export function clearOverlay(): void {
 
 /**
  * Resolve the dist/overlay directory relative to this file.
- * Works both in development (src/overlay-server.ts) and after electrobun
+ * Works both in development (src/overlay-server.ts) and in packaged builds
  * copies the built assets.
  */
 export function resolveOverlayRuntimePaths(
   baseDir: string,
   pathExists: (path: string) => boolean = existsSync,
 ): OverlayRuntimePaths {
+  // Packaged builds (bun --compile) get assets as real files next to the exe;
+  // dev resolves them from the source tree.
+  const execDir = dirname(process.execPath)
   const overlayCandidates = [
     join(baseDir, '..', 'views', 'overlay'),
     join(baseDir, '..', 'dist', 'overlay'),
+    join(execDir, 'overlay'),
   ]
 
   const fontCandidates = [
     join(baseDir, '..', 'views', 'fonts'),
     join(baseDir, '..', 'public', 'fonts'),
+    join(execDir, 'fonts'),
   ]
 
   return {

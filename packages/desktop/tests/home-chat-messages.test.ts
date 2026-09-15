@@ -71,9 +71,9 @@ test('keeps My channels scoped to the connected account channels', () => {
 })
 
 test('routes live messages and history through the My channels filter', async () => {
-  const source = await Bun.file(new URL('../src/views/main/App.vue', import.meta.url)).text()
+  const source = await Bun.file(new URL('../src/gpuix/state/app.ts', import.meta.url)).text()
 
-  expect(source).toContain('filterHomeChatMessages(recentMsgs, accounts.value)')
-  expect(source).toContain('filterHomeChatMessages([msg], accounts.value)')
-  expect(source).toContain('filterHomeChatMessages(recentMessages, accounts.value)')
+  expect(source).toContain('filterHomeChatMessages(incoming, accountsStore.get())')
+  expect(source).toContain('appendHomeMessages(recent)')
+  expect(source).toContain("events.on('chat_message'")
 })

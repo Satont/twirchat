@@ -4,7 +4,7 @@ import type {
   ChatterGroup,
   ChatterRole,
   ChatterUser,
-} from '../services/desktop-api'
+} from '../../../gpuix/backend/api'
 import type { ChatSendTarget } from './chat-send-targets'
 
 export function supportsChatters(platform: Platform | undefined): platform is 'twitch' | 'kick' {

@@ -15,7 +15,8 @@ The release pipeline is fully automated via GitHub Actions and triggers on:
 
 - **Linux**: x64 AppImage (Velopack)
 - **Windows**: x64 Setup `.exe` (Velopack)
-- **macOS**: universal `.pkg` containing `TwirChat.app` (Velopack)
+- **macOS**: Apple Silicon `.pkg` containing `TwirChat.app` (Velopack; `bun --compile` cannot
+  produce universal binaries, so the `osx` feed is arm64-only)
 
 Velopack also publishes platform feeds named `releases.linux.json`, `releases.win.json`, and
 `releases.osx.json` to the GitHub Release.
@@ -35,10 +36,9 @@ Velopack also publishes platform feeds named `releases.linux.json`, `releases.wi
 
 ### Environment Configuration
 
-Production builds use environment variables from GitHub Secrets:
-
-- `BACKEND_URL` - Backend HTTP URL
-- `BACKEND_WS_URL` - Backend WebSocket URL
+Production desktop builds bake `BACKEND_URL` into the binary via `bun build --compile --define`
+(from the `BACKEND_URL` GitHub Actions variable/secret); the backend Docker image is configured
+through its own environment.
 
 ## How to Create a Release
 
@@ -53,12 +53,10 @@ git push origin v1.0.0
 The workflow will automatically:
 
 1. Generate changelog from commits
-2. Build desktop-rust apps for Linux, Windows, and macOS
-3. Prepare Velopack app directories with native staged artifacts only
-4. Verify each prepared app directory with the Rust packaging verifier
-5. Create the GitHub Release for backend and release metadata
-6. Publish Velopack packages for each desktop channel (`linux`, `win`, `osx`)
-7. Build backend binary and Docker image
+2. Build the Bun/GPUIX desktop app (`bun build --compile`) for Linux, Windows, and macOS
+3. Create the GitHub Release for backend and release metadata
+4. Publish Velopack packages for each desktop channel (`linux`, `win`, `osx`)
+5. Build backend binary and Docker image
 
 ### Method 2: Manual Trigger
 
@@ -126,27 +124,24 @@ Caddy will automatically:
 
 ## Local Build
 
-### Desktop (Native Rust)
+### Desktop (Bun + GPUIX)
 
 ```bash
-cd packages/desktop-rust
+cd packages/desktop
 
 # Development
-cargo run
+bun run dev
 
-# Production build
-cargo build --release
-
-# Verify packaging assets
-cargo test packaging_artifact_contains_required_assets
+# Production binary (VERSION/BACKEND_URL baked via --define)
+bun run build:overlay
+bun build --compile src/gpuix/main.tsx --outfile dist/twirchat \
+  --define '__APP_VERSION__="dev"' \
+  --define '__BACKEND_URL__="http://127.0.0.1:3000"'
 ```
 
-To verify a prepared Velopack app directory directly:
-
-```bash
-cargo run --manifest-path packages/desktop-rust/Cargo.toml --bin release-contract -- \
-  verify-artifact artifacts/desktop-linux-x64 --target linux-x64
-```
+The compiled binary embeds the app code and native modules; the OBS overlay assets
+(`dist/overlay`) and fonts (`public/fonts`) are served from disk and must be shipped next to
+the executable (the release workflow does this).
 
 ### Backend
 
@@ -167,10 +162,8 @@ docker build -t twirchat-backend .
 
 The desktop application uses Velopack for distribution and automatic updates:
 
-- **Self-contained**: desktop artifacts are bundled as native platform app artifacts only
-  (`twirchat`, `twirchat.exe` plus `sqlite3.dll`, or `TwirChat.app`) before `vpk pack`; the macOS
-  bundle must include `Contents/MacOS/TwirChat`, `Contents/Info.plist`, and `Contents/Resources`
-  with a non-hidden file so GitHub artifact upload preserves the directory.
+- **Self-contained**: desktop artifacts are the compiled Bun binary plus on-disk assets
+  (`overlay/`, `fonts/`), wrapped into a `TwirChat.app` bundle on macOS, before `vpk pack`.
 - **Automatic checks**: packaged builds initialize Velopack at startup and check for updates on
   startup and periodically while automatic update checks are enabled.
 - **In-app flow**: available updates appear as an in-app toast; users can download the update and

@@ -101,87 +101,52 @@ jobs:
             target: linux
             main_exe: twirchat
             runtime: linux-x64
-            cgo_ldflags: ''
-            upx: true
           - os: windows-latest
             channel: win
             target: win
             main_exe: twirchat.exe
             runtime: win-x64
-            cgo_ldflags: -lntdll
-            upx: true
+          # macOS builds on the arm64 runner: bun --compile cannot produce
+          # universal binaries, so the osx feed is Apple Silicon only.
           - os: macos-latest
             channel: osx
             target: osx
             main_exe: TwirChat
             runtime: ''
-            cgo_ldflags: ''
-            upx: false
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.26.x' }
       - uses: oven-sh/setup-bun@v2
-        with: { bun-version-file: '.bun-version' }
-      - uses: arduino/setup-task@v2
         with:
-          repo-token: ${{ github.token }}
+          bun-version-file: '.bun-version'
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: '8.0.x' }
-      - name: Linux WebKitGTK 6 build dependencies and UPX
-        if: matrix.target == 'linux'
+        with:
+          dotnet-version: '8.0.x'
+      - name: Install Velopack
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev upx-ucl
-          pkg-config --modversion gtk4
-          pkg-config --modversion webkitgtk-6.0
-      - name: Install Wails and Velopack
-        shell: bash
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117
           dotnet tool install --global vpk
-          echo "$HOME/go/bin" >> "$GITHUB_PATH"
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-      - name: Windows UPX
-        if: matrix.target == 'win'
-        shell: pwsh
-        run: choco install upx -y
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Build Wails application
+      - name: Build desktop binary
         if: matrix.target != 'osx'
         working-directory: packages/desktop
         shell: bash
         run: |
           : "${BACKEND_URL:?BACKEND_URL repository variable or secret must be configured for release builds}"
-          goLdflags="-s -w -X main.version=${{ needs.version.outputs.version }} -X main.buildBackendURL=${BACKEND_URL}"
-          if [[ "${{ matrix.target }}" == 'win' ]]; then
-            goLdflags="$goLdflags -H windowsgui"
-          fi
-          export GO_LDFLAGS="$goLdflags"
-          export CGO_LDFLAGS="${{ matrix.cgo_ldflags }}"
-          wails3 build
-          if [[ "${{ matrix.target }}" == 'win' && -f bin/twirchat && ! -f bin/twirchat.exe ]]; then
-            mv bin/twirchat bin/twirchat.exe
-          fi
-          test -f "bin/${{ matrix.main_exe }}"
-      - name: Stage MinGW runtime dependencies
-        if: matrix.target == 'win'
-        working-directory: packages/desktop
-        shell: pwsh
-        run: |
-          $gccDirectory = Split-Path -Parent (Get-Command gcc).Source
-          $runtimeDlls = 'libgcc_s_seh-1.dll', 'libwinpthread-1.dll'
-          foreach ($runtimeDllName in $runtimeDlls) {
-            $runtimeDll = Join-Path $gccDirectory $runtimeDllName
-            if (-not (Test-Path -LiteralPath $runtimeDll)) {
-              throw "MinGW runtime $runtimeDllName was not found beside $gccDirectory."
-            }
-            Copy-Item -LiteralPath $runtimeDll -Destination (Join-Path 'bin' $runtimeDllName)
-          }
+          bun run build:overlay
+          rm -rf bin && mkdir -p bin
+          bun build --compile src/gpuix/main.tsx \
+            --outfile "bin/${{ matrix.main_exe }}" \
+            --define "__APP_VERSION__=\"${{ needs.version.outputs.version }}\"" \
+            --define "__BACKEND_URL__=\"${BACKEND_URL}\""
+          # overlay assets + fonts are served from disk (see overlay-server.ts),
+          # ship them next to the executable
+          cp -r dist/overlay bin/overlay
+          cp -r public/fonts bin/fonts
+          test -x "bin/${{ matrix.main_exe }}"
       - name: Build macOS application bundle
         if: matrix.target == 'osx'
         working-directory: packages/desktop
@@ -190,74 +155,101 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           : "${BACKEND_URL:?BACKEND_URL repository variable or secret must be configured for release builds}"
-          bun run build:main
-          test -f "dist/main/index.html"
+          bun run build:overlay
           app='bin/TwirChat.app'
           rm -rf "$app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-          printf 'Preserve macOS resources in the Velopack bundle.\n' > "$app/Contents/Resources/artifact-sentinel.txt"
-          go build -ldflags "-s -w -X main.version=$VERSION -X main.buildBackendURL=$BACKEND_URL" -o "$app/Contents/MacOS/TwirChat" .
-          cat > "$app/Contents/Info.plist" <<PLIST
+          bun build --compile src/gpuix/main.tsx \
+            --outfile "$app/Contents/MacOS/TwirChat" \
+            --define "__APP_VERSION__=\"${VERSION}\"" \
+            --define "__BACKEND_URL__=\"${BACKEND_URL}\""
+          cp -r dist/overlay "$app/Contents/MacOS/overlay"
+          cp -r public/fonts "$app/Contents/MacOS/fonts"
+          iconutil -c icns assets/icon.iconset -o "$app/Contents/Resources/icon.icns" || true
+          cat > "$app/Contents/Info.plist" <<EOFPLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>CFBundleDisplayName</key><string>TwirChat</string>
-            <key>CFBundleExecutable</key><string>TwirChat</string>
-            <key>CFBundleIdentifier</key><string>dev.twirchat.app</string>
-            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-            <key>CFBundleName</key><string>TwirChat</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>$VERSION</string>
-            <key>CFBundleVersion</key><string>$VERSION</string>
-            <key>LSMinimumSystemVersion</key><string>11.0</string>
-            <key>NSHighResolutionCapable</key><true/>
-          </dict></plist>
-          PLIST
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key>
+            <string>TwirChat</string>
+            <key>CFBundleDisplayName</key>
+            <string>TwirChat</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.twirchat.app</string>
+            <key>CFBundleExecutable</key>
+            <string>TwirChat</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleVersion</key>
+            <string>${VERSION}</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${VERSION}</string>
+            <key>CFBundleIconFile</key>
+            <string>icon.icns</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+            <key>LSMinimumSystemVersion</key>
+            <string>13.0</string>
+          </dict>
+          </plist>
+          EOFPLIST
           test -x "$app/Contents/MacOS/TwirChat"
           plutil -lint "$app/Contents/Info.plist"
-      - name: Compress executable with UPX
-        if: matrix.upx
-        working-directory: packages/desktop
-        shell: bash
-        run: |
-          exe="bin/${{ matrix.main_exe }}"
-          upx --best --lzma "$exe"
-          upx -t "$exe"
-      - name: Package and publish Velopack release
-        if: matrix.target != 'osx'
-        working-directory: packages/desktop
+      - name: Download previous Velopack channel feed
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.version.outputs.version }}
-          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          mkdir -p velopack
-          vpk download github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --channel "${{ matrix.channel }}" --outputDir velopack || true
-          if gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"; then
-            echo "${{ matrix.channel }} $VERSION is already published; preserving the existing release."
-            exit 0
+          dest="$(mktemp -d)/feed.json"
+          if gh release download --repo ${{ github.repository }} --pattern 'releases.${{ matrix.channel }}.json' --output "$dest" --clobber; then
+            echo "FEED_PATH=$dest" >> "$GITHUB_ENV"
+          else
+            echo "No previous feed for ${{ matrix.channel }}; starting a new one"
           fi
-          vpk "[${{ matrix.target }}]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin --mainExe "${{ matrix.main_exe }}" --channel "${{ matrix.channel }}" --outputDir velopack --runtime "${{ matrix.runtime }}"
-          vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --publish --merge --tag "$TAG" --channel "${{ matrix.channel }}" --outputDir velopack
-          gh release upload "$TAG" velopack/* --repo "${{ github.repository }}" --clobber
-          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"
-      - name: Package and publish macOS Velopack release
-        if: matrix.target == 'osx'
+      - name: Velopack pack
+        shell: bash
         working-directory: packages/desktop
+        run: |
+          args=(
+            --packId dev.twirchat.app
+            --packVersion "${{ needs.version.outputs.version }}"
+            --mainExe "${{ matrix.main_exe }}"
+            --outputDir releases
+            --channel "${{ matrix.channel }}"
+            --packAuthors "Satont"
+            --packTitle "TwirChat"
+            --delta BestSpeed
+          )
+          if [ -n "${FEED_PATH:-}" ]; then
+            args+=(--releaseNotes "$FEED_PATH")
+          fi
+          if [ "${{ matrix.target }}" = "osx" ]; then
+            vpk pack "${args[@]}" --packDir bin/TwirChat.app
+          else
+            vpk "[${{ matrix.target }}]" pack "${args[@]}"               --runtime "${{ matrix.runtime }}"               --packDir bin
+          fi
+      - name: Upload and merge Velopack channel feed
+        shell: bash
+        working-directory: packages/desktop
+        run: |
+          vpk upload github             --outputDir releases             --repoUrl "https://github.com/${{ github.repository }}"             --token "${{ github.token }}"             --publish             --merge             --releaseName "Release ${{ needs.version.outputs.tag }}"             --tag "${{ needs.version.outputs.tag }}"             --channel "${{ matrix.channel }}"
+      - name: Upload installer artifacts
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.version.outputs.version }}
-          TAG: ${{ needs.version.outputs.tag }}
+        working-directory: packages/desktop
         run: |
-          mkdir -p velopack
-          vpk download github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --channel "${{ matrix.channel }}" --outputDir velopack || true
-          if gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"; then
-            echo "${{ matrix.channel }} $VERSION is already published; preserving the existing release."
-            exit 0
+          shopt -s nullglob
+          assets=(
+            releases/*.AppImage
+            releases/*.AppImage.tar.zst
+            releases/*-Portable.zip
+            releases/*-Setup.exe
+            releases/*-Setup.msi
+            releases/*-Portable.tar.zst
+            releases/velopack.*.nupkg
+          )
+          if ((${#assets[@]})); then
+            gh release upload "${{ needs.version.outputs.tag }}" "${assets[@]}" --clobber --repo ${{ github.repository }}
           fi
-          vpk "[osx]" pack -u dev.twirchat.app --packTitle TwirChat -v "$VERSION" --packDir bin/TwirChat.app --mainExe TwirChat --channel "${{ matrix.channel }}" --outputDir velopack
-          vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --token "$GH_TOKEN" --publish --merge --tag "$TAG" --channel "${{ matrix.channel }}" --outputDir velopack
-          gh release upload "$TAG" velopack/* --repo "${{ github.repository }}" --clobber
-          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fx "releases.${{ matrix.channel }}.json"

@@ -154,32 +154,33 @@ Desktop-приложение + backend. Monorepo на Bun + TypeScript.
 
 - **Runtime**: Bun
 - **Monorepo**: bun workspaces — `packages/desktop`, `packages/backend`, `packages/shared`
-- **Desktop**: Electrobun v1.16.0 (`electrobun/bun` main process, `electrobun/view` browser side)
-  - **Frontend**: Vue 3 SFC через Vite + `@vitejs/plugin-vue`
-  - Desktop приложение — это Electrobun wrapper вокруг Vue-приложения
+- **Desktop**: GPUIX v0.7 (React + GPUI, Zed's GPU framework — **без webview, без DOM**, один Bun-процесс)
+  - OBS overlay остаётся Vue 3 SFC через Vite (OBS browser source рендерит HTML)
 - **Backend**: Bun (REST API + WebSocket + gRPC клиенты)
 - **Проверка типов**:
   - **Backend**: `tsgo --noEmit` (`@typescript/native-preview`)
-  - **Frontend**: `vue-tsc --noEmit` (обычный TypeScript + Vue Language Tools)
+  - **Desktop**: `tsc --noEmit` (`tsconfig.json` + `tsconfig.gpuix.json` с `jsxImportSource: @gpuix/react`)
 - **НЕ использовать** HTTP polling для YouTube — только gRPC
 
 ### Архитектура `packages/desktop`
 
-Desktop — это Electrobun приложение с Vue 3 фронтендом:
+Desktop — один Bun-процесс: бэкенд-логика + React-UI через GPUIX:
 
 ```
-src/bun/index.ts          — Electrobun main process (BrowserWindow, RPC, backend WS)
-src/shared/rpc.ts         — TwirChatRPCSchema + WebviewSender (общий тип для обеих сторон)
-src/views/main/           — Vue app главного окна (собирается Vite → dist/main/)
-src/views/overlay/        — Vue app OBS overlay (собирается Vite → dist/overlay/)
-src/overlay-server.ts     — Bun.serve: раздаёт dist/overlay/ + WebSocket для OBS
+src/gpuix/main.tsx        — entry: boot backend + render(<App/>) (bun --hot)
+src/gpuix/backend/        — in-process «RPC» bridge: server.ts (boot), api.ts (DesktopApi),
+                            events.ts (DesktopEventMap), context.ts (useBackend/useBackendEvent)
+src/gpuix/state/          — observable stores (create-store на useSyncExternalStore),
+                            layout, caches, image-cache (GPUI не качает http на Linux), hotkeys
+src/gpuix/components/     — React UI (ChatView, ChatMessage, panels, dialogs, ui primitives)
 src/store/                — SQLite (bun:sqlite), accounts, settings, crypto
 src/chat/aggregator.ts    — дедупликация/агрегация сообщений
 src/platforms/            — адаптеры Twitch / YouTube (gRPC) / Kick
 src/auth/                 — PKCE OAuth, Twitch, YouTube, Kick, локальный HTTP сервер
 src/backend-connection.ts — WS клиент к backend-сервису
-electrobun.config.ts      — app meta + build.bun entrypoint + build.copy (dist/ → views://)
-vite.main.config.ts       — Vite конфиг для src/views/main/ → dist/main/
+src/overlay-server.ts     — Bun.serve: раздаёт dist/overlay/ + WebSocket для OBS
+src/views/overlay/        — Vue app OBS overlay (vite build → dist/overlay/)
+src/views/main/utils/     — чистые TS утилиты (шарятся gpuix-компонентами)
 vite.overlay.config.ts    — Vite конфиг для src/views/overlay/ → dist/overlay/
 ```
 
@@ -228,23 +229,22 @@ Overlay **не** имеет HMR и **не** запускает отдельны�
   на порту 45823 вместе с WebSocket для push сообщений
 - OBS URL: `http://localhost:45823/?bg=transparent&fontSize=14&...`
 
-### Delivery main window (HMR)
+### Delivery main window (GPUIX)
 
-- `dev:hmr` запускает Vite dev server (`hmr:main` на порту 5173) + `start` (bun process)
-- `src/bun/index.ts` при старте проверяет `http://localhost:5173` — если доступен, открывает его
-- В продакшене открывает `views://main/index.html` (electrobun copy из `dist/main/`)
+- `bun run dev` = `bun --hot src/gpuix/main.tsx` — сохранение файла ремаунтит React на том же окне;
+  бэкенд-синглтон на `globalThis` переживает ремаунт (соединения не рвутся)
+- Окно создаётся `render(<App/>, {...})` в `src/gpuix/main.tsx`; продакшен-бинарь:
+  `bun build --compile src/gpuix/main.tsx`
 
 ### Скрипты `packages/desktop`
 
 ```json
-"dev"         : "bun run build:views && electrobun dev"
-"dev:hmr"     : "concurrently \"bun run hmr:main\" \"bun run start\""
-"hmr:main"    : "vite --config vite.main.config.ts --port 5173"
-"start"       : "bun src/bun/index.ts"
-"build:views" : "vite build --config vite.main.config.ts && vite build --config vite.overlay.config.ts"
-"build"       : "bun run build:views && electrobun build"
-"typecheck"   : "vue-tsc --noEmit"  // для frontend
-"test"        : "bun test tests/"
+"dev"           : "bun --hot src/gpuix/main.tsx"
+"start"         : "bun src/gpuix/main.tsx"
+"build"         : "bun run build:overlay && bun build --compile src/gpuix/main.tsx --outfile dist/twirchat"
+"build:overlay" : "vite build --config vite.overlay.config.ts"
+"typecheck"     : "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.gpuix.json"
+"test"          : "bun test tests/"
 ```
 
 ### Скрипты `packages/backend`
@@ -256,39 +256,39 @@ Overlay **не** имеет HMR и **не** запускает отдельны�
 "test"        : "bun test tests/"
 ```
 
-### Electrobun RPC паттерн
+### GPUIX bridge паттерн (замена RPC)
+
+GPUIX не имеет второго процесса, поэтому RPC-мост — это in-process фасад с той же
+формой, что был у Wails/Electrobun gateway:
 
 ```typescript
-// src/shared/rpc.ts — схема
-import type { RPCSchema } from "electrobun/bun";
-export type TwirChatRPCSchema = {
-  bun: RPCSchema<{ requests: BunRequests; messages: BunMessages }>;
-  webview: RPCSchema<{ requests: WebviewRequests; messages: WebviewMessages }>;
-};
-export type WebviewSender = { [K in keyof WebviewMessages]: (payload: WebviewMessages[K]) => void };
+// src/gpuix/backend/server.ts — boot один раз на процесс (globalThis singleton)
+const backend = getDesktopBackend() // { api, events }
 
-// src/bun/index.ts (main process)
-import { BrowserWindow, defineElectrobunRPC } from "electrobun/bun";
-const rpc = defineElectrobunRPC<TwirChatRPCSchema>("bun", { handlers: { requests: {...} } });
-const sendToView = rpc.send as unknown as WebviewSender; // cast нужен из-за TS inference бага
-const win = new BrowserWindow({ url: windowUrl, rpc });
+// src/gpuix/backend/api.ts — методы запросов (как старый desktopApi.request.*)
+await backend.api.getAccounts()
+await backend.api.sendMessage({ platform, channelId, text })
 
-// src/views/main/main.ts (webview side)
-import { Electroview } from "electrobun/view";
-export const rpc = Electroview.defineRPC<TwirChatRPCSchema>({ handlers: { requests: {}, messages: {} } });
-new Electroview({ rpc });
-createApp(App).mount("#app");
-// В компонентах: rpc.send.getAccounts(), rpc.on.chat_message(handler)
+// src/gpuix/backend/context.ts — React-привязка
+const backend = useBackend()
+useBackendEvent('chat_message', (msg) => { ... })
+
+// src/gpuix/state/* — stores на useSyncExternalStore; UI не импортирует
+// src/store / адаптеры напрямую — только фасад (граница «как RPC»).
 ```
 
 ### Важные находки
 
 - `bun-plugin-vue` v1.0.0 на npm — пустой placeholder, бесполезен
-- `defineElectrobunRPC` **не** экспортируется из `electrobun/view` — нужен `Electroview.defineRPC`
-- `rpc.send` на bun-стороне не резолвится через TS proxy → cast через `WebviewSender`
-- `skipLibCheck` не работает в `tsgo` для transitive deps (electrobun тащит `three` без типов — upstream баг)
+- **GPUI reentrancy**: `useSyncExternalStore` рендерит синхронно → store-нотификации
+  откладываются в `setTimeout(0)` (см. `state/create-store.ts`), иначе паника
+  «cannot update GpuixView while it is already being updated» при рендере из event callback
+- **GPUIX на Linux не грузит http(s) картинки** (asset_cache открывает URL как файл) —
+  все remote-изображения через `state/image-cache.ts` + `<RemoteImage>`
+- **Upstream-баг gpuix 0.7.0**: automation `click()` на Linux паникует в `dispatch_mouse_up`;
+  реальный ввод не затронут, клавиатурная автоматизация работает
 - `import.meta.dir` в `overlay-server.ts` указывает на `src/` → `dist/overlay/` находится через `join(import.meta.dir, "..", "dist", "overlay")`
-- **Frontend type checking**: используй `vue-tsc` (обычный TypeScript), НЕ `tsgo` — Vue SFC требуют Vue Language Tools
+- Детали и остальные ограничения GPUIX — в `packages/desktop/src/gpuix/README.md`
 
 ### Файловая структура
 
@@ -339,37 +339,26 @@ createApp(App).mount("#app");
     │           └── handlers.ts           — WS handlers
     └── desktop/
         ├── package.json
-        ├── tsconfig.json
-        ├── electrobun.config.ts          ← app meta + bun entrypoint + copy dist/ → views://
-        ├── vite.main.config.ts           ← root: src/views/main, outDir: dist/main
-        ├── vite.overlay.config.ts        ← root: src/views/overlay, outDir: dist/overlay (без dev server)
-        ├── index.ts                      ← monorepo entrypoint → src/bun/index.ts
-        ├── tests/
-        │   ├── aggregator.test.ts
-        │   ├── pkce.test.ts
-        │   └── store.test.ts
+        ├── tsconfig.json                   ← src/** (без gpuix)
+        ├── tsconfig.gpuix.json             ← jsxImportSource: @gpuix/react
+        ├── vite.overlay.config.ts          ← root: src/views/overlay, outDir: dist/overlay
+        ├── tests/                          ← bun test (TS-модули + gpuix)
         └── src/
-            ├── bun/
-            │   └── index.ts              ← Electrobun main process (BrowserWindow + RPC + HMR detection)
+            ├── gpuix/                      ← DESKTOP APP (React + GPUIX)
+            │   ├── main.tsx                ← entry: boot + render(<App/>)
+            │   ├── backend/                ← server.ts (boot) / api.ts / events.ts / context.ts
+            │   ├── state/                  ← stores, layout, caches, image-cache, hotkeys
+            │   ├── components/             ← ChatView, ChatMessage, panels, dialogs, ui/
+            │   ├── theme.ts, icons.ts, message-tokens.ts
+            │   └── README.md               ← архитектура + ограничения
             ├── shared/
-            │   └── rpc.ts               ← TwirChatRPCSchema, WebviewSender
+            │   └── rpc.ts                  ← WebviewSender + history DTOs (small, legacy)
             ├── views/
-            │   ├── main/
-            │   │   ├── index.html
-            │   │   ├── env.d.ts
-            │   │   ├── main.ts           ← Electroview.defineRPC + createApp
-            │   │   ├── App.vue           ← корневой компонент (sidebar + chat/events/settings tabs)
-            │   │   └── components/
-            │   │       ├── ChatMessage.vue
-            │   │       ├── ChatList.vue
-            │   │       └── Sidebar.vue
-            │   └── overlay/
-            │       ├── index.html
-            │       ├── env.d.ts
-            │       ├── main.ts           ← createApp (без Electrobun RPC)
-            │       └── App.vue           ← WS клиент к overlay-server + TransitionGroup анимации
-            ├── overlay-server.ts         ← Bun.serve: dist/overlay/ + WS push на порту 45823
-            ├── backend-connection.ts     ← WS клиент к backend
+            │   ├── main/utils/             ← чистые TS утилиты
+            │   ├── shared/utils/           ← messageParts / message-text / platform
+            │   └── overlay/                ← OBS overlay (Vue)
+            ├── overlay-server.ts           ← Bun.serve: dist/overlay/ + WS push на порту 45823
+            ├── backend-connection.ts       ← WS клиент к backend
             ├── store/
             │   ├── db.ts
             │   ├── client-secret.ts
