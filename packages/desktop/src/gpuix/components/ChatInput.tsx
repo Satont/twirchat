@@ -8,7 +8,13 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useGpuixRequired,
+  type PublicInstance,
+} from '@gpuix/react'
 
 import { useTextInputFocusTracking } from '../state/focus'
 import type {
@@ -19,7 +25,7 @@ import type {
   WatchedChannel,
 } from '@twirchat/shared/types'
 
-import { platformColor, withAlpha } from '../theme'
+import { accent, platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { aliasesStore } from '../state/app'
 import { useStore } from '../state/create-store'
@@ -204,7 +210,7 @@ export function ChatInput(props: ChatInputProps) {
     }
     if (!hasAnything) return 'Connect a channel to send messages…'
     if (isDisabled) return 'Log in to send messages…'
-    return 'Send a message… (Enter ↵ to send, Shift+Enter for newline)'
+    return 'Send a message…'
   }
 
   const currentChannelInfo = props.watchedChannel
@@ -240,17 +246,15 @@ export function ChatInput(props: ChatInputProps) {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
-            backgroundColor: 'rgba(255, 255, 255, 0.04)',
+            backgroundColor: theme.fill,
             borderRadius: 8,
             paddingTop: 5,
             paddingBottom: 5,
             paddingLeft: 10,
             paddingRight: 10,
-            borderLeftWidth: 2,
-            borderColor: 'rgba(167, 139, 250, 0.5)',
           }}
         >
-          <Text style={{ fontSize: 12, color: theme.text2, opacity: 0.7 }}>↩</Text>
+          <Icon name="reply" size={13} color={theme.link} />
           <Text
             style={{
               flexGrow: 1,
@@ -280,7 +284,7 @@ export function ChatInput(props: ChatInputProps) {
               cursor: 'pointer',
               borderRadius: 4,
               flexShrink: 0,
-              hover: { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+              hover: { backgroundColor: theme.fillHover },
             }}
           >
             <Icon name="close" size={16} color={theme.text2} />
@@ -288,8 +292,10 @@ export function ChatInput(props: ChatInputProps) {
         </div>
       ) : null}
 
-      {/* Connection state banners */}
-      {props.watchedChannel &&
+      {/* Connection state banners — only when the target chips (which carry
+          a status dot + tooltip) are hidden by the channel-label setting. */}
+      {!props.settings.showChannelLabel &&
+      props.watchedChannel &&
       props.watchedChannelStatus &&
       props.watchedChannelStatus.status !== 'connected' ? (
         <div
@@ -308,9 +314,9 @@ export function ChatInput(props: ChatInputProps) {
               borderRadius: 3,
               backgroundColor:
                 props.watchedChannelStatus.status === 'connecting'
-                  ? '#fbbf24'
+                  ? theme.warningText
                   : props.watchedChannelStatus.status === 'error'
-                    ? '#fca5a5'
+                    ? theme.dangerText
                     : theme.text2,
             }}
           />
@@ -319,9 +325,9 @@ export function ChatInput(props: ChatInputProps) {
               fontSize: 12,
               color:
                 props.watchedChannelStatus.status === 'connecting'
-                  ? '#fbbf24'
+                  ? theme.warningText
                   : props.watchedChannelStatus.status === 'error'
-                    ? '#fca5a5'
+                    ? theme.dangerText
                     : theme.text2,
             }}
           >
@@ -334,7 +340,9 @@ export function ChatInput(props: ChatInputProps) {
         </div>
       ) : null}
 
-      {!props.watchedChannel && homeConnectionStatuses.length > 0 ? (
+      {!props.settings.showChannelLabel &&
+      !props.watchedChannel &&
+      homeConnectionStatuses.length > 0 ? (
         <div
           style={{
             display: 'flex',
@@ -358,13 +366,13 @@ export function ChatInput(props: ChatInputProps) {
                   width: 6,
                   height: 6,
                   borderRadius: 3,
-                  backgroundColor: p.status === 'connecting' ? '#fbbf24' : '#fca5a5',
+                  backgroundColor: p.status === 'connecting' ? theme.warningText : theme.dangerText,
                 }}
               />
               <Text
                 style={{
                   fontSize: 12,
-                  color: p.status === 'connecting' ? '#fbbf24' : '#fca5a5',
+                  color: p.status === 'connecting' ? theme.warningText : theme.dangerText,
                 }}
               >
                 {connectionStatusText(p.status, p.channelLogin, p.error)}
@@ -382,6 +390,12 @@ export function ChatInput(props: ChatInputProps) {
             label={props.watchedChannel.displayName}
             active={props.watchedChannelStatus?.mode === 'authenticated'}
             anonymous={props.watchedChannelStatus?.mode !== 'authenticated'}
+            status={props.watchedChannelStatus?.status}
+            statusText={connectionStatusText(
+              props.watchedChannelStatus?.status,
+              props.watchedChannel.displayName,
+              props.watchedChannelStatus?.error,
+            )}
           />
         </div>
       ) : null}
@@ -395,6 +409,8 @@ export function ChatInput(props: ChatInputProps) {
               label={p.channelLogin}
               active={isEnabled(p.platform)}
               anonymous={p.mode !== 'authenticated'}
+              status={p.status}
+              statusText={connectionStatusText(p.status, p.channelLogin, p.error)}
               onClick={() => toggle(p.platform)}
             />
           ))}
@@ -413,7 +429,7 @@ export function ChatInput(props: ChatInputProps) {
         ) : null}
 
         {commandError ? (
-          <Text style={{ fontSize: 12, color: '#fca5a5', paddingLeft: 2, paddingBottom: 2 }}>
+          <Text style={{ fontSize: 12, color: theme.dangerText, paddingLeft: 2, paddingBottom: 2 }}>
             {commandError}
           </Text>
         ) : null}
@@ -496,11 +512,11 @@ export function ChatInput(props: ChatInputProps) {
               justifyContent: 'center',
               cursor: isDisabled ? 'default' : 'pointer',
               opacity: isDisabled ? 0.3 : 1,
-              backgroundColor: emotePickerOpen ? 'rgba(167, 139, 250, 0.15)' : undefined,
-              hover: { backgroundColor: 'rgba(255, 255, 255, 0.08)' },
+              backgroundColor: emotePickerOpen ? accent.tint15 : undefined,
+              hover: { backgroundColor: theme.fillHover },
             }}
           >
-            <Icon name="smile" size={16} color={emotePickerOpen ? '#a78bfa' : theme.text2} />
+            <Icon name="smile" size={16} color={emotePickerOpen ? theme.link : theme.text2} />
           </div>
 
           <div
@@ -560,24 +576,38 @@ export function ChatInput(props: ChatInputProps) {
   )
 }
 
+function statusDotColor(status: string | undefined, theme: Theme): string | null {
+  if (status === 'connecting') return theme.warningText
+  if (status === 'error' || status === 'disconnected') return theme.dangerText
+  return null
+}
+
 function TargetChip({
   platform,
   label,
   active,
   anonymous,
+  status,
+  statusText,
   onClick,
 }: {
   platform: string
   label: string
   active: boolean
   anonymous: boolean
+  status?: string
+  /** Non-empty while not connected — shown as a dot + tooltip. */
+  statusText?: string
   onClick?: () => void
 }) {
+  const theme = useTheme()
   const color = platformColor(platform)
   const [hovered, setHovered] = useState(false)
   const effectiveHover = hovered && !anonymous && !active
+  const dotColor = statusDotColor(status, theme)
+  const tint = active || effectiveHover ? color : theme.text2
 
-  return (
+  const chip = (
     <div
       onClick={anonymous ? undefined : onClick}
       onMouseEnter={() => setHovered(true)}
@@ -594,31 +624,27 @@ function TargetChip({
         borderRadius: 20,
         borderWidth: 1,
         borderColor: active
-          ? withAlpha(color, 0.45)
+          ? withAlpha(color, 0.35)
           : effectiveHover
-            ? withAlpha(color, 0.55)
-            : 'rgba(255, 255, 255, 0.1)',
+            ? withAlpha(color, 0.5)
+            : theme.border,
         backgroundColor: active
-          ? withAlpha(color, 0.15)
+          ? withAlpha(color, 0.1)
           : effectiveHover
-            ? withAlpha(color, 0.2)
-            : 'rgba(255, 255, 255, 0.04)',
+            ? withAlpha(color, 0.16)
+            : 'transparent',
         cursor: anonymous ? 'default' : 'pointer',
-        opacity: anonymous ? 0.35 : !active && !hovered ? 0.4 : 1,
+        opacity: anonymous ? 0.45 : !active && !hovered ? 0.55 : 1,
         userSelect: 'none',
       }}
     >
-      <PlatformIcon
-        platform={platform}
-        size={13}
-        color={active || effectiveHover ? color : '#8b8b99'}
-      />
+      <PlatformIcon platform={platform} size={12} color={tint} />
       <Text
         style={{
           fontSize: 12,
           fontWeight: 500,
-          color: active || effectiveHover ? color : '#8b8b99',
-          maxWidth: 80,
+          color: active || effectiveHover ? theme.text : theme.text2,
+          maxWidth: 110,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -626,7 +652,34 @@ function TargetChip({
       >
         {label}
       </Text>
-      {anonymous ? <Icon name="lock" size={10} color="#8b8b99" /> : null}
+      {dotColor ? (
+        <div style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dotColor }} />
+      ) : null}
+      {anonymous ? <Icon name="lock" size={10} color={theme.text2} /> : null}
     </div>
+  )
+
+  if (!statusText) return chip
+  return (
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>{chip}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={6}
+        style={{
+          backgroundColor: theme.popover,
+          borderWidth: 1,
+          borderColor: theme.dialogBorder,
+          borderRadius: 6,
+          paddingTop: 5,
+          paddingBottom: 5,
+          paddingLeft: 8,
+          paddingRight: 8,
+          maxWidth: 320,
+        }}
+      >
+        <Text style={{ fontSize: 12, color: dotColor ?? theme.text }}>{statusText}</Text>
+      </TooltipContent>
+    </Tooltip>
   )
 }

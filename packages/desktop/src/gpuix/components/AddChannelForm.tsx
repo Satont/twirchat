@@ -76,14 +76,14 @@ export function AddChannelForm({
                 paddingRight: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: active ? withAlpha(color, 0.45) : 'rgba(255, 255, 255, 0.1)',
-                backgroundColor: active ? withAlpha(color, 0.15) : 'rgba(255, 255, 255, 0.04)',
+                borderColor: active ? withAlpha(color, 0.45) : theme.hairline,
+                backgroundColor: active ? withAlpha(color, 0.15) : theme.fill,
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 opacity: disabled ? 0.35 : 1,
                 userSelect: 'none',
                 hover: active
                   ? undefined
-                  : { backgroundColor: disabled ? undefined : 'rgba(255, 255, 255, 0.07)' },
+                  : { backgroundColor: disabled ? undefined : theme.fillHover },
               }}
             >
               <PlatformIcon platform={p} size={14} color={active ? color : theme.text2} />
@@ -149,9 +149,9 @@ export function AddChannelForm({
               paddingRight: 14,
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.1)',
+              borderColor: theme.hairline,
               cursor: 'pointer',
-              hover: { backgroundColor: 'rgba(255, 255, 255, 0.06)' },
+              hover: { backgroundColor: theme.fillHover },
             }}
           >
             <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text2 }}>Cancel</Text>

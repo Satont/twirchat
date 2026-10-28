@@ -72,7 +72,7 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
           borderRadius: 6,
           cursor: 'pointer',
           display: 'flex',
-          backgroundColor: hovered ? 'rgba(255, 255, 255, 0.07)' : undefined,
+          backgroundColor: hovered ? theme.fillHover : undefined,
         }}
       >
         <Icon name="settings" size={16} color={hovered ? theme.text : theme.text2} />
@@ -89,9 +89,9 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
             }}
             style={{
               width: 240,
-              backgroundColor: '#1a1a22',
+              backgroundColor: theme.popover,
               borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.1)',
+              borderColor: theme.hairline,
               borderRadius: 12,
               padding: 16,
               display: 'flex',
@@ -116,10 +116,10 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
                   marginBottom: 10,
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99' }}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2 }}>
                   {'Font size'.toUpperCase()}
                 </Text>
-                <Text style={{ fontSize: 12, fontWeight: 500, color: '#e2e2e8' }}>
+                <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
                   {`${settings.fontSize}px`}
                 </Text>
               </div>
@@ -138,14 +138,14 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
                   marginTop: 4,
                 }}
               >
-                <Text style={{ fontSize: 10, color: '#555566' }}>11</Text>
-                <Text style={{ fontSize: 10, color: '#555566' }}>22</Text>
+                <Text style={{ fontSize: 10, color: theme.text2 }}>11</Text>
+                <Text style={{ fontSize: 10, color: theme.text2 }}>22</Text>
               </div>
             </div>
 
             {/* Display toggles */}
             <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
-              <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99', marginBottom: 10 }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}>
                 {'Display'.toUpperCase()}
               </Text>
               {toggles.map((toggle, index) => (
@@ -159,10 +159,10 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
                     paddingTop: index === 0 ? 0 : 7,
                     paddingBottom: 7,
                     borderBottomWidth: index === toggles.length - 1 ? 0 : 1,
-                    borderColor: 'rgba(255, 255, 255, 0.06)',
+                    borderColor: theme.divider,
                   }}
                 >
-                  <Text style={{ fontSize: 13, color: '#d0d0da' }}>{toggle.label}</Text>
+                  <Text style={{ fontSize: 13, color: theme.text }}>{toggle.label}</Text>
                   <Switch
                     small
                     checked={Boolean(settings[toggle.key])}
@@ -174,7 +174,7 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
 
             {/* Theme cards */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99', marginBottom: 10 }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}>
                 {'Layout'.toUpperCase()}
               </Text>
               <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
@@ -210,15 +210,16 @@ function ThemeCard({
   onClick: () => void
   preview: 'modern' | 'compact'
 }) {
+  const theme = useTheme()
   return (
     <div
       testId={`theme-${preview}`}
       onClick={onClick}
       style={{
         flexGrow: 1,
-        backgroundColor: active ? 'rgba(167, 139, 250, 0.1)' : 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: active ? 'rgba(167, 139, 250, 0.1)' : theme.fill,
         borderWidth: 1,
-        borderColor: active ? accent.primary : 'rgba(255, 255, 255, 0.08)',
+        borderColor: active ? accent.primary : theme.hairline,
         borderRadius: 10,
         paddingTop: 10,
         paddingBottom: 8,
@@ -229,7 +230,7 @@ function ThemeCard({
         flexDirection: 'column',
         alignItems: 'center',
         gap: 8,
-        hover: { backgroundColor: 'rgba(255, 255, 255, 0.08)' },
+        hover: { backgroundColor: theme.fillHover },
       }}
     >
       {preview === 'modern' ? (
@@ -241,7 +242,7 @@ function ThemeCard({
                   width: 10,
                   height: 10,
                   borderRadius: 5,
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  backgroundColor: theme.scrollbar,
                   flexShrink: 0,
                   marginTop: 1,
                 }}
@@ -259,7 +260,7 @@ function ThemeCard({
                   style={{
                     height: 3,
                     borderRadius: 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                    backgroundColor: theme.hairline,
                     width: '85%',
                   }}
                 />
@@ -288,7 +289,7 @@ function ThemeCard({
                   width: 3,
                   height: 3,
                   borderRadius: 1,
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  backgroundColor: theme.scrollbar,
                   flexShrink: 0,
                 }}
               />
@@ -297,14 +298,14 @@ function ThemeCard({
                   flexGrow: 1,
                   height: 3,
                   borderRadius: 2,
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  backgroundColor: theme.hairline,
                 }}
               />
             </div>
           ))}
         </div>
       )}
-      <Text style={{ fontSize: 11, fontWeight: 500, color: active ? accent.primary : '#aaaaaa' }}>
+      <Text style={{ fontSize: 11, fontWeight: 500, color: active ? theme.link : theme.text2 }}>
         {label}
       </Text>
     </div>

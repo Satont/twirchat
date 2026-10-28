@@ -22,10 +22,13 @@ const MAX_DISTANCE = 420
 export function MessageModerationRail({
   platform,
   disabled,
+  rowHovered,
   onModerate,
 }: {
   platform: 'twitch' | 'kick'
   disabled?: boolean
+  /** The grip only shows while its message row is hovered. */
+  rowHovered: boolean
   onModerate: (action: ModerationDragAction) => void
 }) {
   const theme = useTheme()
@@ -65,17 +68,22 @@ export function MessageModerationRail({
         userSelect: 'none',
       }}
     >
-      {/* Always-visible grip line, centered vertically */}
+      {/* Grip line — painted transparent (not unmounted) outside row hover,
+          so the hitbox stays put and GPUI sees no mount churn. */}
       <div
         style={{
           position: 'absolute',
-          left: 4,
-          top: 8,
-          bottom: 8,
+          left: 5,
+          top: 5,
+          bottom: 5,
           width: 3,
           borderRadius: 2,
           backgroundColor:
-            dragStartX.current !== null || hovered ? theme.text2 : 'rgba(139, 139, 153, 0.35)',
+            dragStartX.current !== null || hovered
+              ? theme.text2
+              : rowHovered
+                ? withAlpha(theme.text2, 0.35)
+                : 'transparent',
         }}
       />
       {distance > 0 ? (

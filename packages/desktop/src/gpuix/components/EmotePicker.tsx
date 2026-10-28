@@ -148,7 +148,10 @@ export function EmotePicker({
             </Text>
           </div>
         ) : (
-          <virtual-list estimatedItemHeight={44} style={{ height: 340 }}>
+          <virtual-list
+            estimatedItemHeight={44}
+            style={{ height: 340, scrollbarColor: theme.scrollbar, scrollbarWidth: 4 }}
+          >
             {pickerRows.map((row, index) =>
               row.kind === 'heading' ? (
                 <div

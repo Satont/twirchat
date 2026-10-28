@@ -394,7 +394,11 @@ export function showConnectionNotice(status: PlatformStatusInfo): void {
 
   const key = `${status.platform}:${status.channelLogin ?? status.platform}`
   const signature = `${status.status}:${status.error ?? ''}`
-  if (lastConnectionNotices.get(key) === signature) return
+  const previous = lastConnectionNotices.get(key)
+  if (previous === signature) return
+  // Startup reports 'disconnected' for channels that never connected yet —
+  // only a drop from a live connection is news.
+  if (status.status === 'disconnected' && !previous?.startsWith('connected:')) return
   lastConnectionNotices.set(key, signature)
 
   const label = status.channelLogin ?? status.platform

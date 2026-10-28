@@ -19,22 +19,54 @@ export interface Theme {
   navActiveBg: string
   /** subtle scrollbar-ish white tint */
   scrollbar: string
+  /** hairline between chat messages */
+  divider: string
+  /** chat row hover fill */
+  rowHover: string
+  /** link text — accent tuned for ≥4.5:1 on `bg` */
+  link: string
+  /** modal dialog surface + its border */
+  dialog: string
+  dialogBorder: string
+  /** popovers / dropdown menus */
+  popover: string
+  /** subtle neutral fill (chips, inline wells) and its hover step */
+  fill: string
+  fillHover: string
+  /** low-contrast outline for chips and wells */
+  hairline: string
+  /** semantic TEXT colors, ≥4.5:1 on dialog/bg surfaces of this theme */
+  dangerText: string
+  successText: string
+  warningText: string
   isLight: boolean
 }
 
 export const darkTheme: Theme = {
-  bg: '#0f0f11',
-  surface: '#18181b',
-  surface2: '#1f1f24',
-  border: '#2a2a33',
-  text: '#e2e2e8',
-  text2: '#8b8b99',
-  navBg: '#111114',
+  bg: '#17161c',
+  surface: '#1c1b22',
+  surface2: '#25242d',
+  border: '#2f2d39',
+  text: '#ecebf1',
+  text2: '#9896a8',
+  navBg: '#121116',
   navText: 'rgba(255, 255, 255, 0.45)',
   navActive: '#ffffff',
   navHover: 'rgba(255, 255, 255, 0.06)',
   navActiveBg: 'rgba(167, 139, 250, 0.15)',
   scrollbar: 'rgba(255, 255, 255, 0.12)',
+  divider: 'rgba(255, 255, 255, 0.045)',
+  rowHover: 'rgba(255, 255, 255, 0.035)',
+  link: '#a78bfa',
+  dialog: '#211f28',
+  dialogBorder: '#34323f',
+  popover: '#1f1e26',
+  fill: 'rgba(255, 255, 255, 0.05)',
+  fillHover: 'rgba(255, 255, 255, 0.09)',
+  hairline: 'rgba(255, 255, 255, 0.1)',
+  dangerText: '#fca5a5',
+  successText: '#86efac',
+  warningText: '#fcd34d',
   isLight: false,
 }
 
@@ -51,6 +83,18 @@ export const lightTheme: Theme = {
   navHover: 'rgba(28, 27, 34, 0.06)',
   navActiveBg: 'rgba(124, 90, 234, 0.12)',
   scrollbar: 'rgba(28, 27, 34, 0.14)',
+  divider: 'rgba(28, 27, 34, 0.06)',
+  rowHover: 'rgba(28, 27, 34, 0.035)',
+  link: '#6d28d9',
+  dialog: '#ffffff',
+  dialogBorder: '#d8d6e0',
+  popover: '#ffffff',
+  fill: 'rgba(28, 27, 34, 0.045)',
+  fillHover: 'rgba(28, 27, 34, 0.08)',
+  hairline: 'rgba(28, 27, 34, 0.12)',
+  dangerText: '#b91c1c',
+  successText: '#15803d',
+  warningText: '#a16207',
   isLight: true,
 }
 
@@ -137,6 +181,61 @@ export function withAlpha(hex: string, alpha: number): string {
   const b = parseInt(value.slice(4, 6), 16)
   if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return hex
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function parseHex(color: string): [number, number, number] | null {
+  let value = color.trim().replace('#', '')
+  if (value.length === 3) {
+    value = value
+      .split('')
+      .map((c) => c + c)
+      .join('')
+  }
+  if (!/^[0-9a-f]{6}$/i.test(value)) return null
+  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16)) as [number, number, number]
+}
+
+function luminance([r, g, b]: [number, number, number]): number {
+  const channel = (v: number) => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+
+function contrast(a: [number, number, number], b: [number, number, number]): number {
+  const la = luminance(a)
+  const lb = luminance(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+const readableCache = new Map<string, string>()
+
+/**
+ * User-chosen colors (Twitch/Kick name colors, mentions) mixed toward white
+ * on dark backgrounds or black on light ones until they reach 4.5:1 — like
+ * Chatterino, so #0000ff on dark or #ffff66 on light stays legible. Hue is
+ * kept; already-readable colors pass through untouched.
+ */
+export function readableOn(color: string, background: string): string {
+  const key = `${color}|${background}`
+  const cached = readableCache.get(key)
+  if (cached) return cached
+
+  const fg = parseHex(color)
+  const bg = parseHex(background)
+  let result = color
+  if (fg && bg && contrast(fg, bg) < 4.5) {
+    const target = luminance(bg) < 0.5 ? 255 : 0
+    for (let step = 1; step <= 10; step++) {
+      const t = step / 10
+      const mixed = fg.map((c) => Math.round(c + (target - c) * t)) as [number, number, number]
+      result = `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`
+      if (contrast(mixed, bg) >= 4.5) break
+    }
+  }
+  readableCache.set(key, result)
+  return result
 }
 
 /**

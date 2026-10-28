@@ -310,6 +310,8 @@ export function UserCardDialog({
           flexGrow: 1,
           minHeight: 0,
           overflowY: 'scroll',
+          scrollbarColor: theme.scrollbar,
+          scrollbarWidth: 4,
         }}
       >
         {/* Header (full-bleed: the Vue version used negative margins) */}
@@ -324,12 +326,17 @@ export function UserCardDialog({
               type: 'linear-gradient',
               angle: 135,
               stops: [
-                { color: hexMix(platformColor(target.platform), '#101012', 0.72), position: 0 },
-                { color: '#1a1a22', position: 1 },
+                {
+                  color: theme.isLight
+                    ? hexMix(platformColor(target.platform), theme.dialog, 0.22)
+                    : hexMix(platformColor(target.platform), '#101012', 0.72),
+                  position: 0,
+                },
+                { color: theme.dialog, position: 1 },
               ],
             },
             borderBottomWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.08)',
+            borderColor: theme.hairline,
           }}
         >
           <div style={{ flexShrink: 0 }}>
@@ -341,7 +348,7 @@ export function UserCardDialog({
                   width: 72,
                   height: 72,
                   borderRadius: 18,
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  backgroundColor: theme.fill,
                 }}
               />
             ) : (
@@ -350,13 +357,13 @@ export function UserCardDialog({
                   width: 72,
                   height: 72,
                   borderRadius: 18,
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  backgroundColor: theme.fill,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Text style={{ fontWeight: 800, fontSize: 24, color: '#ffffff' }}>
+                <Text style={{ fontWeight: 800, fontSize: 24, color: theme.text }}>
                   {initials(target.displayName)}
                 </Text>
               </div>
@@ -382,13 +389,9 @@ export function UserCardDialog({
               <Text style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>
                 {target.displayName}
               </Text>
-              <PlatformIcon
-                platform={target.platform}
-                size={18}
-                color="rgba(255, 255, 255, 0.95)"
-              />
+              <PlatformIcon platform={target.platform} size={18} color={theme.text} />
             </div>
-            <Text style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.75)' }}>{titleHandle}</Text>
+            <Text style={{ fontSize: 13, color: theme.text2 }}>{titleHandle}</Text>
             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               <HeaderPill>{target.platform.toUpperCase()}</HeaderPill>
               {effectiveAlias ? <HeaderPill accent>{`Alias: ${effectiveAlias}`}</HeaderPill> : null}
@@ -439,7 +442,7 @@ export function UserCardDialog({
                 onKeyDown={(event) => {
                   if (event.key === 'escape') onClose()
                 }}
-                theme={{ caret: '#a78bfa' }}
+                theme={{ caret: theme.link }}
                 style={{
                   flexGrow: 1,
                   minWidth: 0,
@@ -447,9 +450,9 @@ export function UserCardDialog({
                   paddingBottom: 8,
                   paddingLeft: 12,
                   paddingRight: 12,
-                  backgroundColor: '#1e1e24',
+                  backgroundColor: theme.surface2,
                   borderWidth: 1,
-                  borderColor: '#3a3a45',
+                  borderColor: theme.border,
                   borderRadius: 4,
                   fontSize: 13,
                   color: theme.text,
@@ -504,7 +507,7 @@ export function UserCardDialog({
                   marginTop: 10,
                 }}
               >
-                <Text style={{ fontSize: 12, color: '#fca5a5' }}>{publicChannelError}</Text>
+                <Text style={{ fontSize: 12, color: theme.dangerText }}>{publicChannelError}</Text>
                 <InlineButton onClick={() => void openPublicChannel()}>Retry</InlineButton>
               </div>
             ) : null}
@@ -525,7 +528,7 @@ export function UserCardDialog({
               <Text
                 style={{
                   fontSize: 12,
-                  color: moderationFeedback.kind === 'error' ? '#fca5a5' : '#86efac',
+                  color: moderationFeedback.kind === 'error' ? theme.dangerText : theme.successText,
                   marginTop: 10,
                 }}
               >
@@ -556,7 +559,7 @@ export function UserCardDialog({
                     : { backgroundColor: 'rgba(251, 191, 36, 0.24)' },
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: 500, color: '#fde68a' }}>
+                <Text style={{ fontSize: 13, fontWeight: 500, color: theme.warningText }}>
                   {moderationAction === 'timeout' ? 'Timing out…' : 'Timeout 10m'}
                 </Text>
               </div>
@@ -609,7 +612,7 @@ export function UserCardDialog({
               </MetadataState>
             ) : metadataError ? (
               <MetadataState error>
-                <Text style={{ fontSize: 13, color: '#fca5a5' }}>{metadataError}</Text>
+                <Text style={{ fontSize: 13, color: theme.dangerText }}>{metadataError}</Text>
                 <InlineButton onClick={() => void reloadMetadata()}>Retry</InlineButton>
               </MetadataState>
             ) : metadata ? (
@@ -630,9 +633,9 @@ export function UserCardDialog({
                       minWidth: 0,
                       padding: 12,
                       borderWidth: 1,
-                      borderColor: 'rgba(255, 255, 255, 0.06)',
+                      borderColor: theme.hairline,
                       borderRadius: 10,
-                      backgroundColor: 'rgba(0, 0, 0, 0.16)',
+                      backgroundColor: theme.fill,
                     }}
                   >
                     <Text
@@ -664,6 +667,7 @@ export function UserCardDialog({
 // ── Local styled bits ───────────────────────────────────────────────────────
 
 function HeaderPill({ accent, children }: { accent?: boolean; children: string }) {
+  const theme = useTheme()
   return (
     <div
       style={{
@@ -673,10 +677,14 @@ function HeaderPill({ accent, children }: { accent?: boolean; children: string }
         paddingLeft: 10,
         paddingRight: 10,
         borderRadius: 999,
-        backgroundColor: accent ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.25)',
+        backgroundColor: accent
+          ? theme.fillHover
+          : theme.isLight
+            ? theme.fill
+            : 'rgba(0, 0, 0, 0.25)',
       }}
     >
-      <Text style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>{children}</Text>
+      <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text }}>{children}</Text>
     </div>
   )
 }
@@ -703,7 +711,7 @@ function GhostButton({
         paddingRight: 14,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.6 : 1,
-        hover: disabled ? {} : { backgroundColor: 'rgba(255, 255, 255, 0.08)' },
+        hover: disabled ? {} : { backgroundColor: theme.fillHover },
       }}
     >
       <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text }}>{children}</Text>
@@ -720,6 +728,7 @@ function DangerButton({
   onClick: () => void
   children: string
 }) {
+  const theme = useTheme()
   return (
     <div
       onClick={disabled ? undefined : onClick}
@@ -735,7 +744,7 @@ function DangerButton({
         hover: disabled ? {} : { backgroundColor: 'rgba(255, 80, 80, 0.2)' },
       }}
     >
-      <Text style={{ fontSize: 13, fontWeight: 500, color: '#ff9b9b' }}>{children}</Text>
+      <Text style={{ fontSize: 13, fontWeight: 500, color: theme.dangerText }}>{children}</Text>
     </div>
   )
 }
@@ -755,7 +764,7 @@ function InlineButton({
       onClick={disabled ? undefined : onClick}
       style={{
         borderRadius: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: theme.fill,
         paddingTop: 6,
         paddingBottom: 6,
         paddingLeft: 10,
@@ -763,7 +772,7 @@ function InlineButton({
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.6 : 1,
         flexShrink: 0,
-        hover: disabled ? {} : { backgroundColor: 'rgba(255, 255, 255, 0.14)' },
+        hover: disabled ? {} : { backgroundColor: theme.fillHover },
       }}
     >
       <Text style={{ fontSize: 12, color: theme.text }}>{children}</Text>
@@ -772,6 +781,7 @@ function InlineButton({
 }
 
 function MetadataState({ error, children }: { error?: boolean; children: React.ReactNode }) {
+  const theme = useTheme()
   return (
     <div
       style={{
@@ -783,9 +793,9 @@ function MetadataState({ error, children }: { error?: boolean; children: React.R
         minHeight: 96,
         padding: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: theme.hairline,
         borderRadius: 10,
-        backgroundColor: 'rgba(0, 0, 0, 0.16)',
+        backgroundColor: theme.fill,
       }}
     >
       {children}

@@ -169,6 +169,8 @@ export function SettingsPanel() {
           flexGrow: 1,
           minHeight: 0,
           overflowY: 'scroll',
+          scrollbarColor: theme.scrollbar,
+          scrollbarWidth: 4,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

@@ -319,6 +319,8 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                   width: '100%',
                   maxHeight: 200,
                   overflowY: 'scroll',
+                  scrollbarColor: theme.scrollbar,
+                  scrollbarWidth: 4,
                   backgroundColor: theme.surface,
                   borderWidth: 1,
                   borderColor: theme.border,

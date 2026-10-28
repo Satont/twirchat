@@ -14,14 +14,15 @@ import { useBackend } from '../backend/context'
 import { buildMessageTokens } from '../message-tokens'
 import { useStore } from '../state/create-store'
 import { mentionColorRevisionStore } from '../state/caches'
-import { accent } from '../theme'
+import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { EmoteTooltip } from './ui/EmoteTooltip'
 import { RemoteImage } from './ui/RemoteImage'
 
-// Emote height scales with the chat font (2.3x ≈ 32px at the 14px default,
-// like the avatar size). Wide emotes cap at 3x their height.
-const EMOTE_SCALE = 2.3
+// Emote height scales with the chat font (2x = 28px at the 14px default —
+// Twitch's native 1x size, so emote rows stay close to text rows). Wide
+// emotes cap at 3x their height.
+const EMOTE_SCALE = 2
 const SYSTEM_EMOTE_SCALE = 1.5
 const EMOTE_MAX_RATIO = 3
 
@@ -29,14 +30,16 @@ export const MessageTokens = memo(function MessageTokens({
   message,
   fontSize,
   deleted,
-  isAction,
   isSystem,
+  actionColor,
 }: {
   message: NormalizedChatMessage
   fontSize: number
   deleted?: boolean
   isAction?: boolean
   isSystem?: boolean
+  /** `/me` messages render in the author's color (no italics in GPUIX). */
+  actionColor?: string
 }) {
   const theme = useTheme()
   const font = useFont()
@@ -50,8 +53,8 @@ export const MessageTokens = memo(function MessageTokens({
     [message],
   )
 
-  const baseColor = isSystem ? theme.text2 : theme.text
-  const textOpacity = deleted ? 0.5 : isAction ? 0.85 : 1
+  const baseColor = isSystem ? theme.text2 : (actionColor ?? theme.text)
+  const textOpacity = deleted ? 0.5 : 1
   const emoteSize = Math.round(fontSize * (isSystem ? SYSTEM_EMOTE_SCALE : EMOTE_SCALE))
   const lineHeight = Math.round(fontSize * 1.45)
 
@@ -83,7 +86,7 @@ export const MessageTokens = memo(function MessageTokens({
           key={index}
           onClick={() => void backend.api.openExternalUrl({ url: token.url })}
           style={{
-            color: accent.primary,
+            color: theme.link,
             fontSize,
             fontFamily: font,
             cursor: 'pointer',
@@ -100,7 +103,7 @@ export const MessageTokens = memo(function MessageTokens({
         <text
           key={index}
           style={{
-            color: token.color ?? baseColor,
+            color: token.color ? readableOn(token.color, theme.bg) : baseColor,
             fontWeight: token.color ? 600 : 400,
             fontSize,
             fontFamily: font,
@@ -136,6 +139,7 @@ export const MessageText = memo(function MessageText(props: {
   deleted?: boolean
   isAction?: boolean
   isSystem?: boolean
+  actionColor?: string
 }) {
   return (
     <div

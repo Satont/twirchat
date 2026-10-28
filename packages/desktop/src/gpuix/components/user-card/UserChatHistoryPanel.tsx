@@ -164,7 +164,7 @@ export function UserChatHistoryPanel({
         flexDirection: 'column',
         minHeight: 0,
         borderTopWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: theme.hairline,
         paddingTop: 16,
       }}
     >
@@ -189,7 +189,7 @@ export function UserChatHistoryPanel({
           onClick={loadingInitial ? undefined : () => void loadInitial()}
           style={{
             borderRadius: 6,
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            backgroundColor: theme.fill,
             paddingTop: 7,
             paddingBottom: 7,
             paddingLeft: 10,
@@ -197,7 +197,7 @@ export function UserChatHistoryPanel({
             cursor: loadingInitial ? 'default' : 'pointer',
             opacity: loadingInitial ? 0.6 : 1,
             flexShrink: 0,
-            hover: loadingInitial ? {} : { backgroundColor: 'rgba(255, 255, 255, 0.14)' },
+            hover: loadingInitial ? {} : { backgroundColor: theme.fillHover },
           }}
         >
           <Text style={{ fontSize: 12, color: theme.text }}>Refresh</Text>
@@ -210,7 +210,7 @@ export function UserChatHistoryPanel({
         </HistoryState>
       ) : error ? (
         <HistoryState minHeight={160} error>
-          <Text style={{ fontSize: 13, color: '#fca5a5' }}>{error}</Text>
+          <Text style={{ fontSize: 13, color: theme.dangerText }}>{error}</Text>
           <HistoryRetryButton onClick={() => void loadInitial()} />
         </HistoryState>
       ) : isEmpty ? (
@@ -224,13 +224,16 @@ export function UserChatHistoryPanel({
           style={{
             minHeight: 0,
             borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.06)',
+            borderColor: theme.hairline,
             borderRadius: 10,
             overflow: 'hidden',
-            backgroundColor: 'rgba(0, 0, 0, 0.16)',
+            backgroundColor: theme.fill,
           }}
         >
-          <virtual-list estimatedItemHeight={44} style={{ height: 260 }}>
+          <virtual-list
+            estimatedItemHeight={44}
+            style={{ height: 260, scrollbarColor: theme.scrollbar, scrollbarWidth: 4 }}
+          >
             {hasMore || loadingOlder ? (
               <div
                 key="load-older"
@@ -244,12 +247,9 @@ export function UserChatHistoryPanel({
                   paddingLeft: 12,
                   paddingRight: 12,
                   borderBottomWidth: 1,
-                  borderColor: 'rgba(255, 255, 255, 0.05)',
+                  borderColor: theme.divider,
                   cursor: hasMore && !loadingOlder ? 'pointer' : 'default',
-                  hover:
-                    hasMore && !loadingOlder
-                      ? { backgroundColor: 'rgba(255, 255, 255, 0.05)' }
-                      : {},
+                  hover: hasMore && !loadingOlder ? { backgroundColor: theme.rowHover } : {},
                 }}
               >
                 <Text style={{ fontSize: 11, color: theme.text2 }}>
@@ -276,6 +276,7 @@ function HistoryState({
   error?: boolean
   children: React.ReactNode
 }) {
+  const theme = useTheme()
   return (
     <div
       style={{
@@ -287,9 +288,9 @@ function HistoryState({
         minHeight,
         padding: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: theme.hairline,
         borderRadius: 10,
-        backgroundColor: 'rgba(0, 0, 0, 0.16)',
+        backgroundColor: theme.fill,
       }}
     >
       {children}
@@ -304,13 +305,13 @@ function HistoryRetryButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       style={{
         borderRadius: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: theme.fill,
         paddingTop: 6,
         paddingBottom: 6,
         paddingLeft: 10,
         paddingRight: 10,
         cursor: 'pointer',
-        hover: { backgroundColor: 'rgba(255, 255, 255, 0.14)' },
+        hover: { backgroundColor: theme.fillHover },
       }}
     >
       <Text style={{ fontSize: 12, color: theme.text }}>Retry</Text>
@@ -321,7 +322,11 @@ function HistoryRetryButton({ onClick }: { onClick: () => void }) {
 function HistoryMessageRow({ message }: { message: NormalizedChatMessage }) {
   const theme = useTheme()
   const typeColor =
-    message.type === 'action' ? '#7dd3fc' : message.type === 'system' ? '#fbbf24' : theme.text2
+    message.type === 'action'
+      ? theme.link
+      : message.type === 'system'
+        ? theme.warningText
+        : theme.text2
 
   return (
     <div
@@ -334,7 +339,7 @@ function HistoryMessageRow({ message }: { message: NormalizedChatMessage }) {
         paddingLeft: 12,
         paddingRight: 12,
         borderBottomWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
+        borderColor: theme.divider,
       }}
     >
       <div
@@ -367,7 +372,7 @@ function HistoryMessageRow({ message }: { message: NormalizedChatMessage }) {
               paddingLeft: 6,
               paddingRight: 6,
               borderRadius: 999,
-              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              backgroundColor: theme.fill,
             }}
           >
             <Text style={{ fontSize: 11, color: theme.text2 }}>{message.channelId}</Text>
@@ -379,7 +384,7 @@ function HistoryMessageRow({ message }: { message: NormalizedChatMessage }) {
               paddingLeft: 6,
               paddingRight: 6,
               borderRadius: 999,
-              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              backgroundColor: theme.fill,
             }}
           >
             <Text style={{ fontSize: 11, color: typeColor }}>{message.type}</Text>

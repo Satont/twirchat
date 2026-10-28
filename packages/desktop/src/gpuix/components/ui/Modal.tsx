@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from 'react'
 import { useWindowSize } from '@gpuix/react'
 
 import { elevated } from '../../theme'
+import { useTheme } from '../../theme-context'
 import { pushOverlayClose } from '../../state/overlays'
 
 export function Modal({
@@ -23,6 +24,7 @@ export function Modal({
   children: ReactNode
 }) {
   const windowSize = useWindowSize()
+  const theme = useTheme()
 
   useEffect(() => pushOverlayClose(onClose), [onClose])
 
@@ -54,9 +56,9 @@ export function Modal({
           style={{
             width,
             maxHeight: '85%',
-            backgroundColor: elevated.dialog,
+            backgroundColor: theme.dialog,
             borderWidth: 1,
-            borderColor: elevated.dialogBorder,
+            borderColor: theme.dialogBorder,
             borderRadius: 14,
             display: 'flex',
             flexDirection: 'column',

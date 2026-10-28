@@ -23,8 +23,10 @@ import {
   showNotice,
 } from '../state/app'
 import { registerHotkeyActions } from '../state/hotkeys'
-import { resolveFont, resolveTheme, FontContext, ThemeContext } from '../theme-context'
+import { accent, withAlpha } from '../theme'
+import { resolveFont, resolveTheme, useTheme, FontContext, ThemeContext } from '../theme-context'
 import { NavRail } from './NavRail'
+import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'
 import { ChatView } from './ChatView'
 import { EventsFeed } from './EventsFeed'
@@ -99,6 +101,7 @@ function ChatNotice() {
  */
 function UpdateToast() {
   const backend = useBackend()
+  const theme = useTheme()
   const [update, setUpdate] = useState<{
     status: string
     message: string
@@ -128,14 +131,14 @@ function UpdateToast() {
     paddingLeft: 12,
     paddingRight: 12,
     borderRadius: 6,
-    backgroundColor: '#9147ff',
+    backgroundColor: accent.deep,
     cursor: 'pointer' as const,
   }
   const secondaryButtonStyle = {
     ...buttonStyle,
-    backgroundColor: '#26262c',
+    backgroundColor: theme.fill,
     borderWidth: 1,
-    borderColor: '#333339',
+    borderColor: theme.hairline,
   }
 
   return (
@@ -150,33 +153,35 @@ function UpdateToast() {
         gap: 10,
         minWidth: 240,
         maxWidth: 340,
-        backgroundColor: '#1a1a1e',
+        backgroundColor: theme.popover,
         borderWidth: 1,
-        borderColor: '#333339',
+        borderColor: theme.dialogBorder,
         borderRadius: 10,
         padding: 12,
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Text style={{ flexGrow: 1, fontSize: 13, color: '#e4e4e7' }}>
+        <Text style={{ flexGrow: 1, fontSize: 13, color: theme.text }}>
           {update.status === 'downloading' && typeof update.progress === 'number'
             ? `${update.message} — ${Math.round(update.progress)}%`
             : update.message}
         </Text>
-        <Text
-          style={{ fontSize: 13, color: '#8b8b99', cursor: 'pointer' }}
+        <div
           onClick={() => setDismissed(true)}
+          style={{ display: 'flex', cursor: 'pointer', borderRadius: 4, padding: 2 }}
         >
-          ✕
-        </Text>
+          <Icon name="close" size={14} color={theme.text2} />
+        </div>
       </div>
       {update.status === 'downloading' ? (
-        <div style={{ height: 4, borderRadius: 2, backgroundColor: '#26262c', overflow: 'hidden' }}>
+        <div
+          style={{ height: 4, borderRadius: 2, backgroundColor: theme.fill, overflow: 'hidden' }}
+        >
           <div
             style={{
               width: `${Math.round(update.progress ?? 0)}%`,
               height: '100%',
-              backgroundColor: '#9147ff',
+              backgroundColor: accent.deep,
             }}
           />
         </div>
@@ -193,7 +198,7 @@ function UpdateToast() {
               setDismissed(true)
             }}
           >
-            <Text style={{ fontSize: 13, color: '#e4e4e7' }}>Skip</Text>
+            <Text style={{ fontSize: 13, color: theme.text }}>Skip</Text>
           </div>
         </div>
       ) : null}
@@ -344,6 +349,8 @@ export function App() {
             width: '100%',
             height: '100%',
             backgroundColor: theme.bg,
+            // Inherited by every text subtree (GPUI's default wash is blue).
+            selectionColor: withAlpha(accent.primary, 0.35),
           }}
         >
           <NavRail collapsed={sidebarCollapsed} onToggle={toggleSidebar} />

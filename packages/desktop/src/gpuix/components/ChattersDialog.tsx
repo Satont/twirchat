@@ -141,12 +141,12 @@ export function ChattersDialog({
               type: 'linear-gradient',
               angle: 135,
               stops: [
-                { color: '#23232e', position: 0 },
-                { color: '#1a1a22', position: 1 },
+                { color: theme.surface2, position: 0 },
+                { color: theme.dialog, position: 1 },
               ],
             },
             borderBottomWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.08)',
+            borderColor: theme.hairline,
           }}
         >
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -157,12 +157,12 @@ export function ChattersDialog({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: 'rgba(255, 255, 255, 0.75)',
+                    color: theme.text2,
                   }}
                 >
                   {`${totalChatting} chatting`}
                 </Text>
-                <Text style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.75)' }}>
+                <Text style={{ fontSize: 13, color: theme.text2 }}>
                   {`across ${chatters.results.length} ${
                     chatters.results.length === 1 ? 'channel' : 'channels'
                   }`}
@@ -192,7 +192,7 @@ export function ChattersDialog({
             onKeyDown={(event) => {
               if (event.key === 'escape') onClose()
             }}
-            theme={{ caret: '#a78bfa' }}
+            theme={{ caret: theme.link }}
             style={{
               flexShrink: 0,
               marginBottom: 12,
@@ -200,9 +200,9 @@ export function ChattersDialog({
               paddingBottom: 8,
               paddingLeft: 12,
               paddingRight: 12,
-              backgroundColor: '#1e1e24',
+              backgroundColor: theme.surface2,
               borderWidth: 1,
-              borderColor: '#3a3a45',
+              borderColor: theme.border,
               borderRadius: 4,
               fontSize: 13,
               color: theme.text,
@@ -214,6 +214,8 @@ export function ChattersDialog({
               flexGrow: 1,
               minHeight: 160,
               overflowY: 'scroll',
+              scrollbarColor: theme.scrollbar,
+              scrollbarWidth: 4,
               display: 'flex',
               flexDirection: 'column',
               gap: 16,
@@ -225,7 +227,7 @@ export function ChattersDialog({
               </ChattersState>
             ) : error ? (
               <ChattersState error>
-                <Text style={{ fontSize: 13, color: '#fca5a5' }}>{error}</Text>
+                <Text style={{ fontSize: 13, color: theme.dangerText }}>{error}</Text>
                 <RetryButton onClick={() => void reload()} />
               </ChattersState>
             ) : chatters ? (
@@ -250,7 +252,7 @@ export function ChattersDialog({
                         marginBottom: 8,
                         paddingBottom: 6,
                         borderBottomWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.08)',
+                        borderColor: theme.hairline,
                       }}
                     >
                       <PlatformIcon platform={channel.platform} size={16} />
@@ -280,7 +282,9 @@ export function ChattersDialog({
 
                     {channel.error ? (
                       <ChattersState small error>
-                        <Text style={{ fontSize: 13, color: '#fca5a5' }}>{channel.error}</Text>
+                        <Text style={{ fontSize: 13, color: theme.dangerText }}>
+                          {channel.error}
+                        </Text>
                         <RetryButton onClick={() => void reload()} />
                       </ChattersState>
                     ) : channel.groups.length === 0 ? (
@@ -318,7 +322,7 @@ export function ChattersDialog({
                               </Text>
                               <div
                                 style={{
-                                  backgroundColor: 'rgba(255, 255, 255, 0.07)',
+                                  backgroundColor: theme.fill,
                                   borderRadius: 999,
                                   paddingTop: 1,
                                   paddingBottom: 1,
@@ -346,7 +350,7 @@ export function ChattersDialog({
                                     paddingLeft: 6,
                                     paddingRight: 6,
                                     borderRadius: 6,
-                                    hover: { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+                                    hover: { backgroundColor: theme.fill },
                                   }}
                                 >
                                   {user.avatarUrl ? (
@@ -357,7 +361,7 @@ export function ChattersDialog({
                                         width: 24,
                                         height: 24,
                                         borderRadius: 12,
-                                        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                        backgroundColor: theme.fill,
                                         flexShrink: 0,
                                       }}
                                     />
@@ -438,6 +442,7 @@ function ChattersState({
   error?: boolean
   children: React.ReactNode
 }) {
+  const theme = useTheme()
   return (
     <div
       style={{
@@ -449,9 +454,9 @@ function ChattersState({
         minHeight: small ? 56 : 160,
         padding: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: theme.hairline,
         borderRadius: 10,
-        backgroundColor: 'rgba(0, 0, 0, 0.16)',
+        backgroundColor: theme.fill,
       }}
     >
       {children}
@@ -466,13 +471,13 @@ function RetryButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       style={{
         borderRadius: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: theme.fill,
         paddingTop: 6,
         paddingBottom: 6,
         paddingLeft: 10,
         paddingRight: 10,
         cursor: 'pointer',
-        hover: { backgroundColor: 'rgba(255, 255, 255, 0.14)' },
+        hover: { backgroundColor: theme.fillHover },
       }}
     >
       <Text style={{ fontSize: 12, color: theme.text }}>Retry</Text>

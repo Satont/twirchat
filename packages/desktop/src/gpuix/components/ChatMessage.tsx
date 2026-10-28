@@ -15,11 +15,11 @@ import { useBackend } from '../backend/context'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
 import { useStore } from '../state/create-store'
 import type { ResolvedModerationOutcome } from '../state/app'
-import { platformColor, semantic } from '../theme'
+import { platformColor, readableOn, semantic } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
-import { PlatformIcon } from './ui/Icon'
+import { Icon, PlatformIcon } from './ui/Icon'
 import { icons } from '../icons'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
@@ -33,6 +33,10 @@ function badgeSize(fontSize: number): number {
 
 function platformIconSize(fontSize: number): number {
   return Math.max(9, Math.round(fontSize * 0.85))
+}
+
+function timestampSize(fontSize: number): number {
+  return Math.max(10, Math.round(fontSize * 0.78))
 }
 
 // Avatars scale with the chat font size (28/18px at the 14px default).
@@ -111,6 +115,7 @@ function badgeDataUrl(svg: string): string {
 }
 
 function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size: number }) {
+  const theme = useTheme()
   const resolved = resolveBadgeImage(imageUrl)
   if (resolved?.startsWith('<svg')) {
     // Embedded Kick badge SVG: render full-colour through <img> (the <svg>
@@ -141,13 +146,13 @@ function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size
         paddingLeft: Math.round(size * 0.35),
         paddingRight: Math.round(size * 0.35),
         paddingTop: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: theme.fillHover,
         borderRadius: 3,
         display: 'flex',
         alignItems: 'center',
       }}
     >
-      <Text style={{ fontSize: size - 4, color: '#e2e2e8', lineHeight: size - 2 }}>{text}</Text>
+      <Text style={{ fontSize: size - 4, color: theme.text, lineHeight: size - 2 }}>{text}</Text>
     </div>
   )
 }
@@ -189,11 +194,7 @@ function ReplyPreview({ message, fontSize }: { message: NormalizedChatMessage; f
         overflow: 'hidden',
       }}
     >
-      <Text
-        style={{ fontSize: Math.round(fontSize * 0.8 * 1.1), color: theme.text2, opacity: 0.7 }}
-      >
-        ↩
-      </Text>
+      <Icon name="reply" size={Math.round(fontSize * 0.85)} color={theme.text2} />
       <Text
         style={{
           fontSize: Math.round(fontSize * 0.8),
@@ -252,6 +253,7 @@ function ActionButton({
   color: string
   bg?: string
 }) {
+  const theme = useTheme()
   return (
     <div
       testId={testId}
@@ -263,8 +265,8 @@ function ActionButton({
         padding: 3,
         cursor: 'pointer',
         display: 'flex',
-        backgroundColor: visible ? (bg ?? 'rgba(255, 255, 255, 0.1)') : 'transparent',
-        hover: { backgroundColor: 'rgba(255, 255, 255, 0.15)' },
+        backgroundColor: visible ? (bg ?? theme.fill) : 'transparent',
+        hover: { backgroundColor: theme.fillHover },
       }}
     >
       <svg
@@ -348,8 +350,8 @@ export interface ChatMessageProps {
   selfPingColor?: string
   alias?: string
   moderationOutcome?: ResolvedModerationOutcome
-  /** Moderation drag rail, rendered over the row's left edge. */
-  moderationRail?: import('react').ReactNode
+  /** Moderation drag rail over the row's left edge; gets the row hover. */
+  renderModerationRail?: (rowHovered: boolean) => import('react').ReactNode
   onOpenUserCard?: (target: UserCardTarget) => void
   onReply?: (message: NormalizedChatMessage) => void
 }
@@ -402,7 +404,8 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
     })
   }
 
-  const authorColor = message.author.color ?? theme.text
+  // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
+  const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
   const authorName = props.alias ?? message.author.displayName
 
   // ── System message ────────────────────────────────────────────────────────
@@ -412,7 +415,6 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
     const palette =
       action === 'added'
         ? {
-            border: '#4ade80',
             bg: 'rgba(74, 222, 128, 0.04)',
             iconBg: 'rgba(74, 222, 128, 0.15)',
             iconColor: '#4ade80',
@@ -420,14 +422,12 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           }
         : action === 'removed'
           ? {
-              border: '#ff5050',
               bg: 'rgba(255, 80, 80, 0.05)',
               iconBg: 'rgba(255, 80, 80, 0.18)',
               iconColor: '#ff6060',
               glyph: '−',
             }
           : {
-              border: '#818cf8',
               bg: 'rgba(129, 140, 248, 0.06)',
               iconBg: 'rgba(129, 140, 248, 0.18)',
               iconColor: '#818cf8',
@@ -445,9 +445,9 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           paddingBottom: 3,
           paddingLeft: 14,
           paddingRight: 14,
-          borderLeftWidth: 2,
-          borderColor: palette.border,
           backgroundColor: palette.bg,
+          borderBottomWidth: 1,
+          borderColor: theme.divider,
           position: 'relative',
         }}
       >
@@ -472,7 +472,7 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           <MessageText message={message} fontSize={Math.round(fontSize * 0.88)} isSystem />
         </div>
         {props.showTimestamp ? (
-          <Text style={{ fontSize: 10, color: theme.text2, opacity: 0.7, flexShrink: 0 }}>
+          <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2, flexShrink: 0 }}>
             {formatMessageTime(message.timestamp)}
           </Text>
         ) : null}
@@ -480,8 +480,37 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
     )
   }
 
-  // ── Compact (single wrapping line) ────────────────────────────────────────
+  const rowBackground = isSelfPing
+    ? (props.selfPingColor ?? 'rgba(167, 139, 250, 0.15)')
+    : message.delivery?.state === 'failed'
+      ? 'rgba(239, 68, 68, 0.08)'
+      : hovered
+        ? theme.rowHover
+        : undefined
+  const rowOpacity =
+    message.delivery?.state === 'pending' ? 0.52 : props.moderationOutcome ? 0.48 : 1
+
+  // Platform stripe: one continuous hairline down the list (rows are flush),
+  // so a run of same-platform messages reads as a single column.
+  const platformStripe =
+    props.showPlatformColorStripe !== false ? (
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 2,
+          opacity: 0.55,
+          backgroundColor:
+            message.delivery?.state === 'failed' ? semantic.error : platformColor(message.platform),
+        }}
+      />
+    ) : null
+
+  // ── Compact (single wrapping line, Chatterino-like) ──────────────────────
   if (props.chatTheme === 'compact') {
+    const tsSize = timestampSize(fontSize)
     return (
       <div
         onMouseEnter={() => setHovered(true)}
@@ -489,38 +518,19 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          paddingTop: 2,
-          paddingBottom: 2,
-          paddingLeft: 14,
-          paddingRight: 14,
+          paddingTop: 4,
+          paddingBottom: 4,
+          paddingLeft: 12,
+          paddingRight: 12,
           position: 'relative',
           gap: 2,
-          opacity:
-            message.delivery?.state === 'pending' ? 0.52 : props.moderationOutcome ? 0.48 : 1,
-          backgroundColor: isSelfPing
-            ? (props.selfPingColor ?? 'rgba(167, 139, 250, 0.15)')
-            : message.delivery?.state === 'failed'
-              ? 'rgba(239, 68, 68, 0.08)'
-              : undefined,
-          borderLeftWidth: message.delivery?.state === 'failed' ? 2 : 0,
-          borderColor: semantic.error,
-          hover: { backgroundColor: isSelfPing ? undefined : 'rgba(255, 255, 255, 0.025)' },
+          opacity: rowOpacity,
+          backgroundColor: rowBackground,
+          borderBottomWidth: 1,
+          borderColor: theme.divider,
         }}
       >
-        {props.showPlatformColorStripe !== false ? (
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 2,
-              bottom: 2,
-              width: 2,
-              borderRadius: 2,
-              opacity: 0.7,
-              backgroundColor: platformColor(message.platform),
-            }}
-          />
-        ) : null}
+        {platformStripe}
 
         {message.reply && !isTombstone ? (
           <ReplyPreview message={message} fontSize={fontSize} />
@@ -534,36 +544,35 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
             alignItems: 'center',
             // No columnGap: word tokens carry their own trailing spaces, and
             // structural elements use explicit margins (same as the Vue CSS).
-            rowGap: 1,
+            rowGap: 2,
           }}
         >
           {props.showTimestamp ? (
             <Text
               style={{
-                fontSize: 10,
+                fontSize: tsSize,
                 color: theme.text2,
-                opacity: 0.8,
                 whiteSpace: 'nowrap',
-                width: 56,
+                width: Math.round(tsSize * 5.2),
                 flexShrink: 0,
-                marginRight: 4,
+                marginRight: 6,
               }}
             >
               {formatMessageTime(message.timestamp)}
             </Text>
           ) : null}
           {props.showAvatar !== false ? (
-            <div style={{ marginRight: 3, flexShrink: 0, display: 'flex' }}>
+            <div style={{ marginRight: 5, flexShrink: 0, display: 'flex' }}>
               <Avatar message={message} size={compactAvatarSize(fontSize)} />
             </div>
           ) : null}
           {props.showPlatformIcon ? (
-            <div style={{ marginRight: 3, flexShrink: 0, display: 'flex' }}>
+            <div style={{ marginRight: 5, flexShrink: 0, display: 'flex' }}>
               <PlatformIcon platform={message.platform} size={platformIconSize(fontSize)} />
             </div>
           ) : null}
-          {props.showBadges !== false ? (
-            <div style={{ marginRight: 3, flexShrink: 0, display: 'flex' }}>
+          {props.showBadges !== false && (message.author.badges?.length ?? 0) > 0 ? (
+            <div style={{ marginRight: 5, flexShrink: 0, display: 'flex' }}>
               <BadgeList badges={message.author.badges ?? []} size={badgeSize(fontSize)} />
             </div>
           ) : null}
@@ -571,23 +580,34 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
             onClick={openUserCard}
             style={{
               fontWeight: 700,
-              fontSize: Math.round(fontSize * 0.9),
+              fontSize,
               color: authorColor,
               cursor: 'pointer',
               fontFamily: font,
+              lineHeight: Math.round(fontSize * 1.45),
             }}
           >
             {authorName}
           </Text>
-          <Text style={{ color: theme.text2, fontSize, fontFamily: font }}>{': '}</Text>
+          <Text
+            style={{
+              color: theme.text,
+              fontSize,
+              fontFamily: font,
+              lineHeight: Math.round(fontSize * 1.45),
+            }}
+          >
+            {isAction ? ' ' : ': '}
+          </Text>
           <MessageTokens
             message={message}
             fontSize={fontSize}
             deleted={isTombstone}
             isAction={isAction}
+            actionColor={isAction ? authorColor : undefined}
           />
           {message.delivery?.state === 'failed' ? (
-            <Text style={{ fontSize: Math.round(fontSize * 0.82), color: semantic.errorText }}>
+            <Text style={{ fontSize: Math.round(fontSize * 0.82), color: theme.dangerText }}>
               {`Not sent: ${message.delivery.error ?? ''}`}
             </Text>
           ) : null}
@@ -608,7 +628,7 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
 
         {/* Paint order = document order: the rail sits last so its fill and
             preview draw above the row content. */}
-        {props.moderationRail}
+        {props.renderModerationRail?.(hovered)}
       </div>
     )
   }
@@ -623,36 +643,18 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: 10,
-        paddingTop: 6,
-        paddingBottom: 6,
+        paddingTop: 7,
+        paddingBottom: 7,
         paddingLeft: 14,
         paddingRight: 14,
         position: 'relative',
-        opacity: message.delivery?.state === 'pending' ? 0.52 : props.moderationOutcome ? 0.48 : 1,
-        backgroundColor: isSelfPing
-          ? (props.selfPingColor ?? 'rgba(167, 139, 250, 0.15)')
-          : message.delivery?.state === 'failed'
-            ? 'rgba(239, 68, 68, 0.08)'
-            : undefined,
-        borderLeftWidth: message.delivery?.state === 'failed' ? 2 : 0,
-        borderColor: semantic.error,
-        hover: { backgroundColor: 'rgba(255, 255, 255, 0.025)' },
+        opacity: rowOpacity,
+        backgroundColor: rowBackground,
+        borderBottomWidth: 1,
+        borderColor: theme.divider,
       }}
     >
-      {props.showPlatformColorStripe !== false ? (
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 6,
-            bottom: 6,
-            width: 2,
-            borderRadius: 2,
-            opacity: 0.7,
-            backgroundColor: platformColor(message.platform),
-          }}
-        />
-      ) : null}
+      {platformStripe}
 
       {props.showPlatformIcon ? (
         <div style={{ marginTop: 6, flexShrink: 0, opacity: 0.85, display: 'flex' }}>
@@ -695,7 +697,7 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
             onClick={openUserCard}
             style={{
               fontWeight: 700,
-              fontSize: Math.round(fontSize * 0.9),
+              fontSize,
               color: authorColor,
               cursor: 'pointer',
               fontFamily: font,
@@ -704,7 +706,13 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
             {authorName}
           </Text>
           {props.showTimestamp ? (
-            <Text style={{ fontSize: 10, color: theme.text2, marginLeft: 2 }}>
+            <Text
+              style={{
+                fontSize: timestampSize(fontSize),
+                color: theme.text2,
+                marginLeft: 2,
+              }}
+            >
               {formatMessageTime(message.timestamp)}
             </Text>
           ) : null}
@@ -723,13 +731,14 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           fontSize={fontSize}
           deleted={isTombstone}
           isAction={isAction}
+          actionColor={isAction ? authorColor : undefined}
         />
 
         {message.delivery?.state === 'failed' ? (
           <Text
             style={{
               fontSize: Math.round(fontSize * 0.82),
-              color: semantic.errorText,
+              color: theme.dangerText,
               marginTop: 2,
             }}
           >
@@ -747,7 +756,7 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
 
       {/* Paint order = document order: the rail sits last so its fill and
           preview draw above the row content. */}
-      {props.moderationRail}
+      {props.renderModerationRail?.(hovered)}
     </div>
   )
 })

@@ -31,7 +31,7 @@ import {
   watchedStatusesStore,
   showNotice,
 } from '../state/app'
-import { accent, platformColor, withAlpha } from '../theme'
+import { accent, platformColor, semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { ownChatSendTargets } from '../../views/main/utils/chat-send-targets'
 import { useOverlayClose } from '../state/overlays'
@@ -45,7 +45,7 @@ import {
   type DeliveryMessage,
 } from '../../views/main/utils/message-delivery'
 import type { ModerationDragAction } from '../../views/main/utils/moderation-drag'
-import { Icon, PlatformIcon } from './ui/Icon'
+import { Icon, PlatformIcon, type IconName } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 import { ChatMessage } from './ChatMessage'
@@ -90,8 +90,8 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
             borderRadius: 20,
             borderWidth: 1,
             flexShrink: 0,
-            backgroundColor: ch.isLive ? withAlpha(color, 0.12) : 'rgba(255, 255, 255, 0.05)',
-            borderColor: ch.isLive ? withAlpha(color, 0.35) : 'rgba(255, 255, 255, 0.08)',
+            backgroundColor: ch.isLive ? withAlpha(color, 0.12) : theme.fill,
+            borderColor: ch.isLive ? withAlpha(color, 0.35) : theme.hairline,
           }}
         >
           <div
@@ -127,9 +127,9 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
         side="bottom"
         sideOffset={8}
         style={{
-          backgroundColor: '#1e1e30',
+          backgroundColor: theme.popover,
           borderWidth: 1,
-          borderColor: 'rgba(255, 255, 255, 0.1)',
+          borderColor: theme.dialogBorder,
           borderRadius: 8,
           padding: 10,
           minWidth: 190,
@@ -152,7 +152,7 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
               style={{
                 fontSize: 10,
                 fontWeight: 600,
-                color: ch.isLive ? '#22c55e' : '#8b8b99',
+                color: ch.isLive ? semantic.success : theme.text2,
                 fontFamily: font,
               }}
             >
@@ -574,7 +574,8 @@ export function ChatView({
                 ) : null}
               </>
             ) : null}
-            {watchedChannelStatus ? (
+            {/* Authenticated is the normal state — only flag read-only. */}
+            {watchedChannelStatus && watchedChannelStatus.mode !== 'authenticated' ? (
               <div
                 style={{
                   borderRadius: 10,
@@ -584,25 +585,10 @@ export function ChatView({
                   paddingRight: 7,
                   borderWidth: 1,
                   flexShrink: 0,
-                  ...(watchedChannelStatus.mode === 'authenticated'
-                    ? {
-                        borderColor: 'rgba(34, 197, 94, 0.25)',
-                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                      }
-                    : {
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      }),
+                  borderColor: theme.border,
                 }}
               >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: watchedChannelStatus.mode === 'authenticated' ? '#22c55e' : theme.text2,
-                  }}
-                >
-                  {watchedChannelStatus.mode === 'authenticated' ? 'authenticated' : 'read-only'}
-                </Text>
+                <Text style={{ fontSize: 11, color: theme.text2 }}>read-only</Text>
               </div>
             ) : null}
           </>
@@ -698,7 +684,8 @@ export function ChatView({
                 >
                   {watchedChannel ? (
                     <MenuItem
-                      label="📺 Change channel"
+                      icon="refresh"
+                      label="Change channel"
                       onClick={() => {
                         setMenuOpen(false)
                         onChangeChannel?.()
@@ -716,7 +703,8 @@ export function ChatView({
                     />
                   ) : null}
                   <MenuItem
-                    label="✕ Close panel"
+                    icon="close"
+                    label="Close panel"
                     danger
                     onClick={() => {
                       setMenuOpen(false)
@@ -751,7 +739,12 @@ export function ChatView({
               const end = event.endIndex ?? 0
               setAtBottom(end >= activeMessages.length - 1)
             }}
-            style={{ flexGrow: 1, minHeight: 0 }}
+            style={{
+              flexGrow: 1,
+              minHeight: 0,
+              scrollbarColor: theme.scrollbar,
+              scrollbarWidth: 5,
+            }}
           >
             {activeMessages.map((message) => {
               const outcome = moderationOutcomeFor(message)
@@ -784,14 +777,17 @@ export function ChatView({
                       })
                     }
                     onReply={setReplyTarget}
-                    moderationRail={
-                      canShowModerationRail(message) && (!outcome || outcome.isTombstone) ? (
-                        <MessageModerationRail
-                          disabled={moderationPendingIds.has(message.id)}
-                          platform={moderationPlatform(message.platform)!}
-                          onModerate={(action) => void onModerate(message, action)}
-                        />
-                      ) : undefined
+                    renderModerationRail={
+                      canShowModerationRail(message) && (!outcome || outcome.isTombstone)
+                        ? (rowHovered) => (
+                            <MessageModerationRail
+                              disabled={moderationPendingIds.has(message.id)}
+                              platform={moderationPlatform(message.platform)!}
+                              rowHovered={rowHovered}
+                              onModerate={(action) => void onModerate(message, action)}
+                            />
+                          )
+                        : undefined
                     }
                   />
                 </div>
@@ -831,16 +827,16 @@ export function ChatView({
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 6,
-                backgroundColor: 'rgba(15, 15, 17, 0.92)',
+                backgroundColor: theme.popover,
                 borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.12)',
+                borderColor: theme.dialogBorder,
                 borderRadius: 20,
                 paddingTop: 6,
                 paddingBottom: 6,
                 paddingLeft: 14,
                 paddingRight: 14,
                 cursor: 'pointer',
-                hover: { backgroundColor: 'rgba(30, 30, 36, 0.96)' },
+                hover: { backgroundColor: theme.surface2 },
               }}
             >
               <Icon name="chevronDown" size={14} color={theme.text} />
@@ -899,6 +895,7 @@ function HeaderButton({
   onClick?: () => void
   testId?: string
 }) {
+  const theme = useTheme()
   const [hovered, setHovered] = useState(false)
   return (
     <div
@@ -914,7 +911,7 @@ function HeaderButton({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: hovered ? 'rgba(255, 255, 255, 0.1)' : undefined,
+        backgroundColor: hovered ? theme.fillHover : undefined,
       }}
     >
       {/* re-tint the icon on hover by cloning with a different color is the
@@ -926,29 +923,37 @@ function HeaderButton({
 }
 
 function MenuItem({
+  icon,
   label,
   danger,
   onClick,
 }: {
+  icon: IconName
   label: string
   danger?: boolean
   onClick?: () => void
 }) {
   const theme = useTheme()
+  const color = danger ? theme.dangerText : theme.text
   return (
     <div
       onClick={onClick}
       style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
         paddingTop: 7,
         paddingBottom: 7,
         paddingLeft: 10,
         paddingRight: 10,
         borderRadius: 5,
         cursor: 'pointer',
-        hover: { backgroundColor: danger ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255, 255, 255, 0.1)' },
+        hover: { backgroundColor: danger ? 'rgba(239, 68, 68, 0.15)' : theme.navHover },
       }}
     >
-      <Text style={{ fontSize: 13, color: danger ? '#ef4444' : theme.text }}>{label}</Text>
+      <Icon name={icon} size={14} color={danger ? color : theme.text2} />
+      <Text style={{ fontSize: 13, color }}>{label}</Text>
     </div>
   )
 }
@@ -1070,9 +1075,9 @@ function EmptyState({
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: theme.fill,
                   borderWidth: 1,
-                  borderColor: 'rgba(255, 255, 255, 0.08)',
+                  borderColor: theme.hairline,
                   borderRadius: 24,
                   paddingTop: 4,
                   paddingBottom: 4,

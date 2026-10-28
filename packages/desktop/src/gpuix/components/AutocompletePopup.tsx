@@ -33,6 +33,8 @@ export function AutocompletePopup({
         maxWidth: 340,
         maxHeight: 240,
         overflowY: 'scroll',
+        scrollbarColor: theme.scrollbar,
+        scrollbarWidth: 4,
         backgroundColor: theme.surface2,
         borderWidth: 1,
         borderColor: theme.border,

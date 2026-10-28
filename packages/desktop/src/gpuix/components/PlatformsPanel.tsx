@@ -529,6 +529,8 @@ export function PlatformsPanel() {
         flexGrow: 1,
         minHeight: 0,
         overflowY: 'scroll',
+        scrollbarColor: theme.scrollbar,
+        scrollbarWidth: 4,
         paddingTop: 28,
         paddingBottom: 28,
         paddingLeft: 32,

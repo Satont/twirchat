@@ -87,7 +87,15 @@ export function TabSelectorModal({
             style={{ flexGrow: 1, minWidth: 0, fontSize: 14, color: theme.text }}
           />
         </div>
-        <div style={{ overflowY: 'scroll', padding: 4, flexShrink: 1 }}>
+        <div
+          style={{
+            overflowY: 'scroll',
+            scrollbarColor: theme.scrollbar,
+            scrollbarWidth: 4,
+            padding: 4,
+            flexShrink: 1,
+          }}
+        >
           {filtered.map((tab, index) => {
             const isActive = tab.id === activeTabId
             const isSelected = index === selected
