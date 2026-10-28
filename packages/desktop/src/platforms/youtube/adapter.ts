@@ -290,8 +290,9 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       }
     })
 
-    this.liveChat.on('error', (err: Error) => {
-      log.error(`[YouTube] Live chat error: ${err.message}`)
+    this.liveChat.on('error', (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err)
+      log.error(`[YouTube] Live chat error: ${message}`)
       if (this.shouldReconnect) {
         this.scheduleReconnect()
       }

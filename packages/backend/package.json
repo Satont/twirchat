@@ -14,15 +14,15 @@
   "dependencies": {
     "@graphql-typed-document-node/core": "3.2.0",
     "@twirchat/shared": "workspace:*",
-    "@urql/core": "6.0.1",
-    "graphql": "16.13.2",
-    "zod": "4.3.6"
+    "@urql/core": "6.0.3",
+    "graphql": "17.0.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "6.2.1",
-    "@graphql-codegen/client-preset": "5.2.4",
-    "@graphql-codegen/typescript": "5.0.9",
-    "@graphql-codegen/typescript-operations": "5.0.9",
+    "@graphql-codegen/cli": "7.4.6",
+    "@graphql-codegen/client-preset": "6.2.3",
+    "@graphql-codegen/typescript": "6.1.2",
+    "@graphql-codegen/typescript-operations": "6.2.0",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:"

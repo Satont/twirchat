@@ -896,9 +896,7 @@ export function useForm<T extends Record<string, any>>(initial: T) {
 ```typescript
 // ❌ WRONG
 const userKey = Symbol()
-provide(userKey, {
-  /* any user object */
-})
+provide(userKey, {/* any user object */})
 const user = inject(userKey) // type is `any`
 
 // ✅ CORRECT: Use strong typing

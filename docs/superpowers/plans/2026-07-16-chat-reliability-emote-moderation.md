@@ -403,7 +403,7 @@ Expected: the commit contains no unrelated files.
 
 - Produces `EmoteSource = 'channel' | 'seventv' | 'collectibles' | 'global'`.
 - Produces `EmoteCatalogEntry { id, alias, name, imageUrl, animated,
-zeroWidth, aspectRatio, source }`.
+  zeroWidth, aspectRatio, source }`.
 - `getChannelEmotes` returns `EmoteCatalogEntry[]`; the native 7TV runtime maps
   every current item to source `seventv`.
 

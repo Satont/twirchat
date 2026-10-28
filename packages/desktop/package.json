@@ -13,28 +13,29 @@
     "test": "bun test tests/"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "2.11.0",
-    "@gpuix/react": "0.7.0",
-    "@grpc/grpc-js": "1.14.3",
+    "@bufbuild/protobuf": "2.16.0",
+    "@gpuix/native": "0.11.0",
+    "@gpuix/react": "0.11.0",
+    "@grpc/grpc-js": "1.14.6",
     "@twirchat/shared": "workspace:*",
-    "@twurple/api": "8.0.3",
-    "@twurple/auth": "8.0.3",
-    "@twurple/chat": "8.0.3",
-    "react": "^19.2.4",
-    "velopack": "1.2.110-ge826545",
-    "vue": "3.5.30",
-    "youtubei.js": "17.0.1"
+    "@twurple/api": "8.2.0",
+    "@twurple/auth": "8.2.0",
+    "@twurple/chat": "8.2.0",
+    "react": "19.3.1",
+    "velopack": "1.3.39-g8d2844f",
+    "vue": "3.5.44",
+    "youtubei.js": "18.3.0"
   },
   "devDependencies": {
-    "@bufbuild/buf": "1.66.1",
+    "@bufbuild/buf": "1.75.0",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
-    "@types/react": "^19.2.0",
+    "@types/react": "19.3.0",
     "@typescript/native-preview": "catalog:",
-    "@vitejs/plugin-vue": "6.0.5",
-    "ts-proto": "2.11.6",
-    "typescript": "^5.8.0",
-    "vite": "8.0.1",
-    "vite-svg-loader": "5.1.1"
+    "@vitejs/plugin-vue": "6.0.10",
+    "ts-proto": "2.18.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vite-svg-loader": "5.1.3"
   }
 }
