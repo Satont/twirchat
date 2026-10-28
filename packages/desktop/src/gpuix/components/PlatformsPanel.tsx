@@ -17,6 +17,7 @@ import type { Account, Platform, PlatformStatusInfo } from '@twirchat/shared/typ
 import { useBackend, useBackendEvent } from '../backend/context'
 import { useStore } from '../state/create-store'
 import { accountsStore, channelStatusStore, showNotice } from '../state/app'
+import { useTextInputFocusTracking } from '../state/focus'
 import { accent, platformColor, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { applySavedChannels } from '../../views/main/utils/channel-connections'
@@ -126,6 +127,9 @@ function PlatformCard({
   onLogout,
 }: PlatformCardProps) {
   const theme = useTheme()
+  const channelInputFocus = useTextInputFocusTracking((focused) =>
+    focused ? onInputFocus() : onInputBlur(),
+  )
   const pColor = platformColor(platform)
   const joinDisabled = !channelInput.trim() || joining
 
@@ -236,7 +240,9 @@ function PlatformCard({
                   <RemoteImage
                     url={account.avatarUrl}
                     objectFit="cover"
-                    style={{ width: '100%', height: '100%' }}
+                    // GPUI clips overflow to a rectangle, so the image needs
+                    // its own radius to stay inside the round frame.
+                    style={{ width: '100%', height: '100%', borderRadius: 16 }}
                   />
                 ) : (
                   <Text style={{ fontSize: 15, fontWeight: 700, color: '#ffffff' }}>
@@ -354,8 +360,7 @@ function PlatformCard({
                 placeholder={platform === 'youtube' ? 'Channel ID or handle' : 'channel name'}
                 onChange={(event) => onInputChange(event.value ?? '')}
                 onSubmit={onJoin}
-                onFocus={onInputFocus}
-                onBlur={onInputBlur}
+                {...channelInputFocus}
                 theme={{ caret: accent.primary, textMuted: withAlpha(theme.text2, 0.6) }}
                 style={{
                   flexGrow: 1,
@@ -410,7 +415,9 @@ function PlatformCard({
               paddingBottom: 8,
             }}
           >
-            <Text style={{ fontSize: 13, color: theme.text2 }}>Connected to your channel</Text>
+            <Text style={{ fontSize: 13, color: theme.text2 }}>
+              Chat joins your own channel automatically
+            </Text>
           </div>
         )}
       </div>

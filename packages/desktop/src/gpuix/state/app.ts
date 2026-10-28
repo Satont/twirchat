@@ -380,14 +380,22 @@ export function showNotice(kind: TransientNotice['kind'], text: string, duration
   noticeTimer = setTimeout(() => noticeStore.set(null), durationMs)
 }
 
-const recentConnectionNotices = new Map<string, number>()
+/** Last status (and error text) toasted per platform/channel. */
+const lastConnectionNotices = new Map<string, string>()
 
+/**
+ * Toasts connection transitions. Reconnect loops cycle connecting → error →
+ * connecting… every few seconds, so 'connecting' is never toasted (the status
+ * strip under the chat shows it) and a repeat of the last toasted status for
+ * the same channel is dropped.
+ */
 export function showConnectionNotice(status: PlatformStatusInfo): void {
+  if (status.status === 'connecting') return
+
   const key = `${status.platform}:${status.channelLogin ?? status.platform}`
-  const now = Date.now()
-  const last = recentConnectionNotices.get(key) ?? 0
-  if (now - last < 5000 && status.status !== 'error') return
-  recentConnectionNotices.set(key, now)
+  const signature = `${status.status}:${status.error ?? ''}`
+  if (lastConnectionNotices.get(key) === signature) return
+  lastConnectionNotices.set(key, signature)
 
   const label = status.channelLogin ?? status.platform
   if (status.status === 'connected') {
@@ -395,9 +403,11 @@ export function showConnectionNotice(status: PlatformStatusInfo): void {
   } else if (status.status === 'disconnected') {
     showNotice('info', `${label} disconnected`, 3000)
   } else if (status.status === 'error') {
-    showNotice('error', status.error ?? `${label}: connection error`, 6000)
-  } else if (status.status === 'connecting') {
-    showNotice('info', `Connecting to ${label}…`, 3000)
+    showNotice(
+      'error',
+      status.error ? `${label}: ${status.error}` : `${label}: connection error`,
+      6000,
+    )
   }
 }
 

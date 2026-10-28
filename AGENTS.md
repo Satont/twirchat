@@ -154,7 +154,7 @@ Desktop-приложение + backend. Monorepo на Bun + TypeScript.
 
 - **Runtime**: Bun
 - **Monorepo**: bun workspaces — `packages/desktop`, `packages/backend`, `packages/shared`
-- **Desktop**: GPUIX v0.7 (React + GPUI, Zed's GPU framework — **без webview, без DOM**, один Bun-процесс)
+- **Desktop**: GPUIX v0.11 (React + GPUI, Zed's GPU framework — **без webview, без DOM**, один Bun-процесс)
   - OBS overlay остаётся Vue 3 SFC через Vite (OBS browser source рендерит HTML)
 - **Backend**: Bun (REST API + WebSocket + gRPC клиенты)
 - **Проверка типов**:
@@ -283,10 +283,11 @@ useBackendEvent('chat_message', (msg) => { ... })
 - **GPUI reentrancy**: `useSyncExternalStore` рендерит синхронно → store-нотификации
   откладываются в `setTimeout(0)` (см. `state/create-store.ts`), иначе паника
   «cannot update GpuixView while it is already being updated» при рендере из event callback
-- **GPUIX на Linux не грузит http(s) картинки** (asset_cache открывает URL как файл) —
-  все remote-изображения через `state/image-cache.ts` + `<RemoteImage>`
-- **Upstream-баг gpuix 0.7.0**: automation `click()` на Linux паникует в `dispatch_mouse_up`;
-  реальный ввод не затронут, клавиатурная автоматизация работает
+- **Remote-изображения** идут через `state/image-cache.ts` + `<RemoteImage>` (дисковый кэш;
+  исторически GPUIX на Linux не грузил http(s), с 0.8 умеет, но кэш остаётся)
+- **Поля ввода** — всегда `useTextInputFocusTracking()` из `state/focus.ts`, иначе глобальные
+  хоткеи/ESC срабатывают во время набора (или отключаются навсегда при размонтировании в фокусе)
+- **Шрифты** Inter/Manrope регистрируются из `public/fonts` через `registerFont` (`gpuix/fonts.ts`)
 - `import.meta.dir` в `overlay-server.ts` указывает на `src/` → `dist/overlay/` находится через `join(import.meta.dir, "..", "dist", "overlay")`
 - Детали и остальные ограничения GPUIX — в `packages/desktop/src/gpuix/README.md`
 

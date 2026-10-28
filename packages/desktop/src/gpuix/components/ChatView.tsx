@@ -523,11 +523,13 @@ export function ChatView({
                 fontSize: 13,
                 fontWeight: 700,
                 color: theme.text2,
-                minWidth: 0,
+                // The channel name wins over the stream title/category,
+                // which absorb the squeeze in narrow split panes.
+                maxWidth: 160,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                flexShrink: 1,
+                flexShrink: 0,
               }}
             >
               {watchedChannel.displayName.toUpperCase()}

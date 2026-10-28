@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CategorySearchResult } from '@twirchat/shared/protocol'
 
 import { useBackend } from '../backend/context'
+import { useTextInputFocusTracking } from '../state/focus'
 import { useOverlayClose } from '../state/overlays'
 import { accent, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
@@ -52,6 +53,12 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
   useOverlayClose(categoryResults.length > 0, () => setCategoryResults([]))
   const [searchLoading, setSearchLoading] = useState(false)
   const [focusedField, setFocusedField] = useState<'title' | 'category' | null>(null)
+  const titleFocus = useTextInputFocusTracking((focused) =>
+    setFocusedField((field) => (focused ? 'title' : field === 'title' ? null : field)),
+  )
+  const categoryFocus = useTextInputFocusTracking((focused) =>
+    setFocusedField((field) => (focused ? 'category' : field === 'category' ? null : field)),
+  )
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -286,8 +293,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
             value={editTitle}
             placeholder="Stream title…"
             onChange={(event) => setEditTitle((event.value ?? '').slice(0, 140))}
-            onFocus={() => setFocusedField('title')}
-            onBlur={() => setFocusedField((field) => (field === 'title' ? null : field))}
+            {...titleFocus}
             theme={{ caret: accent.primary, textMuted: placeholderColor }}
             style={inputStyle(focusedField === 'title')}
           />
@@ -298,8 +304,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
               value={categoryQuery}
               placeholder="Search categories…"
               onChange={(event) => onCategoryInput(event.value ?? '')}
-              onFocus={() => setFocusedField('category')}
-              onBlur={() => setFocusedField((field) => (field === 'category' ? null : field))}
+              {...categoryFocus}
               theme={{ caret: accent.primary, textMuted: placeholderColor }}
               style={inputStyle(focusedField === 'category')}
             />

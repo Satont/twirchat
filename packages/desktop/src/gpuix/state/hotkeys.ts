@@ -3,7 +3,7 @@
  * Driven from the window-level renderer onKeyDown in main.tsx.
  */
 
-import type { EventPayload } from '@gpuix/react'
+import type { EventPayload, KeyEvent } from '@gpuix/react'
 
 import { activeTabStore, activeWatchedTabStore, settingsStore, tabChannelIdsStore } from './app'
 import { isTextInputFocused } from './focus'
@@ -18,6 +18,30 @@ let uiActions: HotkeyUiActions | null = null
 
 export function registerHotkeyActions(actions: HotkeyUiActions): void {
   uiActions = actions
+}
+
+/** GPUIX arrow names → DOM names, so recorded combos match the stored format. */
+export const GPUIX_TO_DOM_KEY: Record<string, string> = {
+  up: 'arrowup',
+  down: 'arrowdown',
+  left: 'arrowleft',
+  right: 'arrowright',
+}
+
+const KEY_LABELS: Record<string, string> = {
+  arrowup: '↑',
+  arrowdown: '↓',
+  arrowleft: '←',
+  arrowright: '→',
+  escape: 'Esc',
+}
+
+/** Stored combo ('alt+arrowleft') → display label ('Alt+←'). */
+export function formatKeyCombo(combo: string): string {
+  return combo
+    .split('+')
+    .map((part) => KEY_LABELS[part] ?? part.charAt(0).toUpperCase() + part.slice(1))
+    .join('+')
 }
 
 function parseKeyCombo(combo: string): {
@@ -42,7 +66,7 @@ function parseKeyCombo(combo: string): {
 function matchesCombo(event: EventPayload, combo: string): boolean {
   const parsed = parseKeyCombo(combo)
   const key = event.key ?? ''
-  const normalizedKey = key.length === 1 ? key.toLowerCase() : key
+  const normalizedKey = key.length === 1 ? key.toLowerCase() : (GPUIX_TO_DOM_KEY[key] ?? key)
   return (
     (event.modifiers?.ctrl ?? false) === parsed.ctrl &&
     (event.modifiers?.shift ?? false) === parsed.shift &&
@@ -62,7 +86,7 @@ function cycleTab(direction: 1 | -1): void {
   }
 }
 
-export function handleGlobalKeyDown(event: EventPayload): void {
+export function handleGlobalKeyDown(event: KeyEvent): void {
   if (!uiActions) return
 
   // ESC closes the topmost overlay. Inputs inside overlays handle their own
@@ -85,13 +109,16 @@ export function handleGlobalKeyDown(event: EventPayload): void {
   const hotkeys = settingsStore.get()?.hotkeys
   if (!hotkeys) return
 
-  if (matchesCombo(event, hotkeys.newTab)) {
-    uiActions.openAddChannel()
-  } else if (matchesCombo(event, hotkeys.nextTab)) {
-    cycleTab(1)
-  } else if (matchesCombo(event, hotkeys.prevTab)) {
-    cycleTab(-1)
-  } else if (matchesCombo(event, hotkeys.tabSelector)) {
-    uiActions.openTabSelector()
+  const actions: [string, () => void][] = [
+    [hotkeys.newTab, uiActions.openAddChannel],
+    [hotkeys.nextTab, () => cycleTab(1)],
+    [hotkeys.prevTab, () => cycleTab(-1)],
+    [hotkeys.tabSelector, uiActions.openTabSelector],
+  ]
+  const match = actions.find(([combo]) => matchesCombo(event, combo))
+  if (match) {
+    // A combo like Ctrl+Tab must not also run GPUI's default (focus moves).
+    event.preventDefault()
+    match[1]()
   }
 }

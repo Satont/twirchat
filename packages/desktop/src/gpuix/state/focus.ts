@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 /**
  * Tracks whether a native text editor currently holds focus, so the global
  * hotkey handler can skip — mirrors the Vue app's isEditableTarget check.
@@ -22,4 +24,38 @@ export function trackTextInputFocus(focused: boolean): void {
   focusedEditors = Math.max(0, focusedEditors + (focused ? 1 : -1))
   const value = focusedEditors > 0
   for (const listener of [...listeners]) listener(value)
+}
+
+/**
+ * onFocus/onBlur props for a native editor that keep the global counter
+ * honest even when the editor unmounts while focused (dialogs closing on
+ * ESC/submit), which would otherwise leave hotkeys disabled for good.
+ */
+export function useTextInputFocusTracking(onChange?: (focused: boolean) => void): {
+  onFocus: () => void
+  onBlur: () => void
+} {
+  const focused = useRef(false)
+  useEffect(
+    () => () => {
+      if (focused.current) trackTextInputFocus(false)
+    },
+    [],
+  )
+  return {
+    onFocus: () => {
+      if (!focused.current) {
+        focused.current = true
+        trackTextInputFocus(true)
+      }
+      onChange?.(true)
+    },
+    onBlur: () => {
+      if (focused.current) {
+        focused.current = false
+        trackTextInputFocus(false)
+      }
+      onChange?.(false)
+    },
+  }
 }

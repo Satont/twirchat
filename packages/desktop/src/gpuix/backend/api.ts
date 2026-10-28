@@ -294,6 +294,26 @@ async function resolveAvatarRemote(params: {
 
 // ── Moderation (port of internal/bridge/moderation_handlers.go) ────────────
 
+/**
+ * Turns a failed backend response into a user-facing error: the route's
+ * `{ error }` body when present, with expired platform OAuth called out.
+ */
+async function backendFailure(action: string, res: Response): Promise<Error> {
+  let detail = ''
+  try {
+    const body = (await res.json()) as { error?: unknown }
+    if (body?.error) detail = String(body.error).replace(/^Error:\s*/, '')
+  } catch {
+    // Non-JSON body — fall back to the status code.
+  }
+  if (res.status === 401 || /\b401\b|Invalid OAuth token|Unauthorized/i.test(detail)) {
+    return new Error(
+      `${action}: authorization expired — reconnect the account on the Platforms tab`,
+    )
+  }
+  return new Error(detail ? `${action}: ${detail}` : `${action} (HTTP ${res.status})`)
+}
+
 async function moderationBody(platform: ModerationPlatform, channelSlug: string) {
   if (platform !== 'twitch' && platform !== 'kick') {
     throw new Error(`moderation: unsupported platform "${platform}"`)
@@ -614,7 +634,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw new Error(`moderation capabilities: ${res.status}`)
+      if (!res.ok) throw await backendFailure("Couldn't check moderation permissions", res)
       return (await res.json()) as { canModerate: boolean }
     },
 
@@ -631,7 +651,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           durationSeconds: params.durationSeconds,
         }),
       })
-      if (!res.ok) throw new Error(`moderation action: ${res.status}`)
+      if (!res.ok) throw await backendFailure('Moderation action failed', res)
       const result = (await res.json()) as { success: boolean; error?: { message?: string } }
       if (!result.success) {
         throw new Error(result.error?.message || 'moderation action was rejected')
@@ -643,7 +663,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/stream-status?platform=${platform}&channelId=${encodeURIComponent(channelId)}`,
       )
-      if (!res.ok) throw new Error(`stream-status: ${res.status}`)
+      if (!res.ok) throw await backendFailure("Couldn't load stream info", res)
       return (await res.json()) as StreamStatusResponse
     },
 
@@ -659,7 +679,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw new Error(`update-stream: ${res.status}`)
+      if (!res.ok) throw await backendFailure("Couldn't update the stream", res)
       return (await res.json()) as UpdateStreamResponse
     },
 
@@ -667,7 +687,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/search-categories?platform=${platform}&query=${encodeURIComponent(query)}`,
       )
-      if (!res.ok) throw new Error(`search-categories: ${res.status}`)
+      if (!res.ok) throw await backendFailure('Category search failed', res)
       return (await res.json()) as SearchCategoriesResponse
     },
 
@@ -688,7 +708,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channels: enriched }),
       })
-      if (!res.ok) throw new Error(`channels-status: ${res.status}`)
+      if (!res.ok) throw await backendFailure("Couldn't load channel status", res)
       return (await res.json()) as ChannelsStatusResponse
     },
 
@@ -724,7 +744,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw new Error(`user-card-metadata: ${res.status}`)
+      if (!res.ok) throw await backendFailure("Couldn't load account details", res)
       return (await res.json()) as UserCardMetadataResponse
     },
 

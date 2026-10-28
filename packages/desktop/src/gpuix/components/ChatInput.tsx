@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 
-import { trackTextInputFocus } from '../state/focus'
+import { useTextInputFocusTracking } from '../state/focus'
 import type {
   Account,
   AppSettings,
@@ -69,8 +69,12 @@ export function ChatInput(props: ChatInputProps) {
   const renderer = useGpuixRequired()
   const textareaRef = useRef<PublicInstance | null>(null)
   const [text, setText] = useState('')
+  const composerFocus = useTextInputFocusTracking()
   const [commandError, setCommandError] = useState('')
   const [emotePickerOpen, setEmotePickerOpen] = useState(false)
+  // Timestamp of the last outside-click dismissal: the same gesture ends in a
+  // click on the trigger (mousedown closes, mouseup clicks) — swallow it.
+  const emotePickerDismissedAt = useRef(0)
 
   // Focus the composer when a reply is initiated (matches the Vue build).
   useEffect(() => {
@@ -447,8 +451,7 @@ export function ChatInput(props: ChatInputProps) {
                 setText(event.value ?? '')
                 setCommandError('')
               }}
-              onFocus={() => trackTextInputFocus(true)}
-              onBlur={() => trackTextInputFocus(false)}
+              {...composerFocus}
               onSubmit={autocomplete.isOpen ? undefined : send}
               onKeyDown={(event) => {
                 if (!autocomplete.isOpen) return
@@ -457,6 +460,9 @@ export function ChatInput(props: ChatInputProps) {
                 } else if (event.key === 'down') {
                   autocomplete.moveDown()
                 } else if (event.key === 'enter' || event.key === 'tab') {
+                  // Without onSubmit Enter would insert a newline, and Tab
+                  // would move focus — both must only pick the suggestion.
+                  event.preventDefault()
                   autocomplete.selectSuggestion(autocomplete.selectedIndex)
                 } else if (event.key === 'escape') {
                   autocomplete.close()
@@ -476,7 +482,9 @@ export function ChatInput(props: ChatInputProps) {
           <div
             testId="emote-button"
             onClick={() => {
-              if (!isDisabled) setEmotePickerOpen((open) => !open)
+              if (isDisabled) return
+              if (Date.now() - emotePickerDismissedAt.current < 250) return
+              setEmotePickerOpen((open) => !open)
             }}
             style={{
               flexShrink: 0,
@@ -541,7 +549,10 @@ export function ChatInput(props: ChatInputProps) {
               })
               setEmotePickerOpen(false)
             }}
-            onClose={() => setEmotePickerOpen(false)}
+            onClose={() => {
+              emotePickerDismissedAt.current = Date.now()
+              setEmotePickerOpen(false)
+            }}
           />
         ) : null}
       </div>

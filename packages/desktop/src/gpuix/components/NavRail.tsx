@@ -12,7 +12,7 @@ import { useTheme } from '../theme-context'
 import { Icon, type IconName } from './ui/Icon'
 import { Text } from './ui/Text'
 
-const RAIL_WIDTH = 68
+const RAIL_WIDTH = 72
 const RAIL_COLLAPSED_WIDTH = 44
 
 interface NavItem {
@@ -69,8 +69,8 @@ function NavItemButton({
         gap: 4,
         paddingTop: 10,
         paddingBottom: 10,
-        paddingLeft: 4,
-        paddingRight: 4,
+        paddingLeft: 2,
+        paddingRight: 2,
         borderRadius: 10,
         cursor: 'pointer',
         width: '100%',
@@ -111,7 +111,7 @@ function NavItemButton({
         ) : null}
       </div>
       {collapsed ? null : (
-        <Text style={{ fontSize: 10, fontWeight: 500, color, letterSpacing: 0.1 }}>
+        <Text style={{ fontSize: 10, fontWeight: 500, color, whiteSpace: 'nowrap' }}>
           {item.label}
         </Text>
       )}

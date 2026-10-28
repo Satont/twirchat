@@ -5,9 +5,10 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { motion } from '@gpuix/react'
+import { motion, useGpuixRequired } from '@gpuix/react'
 
 import { useBackend, useBackendEvent } from '../backend/context'
+import { registerBundledFonts } from '../fonts'
 import { useStore } from '../state/create-store'
 import {
   accountsStore,
@@ -209,6 +210,9 @@ function UpdateToast() {
 
 export function App() {
   const backend = useBackend()
+  // Runs during the first render — before the first layout — so text that
+  // names Inter/Manrope never falls back. Idempotent across hot remounts.
+  registerBundledFonts(useGpuixRequired())
   const settings = useStore(settingsStore)
   const activeTab = useStore(activeTabStore)
   const accounts = useStore(accountsStore)

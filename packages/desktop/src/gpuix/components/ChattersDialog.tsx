@@ -16,6 +16,7 @@ import { chatterRoleLabel, filterChatterGroups } from '../../views/main/utils/ch
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { useBackend } from '../backend/context'
+import { useTextInputFocusTracking } from '../state/focus'
 import { Text } from './ui/Text'
 import { RemoteImage } from './ui/RemoteImage'
 import { Modal } from './ui/Modal'
@@ -56,6 +57,7 @@ export function ChattersDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const searchFocus = useTextInputFocusTracking()
   const generationRef = useRef(0)
 
   const targetsKey = serializeTargets(targets)
@@ -186,6 +188,7 @@ export function ChattersDialog({
             value={query}
             placeholder="Search chatters…"
             onChange={(event) => setQuery(event.value ?? '')}
+            {...searchFocus}
             onKeyDown={(event) => {
               if (event.key === 'escape') onClose()
             }}

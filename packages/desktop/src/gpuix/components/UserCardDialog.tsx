@@ -23,6 +23,7 @@ import { useTheme } from '../theme-context'
 import { useBackend } from '../backend/context'
 import type { ModerationPlatform } from '../backend/api'
 import { aliasesStore, applyModerationOutcome, showNotice } from '../state/app'
+import { useTextInputFocusTracking } from '../state/focus'
 import { Text } from './ui/Text'
 import { RemoteImage } from './ui/RemoteImage'
 import { Modal } from './ui/Modal'
@@ -64,6 +65,7 @@ export function UserCardDialog({
   // ── Alias ───────────────────────────────────────────────────────────────
 
   const [aliasValue, setAliasValue] = useState(effectiveAlias ?? '')
+  const aliasFocus = useTextInputFocusTracking()
   useEffect(() => {
     setAliasValue(effectiveAlias ?? '')
   }, [effectiveAlias, target.platform, target.platformUserId])
@@ -432,6 +434,7 @@ export function UserCardDialog({
                 value={aliasValue}
                 placeholder={target.displayName}
                 onChange={(event) => setAliasValue(event.value ?? '')}
+                {...aliasFocus}
                 onSubmit={() => void handleSaveAlias()}
                 onKeyDown={(event) => {
                   if (event.key === 'escape') onClose()

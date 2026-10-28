@@ -47,6 +47,9 @@ render(
     trafficLightX: 16,
     trafficLightY: 17,
     appName: 'TwirChat',
+    // Wayland app_id / X11 WM_CLASS — same identity as the Velopack package,
+    // so compositors and taskbars can group the window and match rules.
+    appId: 'dev.twirchat.app',
     // Agent-driven runs (screenshots, automation) must not steal focus.
     focus: process.env.GPUIX_BACKGROUND !== '1',
     onKeyDown(event) {

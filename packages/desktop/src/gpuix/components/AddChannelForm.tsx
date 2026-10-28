@@ -6,7 +6,7 @@
 import { useState } from 'react'
 
 import { platformColor, withAlpha } from '../theme'
-import { trackTextInputFocus } from '../state/focus'
+import { useTextInputFocusTracking } from '../state/focus'
 import { useTheme } from '../theme-context'
 import { useStore } from '../state/create-store'
 import { accountsStore } from '../state/app'
@@ -30,6 +30,7 @@ export function AddChannelForm({
   const [platform, setPlatform] = useState<FormPlatform>('twitch')
   const [slug, setSlug] = useState('')
   const [inputFocused, setInputFocused] = useState(false)
+  const inputFocus = useTextInputFocusTracking(setInputFocused)
 
   const placeholder =
     platform === 'twitch'
@@ -121,14 +122,7 @@ export function AddChannelForm({
           placeholder={placeholder}
           onChange={(event) => setSlug(event.value ?? '')}
           onSubmit={confirm}
-          onFocus={() => {
-            setInputFocused(true)
-            trackTextInputFocus(true)
-          }}
-          onBlur={() => {
-            setInputFocused(false)
-            trackTextInputFocus(false)
-          }}
+          {...inputFocus}
           onKeyDown={(event) => {
             if (event.key === 'escape') onCancel?.()
           }}

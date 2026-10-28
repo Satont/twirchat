@@ -5,7 +5,8 @@
  * Vue handler in ChatList.vue.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useGpuixRequired } from '@gpuix/react'
 import type { AppSettings } from '@twirchat/shared/types'
 
 import { useBackend } from '../backend/context'
@@ -23,7 +24,17 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
   const backend = useBackend()
   const [open, setOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const renderer = useGpuixRequired()
+  // Timestamp of the last outside-click dismissal, so the trigger click that
+  // caused it (mousedown closes, mouseup clicks) doesn't immediately reopen.
+  const dismissedAt = useRef(0)
   useOverlayClose(open, () => setOpen(false))
+
+  // Clicking the trigger doesn't blur a focused text editor, which would
+  // block the window-level ESC handler — drop that focus on open.
+  useEffect(() => {
+    if (open) renderer.blur?.()
+  }, [open, renderer])
 
   const patch = (partial: Partial<AppSettings>) => {
     const next = { ...settings, ...partial }
@@ -47,7 +58,10 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
     <div style={{ position: 'relative' }}>
       <div
         testId="appearance-button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (Date.now() - dismissedAt.current < 250) return
+          setOpen((v) => !v)
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
@@ -65,115 +79,118 @@ export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {
       </div>
 
       {open ? (
-        <anchored
-          deferred
-          side="bottom"
-          align="end"
-          gap={8}
-          onMouseDownOutside={() => setOpen(false)}
-          style={{
-            width: 240,
-            backgroundColor: '#1a1a22',
-            borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: 12,
-            padding: 16,
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: {
-              offsetX: 0,
-              offsetY: 12,
-              blurRadius: 32,
-              spreadRadius: 0,
-              color: '#00000099',
-            },
-          }}
-        >
-          {/* Font size */}
-          <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 10,
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99' }}>
-                {'Font size'.toUpperCase()}
-              </Text>
-              <Text style={{ fontSize: 12, fontWeight: 500, color: '#e2e2e8' }}>
-                {`${settings.fontSize}px`}
-              </Text>
-            </div>
-            <Slider
-              value={settings.fontSize}
-              min={11}
-              max={22}
-              width={208}
-              onChange={(fontSize) => patch({ fontSize })}
-            />
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                marginTop: 4,
-              }}
-            >
-              <Text style={{ fontSize: 10, color: '#555566' }}>11</Text>
-              <Text style={{ fontSize: 10, color: '#555566' }}>22</Text>
-            </div>
-          </div>
-
-          {/* Display toggles */}
-          <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
-            <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99', marginBottom: 10 }}>
-              {'Display'.toUpperCase()}
-            </Text>
-            {toggles.map((toggle, index) => (
+        <anchored deferred side="bottom" align="end" gap={8}>
+          {/* <anchored> supports only click/hover/fileDrop events, so
+              onMouseDownOutside must live on the content div. */}
+          <div
+            onMouseDownOutside={() => {
+              dismissedAt.current = Date.now()
+              setOpen(false)
+            }}
+            style={{
+              width: 240,
+              backgroundColor: '#1a1a22',
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: 12,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: {
+                offsetX: 0,
+                offsetY: 12,
+                blurRadius: 32,
+                spreadRadius: 0,
+                color: '#00000099',
+              },
+            }}
+          >
+            {/* Font size */}
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
               <div
-                key={toggle.key}
                 style={{
                   display: 'flex',
                   flexDirection: 'row',
-                  alignItems: 'center',
                   justifyContent: 'space-between',
-                  paddingTop: index === 0 ? 0 : 7,
-                  paddingBottom: 7,
-                  borderBottomWidth: index === toggles.length - 1 ? 0 : 1,
-                  borderColor: 'rgba(255, 255, 255, 0.06)',
+                  alignItems: 'center',
+                  marginBottom: 10,
                 }}
               >
-                <Text style={{ fontSize: 13, color: '#d0d0da' }}>{toggle.label}</Text>
-                <Switch
-                  small
-                  checked={Boolean(settings[toggle.key])}
-                  onChange={(value) => patch({ [toggle.key]: value })}
+                <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99' }}>
+                  {'Font size'.toUpperCase()}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: 500, color: '#e2e2e8' }}>
+                  {`${settings.fontSize}px`}
+                </Text>
+              </div>
+              <Slider
+                value={settings.fontSize}
+                min={11}
+                max={22}
+                width={208}
+                onChange={(fontSize) => patch({ fontSize })}
+              />
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  marginTop: 4,
+                }}
+              >
+                <Text style={{ fontSize: 10, color: '#555566' }}>11</Text>
+                <Text style={{ fontSize: 10, color: '#555566' }}>22</Text>
+              </div>
+            </div>
+
+            {/* Display toggles */}
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99', marginBottom: 10 }}>
+                {'Display'.toUpperCase()}
+              </Text>
+              {toggles.map((toggle, index) => (
+                <div
+                  key={toggle.key}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: index === 0 ? 0 : 7,
+                    paddingBottom: 7,
+                    borderBottomWidth: index === toggles.length - 1 ? 0 : 1,
+                    borderColor: 'rgba(255, 255, 255, 0.06)',
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: '#d0d0da' }}>{toggle.label}</Text>
+                  <Switch
+                    small
+                    checked={Boolean(settings[toggle.key])}
+                    onChange={(value) => patch({ [toggle.key]: value })}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Theme cards */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99', marginBottom: 10 }}>
+                {'Layout'.toUpperCase()}
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
+                <ThemeCard
+                  label="Modern"
+                  active={settings.chatTheme === 'modern'}
+                  onClick={() => patch({ chatTheme: 'modern' })}
+                  preview="modern"
+                />
+                <ThemeCard
+                  label="Compact"
+                  active={settings.chatTheme === 'compact'}
+                  onClick={() => patch({ chatTheme: 'compact' })}
+                  preview="compact"
                 />
               </div>
-            ))}
-          </div>
-
-          {/* Theme cards */}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <Text style={{ fontSize: 12, fontWeight: 600, color: '#8b8b99', marginBottom: 10 }}>
-              {'Layout'.toUpperCase()}
-            </Text>
-            <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
-              <ThemeCard
-                label="Modern"
-                active={settings.chatTheme === 'modern'}
-                onClick={() => patch({ chatTheme: 'modern' })}
-                preview="modern"
-              />
-              <ThemeCard
-                label="Compact"
-                active={settings.chatTheme === 'compact'}
-                onClick={() => patch({ chatTheme: 'compact' })}
-                preview="compact"
-              />
             </div>
           </div>
         </anchored>

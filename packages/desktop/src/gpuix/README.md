@@ -115,11 +115,6 @@ served by `src/overlay-server.ts` (started by the GPUIX backend too).
 
 ## Known limitations (GPUIX-specific)
 
-- **`click()` automation panics on Linux** (gpuix 0.7.0 upstream bug:
-  `dispatch_mouse_up` → text drag listeners → `cannot update GpuixView while it
-is already being updated`). Real mouse input is unaffected; keyboard
-  automation (`press`, `fill`, `ctrl+tab`…) works. Track
-  https://github.com/remorses/gpuix before relying on mouse automation on Linux.
 - **Freshly mounted subtrees sometimes don't paint** (elements exist in the
   retained tree with correct bounds, but no pixels until restart) — hit it on
   newly split panes. Workaround: `layoutRevisionStore` remounts the whole pane
@@ -130,19 +125,29 @@ is already being updated`). Real mouse input is unaffected; keyboard
   routes moves only to the pressed element, so cross-element hit testing is
   impossible. Splits/resizes/assignments work via buttons, hotkeys
   (Ctrl+H / Ctrl+Shift+H / Ctrl+W) and the ⋮ menu.
-- **No italic / underline / letter-spacing** in GPUIX styles: action (`/me`)
-  messages use opacity instead of italics; links are colored-only;
-  uppercase is done in JS.
-- **Fonts resolve from the OS** — Inter/Manrope render if installed, otherwise
-  GPUI's fallback is used (no bundled fonts yet).
+- **No italic / letter-spacing** in GPUIX styles: action (`/me`) messages use
+  opacity instead of italics; uppercase is done in JS. (`textDecoration`
+  underline/line-through exists since gpuix 0.8.)
+- **Fonts are bundled** — `fonts.ts` registers `InterVariable.ttf` and the
+  Manrope variable TTF via `renderer.registerFont` on first render (from
+  `public/fonts` in dev, `fonts/` next to the packaged exe). It must run
+  before the first layout: a family missing then has already fallen back.
 - **Emote insertion appends at the end** — the native textarea doesn't expose
   the caret position.
-- **Updater is stubbed** (`checkForUpdate` → "no update"); releases stay on the
-  Wails build.
 - **Window frame persistence** (`WindowStateStore`) is not wired — GPUIX
   `render()` takes only width/height at startup.
 - Clipboard write goes through `backend.api.copyText` (pbcopy/wl-copy/xclip),
   since GPUIX exposes no clipboard API.
+- **Keyboard defaults (gpuix 0.11)**: Tab/Shift+Tab move focus, and a
+  `<textarea>` without `onSubmit` inserts a newline on Enter. Handlers that
+  repurpose those keys (autocomplete, matched global hotkeys) call
+  `event.preventDefault()`.
+- **Text-editor focus tracking**: every `<input>`/`<textarea>` spreads
+  `useTextInputFocusTracking()` (`state/focus.ts`) so global hotkeys and the
+  window-level ESC skip while typing. Use the hook, not raw
+  `trackTextInputFocus` — the hook also releases the counter when an editor
+  unmounts while focused (dialogs closed by Enter/ESC), which would otherwise
+  disable hotkeys for the rest of the session.
 
 ## Debug helpers
 
@@ -154,5 +159,7 @@ is already being updated`). Real mouse input is unaffected; keyboard
 - `POST http://localhost:45824/dev/inject-chat` with a `NormalizedChatMessage`
   JSON body injects a fake chat message (dev only).
 - Automation: `launch({ command: 'bun', args: ['src/gpuix/main.tsx'] })` from
-  `@gpuix/react/automation` — tree queries, bounds, `fill`/`press` work on
-  Linux; screenshots don't.
+  `@gpuix/react/automation` — tree queries, bounds, `click`/`wheel`/`fill`/
+  `press` work on Linux (window-level keys: `app.call('keystrokes', { keys })`).
+  Built-in screenshots don't work on Linux; on Wayland capture the output
+  with `grim` instead.

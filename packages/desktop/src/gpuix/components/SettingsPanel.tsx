@@ -15,12 +15,14 @@ import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 import { useBackend } from '../backend/context'
 import { useStore } from '../state/create-store'
 import { settingsStore } from '../state/app'
+import { useTextInputFocusTracking } from '../state/focus'
 import { accent } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
 import { Switch } from './ui/Switch'
 import { Slider } from './ui/Slider'
 import { Text } from './ui/Text'
+import { formatKeyCombo, GPUIX_TO_DOM_KEY } from '../state/hotkeys'
 
 /** AppSettings with the optional selfPing block materialized (Vue makeLocal). */
 type EditableSettings = AppSettings & { selfPing: SelfPingConfig }
@@ -44,21 +46,6 @@ const HOTKEYS_CONFIG: { action: keyof HotkeySettings; label: string; description
     description: 'Open fuzzy tab search (Ctrl+K always works)',
   },
 ]
-
-function formatKeyCombo(combo: string): string {
-  return combo
-    .split('+')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('+')
-}
-
-/** GPUIX arrow names → DOM names, so recorded combos match the stored format. */
-const GPUIX_TO_DOM_KEY: Record<string, string> = {
-  up: 'arrowup',
-  down: 'arrowdown',
-  left: 'arrowleft',
-  right: 'arrowright',
-}
 
 /** Modifier-only presses are skipped while recording (wait for the real key). */
 const MODIFIER_ONLY_KEYS = new Set([
@@ -298,6 +285,7 @@ export function SettingsPanel() {
             <FormRow label="Highlight color">
               <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <SmallInput
+                  width={210}
                   value={local.selfPing.color}
                   placeholder="rgba(167, 139, 250, 0.15)"
                   onChange={(value) =>
@@ -827,24 +815,26 @@ function ToggleGroup<T extends string>({
 function SmallInput({
   value,
   placeholder,
+  width = 160,
   onChange,
 }: {
   value: string
   placeholder?: string
+  width?: number
   onChange: (value: string) => void
 }) {
   const theme = useTheme()
   const [focused, setFocused] = useState(false)
+  const focusTracking = useTextInputFocusTracking(setFocused)
   return (
     <input
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.value ?? '')}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      {...focusTracking}
       theme={{ caret: accent.primary }}
       style={{
-        width: 160,
+        width,
         backgroundColor: theme.surface2,
         borderWidth: 1,
         borderColor: focused ? accent.primary : theme.border,

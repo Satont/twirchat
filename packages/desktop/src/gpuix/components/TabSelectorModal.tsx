@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
-import { trackTextInputFocus } from '../state/focus'
+import { useTextInputFocusTracking } from '../state/focus'
 import { Modal } from './ui/Modal'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { Text } from './ui/Text'
@@ -34,6 +34,7 @@ export function TabSelectorModal({
   const theme = useTheme()
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const queryFocus = useTextInputFocusTracking()
 
   const filtered = useMemo(
     () => (query ? (fuzzyFilter(tabs, query) as TabItem[]) : tabs),
@@ -71,8 +72,7 @@ export function TabSelectorModal({
               setQuery(event.value ?? '')
               setSelectedIndex(0)
             }}
-            onFocus={() => trackTextInputFocus(true)}
-            onBlur={() => trackTextInputFocus(false)}
+            {...queryFocus}
             onKeyDown={(event) => {
               if (event.key === 'down') {
                 setSelectedIndex((i) => Math.min(filtered.length - 1, i + 1))

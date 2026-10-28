@@ -86,8 +86,10 @@ Debug helpers: `GPUIX_BACKGROUND=1` (no focus steal), `TWIRCHAT_GPUIX_START_MAIN
 - **Store notifications are macrotask-deferred** (`create-store.ts`) — GPUI
   panics on reentrant view updates if a store triggers a sync render inside
   an event callback. Don't expect synchronous repaint after `.set()`.
-- **Remote images** go through `ui/RemoteImage.tsx` (disk cache) — GPUI's
-  Linux build can't load http(s).
+- **Remote images** go through `ui/RemoteImage.tsx` (disk cache; GPUI's
+  Linux build couldn't load http(s) before gpuix 0.8).
+- **Text editors** spread `useTextInputFocusTracking()` (`state/focus.ts`) so
+  global hotkeys/ESC skip while typing — never raw `trackTextInputFocus`.
 - Format/lint: `bun run fix` (oxfmt + oxlint) after changes.
 
 ## ANTI-PATTERNS
