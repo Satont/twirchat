@@ -101,7 +101,23 @@ export async function fetchTwitchUserById(
     return null
   }
 
-  const url = `https://api.twitch.tv/helix/users?id=${encodeURIComponent(userId)}`
+  return fetchTwitchUserProfile(`id=${encodeURIComponent(userId)}`, userAccessToken)
+}
+
+export async function fetchTwitchUserByLogin(
+  login: string,
+  userAccessToken?: string,
+): Promise<HelixUserProfile | null> {
+  const normalized = normalizeTwitchLogin(login)
+  if (!normalized) return null
+  return fetchTwitchUserProfile(`login=${encodeURIComponent(normalized)}`, userAccessToken)
+}
+
+async function fetchTwitchUserProfile(
+  query: string,
+  userAccessToken?: string,
+): Promise<HelixUserProfile | null> {
+  const url = `https://api.twitch.tv/helix/users?${query}`
   const response = userAccessToken
     ? await fetch(url, {
         headers: {
@@ -113,7 +129,7 @@ export async function fetchTwitchUserById(
 
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(`Twitch /helix/users by id failed: ${response.status} ${body}`)
+    throw new Error(`Twitch /helix/users failed: ${response.status} ${body}`)
   }
 
   const payload = z

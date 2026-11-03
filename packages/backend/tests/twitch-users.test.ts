@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { getTwitchAppToken } from '../src/api/stream-status.ts'
 import {
   fetchTwitchUserById,
+  fetchTwitchUserByLogin,
   isTwitchUserId,
   normalizeTwitchLogin,
   resolveTwitchUserId,
@@ -185,5 +186,31 @@ describe('twitch-users helpers', () => {
       display_name: 'Satont',
       profile_image_url: 'https://example.com/avatar.png',
     })
+  })
+
+  it('fetches a normalized login as a login even when the name is numeric', async () => {
+    const calls: string[] = []
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request) => {
+        calls.push(fetchUrl(input))
+        return Response.json({ data: [{ id: '987', login: '123', display_name: '123' }] })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
+    await expect(fetchTwitchUserByLogin('@123', 'test-token')).resolves.toEqual({
+      id: '987',
+      login: '123',
+      display_name: '123',
+    })
+    expect(calls).toEqual(['https://api.twitch.tv/helix/users?login=123'])
+  })
+
+  it('rejects invalid login lookups without fetching and returns null for unknown users', async () => {
+    const request = mock(async () => Response.json({ data: [] }))
+    global.fetch = Object.assign(request, { preconnect: originalFetch.preconnect })
+    await expect(fetchTwitchUserByLogin('bad/name', 'test-token')).resolves.toBeNull()
+    expect(request).not.toHaveBeenCalled()
+    await expect(fetchTwitchUserByLogin('unknown_user', 'test-token')).resolves.toBeNull()
+    expect(request).toHaveBeenCalledTimes(1)
   })
 })

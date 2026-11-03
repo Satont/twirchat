@@ -581,7 +581,13 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           </Text>
         </div>
         <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <MessageText message={message} fontSize={Math.round(fontSize * 0.88)} isSystem />
+          <MessageText
+            message={message}
+            fontSize={Math.round(fontSize * 0.88)}
+            isSystem
+            channelSlug={props.channelSlug}
+            onOpenUserCard={props.onOpenUserCard}
+          />
         </div>
         {props.showTimestamp ? (
           <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2, flexShrink: 0 }}>
@@ -724,6 +730,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           </Text>
           <MessageTokens
             message={message}
+            channelSlug={props.channelSlug}
+            onOpenUserCard={props.onOpenUserCard}
             fontSize={fontSize}
             deleted={isTombstone}
             isAction={isAction}
@@ -876,6 +884,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
 
         <MessageText
           message={message}
+          channelSlug={props.channelSlug}
+          onOpenUserCard={props.onOpenUserCard}
           fontSize={fontSize}
           deleted={isTombstone}
           isAction={isAction}

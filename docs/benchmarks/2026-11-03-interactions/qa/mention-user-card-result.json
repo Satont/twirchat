@@ -1,0 +1,154 @@
+{
+  "ok": true,
+  "checks": [
+    "compact-420: native click, right click, Enter, IDs, channel context, bounded card",
+    "modern-420: native click, right click, Space, IDs, channel context, bounded card",
+    "compact-900: native click, right click, Enter, IDs, channel context, bounded card, 200 history rows",
+    "modern-900: native click, right click, Space, IDs, channel context, bounded card, 200 history rows",
+    "rapid reopen and a delayed remote lookup overtaken by another mention",
+    "history/translation mention fallback opens a native user window",
+    "unmount cancels pending card opening"
+  ],
+  "screenshots": [
+    "mention-compact-420.png",
+    "mention-modern-420.png",
+    "mention-compact-900.png",
+    "mention-modern-900.png"
+  ],
+  "opened": [
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "333",
+      "username": "remoteviewer",
+      "displayName": "Remote Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "333",
+      "username": "remoteviewer",
+      "displayName": "Remote Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "333",
+      "username": "remoteviewer",
+      "displayName": "Remote Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "333",
+      "username": "remoteviewer",
+      "displayName": "Remote Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    },
+    {
+      "platformUserId": "222",
+      "username": "knownviewer",
+      "displayName": "Known Viewer",
+      "platform": "twitch",
+      "channelId": "source-channel",
+      "channelSlug": "source-slug"
+    }
+  ],
+  "lookups": [
+    "RemoteViewer",
+    "RemoteViewer",
+    "RemoteViewer",
+    "RemoteViewer",
+    "RemoteViewer",
+    "RemoteViewer"
+  ],
+  "incomingMessages": 222,
+  "heartbeat": 222,
+  "maximumLagMs": 165.71891200000027,
+  "mode": "production",
+  "provenance": {
+    "gitHead": "8142e8fcc920450ec3cf5267a042a1269a5f74b5",
+    "dirtyHash": "c259d380bf9f18548ec5db2d054def5f7621a6f5d9f374d3a795cccdc136623e",
+    "sourceHash": "2f5b60ed4a11ecad4b2b0bd05af05c148af152d90d7d7080a281e4d91c7bc580",
+    "sourceFiles": 358
+  },
+  "native": {
+    "apiVersion": 3,
+    "version": "0.11.0-twirchat.4",
+    "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+    "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+    "patchDigest": "9fb2fa0507af39a4",
+    "rustToolchain": "1.97.1",
+    "target": "linux-x64",
+    "size": 56224840,
+    "sha256": "32df77db2384eb22f77a2eb5442b9c67356d857720ee7248d80b35c4ed63bcf7"
+  },
+  "limitations": "Offline fixture stubs remote responses. Timer maximum includes screenshots, native test-driver subprocesses and 200-row history rendering; it does not isolate input callback latency."
+}

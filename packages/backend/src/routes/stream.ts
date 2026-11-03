@@ -7,7 +7,7 @@ import { handleStreamStatus } from '../api/stream-status.ts'
 import { handleTwitchBadges } from '../api/twitch-badges.ts'
 import { handleTwitchChatters, TwitchChattersError } from '../api/twitch-chatters.ts'
 import { handleTwitchSendMessage, TwitchAPIError } from '../api/twitch-send-message.ts'
-import { fetchTwitchUserById } from '../api/twitch-users.ts'
+import { fetchTwitchUserById, fetchTwitchUserByLogin } from '../api/twitch-users.ts'
 import { handleUpdateStream } from '../api/update-stream.ts'
 import { json, requireClient } from './utils.ts'
 
@@ -123,11 +123,14 @@ export const streamRoutes = {
       try {
         const url = new URL(req.url)
         const userId = url.searchParams.get('userId')
-        if (!userId) {
-          return json({ error: 'userId is required' }, 400)
+        const login = url.searchParams.get('login')
+        if (!userId && !login) {
+          return json({ error: 'userId or login is required' }, 400)
         }
 
-        const user = await fetchTwitchUserById(userId)
+        const user = userId
+          ? await fetchTwitchUserById(userId)
+          : await fetchTwitchUserByLogin(login ?? '')
         return json({ user })
       } catch (err) {
         log.error('twitch/user failed', { err: String(err) })

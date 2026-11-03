@@ -18,7 +18,7 @@ import { mentionColor } from './state/caches'
 
 export type MessageToken =
   | { kind: 'text'; text: string }
-  | { kind: 'mention'; text: string; color: string | null }
+  | { kind: 'mention'; text: string; username: string; color: string | null }
   | { kind: 'link'; text: string; url: string }
   | { kind: 'emote'; emote: Emote; overlays?: Emote[]; modifiers?: string[] }
 
@@ -185,6 +185,7 @@ function pushMentions(tokens: MessageToken[], segment: string, platform: string)
     pushSegment(tokens, match[0], platform, (word) => ({
       kind: 'mention',
       text: word,
+      username,
       color: mentionColor(platform, username) ?? null,
     }))
     cursor = match.index + match[0].length

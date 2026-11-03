@@ -71,7 +71,33 @@ describe('buildMessageTokens', () => {
 
   test('mentions become mention tokens', () => {
     const tokens = buildMessageTokens(makeMessage({ text: 'hey @someone nice' }))
-    expect(tokens[1]).toEqual({ kind: 'mention', text: '@someone ', color: null })
+    expect(tokens[1]).toEqual({
+      kind: 'mention',
+      text: '@someone ',
+      username: 'someone',
+      color: null,
+    })
+  })
+
+  test('wrapped mention chunks retain the full username independently of punctuation and spacing', () => {
+    const username = 'long_username_'.repeat(5)
+    const tokens = buildMessageTokens(makeMessage({ text: `@${username}, @Other_User hi` }))
+    const mentions = tokens.filter((token) => token.kind === 'mention')
+    expect(mentions.length).toBeGreaterThan(2)
+    expect(mentions.slice(0, -1).every((token) => token.username === username)).toBe(true)
+    expect(mentions.at(-1)).toEqual({
+      kind: 'mention',
+      text: '@Other_User ',
+      username: 'Other_User',
+      color: null,
+    })
+  })
+
+  test('handles inside a URL remain links', () => {
+    const tokens = buildMessageTokens(makeMessage({ text: 'https://example.com/@someone @other' }))
+    expect(tokens.filter((token) => token.kind === 'mention')).toEqual([
+      { kind: 'mention', text: '@other', username: 'other', color: null },
+    ])
   })
 
   test('whitespace-only tokens after emotes are dropped (emote has its own margin)', () => {
