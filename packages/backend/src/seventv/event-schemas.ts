@@ -29,27 +29,28 @@ export const sevenTVEventEmoteValueSchema = z.object({
   }),
 })
 const actorSchema = z.object({ id: z.string(), display_name: z.string() })
+const emoteChangeTypeSchema = z.enum(['object', 'emote'])
 export const emoteInsertSchema = z.object({
   key: z.literal('emotes'),
   index: z.number(),
-  type: z.literal('emote'),
+  type: emoteChangeTypeSchema,
   value: sevenTVEventEmoteValueSchema,
 })
 export const emoteRemoveSchema = z.object({
   key: z.literal('emotes'),
   index: z.number(),
-  type: z.literal('emote'),
+  type: emoteChangeTypeSchema,
   old_value: sevenTVEventEmoteValueSchema,
 })
 export const emoteUpdateSchema = z.object({
   key: z.literal('emotes'),
   index: z.number().optional(),
-  type: z.string().optional(),
+  type: emoteChangeTypeSchema.optional(),
   old_value: sevenTVEventEmoteValueSchema,
   value: sevenTVEventEmoteValueSchema,
 })
 export const fieldUpdateSchema = z.object({
-  key: z.string(),
+  key: z.string().refine((key) => key !== 'emotes'),
   index: z.number().optional(),
   type: z.string().optional(),
   old_value: z.unknown(),

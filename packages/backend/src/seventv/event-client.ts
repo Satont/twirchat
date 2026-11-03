@@ -125,11 +125,6 @@ export class SevenTVEventClient {
     try {
       const message = sevenTVEventMessageSchema.parse(JSON.parse(data))
 
-      // Log ALL raw messages for debugging
-      if (message.op === 0) {
-        log.info('RAW DISPATCH MESSAGE', { raw: data })
-      }
-
       if (message.op !== 2) {
         const dispatchType =
           typeof message.d === 'object' && message.d !== null && 'type' in message.d
@@ -152,7 +147,7 @@ export class SevenTVEventClient {
           // Dispatch
           if (message.d) {
             const dispatch = sevenTVEventSchema.parse(message.d)
-            log.info('DISPATCH EVENT RECEIVED', { type: dispatch.type, bodyId: dispatch.body?.id })
+            log.debug('Dispatch event received', { type: dispatch.type, bodyId: dispatch.body.id })
             this.onEvent?.(dispatch)
           }
           break
@@ -203,7 +198,7 @@ export class SevenTVEventClient {
         }
       }
     } catch (error) {
-      log.error('Failed to parse message', { data, error: String(error) })
+      log.error('Failed to parse message', { payloadLength: data.length, error: String(error) })
     }
   }
 
