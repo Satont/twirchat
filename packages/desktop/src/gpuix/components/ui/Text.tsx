@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+
 import { useFont } from '../../theme-context'
 
 type TextStyle = Record<string, unknown>

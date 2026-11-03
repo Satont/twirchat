@@ -1,3 +1,4 @@
+import { logger } from '@twirchat/shared/logger'
 /**
  * GET /api/youtube/resolve?handle=<handle>
  *
@@ -13,11 +14,11 @@
  *   3. Call channels?forHandle=  (YouTube @handle, 1 quota unit)
  *   4. Fall back to channels?forUsername=  (legacy custom URL, 1 quota unit)
  */
+import { z } from 'zod'
 
+import { config } from '../config.ts'
 import { YoutubeChannelCacheStore } from '../db/index.ts'
 import { json } from './utils.ts'
-import { config } from '../config.ts'
-import { logger } from '@twirchat/shared/logger'
 
 const log = logger('youtube-resolve')
 
@@ -66,7 +67,7 @@ export const youtubeRoutes = {
       return json({ channelId })
     },
   },
-} as const
+}
 
 // ---------------------------------------------------------------------------
 
@@ -94,9 +95,9 @@ async function ytChannels(queryParam: string, apiKey: string): Promise<string | 
       })
       return null
     }
-    const data = (await res.json()) as {
-      items?: { id: string }[]
-    }
+    const data = z
+      .object({ items: z.array(z.object({ id: z.string() })).optional() })
+      .parse(await res.json())
     return data.items?.[0]?.id ?? null
   } catch (error) {
     log.error('YouTube channels API fetch failed', { error: String(error) })

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "version": "0.11.0-twirchat.2",
+  "repository": "https://github.com/remorses/gpuix.git",
+  "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+  "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+  "rustToolchain": "1.97.1",
+  "patches": [
+    {
+      "path": "patches/gpui-native-window-operations.patch",
+      "root": "gpui",
+      "sha256": "da8029e68a015618d7e103409a5c779eafa61c2a65dcfe6ba9ccfd74b0e00d6e"
+    },
+    {
+      "path": "patches/gpuix-window-lifecycle.patch",
+      "root": "gpuix",
+      "sha256": "b2614b56461b9310fa5708bd64c417c19ed2f833d01cf2ec408ae5b1b1a684d2"
+    }
+  ]
+}

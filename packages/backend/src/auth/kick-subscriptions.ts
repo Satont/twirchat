@@ -1,3 +1,4 @@
+import { z } from 'zod'
 /**
  * Kick Event Subscriptions
  *
@@ -20,12 +21,14 @@ const EVENT_TYPES = [
   'channel.subscription.new',
   'channel.subscription.renewal',
   'channel.subscription.gifts',
-] as const
+]
 
-interface SubscriptionResponse {
-  data?: { id: string; event_type: string; broadcaster_user_id: number }[]
-  error?: string
-}
+const subscriptionResponseSchema = z.object({
+  data: z
+    .array(z.object({ id: z.string(), event_type: z.string(), broadcaster_user_id: z.number() }))
+    .optional(),
+  error: z.string().optional(),
+})
 
 /**
  * Subscribe the authenticated user's channel to all relevant Kick webhook events.
@@ -60,7 +63,7 @@ export async function subscribeKickEvents(accessToken: string, clientId: string)
     throw new Error(`Kick event subscription failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as SubscriptionResponse
+  const data = subscriptionResponseSchema.parse(await res.json())
   const count = data.data?.length ?? 0
   console.log(`[Kick] Subscribed to ${count} event type(s) at ${WEBHOOK_URL}`)
 }

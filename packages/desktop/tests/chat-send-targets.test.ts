@@ -1,13 +1,16 @@
 import { expect, test } from 'bun:test'
+
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
+
 import {
   createChatMessageTargets,
   ownChatSendTargets,
 } from '../src/views/main/utils/chat-send-targets'
+import { literal } from './fixture-values'
 
 const homeTargets = [
-  { channelLogin: 'justovich221337', platform: 'twitch' as const },
-  { channelLogin: 'satont', platform: 'kick' as const },
+  { channelLogin: 'justovich221337', platform: literal('twitch') },
+  { channelLogin: 'satont', platform: literal('kick') },
 ]
 
 test('uses connected account channels as home composer targets, never watched channel statuses', () => {

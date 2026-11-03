@@ -12,7 +12,7 @@ This package contains the canonical contracts between desktop and backend: messa
 packages/shared/
 ├── index.ts          # Re-exports all public APIs
 ├── types.ts          # NormalizedChatMessage, NormalizedEvent, Account, AppSettings
-├── constants.ts      # OVERLAY_SERVER_PORT, KICK_PUSHER_WS, platform defaults
+├── constants.ts      # OVERLAY_SERVER_PORT, platform defaults
 ├── protocol.ts       # WebSocket message types (backend ↔ desktop)
 └── logger.ts         # Structured logging utility
 ```

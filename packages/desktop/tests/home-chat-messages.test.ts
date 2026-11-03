@@ -1,6 +1,9 @@
 import { expect, test } from 'bun:test'
+
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
-import * as chatTargets from '../src/views/main/utils/chat-send-targets'
+
+import { filterHomeChatMessages } from '../src/views/main/utils/chat-send-targets'
+import { required } from './fixture-values'
 
 const accounts: Account[] = [
   {
@@ -43,37 +46,124 @@ function message(
     text: id,
     type: 'message',
     emotes: [],
-    data: {},
     timestamp: new Date('2026-07-14T00:00:00.000Z'),
   }
 }
 
 test('keeps My channels scoped to the connected account channels', () => {
-  const filterHomeChatMessages = (chatTargets as unknown as Record<string, unknown>)[
-    'filterHomeChatMessages'
-  ]
-
-  expect(filterHomeChatMessages).toBeTypeOf('function')
-  if (typeof filterHomeChatMessages !== 'function') return
-
   const messages = [
     message('twitch-own', 'twitch', 'MYSTREAMER'),
     message('twitch-watched', 'twitch', 'another-streamer'),
     message('kick-own', 'kick', 'mykick'),
     message('kick-watched', 'kick', 'another-kick'),
   ]
-  const filter = filterHomeChatMessages as (
-    messages: readonly NormalizedChatMessage[],
-    accounts: readonly Account[],
-  ) => NormalizedChatMessage[]
 
-  expect(filter(messages, accounts).map((item) => item.id)).toEqual(['twitch-own', 'kick-own'])
+  expect(filterHomeChatMessages(messages, accounts).map((item) => item.id)).toEqual([
+    'twitch-own',
+    'kick-own',
+  ])
 })
 
-test('routes live messages and history through the My channels filter', async () => {
-  const source = await Bun.file(new URL('../src/gpuix/state/app.ts', import.meta.url)).text()
+test('keeps real Kick broadcaster IDs while excluding watched channels, even for the same sender', () => {
+  const kick = { ...required(accounts[1]), platformUserId: '3195252', username: 'satont' }
+  const own = message('kick-canonical-own', 'kick', '3195252')
+  own.author = {
+    id: '3195252',
+    username: 'satont',
+    displayName: 'Satont',
+    badges: [{ id: 'broadcaster', type: 'broadcaster', text: 'Broadcaster' }],
+  }
+  const elsewhere = { ...own, id: 'kick-watched', channelId: '999999' }
+  const foreignPlatform = message('twitch-same-id', 'twitch', '3195252')
+  expect(filterHomeChatMessages([own, elsewhere, foreignPlatform], [kick])).toEqual([own])
+})
 
-  expect(source).toContain('filterHomeChatMessages(incoming, accountsStore.get())')
-  expect(source).toContain('appendHomeMessages(recent)')
-  expect(source).toContain("events.on('chat_message'")
+test('coalesces live bursts per channel without overwriting an in-flight history snapshot', async () => {
+  const {
+    accountsStore,
+    appendHomeMessages,
+    chatActivityStore,
+    chatMessageRate,
+    homeMessagesStore,
+    watchedMessagesStore,
+    wireBackendToStores,
+  } = await import('../src/gpuix/state/app')
+  const { createDesktopEvents } = await import('../src/gpuix/backend/events')
+  const events = createDesktopEvents()
+  const previousAccounts = accountsStore.get()
+  const previousHome = homeMessagesStore.get()
+  const previousWatched = watchedMessagesStore.get()
+  const previousActivity = chatActivityStore.get()
+  accountsStore.set(accounts)
+  homeMessagesStore.set([])
+  watchedMessagesStore.set(new Map())
+  chatActivityStore.set(new Map())
+  let watchedPublications = 0
+  const unsubscribeWatched = watchedMessagesStore.subscribe(() => {
+    watchedPublications += 1
+  })
+  const stop = wireBackendToStores({
+    events,
+    api: {
+      getAccounts: async () => accounts,
+      getWatchedChannelMessages: async () => [],
+      getWatchedChannelStatuses: async () => [],
+    },
+  })
+  try {
+    const first = message('first-live', 'twitch', 'MyStreamer')
+    const second = message('second-live', 'twitch', 'MyStreamer')
+    second.timestamp = new Date('2026-07-14T00:00:01.000Z')
+    events.emit('chat_message', first)
+    events.emit('chat_message', second)
+    events.emit('chat_message', first)
+    events.emit('chat_message', message('foreign', 'twitch', 'other-channel'))
+    events.emit('watched_channel_message', { channelId: 'watched', message: first })
+    events.emit('watched_channel_message', { channelId: 'watched', message: second })
+    expect(homeMessagesStore.get()).toEqual([])
+    expect(watchedMessagesStore.get().size).toBe(0)
+
+    const history = message('history', 'kick', 'MyKick')
+    history.timestamp = new Date('2026-07-13T23:00:00.000Z')
+    appendHomeMessages([history])
+    await Bun.sleep(40)
+    expect(homeMessagesStore.get()).toEqual([history, first, second])
+    expect(watchedMessagesStore.get().get('watched')).toEqual([first, second])
+    expect(watchedPublications).toBe(1)
+    expect(chatActivityStore.get().get('home')?.total).toBe(2)
+    expect(chatActivityStore.get().get('watched')?.total).toBe(2)
+    expect(chatMessageRate(chatActivityStore.get().get('home'))).toBe(0.2)
+
+    for (let index = 0; index < 250; index += 1) {
+      const incoming = message(`burst-${index}`, 'twitch', 'MyStreamer')
+      incoming.timestamp = new Date(Date.parse('2026-07-14T00:00:02.000Z') + index)
+      events.emit('watched_channel_message', { channelId: 'watched', message: incoming })
+    }
+    await Bun.sleep(40)
+    expect(watchedMessagesStore.get().get('watched')?.length).toBe(200)
+    expect(chatActivityStore.get().get('watched')?.total).toBe(252)
+
+    const retained = watchedMessagesStore.get()
+    const activity = chatActivityStore.get()
+    events.emit('watched_channel_message', {
+      channelId: 'watched',
+      message: required(required(watchedMessagesStore.get().get('watched'))[199]),
+    })
+    await Bun.sleep(40)
+    expect(watchedMessagesStore.get()).toBe(retained)
+    expect(watchedPublications).toBe(2)
+    expect(chatActivityStore.get()).toBe(activity)
+    expect(chatMessageRate(activity.get('home'), Date.now() + 11_000)).toBe(0)
+    stop()
+    events.emit('chat_message', message('after-stop', 'kick', 'MyKick'))
+    await Bun.sleep(25)
+    expect(homeMessagesStore.get()).toEqual([history, first, second])
+  } finally {
+    stop()
+    unsubscribeWatched()
+    accountsStore.set(previousAccounts)
+    homeMessagesStore.set(previousHome)
+    watchedMessagesStore.set(previousWatched)
+    chatActivityStore.set(previousActivity)
+  }
 })

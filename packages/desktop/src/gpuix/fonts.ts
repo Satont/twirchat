@@ -8,12 +8,17 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { resolveOverlayRuntimePaths } from '../overlay-server'
 import { logger } from '@twirchat/shared/logger'
+
+import { resolveOverlayRuntimePaths } from '../overlay-server'
 
 const log = logger('fonts')
 
 const FONT_FILES = ['InterVariable.ttf', join('manrope', 'Manrope-VariableFont_wght.ttf')]
+
+declare global {
+  var __twirchatFontRenderers: WeakSet<object> | undefined
+}
 
 interface FontRenderer {
   registerFont?: (data: Buffer) => void
@@ -25,9 +30,9 @@ interface FontRenderer {
  * layout: a family missing at first layout has already fallen back.
  */
 export function registerBundledFonts(renderer: FontRenderer): void {
-  const g = globalThis as { __twirchatFontsRegistered?: boolean }
-  if (g.__twirchatFontsRegistered || !renderer.registerFont) return
-  g.__twirchatFontsRegistered = true
+  const registered = (globalThis.__twirchatFontRenderers ??= new WeakSet())
+  if (registered.has(renderer) || !renderer.registerFont) return
+  registered.add(renderer)
 
   const { fontsDir } = resolveOverlayRuntimePaths(join(import.meta.dir, '..'))
   if (!fontsDir) {

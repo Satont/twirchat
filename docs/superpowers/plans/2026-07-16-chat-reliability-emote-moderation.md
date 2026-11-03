@@ -83,6 +83,7 @@ Create `packages/desktop/tests/chat-appearance-settings.test.ts` with:
 
 ```ts
 import { expect, test } from 'bun:test'
+
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 
 test('defaults the chat label and session emote cache on', () => {
@@ -200,6 +201,7 @@ Create `chat-scroll.test.ts`:
 
 ```ts
 import { expect, test } from 'bun:test'
+
 import { isNearChatBottom } from '../src/views/main/utils/chat-scroll'
 
 test('only treats the final 64 pixels as the chat bottom', () => {
@@ -212,6 +214,7 @@ Create `chat-textarea.test.ts`:
 
 ```ts
 import { expect, test } from 'bun:test'
+
 import { nextTextareaHeight } from '../src/views/main/utils/chat-textarea'
 
 test('preserves a one-line minimum and caps growth at 120 pixels', () => {

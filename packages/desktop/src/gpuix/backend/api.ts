@@ -1,27 +1,9 @@
-/**
- * GPUIX backend bridge — request API.
- *
- * Mirrors the Wails gateway contract (`LegacyRequestMap` in
- * src/views/main/services/desktop-api.ts) method-for-method, but executes
- * in-process against the TypeScript stores / adapters / managers.
- *
- * Semantics are ported from the Electrobun main process (src/bun/index.ts)
- * and the Go bridge handlers (internal/bridge/*.go) for the methods that
- * only exist in the Wails stack (moderation, chatters, avatar resolution).
- */
-
-import type {
-  Account,
-  AppSettings,
-  LayoutNode,
-  NormalizedChatMessage,
-  PanelNode,
-  Platform,
-  PlatformStatusInfo,
-  SplitDirection,
-  WatchedChannel,
-  WatchedChannelsLayout,
-} from '@twirchat/shared/types'
+import {
+  PLATFORM_COMMAND_NAMES,
+  type PlatformCommandResult,
+  type RoomState,
+} from '@twirchat/shared/channel-tools'
+import { logger } from '@twirchat/shared/logger'
 import type {
   ChannelStatusRequest,
   ChannelsStatusResponse,
@@ -33,21 +15,38 @@ import type {
   UserCardMetadataRequest,
   UserCardMetadataResponse,
 } from '@twirchat/shared/protocol'
-import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
-import { logger } from '@twirchat/shared/logger'
-import { getDb } from '../../store/db'
-import {
-  AccountStore,
-  ChannelStore,
-  MessageStore,
-  SettingsStore,
-  UsernameColorCache,
-} from '../../store'
-import { UserAliasStore } from '../../store/user-alias-store'
-import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
-import { backendFetch } from '../../runtime-config'
-import { APP_VERSION } from '../../build-info'
-import { createUpdater } from './updater'
+import type {
+  TwitchActivitiesSnapshot,
+  TwitchActivityAction,
+  TwitchRedemptionsPage,
+  TwitchFollowingPage,
+  TwitchWebSessionStatus,
+} from '@twirchat/shared/twitch-activities'
+/** UI request boundary; stores, credentials and platform adapters stay backend-owned. */
+import type {
+  TwitchActivitySnapshotPart,
+  TwitchActivityCapability,
+  TwitchRewardQueueSummary,
+} from '@twirchat/shared/twitch-activities'
+import type {
+  Account,
+  ChatSendReceipt,
+  AppSettings,
+  LayoutNode,
+  NormalizedChatMessage,
+  Platform,
+  PlatformStatusInfo,
+  SplitDirection,
+  WatchedChannel,
+  WatchedChannelsLayout,
+} from '@twirchat/shared/types'
+import type {
+  ModerationSettings,
+  UserProfileRequest,
+  UserProfileSnapshot,
+} from '@twirchat/shared/user-profile'
+import { z } from 'zod'
+
 import {
   getKickAuthUrl,
   getTwitchAuthUrl,
@@ -56,14 +55,94 @@ import {
   prepareTwitchAuth,
   prepareYouTubeAuth,
 } from '../../auth'
-import type { ChatAggregator } from '../../chat/aggregator'
 import type { BackendConnection } from '../../backend-connection'
-import type { WatchedChannelManager } from '../../watched-channels/manager'
+import { APP_VERSION } from '../../build-info'
+import type { ChatAggregator } from '../../chat/aggregator'
+import { KickAdapter } from '../../platforms/kick/adapter'
+import { backendFetch } from '../../runtime-config'
+import type { AccountSessions } from '../../services/account-sessions'
+import type { ChannelActions, PlayerSettings } from '../../services/channel-actions'
+import {
+  getUserCosmetics,
+  getPaintNameImage,
+  type UserCosmetics,
+  type CosmeticPaint,
+} from '../../services/cosmetics'
+import { getProviderErrors } from '../../services/emote-providers'
+import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
+import { createSnapshotRequests } from '../../services/snapshot-requests'
+import type {
+  StreamerMode,
+  StreamerModeService,
+  StreamerModeSettings,
+  StreamerModeStatus,
+} from '../../services/streamer-mode'
+import { systemIntegration } from '../../services/system-integration'
+import type { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
+import type { TwitchEventSubClient } from '../../services/twitch-eventsub'
 import { sevenTVService } from '../../seventv'
-import type { KickAdapter } from '../../platforms/kick/adapter'
+import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
+import {
+  AccountStore,
+  ChannelStore,
+  MessageStore,
+  SettingsStore,
+  UsernameColorCache,
+} from '../../store'
+import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
+import { UserAliasStore } from '../../store/user-alias-store'
+import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
+import type { WatchedChannelManager } from '../../watched-channels/manager'
+import {
+  twitchActivitiesSnapshotSchema,
+  twitchRewardQueueSummarySchema,
+  twitchRedemptionsPageSchema,
+  twitchFollowingPageSchema,
+  twitchWebSessionSchema,
+  platformCommandResultSchema,
+  roomStateSchema,
+  streamStatusResponseSchema,
+  updateStreamResponseSchema,
+  searchCategoriesResponseSchema,
+  channelsStatusResponseSchema,
+  userProfileSnapshotSchema,
+  userCardMetadataResponseSchema,
+  twitchChattersSchema,
+  kickChatroomSchema,
+  kickChattersSchema,
+} from './api-schemas'
+import {
+  getChatHistory as readChatHistory,
+  getChatLoggingSettings as readChatLoggingSettings,
+  saveChatLoggingSettings as writeChatLoggingSettings,
+  exportChatHistory as writeChatHistoryExport,
+  getChatLoggingStatus as readChatLoggingStatus,
+  flushChatLogs as flushRecordedChatLogs,
+  type ChatHistoryQuery,
+  type ChatLoggingSettings,
+} from './chat-history'
 import type { DesktopEvents } from './events'
+import { createLayoutApi } from './layout-api'
+import { createStreamerModeApi } from './streamer-mode-api'
+import * as translation from './translation'
+import type {
+  TranslationSettings,
+  TranslationSettingsView,
+  TranslationProvider,
+  TranslationRequest,
+  TranslationResult,
+  TranslationLanguage,
+} from './translation'
+import { createUpdater } from './updater'
+import {
+  getUserNotes,
+  setUserNotes,
+  getModerationSettings,
+  saveModerationSettings,
+} from './user-preferences'
 
 const log = logger('gpuix-backend')
+const platformCommands = new Set<string>(PLATFORM_COMMAND_NAMES)
 
 export interface UserAlias {
   platform: Platform
@@ -102,9 +181,78 @@ export interface ChannelChatters {
   error?: string
 }
 
-/** Functionalty-equivalent to the Wails `DesktopApi.request` surface. */
 export interface DesktopApi {
+  getStreamerMode(): Promise<StreamerModeStatus>
+  setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
+  getStreamerModeSettings(): Promise<StreamerModeSettings>
+  setStreamerModeSettings(params: { settings: StreamerModeSettings }): Promise<StreamerModeStatus>
+  reconnectChat(params: { watchedChannelId?: string; platform?: Platform }): Promise<void>
+  reloadChatEmotes(params: {
+    platform: Platform
+    channelSlug: string
+    kind?: 'channel' | 'subscriber'
+  }): Promise<void>
+  openChannelPlayer(params: {
+    platform: Platform
+    channelSlug: string
+    mode: 'browser' | 'custom' | 'streamlink'
+  }): Promise<void>
+  getPlayerSettings(): Promise<PlayerSettings>
+  savePlayerSettings(params: { settings: PlayerSettings }): Promise<void>
+  setProviderActiveChannel(
+    params: { platform: Platform; channelId: string; channelSlug?: string } | null,
+  ): Promise<void>
+  getTranslationSettings(): Promise<TranslationSettingsView>
+  saveTranslationSettings(settings: TranslationSettings): Promise<TranslationSettingsView>
+  setTranslationCredential(params: {
+    provider: TranslationProvider
+    key: string
+  }): Promise<TranslationSettingsView>
+  removeTranslationCredential(params: {
+    provider: TranslationProvider
+  }): Promise<TranslationSettingsView>
+  translateText(request: TranslationRequest): Promise<TranslationResult>
+  getTranslationLanguages(params?: {
+    provider?: TranslationProvider
+  }): Promise<TranslationLanguage[]>
+  getChatHistory(query: ChatHistoryQuery): Promise<UserChatHistoryPage>
+  getChatLoggingSettings(): Promise<ChatLoggingSettings>
+  saveChatLoggingSettings(settings: ChatLoggingSettings): Promise<void>
+  exportChatHistory(params: {
+    query: ChatHistoryQuery
+    path: string
+  }): Promise<{ path: string; count: number }>
+  getChatLoggingStatus(): Promise<{ error: string | null; queued: number }>
+  flushChatLogs(): Promise<void>
+  getTwitchActivities(params: {
+    channelSlug: string
+    sections?: TwitchActivitySnapshotPart[]
+  }): Promise<TwitchActivitiesSnapshot>
+  getTwitchActivityCapability(params: { channelSlug: string }): Promise<TwitchActivityCapability>
+  getTwitchRewardQueueSummary(params: { channelSlug: string }): Promise<TwitchRewardQueueSummary>
+  executeTwitchActivityAction(params: TwitchActivityAction): Promise<{ message?: string }>
+  getTwitchRewardRedemptions(params: {
+    channelSlug: string
+    rewardId?: string
+    status?: string
+    cursor?: string
+    order?: 'NEWEST' | 'OLDEST'
+  }): Promise<TwitchRedemptionsPage>
+  getTwitchFollowing(params?: { liveOnly?: boolean; cursor?: string }): Promise<TwitchFollowingPage>
+  setTwitchWebSession(params: { token: string }): Promise<TwitchWebSessionStatus>
+  getTwitchWebSessionStatus(): Promise<TwitchWebSessionStatus>
+  clearTwitchWebSession(): Promise<void>
+  watchTwitchActivities(params: { channelSlug: string; watch: boolean }): Promise<void>
+  executePlatformCommand(params: {
+    platform: Platform
+    channelSlug: string
+    text: string
+  }): Promise<PlatformCommandResult>
+  getChannelRoomState(params: { platform: Platform; channelSlug: string }): Promise<RoomState>
   getAccounts(): Promise<Account[]>
+  getSavedAccounts(): Promise<Account[]>
+  setActiveAccount(params: { platform: Platform; accountId: string | null }): Promise<void>
+  forgetAccount(params: { accountId: string }): Promise<void>
   getSettings(): Promise<AppSettings>
   saveSettings(params: AppSettings): Promise<void>
   getUserAliases(): Promise<UserAlias[]>
@@ -120,7 +268,7 @@ export interface DesktopApi {
     channelId: string
     text: string
     replyToMessageId?: string
-  }): Promise<void>
+  }): Promise<void | ChatSendReceipt>
   resolveAvatar(params: {
     platform: ModerationPlatform
     authorId: string
@@ -156,9 +304,26 @@ export interface DesktopApi {
     cursor?: UserChatHistoryCursor
   }): Promise<UserChatHistoryPage>
   getUserCardMetadata(params: UserCardMetadataRequest): Promise<UserCardMetadataResponse>
+  getUserProfile(params: UserProfileRequest): Promise<UserProfileSnapshot>
+  getUserNotes(params: { platform: Platform; platformUserId: string }): Promise<string>
+  setUserNotes(params: { platform: Platform; platformUserId: string; text: string }): Promise<void>
+  getModerationSettings(): Promise<ModerationSettings>
+  saveModerationSettings(settings: ModerationSettings): Promise<void>
   getStatuses(): Promise<PlatformStatusInfo[]>
   getUsernameColor(params: { platform: Platform; username: string }): Promise<string | null>
   getChannelEmotes(params: { platform: Platform; channelId: string }): Promise<EmoteCatalogEntry[]>
+  getEmoteProviderErrors(): Promise<Array<{ url: string; error: string }>>
+  getUserCosmetics(params: {
+    platform: Platform
+    platformUserId: string
+    username?: string
+  }): Promise<UserCosmetics | null>
+  getPaintNameImage(params: {
+    name: string
+    paint: CosmeticPaint
+    fontSize?: number
+    fontFamily?: string
+  }): Promise<{ path: string; width: number; height: number }>
   /** Velopack updater; dev/unpackaged builds always report "no update". */
   getAppVersion(): Promise<string>
   checkForUpdate(): Promise<{ updateAvailable: boolean; version?: string; currentVersion: string }>
@@ -166,6 +331,7 @@ export interface DesktopApi {
   applyUpdate(): Promise<void>
   skipUpdate(params: { hash: string }): Promise<void>
   getWatchedChannels(): Promise<WatchedChannel[]>
+  setActiveWatchedChannels(params: { ids: string[] }): Promise<void>
   addWatchedChannel(params: {
     platform: 'twitch' | 'kick' | 'youtube'
     channelSlug: string
@@ -176,7 +342,7 @@ export interface DesktopApi {
     id: string
     text: string
     replyToMessageId?: string
-  }): Promise<void>
+  }): Promise<void | ChatSendReceipt>
   getWatchedChannelStatuses(): Promise<Array<{ channelId: string; status: PlatformStatusInfo }>>
   getChatters(params: { targets: ChattersTarget[] }): Promise<{ results: ChannelChatters[] }>
   openExternalUrl(params: { url: string }): Promise<void>
@@ -185,10 +351,19 @@ export interface DesktopApi {
   setUiState(params: { key: string; value: string }): Promise<void>
   /** GPUIX-only: write to the system clipboard (GPUIX exposes no clipboard API). */
   copyText(params: { text: string }): Promise<void>
+  readClipboard(): Promise<string>
+  notify(params: {
+    title: string
+    body: string
+    sound?: boolean
+    soundPath?: string
+    silent?: boolean
+  }): Promise<void>
   getTabChannelIds(): Promise<string[] | null>
   setTabChannelIds(params: { ids: string[] }): Promise<void>
   getWatchedChannelsLayout(params: { tabId: string }): Promise<WatchedChannelsLayout | null>
   setWatchedChannelsLayout(params: { tabId: string; layout: WatchedChannelsLayout }): Promise<void>
+  removeWatchedChannelsLayout(params: { tabId: string }): Promise<void>
   removePanel(params: { tabId: string; panelId: string }): Promise<void>
   assignChannelToPanel(params: {
     tabId: string
@@ -203,6 +378,12 @@ export interface DesktopApi {
 }
 
 export interface DesktopApiContext {
+  streamerMode?: StreamerModeService
+  channelActions?: ChannelActions
+  accountSessions?: AccountSessions
+  providerRuntime?: ProviderRuntime
+  twitchActivityRefresh?: TwitchActivityRefreshClient
+  twitchEventSub?: TwitchEventSubClient
   aggregator: ChatAggregator
   backendConn: BackendConnection
   watchedChannelManager: WatchedChannelManager
@@ -211,7 +392,67 @@ export interface DesktopApiContext {
   openBrowser: (url: string) => void
 }
 
-const MAX_PANELS = 8
+const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
+
+async function prepareTwitchActivitiesRequest(
+  operation: string,
+  params: Record<string, unknown> = {},
+) {
+  let credentials: Record<string, unknown> = {}
+  let selectedAccountId: string | null = null
+  const checkIdentity = () => {
+    if (selectedAccountId && AccountStore.findByPlatform('twitch')?.id !== selectedAccountId)
+      throw new Error(
+        'The active Twitch account changed. Retry this action in the selected account.',
+      )
+  }
+  if (operation !== 'validate_session') {
+    const account = AccountStore.findByPlatform('twitch')
+    const tokens = account ? AccountStore.getTokens(account.id) : null
+    if (!account || !tokens?.accessToken)
+      throw new Error('Connect your Twitch account on the Platforms tab first.')
+    selectedAccountId = account.id
+    credentials = {
+      accessToken: tokens.accessToken,
+      platformUserId: account.platformUserId,
+      scopes: account.scopes,
+      webSession: await TwitchWebSessionStore.get(),
+    }
+  }
+  const run = async (): Promise<unknown> => {
+    checkIdentity()
+    const response = await backendFetch('/api/twitch/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...credentials, ...params, operation }),
+    })
+    if (!response.ok) throw await backendFailure('Twitch activity failed', response)
+    const result: unknown = await response.json()
+    checkIdentity()
+    return result
+  }
+  const key = `${credentials.platformUserId}:${String(params.channelSlug).toLowerCase()}:${credentials.webSession ? 'web' : 'oauth'}`
+  return { key, run }
+}
+
+export async function twitchActivitiesRequest<T>(
+  operation: string,
+  params: Record<string, unknown>,
+  responseSchema: z.ZodType<T>,
+): Promise<T> {
+  const request = await prepareTwitchActivitiesRequest(operation, params)
+  return responseSchema.parse(await request.run())
+}
+
+export async function requestTwitchActivitiesSnapshot(params: {
+  channelSlug: string
+  sections?: TwitchActivitySnapshotPart[]
+}): Promise<TwitchActivitiesSnapshot> {
+  const request = await prepareTwitchActivitiesRequest('snapshot', params)
+  return activitySnapshots.request(request.key, params.sections, async () =>
+    twitchActivitiesSnapshotSchema.parse(await request.run()),
+  )
+}
 
 // ── Avatar resolution (port of internal/avatar/resolver.go) ────────────────
 
@@ -251,7 +492,9 @@ async function resolveAvatarRemote(params: {
         `/api/twitch/user?userId=${encodeURIComponent(params.authorId)}`,
       )
       if (res.ok) {
-        const data = (await res.json()) as { user?: { profile_image_url?: string } }
+        const data = z
+          .object({ user: z.object({ profile_image_url: z.string().optional() }).optional() })
+          .parse(await res.json())
         avatarUrl = data.user?.profile_image_url?.trim() ?? ''
       }
     } else {
@@ -259,7 +502,7 @@ async function resolveAvatarRemote(params: {
       if (slug) {
         const res = await backendFetch(`/api/kick/chatroom?slug=${encodeURIComponent(slug)}`)
         if (res.ok) {
-          const data = (await res.json()) as { avatarUrl?: string }
+          const data = kickChatroomSchema.parse(await res.json())
           avatarUrl = data.avatarUrl?.trim() ?? ''
         }
       }
@@ -301,7 +544,7 @@ async function resolveAvatarRemote(params: {
 async function backendFailure(action: string, res: Response): Promise<Error> {
   let detail = ''
   try {
-    const body = (await res.json()) as { error?: unknown }
+    const body = z.object({ error: z.string().optional() }).parse(await res.json())
     if (body?.error) detail = String(body.error).replace(/^Error:\s*/, '')
   } catch {
     // Non-JSON body — fall back to the status code.
@@ -341,16 +584,6 @@ async function moderationBody(platform: ModerationPlatform, channelSlug: string)
 
 const KICK_ACTIVE_CHATTERS_URL = 'https://web.kick.com/api/v1/channels'
 
-interface TwitchChattersResponse {
-  broadcasterId?: string
-  chatters?: Array<{
-    userId?: string
-    userLogin?: string
-    userName?: string
-    avatarUrl?: string
-  }>
-}
-
 async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters> {
   const account = AccountStore.findByPlatform('twitch')
   const tokens = account ? AccountStore.getTokens(account.id) : null
@@ -374,7 +607,7 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
     if (res.status === 404) throw new Error('Channel not found on Twitch.')
     throw new Error('Twitch chatters are currently unavailable.')
   }
-  const data = (await res.json()) as TwitchChattersResponse
+  const data = twitchChattersSchema.parse(await res.json())
 
   const broadcaster: ChatterGroup = { role: 'broadcaster', users: [] }
   const chatters: ChatterGroup = { role: 'chatters', users: [] }
@@ -402,17 +635,11 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
   }
 }
 
-interface KickChatter {
-  slug?: string
-  username?: string
-  profilePicture?: string
-}
-
 async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> {
   // 1. Resolve the broadcaster id via the backend chatroom proxy.
   const roomRes = await backendFetch(`/api/kick/chatroom?slug=${encodeURIComponent(channelSlug)}`)
   if (!roomRes.ok) throw new Error('Kick chatters are currently unavailable.')
-  const room = (await roomRes.json()) as { broadcasterUserId?: number; chatroomId?: number }
+  const room = kickChatroomSchema.parse(await roomRes.json())
   const broadcasterId = room.broadcasterUserId ?? 0
   if (broadcasterId <= 0) throw new Error('Kick chatters are currently unavailable.')
 
@@ -429,15 +656,7 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
     },
   })
   if (!res.ok) throw new Error('Kick chatters are currently unavailable.')
-  const body = (await res.json()) as {
-    data?: {
-      moderators?: KickChatter[]
-      vips?: KickChatter[]
-      ogs?: KickChatter[]
-      bots?: KickChatter[]
-      chatters?: KickChatter[]
-    }
-  }
+  const body = kickChattersSchema.parse(await res.json())
   const data = body.data
   if (!data) throw new Error('Kick chatters are currently unavailable.')
 
@@ -466,42 +685,6 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
   return { platform: 'kick', channelSlug, total, groups }
 }
 
-// ── Layout tree surgery (ported from src/bun/index.ts) ─────────────────────
-
-function findNodeById(node: LayoutNode, id: string): PanelNode | null {
-  if (node.type === 'panel' && node.id === id) return node
-  if (node.type === 'split') {
-    for (const child of node.children) {
-      const found = findNodeById(child, id)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-function findParentOfNode(
-  root: LayoutNode,
-  nodeId: string,
-): { node: LayoutNode; children: LayoutNode[] } | null {
-  if (root.type === 'split') {
-    for (let i = 0; i < root.children.length; i++) {
-      const child = root.children[i]
-      if (!child) continue
-      if (child.id === nodeId) {
-        return { node: root, children: root.children }
-      }
-      const found = findParentOfNode(child, nodeId)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-function countPanels(node: LayoutNode): number {
-  if (node.type === 'panel') return 1
-  return node.children.reduce((sum, child) => sum + countPanels(child), 0)
-}
-
 // ── API factory ─────────────────────────────────────────────────────────────
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
@@ -519,13 +702,20 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     let sevenTvChannelId = channelSlug
     let sevenTvPlatformUserId: string | undefined
     if (platform === 'kick') {
-      const broadcasterUserId = (adapter as KickAdapter).getBroadcasterUserId()
+      const broadcasterUserId =
+        adapter instanceof KickAdapter ? adapter.getBroadcasterUserId() : undefined
       if (broadcasterUserId) sevenTvChannelId = String(broadcasterUserId)
     } else if (platform === 'twitch') {
       sevenTvPlatformUserId = getSevenTvTwitchPlatformUserId(channelSlug)
     }
     sevenTVService
-      .subscribeToChannel(platform, sevenTvChannelId, [channelSlug], sevenTvPlatformUserId)
+      .subscribeToChannel(
+        platform,
+        sevenTvChannelId,
+        [channelSlug],
+        sevenTvPlatformUserId,
+        `own:${platform}`,
+      )
       .catch((error) => {
         log.error('Failed to subscribe to 7TV', {
           platform,
@@ -536,7 +726,97 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   }
 
   return {
-    getAccounts: async () => AccountStore.findAll(),
+    getTwitchActivities: async (params) => {
+      const snapshot = await requestTwitchActivitiesSnapshot(params)
+      ctx.twitchActivityRefresh?.observeSnapshot(snapshot)
+      return snapshot
+    },
+    getTwitchRewardQueueSummary: (params) =>
+      twitchActivitiesRequest('reward_queue_summary', params, twitchRewardQueueSummarySchema),
+    getTwitchActivityCapability: async ({ channelSlug }) => {
+      if (!ctx.twitchActivityRefresh) throw new Error('Twitch activities are not initialized.')
+      return ctx.twitchActivityRefresh.capability(channelSlug)
+    },
+    executeTwitchActivityAction: (action) =>
+      twitchActivitiesRequest('action', { action }, platformCommandResultSchema),
+    getTwitchRewardRedemptions: (params) =>
+      twitchActivitiesRequest('redemptions', params, twitchRedemptionsPageSchema),
+    getTwitchFollowing: (params = {}) =>
+      twitchActivitiesRequest('following', params, twitchFollowingPageSchema),
+    getTwitchWebSessionStatus: () => TwitchWebSessionStore.status(),
+    setTwitchWebSession: async ({ token }) => {
+      const session = await twitchActivitiesRequest(
+        'validate_session',
+        { token },
+        twitchWebSessionSchema,
+      )
+      const account = AccountStore.findByPlatform('twitch')
+      if (account && account.platformUserId !== session.userId)
+        throw new Error('Use a web session belonging to your connected Twitch account.')
+      await TwitchWebSessionStore.set(session)
+      ctx.twitchActivityRefresh?.restart()
+      return TwitchWebSessionStore.status()
+    },
+    clearTwitchWebSession: async () => {
+      await TwitchWebSessionStore.clear()
+      ctx.twitchActivityRefresh?.restart()
+    },
+    watchTwitchActivities: async ({ channelSlug, watch }) => {
+      if (!ctx.twitchEventSub) throw new Error('Twitch events are not initialized.')
+      void ctx.twitchEventSub.watch(channelSlug, watch).catch(() =>
+        ctx.events.emit('twitch_eventsub_status', {
+          status: 'error',
+          message: 'Could not update Twitch event subscriptions.',
+        }),
+      )
+      await ctx.twitchActivityRefresh?.watch(channelSlug, watch)
+    },
+    ...createStreamerModeApi(ctx.streamerMode),
+    reconnectChat: async (params) => {
+      if (!ctx.channelActions) throw new Error('Chat reconnection is unavailable.')
+      return ctx.channelActions.reconnectChat(params)
+    },
+    reloadChatEmotes: async (params) => {
+      if (!ctx.channelActions) throw new Error('Emote reload is unavailable.')
+      return ctx.channelActions.reloadChatEmotes(params)
+    },
+    openChannelPlayer: async (params) => {
+      if (!ctx.channelActions) throw new Error('Channel players are unavailable.')
+      return ctx.channelActions.openChannelPlayer(params)
+    },
+    getPlayerSettings: async () => {
+      if (!ctx.channelActions) throw new Error('Player settings are unavailable.')
+      return ctx.channelActions.getPlayerSettings()
+    },
+    savePlayerSettings: async ({ settings }) => {
+      if (!ctx.channelActions) throw new Error('Player settings are unavailable.')
+      return ctx.channelActions.savePlayerSettings(settings)
+    },
+    getAccounts: async () => AccountStore.findAllActive(),
+    getSavedAccounts: async () => AccountStore.findAllSaved(),
+    setActiveAccount: async ({ platform, accountId }) => {
+      if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
+      await ctx.accountSessions.select(platform, accountId)
+    },
+    forgetAccount: async ({ accountId }) => {
+      if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
+      await ctx.accountSessions.forget(accountId)
+    },
+    setProviderActiveChannel: async (params) => {
+      ctx.providerRuntime?.setActiveChannel(params)
+    },
+    getTranslationSettings: translation.getTranslationSettings,
+    saveTranslationSettings: translation.saveTranslationSettings,
+    setTranslationCredential: translation.setTranslationCredential,
+    removeTranslationCredential: translation.removeTranslationCredential,
+    translateText: translation.translateText,
+    getTranslationLanguages: translation.getTranslationLanguages,
+    getChatHistory: (query) => readChatHistory(query),
+    getChatLoggingSettings: () => readChatLoggingSettings(),
+    saveChatLoggingSettings: (settings) => writeChatLoggingSettings(settings),
+    exportChatHistory: (params) => writeChatHistoryExport(params),
+    getChatLoggingStatus: () => readChatLoggingStatus(),
+    flushChatLogs: () => flushRecordedChatLogs(),
 
     getSettings: async () => SettingsStore.get(),
 
@@ -579,14 +859,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     authLogout: async ({ platform }) => {
-      backendConn.send({ type: 'auth_logout', platform })
-      AccountStore.deleteByPlatform(platform)
-      void watchedChannelManager.reconnectByPlatform(platform).catch((err) => {
-        log.error('Failed to reconnect watched channels after logout', {
-          platform,
-          error: String(err),
-        })
-      })
+      if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
+      await ctx.accountSessions.select(platform, null)
     },
 
     joinChannel: async ({ platform, channelSlug }) => {
@@ -596,6 +870,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         return
       }
       ChannelStore.save(platform, channelSlug)
+      ctx.providerRuntime?.setJoined(`own:${platform}`, platform, channelSlug)
       adapter
         .connect(channelSlug)
         .then(() => subscribeSevenTv(platform, channelSlug, adapter))
@@ -608,24 +883,65 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) return
       ChannelStore.remove(platform, channelSlug)
-      sevenTVService.unsubscribeFromChannel(platform, channelSlug).catch((err) => {
-        log.error('Failed to unsubscribe from 7TV', { platform, channelSlug, error: String(err) })
-      })
+      ctx.providerRuntime?.setJoined(`own:${platform}`, platform, null)
+      sevenTVService
+        .unsubscribeFromChannel(platform, channelSlug, `own:${platform}`)
+        .catch((err) => {
+          log.error('Failed to unsubscribe from 7TV', { platform, channelSlug, error: String(err) })
+        })
       adapter.disconnect().catch((err) => {
         log.error('Failed to disconnect', { platform, error: String(err) })
       })
     },
 
     sendMessage: async ({ platform, channelId, text, replyToMessageId }) => {
+      const command = text
+        .trim()
+        .match(/^\/([a-z]+)/i)?.[1]
+        ?.toLowerCase()
+      if (command && platformCommands.has(command)) {
+        throw new Error('Use the platform command handler for slash commands.')
+      }
       const adapter = aggregator.getAdapter(platform)
-      if (!adapter) return
-      await adapter.sendMessage(channelId, text, replyToMessageId).catch((err) => {
+      if (!adapter) throw new Error(`No ${platform} chat adapter is connected.`)
+      return adapter.sendMessage(channelId, text, replyToMessageId).catch((err) => {
         log.error('Failed to send message', { platform, error: String(err) })
         throw err
       })
     },
 
     resolveAvatar: async (params) => resolveAvatarRemote(params),
+
+    executePlatformCommand: async ({ platform, channelSlug, text }) => {
+      if (platform !== 'twitch' && platform !== 'kick')
+        throw new Error(`Platform commands are unavailable for ${platform}.`)
+      const body = await moderationBody(platform, channelSlug)
+      const res = await backendFetch('/api/chat-tools/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, text }),
+      })
+      if (!res.ok) throw await backendFailure('Platform command failed', res)
+      return platformCommandResultSchema.parse(await res.json())
+    },
+
+    getChannelRoomState: async ({ platform, channelSlug }) => {
+      const own = aggregator.getAdapter(platform)?.getRoomState?.()
+      const current =
+        own?.channelId === channelSlug.toLowerCase()
+          ? own
+          : watchedChannelManager.getRoomState(platform, channelSlug)
+      if (current) return current
+      if (platform !== 'twitch') throw new Error(`Room settings are unavailable for ${platform}.`)
+      const body = await moderationBody(platform, channelSlug)
+      const res = await backendFetch('/api/chat-tools/room-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw await backendFailure('Could not load chat settings', res)
+      return roomStateSchema.parse(await res.json())
+    },
 
     getModerationCapabilities: async ({ platform, channelSlug }) => {
       const body = await moderationBody(platform, channelSlug)
@@ -635,7 +951,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify(body),
       })
       if (!res.ok) throw await backendFailure("Couldn't check moderation permissions", res)
-      return (await res.json()) as { canModerate: boolean }
+      return z.object({ canModerate: z.boolean() }).parse(await res.json())
     },
 
     moderateMessage: async (params) => {
@@ -652,7 +968,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         }),
       })
       if (!res.ok) throw await backendFailure('Moderation action failed', res)
-      const result = (await res.json()) as { success: boolean; error?: { message?: string } }
+      const result = z
+        .object({
+          success: z.boolean(),
+          error: z.object({ message: z.string().optional() }).optional(),
+        })
+        .parse(await res.json())
       if (!result.success) {
         throw new Error(result.error?.message || 'moderation action was rejected')
       }
@@ -664,7 +985,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         `/api/stream-status?platform=${platform}&channelId=${encodeURIComponent(channelId)}`,
       )
       if (!res.ok) throw await backendFailure("Couldn't load stream info", res)
-      return (await res.json()) as StreamStatusResponse
+      return streamStatusResponseSchema.parse(await res.json())
     },
 
     updateStream: async (params) => {
@@ -680,7 +1001,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify(body),
       })
       if (!res.ok) throw await backendFailure("Couldn't update the stream", res)
-      return (await res.json()) as UpdateStreamResponse
+      return updateStreamResponseSchema.parse(await res.json())
     },
 
     searchCategories: async ({ platform, query }) => {
@@ -688,12 +1009,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         `/api/search-categories?platform=${platform}&query=${encodeURIComponent(query)}`,
       )
       if (!res.ok) throw await backendFailure('Category search failed', res)
-      return (await res.json()) as SearchCategoriesResponse
+      return searchCategoriesResponseSchema.parse(await res.json())
     },
 
     getChannelsStatus: async ({ channels }) => {
       const enriched = channels.map((ch) => {
-        const account = AccountStore.findByPlatform(ch.platform as Platform)
+        const account = AccountStore.findByPlatform(ch.platform)
         if (account) {
           const tokens = AccountStore.getTokens(account.id)
           if (tokens?.accessToken) {
@@ -709,7 +1030,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify({ channels: enriched }),
       })
       if (!res.ok) throw await backendFailure("Couldn't load channel status", res)
-      return (await res.json()) as ChannelsStatusResponse
+      return channelsStatusResponseSchema.parse(await res.json())
     },
 
     getRecentMessages: async (params) => {
@@ -719,6 +1040,30 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getUserChatHistory: async ({ platform, platformUserId, limit, cursor }) => {
       return MessageStore.getByUser({ platform, platformUserId, limit, cursor })
     },
+
+    getUserProfile: async (params) => {
+      const account = AccountStore.findByPlatform('twitch')
+      const tokens = account ? AccountStore.getTokens(account.id) : undefined
+      const twitchAuth =
+        account && tokens?.accessToken
+          ? {
+              accessToken: tokens.accessToken,
+              platformUserId: account.platformUserId,
+              scopes: account.scopes,
+            }
+          : undefined
+      const response = await backendFetch('/api/user-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...params, twitchAuth }),
+      })
+      if (!response.ok) throw await backendFailure('Could not load user profile', response)
+      return userProfileSnapshotSchema.parse(await response.json())
+    },
+    getUserNotes: async (params) => getUserNotes(params),
+    setUserNotes: async (params) => setUserNotes(params),
+    getModerationSettings: async () => getModerationSettings(),
+    saveModerationSettings: async (settings) => saveModerationSettings(settings),
 
     getUserCardMetadata: async ({ platform, platformUserId, username, channelId, channelSlug }) => {
       const body: Record<string, unknown> = {
@@ -745,7 +1090,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         body: JSON.stringify(body),
       })
       if (!res.ok) throw await backendFailure("Couldn't load account details", res)
-      return (await res.json()) as UserCardMetadataResponse
+      return userCardMetadataResponseSchema.parse(await res.json())
     },
 
     getStatuses: async () => [...currentStatuses.values()],
@@ -755,8 +1100,21 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     getChannelEmotes: async ({ platform, channelId }) => {
-      return sevenTVService.getEmotes(platform, channelId) as unknown as EmoteCatalogEntry[]
+      const runtime = (ctx.providerRuntime ??= createDesktopProviderRuntime())
+      runtime.refreshPreferences()
+      return runtime.warm(platform, channelId)
     },
+    getEmoteProviderErrors: async () => getProviderErrors(),
+    getUserCosmetics: async ({ platform, platformUserId, username }) => {
+      const cosmetics = await getUserCosmetics(platform, platformUserId, username)
+      if (cosmetics && cosmetics.lookupStatus !== 'unavailable')
+        void ctx.providerRuntime
+          ?.warmAuthorPersonal(platform, platformUserId, cosmetics.personalEmoteSetId)
+          .catch((error) => log.warn('Could not warm personal emotes', { error: String(error) }))
+      return cosmetics
+    },
+    getPaintNameImage: ({ name, paint, fontSize, fontFamily }) =>
+      getPaintNameImage(name, paint, fontSize, fontFamily),
 
     getAppVersion: async () => APP_VERSION,
     checkForUpdate: () => updater.check(),
@@ -766,11 +1124,32 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     getWatchedChannels: async () => watchedChannelManager.getAll(),
 
+    setActiveWatchedChannels: async ({ ids }) => {
+      const active = new Set(ids)
+      for (const channel of watchedChannelManager.getAll())
+        ctx.providerRuntime?.setJoined(
+          `watched:${channel.id}`,
+          channel.platform,
+          active.has(channel.id) ? channel.channelSlug : null,
+        )
+      await watchedChannelManager.setActiveChannels(ids)
+    },
+
     addWatchedChannel: async ({ platform, channelSlug }) => {
-      return await watchedChannelManager.addChannel(platform, channelSlug)
+      void ctx.providerRuntime?.warm(platform, channelSlug).catch((error) =>
+        log.warn('Could not warm channel emotes', {
+          platform,
+          channelSlug,
+          error: String(error),
+        }),
+      )
+      const channel = await watchedChannelManager.addChannel(platform, channelSlug)
+      return channel
     },
 
     removeWatchedChannel: async ({ id }) => {
+      const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === id)
+      if (channel) ctx.providerRuntime?.setJoined(`watched:${id}`, channel.platform, null)
       await watchedChannelManager.removeChannel(id)
       WatchedChannelsLayoutStore.remove(id)
     },
@@ -780,7 +1159,14 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     sendWatchedChannelMessage: async ({ id, text, replyToMessageId }) => {
-      await watchedChannelManager.sendMessage(id, text, replyToMessageId)
+      const command = text
+        .trim()
+        .match(/^\/([a-z]+)/i)?.[1]
+        ?.toLowerCase()
+      if (command && platformCommands.has(command)) {
+        throw new Error('Use the platform command handler for slash commands.')
+      }
+      return watchedChannelManager.sendMessage(id, text, replyToMessageId)
     },
 
     getWatchedChannelStatuses: async () => {
@@ -814,21 +1200,9 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.openBrowser(url)
     },
 
-    getUiState: async ({ key }) => {
-      const db = getDb()
-      const row = db
-        .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
-        .get(`gpuix_ui_${key}`)
-      return row?.value ?? null
-    },
-
-    setUiState: async ({ key, value }) => {
-      const db = getDb()
-      db.run(
-        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-        [`gpuix_ui_${key}`, value],
-      )
-    },
+    ...createLayoutApi((key) => {
+      if (key === 'emote_preferences_v1') ctx.providerRuntime?.refreshPreferences()
+    }),
 
     copyText: async ({ text }) => {
       const candidates: string[][] =
@@ -843,8 +1217,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       for (const cmd of candidates) {
         try {
           const proc = Bun.spawn(cmd, { stdin: 'pipe', stdout: 'ignore', stderr: 'ignore' })
-          proc.stdin.write(text)
-          proc.stdin.end()
+          await proc.stdin.write(text)
+          await proc.stdin.end()
           await proc.exited
           if (proc.exitCode === 0) return
         } catch (error) {
@@ -853,130 +1227,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       }
       throw new Error(`clipboard unavailable: ${String(lastError)}`)
     },
-
-    getTabChannelIds: async () => {
-      const db = getDb()
-      const row = db
-        .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
-        .get('tab_channel_ids')
-      if (!row) return null
-      try {
-        return JSON.parse(row.value) as string[]
-      } catch {
-        return null
-      }
-    },
-
-    setTabChannelIds: async ({ ids }) => {
-      const db = getDb()
-      db.run(
-        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-        ['tab_channel_ids', JSON.stringify(ids)],
-      )
-    },
-
-    getWatchedChannelsLayout: async ({ tabId }) => {
-      return WatchedChannelsLayoutStore.get(tabId)
-    },
-
-    setWatchedChannelsLayout: async ({ tabId, layout }) => {
-      WatchedChannelsLayoutStore.set(tabId, layout)
-    },
-
-    splitPanel: async ({ tabId, panelId, direction }) => {
-      const layout = WatchedChannelsLayoutStore.get(tabId)
-
-      if (countPanels(layout.root) >= MAX_PANELS) {
-        throw new Error('Maximum panel limit reached (8)')
-      }
-
-      const panel = findNodeById(layout.root, panelId)
-      if (!panel || panel.type !== 'panel') {
-        throw new Error('Panel not found')
-      }
-
-      const newPanel: PanelNode = {
-        type: 'panel',
-        id: crypto.randomUUID(),
-        content: { type: 'empty' },
-        flex: 50,
-      }
-
-      const parent = findParentOfNode(layout.root, panelId)
-      if (parent && parent.node.type === 'split' && parent.node.direction === direction) {
-        const index = parent.children.findIndex((c) => c.id === panelId)
-        parent.children.splice(index + 1, 0, newPanel)
-        const flexPerChild = 100 / parent.children.length
-        parent.children.forEach((child) => (child.flex = flexPerChild))
-      } else {
-        const newSplit: LayoutNode = {
-          type: 'split',
-          id: crypto.randomUUID(),
-          direction,
-          children: [panel, newPanel],
-          flex: panel.flex,
-        }
-        panel.flex = 50
-        if (parent) {
-          const index = parent.children.findIndex((c) => c.id === panelId)
-          parent.children[index] = newSplit
-        } else {
-          layout.root = newSplit
-        }
-      }
-
-      WatchedChannelsLayoutStore.set(tabId, layout)
-      return { original: panel, newPanel }
-    },
-
-    removePanel: async ({ tabId, panelId }) => {
-      const layout = WatchedChannelsLayoutStore.get(tabId)
-
-      const panelToRemove = findNodeById(layout.root, panelId)
-      if (panelToRemove?.type === 'panel' && panelToRemove.content.type === 'main') {
-        throw new Error('Cannot remove main panel')
-      }
-
-      const parent = findParentOfNode(layout.root, panelId)
-      if (!parent) throw new Error('Panel not found')
-
-      const index = parent.children.findIndex((c) => c.id === panelId)
-      if (index === -1) throw new Error('Panel not found in parent')
-
-      parent.children.splice(index, 1)
-
-      if (parent.children.length === 1) {
-        const onlyChild = parent.children[0]
-        if (onlyChild) {
-          const grandparent = findParentOfNode(layout.root, parent.node.id)
-          if (grandparent) {
-            const parentIndex = grandparent.children.findIndex((c) => c.id === parent.node.id)
-            if (parentIndex !== -1) {
-              grandparent.children[parentIndex] = onlyChild
-            }
-          } else {
-            layout.root = onlyChild
-          }
-        }
-      } else {
-        const flexPerChild = 100 / parent.children.length
-        parent.children.forEach((child) => (child.flex = flexPerChild))
-      }
-
-      WatchedChannelsLayoutStore.set(tabId, layout)
-    },
-
-    assignChannelToPanel: async ({ tabId, panelId, channelId }) => {
-      const layout = WatchedChannelsLayoutStore.get(tabId)
-
-      const panel = findNodeById(layout.root, panelId)
-      if (!panel || panel.type !== 'panel') {
-        throw new Error('Panel not found')
-      }
-
-      panel.content = channelId ? { type: 'watched', channelId } : { type: 'empty' }
-
-      WatchedChannelsLayoutStore.set(tabId, layout)
-    },
+    readClipboard: () => systemIntegration.readClipboard(),
+    notify: (params) => systemIntegration.notify(params),
   }
 }

@@ -1,3 +1,4 @@
+import { z } from 'zod'
 interface KickAvatarCacheEntry {
   avatarUrl?: string
   expiresAt: number
@@ -11,7 +12,7 @@ export interface KickAvatarLookupInput {
 }
 
 export interface KickAvatarResolverDependencies {
-  fetchFn?: typeof fetch
+  fetchFn?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   now?: () => number
   timeoutMs?: number
 }
@@ -137,9 +138,11 @@ export function createKickAvatarResolver({
           return undefined
         }
 
-        const body = (await response.json()) as {
-          user?: { profile_pic?: string | null }
-        }
+        const body = z
+          .object({
+            user: z.object({ profile_pic: z.union([z.string(), z.null()]).optional() }).optional(),
+          })
+          .parse(await response.json())
 
         const avatarUrl = normalizeAvatarUrl(body.user?.profile_pic)
         if (avatarUrl) {

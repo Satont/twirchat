@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "name": "react-best-practices",
+      "repo": "vercel-labs/agent-skills",
+      "ref": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
+      "path": "skills/react-best-practices",
+      "license": "MIT",
+      "licenseEvidence": "skills/react-best-practices/SKILL.md metadata; upstream has no separate LICENSE file"
+    },
+    {
+      "name": "typescript-best-practices",
+      "repo": "cursor/plugins",
+      "ref": "ae5650febf4320793844c12c4adaa937f417f8da",
+      "path": "pstack/skills/typescript-best-practices",
+      "license": "MIT",
+      "licenseEvidence": "pstack/LICENSE",
+      "licenseFile": "typescript-best-practices/LICENSE"
+    },
+    {
+      "name": "principle-type-system-discipline",
+      "repo": "cursor/plugins",
+      "ref": "ae5650febf4320793844c12c4adaa937f417f8da",
+      "path": "pstack/skills/principle-type-system-discipline",
+      "license": "MIT",
+      "licenseEvidence": "pstack/LICENSE",
+      "licenseFile": "principle-type-system-discipline/LICENSE"
+    },
+    {
+      "name": "principle-boundary-discipline",
+      "repo": "cursor/plugins",
+      "ref": "ae5650febf4320793844c12c4adaa937f417f8da",
+      "path": "pstack/skills/principle-boundary-discipline",
+      "license": "MIT",
+      "licenseEvidence": "pstack/LICENSE",
+      "licenseFile": "principle-boundary-discipline/LICENSE"
+    },
+    {
+      "name": "principle-encode-lessons-in-structure",
+      "repo": "cursor/plugins",
+      "ref": "ae5650febf4320793844c12c4adaa937f417f8da",
+      "path": "pstack/skills/principle-encode-lessons-in-structure",
+      "license": "MIT",
+      "licenseEvidence": "pstack/LICENSE",
+      "licenseFile": "principle-encode-lessons-in-structure/LICENSE"
+    },
+    {
+      "name": "deslop",
+      "repo": "cursor/plugins",
+      "ref": "ae5650febf4320793844c12c4adaa937f417f8da",
+      "path": "cursor-team-kit/skills/deslop",
+      "license": "MIT",
+      "licenseEvidence": "cursor-team-kit/LICENSE",
+      "licenseFile": "deslop/LICENSE"
+    }
+  ]
+}

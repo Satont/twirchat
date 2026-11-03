@@ -1,15 +1,17 @@
+import { motion, useGpuixRequired, type StyleDesc } from '@gpuix/react'
+import { useEffect, useMemo, useState } from 'react'
 /**
  * Root component — port of App.vue's shell: nav rail + channel tab bar +
  * tabbed content area (chat / events / platforms / settings) + modals +
  * transient notice toast. Window chrome is the native GPUI titlebar.
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { motion, useGpuixRequired } from '@gpuix/react'
-
 import { useBackend, useBackendEvent } from '../backend/context'
 import { registerBundledFonts } from '../fonts'
-import { useStore } from '../state/create-store'
+import { runUiTask } from '../hooks/run-ui-task'
+import { parseHotkeyChoice } from '../hotkey-bindings'
+import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
+import { getActivePane } from '../state/active-pane'
 import {
   accountsStore,
   activeTabStore,
@@ -22,23 +24,49 @@ import {
   watchedChannelsStore,
   showNotice,
 } from '../state/app'
+import {
+  chatTabsStore,
+  closeChatTab,
+  openChannelChatTab,
+  tabsForChannels,
+  createEmptyChatTab,
+  reorderChatTab,
+} from '../state/chat-tabs'
+import { useStore } from '../state/create-store'
+import { useDesktopWindows } from '../state/desktop-windows'
 import { registerHotkeyActions } from '../state/hotkeys'
+import { allPanels, layoutStore, loadLayout, splitPanel, reopenClosedSplit } from '../state/layout'
+import { messageSimilarityPreferences } from '../state/message-similarity'
+import { saveStreamerMode, streamerModeStore } from '../state/streamer-mode'
+import { visitChatTab, navigateChatTabHistory } from '../state/tab-history'
+import { clearTabUnread, tabUnreadStore } from '../state/tab-unread'
+import { changeWindowPresentation, useWindowPresentation } from '../state/window-presentation'
+import { useWindowScope } from '../state/window-scope'
 import { accent, withAlpha } from '../theme'
 import { resolveFont, resolveTheme, useTheme, FontContext, ThemeContext } from '../theme-context'
-import { NavRail } from './NavRail'
-import { Icon } from './ui/Icon'
-import { Text } from './ui/Text'
-import { ChatView } from './ChatView'
-import { EventsFeed } from './EventsFeed'
-import { PlatformsPanel } from './PlatformsPanel'
-import { SettingsPanel } from './SettingsPanel'
-import { ChannelTabBar, type WatchedLiveStatus } from './ChannelTabBar'
-import { WatchedView } from './WatchedView'
 import { AddChannelModal } from './AddChannelModal'
+import { ChannelTabBar, type WatchedLiveStatus } from './ChannelTabBar'
+import { EventsFeed } from './EventsFeed'
+import { NavRail } from './NavRail'
+import { PlatformsPanel } from './PlatformsPanel'
+import { SavedAccounts } from './SavedAccounts'
+import { SearchAllChatsDialog } from './SearchAllChatsDialog'
+import { SettingsPanel } from './SettingsPanel'
 import { TabSelectorModal, type TabItem } from './TabSelectorModal'
+import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
+import { Icon } from './ui/Icon'
+import { Modal } from './ui/Modal'
+import { Text } from './ui/Text'
+import { WatchedView } from './WatchedView'
+
+/** Badge updates stay inside the tab bar, outside the chat render tree. */
+function UnreadChannelTabBar(props: React.ComponentProps<typeof ChannelTabBar>) {
+  const unread = useStore(tabUnreadStore)
+  return <ChannelTabBar {...props} unread={unread} />
+}
 
 /** Transient top-center toast (port of ChatNotice.vue). */
-function ChatNotice() {
+export function ChatNotice() {
   const notice = useStore(noticeStore)
   if (!notice) return null
 
@@ -99,7 +127,7 @@ function ChatNotice() {
  * 'downloading' (progress) / 'download-complete' / 'applying' /
  * 'no-update' / 'update-error'.
  */
-function UpdateToast() {
+export function UpdateToast() {
   const backend = useBackend()
   const theme = useTheme()
   const [update, setUpdate] = useState<{
@@ -125,14 +153,14 @@ function UpdateToast() {
 
   if (!update || dismissed) return null
 
-  const buttonStyle = {
+  const buttonStyle: StyleDesc = {
     paddingTop: 6,
     paddingBottom: 6,
     paddingLeft: 12,
     paddingRight: 12,
     borderRadius: 6,
     backgroundColor: accent.deep,
-    cursor: 'pointer' as const,
+    cursor: 'pointer',
   }
   const secondaryButtonStyle = {
     ...buttonStyle,
@@ -194,7 +222,7 @@ function UpdateToast() {
           <div
             style={secondaryButtonStyle}
             onClick={() => {
-              if (update.hash) void backend.api.skipUpdate({ hash: update.hash })
+              if (update.hash) runUiTask(backend.api.skipUpdate({ hash: update.hash }))
               setDismissed(true)
             }}
           >
@@ -215,6 +243,10 @@ function UpdateToast() {
 
 export function App() {
   const backend = useBackend()
+  const windows = useDesktopWindows()
+  const scope = useWindowScope()
+  const presentation = useWindowPresentation()
+  const streamerMode = useStore(streamerModeStore)
   // Runs during the first render — before the first layout — so text that
   // names Inter/Manrope never falls back. Idempotent across hot remounts.
   registerBundledFonts(useGpuixRequired())
@@ -223,6 +255,7 @@ export function App() {
   const accounts = useStore(accountsStore)
   const watchedChannels = useStore(watchedChannelsStore)
   const tabChannelIds = useStore(tabChannelIdsStore)
+  const chatTabs = useStore(chatTabsStore)
   const activeWatchedTab = useStore(activeWatchedTabStore)
   const tabChannelNames = useStore(tabChannelNamesStore)
   const streamStatuses = useStore(streamStatusStore)
@@ -230,35 +263,46 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showTabSelector, setShowTabSelector] = useState(false)
+  const [showAllChatSearch, setShowAllChatSearch] = useState(false)
+  const [showAccounts, setShowAccounts] = useState(false)
+  const [showFollowing, setShowFollowing] = useState(false)
 
   const theme = resolveTheme(settings)
   const font = resolveFont(settings)
 
   // Sidebar collapse preference survives restarts via the settings KV store.
   useEffect(() => {
-    void backend.api.getUiState({ key: 'sidebar_collapsed' }).then((value) => {
-      if (value === 'true') setSidebarCollapsed(true)
-    })
+    runUiTask(
+      backend.api.getUiState({ key: 'sidebar_collapsed' }).then((value) => {
+        if (value === 'true') setSidebarCollapsed(true)
+      }),
+    )
   }, [backend])
 
   const toggleSidebar = () => {
     setSidebarCollapsed((current) => {
-      void backend.api.setUiState({ key: 'sidebar_collapsed', value: String(!current) })
+      runUiTask(backend.api.setUiState({ key: 'sidebar_collapsed', value: String(!current) }))
       return !current
     })
   }
 
   // Global hotkeys (Ctrl+K etc.) are dispatched from main.tsx's render().
   useEffect(() => {
-    registerHotkeyActions({
-      openAddChannel: () => setShowAddModal(true),
-      openTabSelector: () => setShowTabSelector(true),
-    })
-  }, [])
+    return registerHotkeyActions(
+      {
+        openAddChannel: () => setShowAddModal(true),
+        openTabSelector: () => setShowTabSelector(true),
+        openAllChatSearch: () => setShowAllChatSearch(true),
+        isChatActive: () => activeTabStore.get() === 'chat',
+      },
+      scope,
+    )
+  }, [scope])
+  useEffect(() => visitChatTab(activeWatchedTab, scope), [activeWatchedTab, scope])
 
   const tabWatchedChannels = useMemo(
-    () => watchedChannels.filter((ch) => tabChannelIds.includes(ch.id)),
-    [watchedChannels, tabChannelIds],
+    () => tabsForChannels(watchedChannels, tabChannelIds, chatTabs.value.metadata),
+    [watchedChannels, tabChannelIds, chatTabs.value.metadata],
   )
 
   const watchedLiveStatuses = useMemo(() => {
@@ -266,12 +310,24 @@ export function App() {
     for (const ch of watchedChannels) {
       if (ch.platform === 'youtube') continue
       const status = streamStatuses.get(`${ch.platform}:${ch.channelSlug.toLowerCase()}`)
-      map.set(ch.id, { isLive: status?.isLive ?? false, viewerCount: status?.viewerCount })
+      map.set(ch.id, {
+        isLive: status?.isLive ?? false,
+        viewerCount:
+          streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration
+            ? undefined
+            : status?.viewerCount,
+      })
+    }
+    for (const tab of tabWatchedChannels) {
+      const status = map.get(tab.sourceChannelId)
+      if (status) map.set(tab.id, status)
     }
     return map
-  }, [watchedChannels, streamStatuses])
+  }, [watchedChannels, streamStatuses, tabWatchedChannels, streamerMode])
 
   const homeViewerCount = useMemo(() => {
+    if (streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration)
+      return undefined
     let total = 0
     let anyLive = false
     for (const acc of accounts) {
@@ -283,39 +339,35 @@ export function App() {
       }
     }
     return anyLive ? total : undefined
-  }, [accounts, streamStatuses])
+  }, [accounts, streamStatuses, streamerMode])
 
   const tabSelectorItems = useMemo<TabItem[]>(() => {
     const items: TabItem[] = [{ id: 'home', label: 'My channels' }]
     for (const ch of tabWatchedChannels) {
       items.push({
         id: ch.id,
-        label: tabChannelNames.get(ch.id)?.join(', ') ?? ch.displayName,
+        label:
+          chatTabs.value.metadata[ch.id]?.title ??
+          tabChannelNames.get(ch.id)?.join(', ') ??
+          ch.displayName,
         platform: ch.platform,
         isLive: watchedLiveStatuses.get(ch.id)?.isLive ?? false,
       })
     }
     return items
-  }, [tabWatchedChannels, tabChannelNames, watchedLiveStatuses])
+  }, [tabWatchedChannels, tabChannelNames, watchedLiveStatuses, chatTabs.value.metadata])
 
   const selectWatchedTab = (id: string) => {
+    clearTabUnread(id)
     activeWatchedTabStore.set(id)
     activeTabStore.set('chat')
-  }
-
-  const persistTabIds = (ids: string[]) => {
-    tabChannelIdsStore.set(ids)
-    void backend.api.setTabChannelIds({ ids })
   }
 
   const onAddChannel = async (platform: 'twitch' | 'kick' | 'youtube', channelSlug: string) => {
     try {
       const channel = await backend.api.addWatchedChannel({ platform, channelSlug })
       watchedChannelsStore.set(await backend.api.getWatchedChannels())
-      if (!tabChannelIdsStore.get().includes(channel.id)) {
-        persistTabIds([...tabChannelIdsStore.get(), channel.id])
-      }
-      activeWatchedTabStore.set(channel.id)
+      await openChannelChatTab(backend, channel)
       setShowAddModal(false)
       showNotice('success', `Watching ${channel.displayName}`)
     } catch (error) {
@@ -326,17 +378,107 @@ export function App() {
 
   const onRemoveChannel = async (id: string) => {
     try {
-      await backend.api.removeWatchedChannel({ id })
-      watchedChannelsStore.set(await backend.api.getWatchedChannels())
-      const remaining = tabChannelIdsStore.get().filter((tabId) => tabId !== id)
-      persistTabIds(remaining)
-      if (activeWatchedTabStore.get() === id) {
-        activeWatchedTabStore.set(remaining[0] ?? 'home')
-      }
+      await closeChatTab(backend, id)
     } catch (error) {
-      console.error('[App] removeWatchedChannel failed:', error)
+      showNotice('error', `Could not close tab: ${String(error)}`)
     }
   }
+
+  const visibleTabs =
+    presentation.tabVisibility === 'liveOnly'
+      ? tabWatchedChannels.filter(
+          (tab) => tab.id === activeWatchedTab || watchedLiveStatuses.get(tab.id)?.isLive,
+        )
+      : tabWatchedChannels
+  const visibleTabIds = ['home', ...visibleTabs.map((tab) => tab.id)]
+  const activePanel = () => {
+    const panels = allPanels(layoutStore.get().get(activeWatchedTab)?.layout ?? null)
+    const active = getActivePane(scope)
+    return panels.find((panel) => `${activeWatchedTab}:${panel.id}` === active?.paneId) ?? panels[0]
+  }
+  useHotkeyContext({
+    id: 'window',
+    category: 'window',
+    handlers: {
+      newSplit: async () => {
+        if (!layoutStore.get().get(activeWatchedTab)?.layout)
+          await loadLayout(backend, activeWatchedTab)
+        const panel = activePanel()
+        if (!panel) throw new Error('The current layout is unavailable.')
+        activeTabStore.set('chat')
+        await splitPanel(backend, activeWatchedTab, panel.id, 'vertical', scope)
+      },
+      newTab: () => createEmptyChatTab(backend),
+      openSettings: () => activeTabStore.set('settings'),
+      openAccountSelector: () => setShowAccounts(true),
+      openQuickSwitcher: () => setShowTabSelector(true),
+      quit: windows ? () => windows.quit() : null,
+      removeTab: activeWatchedTab !== 'home' ? () => closeChatTab(backend, activeWatchedTab) : null,
+      reopenSplit: () => reopenClosedSplit(backend),
+      toggleLocalR9K: async () => {
+        await messageSimilarityPreferences.load(backend.api)
+        const value = messageSimilarityPreferences.store.get().value
+        await messageSimilarityPreferences.save(backend.api, {
+          ...value,
+          hideSimilar: !value.hideSimilar,
+        })
+      },
+      setStreamerMode: ([mode]) =>
+        saveStreamerMode(
+          backend,
+          parseHotkeyChoice(mode ?? 'toggle', ['on', 'off', 'auto', 'toggle']),
+        ),
+      selectTabHistoryBack: () => {
+        const id = navigateChatTabHistory(-1, activeWatchedTab, ['home', ...tabChannelIds], scope)
+        if (id) selectWatchedTab(id)
+      },
+      selectTabHistoryForward: () => {
+        const id = navigateChatTabHistory(1, activeWatchedTab, ['home', ...tabChannelIds], scope)
+        if (id) selectWatchedTab(id)
+      },
+      openFollowedChannels: accounts.some((account) => account.platform === 'twitch')
+        ? () => setShowFollowing(true)
+        : null,
+      moveTab:
+        activeWatchedTab !== 'home'
+          ? ([argument]) => {
+              const index = tabChannelIds.indexOf(activeWatchedTab)
+              const target =
+                argument === 'next'
+                  ? index + 1
+                  : argument === 'previous'
+                    ? index - 1
+                    : Number(argument)
+              return reorderChatTab(
+                backend,
+                activeWatchedTab,
+                Math.max(0, Math.min(tabChannelIds.length - 1, target)),
+              )
+            }
+          : null,
+      openTab: ([argument]) => {
+        const index = visibleTabIds.indexOf(activeWatchedTab)
+        const target =
+          argument === 'last'
+            ? visibleTabIds.length - 1
+            : argument === 'next'
+              ? (index + 1) % visibleTabIds.length
+              : argument === 'previous'
+                ? (index - 1 + visibleTabIds.length) % visibleTabIds.length
+                : Number(argument)
+        const id = visibleTabIds[target]
+        if (id) selectWatchedTab(id)
+      },
+      popup: windows
+        ? ([kind]) =>
+            windows.openChat(activeWatchedTab, kind === 'split' ? activePanel()?.id : undefined)
+        : null,
+      zoom: ([argument]) => changeWindowPresentation(backend.api, scope, 'zoom', argument),
+      setTabVisibility: ([argument]) =>
+        changeWindowPresentation(backend.api, scope, 'tabs', argument),
+    },
+  })
+  useHotkeyRoute(['window'])
 
   return (
     <ThemeContext.Provider value={theme}>
@@ -365,9 +507,9 @@ export function App() {
               backgroundColor: theme.bg,
             }}
           >
-            {activeTab === 'chat' ? (
-              <ChannelTabBar
-                watchedChannels={tabWatchedChannels}
+            {activeTab === 'chat' && presentation.tabVisibility !== 'off' ? (
+              <UnreadChannelTabBar
+                watchedChannels={visibleTabs}
                 activeTabId={activeWatchedTab}
                 watchedStatuses={new Map()}
                 watchedLiveStatuses={watchedLiveStatuses}
@@ -375,16 +517,16 @@ export function App() {
                 tabChannelNames={tabChannelNames}
                 onSelectTab={selectWatchedTab}
                 onAddChannel={() => setShowAddModal(true)}
+                onSearchAll={() => setShowAllChatSearch(true)}
                 onRemoveChannel={(id) => void onRemoveChannel(id)}
               />
             ) : null}
 
             {activeTab === 'chat' ? (
-              activeWatchedTab === 'home' ? (
-                <ChatView onGoToPlatforms={() => activeTabStore.set('platforms')} />
-              ) : (
-                <WatchedView tabId={activeWatchedTab} />
-              )
+              <WatchedView
+                tabId={activeWatchedTab}
+                onGoToPlatforms={() => activeTabStore.set('platforms')}
+              />
             ) : null}
             {activeTab === 'events' ? <EventsFeed /> : null}
             {activeTab === 'platforms' ? <PlatformsPanel /> : null}
@@ -404,6 +546,23 @@ export function App() {
               activeTabId={activeWatchedTab}
               onSelect={selectWatchedTab}
               onClose={() => setShowTabSelector(false)}
+            />
+          ) : null}
+          {showAllChatSearch ? (
+            <SearchAllChatsDialog onClose={() => setShowAllChatSearch(false)} />
+          ) : null}
+          {showAccounts ? (
+            <Modal width={660} onClose={() => setShowAccounts(false)}>
+              <SavedAccounts />
+            </Modal>
+          ) : null}
+          {showFollowing ? (
+            <TwitchActivitiesPanel
+              channelSlug={
+                accounts.find((account) => account.platform === 'twitch')?.username ?? ''
+              }
+              initialTab="following"
+              onClose={() => setShowFollowing(false)}
             />
           ) : null}
 

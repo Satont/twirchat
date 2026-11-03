@@ -1,28 +1,45 @@
+import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
+import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
+import type { Platform } from '@twirchat/shared/types'
 /**
  * Emote picker — port of EmotePicker.vue onto GPUIX: native search input +
  * a <virtual-list> of heading / 7-cell grid rows inside an anchored overlay.
  */
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { useEffect, useMemo, useState } from 'react'
-import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
-
-import { useBackend } from '../backend/context'
-import { emoteStore, loadEmotes } from '../state/app'
-import { useTextInputFocusTracking } from '../state/focus'
-import { pushOverlayClose } from '../state/overlays'
-import { useStore } from '../state/create-store'
-import { useTheme } from '../theme-context'
 import { groupEmoteCatalog } from '../../views/main/utils/emote-catalog'
+import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
+import { useBackend } from '../backend/context'
+import { runUiTask } from '../hooks/run-ui-task'
+import {
+  focusPopupSearch,
+  popupTabIndex,
+  scrollPopupPage,
+  usePopupHotkeys,
+} from '../hooks/use-popup-hotkeys'
+import { nativeWindow } from '../native-window'
+import { emoteStore, loadEmotes } from '../state/app'
+import { useStore } from '../state/create-store'
+import { emotePreferencesStore, loadEmotePreferences } from '../state/emote-preferences'
+import { useTextInputFocusTracking } from '../state/focus'
+import { useOverlayClose } from '../state/overlays'
+import { useTheme } from '../theme-context'
+import { EmoteTooltip } from './ui/EmoteTooltip'
+import { ActionButton } from './ui/Form'
 import { Icon } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
+
+type PickerSource = EmoteSource | 'favorites'
 
 const ITEMS_PER_ROW = 7
 const CELL_WIDTH = 41
 
 type PickerRow =
-  | { kind: 'heading'; source: EmoteSource; label: string }
-  | { kind: 'emotes'; source: EmoteSource; entries: EmoteCatalogEntry[] }
+  | { kind: 'heading'; source: PickerSource; label: string }
+  | { kind: 'emotes'; source: PickerSource; entries: EmoteCatalogEntry[] }
+
+const EMPTY_EMOTES: EmoteCatalogEntry[] = []
 
 export function EmotePicker({
   platform,
@@ -31,7 +48,7 @@ export function EmotePicker({
   onSelect,
   onClose,
 }: {
-  platform: string
+  platform: Platform
   channelId: string
   useSessionCache: boolean
   onSelect: (alias: string) => void
@@ -40,23 +57,44 @@ export function EmotePicker({
   const theme = useTheme()
   const backend = useBackend()
   const emotes = useStore(emoteStore)
+  const preferences = useStore(emotePreferencesStore)
+  const renderer = useGpuixRequired()
+  const searchRef = useRef<PublicInstance | null>(null)
+  const listRef = useRef<PublicInstance | null>(null)
+  const [selectedSource, setSelectedSource] = useState<PickerSource | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const searchFocus = useTextInputFocusTracking()
 
   const cacheKey = `${platform}:${channelId}`
-  const allEmotes = emotes.get(cacheKey) ?? []
+  const allEmotes = emotes.get(cacheKey) ?? EMPTY_EMOTES
   const isLoading = allEmotes.length === 0 && !emotes.has(cacheKey)
 
   useEffect(() => {
-    void loadEmotes(backend, platform, channelId, useSessionCache)
+    runUiTask(loadEmotes(backend, platform, channelId, useSessionCache))
+    runUiTask(loadEmotePreferences(backend.api))
   }, [backend, platform, channelId, useSessionCache])
 
-  useEffect(() => pushOverlayClose(onClose), [onClose])
-
+  const groups = useMemo(() => {
+    const grouped: Array<{ source: PickerSource; label: string; entries: EmoteCatalogEntry[] }> =
+      groupEmoteCatalog(allEmotes, searchQuery)
+    const favorites = fuzzyFilter(
+      preferences.value.favorites.map((entry) => ({ label: entry.alias, entry })),
+      searchQuery,
+    ).map(({ entry }) => entry)
+    if (favorites.length)
+      grouped.unshift({ source: 'favorites', label: 'Favorites', entries: favorites })
+    return grouped
+  }, [allEmotes, searchQuery, preferences.value.favorites])
+  const activeSource = groups.some((group) => group.source === selectedSource)
+    ? selectedSource
+    : groups[0]?.source
+  const activeIndex = Math.max(
+    0,
+    groups.findIndex((group) => group.source === activeSource),
+  )
   const pickerRows = useMemo((): PickerRow[] => {
-    const groups = groupEmoteCatalog(allEmotes, searchQuery)
     const rows: PickerRow[] = []
-    for (const group of groups) {
+    for (const group of groups.filter((group) => group.source === activeSource)) {
       rows.push({ kind: 'heading', source: group.source, label: group.label })
       for (let index = 0; index < group.entries.length; index += ITEMS_PER_ROW) {
         rows.push({
@@ -67,7 +105,25 @@ export function EmotePicker({
       }
     }
     return rows
-  }, [allEmotes, searchQuery])
+  }, [groups, activeSource])
+  useEffect(() => {
+    if (listRef.current) renderer.scrollToItem?.(listRef.current.id, 0)
+  }, [renderer, activeSource, searchQuery])
+  const popupContextId = usePopupHotkeys('emotes', {
+    delete: onClose,
+    search: () => focusPopupSearch(nativeWindow(renderer), searchRef),
+    openTab: groups.length
+      ? ([target]) => {
+          const index = popupTabIndex(activeIndex, target!, groups.length)
+          if (index !== null) setSelectedSource(groups[index]!.source)
+        }
+      : null,
+    scrollPage: pickerRows.length
+      ? ([direction]) => scrollPopupPage(renderer, listRef, direction!)
+      : null,
+  })
+
+  useOverlayClose(true, onClose, popupContextId)
 
   return (
     <anchored deferred side="top" align="end" gap={8}>
@@ -108,6 +164,8 @@ export function EmotePicker({
         >
           <Icon name="search" size={13} color={theme.text2} />
           <input
+            ref={searchRef}
+            testId="emote-popup-search"
             autoFocus
             value={searchQuery}
             placeholder="Search emotes…"
@@ -123,6 +181,23 @@ export function EmotePicker({
           />
         </div>
 
+        {groups.length > 1 ? (
+          <div
+            testId="emote-popup-tabs"
+            style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4, padding: 8 }}
+          >
+            {groups.map((group) => (
+              <ActionButton
+                key={group.source}
+                testId={`emote-popup-tab-${group.source}`}
+                primary={group.source === activeSource}
+                onClick={() => setSelectedSource(group.source)}
+              >
+                {group.label}
+              </ActionButton>
+            ))}
+          </div>
+        ) : null}
         {isLoading ? (
           <div
             style={{
@@ -149,6 +224,8 @@ export function EmotePicker({
           </div>
         ) : (
           <virtual-list
+            ref={listRef}
+            testId="emote-popup-list"
             estimatedItemHeight={44}
             style={{ height: 340, scrollbarColor: theme.scrollbar, scrollbarWidth: 4 }}
           >
@@ -183,8 +260,7 @@ export function EmotePicker({
                 >
                   {row.entries.map((emote) => (
                     <div
-                      key={`${emote.source}:${emote.id}`}
-                      onClick={() => onSelect(emote.alias)}
+                      key={`${emote.source}:${emote.id}:${emote.alias}`}
                       style={{
                         width: CELL_WIDTH,
                         height: CELL_WIDTH,
@@ -196,11 +272,24 @@ export function EmotePicker({
                         hover: { backgroundColor: 'rgba(255, 255, 255, 0.09)' },
                       }}
                     >
-                      <RemoteImage
-                        url={emote.imageUrl}
-                        objectFit="contain"
-                        style={{ width: 32, height: 32, pointerEvents: 'none' }}
-                      />
+                      <EmoteTooltip emote={{ ...emote, name: emote.alias, positions: [] }}>
+                        <div
+                          onClick={() => onSelect(emote.alias)}
+                          style={{
+                            width: CELL_WIDTH,
+                            height: CELL_WIDTH,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <RemoteImage
+                            url={emote.imageUrl}
+                            objectFit="contain"
+                            style={{ width: 32, height: 32, pointerEvents: 'none' }}
+                          />
+                        </div>
+                      </EmoteTooltip>
                     </div>
                   ))}
                 </div>

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+
 import { config } from '../src/config.ts'
 import { ClientStore } from '../src/db/index.ts'
 import { streamRoutes } from '../src/routes/stream.ts'
+import { fetchUrl } from './literal'
 
 const originalFetch = globalThis.fetch
 const originalUpsert = ClientStore.upsert
@@ -39,10 +41,13 @@ describe('POST /api/twitch/chatters', () => {
 
   test('returns 400 for missing request fields without fetching Twitch', async () => {
     let fetchCalled = false
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(request({ accessToken: 'token' }))
 
@@ -51,7 +56,10 @@ describe('POST /api/twitch/chatters', () => {
   })
 
   test('returns 404 when the broadcaster cannot be resolved', async () => {
-    globalThis.fetch = mock(async () => Response.json({ data: [] })) as unknown as typeof fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => Response.json({ data: [] })),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
@@ -68,8 +76,8 @@ describe('POST /api/twitch/chatters', () => {
       controller.signal,
     )
 
-    globalThis.fetch = mock(
-      async (fetchInput: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    globalThis.fetch = Object.assign(
+      mock(async (fetchInput: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
         const url = String(fetchInput)
         calls.push({ init, url })
         if (url.includes('/helix/users?')) return resolvedUserResponse()
@@ -95,8 +103,9 @@ describe('POST /api/twitch/chatters', () => {
           pagination: {},
           total: 2,
         })
-      },
-    ) as unknown as typeof fetch
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(inputRequest)
 
@@ -125,9 +134,9 @@ describe('POST /api/twitch/chatters', () => {
     )
     let avatarInit: RequestInit | undefined
 
-    globalThis.fetch = mock(
-      async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-        const url = new URL(String(input))
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const url = new URL(fetchUrl(input))
         if (url.pathname.endsWith('/users')) {
           if (url.searchParams.has('login')) {
             return resolvedUserResponse()
@@ -148,8 +157,9 @@ describe('POST /api/twitch/chatters', () => {
           pagination: {},
           total: 2,
         })
-      },
-    ) as unknown as typeof fetch
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(inputRequest)
 
@@ -180,25 +190,28 @@ describe('POST /api/twitch/chatters', () => {
 
   test('chunks avatar lookups at 100 user IDs', async () => {
     const avatarRequests: URL[] = []
-    globalThis.fetch = mock(async (input: Parameters<typeof fetch>[0]) => {
-      const url = new URL(String(input))
-      if (url.pathname.endsWith('/users')) {
-        if (url.searchParams.has('login')) {
-          return resolvedUserResponse()
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(fetchUrl(input))
+        if (url.pathname.endsWith('/users')) {
+          if (url.searchParams.has('login')) {
+            return resolvedUserResponse()
+          }
+          avatarRequests.push(url)
+          return Response.json({ data: [] })
         }
-        avatarRequests.push(url)
-        return Response.json({ data: [] })
-      }
-      return Response.json({
-        data: Array.from({ length: 101 }, (_, index) => ({
-          user_id: String(index + 1),
-          user_login: `user-${index + 1}`,
-          user_name: `User ${index + 1}`,
-        })),
-        pagination: {},
-        total: 101,
-      })
-    }) as unknown as typeof fetch
+        return Response.json({
+          data: Array.from({ length: 101 }, (_, index) => ({
+            user_id: String(index + 1),
+            user_login: `user-${index + 1}`,
+            user_name: `User ${index + 1}`,
+          })),
+          pagination: {},
+          total: 101,
+        })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' }),
@@ -211,25 +224,28 @@ describe('POST /api/twitch/chatters', () => {
   })
 
   test('leaves avatarUrl absent when Twitch does not return a user', async () => {
-    globalThis.fetch = mock(async (input: Parameters<typeof fetch>[0]) => {
-      const url = new URL(String(input))
-      if (url.pathname.endsWith('/users')) {
-        if (url.searchParams.has('login')) {
-          return resolvedUserResponse()
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(fetchUrl(input))
+        if (url.pathname.endsWith('/users')) {
+          if (url.searchParams.has('login')) {
+            return resolvedUserResponse()
+          }
+          return Response.json({
+            data: [{ id: '1', profile_image_url: 'https://cdn.example/one.png' }],
+          })
         }
         return Response.json({
-          data: [{ id: '1', profile_image_url: 'https://cdn.example/one.png' }],
+          data: [
+            { user_id: '1', user_login: 'one', user_name: 'One' },
+            { user_id: '2', user_login: 'two', user_name: 'Two' },
+          ],
+          pagination: {},
+          total: 2,
         })
-      }
-      return Response.json({
-        data: [
-          { user_id: '1', user_login: 'one', user_name: 'One' },
-          { user_id: '2', user_login: 'two', user_name: 'Two' },
-        ],
-        pagination: {},
-        total: 2,
-      })
-    }) as unknown as typeof fetch
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' }),
@@ -252,20 +268,23 @@ describe('POST /api/twitch/chatters', () => {
   })
 
   test('returns chatters without avatars when the users endpoint fails', async () => {
-    globalThis.fetch = mock(async (input: Parameters<typeof fetch>[0]) => {
-      const url = new URL(String(input))
-      if (url.pathname.endsWith('/users')) {
-        if (url.searchParams.has('login')) {
-          return resolvedUserResponse()
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(fetchUrl(input))
+        if (url.pathname.endsWith('/users')) {
+          if (url.searchParams.has('login')) {
+            return resolvedUserResponse()
+          }
+          return new Response('users unavailable', { status: 503 })
         }
-        return new Response('users unavailable', { status: 503 })
-      }
-      return Response.json({
-        data: [{ user_id: '1', user_login: 'one', user_name: 'One' }],
-        pagination: {},
-        total: 1,
-      })
-    }) as unknown as typeof fetch
+        return Response.json({
+          data: [{ user_id: '1', user_login: 'one', user_name: 'One' }],
+          pagination: {},
+          total: 1,
+        })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' }),
@@ -281,16 +300,19 @@ describe('POST /api/twitch/chatters', () => {
 
   test('returns 502 when Twitch repeats a pagination cursor', async () => {
     let chatterPage = 0
-    globalThis.fetch = mock(async (input: Parameters<typeof fetch>[0]) => {
-      const url = String(input)
-      if (url.includes('/helix/users?')) return resolvedUserResponse()
-      chatterPage += 1
-      return Response.json({
-        data: [{ user_id: String(chatterPage), user_login: 'user', user_name: 'User' }],
-        pagination: { cursor: 'repeated-cursor' },
-        total: 1,
-      })
-    }) as unknown as typeof fetch
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = fetchUrl(input)
+        if (url.includes('/helix/users?')) return resolvedUserResponse()
+        chatterPage += 1
+        return Response.json({
+          data: [{ user_id: String(chatterPage), user_login: 'user', user_name: 'User' }],
+          pagination: { cursor: 'repeated-cursor' },
+          total: 1,
+        })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
@@ -309,11 +331,14 @@ describe('POST /api/twitch/chatters', () => {
       name: 'malformed chatter',
     },
   ])('returns 502 for $name Helix data', async ({ data }) => {
-    globalThis.fetch = mock(async (input: Parameters<typeof fetch>[0]) => {
-      const url = String(input)
-      if (url.includes('/helix/users?')) return resolvedUserResponse()
-      return Response.json(data)
-    }) as unknown as typeof fetch
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = fetchUrl(input)
+        if (url.includes('/helix/users?')) return resolvedUserResponse()
+        return Response.json(data)
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
@@ -323,11 +348,14 @@ describe('POST /api/twitch/chatters', () => {
   })
 
   test.each([401, 403])('preserves Twitch upstream %i status', async (status) => {
-    globalThis.fetch = mock(async (input: Parameters<typeof fetch>[0]) => {
-      const url = String(input)
-      if (url.includes('/helix/users?')) return resolvedUserResponse()
-      return new Response('upstream failure', { status })
-    }) as unknown as typeof fetch
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = fetchUrl(input)
+        if (url.includes('/helix/users?')) return resolvedUserResponse()
+        return new Response('upstream failure', { status })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
@@ -337,11 +365,14 @@ describe('POST /api/twitch/chatters', () => {
   })
 
   test('maps other upstream statuses to 502', async () => {
-    globalThis.fetch = mock(async (input: Parameters<typeof fetch>[0]) => {
-      const url = String(input)
-      if (url.includes('/helix/users?')) return resolvedUserResponse()
-      return new Response('upstream failure', { status: 500 })
-    }) as unknown as typeof fetch
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = fetchUrl(input)
+        if (url.includes('/helix/users?')) return resolvedUserResponse()
+        return new Response('upstream failure', { status: 500 })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const response = await chattersRoute(
       request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),

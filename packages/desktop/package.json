@@ -4,13 +4,28 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot src/gpuix/main.tsx",
-    "start": "bun src/gpuix/main.tsx",
-    "build": "bun run build:overlay && bun build --compile src/gpuix/main.tsx --outfile dist/twirchat",
+    "dev": "bun run build:native && bun --hot src/gpuix/main.tsx",
+    "start": "bun run build:native && bun src/gpuix/main.tsx",
+    "qa:gui": "bun scripts/qa-gui.ts",
+    "qa:native": "bun scripts/qa-gui.ts --timeout 45 -- bun scripts/qa-native.tsx",
+    "qa:settings": "bun scripts/qa-gui.ts --timeout 45 -- bun scripts/qa-settings.tsx",
+    "qa:windows": "bun scripts/qa-gui.ts --dbus --timeout 60 -- bun scripts/qa-windows.tsx",
+    "qa:app": "bun scripts/qa-gui.ts --dbus --timeout 45 -- bun scripts/qa-app.tsx",
+    "qa:chat": "bun scripts/qa-gui.ts --dbus --timeout 45 -- bun scripts/qa-chat-behavior.tsx",
+    "build": "bun run build:native && bun run build:overlay && bun build --compile src/gpuix/main.tsx --outfile dist/twirchat && bun run package:runtime dist",
+    "package:runtime": "bun scripts/package-runtime-assets.ts",
     "build:overlay": "vite build --config vite.overlay.config.ts",
-    "gen": "cd src/platforms/youtube && bunx @bufbuild/buf generate",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.gpuix.json",
-    "test": "bun test tests/"
+    "gen": "bun ../shared/youtube/codegen/generate.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.gpuix.json && tsc --noEmit -p tsconfig.tests.json && tsc --noEmit -p tsconfig.bun.json",
+    "test": "bun test tests/",
+    "build:native": "bun scripts/build-gpuix-native.ts build",
+    "check:native": "bun scripts/build-gpuix-native.ts check",
+    "test:native": "bun scripts/build-gpuix-native.ts test",
+    "qa:hmr": "bun scripts/qa-gui.ts --dbus --keep --timeout 80 -- bun scripts/qa-hmr.ts",
+    "qa:composer": "bun scripts/qa-gui.ts --keep --timeout 60 -- bun scripts/qa-composer.tsx",
+    "qa:status": "bun scripts/qa-gui.ts --dbus --keep --timeout 60 -- bun scripts/qa-status.tsx",
+    "qa:churn": "bun scripts/qa-gui.ts --dbus --keep --timeout 80 -- bun --expose-gc scripts/qa-window-churn.tsx",
+    "bench:chat": "bun scripts/bench-chat.ts"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.16.0",
@@ -21,10 +36,12 @@
     "@twurple/api": "8.2.0",
     "@twurple/auth": "8.2.0",
     "@twurple/chat": "8.2.0",
+    "pcre2-wasm": "10.49.2",
     "react": "19.3.1",
+    "sharp": "0.35.5",
     "velopack": "1.3.39-g8d2844f",
     "vue": "3.5.44",
-    "youtubei.js": "18.3.0"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.75.0",
@@ -37,5 +54,8 @@
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vite-svg-loader": "5.1.3"
+  },
+  "engines": {
+    "bun": ">=1.4.4"
   }
 }

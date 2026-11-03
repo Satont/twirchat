@@ -7,16 +7,57 @@
  * window while the backend (pinned on globalThis) keeps its connections.
  */
 
-import { render, TooltipProvider } from '@gpuix/react'
+import './native-bootstrap'
+import { z } from 'zod'
 
+import { assertGuiQaEnvironment } from '../services/gui-qa'
 import { getDesktopBackend } from './backend/server'
-import { BackendContext } from './backend/context'
-import { activeWatchedTabStore, loadInitialData, wireBackendToStores } from './state/app'
-import { initCaches } from './state/caches'
-import { handleGlobalKeyDown } from './state/hotkeys'
 import { App } from './components/App'
+import { ChatWindow } from './components/ChatWindow'
+import { loadActionBindings } from './state/action-bindings'
+import { wireProviderChannelFocus } from './state/active-pane'
+import {
+  activeWatchedTabStore,
+  loadInitialData,
+  wireBackendToStores,
+  showNotice,
+} from './state/app'
+import { initCaches } from './state/caches'
+import { wireChannelState } from './state/channel-state'
+import { loadChatPausePreferences } from './state/chat-pause'
+import { chatRulesPreferences } from './state/chat-rules'
+import { initCosmeticCaches } from './state/cosmetics'
+import { loadEmotePreferences } from './state/emote-preferences'
+import {
+  notificationPreferences,
+  wireHighlightNotifications,
+} from './state/highlight-notifications'
+import { loadMessageSimilaritySettings } from './state/message-similarity'
+import { loadStreamerMode, wireStreamerMode } from './state/streamer-mode'
+import { wireTabUnread } from './state/tab-unread'
+import { loadTranslationSettings, wireAutoTranslations } from './state/translation'
+import { wireTwitchActivities } from './state/twitch-activities'
+import { wireActiveWatchedChannels } from './state/watched-subscriptions'
+import { windowPresentationPreferences } from './state/window-presentation'
+import { mountDesktopWindows } from './window-manager'
 
+if (process.env.TWIRCHAT_GUI_QA === '1') assertGuiQaEnvironment()
+else if (process.platform === 'linux' && process.env.GPUIX_BACKGROUND === '1') {
+  throw new Error('Background GUI tests require the isolated qa:gui launcher.')
+}
 const backend = getDesktopBackend()
+initCosmeticCaches(backend.api)
+void Promise.all([
+  loadEmotePreferences(backend.api),
+  loadActionBindings(backend.api),
+  windowPresentationPreferences.load(backend.api),
+  loadMessageSimilaritySettings(backend),
+  loadChatPausePreferences(backend.api),
+  loadStreamerMode(backend),
+  chatRulesPreferences.load(backend.api),
+  notificationPreferences.load(backend.api),
+  loadTranslationSettings(backend),
+]).catch((error) => showNotice('error', `Could not load preferences: ${String(error)}`))
 
 // Session caches (avatars, mention colors) resolve through the backend bridge.
 initCaches({
@@ -26,43 +67,73 @@ initCaches({
 
 // Wiring must survive `bun --hot`: the entry re-runs on every save, but the
 // backend singleton and its event subscriptions must be created only once.
-const g = globalThis as { __twirchatGpuixWired?: boolean }
+declare global {
+  var __twirchatGpuixWired: boolean | undefined
+  var __twirchatTabUnreadWired: boolean | undefined
+  var __twirchatChannelStateWired: boolean | undefined
+  var __twirchatActivitiesWired: boolean | undefined
+  var __twirchatHighlightNotificationsWired: boolean | undefined
+  var __twirchatTranslationsWired: boolean | undefined
+  var __twirchatProviderFocusWired: boolean | undefined
+  var __twirchatStreamerModeWired: boolean | undefined
+  var __twirchatWatchedSubscriptionsWired: boolean | undefined
+}
+const g = globalThis
+
 if (!g.__twirchatGpuixWired) {
   g.__twirchatGpuixWired = true
   wireBackendToStores(backend)
-  void loadInitialData(backend)
+  void loadInitialData(backend).catch((error) =>
+    showNotice('error', `Could not load chat state: ${String(error)}`),
+  )
+}
+if (!g.__twirchatTabUnreadWired) {
+  g.__twirchatTabUnreadWired = true
+  wireTabUnread(backend)
+}
+if (!g.__twirchatChannelStateWired) {
+  g.__twirchatChannelStateWired = true
+  wireChannelState(backend)
+}
+if (!g.__twirchatActivitiesWired) {
+  g.__twirchatActivitiesWired = true
+  wireTwitchActivities(backend)
+}
+if (!g.__twirchatHighlightNotificationsWired) {
+  g.__twirchatHighlightNotificationsWired = true
+  wireHighlightNotifications(backend)
+}
+if (!g.__twirchatTranslationsWired) {
+  g.__twirchatTranslationsWired = true
+  wireAutoTranslations(backend)
+}
+if (!g.__twirchatProviderFocusWired) {
+  g.__twirchatProviderFocusWired = true
+  wireProviderChannelFocus(backend)
+}
+if (!g.__twirchatStreamerModeWired) {
+  g.__twirchatStreamerModeWired = true
+  wireStreamerMode(backend)
+}
+if (!g.__twirchatWatchedSubscriptionsWired) {
+  g.__twirchatWatchedSubscriptionsWired = true
+  wireActiveWatchedChannels(backend)
 }
 
-render(
-  <BackendContext.Provider value={backend}>
-    <TooltipProvider delayDuration={300}>
-      <App />
-    </TooltipProvider>
-  </BackendContext.Provider>,
-  {
-    title: 'TwirChat',
-    width: 1200,
-    height: 800,
-    titlebarTransparent: process.platform === 'darwin',
-    trafficLightX: 16,
-    trafficLightY: 17,
-    appName: 'TwirChat',
-    // Wayland app_id / X11 WM_CLASS — same identity as the Velopack package,
-    // so compositors and taskbars can group the window and match rules.
-    appId: 'dev.twirchat.app',
-    // Agent-driven runs (screenshots, automation) must not steal focus.
-    focus: process.env.GPUIX_BACKGROUND !== '1',
-    onKeyDown(event) {
-      handleGlobalKeyDown(event)
-    },
-  },
+mountDesktopWindows(
+  backend,
+  (descriptor) => (descriptor.kind === 'main' ? <App /> : <ChatWindow descriptor={descriptor} />),
+  () => process.exit(0),
 )
 
 // Dev-only debug actions driven through POST :45824/dev/hook.
-;(
-  globalThis as { __twirchatDevHook?: (action: string, payload?: unknown) => Promise<unknown> }
-).__twirchatDevHook = async (action, payload) => {
-  const p = (payload ?? {}) as { tabId?: string; panelId?: string; direction?: string }
+const debugPayloadSchema = z.object({
+  tabId: z.string().optional(),
+  panelId: z.string().optional(),
+  direction: z.enum(['horizontal', 'vertical']).optional(),
+})
+globalThis.__twirchatDevHook = async (action, payload) => {
+  const p = debugPayloadSchema.parse(payload ?? {})
   const { layoutStore, splitPanel } = await import('./state/layout')
   if (action === 'dump-layout') {
     const tabId = p.tabId ?? activeWatchedTabStore.get()
@@ -74,12 +145,7 @@ render(
     if (!layout) return { error: 'no layout' }
     const firstPanel = findFirstPanel(layout.root)
     if (!firstPanel) return { error: 'no panel' }
-    await splitPanel(
-      backend,
-      tabId,
-      firstPanel.id,
-      (p.direction as 'horizontal' | 'vertical') ?? 'vertical',
-    )
+    await splitPanel(backend, tabId, firstPanel.id, p.direction ?? 'vertical')
     return layoutStore.get().get(tabId) ?? null
   }
   return { error: `unknown action: ${action}` }

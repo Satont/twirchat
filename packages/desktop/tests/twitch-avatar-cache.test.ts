@@ -6,16 +6,19 @@ describe('createTwitchAvatarResolver', () => {
   test('fetches avatar from backend twitch user endpoint and caches it', async () => {
     const calls: string[] = []
     const resolver = createTwitchAvatarResolver({
-      fetchFn: mock(async (input: string | URL | Request) => {
-        const url = String(input)
-        calls.push(url)
+      fetchFn: Object.assign(
+        mock(async (input: string | URL | Request) => {
+          const url = String(input)
+          calls.push(url)
 
-        return Response.json({
-          user: {
-            profile_image_url: 'https://example.com/avatar.png',
-          },
-        })
-      }) as unknown as typeof fetch,
+          return Response.json({
+            user: {
+              profile_image_url: 'https://example.com/avatar.png',
+            },
+          })
+        }),
+        { preconnect: fetch.preconnect },
+      ),
     })
 
     const first = await resolver({ authorId: '12345' })

@@ -1,3 +1,4 @@
+import type { ChannelStatus, ChannelStatusRequest, ChannelsStatusResponse } from '@twirchat/shared'
 /**
  * POST /api/channels-status
  *
@@ -15,6 +16,8 @@
  *   - Always uses app token (no user context needed for public channel info)
  *   - One request per channel (Kick API doesn't support bulk slug lookup)
  */
+import { logger } from '@twirchat/shared/logger'
+import { z } from 'zod'
 
 import { config } from '../config.ts'
 import { fetchTwitchHelixWithAppToken, getKickAppToken } from './stream-status.ts'
@@ -23,8 +26,6 @@ import {
   normalizeTwitchLogin,
   resolveTwitchUserIdsByLogin,
 } from './twitch-users.ts'
-import { logger } from '@twirchat/shared/logger'
-import type { ChannelStatus, ChannelStatusRequest, ChannelsStatusResponse } from '@twirchat/shared'
 
 const log = logger('channels-status')
 const MAX_REQUEST_BODY_BYTES = 64 * 1024
@@ -113,7 +114,7 @@ async function fetchTwitchChannelsStatus(
       return normalizedChannels.map((channel) => ({
         channelLogin: channel.normalizedLogin ?? channel.originalLogin.toLowerCase(),
         isLive: false,
-        platform: 'twitch' as const,
+        platform: 'twitch' satisfies ChannelStatus['platform'],
         title: '',
       }))
     }
@@ -121,12 +122,12 @@ async function fetchTwitchChannelsStatus(
 
   const broadcasterIds = [
     ...new Set(validLogins.map((login) => loginToId.get(login)).filter(Boolean)),
-  ] as string[]
+  ].filter((id): id is string => typeof id === 'string')
   if (broadcasterIds.length === 0) {
     return normalizedChannels.map((channel) => ({
       channelLogin: channel.normalizedLogin ?? channel.originalLogin.toLowerCase(),
       isLive: false,
-      platform: 'twitch' as const,
+      platform: 'twitch' satisfies ChannelStatus['platform'],
       title: '',
     }))
   }
@@ -154,7 +155,19 @@ async function fetchTwitchChannelsStatus(
   const offlineMap = new Map<string, HelixChannel>()
 
   if (streamsRes.ok) {
-    const body = (await streamsRes.json()) as { data: HelixStream[] }
+    const body = z
+      .object({
+        data: z.array(
+          z.object({
+            user_id: z.string(),
+            user_login: z.string(),
+            title: z.string(),
+            game_name: z.string(),
+            viewer_count: z.number(),
+          }),
+        ),
+      })
+      .parse(await streamsRes.json())
     for (const s of body.data) {
       liveMap.set(s.user_login.toLowerCase(), s)
     }
@@ -167,7 +180,18 @@ async function fetchTwitchChannelsStatus(
   }
 
   if (channelsRes.ok) {
-    const body = (await channelsRes.json()) as { data: HelixChannel[] }
+    const body = z
+      .object({
+        data: z.array(
+          z.object({
+            broadcaster_id: z.string(),
+            broadcaster_login: z.string(),
+            title: z.string(),
+            game_name: z.string(),
+          }),
+        ),
+      })
+      .parse(await channelsRes.json())
     for (const c of body.data) {
       offlineMap.set(c.broadcaster_login.toLowerCase(), c)
     }
@@ -185,7 +209,7 @@ async function fetchTwitchChannelsStatus(
       return {
         channelLogin: channel.originalLogin.toLowerCase(),
         isLive: false,
-        platform: 'twitch' as const,
+        platform: 'twitch' satisfies ChannelStatus['platform'],
         title: '',
       }
     }
@@ -196,7 +220,7 @@ async function fetchTwitchChannelsStatus(
         categoryName: live.game_name || undefined,
         channelLogin: login,
         isLive: true,
-        platform: 'twitch' as const,
+        platform: 'twitch' satisfies ChannelStatus['platform'],
         title: live.title,
         viewerCount: live.viewer_count,
       }
@@ -206,7 +230,7 @@ async function fetchTwitchChannelsStatus(
       categoryName: offline?.game_name || undefined,
       channelLogin: login,
       isLive: false,
-      platform: 'twitch' as const,
+      platform: 'twitch' satisfies ChannelStatus['platform'],
       title: offline?.title ?? '',
     }
   })
@@ -240,13 +264,21 @@ async function fetchKickChannelStatus(
     }
   }
 
-  const body = (await res.json()) as {
-    data?: {
-      stream_title?: string
-      stream?: { is_live?: boolean; viewer_count?: number }
-      category?: { name?: string }
-    }[]
-  }
+  const body = z
+    .object({
+      data: z
+        .array(
+          z.object({
+            stream_title: z.string().optional(),
+            stream: z
+              .object({ is_live: z.boolean().optional(), viewer_count: z.number().optional() })
+              .optional(),
+            category: z.object({ name: z.string().optional() }).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .parse(await res.json())
 
   const ch = body.data?.[0]
   if (!ch) {
@@ -283,7 +315,7 @@ async function mapWithConcurrency<T, U>(
     return []
   }
 
-  const results = new Array<U>(items.length)
+  const results: U[] = []
   let nextIndex = 0
 
   const runWorker = async (): Promise<void> => {
@@ -293,7 +325,8 @@ async function mapWithConcurrency<T, U>(
     }
 
     nextIndex += 1
-    const currentItem = items[currentIndex] as T
+    const currentItem = items[currentIndex]
+    if (currentItem === undefined) return
     results[currentIndex] = await mapper(currentItem, currentIndex)
     await runWorker()
   }
@@ -327,7 +360,7 @@ async function parseChannelsStatusBody(req: Request): Promise<unknown> {
   }
 
   try {
-    return JSON.parse(text) as unknown
+    return JSON.parse(text)
   } catch {
     throw new InvalidChannelsStatusRequestError('body must be valid JSON')
   }

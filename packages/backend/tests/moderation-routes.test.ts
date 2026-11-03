@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { createModerationRoutes } from '../src/routes/moderation.ts'
 
 test('moderation endpoints reject requests that do not identify a desktop client', async () => {

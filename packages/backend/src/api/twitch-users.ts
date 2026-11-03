@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import { config } from '../config.ts'
 import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
 
@@ -81,7 +83,9 @@ export async function resolveTwitchUserIdsByLogin(
     throw new Error(`Twitch /helix/users failed: ${response.status} ${body}`)
   }
 
-  const payload = (await response.json()) as { data: HelixUser[] }
+  const payload = z
+    .object({ data: z.array(z.object({ id: z.string(), login: z.string() })) })
+    .parse(await response.json())
   for (const user of payload.data) {
     loginToId.set(user.login.toLowerCase(), user.id)
   }
@@ -112,6 +116,17 @@ export async function fetchTwitchUserById(
     throw new Error(`Twitch /helix/users by id failed: ${response.status} ${body}`)
   }
 
-  const payload = (await response.json()) as { data: HelixUserProfile[] }
+  const payload = z
+    .object({
+      data: z.array(
+        z.object({
+          id: z.string(),
+          login: z.string(),
+          display_name: z.string().optional(),
+          profile_image_url: z.string().optional(),
+        }),
+      ),
+    })
+    .parse(await response.json())
   return payload.data[0] ?? null
 }

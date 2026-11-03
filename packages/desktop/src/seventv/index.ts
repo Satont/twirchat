@@ -1,4 +1,5 @@
-import type { Platform, SevenTVEmote } from '@twirchat/shared'
+import type { DesktopToBackendMessage, Platform, SevenTVEmote } from '@twirchat/shared'
+
 import { getBackendUrl } from '../runtime-config'
 
 interface EmoteSetData {
@@ -12,16 +13,17 @@ interface ChannelSubscription {
   channelId: string
   platformUserId?: string
   lookupIds: Set<string>
+  owners: Set<string>
 }
 
-class DesktopSevenTVService {
+export class DesktopSevenTVService {
   private emoteSets = new Map<string, EmoteSetData>() // ChannelKey -> emoteSet
   private subscriptions = new Map<string, ChannelSubscription>()
   private lookupToChannelKey = new Map<string, string>()
   private _backendUrl: string | null = null
 
   private getChannelKey(platform: Platform, channelId: string): string {
-    return `${platform}:${channelId}`
+    return `${platform}:${platform === 'youtube' ? channelId : channelId.replace(/^#/, '').toLowerCase()}`
   }
 
   private rememberLookupIds(
@@ -37,6 +39,7 @@ class DesktopSevenTVService {
       subscription = {
         channelId,
         lookupIds: new Set<string>(),
+        owners: new Set<string>(),
         platform,
         platformUserId,
       }
@@ -74,6 +77,7 @@ class DesktopSevenTVService {
     channelId: string,
     lookupIds: string[] = [],
     platformUserId?: string,
+    owner = 'default',
   ): Promise<void> {
     const subscription = this.rememberLookupIds(
       platform,
@@ -82,13 +86,14 @@ class DesktopSevenTVService {
       platformUserId,
     )
     subscription.platformUserId = platformUserId
+    subscription.owners.add(owner)
 
     // Send via backend WebSocket
-    const message = {
+    const message: DesktopToBackendMessage = {
       channelId,
       platform,
       platformUserId,
-      type: 'seventv_subscribe' as const,
+      type: 'seventv_subscribe' satisfies DesktopToBackendMessage['type'],
     }
 
     // This will be sent via the existing backend connection
@@ -96,9 +101,15 @@ class DesktopSevenTVService {
   }
 
   // Unsubscribe when leaving channel
-  async unsubscribeFromChannel(platform: Platform, channelId: string): Promise<void> {
+  async unsubscribeFromChannel(
+    platform: Platform,
+    channelId: string,
+    owner = 'default',
+  ): Promise<void> {
     const channelKey = this.resolveChannelKey(platform, channelId)
     const subscription = this.subscriptions.get(channelKey)
+    subscription?.owners.delete(owner)
+    if (subscription && subscription.owners.size > 0) return
     const backendChannelId = subscription?.channelId ?? channelId
 
     // Remove from local cache
@@ -114,10 +125,10 @@ class DesktopSevenTVService {
     }
 
     // Send via backend WebSocket
-    const message = {
+    const message: DesktopToBackendMessage = {
       channelId: backendChannelId,
       platform,
-      type: 'seventv_unsubscribe' as const,
+      type: 'seventv_unsubscribe' satisfies DesktopToBackendMessage['type'],
     }
 
     this.sendToBackend(message)
@@ -127,9 +138,9 @@ class DesktopSevenTVService {
   async resubscribeToChannels(
     subscriptions: { platform: Platform; channelId: string; platformUserId?: string }[],
   ): Promise<void> {
-    const message = {
+    const message: DesktopToBackendMessage = {
       subscriptions,
-      type: 'seventv_resubscribe' as const,
+      type: 'seventv_resubscribe' satisfies DesktopToBackendMessage['type'],
     }
 
     this.sendToBackend(message)
@@ -219,6 +230,10 @@ class DesktopSevenTVService {
   }
 
   // Get all emotes for a channel
+  hasEmoteSet(platform: Platform, channelId: string): boolean {
+    return this.emoteSets.has(this.resolveChannelKey(platform, channelId))
+  }
+
   getEmotes(platform: Platform, channelId: string): SevenTVEmote[] {
     const channelKey = this.resolveChannelKey(platform, channelId)
     const emoteSet = this.emoteSets.get(channelKey)
@@ -232,11 +247,13 @@ class DesktopSevenTVService {
 
   // Get all subscribed channels
   getSubscribedChannels(): { platform: Platform; channelId: string; platformUserId?: string }[] {
-    return [...this.subscriptions.values()].map((subscription) => ({
-      channelId: subscription.channelId,
-      platform: subscription.platform,
-      platformUserId: subscription.platformUserId,
-    }))
+    return [...this.subscriptions.values()]
+      .filter((subscription) => subscription.owners.size > 0)
+      .map((subscription) => ({
+        channelId: subscription.channelId,
+        platform: subscription.platform,
+        platformUserId: subscription.platformUserId,
+      }))
   }
 
   getLookupChannelIds(platform: Platform, channelId: string): string[] {
@@ -251,7 +268,7 @@ class DesktopSevenTVService {
   }
 
   // This will be set by the backend connection module
-  sendToBackend: (message: unknown) => void = () => {
+  sendToBackend: (message: DesktopToBackendMessage) => void = () => {
     console.warn('[7TV] sendToBackend not initialized')
   }
 }

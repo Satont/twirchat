@@ -1,0 +1,15 @@
+version: v2
+clean: true
+plugins:
+  - local: [bun, codegen/plugin.ts]
+    out: gen
+    strategy: all
+    opt:
+      - outputServices=grpc-js
+      - esModuleInterop=true
+      - env=node
+      - importSuffix=.js
+      - useOptionals=messages
+      - exportCommonSymbols=true
+      - useExactTypes=false
+      - outputJsonMethods=false

@@ -17,6 +17,7 @@ export interface EmoteSuggestion {
   label: string
   imageUrl: string
   animated: boolean
+  emoji?: string
 }
 
 export interface CommandSuggestion {
@@ -79,5 +80,5 @@ export function replaceToken(text: string, suggestion: AutocompleteSuggestion): 
     return `${before}@${suggestion.insertLabel} `
   }
 
-  return `${before}${suggestion.label} `
+  return `${before}${suggestion.emoji ?? suggestion.label} `
 }

@@ -7,13 +7,13 @@
  * for the UI now lives in src/gpuix/backend/{api,events}.ts.
  */
 
+import type { SevenTVEmote } from '@twirchat/shared/protocol'
 import type {
   NormalizedChatMessage,
   NormalizedEvent,
   Platform,
   PlatformStatusInfo,
 } from '@twirchat/shared/types'
-import type { SevenTVEmote } from '@twirchat/shared/protocol'
 
 export interface UserAlias {
   platform: Platform
@@ -26,6 +26,8 @@ export interface UserAlias {
 export interface UserChatHistoryCursor {
   createdAt: number
   id: string
+  platform?: Platform
+  channelId?: string
 }
 
 export interface UserChatHistoryPage {

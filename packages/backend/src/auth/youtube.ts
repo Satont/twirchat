@@ -1,3 +1,4 @@
+import { YOUTUBE_AUTH_URL, YOUTUBE_TOKEN_URL } from '@twirchat/shared'
 /**
  * YouTube OAuth helpers — backend side.
  *
@@ -9,14 +10,14 @@
  *
  * Tokens are returned to the desktop and stored in its local SQLite.
  */
-
-import { config } from '../config.ts'
-import { YOUTUBE_AUTH_URL, YOUTUBE_TOKEN_URL } from '@twirchat/shared'
 import type {
   YouTubeBuildUrlResponse,
   YouTubeExchangeResponse,
   YouTubeRefreshResponse,
 } from '@twirchat/shared'
+import { z } from 'zod'
+
+import { config } from '../config.ts'
 
 const YOUTUBE_SCOPES = [
   'openid',
@@ -75,12 +76,14 @@ export async function exchangeYouTubeCode(
     throw new Error(`YouTube token exchange failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as {
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-    scope?: string
-  }
+  const data = z
+    .object({
+      access_token: z.string(),
+      refresh_token: z.string().optional(),
+      expires_in: z.number().optional(),
+      scope: z.string().optional(),
+    })
+    .parse(await res.json())
 
   return {
     accessToken: data.access_token,
@@ -110,11 +113,13 @@ export async function refreshYouTubeToken(refreshToken: string): Promise<YouTube
     throw new Error(`YouTube token refresh failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as {
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-  }
+  const data = z
+    .object({
+      access_token: z.string(),
+      refresh_token: z.string().optional(),
+      expires_in: z.number().optional(),
+    })
+    .parse(await res.json())
 
   return {
     accessToken: data.access_token,

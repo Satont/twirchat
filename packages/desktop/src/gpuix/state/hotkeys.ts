@@ -1,23 +1,107 @@
+import type { EventPayload, KeyEvent } from '@gpuix/react'
 /**
  * Global hotkeys (port of composables/useHotkeys.ts).
  * Driven from the window-level renderer onKeyDown in main.tsx.
  */
 
-import type { EventPayload, KeyEvent } from '@gpuix/react'
-
+import { runInBackground } from '../../services/background-task'
+import { normalizeKeyChord, eventKeyChord } from '../hotkey-bindings'
+import {
+  dispatchCustomHotkey,
+  actionBindingsStore,
+  registerSupplementalHotkeys,
+  refreshNativeHotkeyPlan,
+  type SupplementalHotkeyBinding,
+} from './action-bindings'
 import { activeTabStore, activeWatchedTabStore, settingsStore, tabChannelIdsStore } from './app'
 import { isTextInputFocused } from './focus'
-import { closeTopOverlay } from './overlays'
+import { closeTopOverlay, hasOpenOverlay } from './overlays'
+export {
+  registerHotkeyContext,
+  setHotkeyRoute,
+  useHotkeyContext,
+  useHotkeyRoute,
+} from './action-bindings'
 
 export interface HotkeyUiActions {
   openAddChannel: () => void
   openTabSelector: () => void
+  openAllChatSearch?: () => void
+  cycleTab?: (direction: 1 | -1) => void
+  isChatActive?: () => boolean
 }
 
-let uiActions: HotkeyUiActions | null = null
+const windowActions = new Map<string, HotkeyUiActions>()
 
-export function registerHotkeyActions(actions: HotkeyUiActions): void {
-  uiActions = actions
+let stopLegacyStores: (() => void) | undefined
+function legacyBindings(actions: HotkeyUiActions, scope: string): SupplementalHotkeyBinding[] {
+  if (windowActions.get(scope) !== actions || hasOpenOverlay(scope)) return []
+  const inputFocused = isTextInputFocused(scope)
+  const chatActive = actions.isChatActive?.() ?? activeTabStore.get() === 'chat'
+  if (inputFocused && !chatActive) return []
+  const bindings: SupplementalHotkeyBinding[] = []
+  const used = new Set<string>()
+  const add = (id: string, combo: string | undefined, handler: (() => void) | undefined) => {
+    if (!combo || !handler) return
+    let chord: string
+    try {
+      chord = normalizeKeyChord(combo)
+    } catch {
+      return
+    }
+    if (inputFocused && !chord.split('+').some((part) => part === 'ctrl' || part === 'alt')) return
+    if (used.has(chord)) return
+    used.add(chord)
+    bindings.push({ id, keys: [chord], handler })
+  }
+  add('quick-switcher', 'ctrl+k', actions.openTabSelector)
+  add('global-search', 'ctrl+shift+f', actions.openAllChatSearch)
+  if (actionBindingsStore.get().value.legacyNavigation) {
+    const hotkeys = settingsStore.get()?.hotkeys
+    if (hotkeys) {
+      if (!inputFocused) add('new-tab', hotkeys.newTab, actions.openAddChannel)
+      const cycle = actions.cycleTab ?? (scope === 'main' ? cycleTab : undefined)
+      if (cycle) {
+        add('next-tab', hotkeys.nextTab, () => cycle(1))
+        add('previous-tab', hotkeys.prevTab, () => cycle(-1))
+      }
+      add('tab-selector', hotkeys.tabSelector, actions.openTabSelector)
+    }
+  }
+  return bindings
+}
+export function registerHotkeyActions(actions: HotkeyUiActions, scope = 'main'): () => void {
+  windowActions.set(scope, actions)
+  const stopSource = registerSupplementalHotkeys(scope, 'navigation', () =>
+    legacyBindings(actions, scope),
+  )
+  if (!stopLegacyStores) {
+    const refresh = () => {
+      for (const id of windowActions.keys()) refreshNativeHotkeyPlan(id)
+    }
+    const stopSettings = settingsStore.subscribe(refresh)
+    const stopTabs = activeTabStore.subscribe(refresh)
+    stopLegacyStores = () => {
+      stopSettings()
+      stopTabs()
+    }
+  }
+  return () => {
+    if (windowActions.get(scope) === actions) windowActions.delete(scope)
+    stopSource()
+    if (!windowActions.size) {
+      stopLegacyStores?.()
+      stopLegacyStores = undefined
+    }
+  }
+}
+export function invokeHotkeyUiAction(
+  action: 'openAllChatSearch' | 'openTabSelector' | 'openAddChannel',
+  scope = 'main',
+): void {
+  const handler = windowActions.get(scope)?.[action]
+  if (!handler) throw new Error('This action is unavailable in the current window.')
+  handler()
 }
 
 /** GPUIX arrow names → DOM names, so recorded combos match the stored format. */
@@ -44,35 +128,15 @@ export function formatKeyCombo(combo: string): string {
     .join('+')
 }
 
-function parseKeyCombo(combo: string): {
-  ctrl: boolean
-  shift: boolean
-  alt: boolean
-  key: string
-} {
-  const parts = combo
-    .toLowerCase()
-    .split('+')
-    .map((part) => part.trim())
-    .filter(Boolean)
-  return {
-    ctrl: parts.includes('ctrl'),
-    shift: parts.includes('shift'),
-    alt: parts.includes('alt'),
-    key: parts.find((part) => !['ctrl', 'shift', 'alt'].includes(part)) ?? '',
-  }
-}
-
 function matchesCombo(event: EventPayload, combo: string): boolean {
-  const parsed = parseKeyCombo(combo)
-  const key = event.key ?? ''
-  const normalizedKey = key.length === 1 ? key.toLowerCase() : (GPUIX_TO_DOM_KEY[key] ?? key)
-  return (
-    (event.modifiers?.ctrl ?? false) === parsed.ctrl &&
-    (event.modifiers?.shift ?? false) === parsed.shift &&
-    (event.modifiers?.alt ?? false) === parsed.alt &&
-    normalizedKey === parsed.key
-  )
+  try {
+    return (
+      eventKeyChord({ key: event.key ?? '', modifiers: event.modifiers }) ===
+      normalizeKeyChord(combo)
+    )
+  } catch {
+    return false
+  }
 }
 
 function cycleTab(direction: 1 | -1): void {
@@ -86,39 +150,55 @@ function cycleTab(direction: 1 | -1): void {
   }
 }
 
-export function handleGlobalKeyDown(event: KeyEvent): void {
+export function handleGlobalKeyDown(event: KeyEvent, scope = 'main'): void {
+  if (dispatchCustomHotkey(event, scope)) return
+  if (event.defaultPrevented) return
+  const uiActions = windowActions.get(scope)
   if (!uiActions) return
 
   // ESC closes the topmost overlay. Inputs inside overlays handle their own
   // ESC (element callbacks fire first), so only handle it here when no text
   // editor is focused — otherwise both would fire.
   if (event.key === 'escape') {
-    if (!isTextInputFocused()) closeTopOverlay()
+    if (!isTextInputFocused(scope)) closeTopOverlay(scope)
     return
   }
 
-  if (isTextInputFocused()) return
-
   const modifiers = event.modifiers
+  const inputFocused = isTextInputFocused(scope)
+  if (hasOpenOverlay(scope)) return
+  if (
+    inputFocused &&
+    (!(uiActions.isChatActive?.() ?? activeTabStore.get() === 'chat') ||
+      (!modifiers?.ctrl && !modifiers?.alt))
+  ) {
+    return
+  }
+  if (
+    modifiers?.ctrl &&
+    modifiers.shift &&
+    !modifiers.alt &&
+    event.key?.toLowerCase() === 'f' &&
+    uiActions.openAllChatSearch
+  ) {
+    event.preventDefault()
+    uiActions.openAllChatSearch()
+    return
+  }
   // Ctrl+K is hardcoded (same as the Vue build).
-  if (modifiers?.ctrl && !modifiers.shift && !modifiers.alt && event.key === 'k') {
+  if (modifiers?.ctrl && !modifiers.shift && !modifiers.alt && event.key?.toLowerCase() === 'k') {
+    event.preventDefault()
     uiActions.openTabSelector()
     return
   }
 
-  const hotkeys = settingsStore.get()?.hotkeys
-  if (!hotkeys) return
-
-  const actions: [string, () => void][] = [
-    [hotkeys.newTab, uiActions.openAddChannel],
-    [hotkeys.nextTab, () => cycleTab(1)],
-    [hotkeys.prevTab, () => cycleTab(-1)],
-    [hotkeys.tabSelector, uiActions.openTabSelector],
-  ]
-  const match = actions.find(([combo]) => matchesCombo(event, combo))
+  const match = legacyBindings(uiActions, scope).find(
+    (binding) => !!binding.keys[0] && matchesCombo(event, binding.keys[0]),
+  )
   if (match) {
     // A combo like Ctrl+Tab must not also run GPUI's default (focus moves).
     event.preventDefault()
-    match[1]()
+    const result = match.handler()
+    if (result) runInBackground(result, 'hotkeys background operation failed')
   }
 }

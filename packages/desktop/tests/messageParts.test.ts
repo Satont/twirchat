@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
+
 import { buildMessageParts } from '../src/views/shared/utils/messageParts'
 
 function makeMessage(overrides: Partial<NormalizedChatMessage>): NormalizedChatMessage {

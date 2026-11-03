@@ -1,3 +1,6 @@
+import type { KickBuildUrlRequest, KickExchangeRequest } from '@twirchat/shared'
+import { KICK_REDIRECT_URI } from '@twirchat/shared/constants'
+import { logger } from '@twirchat/shared/logger'
 /**
  * Kick OAuth — desktop side (PKCE flow).
  *
@@ -15,21 +18,20 @@
  *  - Desktop calls POST /api/auth/kick/refresh on backend → receives new tokens
  *  - Desktop updates the account record in SQLite
  */
+import type { Platform } from '@twirchat/shared/types'
+import { z } from 'zod'
 
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
-import { AccountStore } from '../store/account-store'
-import { successPage } from './server'
-import { KICK_REDIRECT_URI } from '@twirchat/shared/constants'
 import { backendFetch } from '../runtime-config'
-import { logger } from '@twirchat/shared/logger'
-import type {
-  KickBuildUrlRequest,
-  KickBuildUrlResponse,
-  KickExchangeRequest,
-  KickExchangeResponse,
-  KickRefreshRequest,
-  KickRefreshResponse,
-} from '@twirchat/shared'
+import { AccountStore } from '../store/account-store'
+import {
+  createKickTokenRefresher,
+  requestKickRefresh,
+  type KickRefreshContext,
+  type KickRefreshEntry,
+} from './kick-refresh'
+import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
+import { authUrlSchema, exchangedTokenSchema } from './response-schemas'
+import { successPage } from './server'
 
 const log = logger('auth-kick')
 
@@ -95,7 +97,7 @@ export async function getKickAuthUrl(codeChallenge: string, state: string): Prom
     throw new Error(`Kick auth URL request failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as KickBuildUrlResponse
+  const data = authUrlSchema.parse(await res.json())
   return data.url
 }
 
@@ -149,7 +151,7 @@ export async function handleKickCallback(url: URL): Promise<{
     throw new Error(`Kick token exchange failed: ${exchangeRes.status} ${body}`)
   }
 
-  const tokens = (await exchangeRes.json()) as KickExchangeResponse
+  const tokens = exchangedTokenSchema.parse(await exchangeRes.json())
 
   // Fetch user info from Kick API
   const userRes = await fetch('https://api.kick.com/public/v1/users', {
@@ -160,25 +162,31 @@ export async function handleKickCallback(url: URL): Promise<{
     throw new Error(`Kick user info request failed: ${userRes.status}`)
   }
 
-  const userData = (await userRes.json()) as {
-    data: {
-      user_id: number
-      name: string
-      email?: string
-      profile_picture?: string
-    }[]
-    message: string
-  }
+  const userData = z
+    .object({
+      data: z.array(
+        z.object({
+          user_id: z.number(),
+          name: z.string(),
+          email: z.string().optional(),
+          profile_picture: z.string().optional(),
+        }),
+      ),
+      message: z.string(),
+    })
+    .parse(await userRes.json())
 
   if (!userData.data || userData.data.length === 0) {
     throw new Error('Kick user info response empty')
   }
 
-  const user = userData.data[0]!
+  const user = userData.data[0]
+  if (!user) throw new Error('Kick user response was empty.')
 
   const expiresAt = tokens.expiresIn ? Math.floor(Date.now() / 1000) + tokens.expiresIn : undefined
 
   AccountStore.upsert({
+    activate: true,
     accessToken: tokens.accessToken,
     avatarUrl: user.profile_picture,
     displayName: user.name,
@@ -200,7 +208,7 @@ export async function handleKickCallback(url: URL): Promise<{
     }),
     user: {
       displayName: user.name,
-      platform: 'kick' as const,
+      platform: 'kick' satisfies Platform,
       username: user.name,
     },
   }
@@ -210,30 +218,35 @@ export async function handleKickCallback(url: URL): Promise<{
  * Refreshes the Kick access token for the given accountId via the backend proxy.
  * Updates the stored tokens in SQLite and returns the new access token.
  */
-export async function refreshKickToken(accountId: string): Promise<string> {
-  const stored = AccountStore.getTokens(accountId)
-  if (!stored?.refreshToken) {
-    throw new Error('No refresh token for Kick account')
-  }
+declare global {
+  var __twirchatKickRefreshStateV1: Map<string, KickRefreshEntry> | undefined
+}
 
-  const res = await backendFetch(`/api/auth/kick/refresh`, {
-    body: JSON.stringify({
-      refreshToken: stored.refreshToken,
-    } satisfies KickRefreshRequest),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  })
+const refreshKickTokenSingleFlight = createKickTokenRefresher({
+  state: (globalThis.__twirchatKickRefreshStateV1 ??= new Map()),
+  now: Date.now,
+  read(accountId) {
+    if (AccountStore.findByPlatform('kick')?.id !== accountId) return null
+    const tokens = AccountStore.getTokens(accountId)
+    return tokens?.refreshToken ? { ...tokens, refreshToken: tokens.refreshToken } : null
+  },
+  request: (stored) => requestKickRefresh(stored, backendFetch, Date.now),
+  persist(accountId, tokens) {
+    AccountStore.updateTokens(accountId, tokens.accessToken, tokens.refreshToken, tokens.expiresAt)
+  },
+  failed(accountId, error, retryAt, context) {
+    log.warn('Kick authentication refresh failed', {
+      accountId,
+      channel: context.channelSlug,
+      error: error.message,
+      retryAt,
+    })
+  },
+})
 
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Kick token refresh failed: ${res.status} ${body}`)
-  }
-
-  const data = (await res.json()) as KickRefreshResponse
-
-  const expiresAt = data.expiresIn ? Math.floor(Date.now() / 1000) + data.expiresIn : undefined
-
-  AccountStore.updateTokens(accountId, data.accessToken, data.refreshToken, expiresAt)
-
-  return data.accessToken
+export async function refreshKickToken(
+  accountId: string,
+  context?: KickRefreshContext,
+): Promise<string> {
+  return refreshKickTokenSingleFlight(accountId, context)
 }

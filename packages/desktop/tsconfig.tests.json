@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.gpuix.json",
+  "include": ["tests/**/*.ts", "tests/**/*.tsx"]
+}

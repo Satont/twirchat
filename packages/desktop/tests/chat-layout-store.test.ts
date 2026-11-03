@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, unlinkSync } from 'node:fs'
-import { getDb, initDb } from '@desktop/store/db'
+
 import { ChatLayoutStore } from '@desktop/store/chat-layout-store'
+import { getDb, initDb } from '@desktop/store/db'
 import type { ChatLayout, SplitConfig } from '@twirchat/shared/types'
+
+import { chatLayoutSchema } from '../src/services/persisted-schemas'
+import { required } from './fixture-values'
 
 const TEST_DB = '/tmp/twirchat-chat-layout-test.sqlite'
 
@@ -33,9 +37,9 @@ describe('ChatLayoutStore', () => {
       expect(layout.version).toBe(1)
       expect(layout.mode).toBe('combined')
       expect(layout.splits).toHaveLength(1)
-      expect(layout.splits[0]!.id).toBe('default')
-      expect(layout.splits[0]!.type).toBe('combined')
-      expect(layout.splits[0]!.size).toBe(100)
+      expect(required(layout.splits[0]).id).toBe('default')
+      expect(required(layout.splits[0]).type).toBe('combined')
+      expect(required(layout.splits[0]).size).toBe(100)
     })
 
     test('default layout has correct structure matching DEFAULT_LAYOUT', () => {
@@ -59,9 +63,9 @@ describe('ChatLayoutStore', () => {
 
       expect(retrieved.mode).toBe('split')
       expect(retrieved.splits).toHaveLength(2)
-      expect(retrieved.splits[0]!.id).toBe('panel-1')
-      expect(retrieved.splits[1]!.id).toBe('panel-2')
-      expect(retrieved.splits[1]!.channelId).toBe('twitch:123')
+      expect(required(retrieved.splits[0]).id).toBe('panel-1')
+      expect(required(retrieved.splits[1]).id).toBe('panel-2')
+      expect(required(retrieved.splits[1]).channelId).toBe('twitch:123')
     })
 
     test('returns independent copy (mutations do not affect store)', () => {
@@ -92,7 +96,7 @@ describe('ChatLayoutStore', () => {
         .get('chat_layout')
 
       expect(row).not.toBeNull()
-      const parsed = JSON.parse(row!.value) as ChatLayout
+      const parsed = chatLayoutSchema.parse(JSON.parse(required(row).value))
       expect(parsed.mode).toBe('split')
       expect(parsed.splits).toHaveLength(2)
     })
@@ -135,9 +139,9 @@ describe('ChatLayoutStore', () => {
       ChatLayoutStore.set(layout)
       const retrieved = ChatLayoutStore.get()
 
-      expect(retrieved.splits[0]!.channelId).toBe('twitch:streamer1')
-      expect(retrieved.splits[1]!.channelId).toBe('kick:streamer2')
-      expect(retrieved.splits[2]!.type).toBe('combined')
+      expect(required(retrieved.splits[0]).channelId).toBe('twitch:streamer1')
+      expect(required(retrieved.splits[1]).channelId).toBe('kick:streamer2')
+      expect(required(retrieved.splits[2]).type).toBe('combined')
     })
 
     test('persists split sizes accurately', () => {
@@ -149,8 +153,8 @@ describe('ChatLayoutStore', () => {
       ChatLayoutStore.set({ version: 1, mode: 'split', splits })
       const retrieved = ChatLayoutStore.get()
 
-      expect(retrieved.splits[0]!.size).toBe(25)
-      expect(retrieved.splits[1]!.size).toBe(75)
+      expect(required(retrieved.splits[0]).size).toBe(25)
+      expect(required(retrieved.splits[1]).size).toBe(75)
     })
   })
 
@@ -166,7 +170,7 @@ describe('ChatLayoutStore', () => {
 
       expect(updated.mode).toBe('split')
       expect(updated.splits).toHaveLength(1)
-      expect(updated.splits[0]!.id).toBe('default')
+      expect(required(updated.splits[0]).id).toBe('default')
       expect(updated.version).toBe(1)
     })
 
@@ -185,8 +189,8 @@ describe('ChatLayoutStore', () => {
       const updated = ChatLayoutStore.update({ splits: newSplits })
 
       expect(updated.mode).toBe('split')
-      expect(updated.splits[0]!.channelId).toBe('twitch:x')
-      expect(updated.splits[1]!.size).toBe(60)
+      expect(required(updated.splits[0]).channelId).toBe('twitch:x')
+      expect(required(updated.splits[1]).size).toBe(60)
     })
 
     test('persists the merged result to database', () => {
@@ -216,7 +220,7 @@ describe('ChatLayoutStore', () => {
       expect(updated.version).toBe(1)
       expect(updated.mode).toBe('split')
       expect(updated.splits).toHaveLength(1)
-      expect(updated.splits[0]!.id).toBe('default')
+      expect(required(updated.splits[0]).id).toBe('default')
     })
 
     test('multiple sequential updates accumulate correctly', () => {
@@ -231,7 +235,7 @@ describe('ChatLayoutStore', () => {
       const final = ChatLayoutStore.get()
       expect(final.mode).toBe('split')
       expect(final.splits).toHaveLength(2)
-      expect(final.splits[0]!.size).toBe(30)
+      expect(required(final.splits[0]).size).toBe(30)
     })
   })
 
@@ -248,7 +252,7 @@ describe('ChatLayoutStore', () => {
 
     test('default splits has a single combined panel at 100%', () => {
       const layout = ChatLayoutStore.get()
-      const defaultSplit = layout.splits[0]!
+      const defaultSplit = required(layout.splits[0])
 
       expect(layout.splits).toHaveLength(1)
       expect(defaultSplit.type).toBe('combined')
@@ -258,7 +262,7 @@ describe('ChatLayoutStore', () => {
 
     test('default splits has no channelId on the combined panel', () => {
       const layout = ChatLayoutStore.get()
-      expect(layout.splits[0]!.channelId).toBeUndefined()
+      expect(required(layout.splits[0]).channelId).toBeUndefined()
     })
 
     test('recovers to defaults when stored JSON is invalid', () => {

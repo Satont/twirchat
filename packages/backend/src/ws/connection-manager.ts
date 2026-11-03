@@ -1,4 +1,3 @@
-import type { ServerWebSocket } from 'bun'
 import type { BackendToDesktopMessage } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 
@@ -8,18 +7,26 @@ export interface WsData {
   clientSecret: string
 }
 
+export type ClientSocket = { data: WsData; send(message: string): unknown }
+
 /** Manages active WebSocket connections from desktop clients */
 class ConnectionManager {
-  private connections = new Map<string, ServerWebSocket<WsData>>()
+  private connections = new Map<string, ClientSocket>()
 
-  register(ws: ServerWebSocket<WsData>): void {
+  register(ws: ClientSocket): void {
     this.connections.set(ws.data.clientSecret, ws)
     log.info('Client connected', { client: ws.data.clientSecret.slice(0, 8) })
   }
 
-  remove(ws: ServerWebSocket<WsData>): void {
+  isCurrent(ws: ClientSocket): boolean {
+    return this.connections.get(ws.data.clientSecret) === ws
+  }
+
+  remove(ws: ClientSocket): boolean {
+    if (!this.isCurrent(ws)) return false
     this.connections.delete(ws.data.clientSecret)
     log.info('Client disconnected', { client: ws.data.clientSecret.slice(0, 8) })
+    return true
   }
 
   send(clientSecret: string, message: BackendToDesktopMessage): boolean {

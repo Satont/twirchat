@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { getDb } from './db'
+
 import { logger } from '@twirchat/shared/logger'
+
+import { getDb } from './db'
 
 const log = logger('client-secret')
 

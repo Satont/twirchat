@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import { getBackendUrl } from '../../runtime-config'
 
 interface TwitchAvatarCacheEntry {
@@ -10,7 +12,7 @@ export interface TwitchAvatarLookupInput {
 }
 
 export interface TwitchAvatarResolverDependencies {
-  fetchFn?: typeof fetch
+  fetchFn?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   now?: () => number
   timeoutMs?: number
 }
@@ -78,9 +80,13 @@ export function createTwitchAvatarResolver({
           return undefined
         }
 
-        const body = (await response.json()) as {
-          user?: { profile_image_url?: string | null }
-        }
+        const body = z
+          .object({
+            user: z
+              .object({ profile_image_url: z.union([z.string(), z.null()]).optional() })
+              .optional(),
+          })
+          .parse(await response.json())
         const avatarUrl = normalizeAvatarUrl(body.user?.profile_image_url)
 
         cache.set(cacheKey, {

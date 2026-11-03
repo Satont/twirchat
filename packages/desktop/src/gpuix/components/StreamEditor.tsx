@@ -1,3 +1,4 @@
+import type { CategorySearchResult } from '@twirchat/shared/protocol'
 /**
  * Stream editor — port of StreamEditor.vue: shows the stream status of a
  * connected Twitch/Kick account and lets the user edit title + category.
@@ -6,18 +7,17 @@
  * then a 60s interval, skipping ticks while the previous one is in flight.
  * The category dropdown is a GPUIX anchored overlay (paints above siblings).
  */
-
 import { useEffect, useRef, useState } from 'react'
-import type { CategorySearchResult } from '@twirchat/shared/protocol'
 
 import { useBackend } from '../backend/context'
+import { runUiTask } from '../hooks/run-ui-task'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useOverlayClose } from '../state/overlays'
 import { accent, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
-import { Text } from './ui/Text'
 import { RemoteImage } from './ui/RemoteImage'
+import { Text } from './ui/Text'
 
 export interface StreamEditorProps {
   platform: 'twitch' | 'kick'
@@ -88,7 +88,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
       }
     }
 
-    void tick()
+    runUiTask(tick())
     const timer = setInterval(() => void tick(), 60_000)
     return () => {
       cancelled = true
@@ -111,7 +111,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
       setCategoryResults([])
       return
     }
-    searchTimer.current = setTimeout(async () => {
+    const searchCategories = async () => {
       setSearchLoading(true)
       try {
         const res = await backend.api.searchCategories({ platform, query: value })
@@ -121,7 +121,8 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
       } finally {
         setSearchLoading(false)
       }
-    }, 350)
+    }
+    searchTimer.current = setTimeout(() => runUiTask(searchCategories()), 350)
   }
 
   function selectCategory(cat: CategorySearchResult) {

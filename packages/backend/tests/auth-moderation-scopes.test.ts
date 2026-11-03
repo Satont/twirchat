@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { buildKickAuthUrl } from '../src/auth/kick.ts'
 import { buildTwitchAuthUrl } from '../src/auth/twitch.ts'
 
@@ -17,6 +18,17 @@ test('OAuth URLs request every moderation scope required by the desktop rail', (
       'moderator:read:chatters',
       'moderator:manage:chat_messages',
       'moderator:manage:banned_users',
+      'user:read:moderated_channels',
+      'moderator:manage:chat_settings',
+      'moderator:manage:announcements',
+      'moderator:manage:shoutouts',
+      'user:manage:whispers',
+      'user:manage:chat_color',
+      'channel:manage:moderators',
+      'channel:manage:vips',
+      'channel:manage:raids',
+      'channel:edit:commercial',
+      'user:manage:blocked_users',
     ]),
   )
 

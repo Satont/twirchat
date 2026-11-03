@@ -1,6 +1,3 @@
-import { config } from '../config.ts'
-import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
-import { resolveTwitchUserId } from './twitch-users.ts'
 import type {
   UserCardAccountAgeField,
   UserCardMetadataBackendRequest,
@@ -9,32 +6,16 @@ import type {
   UserCardSubAgeField,
   UserCardSubscriptionDurationField,
 } from '@twirchat/shared'
+import { z } from 'zod'
+
+import { config } from '../config.ts'
+import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
+import { resolveTwitchUserId } from './twitch-users.ts'
 
 interface TwitchAuthContext {
   accessToken: string
   platformUserId: string
   scopes: string[]
-}
-
-interface TwitchUserResponse {
-  data: Array<{
-    id: string
-    created_at: string
-  }>
-}
-
-interface TwitchFollowerResponse {
-  data: Array<{
-    followed_at: string
-  }>
-}
-
-interface TwitchSubscriptionResponse {
-  data: Array<{
-    tier?: string
-    is_gift?: boolean
-    gifter_name?: string
-  }>
 }
 
 interface KickChannelUserIdentityResponse {
@@ -119,7 +100,9 @@ async function fetchTwitchAccountAge(platformUserId: string): Promise<UserCardAc
     return unavailableAccountAge('unavailable', `Twitch user lookup failed (${response.status}).`)
   }
 
-  const body = (await response.json()) as TwitchUserResponse
+  const body = z
+    .object({ data: z.array(z.object({ id: z.string(), created_at: z.string() })) })
+    .parse(await response.json())
   const user = body.data[0]
 
   if (!user?.created_at) {
@@ -179,7 +162,9 @@ async function fetchTwitchFollowAge(
     return unavailableFollowAge('unavailable', `Twitch follow lookup failed (${response.status}).`)
   }
 
-  const body = (await response.json()) as TwitchFollowerResponse
+  const body = z
+    .object({ data: z.array(z.object({ followed_at: z.string() })) })
+    .parse(await response.json())
   const follow = body.data[0]
 
   if (!follow?.followed_at) {
@@ -249,7 +234,17 @@ async function fetchTwitchSubscriptionDuration(
     )
   }
 
-  const body = (await response.json()) as TwitchSubscriptionResponse
+  const body = z
+    .object({
+      data: z.array(
+        z.object({
+          tier: z.string().optional(),
+          is_gift: z.boolean().optional(),
+          gifter_name: z.string().optional(),
+        }),
+      ),
+    })
+    .parse(await response.json())
   const subscription = body.data[0]
 
   if (!subscription) {
@@ -328,7 +323,18 @@ async function fetchKickUserMetadata(
     )
   }
 
-  const body = (await response.json()) as KickChannelUserIdentityResponse
+  const body = z
+    .object({
+      id: z.union([z.number(), z.string()]).optional(),
+      username: z.string().optional(),
+      role: z.string().optional(),
+      badges: z.array(z.unknown()).optional(),
+      following_since: z.union([z.string(), z.null()]).optional(),
+      subscribed_since: z.union([z.string(), z.null()]).optional(),
+      subscription_since: z.union([z.string(), z.null()]).optional(),
+      subscription_started_at: z.union([z.string(), z.null()]).optional(),
+    })
+    .parse(await response.json())
   const subscribedSince = kickSubscribedSince(body)
 
   return emptyKickMetadata(

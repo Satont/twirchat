@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
+
+import { getTwitchAppToken } from '../src/api/stream-status.ts'
 import {
   fetchTwitchUserById,
   isTwitchUserId,
@@ -6,10 +8,13 @@ import {
   resolveTwitchUserId,
   resolveTwitchUserIdsByLogin,
 } from '../src/api/twitch-users.ts'
+import { fetchUrl } from './literal'
+
+const originalFetch = globalThis.fetch
 
 describe('twitch-users helpers', () => {
-  beforeEach(() => {
-    global.fetch = fetch
+  afterEach(() => {
+    globalThis.fetch = originalFetch
   })
 
   it('normalizes Twitch logins', () => {
@@ -31,10 +36,13 @@ describe('twitch-users helpers', () => {
 
   it('returns numeric Twitch ids without fetching', async () => {
     let called = false
-    global.fetch = mock(async () => {
-      called = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    global.fetch = Object.assign(
+      mock(async () => {
+        called = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     await expect(resolveTwitchUserId('12345')).resolves.toBe('12345')
     expect(called).toBe(false)
@@ -42,17 +50,20 @@ describe('twitch-users helpers', () => {
 
   it('resolves only valid normalized logins', async () => {
     const calls: string[] = []
-    global.fetch = mock(async (input: string | URL | Request) => {
-      const url = String(input)
-      calls.push(url)
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request) => {
+        const url = fetchUrl(input)
+        calls.push(url)
 
-      return Response.json({
-        data: [
-          { id: '100', login: 'satont' },
-          { id: '200', login: 'other_user' },
-        ],
-      })
-    }) as unknown as typeof global.fetch
+        return Response.json({
+          data: [
+            { id: '100', login: 'satont' },
+            { id: '200', login: 'other_user' },
+          ],
+        })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await resolveTwitchUserIdsByLogin(
       ['@Satont', 'bad slug', 'other_user'],
@@ -67,44 +78,55 @@ describe('twitch-users helpers', () => {
     expect(result.get('other_user')).toBe('200')
   })
 
-  it('retries app-token-backed Helix user lookup after a 401', async () => {
+  it('refreshes a cached app token and retries Helix user lookup after a 401', async () => {
     const calls: string[] = []
+    const authorizations: Array<string | null> = []
     let tokenRequestCount = 0
+    let priming = true
 
-    global.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input)
-      calls.push(url)
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = fetchUrl(input)
+        calls.push(url)
 
-      if (url === 'https://id.twitch.tv/oauth2/token') {
-        tokenRequestCount += 1
+        if (url === 'https://id.twitch.tv/oauth2/token') {
+          tokenRequestCount += 1
 
-        return Response.json({
-          access_token: tokenRequestCount === 1 ? 'stale-token' : 'fresh-token',
-          expires_in: 3600,
-        })
-      }
-
-      if (url.startsWith('https://api.twitch.tv/helix/users?')) {
-        const authHeader = new Headers(init?.headers).get('Authorization')
-
-        if (authHeader === 'Bearer stale-token') {
-          return new Response('Unauthorized', { status: 401 })
+          return Response.json({
+            access_token: priming ? 'stale-token' : 'fresh-token',
+            expires_in: 3600,
+          })
         }
 
-        return Response.json({
-          data: [{ id: '100', login: 'satont' }],
-        })
-      }
+        if (url.startsWith('https://api.twitch.tv/helix/users?')) {
+          const authHeader = new Headers(init?.headers).get('Authorization')
+          authorizations.push(authHeader)
 
-      throw new Error(`Unexpected fetch: ${url}`)
-    }) as unknown as typeof global.fetch
+          if (authorizations.length === 1) {
+            return new Response('Unauthorized', { status: 401 })
+          }
+
+          return Response.json({
+            data: [{ id: '100', login: 'satont' }],
+          })
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
+
+    const initialToken = await getTwitchAppToken()
+    priming = false
+    calls.length = 0
+    tokenRequestCount = 0
 
     const result = await resolveTwitchUserIdsByLogin(['satont'])
 
     expect(result.get('satont')).toBe('100')
-    expect(tokenRequestCount).toBe(2)
+    expect(authorizations).toEqual([`Bearer ${initialToken}`, 'Bearer fresh-token'])
+    expect(tokenRequestCount).toBe(1)
     expect(calls).toEqual([
-      'https://id.twitch.tv/oauth2/token',
       'https://api.twitch.tv/helix/users?login=satont',
       'https://id.twitch.tv/oauth2/token',
       'https://api.twitch.tv/helix/users?login=satont',
@@ -112,28 +134,31 @@ describe('twitch-users helpers', () => {
   })
 
   it('fetches Twitch user profile by id', async () => {
-    global.fetch = mock(async (input: string | URL | Request) => {
-      const url = String(input)
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request) => {
+        const url = fetchUrl(input)
 
-      if (url === 'https://id.twitch.tv/oauth2/token') {
-        return Response.json({ access_token: 'app-token', expires_in: 3600 })
-      }
+        if (url === 'https://id.twitch.tv/oauth2/token') {
+          return Response.json({ access_token: 'app-token', expires_in: 3600 })
+        }
 
-      if (url === 'https://api.twitch.tv/helix/users?id=12345') {
-        return Response.json({
-          data: [
-            {
-              id: '12345',
-              login: 'satont',
-              display_name: 'Satont',
-              profile_image_url: 'https://example.com/avatar.png',
-            },
-          ],
-        })
-      }
+        if (url === 'https://api.twitch.tv/helix/users?id=12345') {
+          return Response.json({
+            data: [
+              {
+                id: '12345',
+                login: 'satont',
+                display_name: 'Satont',
+                profile_image_url: 'https://example.com/avatar.png',
+              },
+            ],
+          })
+        }
 
-      throw new Error(`Unexpected fetch: ${url}`)
-    }) as unknown as typeof global.fetch
+        throw new Error(`Unexpected fetch: ${url}`)
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const profile = await fetchTwitchUserById('12345')
 

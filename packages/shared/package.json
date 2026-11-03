@@ -6,9 +6,24 @@
   "main": "./index.ts",
   "exports": {
     ".": "./index.ts",
-    "./*": "./*.ts"
+    "./*": "./*.ts",
+    "./youtube": "./youtube/index.ts",
+    "./youtube/*": "./youtube/*.ts"
+  },
+  "scripts": {
+    "test": "bun test tests",
+    "gen:youtube": "bun youtube/codegen/generate.ts",
+    "check:youtube": "bun youtube/codegen/generate.ts --check",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.16.0",
+    "@grpc/grpc-js": "1.14.6"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@bufbuild/buf": "1.75.0",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:"
   }
 }

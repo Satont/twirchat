@@ -7,13 +7,13 @@
 
 import type { NormalizedEvent } from '@twirchat/shared/types'
 
-import { useStore } from '../state/create-store'
 import { eventsStore } from '../state/app'
+import { useStore } from '../state/create-store'
 import { accent, eventColors, platformColor, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon, type IconName } from './ui/Icon'
-import { Text } from './ui/Text'
 import { RemoteImage } from './ui/RemoteImage'
+import { Text } from './ui/Text'
 
 function eventIconName(type: NormalizedEvent['type']): IconName {
   switch (type) {
@@ -72,7 +72,7 @@ function formatTime(ts: Date): string {
 }
 
 function eventDetail(ev: NormalizedEvent): string {
-  const d = ev.data as Record<string, unknown>
+  const d = ev.data
   switch (ev.type) {
     case 'resub':
       return d.months ? `${d.months} months` : ''
@@ -171,6 +171,7 @@ function EventCard({ event: ev }: { event: NormalizedEvent }) {
       {ev.user.avatarUrl ? (
         <RemoteImage
           url={ev.user.avatarUrl}
+          avatarSize={36}
           objectFit="cover"
           style={{ width: 36, height: 36, borderRadius: 18, flexShrink: 0 }}
         />

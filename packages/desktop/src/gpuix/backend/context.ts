@@ -6,8 +6,9 @@
  */
 
 import { createContext, useContext, useEffect, useRef } from 'react'
-import type { DesktopBackend } from './server'
+
 import type { DesktopEventMap, DesktopEventName } from './events'
+import type { DesktopBackend } from './server'
 
 export const BackendContext = createContext<DesktopBackend | null>(null)
 

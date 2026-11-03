@@ -1,56 +1,60 @@
 import { createHmac } from 'node:crypto'
+
 import type { Badge, NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared'
-import { connectionManager } from '../ws/connection-manager.ts'
+import { z } from 'zod'
+
 import { config } from '../config.ts'
+import { connectionManager } from '../ws/connection-manager.ts'
 
 // ============================================================
 // Kick webhook payload types (v1)
 // ============================================================
 
-interface KickUser {
-  is_anonymous: boolean
-  user_id: number | null
-  username: string | null
-  is_verified: boolean | null
-  profile_picture: string | null
-  channel_slug: string | null
-  identity: {
-    username_color?: string
-    badges?: { text: string; type: string; count?: number }[]
-  } | null
-}
-
-interface ChatMessagePayload {
-  message_id: string
-  broadcaster: KickUser
-  sender: KickUser
-  content: string
-  emotes: {
-    emote_id: string
-    positions: Array<{ s: number; e: number }>
-  }[]
-  created_at: string
-}
-
-interface ChannelFollowPayload {
-  broadcaster: KickUser
-  follower: KickUser
-}
-
-interface ChannelSubscriptionPayload {
-  broadcaster: KickUser
-  subscriber: KickUser
-  duration: number
-  created_at: string
-  expires_at: string
-}
-
-interface ChannelSubscriptionGiftsPayload {
-  broadcaster: KickUser
-  gifter: KickUser
-  giftees: KickUser[]
-  created_at: string
-}
+const kickUserSchema = z.object({
+  is_anonymous: z.boolean(),
+  user_id: z.number().nullable(),
+  username: z.string().nullable(),
+  is_verified: z.boolean().nullable(),
+  profile_picture: z.string().nullable(),
+  channel_slug: z.string().nullable(),
+  identity: z
+    .object({
+      username_color: z.string().optional(),
+      badges: z
+        .array(z.object({ text: z.string(), type: z.string(), count: z.number().optional() }))
+        .optional(),
+    })
+    .nullable(),
+})
+type KickUser = z.infer<typeof kickUserSchema>
+const chatMessageSchema = z.object({
+  message_id: z.string(),
+  broadcaster: kickUserSchema,
+  sender: kickUserSchema,
+  content: z.string(),
+  created_at: z.string(),
+  emotes: z.array(
+    z.object({
+      emote_id: z.string(),
+      positions: z.array(z.object({ s: z.number(), e: z.number() })),
+    }),
+  ),
+})
+type ChatMessagePayload = z.infer<typeof chatMessageSchema>
+const followSchema = z.object({ broadcaster: kickUserSchema, follower: kickUserSchema })
+const subscriptionSchema = z.object({
+  broadcaster: kickUserSchema,
+  subscriber: kickUserSchema,
+  duration: z.number(),
+  created_at: z.string(),
+  expires_at: z.string(),
+})
+const giftsSchema = z.object({
+  broadcaster: kickUserSchema,
+  gifter: kickUserSchema,
+  giftees: z.array(kickUserSchema),
+  created_at: z.string(),
+})
 
 // ============================================================
 // HMAC signature verification
@@ -145,9 +149,10 @@ export async function handleKickWebhook(req: Request): Promise<Response> {
 async function dispatchKickEvent(eventType: string, payload: unknown): Promise<void> {
   switch (eventType) {
     case 'chat.message.sent': {
-      const msg = normalizeChatMessage(payload as ChatMessagePayload)
+      const p = chatMessageSchema.parse(payload)
+      const msg = normalizeChatMessage(p)
       // Find the client that owns this broadcaster's channel and push the message
-      await pushToChannelOwner(payload as ChatMessagePayload, {
+      await pushToChannelOwner(p, {
         data: msg,
         type: 'chat_message',
       })
@@ -155,7 +160,7 @@ async function dispatchKickEvent(eventType: string, payload: unknown): Promise<v
     }
 
     case 'channel.followed': {
-      const p = payload as ChannelFollowPayload
+      const p = followSchema.parse(payload)
       const event: NormalizedEvent = {
         data: { channelSlug: p.broadcaster.channel_slug },
         id: `kick:follow:${p.follower.user_id}:${Date.now()}`,
@@ -174,7 +179,7 @@ async function dispatchKickEvent(eventType: string, payload: unknown): Promise<v
 
     case 'channel.subscription.new':
     case 'channel.subscription.renewal': {
-      const p = payload as ChannelSubscriptionPayload
+      const p = subscriptionSchema.parse(payload)
       const event: NormalizedEvent = {
         data: { channelSlug: p.broadcaster.channel_slug, duration: p.duration },
         id: `kick:sub:${p.subscriber.user_id}:${p.created_at}`,
@@ -192,7 +197,7 @@ async function dispatchKickEvent(eventType: string, payload: unknown): Promise<v
     }
 
     case 'channel.subscription.gifts': {
-      const p = payload as ChannelSubscriptionGiftsPayload
+      const p = giftsSchema.parse(payload)
       // One event per giftee
       for (const giftee of p.giftees) {
         const event: NormalizedEvent = {

@@ -1,30 +1,18 @@
-/**
- * Platforms panel — port of PlatformsPanel.vue: one card per platform with
- * account connect/disconnect, the channel join row and the stream editor
- * for authenticated Twitch/Kick accounts.
- *
- * Data flow differences from the Vue source:
- * - accounts/statuses come from accountsStore / channelStatusStore
- * - the `accounts-updated` emit becomes accountsStore.set(await getAccounts())
- * - Teleport toasts become the app-wide notice (showNotice), same texts
- * - the joined-channel list state is kept (loaded from the backend, updated
- *   on join) but, exactly like the Vue template, it is not rendered
- */
-
-import { useEffect, useState } from 'react'
 import type { Account, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
+import { useState } from 'react'
 
+import { initialsOf } from '../../views/shared/utils/display-text'
 import { useBackend, useBackendEvent } from '../backend/context'
-import { useStore } from '../state/create-store'
+import { runUiTask } from '../hooks/run-ui-task'
 import { accountsStore, channelStatusStore, showNotice } from '../state/app'
-import { useTextInputFocusTracking } from '../state/focus'
-import { accent, platformColor, withAlpha } from '../theme'
+import { useStore } from '../state/create-store'
+import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
-import { applySavedChannels } from '../../views/main/utils/channel-connections'
-import { PlatformIcon } from './ui/Icon'
-import { Text } from './ui/Text'
-import { RemoteImage } from './ui/RemoteImage'
+import { SavedAccounts } from './SavedAccounts'
 import { StreamEditor } from './StreamEditor'
+import { PlatformIcon } from './ui/Icon'
+import { RemoteImage } from './ui/RemoteImage'
+import { Text } from './ui/Text'
 
 const platforms: Platform[] = ['twitch', 'youtube', 'kick']
 
@@ -99,14 +87,7 @@ interface PlatformCardProps {
   platform: Platform
   account?: Account
   status?: PlatformStatusInfo
-  channelInput: string
-  joining: boolean
   authLoading: boolean
-  inputFocused: boolean
-  onInputChange: (value: string) => void
-  onInputFocus: () => void
-  onInputBlur: () => void
-  onJoin: () => void
   onStartAuth: () => void
   onLogout: () => void
 }
@@ -115,23 +96,12 @@ function PlatformCard({
   platform,
   account,
   status,
-  channelInput,
-  joining,
   authLoading,
-  inputFocused,
-  onInputChange,
-  onInputFocus,
-  onInputBlur,
-  onJoin,
   onStartAuth,
   onLogout,
 }: PlatformCardProps) {
   const theme = useTheme()
-  const channelInputFocus = useTextInputFocusTracking((focused) =>
-    focused ? onInputFocus() : onInputBlur(),
-  )
   const pColor = platformColor(platform)
-  const joinDisabled = !channelInput.trim() || joining
 
   return (
     <div
@@ -156,8 +126,6 @@ function PlatformCard({
           paddingBottom: 18,
           paddingLeft: 20,
           paddingRight: 20,
-          borderBottomWidth: 1,
-          borderColor: theme.border,
         }}
       >
         <div
@@ -239,6 +207,7 @@ function PlatformCard({
                 {account.avatarUrl ? (
                   <RemoteImage
                     url={account.avatarUrl}
+                    avatarSize={32}
                     objectFit="cover"
                     // GPUI clips overflow to a rectangle, so the image needs
                     // its own radius to stay inside the round frame.
@@ -246,7 +215,7 @@ function PlatformCard({
                   />
                 ) : (
                   <Text style={{ fontSize: 15, fontWeight: 700, color: '#ffffff' }}>
-                    {account.displayName.charAt(0).toUpperCase()}
+                    {initialsOf(account.displayName)}
                   </Text>
                 )}
               </div>
@@ -315,113 +284,6 @@ function PlatformCard({
         </div>
       </div>
 
-      {/* Channel join section */}
-      <div
-        style={{
-          paddingTop: 14,
-          paddingBottom: 14,
-          paddingLeft: 20,
-          paddingRight: 20,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-        }}
-      >
-        {/* Input for Twitch, or for YouTube/Kick while not authenticated */}
-        {platform === 'twitch' || !account ? (
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            <div
-              style={{
-                flexGrow: 1,
-                minWidth: 0,
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: theme.surface2,
-                borderWidth: 1,
-                borderColor: inputFocused ? accent.primary : theme.border,
-                borderRadius: 8,
-                overflow: 'hidden',
-              }}
-            >
-              <Text
-                style={{
-                  paddingLeft: 12,
-                  paddingRight: 4,
-                  fontSize: 14,
-                  color: theme.text2,
-                  userSelect: 'none',
-                }}
-              >
-                #
-              </Text>
-              <input
-                value={channelInput}
-                placeholder={platform === 'youtube' ? 'Channel ID or handle' : 'channel name'}
-                onChange={(event) => onInputChange(event.value ?? '')}
-                onSubmit={onJoin}
-                {...channelInputFocus}
-                theme={{ caret: accent.primary, textMuted: withAlpha(theme.text2, 0.6) }}
-                style={{
-                  flexGrow: 1,
-                  minWidth: 0,
-                  fontSize: 14,
-                  color: theme.text,
-                  paddingTop: 8,
-                  paddingBottom: 8,
-                  paddingLeft: 2,
-                  paddingRight: 12,
-                }}
-              />
-            </div>
-            <div
-              testId={`join-${platform}`}
-              onClick={joinDisabled ? undefined : onJoin}
-              style={{
-                backgroundColor: accent.tint15,
-                borderWidth: 1,
-                borderColor: withAlpha(accent.primary, 0.3),
-                borderRadius: 8,
-                paddingTop: 8,
-                paddingBottom: 8,
-                paddingLeft: 18,
-                paddingRight: 18,
-                cursor: joinDisabled ? 'not-allowed' : 'pointer',
-                opacity: joinDisabled ? 0.45 : 1,
-                hover: joinDisabled ? undefined : { backgroundColor: accent.tint25 },
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: accent.primary,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {joining ? '…' : 'Join'}
-              </Text>
-            </div>
-          </div>
-        ) : (
-          /* Authenticated YouTube/Kick auto-join their own channel */
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-              paddingTop: 8,
-              paddingBottom: 8,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: theme.text2 }}>
-              Chat joins your own channel automatically
-            </Text>
-          </div>
-        )}
-      </div>
-
       {/* Stream editor: shown for Twitch/Kick when account is connected */}
       {account && (platform === 'twitch' || platform === 'kick') ? (
         <StreamEditor platform={platform} channelId={account.platformUserId} />
@@ -436,90 +298,34 @@ export function PlatformsPanel() {
   const accounts = useStore(accountsStore)
   const statuses = useStore(channelStatusStore)
 
-  // Per-platform channel input state
-  const [channelInputs, setChannelInputs] = useState<Record<string, string>>({
-    kick: '',
-    twitch: '',
-    youtube: '',
-  })
-  const [joiningChannel, setJoiningChannel] = useState<Record<string, boolean>>({})
   const [authLoading, setAuthLoading] = useState<Record<string, boolean>>({})
-  const [joinedChannels, setJoinedChannels] = useState<Record<string, string[]>>({
-    kick: [],
-    twitch: [],
-    youtube: [],
-  })
-  const [focusedInput, setFocusedInput] = useState<Platform | null>(null)
 
   useBackendEvent('auth_success', ({ displayName }) => {
-    void backend.api.getAccounts().then((updated) => accountsStore.set(updated))
-    void backend.api.getChannels().then((saved) => {
-      setJoinedChannels((current) => {
-        const next = { ...current }
-        applySavedChannels(next, saved)
-        return next
-      })
-    })
+    runUiTask(backend.api.getAccounts().then((updated) => accountsStore.set(updated)))
     showNotice('success', `Connected as ${displayName}`, 4000)
   })
   useBackendEvent('auth_error', ({ error }) => {
     showNotice('error', error, 4000)
   })
 
-  useEffect(() => {
-    // Load persisted channels from the backend
-    backend.api
-      .getChannels()
-      .then((saved) => {
-        setJoinedChannels((current) => {
-          const next = { ...current }
-          applySavedChannels(next, saved)
-          return next
-        })
-      })
-      .catch((error) => {
-        console.warn('[PlatformsPanel] Failed to load persisted channels:', error)
-      })
-  }, [backend])
-
-  // ── Actions ────────────────────────────────────────────────────────────
-
   async function startAuth(platform: Platform) {
     setAuthLoading((current) => ({ ...current, [platform]: true }))
     try {
       await backend.api.authStart({ platform })
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : String(error))
     } finally {
       setAuthLoading((current) => ({ ...current, [platform]: false }))
     }
   }
 
   async function logout(platform: Platform) {
-    await backend.api.authLogout({ platform })
-    accountsStore.set(await backend.api.getAccounts())
-  }
-
-  async function joinChannel(platform: Platform) {
-    const slug = (channelInputs[platform] ?? '').trim()
-    if (!slug) return
-    setJoiningChannel((current) => ({ ...current, [platform]: true }))
     try {
-      await backend.api.joinChannel({ channelSlug: slug, platform })
-      if (!(joinedChannels[platform] ?? []).includes(slug)) {
-        setJoinedChannels((current) => ({
-          ...current,
-          [platform]: [...(current[platform] ?? []), slug],
-        }))
-      }
-      setChannelInputs((current) => ({ ...current, [platform]: '' }))
+      await backend.api.authLogout({ platform })
     } catch (error) {
-      console.error(`[PlatformsPanel] joinChannel failed for ${platform}:`, error)
-      showNotice(
-        'error',
-        `Failed to join channel: ${error instanceof Error ? error.message : String(error)}`,
-        4000,
-      )
+      showNotice('error', error instanceof Error ? error.message : String(error))
     } finally {
-      setJoiningChannel((current) => ({ ...current, [platform]: false }))
+      accountsStore.set(await backend.api.getAccounts())
     }
   }
 
@@ -542,9 +348,7 @@ export function PlatformsPanel() {
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>Platforms</Text>
-        <Text style={{ fontSize: 13, color: theme.text2 }}>
-          Connect your streaming accounts and join channels
-        </Text>
+        <Text style={{ fontSize: 13, color: theme.text2 }}>Manage your streaming accounts</Text>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -554,23 +358,13 @@ export function PlatformsPanel() {
             platform={platform}
             account={accounts.find((a) => a.platform === platform)}
             status={statuses[platform]}
-            channelInput={channelInputs[platform] ?? ''}
-            joining={joiningChannel[platform] ?? false}
             authLoading={authLoading[platform] ?? false}
-            inputFocused={focusedInput === platform}
-            onInputChange={(value) =>
-              setChannelInputs((current) => ({ ...current, [platform]: value }))
-            }
-            onInputFocus={() => setFocusedInput(platform)}
-            onInputBlur={() =>
-              setFocusedInput((current) => (current === platform ? null : current))
-            }
-            onJoin={() => void joinChannel(platform)}
-            onStartAuth={() => void startAuth(platform)}
-            onLogout={() => void logout(platform)}
+            onStartAuth={() => runUiTask(startAuth(platform))}
+            onLogout={() => runUiTask(logout(platform))}
           />
         ))}
       </div>
+      <SavedAccounts />
     </div>
   )
 }

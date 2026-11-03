@@ -4,4 +4,4 @@ export const webhookRoutes = {
   '/webhook/kick': {
     POST: (req: Request) => handleKickWebhook(req),
   },
-} as const
+}

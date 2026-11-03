@@ -1,3 +1,6 @@
+import { logger } from '@twirchat/shared/logger'
+import { z } from 'zod'
+
 import {
   createModerationService,
   type ModerationCapabilityInput,
@@ -5,7 +8,6 @@ import {
   type ModerationService,
 } from '../api/moderation/service.ts'
 import { json, requireClient } from './utils.ts'
-import { logger } from '@twirchat/shared/logger'
 
 const log = logger('moderation-routes')
 
@@ -38,7 +40,7 @@ export function createModerationRoutes(service: ModerationService = createModera
         }
       },
     },
-  } as const
+  }
 }
 
 export const moderationRoutes = createModerationRoutes()
@@ -65,8 +67,10 @@ async function parseModerationInput(req: Request): Promise<ModerationInput> {
     ...(await parseCapabilitiesInputFromBody(body)),
     action: requireAction(body),
     ...(durationSeconds === undefined ? {} : { durationSeconds }),
-    messageId: requireString(body, 'messageId'),
-    targetUserId: requireString(body, 'targetUserId'),
+    ...(body.messageId === undefined ? {} : { messageId: requireString(body, 'messageId') }),
+    ...(body.targetUserId === undefined
+      ? {}
+      : { targetUserId: requireString(body, 'targetUserId') }),
   }
 }
 
@@ -92,7 +96,7 @@ async function parseObject(req: Request): Promise<Record<string, unknown>> {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     throw new Error('request body must be an object')
   }
-  return body as Record<string, unknown>
+  return z.record(z.string(), z.unknown()).parse(body)
 }
 
 function requireString(body: Record<string, unknown>, key: string): string {

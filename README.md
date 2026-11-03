@@ -41,3 +41,8 @@ also download the standalone `.AppImage` directly from the
 Packaged desktop builds initialize Velopack at startup, check the platform feed on startup while
 automatic checks are enabled, show an in-app update toast when a stable update is available, and
 can download the update before restarting to apply it.
+
+## Development benchmarks
+
+The [chat resource benchmark guide](docs/benchmarks/README.md) covers CPU, GPU and memory runs,
+with the saved baseline and commands for repeating the isolated native benchmark.

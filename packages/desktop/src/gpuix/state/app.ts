@@ -1,9 +1,9 @@
-/**
- * GPUIX app state — ports the Pinia stores + App.vue reactive state into
- * framework-agnostic observable stores, plus the wiring that feeds them
- * from the in-process backend event bus.
- */
-
+import type {
+  ChannelStatus,
+  ChannelStatusRequest,
+  EmoteCatalogEntry,
+  SevenTVEmote,
+} from '@twirchat/shared/protocol'
 import type {
   Account,
   AppSettings,
@@ -14,81 +14,176 @@ import type {
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
-import type {
-  ChannelStatus,
-  ChannelStatusRequest,
-  EmoteCatalogEntry,
-  SevenTVEmote,
-} from '@twirchat/shared/protocol'
 
-import { createStore } from './create-store'
-import type { DesktopBackend } from '../backend/server'
-import type { UserAlias } from '../backend/api'
-import { mergeChatMessageSnapshot } from '../../views/main/utils/chat-message-buffer'
+import { similarityChannelKey } from '../../services/message-similarity'
+import {
+  appendLiveChatMessages,
+  mergeChatMessageSnapshot,
+} from '../../views/main/utils/chat-message-buffer'
+/**
+ * GPUIX app state — ports the Pinia stores + App.vue reactive state into
+ * framework-agnostic observable stores, plus the wiring that feeds them
+ * from the in-process backend event bus.
+ */
 import { filterHomeChatMessages } from '../../views/main/utils/chat-send-targets'
+import type { DesktopApi } from '../backend/api'
+import type { UserAlias } from '../backend/api'
+import type { DesktopEvents } from '../backend/events'
+import type { DesktopBackend } from '../backend/server'
+import type { Store } from './create-store'
+import { createStore } from './create-store'
+import { classifyIncomingSimilarity, hydrateSimilarityHistory } from './message-similarity'
+import { persistentResource } from './persistent-resources'
+
+function hydrateMessageSimilarity(messages: readonly NormalizedChatMessage[]): void {
+  const channels = new Map<string, NormalizedChatMessage[]>()
+  for (const message of messages) {
+    const key = similarityChannelKey(message)
+    const entries = channels.get(key)
+    if (entries) entries.push(message)
+    else channels.set(key, [message])
+  }
+  for (const [key, entries] of channels) hydrateSimilarityHistory(key, entries.toReversed())
+}
 
 // ── Simple stores ───────────────────────────────────────────────────────────
 
-export const settingsStore = createStore<AppSettings | null>(null, 'settings')
-export const accountsStore = createStore<Account[]>([], 'accounts')
-export const aliasesStore = createStore<UserAlias[]>([], 'aliases')
-/** platform → status */
-export const channelStatusStore = createStore<Partial<Record<Platform, PlatformStatusInfo>>>(
-  {},
-  'channelStatuses',
+export const settingsStore = persistentResource('settings', () =>
+  createStore<AppSettings | null>(null),
 )
-export const watchedChannelsStore = createStore<WatchedChannel[]>([], 'watchedChannels')
+export const accountsStore = persistentResource('accounts', () => createStore<Account[]>([]))
+export const aliasesStore = persistentResource('aliases', () => createStore<UserAlias[]>([]))
+/** platform → status */
+export const channelStatusStore = persistentResource('channelStatuses', () =>
+  createStore<Partial<Record<Platform, PlatformStatusInfo>>>({}),
+)
+export const watchedChannelsStore = persistentResource('watchedChannels', () =>
+  createStore<WatchedChannel[]>([]),
+)
 /** channelId → messages (oldest first, capped at 200) */
-export const watchedMessagesStore = createStore<Map<string, NormalizedChatMessage[]>>(
-  new Map(),
-  'watchedMessages',
+export const watchedMessagesStore = persistentResource('watchedMessages', () =>
+  createStore<Map<string, NormalizedChatMessage[]>>(new Map()),
 )
 /** channelId → status */
-export const watchedStatusesStore = createStore<Map<string, PlatformStatusInfo>>(
-  new Map(),
-  'watchedStatuses',
+export const watchedStatusesStore = persistentResource('watchedStatuses', () =>
+  createStore<Map<string, PlatformStatusInfo>>(new Map()),
 )
-export const eventsStore = createStore<NormalizedEvent[]>([], 'events')
-export const unreadEventsStore = createStore(0, 'unreadEvents')
+export const eventsStore = persistentResource('events', () => createStore<NormalizedEvent[]>([]))
+export const unreadEventsStore = persistentResource('unreadEvents', () => createStore<number>(0))
 /** 'platform:login' → stream status */
-export const streamStatusStore = createStore<Map<string, ChannelStatus>>(
-  new Map(),
-  'streamStatuses',
+export const streamStatusStore = persistentResource('streamStatuses', () =>
+  createStore<Map<string, ChannelStatus>>(new Map()),
 )
 /** 'platform:channelId' → emote catalog */
-export const emoteStore = createStore<Map<string, EmoteCatalogEntry[]>>(new Map(), 'emotes')
+export const emoteStore = persistentResource('emotes', () =>
+  createStore<Map<string, EmoteCatalogEntry[]>>(new Map()),
+)
+export const authorEmoteStore = persistentResource('authorEmotes', () =>
+  createStore<Map<string, EmoteCatalogEntry[]>>(new Map()),
+)
 
 export type MainTab = 'chat' | 'events' | 'platforms' | 'settings'
-export const activeTabStore = createStore<MainTab>(
-  (process.env.TWIRCHAT_GPUIX_START_MAIN_TAB as MainTab | undefined) ?? 'chat',
-  'activeMainTab',
+const initialMainTab = process.env.TWIRCHAT_GPUIX_START_MAIN_TAB
+export const activeTabStore = persistentResource('activeMainTab', () =>
+  createStore<MainTab>(
+    initialMainTab === 'events' || initialMainTab === 'platforms' || initialMainTab === 'settings'
+      ? initialMainTab
+      : 'chat',
+  ),
 )
-export const tabChannelIdsStore = createStore<string[]>([], 'tabChannelIds')
+export const tabChannelIdsStore = persistentResource('tabChannelIds', () =>
+  createStore<string[]>([]),
+)
 /** 'home' or a watched channel id */
-export const activeWatchedTabStore = createStore<string>(
-  process.env.TWIRCHAT_GPUIX_START_TAB ?? 'home',
-  'activeWatchedTab',
+export const activeWatchedTabStore = persistentResource('activeWatchedTab', () =>
+  createStore<string>(process.env.TWIRCHAT_GPUIX_START_TAB ?? 'home'),
 )
 /** tabId → channel display names shown in the tab label (from the layout tree) */
-export const tabChannelNamesStore = createStore<Map<string, string[]>>(new Map(), 'tabChannelNames')
+export const tabChannelNamesStore = persistentResource('tabChannelNames', () =>
+  createStore<Map<string, string[]>>(new Map()),
+)
 
 export interface TransientNotice {
   kind: 'info' | 'success' | 'error'
   text: string
 }
-export const noticeStore = createStore<TransientNotice | null>(null, 'notice')
+export const noticeStore = persistentResource('notice', () =>
+  createStore<TransientNotice | null>(null),
+)
 
 // ── Home chat buffer ────────────────────────────────────────────────────────
 // Own-channel messages only (see chat-send-targets.ts), capped at 500.
 
 const HOME_BUFFER_LIMIT = 500
-const homeBuffer = createStore<NormalizedChatMessage[]>([], 'homeMessages')
+const homeBuffer = persistentResource('homeMessages', () =>
+  createStore<NormalizedChatMessage[]>([]),
+)
 export { homeBuffer as homeMessagesStore }
+
+export interface ChatActivity {
+  total: number
+  buckets: { second: number; count: number }[]
+}
+
+/** Live activity only: `home` or a watched channel ID, independent of retention. */
+export const chatActivityStore = persistentResource('chatActivity', () =>
+  createStore<Map<string, ChatActivity>>(new Map()),
+)
+
+export function chatMessageRate(activity: ChatActivity | undefined, now = Date.now()): number {
+  const second = Math.floor(now / 1000)
+  return (
+    (activity?.buckets.reduce(
+      (total, bucket) =>
+        bucket.second > second - 10 && bucket.second <= second ? total + bucket.count : total,
+      0,
+    ) ?? 0) / 10
+  )
+}
+
+function countNewMessages(
+  current: NormalizedChatMessage[],
+  incoming: NormalizedChatMessage[],
+): number {
+  const seen = new Set(current.map((message) => `${message.platform}:${message.id}`))
+  let count = 0
+  for (const message of incoming) {
+    const key = `${message.platform}:${message.id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    count += 1
+  }
+  return count
+}
+
+function recordChatActivity(counts: Map<string, number>): void {
+  if (counts.size === 0) return
+  const second = Math.floor(Date.now() / 1000)
+  chatActivityStore.modify((current) => {
+    let next = current
+    for (const [channelId, count] of counts) {
+      if (count === 0) continue
+      if (next === current) next = new Map(current)
+      const existing = current.get(channelId)
+      const buckets = (existing?.buckets ?? []).filter(
+        (bucket) => bucket.second > second - 10 && bucket.second <= second,
+      )
+      const latest = buckets[buckets.length - 1]
+      if (latest?.second === second) {
+        buckets[buckets.length - 1] = { second, count: latest.count + count }
+      } else {
+        buckets.push({ second, count })
+      }
+      next.set(channelId, { total: (existing?.total ?? 0) + count, buckets })
+    }
+    return next
+  })
+}
 
 export function appendHomeMessages(incoming: NormalizedChatMessage[]): void {
   const filtered = filterHomeChatMessages(incoming, accountsStore.get())
   if (filtered.length === 0) return
-  homeBuffer.set((current) => mergeChatMessageSnapshot(current, filtered, HOME_BUFFER_LIMIT))
+  homeBuffer.modify((current) => mergeChatMessageSnapshot(current, filtered, HOME_BUFFER_LIMIT))
 }
 
 // ── Moderation outcomes (port of useModerationOutcomes.ts) ──────────────────
@@ -102,12 +197,48 @@ export interface ResolvedModerationOutcome {
 const DELETED_MESSAGE_RETENTION_MS = 300_000
 const SANCTION_CLOCK_SKEW_MS = 10_000
 
-const deletedMessages = new Map<
-  string,
-  { expiresAt: number; resolved: ResolvedModerationOutcome }
->()
-const userSanctions = new Map<string, { appliedAt: number; resolved: ResolvedModerationOutcome }>()
-export const moderationRevisionStore = createStore(0, 'moderationRevision')
+interface RetainedDeletion {
+  expiresAt: number
+  resolved: ResolvedModerationOutcome
+}
+interface RetainedSanction {
+  appliedAt: number
+  resolved: ResolvedModerationOutcome
+}
+interface ModerationState {
+  deletedMessages: Map<string, RetainedDeletion>
+  userSanctions: Map<string, RetainedSanction>
+  channelClears: Map<string, number>
+}
+export interface ModerationView {
+  outcomeFor(message: NormalizedChatMessage): ResolvedModerationOutcome | undefined
+}
+const moderationState = persistentResource('moderationState', (): ModerationState => ({
+  deletedMessages: new Map(),
+  userSanctions: new Map(),
+  channelClears: new Map(),
+}))
+const { deletedMessages, userSanctions, channelClears } = moderationState
+const CLEARED_OUTCOME: ResolvedModerationOutcome = {
+  action: 'delete_message',
+  isTombstone: true,
+  label: '(chat cleared)',
+}
+export const moderationRevisionStore = persistentResource('moderationRevision', () =>
+  createStore<number>(0),
+)
+
+export function applyChannelClear({
+  platform,
+  channelId,
+}: {
+  platform: Platform
+  channelId: string
+}): void {
+  const key = `${platform}:${channelId.replace(/^#/u, '').toLowerCase()}`
+  channelClears.set(key, Date.now())
+  publishModerationView()
+}
 
 function moderationMessageKey(platform: string, messageId: string): string {
   return `${platform}:${messageId}`
@@ -139,12 +270,12 @@ export function applyModerationOutcome(outcome: ModerationOutcome): void {
     })
     setTimeout(() => {
       const entry = deletedMessages.get(key)
-      if (entry && entry.expiresAt <= Date.now()) {
+      if (!entry || entry.expiresAt <= Date.now()) {
         deletedMessages.delete(key)
-        moderationRevisionStore.set((v) => v + 1)
+        publishModerationView()
       }
     }, DELETED_MESSAGE_RETENTION_MS)
-    moderationRevisionStore.set((v) => v + 1)
+    publishModerationView()
     return
   }
 
@@ -168,24 +299,52 @@ export function applyModerationOutcome(outcome: ModerationOutcome): void {
     appliedAt: now,
     resolved,
   })
-  moderationRevisionStore.set((v) => v + 1)
+  publishModerationView()
 }
 
+function createModerationView(): ModerationView {
+  const deletions = new Map(deletedMessages)
+  const sanctions = new Map(userSanctions)
+  const clears = new Map(channelClears)
+  return {
+    outcomeFor(message) {
+      const clearedAt = clears.get(
+        `${message.platform}:${message.channelId.replace(/^#/u, '').toLowerCase()}`,
+      )
+      const timestamp =
+        message.timestamp instanceof Date
+          ? message.timestamp.getTime()
+          : new Date(message.timestamp).getTime()
+      if (clearedAt !== undefined && timestamp <= clearedAt) return CLEARED_OUTCOME
+      const deletion = deletions.get(moderationMessageKey(message.platform, message.id))
+      if (deletion && deletion.expiresAt > Date.now()) return deletion.resolved
+      const sanction = sanctions.get(
+        moderationUserKey(message.platform, message.channelId, message.author.id),
+      )
+      return sanction && timestamp <= sanction.appliedAt + SANCTION_CLOCK_SKEW_MS
+        ? sanction.resolved
+        : undefined
+    },
+  }
+}
+export const moderationViewStore = persistentResource('moderationView', () =>
+  createStore<ModerationView>(createModerationView()),
+)
+function publishModerationView(): void {
+  moderationViewStore.set(createModerationView())
+  moderationRevisionStore.modify((revision) => revision + 1)
+}
 export function moderationOutcomeFor(
   message: NormalizedChatMessage,
 ): ResolvedModerationOutcome | undefined {
-  const deletion = deletedMessages.get(moderationMessageKey(message.platform, message.id))
-  if (deletion) return deletion.resolved
-  const sanction = userSanctions.get(
-    moderationUserKey(message.platform, message.channelId, message.author.id),
-  )
-  if (!sanction) return undefined
-  const timestamp =
-    message.timestamp instanceof Date
-      ? message.timestamp.getTime()
-      : new Date(message.timestamp).getTime()
-  if (timestamp > sanction.appliedAt + SANCTION_CLOCK_SKEW_MS) return undefined
-  return sanction.resolved
+  return moderationViewStore.get().outcomeFor(message)
+}
+
+declare module './persistent-resources' {
+  interface PersistentResources {
+    moderationState: ModerationState
+    moderationView: Store<ModerationView>
+  }
 }
 
 // ── Emote catalog (port of stores/emoteStore.ts) ────────────────────────────
@@ -197,8 +356,12 @@ function emoteKey(platform: string, channelId: string): string {
   return `${platform}:${channelId}`
 }
 
-function setEmoteCatalog(platform: string, channelId: string, emotes: EmoteCatalogEntry[]): void {
-  emoteStore.set((current) => new Map(current).set(emoteKey(platform, channelId), emotes))
+export function setEmoteCatalog(
+  platform: string,
+  channelId: string,
+  emotes: EmoteCatalogEntry[],
+): void {
+  emoteStore.modify((current) => new Map(current).set(emoteKey(platform, channelId), emotes))
 }
 
 function sevenTVEntry(emote: SevenTVEmote): EmoteCatalogEntry {
@@ -266,7 +429,7 @@ export function updateSevenTVEmote(
 
 export function loadEmotes(
   backend: DesktopBackend,
-  platform: string,
+  platform: Platform,
   channelId: string,
   useSessionCache = true,
 ): Promise<void> {
@@ -283,7 +446,7 @@ export function loadEmotes(
   const promise = (async () => {
     try {
       const emotes = await backend.api.getChannelEmotes({
-        platform: platform as Platform,
+        platform,
         channelId,
       })
       const liveSevenTV =
@@ -326,7 +489,7 @@ async function refreshStreamStatuses(backend: DesktopBackend): Promise<void> {
   }
   for (const channel of watched) {
     if (channel.platform === 'youtube') continue
-    const platform = channel.platform as 'twitch' | 'kick'
+    const platform = channel.platform
     const key = `${platform}:${channel.channelSlug.toLowerCase()}`
     if (requests.some((r) => `${r.platform}:${r.channelLogin.toLowerCase()}` === key)) continue
     requests.push({ channelLogin: channel.channelSlug, platform })
@@ -336,7 +499,7 @@ async function refreshStreamStatuses(backend: DesktopBackend): Promise<void> {
 
   try {
     const response = await backend.api.getChannelsStatus({ channels: requests })
-    streamStatusStore.set((current) => {
+    streamStatusStore.modify((current) => {
       const next = new Map(current)
       for (const status of response.channels ?? []) {
         next.set(`${status.platform}:${status.channelLogin.toLowerCase()}`, status)
@@ -359,8 +522,11 @@ export function startStreamStatusPolling(backend: DesktopBackend): void {
       streamStatusRunning = false
     }
   }
-  void tick()
-  streamStatusTimer = setInterval(() => void tick(), STREAM_STATUS_POLL_MS)
+  const poll = () => {
+    void tick().catch((error) => console.warn('[stream status]', error))
+  }
+  poll()
+  streamStatusTimer = setInterval(poll, STREAM_STATUS_POLL_MS)
 }
 
 export function getStreamStatus(
@@ -434,40 +600,12 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
     channelStatusStore.set(statusMap)
     watchedChannelsStore.set(watched)
 
-    const persistedTabIds = await backend.api.getTabChannelIds()
-    if (persistedTabIds && persistedTabIds.length > 0) {
-      tabChannelIdsStore.set(persistedTabIds.filter((id) => watched.some((ch) => ch.id === id)))
-    } else {
-      tabChannelIdsStore.set(watched.map((ch) => ch.id))
-      await backend.api.setTabChannelIds({ ids: watched.map((ch) => ch.id) })
-    }
-
-    // Pre-populate tab labels from persisted layouts.
-    const collectNames = (node: import('@twirchat/shared/types').LayoutNode): string[] => {
-      if (node.type === 'panel' && node.content.type === 'watched') {
-        const ch = watched.find((c) => c.id === (node.content as { channelId: string }).channelId)
-        return ch ? [ch.displayName] : []
-      }
-      if (node.type === 'split') return node.children.flatMap((child) => collectNames(child))
-      return []
-    }
-    const nameMap = new Map<string, string[]>()
-    for (const tabId of tabChannelIdsStore.get()) {
-      try {
-        const layout = await backend.api.getWatchedChannelsLayout({ tabId })
-        if (layout) {
-          const names = collectNames(layout.root)
-          if (names.length > 0) nameMap.set(tabId, names)
-        }
-      } catch {
-        // not fatal — tab falls back to the single-channel name
-      }
-    }
-    tabChannelNamesStore.set(nameMap)
+    const { initializeChatTabs } = await import('./chat-tabs')
+    await initializeChatTabs(backend)
 
     try {
       const watchedStats = await backend.api.getWatchedChannelStatuses()
-      watchedStatusesStore.set((current) => {
+      watchedStatusesStore.modify((current) => {
         const next = new Map(current)
         for (const { channelId, status } of watchedStats) next.set(channelId, status)
         return next
@@ -483,7 +621,10 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
 
   try {
     const recent = await backend.api.getRecentMessages({})
-    if (recent.length > 0) appendHomeMessages(recent)
+    if (recent.length > 0) {
+      hydrateMessageSimilarity(recent)
+      appendHomeMessages(recent)
+    }
   } catch (error) {
     console.warn('[state] Failed to load recent messages:', error)
   }
@@ -492,7 +633,8 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
     try {
       const msgs = await backend.api.getWatchedChannelMessages({ id: ch.id })
       if (msgs.length > 0) {
-        watchedMessagesStore.set((current) => {
+        hydrateMessageSimilarity(msgs)
+        watchedMessagesStore.modify((current) => {
           const next = new Map(current)
           next.set(ch.id, mergeChatMessageSnapshot(next.get(ch.id) ?? [], msgs, 200))
           return next
@@ -508,82 +650,196 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
 
 // ── Backend event wiring ────────────────────────────────────────────────────
 
-export function wireBackendToStores(backend: DesktopBackend): void {
+export interface AppStoreBackend {
+  events: DesktopEvents
+  api: Pick<DesktopApi, 'getAccounts' | 'getWatchedChannelMessages' | 'getWatchedChannelStatuses'>
+}
+export function wireBackendToStores(backend: AppStoreBackend): () => void {
   const { events } = backend
+  const subscriptions: Array<() => void> = []
+  const subscribe: typeof events.on = (name, handler) => {
+    const unsubscribe = events.on(name, handler)
+    subscriptions.push(unsubscribe)
+    return unsubscribe
+  }
+  let pendingHome: NormalizedChatMessage[] = []
+  let pendingWatched = new Map<string, NormalizedChatMessage[]>()
+  let messageTimer: ReturnType<typeof setTimeout> | undefined
 
-  events.on('chat_message', (msg) => {
-    appendHomeMessages([msg])
+  // Coalesce platform bursts into one store publication per frame. The
+  // event subscriptions (and this queue) live with the backend singleton,
+  // so a hot remount cannot reset or strand messages already received.
+  const flushMessages = () => {
+    messageTimer = undefined
+    const home = pendingHome
+    const watched = pendingWatched
+    pendingHome = []
+    pendingWatched = new Map()
+    const activityCounts = new Map<string, number>()
+    if (home.length > 0) {
+      const filtered = filterHomeChatMessages(home, accountsStore.get())
+      const current = homeBuffer.get()
+      activityCounts.set('home', countNewMessages(current, filtered))
+      homeBuffer.set(appendLiveChatMessages(current, filtered, HOME_BUFFER_LIMIT))
+    }
+    if (watched.size > 0) {
+      watchedMessagesStore.modify((current) => {
+        let next = current
+        for (const [channelId, incoming] of watched) {
+          const existing = current.get(channelId) ?? []
+          activityCounts.set(channelId, countNewMessages(existing, incoming))
+          const messages = appendLiveChatMessages(existing, incoming, 200)
+          if (messages === existing) continue
+          if (next === current) next = new Map(current)
+          next.set(channelId, messages)
+        }
+        return next
+      })
+    }
+    recordChatActivity(activityCounts)
+  }
+  const scheduleMessages = () => {
+    messageTimer ??= setTimeout(flushMessages, 16)
+  }
+
+  subscribe('chat_message', (msg) => {
+    classifyIncomingSimilarity(msg)
+    pendingHome.push(msg)
+    scheduleMessages()
   })
 
-  events.on('chat_moderation', (outcome) => {
+  subscribe('chat_moderation', (outcome) => {
     applyModerationOutcome(outcome)
   })
 
-  events.on('chat_event', (ev) => {
-    eventsStore.set((current) => {
+  subscribe('chat_event', (ev) => {
+    eventsStore.modify((current) => {
       const next = [...current, ev]
       return next.length > 200 ? next.slice(next.length - 200) : next
     })
     if (activeTabStore.get() !== 'events') {
-      unreadEventsStore.set((v) => v + 1)
+      unreadEventsStore.modify((v) => v + 1)
     }
   })
 
-  events.on('platform_status', (s) => {
+  subscribe('platform_status', (s) => {
     showConnectionNotice(s)
-    channelStatusStore.set((current) => ({ ...current, [s.platform]: s }))
+    channelStatusStore.modify((current) => ({ ...current, [s.platform]: s }))
   })
 
-  events.on('channel_emotes_set', ({ platform, channelId, emotes }) => {
+  subscribe('channel_emotes_set', ({ platform, channelId, emotes }) => {
     setSevenTVEmotes(platform, channelId, emotes)
   })
-  events.on('channel_emote_added', ({ platform, channelId, emote }) => {
+  subscribe('channel_emote_catalog', ({ platform, channelId, emotes }) => {
+    setEmoteCatalog(platform, channelId, emotes)
+  })
+  subscribe('author_emote_catalog', ({ platform, authorId, emotes }) => {
+    authorEmoteStore.modify((current) => {
+      const next = new Map(current)
+      next.delete(`${platform}:${authorId}`)
+      next.set(`${platform}:${authorId}`, emotes)
+      while (next.size > 256) next.delete(next.keys().next().value!)
+      return next
+    })
+  })
+  subscribe('channel_emote_added', ({ platform, channelId, emote }) => {
     addSevenTVEmote(platform, channelId, emote)
     showNotice('info', `7TV: ${emote.alias} added to ${channelId}`)
   })
-  events.on('channel_emote_removed', ({ platform, channelId, emoteId }) => {
+  subscribe('channel_emote_removed', ({ platform, channelId, emoteId }) => {
     removeSevenTVEmote(platform, channelId, emoteId)
     showNotice('info', `7TV emote removed from ${channelId}`)
   })
-  events.on('channel_emote_updated', ({ platform, channelId, emoteId, newAlias }) => {
+  subscribe('channel_emote_updated', ({ platform, channelId, emoteId, newAlias }) => {
     updateSevenTVEmote(platform, channelId, emoteId, newAlias)
     showNotice('info', `7TV emote renamed to ${newAlias} in ${channelId}`)
   })
 
-  events.on('auth_success', () => {
-    void backend.api.getAccounts().then((accs) => accountsStore.set(accs))
+  subscribe('accounts_changed', () => {
+    void backend.api
+      .getAccounts()
+      .then((accounts) => {
+        accountsStore.set(accounts)
+        homeBuffer.modify((messages) => filterHomeChatMessages(messages, accounts))
+      })
+      .catch((error) => showNotice('error', String(error)))
   })
 
-  events.on('auth_error', ({ platform, error }) => {
+  subscribe('auth_success', () => {
+    void backend.api
+      .getAccounts()
+      .then((accs) => accountsStore.set(accs))
+      .catch((error) => showNotice('error', `Could not refresh accounts: ${String(error)}`))
+  })
+
+  subscribe('auth_error', ({ platform, error }) => {
     showNotice('error', `${platform}: ${error}`, 6000)
   })
 
-  events.on('watched_channel_message', ({ channelId, message }) => {
-    watchedMessagesStore.set((current) => {
-      const next = new Map(current)
-      next.set(channelId, mergeChatMessageSnapshot(next.get(channelId) ?? [], [message], 200))
-      return next
-    })
+  subscribe('watched_channel_message', ({ channelId, message }) => {
+    classifyIncomingSimilarity(message)
+    const messages = pendingWatched.get(channelId)
+    if (messages) messages.push(message)
+    else pendingWatched.set(channelId, [message])
+    scheduleMessages()
   })
 
-  events.on('watched_channel_status', ({ channelId, status }) => {
-    watchedStatusesStore.set((current) => new Map(current).set(channelId, status))
+  subscribe('watched_channel_status', ({ channelId, status }) => {
+    watchedStatusesStore.modify((current) => new Map(current).set(channelId, status))
     if (status.status === 'error') {
       // The buffer may have been wiped server-side; refetch both views.
-      void backend.api.getWatchedChannelMessages({ id: channelId }).then((msgs) => {
-        watchedMessagesStore.set((current) => {
-          const next = new Map(current)
-          next.set(channelId, mergeChatMessageSnapshot(next.get(channelId) ?? [], msgs, 200))
-          return next
+      void backend.api
+        .getWatchedChannelMessages({ id: channelId })
+        .then((msgs) => {
+          hydrateMessageSimilarity(msgs)
+          watchedMessagesStore.modify((current) => {
+            const next = new Map(current)
+            next.set(channelId, mergeChatMessageSnapshot(next.get(channelId) ?? [], msgs, 200))
+            return next
+          })
         })
-      })
-      void backend.api.getWatchedChannelStatuses().then((stats) => {
-        watchedStatusesStore.set((current) => {
-          const next = new Map(current)
-          for (const { channelId: id, status: s } of stats) next.set(id, s)
-          return next
+        .catch((error) => showNotice('error', `Could not refresh chat history: ${String(error)}`))
+      void backend.api
+        .getWatchedChannelStatuses()
+        .then((stats) => {
+          watchedStatusesStore.modify((current) => {
+            const next = new Map(current)
+            for (const { channelId: id, status: s } of stats) next.set(id, s)
+            return next
+          })
         })
-      })
+        .catch((error) => showNotice('error', `Could not refresh channel status: ${String(error)}`))
     }
   })
+
+  return () => {
+    for (const unsubscribe of subscriptions) unsubscribe()
+    clearTimeout(messageTimer)
+    flushMessages()
+  }
+}
+
+declare module './persistent-resources' {
+  interface PersistentResources {
+    settings: Store<AppSettings | null>
+    accounts: Store<Account[]>
+    aliases: Store<UserAlias[]>
+    channelStatuses: Store<Partial<Record<Platform, PlatformStatusInfo>>>
+    watchedChannels: Store<WatchedChannel[]>
+    watchedMessages: Store<Map<string, NormalizedChatMessage[]>>
+    watchedStatuses: Store<Map<string, PlatformStatusInfo>>
+    events: Store<NormalizedEvent[]>
+    unreadEvents: Store<number>
+    streamStatuses: Store<Map<string, ChannelStatus>>
+    emotes: Store<Map<string, EmoteCatalogEntry[]>>
+    authorEmotes: Store<Map<string, EmoteCatalogEntry[]>>
+    activeMainTab: Store<MainTab>
+    tabChannelIds: Store<string[]>
+    activeWatchedTab: Store<string>
+    tabChannelNames: Store<Map<string, string[]>>
+    notice: Store<TransientNotice | null>
+    homeMessages: Store<NormalizedChatMessage[]>
+    chatActivity: Store<Map<string, ChatActivity>>
+    moderationRevision: Store<number>
+  }
 }

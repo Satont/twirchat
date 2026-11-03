@@ -16,5 +16,5 @@ test('preserves direct badge image URLs', () => {
 })
 
 test('does not render an unknown embedded Kick badge as a broken image', () => {
-  expect(resolveBadgeImage('embedded:kick:subscriber')).toBeUndefined()
+  expect(resolveBadgeImage('embedded:kick:unknown-role')).toBeUndefined()
 })

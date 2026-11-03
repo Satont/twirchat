@@ -13,7 +13,7 @@ const envSchema = z.object({
   TWITCH_REDIRECT_URI: z.string().url().default('http://localhost:3000/auth/twitch/callback'),
   YOUTUBE_CLIENT_ID: z.string().min(1, 'YOUTUBE_CLIENT_ID is required'),
   YOUTUBE_CLIENT_SECRET: z.string().min(1, 'YOUTUBE_CLIENT_SECRET is required'),
-  // Optional — enables the /api/youtube/resolve channel-ID caching endpoint.
+  // Optional — enables channel resolution and the shared anonymous gRPC chat relay.
   // Get one at https://console.cloud.google.com/ → Credentials → API key.
   YOUTUBE_API_KEY: z.string().optional(),
 })

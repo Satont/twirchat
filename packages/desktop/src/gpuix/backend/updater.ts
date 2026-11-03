@@ -11,10 +11,9 @@
  * Dev builds (APP_VERSION === 'dev') and unpackaged runs are a no-op.
  */
 
+import { logger } from '@twirchat/shared/logger'
 import { GithubSource, UpdateManager, VelopackApp } from 'velopack'
 import type { UpdateInfo, VelopackAsset } from 'velopack'
-
-import { logger } from '@twirchat/shared/logger'
 
 import { APP_VERSION } from '../../build-info'
 import { getDb } from '../../store/db'

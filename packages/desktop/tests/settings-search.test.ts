@@ -1,0 +1,123 @@
+import { describe, expect, test } from 'bun:test'
+
+import {
+  SETTINGS_CATEGORIES,
+  SETTINGS_SECTIONS,
+  SETTINGS_SAVE_LABELS,
+  resolveSettingsCategory,
+  retainMountedSettingsSections,
+  searchSettings,
+  stepSettingsCategory,
+  visibleSettingsSections,
+  type SettingsSectionId,
+} from '../src/gpuix/settings-search'
+
+const ids = (query: string) => searchSettings(query).sections.map((section) => section.id)
+
+describe('settings search index', () => {
+  test('every existing section has a unique reachable category and an explicit save contract', () => {
+    expect(SETTINGS_SECTIONS).toHaveLength(17)
+    expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(17)
+    expect(searchSettings('').categories).toEqual(SETTINGS_CATEGORIES)
+    for (const section of SETTINGS_SECTIONS) {
+      const result = searchSettings('')
+      expect(visibleSettingsSections(section.category, result)).toContain(section.id)
+      expect(SETTINGS_SAVE_LABELS[section.saveMode].length).toBeGreaterThan(0)
+      expect(section.keywords.length).toBeGreaterThan(10)
+    }
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'emotes')?.saveMode).toBe('automatic')
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'notifications')?.saveMode).toBe(
+      'section',
+    )
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'overlay')?.saveMode).toBe('app')
+  })
+  test('field names, providers, aliases and Russian terms find editors outside the current category', () => {
+    const queries: [string, SettingsSectionId][] = [
+      ['fontFamily', 'appearance'],
+      ['Inter', 'appearance'],
+      ['autoCheckUpdates', 'updates'],
+      ['muted channels', 'notifications'],
+      ['sound file', 'notifications'],
+      ['PCRE2', 'rules'],
+      ['ignored placeholder', 'rules'],
+      ['maximum file size', 'history'],
+      ['flush logs', 'history'],
+      ['selfPing rgba', 'self-ping'],
+      ['zero width', 'emotes'],
+      ['FFZ', 'emotes'],
+      ['7TV presence', 'emotes'],
+      ['Azure region', 'translation'],
+      ['Morse outgoing', 'translation'],
+      ['Quick reasons', 'moderation'],
+      ['command template', 'commands'],
+      ['save rules', 'rules'],
+      ['overlay.port', 'overlay'],
+      ['text colour', 'overlay'],
+      ['Ctrl+Tab', 'shortcuts'],
+      ['OAuth token', 'twitch-session'],
+      ['перевод', 'translation'],
+      ['обновления', 'updates'],
+      ['папка', 'history'],
+    ]
+    for (const [query, expected] of queries) expect(ids(query)).toContain(expected)
+    expect(ids('fontFamily')).toEqual(['appearance'])
+    expect(ids('notifications')).toEqual(['notifications'])
+  })
+  test('terms use AND within one section, with case-insensitive prefix and punctuation normalization', () => {
+    expect(ids('  AZURE---REG  ')).toEqual(['translation'])
+    expect(ids('azure reasons')).toEqual([])
+    expect(ids('souND fIlE')).toEqual(['notifications'])
+    expect(ids('7tv')).toEqual(['emotes'])
+    expect(ids('+++')).toHaveLength(17)
+  })
+  test('unknown queries produce an empty result without falling back to a different editor', () => {
+    const result = searchSettings('something-that-does-not-exist')
+    expect(result.sections).toEqual([])
+    expect(result.categories).toEqual([])
+    expect(resolveSettingsCategory('general', result)).toBeNull()
+    expect(visibleSettingsSections(null, result)).toEqual([])
+  })
+  test('matching category selection remains stable and clearing search restores the preferred category', () => {
+    const colors = searchSettings('color')
+    expect(resolveSettingsCategory('overlay', colors)).toBe('overlay')
+    expect(resolveSettingsCategory('general', colors)).toBe('chat')
+    expect(resolveSettingsCategory('general', searchSettings('Azure'))).toBe('translation')
+    expect(resolveSettingsCategory('general', searchSettings(''))).toBe('general')
+  })
+})
+
+describe('lazy settings editors', () => {
+  test('first open mounts only General; searching all categories alone does not mount other bodies', () => {
+    const initial = visibleSettingsSections('general', searchSettings(''))
+    const mounted = retainMountedSettingsSections(new Set(), initial)
+    expect([...mounted]).toEqual(['appearance', 'updates'])
+    expect(mounted.has('translation')).toBe(false)
+    expect(searchSettings('').sections).toHaveLength(17)
+    expect([...mounted]).toEqual(['appearance', 'updates'])
+  })
+  test('visited editor identities are retained across category changes and no-result searches', () => {
+    const general = retainMountedSettingsSections(
+      new Set(),
+      visibleSettingsSections('general', searchSettings('')),
+    )
+    const translating = retainMountedSettingsSections(
+      general,
+      visibleSettingsSections('translation', searchSettings('Azure')),
+    )
+    expect([...translating]).toEqual(['appearance', 'updates', 'translation'])
+    const empty = retainMountedSettingsSections(translating, [])
+    expect(empty).toBe(translating)
+    const back = retainMountedSettingsSections(
+      empty,
+      visibleSettingsSections('general', searchSettings('')),
+    )
+    expect(back).toBe(translating)
+    expect(back.has('translation')).toBe(true)
+  })
+  test('keyboard category traversal wraps, handles filtered sets and safely handles no results', () => {
+    expect(stepSettingsCategory(['general', 'chat', 'overlay'], 'general', -1)).toBe('overlay')
+    expect(stepSettingsCategory(['general', 'chat', 'overlay'], 'overlay', 1)).toBe('general')
+    expect(stepSettingsCategory(['translation'], 'general', 1)).toBe('translation')
+    expect(stepSettingsCategory([], 'general', 1)).toBeNull()
+  })
+})

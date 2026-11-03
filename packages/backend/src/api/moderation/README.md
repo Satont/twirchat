@@ -15,8 +15,8 @@ Unified TypeScript client for implementing chat moderation actions across Twitch
 Already included in `@twirchat/backend`. Import from `src/api/moderation`:
 
 ```typescript
-import * as Twitch from './src/api/moderation/twitch.ts'
 import * as Kick from './src/api/moderation/kick.ts'
+import * as Twitch from './src/api/moderation/twitch.ts'
 import { ModerationException } from './src/api/moderation/types.ts'
 ```
 

@@ -1,0 +1,15 @@
+{
+  "plugins": ["typescript"],
+  "jsPlugins": ["../../../../scripts/quality-plugin.mjs"],
+  "rules": {
+    "project-quality/no-type-assertions": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_"
+      }
+    ]
+  }
+}

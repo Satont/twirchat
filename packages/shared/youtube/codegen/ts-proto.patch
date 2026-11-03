@@ -1,0 +1,197 @@
+--- a/build/src/main.js
++++ b/build/src/main.js
+@@ -23,6 +23,7 @@
+ const utils_1 = require("./utils");
+ const visit_1 = require("./visit");
+ function generateFile(ctx, fileDesc) {
++    ctx = { ...ctx, decodeDepth: (0, ts_poet_1.imp)(`decodeDepth@./ts-proto-depth${ctx.options.importSuffix}`) };
+     const { options, utils } = ctx;
+     if (options.useOptionals === false) {
+         console.warn("ts-proto: Passing useOptionals as a boolean option is deprecated and will be removed in a future version. Please pass the string 'none' instead of false.");
+@@ -1114,7 +1115,7 @@
+                 readSnippet = (0, ts_poet_1.code) `${fromJson}(${readSnippet})`;
+             }
+             else {
+-                readSnippet = (0, ts_poet_1.code) `${readSnippet} as any`;
++                readSnippet = (0, ts_poet_1.code) `${readSnippet}`;
+             }
+         }
+     }
+@@ -1182,11 +1183,11 @@
+       length?: number,
+     ): ${fullName} {
+       const reader = input instanceof ${BinaryReader} ? input : new ${BinaryReader}(input);
+-      const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
++      const previousRecursionDepth = ${ctx.decodeDepth}.get(reader) ?? 0;
+       if (previousRecursionDepth >= 100) {
+         throw new ${ctx.utils.globalThis}.Error("protobuf decode recursion limit exceeded");
+       }
+-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
++      ${ctx.decodeDepth}.set(reader, previousRecursionDepth + 1);
+       try {
+         const end = length === undefined ? reader.len : reader.pos + length;
+   `);
+@@ -1354,7 +1355,11 @@
+     chunks.push((0, ts_poet_1.code) `return message;`);
+     chunks.push((0, ts_poet_1.code) `
+       } finally {
+-        (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
++        if (previousRecursionDepth === 0) {
++          ${ctx.decodeDepth}.delete(reader);
++        } else {
++          ${ctx.decodeDepth}.set(reader, previousRecursionDepth);
++        }
+       }
+     }
+   `);
+@@ -1501,7 +1506,7 @@
+             else if ((0, types_1.packedField)(field, currentFile.isProto3Syntax) === undefined) {
+                 const listWriteSnippet = (0, ts_poet_1.code) `
+           for (const v of ${messageProperty}) {
+-            ${writeSnippet("v!")};
++            ${writeSnippet("v")};
+           }
+         `;
+                 if (isOptional) {
+--- a/build/src/generate-grpc-js.js
++++ b/build/src/generate-grpc-js.js
+@@ -19,8 +19,8 @@
+ const handleServerStreamingCall = (0, ts_poet_1.imp)("t:handleServerStreamingCall@@grpc/grpc-js");
+ const handleUnaryCall = (0, ts_poet_1.imp)("t:handleUnaryCall@@grpc/grpc-js");
+ const UntypedServiceImplementation = (0, ts_poet_1.imp)("t:UntypedServiceImplementation@@grpc/grpc-js");
+-const makeGenericClientConstructor = (0, ts_poet_1.imp)("makeGenericClientConstructor@@grpc/grpc-js");
+-const Metadata = (0, ts_poet_1.imp)("t:Metadata@@grpc/grpc-js");
++const ServiceDefinition = (0, ts_poet_1.imp)("t:ServiceDefinition@@grpc/grpc-js");
++const Metadata = (0, ts_poet_1.imp)("Metadata@@grpc/grpc-js");
+ const ServiceError = (0, ts_poet_1.imp)("t:ServiceError@@grpc/grpc-js");
+ /**
+  * Generates a service definition and server / client stubs for the
+@@ -32,8 +32,7 @@
+     chunks.push(generateServiceDefinition(ctx, fileDesc, sourceInfo, serviceDesc));
+     chunks.push(generateServerStub(ctx, sourceInfo, serviceDesc));
+     if (options.outputClientImpl) {
+-        chunks.push(generateClientStub(ctx, sourceInfo, serviceDesc));
+-        chunks.push(generateClientConstructor(fileDesc, serviceDesc));
++        chunks.push(generateClientConstructor(ctx, fileDesc, serviceDesc));
+     }
+     return (0, ts_poet_1.joinCode)(chunks, { on: "\n\n" });
+ }
+@@ -61,9 +60,9 @@
+         const outputDecoder = (0, encode_1.generateDecoder)(ctx, methodDesc.outputType);
+         chunks.push((0, ts_poet_1.code) `
+       ${methodDesc.formattedName}: {
+-        path: '/${(0, utils_1.maybePrefixPackage)(fileDesc, serviceDesc.name)}/${methodDesc.name}' as const,
+-        requestStream: ${methodDesc.clientStreaming} as const,
+-        responseStream: ${methodDesc.serverStreaming} as const,
++        path: '/${(0, utils_1.maybePrefixPackage)(fileDesc, serviceDesc.name)}/${methodDesc.name}',
++        requestStream: ${methodDesc.clientStreaming},
++        responseStream: ${methodDesc.serverStreaming},
+         requestSerialize: (value: ${inputType}): Buffer =>
+           Buffer.from(${inputEncoder}),
+         requestDeserialize: (value: Buffer): ${inputType} => ${inputDecoder},
+@@ -73,7 +72,7 @@
+       },
+     `);
+     }
+-    chunks.push((0, ts_poet_1.code) `} as const;`);
++    chunks.push((0, ts_poet_1.code) `} satisfies ${ServiceDefinition};`);
+     return (0, ts_poet_1.joinCode)(chunks, { on: "\n" });
+ }
+ function generateServerStub(ctx, sourceInfo, serviceDesc) {
+@@ -185,19 +184,39 @@
+     chunks.push((0, ts_poet_1.code) `}`);
+     return (0, ts_poet_1.joinCode)(chunks, { on: "\n" });
+ }
+-function generateClientConstructor(fileDesc, serviceDesc) {
+-    return (0, ts_poet_1.code) `
+-    export const ${(0, ts_poet_1.def)(`${serviceDesc.name}Client`)} = ${makeGenericClientConstructor}(
+-      ${serviceDesc.name}Service,
+-      '${(0, utils_1.maybePrefixPackage)(fileDesc, serviceDesc.name)}'
+-    ) as unknown as {
+-      new (
+-        address: string,
+-        credentials: ${ChannelCredentials},
+-        options?: Partial<${ClientOptions}>,
+-      ): ${serviceDesc.name}Client;
+-      service: typeof ${serviceDesc.name}Service;
+-      serviceName: string;
+-    }
+-  `;
+-}
++function generateClientConstructor(ctx, fileDesc, serviceDesc) {
++    const chunks = [];
++    const name = (0, ts_poet_1.def)(`${serviceDesc.name}Client`);
++    chunks.push((0, ts_poet_1.code) `
++      export class ${name} extends ${Client} {
++        static service = ${serviceDesc.name}Service;
++        static serviceName = '${(0, utils_1.maybePrefixPackage)(fileDesc, serviceDesc.name)}';
++        constructor(address: string, credentials: ${ChannelCredentials}, options?: Partial<${ClientOptions}>) {
++          super(address, credentials, options);
++        }
++    `);
++    for (const methodDesc of serviceDesc.method) {
++        (0, utils_1.assertInstanceOf)(methodDesc, utils_1.FormattedMethodDescriptor);
++        if (methodDesc.clientStreaming || !methodDesc.serverStreaming) {
++            throw new Error("TwirChat's pinned grpc-js template supports server-streaming RPCs only.");
++        }
++        const inputType = (0, types_1.messageToTypeName)(ctx, methodDesc.inputType);
++        const outputType = (0, types_1.messageToTypeName)(ctx, methodDesc.outputType);
++        chunks.push((0, ts_poet_1.code) `
++          ${methodDesc.formattedName}(request: ${inputType}, options?: Partial<${CallOptions}>): ${ClientReadableStream}<${outputType}>;
++          ${methodDesc.formattedName}(request: ${inputType}, metadata?: ${Metadata}, options?: Partial<${CallOptions}>): ${ClientReadableStream}<${outputType}>;
++          ${methodDesc.formattedName}(request: ${inputType}, metadataOrOptions?: ${Metadata} | Partial<${CallOptions}>, options?: Partial<${CallOptions}>): ${ClientReadableStream}<${outputType}> {
++            const metadata = metadataOrOptions instanceof ${Metadata} ? metadataOrOptions : new ${Metadata}();
++            const callOptions = metadataOrOptions instanceof ${Metadata} ? options : metadataOrOptions ?? options;
++            return this.makeServerStreamRequest(
++              ${serviceDesc.name}Service.${methodDesc.formattedName}.path,
++              ${serviceDesc.name}Service.${methodDesc.formattedName}.requestSerialize,
++              ${serviceDesc.name}Service.${methodDesc.formattedName}.responseDeserialize,
++              request, metadata, callOptions,
++            );
++          }
++        `);
++    }
++    chunks.push((0, ts_poet_1.code) `}`);
++    return (0, ts_poet_1.joinCode)(chunks, { on: "\n" });
++}
+--- a/build/src/options.js
++++ b/build/src/options.js
+@@ -314,7 +314,7 @@
+             : ""}
+ ${fileName ? `// source: ${fileName}` : ""}
+ 
+-    /* eslint-disable */`,
++`,
+         dprintOptions: { preferSingleLine: true, lineWidth: 120 },
+         forceRequireImport: esModuleInterop ? [] : ["long"],
+         forceDefaultImport: esModuleInterop ? [pbjs] : [],
+--- a/build/src/plugin.js
++++ b/build/src/plugin.js
+@@ -46,6 +46,10 @@
+         const content = code.toString({ ...(0, options_1.getTsPoetOpts)(options, tsProtoVersion, protocVersion, file.name), path });
+         return { name: path, content };
+     }));
++    files.push({ name: "ts-proto-depth.ts", content: `// Code generated by the pinned TwirChat ts-proto extension. DO NOT EDIT.
++import type { BinaryReader } from "@bufbuild/protobuf/wire";
++export const decodeDepth = new WeakMap<BinaryReader, number>();
++` });
+     if (options.outputTypeRegistry) {
+         const utils = (0, main_1.makeUtils)(options);
+         const ctx = { options, typeMap, utils };
+--- a/build/src/types.js
++++ b/build/src/types.js
+@@ -336,9 +336,13 @@
+         case ts_proto_descriptors_1.FieldDescriptorProto_Type.TYPE_SINT32:
+         case ts_proto_descriptors_1.FieldDescriptorProto_Type.TYPE_FIXED32:
+         case ts_proto_descriptors_1.FieldDescriptorProto_Type.TYPE_SFIXED32:
+-        case ts_proto_descriptors_1.FieldDescriptorProto_Type.TYPE_BOOL:
+         case ts_proto_descriptors_1.FieldDescriptorProto_Type.TYPE_STRING:
+             return (0, ts_poet_1.code) `${maybeNotUndefinedAnd} ${place} !== ${defaultValue(ctx, field)}`;
++        case ts_proto_descriptors_1.FieldDescriptorProto_Type.TYPE_BOOL: {
++            const defaultBoolean = defaultValue(ctx, field);
++            const condition = defaultBoolean === true || defaultBoolean === "true" ? `!${place}` : place;
++            return (0, ts_poet_1.code) `${maybeNotUndefinedAnd} ${condition}`;
++        }
+         case ts_proto_descriptors_1.FieldDescriptorProto_Type.TYPE_ENUM:
+             // proto3 enforces enums starting at 0, however proto2 does not, so we have
+             // to probe and see if zero is an allowed value. If it's not, pick the first one.

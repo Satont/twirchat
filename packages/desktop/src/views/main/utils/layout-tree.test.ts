@@ -1,4 +1,8 @@
 import { describe, test, expect } from 'bun:test'
+
+import type { LayoutNode, PanelNode, SplitNode } from '@twirchat/shared/types'
+
+import { required } from '../../../../tests/fixture-values'
 import {
   findNodeById,
   findParentOfNode,
@@ -8,7 +12,6 @@ import {
   normalizeFlex,
   canAddPanel,
 } from './layout-tree'
-import type { LayoutNode, PanelNode, SplitNode } from '@twirchat/shared/types'
 
 describe('layout-tree', () => {
   const createTestTree = (): LayoutNode => ({
@@ -115,9 +118,9 @@ describe('layout-tree', () => {
       ],
     }
     normalizeFlex(split)
-    expect(split.children[0]!.flex).toBeCloseTo(33.33, 1)
-    expect(split.children[1]!.flex).toBeCloseTo(33.33, 1)
-    expect(split.children[2]!.flex).toBeCloseTo(33.33, 1)
+    expect(required(split.children[0]).flex).toBeCloseTo(33.33, 1)
+    expect(required(split.children[1]).flex).toBeCloseTo(33.33, 1)
+    expect(required(split.children[2]).flex).toBeCloseTo(33.33, 1)
   })
 
   test('canAddPanel respects limit', () => {

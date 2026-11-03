@@ -1,5 +1,7 @@
-import { getDb } from './db'
 import type { Platform } from '@twirchat/shared/types'
+
+import { platformSchema } from '../services/persisted-schemas'
+import { getDb } from './db'
 
 export const ChannelStore = {
   /** Persist a joined channel */
@@ -42,11 +44,11 @@ export const ChannelStore = {
 
     const result: Partial<Record<Platform, string[]>> = {}
     for (const row of rows) {
-      const p = row.platform as Platform
+      const p = platformSchema.parse(row.platform)
       if (!result[p]) {
         result[p] = []
       }
-      result[p]!.push(row.channel_slug)
+      result[p].push(row.channel_slug)
     }
     return result
   },

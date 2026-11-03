@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { moderationActionForDrag } from '../src/views/main/utils/moderation-drag'
 
 test('maps drag distance to a safe discrete moderation action', () => {

@@ -3,7 +3,7 @@ import type { ModerationAction, ModerationPlatform } from '../../../gpuix/backen
 const activationDistance = 32
 const deleteDistance = 80
 const timeoutStepDistance = 42
-const timeoutPresets = [60, 300, 600, 1800, 3600, 86_400, 604_800] as const
+const timeoutPresets = [60, 300, 600, 1800, 3600, 86_400, 604_800]
 
 export type ModerationDragAction =
   | { action: 'delete_message'; label: string }

@@ -7,26 +7,54 @@
  * stack so ESC dismisses it (see state/overlays.ts).
  */
 
-import { useEffect, type ReactNode } from 'react'
 import { useWindowSize } from '@gpuix/react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
+import { pushOverlayClose } from '../../state/overlays'
+import { useWindowScope } from '../../state/window-scope'
 import { elevated } from '../../theme'
 import { useTheme } from '../../theme-context'
-import { pushOverlayClose } from '../../state/overlays'
 
 export function Modal({
   width,
   onClose,
   children,
+  embedded = false,
+  closeOnOutsideClick = true,
+  hotkeyContextId,
 }: {
   width: number
   onClose: () => void
   children: ReactNode
+  embedded?: boolean
+  closeOnOutsideClick?: boolean
+  hotkeyContextId?: string
 }) {
   const windowSize = useWindowSize()
   const theme = useTheme()
 
-  useEffect(() => pushOverlayClose(onClose), [onClose])
+  const scope = useWindowScope()
+  const close = useRef(onClose)
+  close.current = onClose
+  useEffect(
+    () => pushOverlayClose(() => close.current(), scope, hotkeyContextId),
+    [scope, hotkeyContextId],
+  )
+
+  if (embedded)
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: theme.dialog,
+        }}
+      >
+        {children}
+      </div>
+    )
 
   return (
     <anchored
@@ -42,7 +70,7 @@ export function Modal({
       }}
     >
       <div
-        onClick={onClose}
+        onClick={closeOnOutsideClick ? onClose : undefined}
         style={{
           width: '100%',
           height: '100%',
@@ -54,7 +82,7 @@ export function Modal({
       >
         <div
           style={{
-            width,
+            width: Math.min(width, Math.max(280, windowSize.width - 32)),
             maxHeight: '85%',
             backgroundColor: theme.dialog,
             borderWidth: 1,

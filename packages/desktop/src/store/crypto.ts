@@ -1,5 +1,6 @@
-import { APP_NAME } from '@twirchat/shared/constants'
 import { hostname } from 'node:os'
+
+import { APP_NAME } from '@twirchat/shared/constants'
 
 /**
  * Простое симметричное шифрование AES-256-GCM через Web Crypto API.
@@ -30,8 +31,8 @@ async function encryptAsync(plaintext: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(plaintext)
 
-  const salt = crypto.getRandomValues(new Uint8Array(16)) as Uint8Array<ArrayBuffer>
-  const iv = crypto.getRandomValues(new Uint8Array(12)) as Uint8Array<ArrayBuffer>
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
   const key = await deriveKey(salt)
 
   const ciphertext = await crypto.subtle.encrypt({ iv, name: 'AES-GCM' }, key, data)
@@ -66,7 +67,7 @@ async function decryptAsync(encoded: string): Promise<string> {
 //  С синхронным SQLite используем синхронное шифрование)
 function xorEncode(text: string): string {
   const key = `${APP_NAME}:${hostname()}`
-  const encoded = [...text]
+  const encoded = Array.from(text)
     .map((char, i) => char.charCodeAt(0) ^ (key.charCodeAt(i % key.length) ?? 0))
     .map((code) => String.fromCharCode(code))
     .join('')
@@ -76,7 +77,7 @@ function xorEncode(text: string): string {
 function xorDecode(encoded: string): string {
   const key = `${APP_NAME}:${hostname()}`
   const decoded = Buffer.from(encoded, 'base64').toString('binary')
-  return [...decoded]
+  return Array.from(decoded)
     .map((char, i) => char.charCodeAt(0) ^ (key.charCodeAt(i % key.length) ?? 0))
     .map((code) => String.fromCharCode(code))
     .join('')

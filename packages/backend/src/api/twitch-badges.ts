@@ -1,3 +1,4 @@
+import type { TwitchBadgesResponse } from '@twirchat/shared'
 /**
  * GET /api/twitch/badges?broadcasterLogin=<login>
  *
@@ -8,9 +9,9 @@
  *
  * Example: { "subscriber/6": "https://static-cdn.jtvnw.net/badges/v1/<uuid>/1" }
  */
-
 import { logger } from '@twirchat/shared/logger'
-import type { TwitchBadgesResponse } from '@twirchat/shared'
+import { z } from 'zod'
+
 import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
 
 const log = logger('twitch-badges')
@@ -47,7 +48,16 @@ export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse
   if (!globalRes.ok) {
     throw new Error(`Helix global badges failed: ${globalRes.status}`)
   }
-  const globalBody = (await globalRes.json()) as HelixBadgesBody
+  const globalBody = z
+    .object({
+      data: z.array(
+        z.object({
+          set_id: z.string(),
+          versions: z.array(z.object({ id: z.string(), image_url_1x: z.string() })),
+        }),
+      ),
+    })
+    .parse(await globalRes.json())
   mergeHelixBadges(badges, globalBody)
   log.info('Global badges fetched', {
     count: globalBody.data.reduce((n, s) => n + s.versions.length, 0),
@@ -60,14 +70,25 @@ export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse
       `https://api.twitch.tv/helix/users?login=${encodeURIComponent(broadcasterLogin)}`,
     )
     if (userRes.ok) {
-      const userData = (await userRes.json()) as { data: { id: string }[] }
+      const userData = z
+        .object({ data: z.array(z.object({ id: z.string() })) })
+        .parse(await userRes.json())
       const broadcasterId = userData.data[0]?.id
       if (broadcasterId) {
         const chanRes = await fetchTwitchHelixWithAppToken(
           `https://api.twitch.tv/helix/chat/badges?broadcaster_id=${broadcasterId}`,
         )
         if (chanRes.ok) {
-          const chanBody = (await chanRes.json()) as HelixBadgesBody
+          const chanBody = z
+            .object({
+              data: z.array(
+                z.object({
+                  set_id: z.string(),
+                  versions: z.array(z.object({ id: z.string(), image_url_1x: z.string() })),
+                }),
+              ),
+            })
+            .parse(await chanRes.json())
           mergeHelixBadges(badges, chanBody)
           log.info('Channel badges fetched', {
             channel: broadcasterLogin,

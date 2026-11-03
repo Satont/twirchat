@@ -1,3 +1,4 @@
+import type { StreamStatusResponse } from '@twirchat/shared'
 /**
  * GET /api/stream-status?platform=twitch|kick&channelId=<id>
  *
@@ -7,9 +8,9 @@
  *
  * Returns StreamStatusResponse.
  */
+import { z } from 'zod'
 
 import { config } from '../config.ts'
-import type { StreamStatusResponse } from '@twirchat/shared'
 
 // ----------------------------------------------------------------
 // Twitch App Token (cached in-memory with expiry)
@@ -51,10 +52,9 @@ async function getTwitchAppToken(): Promise<string> {
     throw new Error(`Failed to get Twitch app token: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as {
-    access_token: string
-    expires_in: number
-  }
+  const data = z
+    .object({ access_token: z.string(), expires_in: z.number() })
+    .parse(await res.json())
 
   twitchAppToken = data.access_token
   twitchAppTokenExpiresAt = Date.now() + data.expires_in * 1000
@@ -112,10 +112,9 @@ async function getKickAppToken(): Promise<string> {
     throw new Error(`Failed to get Kick app token: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as {
-    access_token: string
-    expires_in: number
-  }
+  const data = z
+    .object({ access_token: z.string(), expires_in: z.number() })
+    .parse(await res.json())
 
   kickAppToken = data.access_token
   kickAppTokenExpiresAt = Date.now() + data.expires_in * 1000
@@ -137,17 +136,21 @@ async function getTwitchStreamStatus(channelId: string): Promise<StreamStatusRes
     throw new Error(`Twitch streams API failed: ${streamRes.status}`)
   }
 
-  const streamBody = (await streamRes.json()) as {
-    data: {
-      title: string
-      game_id: string
-      game_name: string
-      viewer_count: number
-    }[]
-  }
+  const streamBody = z
+    .object({
+      data: z.array(
+        z.object({
+          title: z.string(),
+          game_id: z.string(),
+          game_name: z.string(),
+          viewer_count: z.number(),
+        }),
+      ),
+    })
+    .parse(await streamRes.json())
 
-  if (streamBody.data.length > 0) {
-    const stream = streamBody.data[0]!
+  const stream = streamBody.data[0]
+  if (stream) {
     return {
       categoryId: stream.game_id || undefined,
       categoryName: stream.game_name || undefined,
@@ -166,13 +169,11 @@ async function getTwitchStreamStatus(channelId: string): Promise<StreamStatusRes
     throw new Error(`Twitch channels API failed: ${channelRes.status}`)
   }
 
-  const channelBody = (await channelRes.json()) as {
-    data: {
-      title: string
-      game_id: string
-      game_name: string
-    }[]
-  }
+  const channelBody = z
+    .object({
+      data: z.array(z.object({ title: z.string(), game_id: z.string(), game_name: z.string() })),
+    })
+    .parse(await channelRes.json())
 
   const channel = channelBody.data[0]
   if (!channel) {
@@ -208,19 +209,23 @@ async function getKickStreamStatus(channelSlug: string): Promise<StreamStatusRes
     throw new Error(`Kick channels API failed: ${res.status}`)
   }
 
-  const body = (await res.json()) as {
-    data?: {
-      stream_title?: string
-      stream?: {
-        is_live?: boolean
-        viewer_count?: number
-      }
-      category?: {
-        id?: number
-        name?: string
-      }
-    }[]
-  }
+  const body = z
+    .object({
+      data: z
+        .array(
+          z.object({
+            stream_title: z.string().optional(),
+            stream: z
+              .object({ is_live: z.boolean().optional(), viewer_count: z.number().optional() })
+              .optional(),
+            category: z
+              .object({ id: z.number().optional(), name: z.string().optional() })
+              .optional(),
+          }),
+        )
+        .optional(),
+    })
+    .parse(await res.json())
 
   const channel = body.data?.[0]
   if (!channel) {

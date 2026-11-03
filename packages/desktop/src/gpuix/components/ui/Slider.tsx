@@ -6,6 +6,7 @@
  */
 
 import { useRef } from 'react'
+
 import { accent } from '../../theme'
 
 const SEGMENT_WIDTH = 8

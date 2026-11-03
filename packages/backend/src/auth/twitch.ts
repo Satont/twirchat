@@ -1,3 +1,4 @@
+import { TWITCH_AUTH_URL, TWITCH_TOKEN_URL } from '@twirchat/shared'
 /**
  * Twitch OAuth helpers — backend side.
  *
@@ -9,19 +10,20 @@
  *
  * Tokens are returned to the desktop and stored in its local SQLite.
  */
-
-import { config } from '../config.ts'
-import { TWITCH_AUTH_URL, TWITCH_TOKEN_URL } from '@twirchat/shared'
 import type {
   TwitchBuildUrlResponse,
   TwitchExchangeResponse,
   TwitchRefreshResponse,
 } from '@twirchat/shared'
+import { z } from 'zod'
+
+import { config } from '../config.ts'
 
 const TWITCH_SCOPES = [
   'chat:read',
   'chat:edit',
   'user:write:chat',
+  'user:read:emotes',
   'channel:read:subscriptions',
   'channel:read:redemptions',
   'moderator:read:followers',
@@ -29,8 +31,36 @@ const TWITCH_SCOPES = [
   'moderator:read:chatters',
   'moderator:manage:chat_messages',
   'moderator:manage:banned_users',
+  'moderator:manage:chat_settings',
+  'moderator:manage:announcements',
+  'moderator:manage:shoutouts',
+  'channel:manage:moderators',
+  'channel:manage:vips',
+  'channel:read:vips',
+  'moderation:read',
+  'user:manage:chat_color',
+  'channel:edit:commercial',
+  'channel:manage:raids',
+  'user:manage:blocked_users',
+  'user:manage:whispers',
+  'user:read:moderated_channels',
+  'user:read:follows',
+  'channel:read:polls',
+  'channel:manage:polls',
+  'channel:read:predictions',
+  'channel:manage:predictions',
+  'channel:manage:redemptions',
+  'moderator:read:chat_messages',
   'bits:read',
   'channel:manage:broadcast',
+  'channel:read:editors',
+  'clips:edit',
+  'moderator:manage:automod',
+  'moderator:manage:blocked_terms',
+  'moderator:manage:shield_mode',
+  'moderator:manage:suspicious_users',
+  'moderator:manage:warnings',
+  'moderator:read:blocked_terms',
 ]
 
 /**
@@ -81,12 +111,14 @@ export async function exchangeTwitchCode(
     throw new Error(`Twitch token exchange failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as {
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-    scope?: string[]
-  }
+  const data = z
+    .object({
+      access_token: z.string(),
+      refresh_token: z.string().optional(),
+      expires_in: z.number().optional(),
+      scope: z.array(z.string()).optional(),
+    })
+    .parse(await res.json())
 
   return {
     accessToken: data.access_token,
@@ -116,11 +148,13 @@ export async function refreshTwitchToken(refreshToken: string): Promise<TwitchRe
     throw new Error(`Twitch token refresh failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as {
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-  }
+  const data = z
+    .object({
+      access_token: z.string(),
+      refresh_token: z.string().optional(),
+      expires_in: z.number().optional(),
+    })
+    .parse(await res.json())
 
   return {
     accessToken: data.access_token,

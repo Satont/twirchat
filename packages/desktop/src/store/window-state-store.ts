@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import { getDb } from './db'
 
 export interface WindowState {
@@ -34,7 +36,9 @@ export const WindowStateStore = {
     if (!row) return null
 
     try {
-      const parsed = JSON.parse(row.value) as Partial<WindowState>
+      const parsed = z
+        .object({ height: z.number(), width: z.number(), x: z.number(), y: z.number() })
+        .parse(JSON.parse(row.value))
       return isValidState(parsed)
         ? { height: parsed.height, width: parsed.width, x: parsed.x, y: parsed.y }
         : null

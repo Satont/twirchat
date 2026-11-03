@@ -1,4 +1,10 @@
-import { sql } from 'bun'
+import { randomUUID } from 'node:crypto'
+
+import type { Platform } from '@twirchat/shared'
+import { sql, type SQL } from 'bun'
+import { z } from 'zod'
+
+const platformSchema = z.enum(['twitch', 'kick', 'youtube'])
 
 export interface DesktopClient {
   secret: string
@@ -9,7 +15,7 @@ export interface DesktopClient {
 export interface PlatformAccount {
   id: string
   clientSecret: string
-  platform: string
+  platform: Platform
   platformUserId: string
   username: string
   displayName: string
@@ -61,7 +67,7 @@ function mapAccount(row: AccountRow): PlatformAccount {
     createdAt: row.created_at,
     displayName: row.display_name,
     id: row.id,
-    platform: row.platform,
+    platform: platformSchema.parse(row.platform),
     platformUserId: row.platform_user_id,
     refreshToken: row.refresh_token ?? undefined,
     scopes: row.scopes,
@@ -99,69 +105,116 @@ export const ClientStore = {
   },
 }
 
-export const AccountStore = {
-  async delete(clientSecret: string, platform: string): Promise<void> {
-    await sql`
-      DELETE FROM platform_accounts
-      WHERE client_secret = ${clientSecret} AND platform = ${platform}
-    `
-  },
-
-  async findAllByClient(clientSecret: string): Promise<PlatformAccount[]> {
-    const rows = await sql<AccountRow[]>`
-      SELECT * FROM platform_accounts
-      WHERE client_secret = ${clientSecret}
-      ORDER BY created_at
-    `
-    return rows.map(mapAccount)
-  },
-
-  async findByClientAndPlatform(
-    clientSecret: string,
-    platform: string,
-  ): Promise<PlatformAccount | null> {
-    const rows = await sql<AccountRow[]>`
-      SELECT * FROM platform_accounts
-      WHERE client_secret = ${clientSecret} AND platform = ${platform}
-    `
-    return rows[0] ? mapAccount(rows[0]) : null
-  },
-
-  async upsert(params: {
-    clientSecret: string
-    platform: string
-    platformUserId: string
-    username: string
-    displayName: string
-    avatarUrl?: string
-    accessToken: string
-    refreshToken?: string
-    tokenExpiresAt?: Date
-    scopes?: string[]
-  }): Promise<void> {
-    const id = `${params.platform}:${params.platformUserId}`
-    await sql`
-      INSERT INTO platform_accounts
-        (id, client_secret, platform, platform_user_id, username, display_name,
-         avatar_url, access_token, refresh_token, token_expires_at, scopes, updated_at)
-      VALUES
-        (${id}, ${params.clientSecret}, ${params.platform}, ${params.platformUserId},
-         ${params.username}, ${params.displayName}, ${params.avatarUrl ?? null},
-         ${params.accessToken}, ${params.refreshToken ?? null},
-         ${params.tokenExpiresAt ?? null}, ${params.scopes ?? []}, NOW())
-      ON CONFLICT (client_secret, platform) DO UPDATE SET
-        platform_user_id = EXCLUDED.platform_user_id,
-        username         = EXCLUDED.username,
-        display_name     = EXCLUDED.display_name,
-        avatar_url       = EXCLUDED.avatar_url,
-        access_token     = EXCLUDED.access_token,
-        refresh_token    = EXCLUDED.refresh_token,
-        token_expires_at = EXCLUDED.token_expires_at,
-        scopes           = EXCLUDED.scopes,
-        updated_at       = NOW()
-    `
-  },
+export interface SavedPlatformAccount extends PlatformAccount {
+  active: boolean
 }
+export class AccountSelectionError extends Error {
+  constructor() {
+    super('This saved account is not available for the requested platform.')
+  }
+}
+export interface AccountUpsert {
+  clientSecret: string
+  platform: string
+  platformUserId: string
+  username: string
+  displayName: string
+  avatarUrl?: string
+  accessToken: string
+  refreshToken?: string
+  tokenExpiresAt?: Date
+  scopes?: string[]
+}
+/** Every identity mutation serializes only that client's platform, including the first selection. */
+export function createAccountStore(database: SQL = sql) {
+  return {
+    async delete(clientSecret: string, platform: string): Promise<void> {
+      await database.begin(async (transaction) => {
+        await transaction`SELECT pg_advisory_xact_lock(hashtext(${clientSecret}), hashtext(${platform}))`
+        await transaction`DELETE FROM platform_accounts WHERE client_secret=${clientSecret} AND platform=${platform}`
+        await transaction`INSERT INTO active_platform_accounts(client_secret,platform,account_id) VALUES(${clientSecret},${platform},NULL) ON CONFLICT(client_secret,platform) DO UPDATE SET account_id=NULL`
+      })
+    },
+    async findAllByClient(clientSecret: string): Promise<PlatformAccount[]> {
+      const rows = await database<AccountRow[]>`
+        SELECT account.* FROM platform_accounts account
+        JOIN active_platform_accounts selection ON selection.account_id=account.id
+          AND selection.client_secret=account.client_secret AND selection.platform=account.platform
+        WHERE account.client_secret=${clientSecret} ORDER BY account.created_at, account.id
+      `
+      return rows.map(mapAccount)
+    },
+    async findAllSavedByClient(clientSecret: string): Promise<SavedPlatformAccount[]> {
+      const rows = await database<(AccountRow & { active: boolean | null })[]>`
+        SELECT account.*, selection.account_id=account.id AS active FROM platform_accounts account
+        LEFT JOIN active_platform_accounts selection ON selection.client_secret=account.client_secret AND selection.platform=account.platform
+        WHERE account.client_secret=${clientSecret} ORDER BY account.created_at, account.id
+      `
+      return rows.map((row) => ({ ...mapAccount(row), active: row.active === true }))
+    },
+    async findByClientAndPlatform(
+      clientSecret: string,
+      platform: string,
+    ): Promise<PlatformAccount | null> {
+      const rows = await database<AccountRow[]>`
+        SELECT account.* FROM platform_accounts account
+        JOIN active_platform_accounts selection ON selection.account_id=account.id
+          AND selection.client_secret=account.client_secret AND selection.platform=account.platform
+        WHERE account.client_secret=${clientSecret} AND account.platform=${platform}
+      `
+      return rows[0] ? mapAccount(rows[0]) : null
+    },
+    async upsert(params: AccountUpsert): Promise<PlatformAccount> {
+      return database.begin(async (transaction) => {
+        await transaction`SELECT pg_advisory_xact_lock(hashtext(${params.clientSecret}), hashtext(${params.platform}))`
+        const rows = await transaction<AccountRow[]>`
+          INSERT INTO platform_accounts(id,client_secret,platform,platform_user_id,username,display_name,avatar_url,access_token,refresh_token,token_expires_at,scopes,updated_at)
+          VALUES(${randomUUID()},${params.clientSecret},${params.platform},${params.platformUserId},${params.username},${params.displayName},${params.avatarUrl ?? null},${params.accessToken},${params.refreshToken ?? null},${params.tokenExpiresAt ?? null},${params.scopes ?? []},NOW())
+          ON CONFLICT(client_secret,platform,platform_user_id) DO UPDATE SET
+            username=EXCLUDED.username, display_name=EXCLUDED.display_name, avatar_url=EXCLUDED.avatar_url,
+            access_token=EXCLUDED.access_token, refresh_token=EXCLUDED.refresh_token,
+            token_expires_at=EXCLUDED.token_expires_at, scopes=EXCLUDED.scopes, updated_at=NOW()
+          RETURNING *
+        `
+        const account = rows[0]
+        if (!account) throw new Error('The account could not be saved.')
+        await transaction`INSERT INTO active_platform_accounts(client_secret,platform,account_id) VALUES(${params.clientSecret},${params.platform},${account.id}) ON CONFLICT(client_secret,platform) DO UPDATE SET account_id=EXCLUDED.account_id`
+        return mapAccount(account)
+      })
+    },
+    async setActive(
+      clientSecret: string,
+      platform: string,
+      accountId: string | null,
+    ): Promise<void> {
+      await database.begin(async (transaction) => {
+        await transaction`SELECT pg_advisory_xact_lock(hashtext(${clientSecret}), hashtext(${platform}))`
+        if (accountId !== null) {
+          const rows = await transaction<
+            { id: string }[]
+          >`SELECT id FROM platform_accounts WHERE id=${accountId} AND client_secret=${clientSecret} AND platform=${platform} FOR KEY SHARE`
+          if (!rows.length) throw new AccountSelectionError()
+        }
+        await transaction`INSERT INTO active_platform_accounts(client_secret,platform,account_id) VALUES(${clientSecret},${platform},${accountId}) ON CONFLICT(client_secret,platform) DO UPDATE SET account_id=EXCLUDED.account_id`
+      })
+    },
+    async forget(clientSecret: string, accountId: string): Promise<boolean> {
+      const rows = await database<
+        { platform: string }[]
+      >`SELECT platform FROM platform_accounts WHERE id=${accountId} AND client_secret=${clientSecret}`
+      const account = rows[0]
+      if (!account) return false
+      return database.begin(async (transaction) => {
+        await transaction`SELECT pg_advisory_xact_lock(hashtext(${clientSecret}), hashtext(${account.platform}))`
+        const removed = await transaction<
+          { id: string }[]
+        >`DELETE FROM platform_accounts WHERE id=${accountId} AND client_secret=${clientSecret} RETURNING id`
+        return removed.length > 0
+      })
+    },
+  }
+}
+export const AccountStore = createAccountStore()
 
 export const KickOAuthSessionStore = {
   async consume(state: string): Promise<{ clientSecret: string; codeVerifier: string } | null> {

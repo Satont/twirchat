@@ -1,6 +1,9 @@
-import { getDb } from './db'
-import type { WatchedChannel } from '@twirchat/shared/types'
 import { randomUUID } from 'node:crypto'
+
+import type { WatchedChannel } from '@twirchat/shared/types'
+
+import { platformSchema } from '../services/persisted-schemas'
+import { getDb } from './db'
 
 interface WatchedChannelRow {
   id: string
@@ -16,7 +19,7 @@ function rowToWatchedChannel(row: WatchedChannelRow): WatchedChannel {
     createdAt: row.created_at,
     displayName: row.display_name,
     id: row.id,
-    platform: row.platform as WatchedChannel['platform'],
+    platform: platformSchema.parse(row.platform),
   }
 }
 
@@ -24,16 +27,16 @@ export const WatchedChannelStore = {
   findAll(): WatchedChannel[] {
     const db = getDb()
     const rows = db
-      .prepare('SELECT * FROM watched_channels ORDER BY created_at ASC')
-      .all() as WatchedChannelRow[]
+      .query<WatchedChannelRow, []>('SELECT * FROM watched_channels ORDER BY created_at ASC')
+      .all()
     return rows.map(rowToWatchedChannel)
   },
 
   findById(id: string): WatchedChannel | null {
     const db = getDb()
-    const row = db.prepare('SELECT * FROM watched_channels WHERE id = ?').get(id) as
-      | WatchedChannelRow
-      | undefined
+    const row = db
+      .query<WatchedChannelRow, [string]>('SELECT * FROM watched_channels WHERE id = ?')
+      .get(id)
     return row ? rowToWatchedChannel(row) : null
   },
 
@@ -46,7 +49,7 @@ export const WatchedChannelStore = {
     const db = getDb()
     db.prepare('DELETE FROM watched_channels WHERE platform = ? AND channel_slug = ?').run(
       platform,
-      channelSlug.toLowerCase(),
+      platform === 'youtube' ? channelSlug.trim() : channelSlug.toLowerCase(),
     )
   },
 
@@ -56,12 +59,14 @@ export const WatchedChannelStore = {
     displayName: string,
   ): WatchedChannel {
     const db = getDb()
-    const slug = channelSlug.toLowerCase()
+    const slug = platform === 'youtube' ? channelSlug.trim() : channelSlug.toLowerCase()
 
     // Check if already exists
     const existing = db
-      .prepare('SELECT * FROM watched_channels WHERE platform = ? AND channel_slug = ?')
-      .get(platform, slug) as WatchedChannelRow | undefined
+      .query<WatchedChannelRow, [string, string]>(
+        'SELECT * FROM watched_channels WHERE platform = ? AND channel_slug = ?',
+      )
+      .get(platform, slug)
 
     if (existing) {
       // Update displayName in case it changed

@@ -1,3 +1,4 @@
+import type { PublicInstance } from '@gpuix/react'
 /**
  * Chat logs panel — port of UserChatHistoryPanel.vue + UserChatHistoryMessage.vue.
  *
@@ -9,13 +10,15 @@
  *   the list instead of the Vue scroll-offset (<160px) detection.
  * - Message text renders as plain <text> (no emote substitution).
  */
-
-import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
 import type { UserChatHistoryCursor } from '../../../shared/rpc'
+import { useBackend, useBackendEvent } from '../../backend/context'
+import { chatMessageKey } from '../../chat-tools'
+import { runUiTask } from '../../hooks/run-ui-task'
 import { platformColor } from '../../theme'
 import { useTheme } from '../../theme-context'
-import { useBackend, useBackendEvent } from '../../backend/context'
 import { Text } from '../ui/Text'
 import { errorText } from './format'
 
@@ -24,15 +27,17 @@ const PAGE_SIZE = 50
 function compareMessages(a: NormalizedChatMessage, b: NormalizedChatMessage): number {
   const timestampDiff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   if (timestampDiff !== 0) return timestampDiff
-  return a.id.localeCompare(b.id)
+  return chatMessageKey(a).localeCompare(chatMessageKey(b))
 }
 
 function mergeUniqueMessages(
   olderMessages: NormalizedChatMessage[],
   existingMessages: NormalizedChatMessage[],
 ): NormalizedChatMessage[] {
-  const existingIds = new Set(existingMessages.map((message) => message.id))
-  const uniqueOlderMessages = olderMessages.filter((message) => !existingIds.has(message.id))
+  const existingIds = new Set(existingMessages.map(chatMessageKey))
+  const uniqueOlderMessages = olderMessages.filter(
+    (message) => !existingIds.has(chatMessageKey(message)),
+  )
   return [...uniqueOlderMessages, ...existingMessages]
 }
 
@@ -40,7 +45,7 @@ function insertMessageInOrder(
   existingMessages: NormalizedChatMessage[],
   incomingMessage: NormalizedChatMessage,
 ): NormalizedChatMessage[] {
-  if (existingMessages.some((entry) => entry.id === incomingMessage.id)) {
+  if (existingMessages.some((entry) => chatMessageKey(entry) === chatMessageKey(incomingMessage))) {
     return existingMessages
   }
 
@@ -68,9 +73,11 @@ function formatHistoryTimestamp(timestamp: Date): string {
 export function UserChatHistoryPanel({
   platform,
   platformUserId,
+  onViewport,
 }: {
   platform: Platform
   platformUserId: string
+  onViewport?: (viewport: PublicInstance | null) => void
 }) {
   const theme = useTheme()
   const backend = useBackend()
@@ -146,7 +153,7 @@ export function UserChatHistoryPanel({
     setError(null)
     setHasMore(false)
     nextCursorRef.current = null
-    void loadInitial()
+    runUiTask(loadInitial())
   }, [loadInitial])
 
   // Live-append new messages from this user while the panel is open.
@@ -231,6 +238,8 @@ export function UserChatHistoryPanel({
           }}
         >
           <virtual-list
+            ref={onViewport}
+            testId="user-card-history-viewport"
             estimatedItemHeight={44}
             style={{ height: 260, scrollbarColor: theme.scrollbar, scrollbarWidth: 4 }}
           >
@@ -258,7 +267,7 @@ export function UserChatHistoryPanel({
               </div>
             ) : null}
             {messages.map((message) => (
-              <HistoryMessageRow key={message.id} message={message} />
+              <HistoryMessageRow key={chatMessageKey(message)} message={message} />
             ))}
           </virtual-list>
         </div>

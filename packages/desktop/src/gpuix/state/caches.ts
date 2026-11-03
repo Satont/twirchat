@@ -1,11 +1,14 @@
+import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+
+import { runInBackground } from '../../services/background-task'
+import type { Store } from './create-store'
 /**
  * Reactive session caches for avatars and mention colors.
  * Ports useAvatarCache.ts + the mention half of useMessageParsing.ts.
  * Both bump a revision store so mounted messages re-render on resolution.
  */
-
-import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { createStore } from './create-store'
+import { persistentResource } from './persistent-resources'
 
 type ModerationPlatform = 'twitch' | 'kick'
 
@@ -17,8 +20,12 @@ type AvatarLookup = (params: {
 
 type ColorLookup = (params: { platform: Platform; username: string }) => Promise<string | null>
 
-export const avatarRevisionStore = createStore(0, 'avatarRevision')
-export const mentionColorRevisionStore = createStore(0, 'mentionColorRevision')
+export const avatarRevisionStore = persistentResource('avatarRevision', () =>
+  createStore<number>(0),
+)
+export const mentionColorRevisionStore = persistentResource('mentionColorRevision', () =>
+  createStore<number>(0),
+)
 
 const avatarUrls = new Map<string, string>()
 const avatarRequested = new Set<string>()
@@ -71,26 +78,29 @@ export function ensureAvatar(message: NormalizedChatMessage): void {
   if (supplied) {
     if (!avatarUrls.has(key)) {
       avatarUrls.set(key, supplied)
-      avatarRevisionStore.set((v) => v + 1)
+      avatarRevisionStore.modify((v) => v + 1)
     }
     return
   }
   if (avatarUrls.has(key) || avatarRequested.has(key)) return
 
   avatarRequested.add(key)
-  void avatarLookup({
-    platform,
-    authorId: message.author.id,
-    ...(message.author.username ? { username: message.author.username } : {}),
-  })
-    .then((resolution) => {
-      const url = normalizedUrl(resolution.avatarUrl)
-      if (url) {
-        avatarUrls.set(key, url)
-        avatarRevisionStore.set((v) => v + 1)
-      }
+  runInBackground(
+    avatarLookup({
+      platform,
+      authorId: message.author.id,
+      ...(message.author.username ? { username: message.author.username } : {}),
     })
-    .catch(() => undefined)
+      .then((resolution) => {
+        const url = normalizedUrl(resolution.avatarUrl)
+        if (url) {
+          avatarUrls.set(key, url)
+          avatarRevisionStore.modify((v) => v + 1)
+        }
+      })
+      .catch(() => undefined),
+    'caches background operation failed',
+  )
 }
 
 // ── Mention colors ──────────────────────────────────────────────────────────
@@ -112,11 +122,21 @@ export function ensureMentionColors(platform: Platform, text: string): void {
     if (mentionColors.size > 2000) mentionColors.clear()
     mentionColors.set(key, null) // optimistic placeholder, replaced on resolve
     const lookup = colorLookup
-    void lookup({ platform, username })
-      .then((color) => {
-        mentionColors.set(key, color)
-        mentionColorRevisionStore.set((v) => v + 1)
-      })
-      .catch(() => undefined)
+    runInBackground(
+      lookup({ platform, username })
+        .then((color) => {
+          mentionColors.set(key, color)
+          mentionColorRevisionStore.modify((v) => v + 1)
+        })
+        .catch(() => undefined),
+      'caches background operation failed',
+    )
+  }
+}
+
+declare module './persistent-resources' {
+  interface PersistentResources {
+    avatarRevision: Store<number>
+    mentionColorRevision: Store<number>
   }
 }

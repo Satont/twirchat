@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { generateCodeChallenge, generateCodeVerifier, generateState } from '@desktop/auth/pkce'
 import { createHash } from 'node:crypto'
+
+import { generateCodeChallenge, generateCodeVerifier, generateState } from '@desktop/auth/pkce'
 
 describe('PKCE utilities', () => {
   test('generateCodeVerifier returns base64url string of ~86 chars', () => {

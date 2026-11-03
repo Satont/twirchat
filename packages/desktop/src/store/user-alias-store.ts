@@ -1,4 +1,6 @@
 import type { Platform } from '@twirchat/shared/types'
+
+import { platformSchema } from '../services/persisted-schemas'
 import { getDb } from './db'
 
 interface DbRow {
@@ -19,7 +21,7 @@ export interface UserAlias {
 
 function mapRow(row: DbRow): UserAlias {
   return {
-    platform: row.platform as Platform,
+    platform: platformSchema.parse(row.platform),
     platformUserId: row.platform_user_id,
     alias: row.alias,
     createdAt: row.created_at,

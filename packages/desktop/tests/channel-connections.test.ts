@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { applySavedChannels } from '../src/views/main/utils/channel-connections'
 
 test('applySavedChannels replaces every platform snapshot after OAuth', () => {

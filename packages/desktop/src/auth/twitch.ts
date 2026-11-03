@@ -1,3 +1,10 @@
+import type {
+  TwitchBuildUrlRequest,
+  TwitchExchangeRequest,
+  TwitchRefreshRequest,
+} from '@twirchat/shared'
+import { TWITCH_REDIRECT_URI } from '@twirchat/shared/constants'
+import { logger } from '@twirchat/shared/logger'
 /**
  * Twitch OAuth — desktop side (PKCE flow).
  *
@@ -15,21 +22,14 @@
  *  - Desktop calls POST /api/auth/twitch/refresh on backend → receives new tokens
  *  - Desktop updates the account record in SQLite
  */
+import type { Platform } from '@twirchat/shared/types'
+import { z } from 'zod'
 
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
-import { AccountStore } from '../store/account-store'
-import { successPage } from './server'
-import { TWITCH_REDIRECT_URI } from '@twirchat/shared/constants'
 import { backendFetch } from '../runtime-config'
-import { logger } from '@twirchat/shared/logger'
-import type {
-  TwitchBuildUrlRequest,
-  TwitchBuildUrlResponse,
-  TwitchExchangeRequest,
-  TwitchExchangeResponse,
-  TwitchRefreshRequest,
-  TwitchRefreshResponse,
-} from '@twirchat/shared'
+import { AccountStore } from '../store/account-store'
+import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
+import { authUrlSchema, exchangedTokenSchema, refreshedTokenSchema } from './response-schemas'
+import { successPage } from './server'
 
 const log = logger('auth-twitch')
 
@@ -95,7 +95,7 @@ export async function getTwitchAuthUrl(codeChallenge: string, state: string): Pr
     throw new Error(`Twitch auth URL request failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as TwitchBuildUrlResponse
+  const data = authUrlSchema.parse(await res.json())
   return data.url
 }
 
@@ -149,7 +149,7 @@ export async function handleTwitchCallback(url: URL): Promise<{
     throw new Error(`Twitch token exchange failed: ${exchangeRes.status} ${body}`)
   }
 
-  const tokens = (await exchangeRes.json()) as TwitchExchangeResponse
+  const tokens = exchangedTokenSchema.parse(await exchangeRes.json())
 
   // Validate the token and get user info — the /oauth2/validate endpoint only
   // Requires the Bearer token, no client credentials needed on the desktop side.
@@ -161,13 +161,15 @@ export async function handleTwitchCallback(url: URL): Promise<{
     throw new Error(`Twitch token validation failed: ${validateRes.status}`)
   }
 
-  const validateData = (await validateRes.json()) as {
-    user_id: string
-    login: string
-    client_id: string
-    expires_in: number
-    scopes: string[]
-  }
+  const validateData = z
+    .object({
+      user_id: z.string(),
+      login: z.string(),
+      client_id: z.string(),
+      expires_in: z.number(),
+      scopes: z.array(z.string()),
+    })
+    .parse(await validateRes.json())
 
   const userInfoRes = await fetch(
     `https://api.twitch.tv/helix/users?id=${encodeURIComponent(validateData.user_id)}`,
@@ -180,16 +182,24 @@ export async function handleTwitchCallback(url: URL): Promise<{
   )
 
   const userInfo = userInfoRes.ok
-    ? (
-        (await userInfoRes.json()) as {
-          data?: Array<{ display_name?: string; profile_image_url?: string | null }>
-        }
-      ).data?.[0]
+    ? z
+        .object({
+          data: z
+            .array(
+              z.object({
+                display_name: z.string().optional(),
+                profile_image_url: z.union([z.string(), z.null()]).optional(),
+              }),
+            )
+            .optional(),
+        })
+        .parse(await userInfoRes.json()).data?.[0]
     : undefined
 
   const expiresAt = tokens.expiresIn ? Math.floor(Date.now() / 1000) + tokens.expiresIn : undefined
 
   AccountStore.upsert({
+    activate: true,
     id: `twitch:${validateData.user_id}`,
     platform: 'twitch',
     platformUserId: validateData.user_id,
@@ -211,7 +221,7 @@ export async function handleTwitchCallback(url: URL): Promise<{
     }),
     user: {
       displayName: validateData.login,
-      platform: 'twitch' as const,
+      platform: 'twitch' satisfies Platform,
       username: validateData.login,
     },
   }
@@ -240,7 +250,7 @@ export async function refreshTwitchToken(accountId: string): Promise<string> {
     throw new Error(`Twitch token refresh failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as TwitchRefreshResponse
+  const data = refreshedTokenSchema.parse(await res.json())
 
   const expiresAt = data.expiresIn ? Math.floor(Date.now() / 1000) + data.expiresIn : undefined
 

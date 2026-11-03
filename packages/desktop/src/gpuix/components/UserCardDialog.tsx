@@ -1,3 +1,4 @@
+import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 /**
  * User card dialog — port of UserCardDialog.vue onto GPUIX.
  *
@@ -13,22 +14,28 @@
  * - Esc closes via a focusable wrapper + input key handlers; reka-ui's global
  *   dialog Escape handling does not exist here.
  */
-
-import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UserCardMetadataResponse } from '@twirchat/shared/protocol'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { publicChannelURL } from '../../views/main/utils/public-channel-url'
+import { initialsOf } from '../../views/shared/utils/display-text'
+import type { ModerationPlatform } from '../backend/api'
+import { useBackend } from '../backend/context'
+import { runUiTask } from '../hooks/run-ui-task'
+import { usePopupHotkeys, scrollPopupPage } from '../hooks/use-popup-hotkeys'
+import { aliasesStore, showNotice } from '../state/app'
+import { useStore } from '../state/create-store'
+import { useDesktopWindows } from '../state/desktop-windows'
+import { useTextInputFocusTracking } from '../state/focus'
+import { streamerModeStore } from '../state/streamer-mode'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
-import { useBackend } from '../backend/context'
-import type { ModerationPlatform } from '../backend/api'
-import { aliasesStore, applyModerationOutcome, showNotice } from '../state/app'
-import { useTextInputFocusTracking } from '../state/focus'
-import { Text } from './ui/Text'
-import { RemoteImage } from './ui/RemoteImage'
-import { Modal } from './ui/Modal'
+import { ActionButton } from './ui/Form'
 import { PlatformIcon } from './ui/Icon'
-import { UserChatHistoryPanel } from './user-card/UserChatHistoryPanel'
+import { Modal } from './ui/Modal'
+import { RemoteImage } from './ui/RemoteImage'
+import { Text } from './ui/Text'
 import {
   accountAgeText,
   errorText,
@@ -37,24 +44,63 @@ import {
   subAgeText,
   subscriptionDurationText,
 } from './user-card/format'
-
-type UserModerationAction = 'timeout' | 'ban'
+import { ProfilePictureMenu } from './user-card/ProfilePictureMenu'
+import { UserCardActions, useUserCardModeration } from './user-card/UserCardActions'
+import { UserChatHistoryPanel } from './user-card/UserChatHistoryPanel'
+import { UserNotes } from './user-card/UserNotes'
+import { UserProfile } from './user-card/UserProfile'
 
 function initials(name: string): string {
-  return name.slice(0, 2).toUpperCase()
+  return initialsOf(name, 2)
 }
 
 export function UserCardDialog({
   target,
   currentAlias,
   onClose,
+  standalone = false,
 }: {
   target: UserCardTarget
   currentAlias?: string
   onClose: () => void
+  standalone?: boolean
 }) {
   const theme = useTheme()
   const backend = useBackend()
+  const windows = useDesktopWindows()
+  const renderer = useGpuixRequired()
+  const streamer = useStore(streamerModeStore)
+  const hideAvatar = streamer.effectiveEnabled && streamer.settings.hideUsercardAvatars
+  const avatarKey = `${target.platform}:${target.platformUserId}`
+  const [profileAvatar, setProfileAvatar] = useState<{ key: string; url?: string }>({
+    key: avatarKey,
+  })
+  const avatarUrl =
+    target.avatarUrl ?? (profileAvatar.key === avatarKey ? profileAvatar.url : undefined)
+  const updateProfileAvatar = useCallback(
+    (url?: string) => setProfileAvatar({ key: avatarKey, url }),
+    [avatarKey],
+  )
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
+  const [localPinned, setLocalPinned] = useState(false)
+  const nativeUserWindow = standalone && windows?.descriptor.kind === 'user'
+  const pinned = nativeUserWindow ? windows.pinned : localPinned
+  const togglePin = () => {
+    if (nativeUserWindow) windows.setPinned(!pinned)
+    else setLocalPinned(!pinned)
+  }
+  const historyViewport = useRef<PublicInstance | null>(null)
+  const moderation = useUserCardModeration(target)
+  const openPicture = () => {
+    if (!hideAvatar && avatarUrl) {
+      renderer.blur?.()
+      setAvatarMenuOpen(true)
+    }
+  }
+  useEffect(() => {
+    if (hideAvatar) setAvatarMenuOpen(false)
+  }, [hideAvatar])
+  const [openingWindow, setOpeningWindow] = useState(false)
 
   const effectiveAlias = currentAlias ?? target.currentAlias
   const titleHandle = target.username ?? target.platformUserId
@@ -135,95 +181,6 @@ export function UserCardDialog({
   const moderationPlatform: ModerationPlatform | undefined =
     target.platform === 'twitch' || target.platform === 'kick' ? target.platform : undefined
 
-  const [moderationChecking, setModerationChecking] = useState(false)
-  const [moderationAllowed, setModerationAllowed] = useState<boolean | null>(null)
-  const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null)
-  const [moderationAction, setModerationAction] = useState<UserModerationAction | null>(null)
-  const [moderationFeedback, setModerationFeedback] = useState<{
-    kind: 'error' | 'success'
-    text: string
-  } | null>(null)
-
-  const moderationInputError = ((): string | undefined => {
-    if (!moderationPlatform) return 'Moderation is available for Twitch and Kick only.'
-    if (!target.channelSlug) return 'No channel context is available for this user.'
-    if (!target.messageId) return 'Open this card from a chat message to moderate this user.'
-    return undefined
-  })()
-
-  const moderationDisabledReason =
-    moderationInputError ??
-    (moderationChecking ? 'Checking moderation permissions…' : undefined) ??
-    capabilitiesError ??
-    (moderationAllowed === false
-      ? 'You do not have moderation permission in this channel.'
-      : undefined)
-
-  useEffect(() => {
-    setModerationAllowed(null)
-    setCapabilitiesError(null)
-    setModerationFeedback(null)
-
-    const platform = moderationPlatform
-    const channelSlug = target.channelSlug
-    if (!platform || !channelSlug || !target.messageId) return
-
-    let cancelled = false
-    setModerationChecking(true)
-    backend.api
-      .getModerationCapabilities({ channelSlug, platform })
-      .then((capabilities) => {
-        if (!cancelled) setModerationAllowed(capabilities.canModerate)
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) return
-        setModerationAllowed(false)
-        setCapabilitiesError(errorText(cause))
-      })
-      .finally(() => {
-        if (!cancelled) setModerationChecking(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [backend, moderationPlatform, target.channelSlug, target.messageId])
-
-  async function moderateUser(action: UserModerationAction): Promise<void> {
-    const platform = moderationPlatform
-    const channelSlug = target.channelSlug
-    const messageId = target.messageId
-    if (!platform || !channelSlug || !messageId || moderationDisabledReason) return
-
-    setModerationAction(action)
-    setModerationFeedback(null)
-    try {
-      await backend.api.moderateMessage({
-        action,
-        channelSlug,
-        messageId,
-        platform,
-        targetUserId: target.platformUserId,
-        ...(action === 'timeout' ? { durationSeconds: 600 } : {}),
-      })
-      applyModerationOutcome({
-        action,
-        channelId: target.channelId ?? channelSlug,
-        platform,
-        targetUserId: target.platformUserId,
-        ...(action === 'timeout' ? { durationSeconds: 600 } : {}),
-      })
-      const text = action === 'timeout' ? 'Timed out for 10 minutes.' : 'User banned.'
-      setModerationFeedback({ kind: 'success', text })
-      showNotice('success', text)
-    } catch (cause) {
-      const text = errorText(cause)
-      setModerationFeedback({ kind: 'error', text })
-      showNotice('error', text)
-    } finally {
-      setModerationAction(null)
-    }
-  }
-
   // ── Account metadata (port of useUserCardMetadata) ──────────────────────
 
   const supportedByCard = moderationPlatform !== undefined
@@ -281,12 +238,28 @@ export function UserCardDialog({
     setMetadata(null)
     setMetadataError(null)
     setMetadataLoading(false)
-    if (supportedByCard) void reloadMetadata()
+    if (supportedByCard) runUiTask(reloadMetadata())
   }, [reloadMetadata, supportedByCard])
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  const moderationButtonsDisabled = Boolean(moderationDisabledReason) || moderationAction !== null
+  const [tab, setTab] = useState<'profile' | 'actions' | 'notes' | 'history'>('profile')
+
+  const popupContextId = usePopupHotkeys('user-card', {
+    delete: onClose,
+    pin: togglePin,
+    openProfilePictureMenu: !hideAvatar && avatarUrl ? openPicture : null,
+    scrollPage:
+      tab === 'history'
+        ? ([direction]) => scrollPopupPage(renderer, historyViewport, direction!)
+        : null,
+    execModeratorAction: moderation.available
+      ? ([argument]) => {
+          setTab('actions')
+          return moderation.exec(argument!)
+        }
+      : null,
+  })
 
   const metadataItems: Array<{ label: string; value: string | null }> = metadata
     ? [
@@ -298,12 +271,15 @@ export function UserCardDialog({
     : []
 
   return (
-    <Modal width={760} onClose={onClose}>
+    <Modal
+      hotkeyContextId={popupContextId}
+      width={760}
+      onClose={onClose}
+      embedded={standalone}
+      closeOnOutsideClick={!pinned}
+    >
       <div
         tabIndex={-1}
-        onKeyDown={(event) => {
-          if (event.key === 'escape') onClose()
-        }}
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -339,10 +315,25 @@ export function UserCardDialog({
             borderColor: theme.hairline,
           }}
         >
-          <div style={{ flexShrink: 0 }}>
-            {target.avatarUrl ? (
+          <div
+            testId="user-card-avatar"
+            tabIndex={!hideAvatar && avatarUrl ? 0 : undefined}
+            onClick={openPicture}
+            onKeyDown={(event) => {
+              if (event.key === 'enter' || event.key === 'space') {
+                event.preventDefault()
+                openPicture()
+              }
+            }}
+            style={{
+              flexShrink: 0,
+              cursor: !hideAvatar && avatarUrl ? 'pointer' : 'default',
+            }}
+          >
+            {!hideAvatar && avatarUrl ? (
               <RemoteImage
-                url={target.avatarUrl}
+                url={avatarUrl}
+                avatarSize={72}
                 objectFit="cover"
                 style={{
                   width: 72,
@@ -492,9 +483,31 @@ export function UserCardDialog({
                   {openingPublicChannel ? 'Opening…' : 'Open channel'}
                 </GhostButton>
               ) : null}
+              <ActionButton primary={pinned} onClick={togglePin}>
+                {pinned ? 'Unpin card' : 'Pin card'}
+              </ActionButton>
               <GhostButton onClick={onClose}>Close</GhostButton>
+              {windows && !standalone ? (
+                <GhostButton
+                  disabled={openingWindow}
+                  onClick={() => {
+                    setOpeningWindow(true)
+                    void windows
+                      .openUser(target)
+                      .then(onClose)
+                      .catch((error) => {
+                        setOpeningWindow(false)
+                        showNotice('error', String(error))
+                      })
+                  }}
+                >
+                  {openingWindow ? 'Opening…' : 'Open in window'}
+                </GhostButton>
+              ) : null}
               {effectiveAlias ? (
-                <DangerButton onClick={() => void handleRemoveAlias()}>Remove alias</DangerButton>
+                <ActionButton danger onClick={() => void handleRemoveAlias()}>
+                  Remove alias
+                </ActionButton>
               ) : null}
             </div>
             {publicChannelError ? (
@@ -513,153 +526,141 @@ export function UserCardDialog({
             ) : null}
           </div>
 
-          {/* Moderation section */}
-          <div style={{ marginBottom: 18 }}>
-            <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>Moderation</Text>
-            <Text style={{ fontSize: 13, color: theme.text2 }}>
-              Actions apply to this user in the message channel.
-            </Text>
-            {moderationDisabledReason ? (
-              <Text style={{ fontSize: 12, color: theme.text2, marginTop: 10 }}>
-                {moderationDisabledReason}
-              </Text>
-            ) : null}
-            {moderationFeedback ? (
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: moderationFeedback.kind === 'error' ? theme.dangerText : theme.successText,
-                  marginTop: 10,
-                }}
-              >
-                {moderationFeedback.text}
-              </Text>
-            ) : null}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                gap: 10,
-                marginTop: 12,
-              }}
-            >
-              <div
-                onClick={moderationButtonsDisabled ? undefined : () => void moderateUser('timeout')}
-                style={{
-                  backgroundColor: 'rgba(251, 191, 36, 0.16)',
-                  borderRadius: 4,
-                  paddingTop: 6,
-                  paddingBottom: 6,
-                  paddingLeft: 14,
-                  paddingRight: 14,
-                  cursor: moderationButtonsDisabled ? 'default' : 'pointer',
-                  opacity: moderationButtonsDisabled ? 0.48 : 1,
-                  hover: moderationButtonsDisabled
-                    ? {}
-                    : { backgroundColor: 'rgba(251, 191, 36, 0.24)' },
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: 500, color: theme.warningText }}>
-                  {moderationAction === 'timeout' ? 'Timing out…' : 'Timeout 10m'}
-                </Text>
-              </div>
-              <DangerButton
-                disabled={moderationButtonsDisabled}
-                onClick={() => void moderateUser('ban')}
-              >
-                {moderationAction === 'ban' ? 'Banning…' : 'Ban'}
-              </DangerButton>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+            {(
+              ['profile', 'actions', 'notes', 'history'] satisfies (
+                | 'profile'
+                | 'actions'
+                | 'notes'
+                | 'history'
+              )[]
+            ).map((name) => (
+              <ActionButton key={name} primary={tab === name} onClick={() => setTab(name)}>
+                {name === 'actions'
+                  ? 'Actions & moderation'
+                  : name[0]!.toUpperCase() + name.slice(1)}
+              </ActionButton>
+            ))}
           </div>
-
-          {/* Account metadata section */}
-          <div style={{ marginBottom: 18 }}>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                gap: 12,
-                marginBottom: 12,
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
-                  Account metadata
-                </Text>
-                <Text style={{ fontSize: 13, color: theme.text2 }}>
-                  Fetched through the backend for this platform.
-                </Text>
-              </div>
-
-              {supportedByCard ? (
-                <InlineButton disabled={metadataLoading} onClick={() => void reloadMetadata()}>
-                  Refresh
-                </InlineButton>
-              ) : null}
-            </div>
-
-            {!supportedByCard ? (
-              <MetadataState>
-                <Text style={{ fontSize: 13, color: theme.text2 }}>
-                  Metadata is not supported for this platform yet.
-                </Text>
-              </MetadataState>
-            ) : metadataLoading ? (
-              <MetadataState>
-                <Text style={{ fontSize: 13, color: theme.text2 }}>Loading metadata…</Text>
-              </MetadataState>
-            ) : metadataError ? (
-              <MetadataState error>
-                <Text style={{ fontSize: 13, color: theme.dangerText }}>{metadataError}</Text>
-                <InlineButton onClick={() => void reloadMetadata()}>Retry</InlineButton>
-              </MetadataState>
-            ) : metadata ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: 10,
-                }}
-              >
-                {metadataItems.map((item) => (
-                  <div
-                    key={item.label}
-                    style={{
-                      flexGrow: 1,
-                      flexBasis: 150,
-                      minWidth: 0,
-                      padding: 12,
-                      borderWidth: 1,
-                      borderColor: theme.hairline,
-                      borderRadius: 10,
-                      backgroundColor: theme.fill,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: theme.text2,
-                        marginBottom: 6,
-                      }}
-                    >
-                      {item.label.toUpperCase()}
+          {tab === 'actions' ? (
+            <UserCardActions
+              key={`${target.platform}:${target.platformUserId}`}
+              target={target}
+              moderation={moderation}
+              avatarUrl={avatarUrl}
+              hideAvatar={hideAvatar}
+            />
+          ) : null}
+          {tab === 'notes' ? (
+            <UserNotes key={`${target.platform}:${target.platformUserId}`} target={target} />
+          ) : null}
+          {tab === 'profile' ? (
+            <>
+              <UserProfile
+                target={target}
+                hideAvatar={hideAvatar}
+                onAvatarChange={updateProfileAvatar}
+              />
+              {/* Account metadata section */}
+              <div style={{ marginBottom: 18 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
+                      Account metadata
                     </Text>
-                    <Text style={{ fontSize: 13, color: theme.text, lineHeight: 19 }}>
-                      {item.value ?? ''}
+                    <Text style={{ fontSize: 13, color: theme.text2 }}>
+                      Fetched through the backend for this platform.
                     </Text>
                   </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
 
-          <UserChatHistoryPanel platform={target.platform} platformUserId={target.platformUserId} />
+                  {supportedByCard ? (
+                    <InlineButton disabled={metadataLoading} onClick={() => void reloadMetadata()}>
+                      Refresh
+                    </InlineButton>
+                  ) : null}
+                </div>
+
+                {!supportedByCard ? (
+                  <MetadataState>
+                    <Text style={{ fontSize: 13, color: theme.text2 }}>
+                      Metadata is not supported for this platform yet.
+                    </Text>
+                  </MetadataState>
+                ) : metadataLoading ? (
+                  <MetadataState>
+                    <Text style={{ fontSize: 13, color: theme.text2 }}>Loading metadata…</Text>
+                  </MetadataState>
+                ) : metadataError ? (
+                  <MetadataState error>
+                    <Text style={{ fontSize: 13, color: theme.dangerText }}>{metadataError}</Text>
+                    <InlineButton onClick={() => void reloadMetadata()}>Retry</InlineButton>
+                  </MetadataState>
+                ) : metadata ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      gap: 10,
+                    }}
+                  >
+                    {metadataItems.map((item) => (
+                      <div
+                        key={item.label}
+                        style={{
+                          flexGrow: 1,
+                          flexBasis: 150,
+                          minWidth: 0,
+                          padding: 12,
+                          borderWidth: 1,
+                          borderColor: theme.hairline,
+                          borderRadius: 10,
+                          backgroundColor: theme.fill,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: theme.text2,
+                            marginBottom: 6,
+                          }}
+                        >
+                          {item.label.toUpperCase()}
+                        </Text>
+                        <Text style={{ fontSize: 13, color: theme.text, lineHeight: 19 }}>
+                          {item.value ?? ''}
+                        </Text>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+          {tab === 'history' ? (
+            <UserChatHistoryPanel
+              onViewport={(viewport) => {
+                historyViewport.current = viewport
+              }}
+              platform={target.platform}
+              platformUserId={target.platformUserId}
+            />
+          ) : null}
         </div>
       </div>
+      {avatarMenuOpen && !hideAvatar && avatarUrl ? (
+        <ProfilePictureMenu url={avatarUrl} onClose={() => setAvatarMenuOpen(false)} />
+      ) : null}
     </Modal>
   )
 }
@@ -715,36 +716,6 @@ function GhostButton({
       }}
     >
       <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text }}>{children}</Text>
-    </div>
-  )
-}
-
-function DangerButton({
-  disabled,
-  onClick,
-  children,
-}: {
-  disabled?: boolean
-  onClick: () => void
-  children: string
-}) {
-  const theme = useTheme()
-  return (
-    <div
-      onClick={disabled ? undefined : onClick}
-      style={{
-        backgroundColor: 'rgba(255, 80, 80, 0.14)',
-        borderRadius: 4,
-        paddingTop: 6,
-        paddingBottom: 6,
-        paddingLeft: 14,
-        paddingRight: 14,
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.48 : 1,
-        hover: disabled ? {} : { backgroundColor: 'rgba(255, 80, 80, 0.2)' },
-      }}
-    >
-      <Text style={{ fontSize: 13, fontWeight: 500, color: theme.dangerText }}>{children}</Text>
     </div>
   )
 }

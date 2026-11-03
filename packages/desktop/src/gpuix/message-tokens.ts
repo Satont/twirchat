@@ -11,6 +11,8 @@
  */
 
 import type { Emote, NormalizedChatMessage } from '@twirchat/shared/types'
+
+import { chunkGraphemes, sanitizeDisplayText } from '../views/shared/utils/display-text'
 import { buildMessageParts } from '../views/shared/utils/messageParts'
 import { mentionColor } from './state/caches'
 
@@ -18,23 +20,82 @@ export type MessageToken =
   | { kind: 'text'; text: string }
   | { kind: 'mention'; text: string; color: string | null }
   | { kind: 'link'; text: string; url: string }
-  | { kind: 'emote'; emote: Emote }
+  | { kind: 'emote'; emote: Emote; overlays?: Emote[]; modifiers?: string[] }
+
+const PREFIX_MODIFIERS: Record<string, string> = {
+  'w!': 'wide',
+  'h!': 'flip-horizontal',
+  'v!': 'flip-vertical',
+  'z!': 'zero-space',
+  'c!': 'cursed',
+  'l!': 'rotate-left',
+  'r!': 'rotate-right',
+  'p!': 'party',
+  's!': 'shake',
+}
+const SUFFIX_MODIFIERS: Record<string, string> = {
+  ffzW: 'wide',
+  ffzX: 'flip-horizontal',
+  ffzY: 'flip-vertical',
+  ffzCursed: 'cursed',
+}
+
+export function layerEmoteTokens(
+  tokens: MessageToken[],
+  options: { zeroWidth?: boolean; modifiers?: boolean } = {},
+): MessageToken[] {
+  const result: MessageToken[] = []
+  let prefixes: Array<{ token: MessageToken; modifier: string }> = []
+  for (const token of tokens) {
+    const text = token.kind === 'text' ? token.text.trim() : ''
+    const prefix = options.modifiers !== false ? PREFIX_MODIFIERS[text] : undefined
+    if (prefix) {
+      prefixes.push({ token, modifier: prefix })
+      continue
+    }
+    const previous = result.at(-1)
+    const suffix = options.modifiers !== false ? SUFFIX_MODIFIERS[text] : undefined
+    if (suffix && previous?.kind === 'emote') {
+      previous.modifiers = [...(previous.modifiers ?? []), suffix]
+      continue
+    }
+    if (token.kind === 'emote') {
+      const emote: Extract<MessageToken, { kind: 'emote' }> = {
+        ...token,
+        ...(prefixes.length ? { modifiers: prefixes.map((item) => item.modifier) } : {}),
+      }
+      prefixes = []
+      if (
+        options.zeroWidth !== false &&
+        emote.emote.zeroWidth &&
+        previous?.kind === 'emote' &&
+        (previous.overlays?.length ?? 0) < 8
+      )
+        previous.overlays = [...(previous.overlays ?? []), emote.emote]
+      else result.push(emote)
+    } else {
+      result.push(...prefixes.map((item) => item.token), token)
+      prefixes = []
+    }
+  }
+  result.push(...prefixes.map((item) => item.token))
+  return result
+}
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
 
-/** Break long unbreakable words (URLs) so the flex row can wrap them. */
-const MAX_WORD_LENGTH = 28
+/**
+ * Break long unbreakable words (URLs, emoji walls) so the flex row can wrap
+ * them. Counted in graphemes — cutting UTF-16 units would split surrogate
+ * pairs, and a lone surrogate stalls GPUI's text layout.
+ */
+const MAX_WORD_GRAPHEMES = 28
 
 function* wordsOf(segment: string): Generator<string> {
   // Split after each whitespace run: ["hello ", "world"].
   for (const match of segment.matchAll(/\S+\s*|\s+/g)) {
-    let piece = match[0]
-    while (piece.length > MAX_WORD_LENGTH) {
-      yield piece.slice(0, MAX_WORD_LENGTH)
-      piece = piece.slice(MAX_WORD_LENGTH)
-    }
-    if (piece) yield piece
+    yield* chunkGraphemes(match[0], MAX_WORD_GRAPHEMES)
   }
 }
 
@@ -49,7 +110,10 @@ function pushSegment(
   }
 }
 
-export function buildMessageTokens(message: NormalizedChatMessage): MessageToken[] {
+export function buildMessageTokens(
+  message: NormalizedChatMessage,
+  options: { zeroWidth?: boolean; modifiers?: boolean } = {},
+): MessageToken[] {
   const parts = buildMessageParts(message)
   const tokens: MessageToken[] = []
 
@@ -58,7 +122,8 @@ export function buildMessageTokens(message: NormalizedChatMessage): MessageToken
       tokens.push({ kind: 'emote', emote: part.emote })
       continue
     }
-    const content = part.content
+    // Sanitize per part, after emote ranges are resolved against raw text.
+    const content = part.content ? sanitizeDisplayText(part.content) : ''
     if (!content) continue
 
     // Split out links first, then mentions inside the remaining text.
@@ -99,12 +164,15 @@ export function buildMessageTokens(message: NormalizedChatMessage): MessageToken
 
   // Drop whitespace-only tokens that directly follow an emote (the emote
   // carries its own trailing margin, so the extra gap would double up).
-  return normalized.filter((token, index) => {
-    if (token.kind !== 'text') return true
-    if (token.text.trim() !== '') return true
-    const prev = normalized[index - 1]
-    return prev?.kind !== 'emote'
-  })
+  return layerEmoteTokens(
+    normalized.filter((token, index) => {
+      if (token.kind !== 'text') return true
+      if (token.text.trim() !== '') return true
+      const prev = normalized[index - 1]
+      return prev?.kind !== 'emote'
+    }),
+    options,
+  )
 }
 
 function pushMentions(tokens: MessageToken[], segment: string, platform: string): void {

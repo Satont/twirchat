@@ -25,6 +25,9 @@ export function buildMessageParts(message: NormalizedChatMessage): MessagePart[]
   let index = 0
 
   for (const range of ranges) {
+    // Overlapping or out-of-range positions (bad upstream offsets) would
+    // duplicate text or emit an emote past the end — skip them.
+    if (range.start < index || range.start >= message.text.length) continue
     if (index < range.start) {
       parts.push({ content: message.text.slice(index, range.start), type: 'text' })
     }

@@ -1,3 +1,5 @@
+import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 /**
  * Chatters dialog — port of ChattersDialog.vue onto GPUIX.
  *
@@ -10,17 +12,20 @@
  *   reka-ui's global dialog Escape handling does not exist here.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ChannelChatters, ChattersTarget, ChatterUser } from '../backend/api'
 import { chatterRoleLabel, filterChatterGroups } from '../../views/main/utils/chatters'
+import { initialsOf } from '../../views/shared/utils/display-text'
+import type { ChannelChatters, ChattersTarget, ChatterUser } from '../backend/api'
+import { useBackend } from '../backend/context'
+import { runUiTask } from '../hooks/run-ui-task'
+import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'
+import { nativeWindow } from '../native-window'
+import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
-import { useBackend } from '../backend/context'
-import { useTextInputFocusTracking } from '../state/focus'
-import { Text } from './ui/Text'
-import { RemoteImage } from './ui/RemoteImage'
-import { Modal } from './ui/Modal'
 import { PlatformIcon } from './ui/Icon'
+import { Modal } from './ui/Modal'
+import { RemoteImage } from './ui/RemoteImage'
+import { Text } from './ui/Text'
 
 interface ChattersResponse {
   results: ChannelChatters[]
@@ -36,7 +41,7 @@ function channelKey(channel: ChannelChatters): string {
 
 function chatterInitial(user: ChatterUser): string {
   const name = user.displayName || user.username
-  return name.charAt(0).toUpperCase()
+  return initialsOf(name)
 }
 
 function showLogin(user: ChatterUser): boolean {
@@ -52,6 +57,8 @@ export function ChattersDialog({
 }) {
   const theme = useTheme()
   const backend = useBackend()
+  const renderer = useGpuixRequired()
+  const searchRef = useRef<PublicInstance | null>(null)
 
   const [chatters, setChatters] = useState<ChattersResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -59,6 +66,11 @@ export function ChattersDialog({
   const [query, setQuery] = useState('')
   const searchFocus = useTextInputFocusTracking()
   const generationRef = useRef(0)
+
+  const popupContextId = usePopupHotkeys('chatters', {
+    delete: onClose,
+    search: () => focusPopupSearch(nativeWindow(renderer), searchRef),
+  })
 
   const targetsKey = serializeTargets(targets)
 
@@ -93,7 +105,7 @@ export function ChattersDialog({
     setError(null)
     setLoading(false)
     setQuery('')
-    if (targetsKey.length > 0) void reload()
+    if (targetsKey.length > 0) runUiTask(reload())
   }, [reload, targetsKey])
 
   const visibleResults = useMemo(
@@ -112,7 +124,7 @@ export function ChattersDialog({
   const totalChatting = (chatters?.results ?? []).reduce((sum, channel) => sum + channel.total, 0)
 
   return (
-    <Modal width={480} onClose={onClose}>
+    <Modal hotkeyContextId={popupContextId} width={480} onClose={onClose}>
       <div
         tabIndex={-1}
         onKeyDown={(event) => {
@@ -184,6 +196,8 @@ export function ChattersDialog({
           }}
         >
           <input
+            ref={searchRef}
+            testId="chatters-search"
             autoFocus
             value={query}
             placeholder="Search chatters…"
@@ -356,6 +370,7 @@ export function ChattersDialog({
                                   {user.avatarUrl ? (
                                     <RemoteImage
                                       url={user.avatarUrl}
+                                      avatarSize={24}
                                       objectFit="cover"
                                       style={{
                                         width: 24,

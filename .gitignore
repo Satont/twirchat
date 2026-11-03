@@ -3,6 +3,7 @@ node_modules
 
 # output
 out
+.out/
 dist
 !packages/desktop/dist/
 !packages/desktop/dist/main/

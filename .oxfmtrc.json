@@ -21,6 +21,12 @@
     "**/.opencode/**",
     "**/*.graphql",
     "**/*.proto",
-    "**/.sisyphus/**"
-  ]
+    "**/.sisyphus/**",
+    "**/.agents/skills/**",
+    "**/.cursor/skills/**",
+    "docs/benchmarks/20*/**"
+  ],
+  "sortImports": {
+    "sortSideEffects": false
+  }
 }

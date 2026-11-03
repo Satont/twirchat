@@ -4,9 +4,14 @@
 
 export type Platform = 'twitch' | 'youtube' | 'kick'
 
+export interface ChatSendReceipt {
+  channelId: string
+  messageId?: string
+}
+
 export interface Badge {
   id: string
-  type: 'moderator' | 'subscriber' | 'vip' | 'broadcaster' | 'staff' | 'gifter' | string
+  type: string
   text: string
   imageUrl?: string
 }
@@ -19,6 +24,11 @@ export interface Emote {
   positions: { start: number; end: number }[]
   /** Соотношение сторон для широких смайлов (например 3 для privet) */
   aspectRatio?: number
+  source?: 'channel' | 'seventv' | 'collectibles' | 'global' | 'bttv' | 'ffz' | 'personal'
+  provider?: 'twitch' | 'seventv' | 'bttv' | 'ffz'
+  animated?: boolean
+  zeroWidth?: boolean
+  modifier?: boolean
 }
 
 // ============================================================
@@ -41,6 +51,23 @@ export interface NormalizedChatMessage {
   emotes: Emote[]
   timestamp: Date
   type: 'message' | 'action' | 'system'
+  metadata?: {
+    firstMessage?: boolean
+    returningChatter?: boolean
+    highlighted?: boolean
+    rewardId?: string
+    rewardTitle?: string
+    bits?: number
+    announcement?: string
+    subscriptionMonths?: number
+    rewardCost?: number
+    flags?: Record<string, boolean>
+    clientDetection?: string
+    sharedChat?: {
+      sourceChannelId: string
+      sourceMessageId?: string
+    }
+  }
   reply?: {
     parentMessageId: string
     parentMessageText: string
@@ -66,7 +93,7 @@ export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
 // A live moderation notification, emitted separately from chat messages. It
 // stays session-only so persisted message history remains provider-authored.
 export interface ModerationOutcome {
-  platform: 'twitch' | 'kick'
+  platform: Platform
   channelId: string
   action: ModerationAction
   messageId?: string
@@ -259,6 +286,8 @@ export interface PlatformStatusInfo {
   mode: 'anonymous' | 'authenticated'
   /** The channel login name this adapter is connected to (lowercase) */
   channelLogin?: string
+  /** Canonical message channel ID; Kick uses the broadcaster user ID. */
+  channelId?: string
 }
 
 // ============================================================

@@ -5,9 +5,9 @@
  * Run: bun scripts/generate-icons.ts
  */
 
+import { execSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { execSync } from 'node:child_process'
 
 const ASSETS_DIR = join(import.meta.dir, '..', 'packages', 'desktop', 'assets')
 const SVG_SOURCE = join(ASSETS_DIR, 'icon.svg')

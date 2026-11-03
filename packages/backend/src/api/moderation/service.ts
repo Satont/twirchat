@@ -28,8 +28,8 @@ export interface ModerationCapabilityInput extends ModerationCredentials {
 export interface ModerationInput extends ModerationCapabilityInput {
   action: ModerationAction
   durationSeconds?: number
-  messageId: string
-  targetUserId: string
+  messageId?: string
+  targetUserId?: string
 }
 
 export interface ModerationCapabilities {
@@ -74,13 +74,9 @@ export interface ModerationService {
   getCapabilities(input: ModerationCapabilityInput): Promise<ModerationCapabilities>
 }
 
-const twitchRailScopes = [
-  'moderator:read:moderators',
-  'moderator:manage:chat_messages',
-  'moderator:manage:banned_users',
-] as const
+const twitchRailScopes = ['moderator:manage:chat_messages', 'moderator:manage:banned_users']
 
-const kickRailScopes = ['moderation:chat_message:manage', 'moderation:ban'] as const
+const kickRailScopes = ['moderation:chat_message:manage', 'moderation:ban']
 
 const defaultDependencies: ModerationDependencies = {
   kick: Kick,
@@ -111,6 +107,7 @@ export function createModerationService(
       if (broadcasterUserId === input.platformUserId) {
         return { canModerate: true }
       }
+      if (!input.scopes.includes('user:read:moderated_channels')) return { canModerate: false }
 
       const moderator = await dependencies.twitch.isModerator(
         input.accessToken,
@@ -171,19 +168,29 @@ function assertCapabilityInput(input: ModerationCapabilityInput): void {
   }
 }
 
-function assertModerationInput(input: ModerationInput): void {
+type ValidatedModerationInput = ModerationInput &
+  (
+    | { action: 'delete_message'; messageId: string }
+    | { action: 'ban' | 'timeout'; targetUserId: string }
+  )
+
+function assertModerationInput(input: ModerationInput): asserts input is ValidatedModerationInput {
   assertCapabilityInput(input)
-  if (!input.messageId || !input.targetUserId) {
-    throw new Error('moderation: message and target user IDs are required')
-  }
+  if (input.action === 'delete_message' && !input.messageId)
+    throw new Error('moderation: message ID is required')
+  if (input.action !== 'delete_message' && !input.targetUserId)
+    throw new Error('moderation: target user ID is required')
   if (input.action !== 'delete_message' && input.action !== 'timeout' && input.action !== 'ban') {
     throw new Error(`moderation: unsupported action ${input.action}`)
   }
   if (
     input.action === 'timeout' &&
-    (!Number.isInteger(input.durationSeconds) || (input.durationSeconds ?? 0) < 60)
+    (!Number.isInteger(input.durationSeconds) ||
+      (input.durationSeconds ?? 0) < (input.platform === 'twitch' ? 1 : 60))
   ) {
-    throw new Error('moderation: timeout duration must be at least 60 seconds')
+    throw new Error(
+      `moderation: timeout duration must be at least ${input.platform === 'twitch' ? 1 : 60} seconds`,
+    )
   }
   if (input.action === 'timeout') {
     const maximumSeconds = input.platform === 'kick' ? 604_800 : 1_209_600

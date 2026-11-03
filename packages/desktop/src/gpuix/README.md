@@ -7,7 +7,7 @@ one Bun process for everything.
 ```bash
 bun run dev              # bun --hot src/gpuix/main.tsx (remounts React on save)
 bun run start            # plain run
-bun run typecheck        # tsc -p tsconfig.json && tsc -p tsconfig.gpuix.json
+bun run typecheck        # desktop, GPUIX and test configurations
 ```
 
 ## Architecture
@@ -77,8 +77,15 @@ in-process facade with exactly the same shape as the Wails gateway:
 > store `.set()` expecting synchronous repaint from an event handler.
 >
 > **Hot reload persistence**: desktop `bun --hot` re-evaluates the whole module
-> graph on save, so every named store is pinned on `globalThis`
-> (`create-store.ts` registry) — remounts keep messages, settings, tabs, caches.
+> graph on save. `persistent-resources.ts` retains each named store or controller
+> on `globalThis`; owners declare the exact key and type at module scope. Remounts
+> keep messages, settings, tabs, caches and pending preference writes. Store
+> `.set(value)` assigns a value and `.modify(update)` applies an updater; function
+> values remain ordinary values without ambiguous casts.
+
+HMR replaces the React roots, context providers, event handlers and hotkey observers
+with the current module graph. Native windows, the backend and named state remain
+alive. A window-manager runtime-version upgrade requires one ordinary app restart.
 
 ### Virtual scroll
 
@@ -88,6 +95,40 @@ behavior (follow new messages until the user scrolls up) that the Vue build
 hand-rolled with `isAtBottom` + `followLatestAfterLayout`. The "Scroll to
 latest" pill tracks `onVisibleRange` and jumps via
 `renderer.scrollToItem(listId, count)`.
+
+### Reading and composing
+
+- Each pane has search (`Ctrl+F`), a mentions/replies filter, and a pause button.
+  Pausing freezes the pane's messages; the resume control counts live arrivals
+  independently of the bounded message buffer, then jumps to the current tail.
+- Search operates on retained messages (500 at home, 200 per watched channel).
+  Words and quoted phrases combine with AND. Filters: `from:user,other`,
+  `in:channel`, `platform:twitch`, `badge:moderator`, `has:link`, `has:emote`,
+  `is:reply`, `is:highlighted`, `is:deleted`, `is:action`, `is:system`, `is:failed`.
+  Prefix a term with `!` or `-` to exclude it. `regex:` uses bounded PCRE2 matching;
+  `subtier:` and `client:` select subscription tiers and detected clients.
+- Mentions match whole nicknames (with or without `@`) and replies to your own
+  messages, scoped to the account's platform. Your own messages and names inside
+  links do not count. Inactive tabs show unread counts and highlighted mention
+  counts, including channels assigned to their split layouts.
+- The `msg/s` indicator is the average over the last ten seconds of live traffic;
+  loading history does not affect it.
+- Drafts and the last 100 sent messages survive tab switches, panel remounts and
+  hot reload for the current session. Splits have separate composer keys.
+  Up recalls history from an empty composer; Alt+Up/Down browses from any draft.
+  Down past the newest entry restores the unsent draft. Ctrl+Tab and Ctrl+K work
+  while composing; dialogs and the shortcut recorder retain keyboard priority.
+- Local commands: `/clearmessages`, `/copy`, `/pause`, `/resume`, `/mentions`,
+  `/search <query>`. Clearing only hides the current pane's retained messages;
+  copying exports its displayed messages. `/clear` remains a platform command.
+
+### Live message pipeline
+
+Live events are batched for 16ms and appended without sorting the whole buffer.
+Late deliveries use binary insertion; snapshots still merge with live messages
+so a slow initial history response cannot erase newer traffic. Duplicate events
+preserve array identity. Panes select only their own channel and rows keep stable
+callbacks, so unrelated traffic and unchanged messages avoid React updates.
 
 ### Message rendering
 
@@ -104,9 +145,11 @@ GPUI's Linux build **cannot load http(s) images** (its asset cache opens the
 URL as a file and fails). `src/gpuix/state/image-cache.ts` downloads every
 remote image (avatars, emotes, badges, thumbnails) to
 `~/.twirchat[-dev]/image-cache/<sha256>.<ext>` and components render the local
-file through `ui/RemoteImage.tsx`. Bump of `imageCacheRevisionStore` re-renders
-consumers when a download lands; failures are negatively cached for 5 minutes;
-the directory is pruned to ~3000 files at startup.
+file through `ui/RemoteImage.tsx`. Existing files are reused before fetching.
+Downloads are coalesced and limited to six concurrent requests, with a 20 MiB
+response limit. Each URL has its own deferred subscription, so completing one
+image does not repaint every image. Idle metadata is bounded; failures are
+negatively cached for five minutes. The directory is pruned to ~3000 files at startup.
 
 ### Overlay (OBS)
 
@@ -121,10 +164,9 @@ served by `src/overlay-server.ts` (started by the GPUIX backend too).
   tree after every layout mutation.
 - **GIF emotes pause while the window is unfocused** — GPUI stops advancing
   animation frames for inactive windows; animation resumes on focus.
-- **No drag-reorder of tabs / drag-dock of panels** — GPUI pointer capture
-  routes moves only to the pressed element, so cross-element hit testing is
-  impossible. Splits/resizes/assignments work via buttons, hotkeys
-  (Ctrl+H / Ctrl+Shift+H / Ctrl+W) and the ⋮ menu.
+- Pane dividers use painted element sizes for proportional resizing. Drag the
+  pane grip onto another pane's edge to dock, or its center to swap positions.
+  Pointer capture keeps the gesture active outside the grip. Escape cancels.
 - **No italic / letter-spacing** in GPUIX styles: action (`/me`) messages use
   opacity instead of italics; uppercase is done in JS. (`textDecoration`
   underline/line-through exists since gpuix 0.8.)
@@ -151,15 +193,24 @@ served by `src/overlay-server.ts` (started by the GPUIX backend too).
 
 ## Debug helpers
 
-- `GPUIX_BACKGROUND=1 bun src/gpuix/main.tsx` — launch without stealing focus
-  (the agent-driving pattern; note **Linux ignores `focus: false`**, the window
-  still comes forward).
+- `bun run qa:gui -- --timeout 30 --keep` — launch on a private Xvfb display
+  inside Bubblewrap. The host compositor sockets, physical display cards,
+  desktop bus, accounts, and network are unavailable to the test process.
+  Missing isolation tools or failed guards abort before launching the app.
+- `bun run qa:native` — run the reproducible native interaction checks in the
+  same isolated display. No GUI test should use the physical desktop.
+- `bun run qa:settings` — verify lazy settings, draft retention, save retries and
+  saved-account actions with mock data on an isolated 680 × 820 display.
+- Run a custom probe with `bun run qa:gui -- --keep -- bun scripts/probe.ts`.
+  Successful temporary sessions are removed unless `--keep` or `--artifacts DIR`
+  is supplied; failures retain their logs. `captureGuiQaDisplay()` from
+  `services/gui-qa-screenshot.ts` captures only the private framebuffer.
+- Linux rejects standalone `GPUIX_BACKGROUND=1` launches: `focus: false` alone
+  does not provide compositor isolation. Use the QA launcher for agent tests.
 - `TWIRCHAT_GPUIX_START_MAIN_TAB=events|platforms|settings` — boot onto a tab.
 - `TWIRCHAT_GPUIX_START_TAB=<watchedChannelId>` — boot onto a watched tab.
 - `POST http://localhost:45824/dev/inject-chat` with a `NormalizedChatMessage`
   JSON body injects a fake chat message (dev only).
-- Automation: `launch({ command: 'bun', args: ['src/gpuix/main.tsx'] })` from
-  `@gpuix/react/automation` — tree queries, bounds, `click`/`wheel`/`fill`/
-  `press` work on Linux (window-level keys: `app.call('keystrokes', { keys })`).
-  Built-in screenshots don't work on Linux; on Wayland capture the output
-  with `grim` instead.
+- GPUIX automation tree queries, bounds, clicks, wheel events, text input and
+  key simulation run inside the QA command. Never point an automated launch
+  or screenshot tool at the host display.

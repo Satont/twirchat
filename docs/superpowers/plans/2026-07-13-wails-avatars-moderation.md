@@ -53,8 +53,9 @@
 
 ```ts
 import { expect, test } from 'bun:test'
-import { buildTwitchAuthUrl } from '../src/auth/twitch.ts'
+
 import { buildKickAuthUrl } from '../src/auth/kick.ts'
+import { buildTwitchAuthUrl } from '../src/auth/twitch.ts'
 
 test('OAuth URLs request every moderation scope required by the rail', () => {
   const twitch = new URL(buildTwitchAuthUrl('challenge', 'state', 'http://localhost/callback').url)

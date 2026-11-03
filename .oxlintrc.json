@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["import", "typescript", "oxc"],
+  "plugins": ["eslint", "typescript", "import", "oxc", "react", "unicorn", "promise"],
   "env": {
     "browser": true,
     "node": true,
@@ -15,8 +15,9 @@
     "perf": "warn"
   },
   "rules": {
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "no-console": "off",
-    "no-debugger": "warn",
+    "no-debugger": "error",
     "eqeqeq": "error",
     "prefer-const": "warn",
     "func-style": "off",
@@ -35,16 +36,68 @@
     "import/no-nodejs-modules": "off",
     "import/prefer-default-export": "off",
     "import/group-exports": "off",
-    "no-useless-constructor": "off"
+    "no-useless-constructor": "off",
+    "project-quality/no-type-assertions": "error",
+    "project-quality/no-local-type-declarations": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "warn",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-ignore": true,
+        "ts-nocheck": true,
+        "ts-expect-error": "allow-with-description",
+        "minimumDescriptionLength": 10
+      }
+    ],
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/jsx-key": "error",
+    "react/jsx-no-duplicate-props": "error",
+    "react/no-children-prop": "error",
+    "promise/param-names": "warn",
+    "promise/no-new-statics": "error",
+    "promise/no-return-in-finally": "error",
+    "promise/valid-params": "error",
+    "typescript/no-floating-promises": [
+      "error",
+      {
+        "ignoreVoid": false
+      }
+    ],
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/set-state-in-effect": "warn",
+    "react/refs": "warn",
+    "react/exhaustive-effect-dependencies": "warn",
+    "typescript/no-base-to-string": "warn",
+    "typescript/unbound-method": "warn",
+    "typescript/restrict-template-expressions": "warn",
+    "unicorn/no-useless-spread": "warn"
   },
   "ignorePatterns": [
     "**/node_modules/**",
     "**/dist/**",
     "**/.out/**",
-    "**/gen/**",
     "**/*.d.ts",
     "**/coverage/**",
     "**/frontend/bindings/**",
-    "**/.opencode/**"
+    "**/.opencode/**",
+    "**/.agents/skills/**",
+    "**/.cursor/skills/**"
+  ],
+  "jsPlugins": ["./scripts/quality-plugin.mjs"],
+  "options": {
+    "reportUnusedDisableDirectives": "error",
+    "typeAware": true
+  },
+  "overrides": [
+    {
+      "files": ["**/tests/**/*.ts", "**/tests/**/*.tsx", "**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "typescript/await-thenable": "off"
+      }
+    }
   ]
 }

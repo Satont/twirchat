@@ -71,7 +71,7 @@ export function backendFetch(path: string, options: RequestInit = {}): Promise<R
   return fetch(`${backendUrl}${path}`, {
     ...options,
     headers: {
-      ...(options.headers as Record<string, string> | undefined),
+      ...Object.fromEntries(new Headers(options.headers).entries()),
       ...(clientSecret ? { 'X-Client-Secret': clientSecret } : {}),
     },
   })

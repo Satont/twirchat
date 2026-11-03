@@ -1,29 +1,36 @@
+import type { ChatClear, RoomState } from '@twirchat/shared/channel-tools'
+import { logger } from '@twirchat/shared/logger'
 /**
  * WatchedChannelManager
  *
  * Manages a pool of platform adapters for "watched" (external) channels.
  * Each watched channel gets its own adapter instance and isolated message buffer.
  *
- * - On add: create adapter, start connect(), buffer messages, emit events
+ * - On add: persist the channel in the saved catalog
+ * - On activation: connect channels referenced by open layouts
  * - On remove: disconnect adapter, clear buffer
  * - On sendMessage: route to correct adapter
  */
-
-import { TwitchAdapter } from '../platforms/twitch/adapter'
-import { KickAdapter } from '../platforms/kick/adapter'
-import { YouTubeAdapter } from '../platforms/youtube/adapter'
 import type {
+  ChatSendReceipt,
   Emote,
   NormalizedChatMessage,
+  NormalizedEvent,
   PlatformStatusInfo,
   WatchedChannel,
+  ModerationOutcome,
 } from '@twirchat/shared/types'
-import { WatchedChannelStore } from '../store/watched-channels-store'
-import { WatchedChannelsLayoutStore } from '../store/watched-channels-layout-store'
-import { AccountStore } from '../store/account-store'
-import { logger } from '@twirchat/shared/logger'
-import { sevenTVService } from '../seventv'
+
 import { parseMessageWithEmotes } from '../platforms/7tv/emote-parser'
+import type { IPlatformAdapter } from '../platforms/base-adapter'
+import { KickAdapter } from '../platforms/kick/adapter'
+import { TwitchAdapter } from '../platforms/twitch/adapter'
+import { YouTubeAdapter } from '../platforms/youtube/adapter'
+import { runInBackground } from '../services/background-task'
+import { sevenTVService } from '../seventv'
+import { AccountStore } from '../store/account-store'
+import { WatchedChannelsLayoutStore } from '../store/watched-channels-layout-store'
+import { WatchedChannelStore } from '../store/watched-channels-store'
 
 const log = logger('watched-channels')
 
@@ -35,55 +42,96 @@ export type WatchedChannelStatusHandler = (channelId: string, status: PlatformSt
 
 interface WatchedEntry {
   watchedChannel: WatchedChannel
-  adapter: TwitchAdapter | KickAdapter | YouTubeAdapter
+  adapter: IPlatformAdapter
   messages: NormalizedChatMessage[]
   status: PlatformStatusInfo | null
   sevenTvChannelId: string
   sevenTvPlatformUserId?: string
+  cleanup?: () => void
 }
 
 export class WatchedChannelManager {
+  constructor(
+    private readonly enrich: (message: NormalizedChatMessage) => NormalizedChatMessage = (
+      message,
+    ) => message,
+    private readonly createAdapter?: (channel: WatchedChannel) => IPlatformAdapter,
+  ) {}
+  private reconnectQueues = new Map<string, Promise<void>>()
   private entries = new Map<string, WatchedEntry>() // Keyed by WatchedChannel.id
+  private activeIds = new Set<string>()
+  private activationRevision = 0
 
+  private eventHandlers = new Set<(channelId: string, event: NormalizedEvent) => void>()
   private messageHandlers = new Set<WatchedChannelMessageHandler>()
   private statusHandlers = new Set<WatchedChannelStatusHandler>()
+  private moderationHandlers = new Set<(outcome: ModerationOutcome) => void>()
+  private roomStateHandlers = new Set<(state: RoomState) => void>()
+  private clearHandlers = new Set<(clear: ChatClear) => void>()
 
   // ----------------------------------------------------------------
   // Public API
   // ----------------------------------------------------------------
 
-  /** Restore all persisted watched channels on startup */
-  async autoConnect(): Promise<void> {
+  async setActiveChannels(ids: readonly string[]): Promise<void> {
     const channels = WatchedChannelStore.findAll()
-    for (const ch of channels) {
-      await this.startChannel(ch)
-    }
+    const requested = new Set(ids)
+    this.activeIds = new Set(
+      channels.filter((channel) => requested.has(channel.id)).map((channel) => channel.id),
+    )
+    const revision = ++this.activationRevision
+    const stopping = [...this.entries.keys()]
+      .filter((id) => !this.activeIds.has(id))
+      .map((id) => this.stopChannel(id))
+    const starting = channels.filter(
+      (channel) => this.activeIds.has(channel.id) && !this.entries.has(channel.id),
+    )
+    let index = 0
+    await Promise.all([
+      ...stopping,
+      ...Array.from({ length: Math.min(4, starting.length) }, async () => {
+        while (revision === this.activationRevision) {
+          const channel = starting[index++]
+          if (!channel) return
+          await this.startChannel(channel)
+        }
+      }),
+    ])
   }
 
-  /** Add a new watched channel (persists + connects) */
+  /** Saved channels connect only after an open layout references them. */
   async addChannel(
     platform: WatchedChannel['platform'],
     channelSlug: string,
     displayName?: string,
   ): Promise<WatchedChannel> {
-    const slug = channelSlug.toLowerCase()
+    const slug = platform === 'youtube' ? channelSlug.trim() : channelSlug.toLowerCase()
     const name = displayName ?? slug
-    const ch = WatchedChannelStore.upsert(platform, slug, name)
-
-    // If already running, return existing
-    if (!this.entries.has(ch.id)) {
-      await this.startChannel(ch)
-    }
-
-    return ch
+    return WatchedChannelStore.upsert(platform, slug, name)
   }
 
   async removeChannel(id: string): Promise<void> {
+    this.activeIds.delete(id)
+    await this.stopChannel(id)
+    WatchedChannelStore.remove(id)
+    WatchedChannelsLayoutStore.remove(id)
+    const remaining = WatchedChannelStore.findAll()
+    for (const ch of remaining) {
+      WatchedChannelsLayoutStore.cleanupStaleAssignments(ch.id, [id])
+    }
+  }
+
+  private async stopChannel(id: string): Promise<void> {
     const entry = this.entries.get(id)
     if (entry) {
+      this.entries.delete(id)
       this.unbindAdapter(entry)
       sevenTVService
-        .unsubscribeFromChannel(entry.watchedChannel.platform, entry.watchedChannel.channelSlug)
+        .unsubscribeFromChannel(
+          entry.watchedChannel.platform,
+          entry.sevenTvChannelId,
+          `watched:${id}`,
+        )
         .catch((error) => {
           log.error('Failed to unsubscribe from 7TV for watched channel', {
             id,
@@ -96,13 +144,6 @@ export class WatchedChannelManager {
       await entry.adapter.disconnect().catch((error) => {
         log.error('Error disconnecting watched channel', { id, error: String(error) })
       })
-      this.entries.delete(id)
-    }
-    WatchedChannelStore.remove(id)
-    WatchedChannelsLayoutStore.remove(id)
-    const remaining = WatchedChannelStore.findAll()
-    for (const ch of remaining) {
-      WatchedChannelsLayoutStore.cleanupStaleAssignments(ch.id, [id])
     }
   }
 
@@ -141,35 +182,61 @@ export class WatchedChannelManager {
       (e) => e.watchedChannel.platform === platform,
     )
 
+    let index = 0
+    const failures: string[] = []
     await Promise.all(
-      matching.map(async (entry) => {
-        log.info('Reconnecting watched channel after auth change', {
-          id: entry.watchedChannel.id,
-          platform,
-          slug: entry.watchedChannel.channelSlug,
-        })
-        try {
-          this.unbindAdapter(entry)
-          await entry.adapter.disconnect()
-          this.bindAdapter(entry)
-          await entry.adapter.connect(entry.watchedChannel.channelSlug)
-        } catch (error) {
-          log.error('Failed to reconnect watched channel', {
-            id: entry.watchedChannel.id,
-            error: String(error),
-          })
+      Array.from({ length: Math.min(4, matching.length) }, async () => {
+        while (index < matching.length) {
+          const entry = matching[index++]
+          if (!entry) return
+          try {
+            await this.reconnect(entry.watchedChannel.id)
+          } catch (error) {
+            if (this.entries.get(entry.watchedChannel.id) === entry)
+              failures.push(`${entry.watchedChannel.channelSlug}: ${String(error)}`)
+          }
         }
       }),
     )
+    if (failures.length)
+      throw new Error(`Watched chats could not reconnect: ${failures.join('; ')}`)
+  }
+
+  reconnect(id: string): Promise<void> {
+    const next = (this.reconnectQueues.get(id) ?? Promise.resolve())
+      .catch(() => {})
+      .then(async () => {
+        const entry = this.entries.get(id)
+        if (!entry) throw new Error('This watched channel is no longer connected.')
+        this.unbindAdapter(entry)
+        await entry.adapter.disconnect()
+        if (this.entries.get(id) !== entry) return
+        this.bindAdapter(entry)
+        await entry.adapter.connect(entry.watchedChannel.channelSlug)
+      })
+    this.reconnectQueues.set(id, next)
+    runInBackground(
+      next
+        .finally(() => {
+          if (this.reconnectQueues.get(id) === next) this.reconnectQueues.delete(id)
+        })
+        .catch(() => {}),
+      'manager background operation failed',
+    )
+    return next
   }
 
   /** Send a message via the watched channel's adapter */
-  async sendMessage(id: string, text: string, replyToMessageId?: string): Promise<void> {
+  async sendMessage(
+    id: string,
+    text: string,
+    replyToMessageId?: string,
+  ): Promise<void | ChatSendReceipt> {
     const entry = this.entries.get(id)
     if (!entry) {
       throw new Error(`Watched channel ${id} not found`)
     }
-    await entry.adapter.sendMessage(entry.watchedChannel.channelSlug, text, replyToMessageId)
+    return entry.adapter.sendMessage(entry.watchedChannel.channelSlug, text, replyToMessageId)
   }
 
   /** Register a handler for incoming messages */
@@ -182,17 +249,51 @@ export class WatchedChannelManager {
     this.statusHandlers.add(handler)
   }
 
+  onEvent(handler: (channelId: string, event: NormalizedEvent) => void): () => void {
+    this.eventHandlers.add(handler)
+    return () => this.eventHandlers.delete(handler)
+  }
+
+  onModeration(handler: (outcome: ModerationOutcome) => void): () => void {
+    this.moderationHandlers.add(handler)
+    return () => this.moderationHandlers.delete(handler)
+  }
+
+  onRoomState(handler: (state: RoomState) => void): () => void {
+    this.roomStateHandlers.add(handler)
+    return () => this.roomStateHandlers.delete(handler)
+  }
+
+  onChatClear(handler: (clear: ChatClear) => void): () => void {
+    this.clearHandlers.add(handler)
+    return () => this.clearHandlers.delete(handler)
+  }
+
+  getRoomState(platform: string, channelSlug: string): RoomState | undefined {
+    for (const entry of this.entries.values()) {
+      if (
+        entry.watchedChannel.platform === platform &&
+        entry.watchedChannel.channelSlug.toLowerCase() === channelSlug.toLowerCase() &&
+        entry.adapter instanceof TwitchAdapter
+      )
+        return entry.adapter.getRoomState()
+    }
+    return undefined
+  }
+
   // ----------------------------------------------------------------
   // Private
   // ----------------------------------------------------------------
 
   private async startChannel(ch: WatchedChannel): Promise<void> {
-    const adapter =
-      ch.platform === 'twitch'
+    if (!this.activeIds.has(ch.id) || this.entries.has(ch.id)) return
+    const adapter: IPlatformAdapter =
+      this.createAdapter?.(ch) ??
+      (ch.platform === 'twitch'
         ? new TwitchAdapter()
         : ch.platform === 'youtube'
           ? new YouTubeAdapter()
-          : new KickAdapter()
+          : new KickAdapter())
 
     const entry: WatchedEntry = {
       adapter,
@@ -218,10 +319,10 @@ export class WatchedChannelManager {
         error: String(error),
       })
     })
+    if (this.entries.get(ch.id) !== entry || !this.activeIds.has(ch.id)) return
 
     if (ch.platform === 'kick') {
-      const kickAdapter = adapter as KickAdapter
-      const broadcasterUserId = kickAdapter.getBroadcasterUserId()
+      const broadcasterUserId = adapter.getBroadcasterUserId?.()
       if (broadcasterUserId) {
         entry.sevenTvChannelId = String(broadcasterUserId)
       }
@@ -238,6 +339,7 @@ export class WatchedChannelManager {
         entry.sevenTvChannelId,
         [ch.channelSlug],
         entry.sevenTvPlatformUserId,
+        `watched:${ch.id}`,
       )
       .catch((error) => {
         log.error('Failed to subscribe to 7TV for watched channel', {
@@ -259,6 +361,10 @@ export class WatchedChannelManager {
       for (const e of parsed.emotes) {
         const emote: Emote = {
           aspectRatio: e.aspectRatio,
+          animated: e.animated,
+          zeroWidth: e.zeroWidth,
+          source: 'seventv',
+          provider: 'seventv',
           id: e.id,
           imageUrl: e.imageUrl,
           name: e.name,
@@ -281,7 +387,7 @@ export class WatchedChannelManager {
         }
       }
 
-      const enrichedMsg: NormalizedChatMessage = { ...msg, emotes: mergedEmotes }
+      const enrichedMsg = this.enrich({ ...msg, emotes: mergedEmotes })
 
       entry.messages = [enrichedMsg, ...entry.messages].slice(0, MAX_BUFFER)
       for (const h of this.messageHandlers) {
@@ -296,28 +402,45 @@ export class WatchedChannelManager {
       }
     }
 
+    const onEvent = (event: NormalizedEvent) => {
+      for (const handler of this.eventHandlers)
+        handler(watchedChannel.id, {
+          ...event,
+          data: {
+            ...event.data,
+            channelId: watchedChannel.channelSlug,
+            sourceWatchedChannelId: watchedChannel.id,
+          },
+        })
+    }
+    adapter.on('event', onEvent)
     adapter.on('message', onMessage)
     adapter.on('status', onStatus)
-
-    // Store references for cleanup
-    ;(
-      entry as WatchedEntry & { _onMessage: typeof onMessage; _onStatus: typeof onStatus }
-    )._onMessage = onMessage
-    ;(
-      entry as WatchedEntry & { _onMessage: typeof onMessage; _onStatus: typeof onStatus }
-    )._onStatus = onStatus
+    const onModeration = (outcome: ModerationOutcome) => {
+      for (const handler of this.moderationHandlers) handler(outcome)
+    }
+    const onRoomState = (state: RoomState) => {
+      for (const handler of this.roomStateHandlers) handler(state)
+    }
+    const onChatClear = (clear: ChatClear) => {
+      entry.messages = []
+      for (const handler of this.clearHandlers) handler(clear)
+    }
+    adapter.on('moderation', onModeration)
+    adapter.on('room_state', onRoomState)
+    adapter.on('chat_clear', onChatClear)
+    entry.cleanup = () => {
+      adapter.off('event', onEvent)
+      adapter.off('message', onMessage)
+      adapter.off('status', onStatus)
+      adapter.off('moderation', onModeration)
+      adapter.off('room_state', onRoomState)
+      adapter.off('chat_clear', onChatClear)
+    }
   }
 
   private unbindAdapter(entry: WatchedEntry): void {
-    const ext = entry as WatchedEntry & {
-      _onMessage?: (msg: NormalizedChatMessage) => void
-      _onStatus?: (s: PlatformStatusInfo) => void
-    }
-    if (ext._onMessage) {
-      entry.adapter.off('message', ext._onMessage)
-    }
-    if (ext._onStatus) {
-      entry.adapter.off('status', ext._onStatus)
-    }
+    entry.cleanup?.()
+    entry.cleanup = undefined
   }
 }

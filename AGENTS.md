@@ -1,3 +1,48 @@
+## Agent GUI testing
+
+- Run native GUI tests only through `bun run qa:gui` or `bun run qa:native` from `packages/desktop`.
+- The launcher creates a private virtual X11 display inside bwrap, with isolated runtime,
+  profile, network and device access. A failed isolation check must abort the test.
+- Never launch the app or a native renderer directly for agent testing. `focus: false` and
+  `GPUIX_BACKGROUND=1` do not protect the user's Linux desktop.
+- Never create test windows on the user's Hyprland workspaces, switch their workspace,
+  modify their compositor rules/outputs, or forward their display sockets into tests.
+- Keep screenshots and GUI automation inside the isolated launcher. Do not capture the host desktop.
+- Example: `bun run qa:gui --timeout 30 -- bun src/gpuix/main.tsx`.
+
+## Current feature scope
+
+- Plugin systems, including Lua compatibility, are deferred to
+  [issue #76](https://github.com/Satont/twirchat/issues/76).
+- Image uploads from the composer (clipboard, file picker, drag-and-drop) are deferred to
+  [issue #77](https://github.com/Satont/twirchat/issues/77).
+- Neither feature blocks the current GPUIX migration or Chatterino/Leafyrino/Dankerino
+  feature-parity acceptance. Resume them only when the user reopens their scope.
+- Avatar/emote rendering and ordinary text-link handling remain in the current scope.
+
+## TypeScript and React quality
+
+- Apply the project-local [TypeScript skill](.agents/skills/typescript-best-practices/SKILL.md),
+  [type discipline](.agents/skills/principle-type-system-discipline/SKILL.md),
+  [boundary discipline](.agents/skills/principle-boundary-discipline/SKILL.md), and
+  [structural safeguards](.agents/skills/principle-encode-lessons-in-structure/SKILL.md)
+  when changing TypeScript. Review the final diff with [deslop](.agents/skills/deslop/SKILL.md).
+- Apply the relevant [React rules](.agents/skills/react-best-practices/SKILL.md) to components,
+  hooks, subscriptions, derived state, and rendering performance. GPUIX has no DOM, browser
+  storage, SSR, RSC, or Next.js; those upstream examples do not apply to the native UI.
+- Type assertions are forbidden, including `as const`, double assertions, and angle-bracket
+  assertions. This project rule overrides upstream exceptions. Use inference, annotations,
+  `satisfies`, discriminated unions, or validated boundary schemas. Import/export aliases are fine.
+- Declare interfaces and type aliases at module scope, never inside functions.
+- Do not replace assertions with `any`, non-null assertions, unchecked typed JSON assignments,
+  or generic predicates that do not prove their result. Validate external data at its boundary;
+  trust already validated internal contracts.
+- Handle rejected promises explicitly. `void promise` does not handle a rejection.
+- Keep hooks unconditional, declare their real dependencies, and derive values during render
+  when they do not require synchronization with an external system.
+- Pinned skill sources and licenses are recorded in `.agents/skills/upstream-lock.json`.
+  Keep vendored upstream skill text unchanged; put project policy here.
+
 ## Code Formatting and Linting
 
 This project uses **oxlint** (linter) and **oxfmt** (formatter) from the Oxc toolchain.

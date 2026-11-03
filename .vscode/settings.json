@@ -20,6 +20,6 @@
   "[jsonc]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
-  "oxc.typeAware": false,
+  "oxc.typeAware": true,
   "oxc.enable": true
 }

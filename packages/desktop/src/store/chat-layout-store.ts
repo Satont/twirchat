@@ -1,5 +1,6 @@
-import { getDb } from './db'
 import type { ChatLayout } from '../../../shared/types.ts'
+import { chatLayoutSchema } from '../services/persisted-schemas'
+import { getDb } from './db'
 import { deepMerge } from './utils'
 
 const DEFAULT_LAYOUT: ChatLayout = {
@@ -18,7 +19,7 @@ export const ChatLayoutStore = {
     if (!row) return { ...DEFAULT_LAYOUT, splits: [...DEFAULT_LAYOUT.splits] }
 
     try {
-      const parsed = JSON.parse(row.value) as Partial<ChatLayout>
+      const parsed = chatLayoutSchema.partial().parse(JSON.parse(row.value))
       // Deep-merge with defaults so new fields added after the layout was saved
       // don't come back as undefined.
       return deepMerge({ ...DEFAULT_LAYOUT, splits: [...DEFAULT_LAYOUT.splits] }, parsed)

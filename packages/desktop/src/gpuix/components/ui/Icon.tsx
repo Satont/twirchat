@@ -1,6 +1,6 @@
 import { icons, platformIconNames } from '../../icons'
-import { platformColor } from '../../theme'
 import type { IconName } from '../../icons'
+import { platformColor } from '../../theme'
 
 export type { IconName }
 

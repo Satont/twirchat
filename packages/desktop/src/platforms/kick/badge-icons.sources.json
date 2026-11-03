@@ -1,0 +1,17 @@
+{
+  "description": "Official Kick web icon definitions; extracted as static data without evaluating source code.",
+  "sources": [
+    {
+      "url": "https://assets.kick.com/main/_next/static/chunks/0ws-x4bs6tawa.js?dpl=0e5ac2ba",
+      "sha256": "b616580f5d3c967e54c6561e20f12eeb4f4a97d80a527d0a8121b19df4008248"
+    },
+    {
+      "url": "https://assets.kick.com/main/_next/static/chunks/1odhez4gguo3a.js?dpl=0e5ac2ba",
+      "sha256": "d13261ee37455b15a3fd5fa90730694b439473c253d8c991e547d2955b75d7fa"
+    },
+    {
+      "url": "https://assets.kick.com/main/_next/static/chunks/2tw2a1-twyxne.js?dpl=0e5ac2ba",
+      "sha256": "303f55d419ba97016373807c38a99388293a94f8fa9b30ddd4b062d2f6f138e8"
+    }
+  ]
+}

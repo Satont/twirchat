@@ -19,8 +19,8 @@ export function fuzzyFilter<T extends { label: string }>(items: T[], query: stri
       return false
     })
     .sort((a, b) => {
-      const ai = a.label.toLowerCase().indexOf(q[0]!)
-      const bi = b.label.toLowerCase().indexOf(q[0]!)
+      const ai = a.label.toLowerCase().indexOf(q.charAt(0))
+      const bi = b.label.toLowerCase().indexOf(q.charAt(0))
 
       return ai - bi
     })

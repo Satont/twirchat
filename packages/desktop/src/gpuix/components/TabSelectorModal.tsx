@@ -5,12 +5,13 @@
 
 import { useMemo, useState } from 'react'
 
+import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
+import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
+import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
-import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
-import { useTextInputFocusTracking } from '../state/focus'
-import { Modal } from './ui/Modal'
 import { Icon, PlatformIcon } from './ui/Icon'
+import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
 
 export interface TabItem {
@@ -36,10 +37,7 @@ export function TabSelectorModal({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const queryFocus = useTextInputFocusTracking()
 
-  const filtered = useMemo(
-    () => (query ? (fuzzyFilter(tabs, query) as TabItem[]) : tabs),
-    [tabs, query],
-  )
+  const filtered = useMemo(() => (query ? fuzzyFilter(tabs, query) : tabs), [tabs, query])
   const selected = Math.min(selectedIndex, Math.max(0, filtered.length - 1))
 
   const pick = (index: number) => {
@@ -49,8 +47,13 @@ export function TabSelectorModal({
     onClose()
   }
 
+  const popupContextId = usePopupHotkeys('tab-selector', {
+    accept: filtered[selected] ? () => pick(selected) : null,
+    reject: onClose,
+  })
+
   return (
-    <Modal width={400} onClose={onClose}>
+    <Modal hotkeyContextId={popupContextId} width={400} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 420 }}>
         <div
           style={{
@@ -136,7 +139,7 @@ export function TabSelectorModal({
                     color={platformColor(tab.platform)}
                   />
                 ) : (
-                  <Icon name="home" size={12} color={theme.text2} />
+                  <Icon name={tab.id === 'home' ? 'home' : 'chat'} size={12} color={theme.text2} />
                 )}
                 <Text
                   style={{

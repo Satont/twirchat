@@ -1,8 +1,10 @@
 import type { LayoutNode, PanelNode, WatchedChannelsLayout } from '@twirchat/shared/types'
 
+import { watchedChannelsLayoutSchema } from '../services/persisted-schemas'
 import { getDb } from './db'
+import { WatchedChannelStore } from './watched-channels-store'
 
-const MAX_PANELS = 8
+const MAX_PANELS = 64
 
 function getKey(tabId: string): string {
   return `watched_tab_layout_v2_${tabId}`
@@ -13,13 +15,18 @@ function countPanels(node: LayoutNode): number {
   return node.children.reduce((sum, child) => sum + countPanels(child), 0)
 }
 
-function createDefaultTabLayout(channelId: string): WatchedChannelsLayout {
+export function createDefaultTabLayout(channelId: string): WatchedChannelsLayout {
   return {
     version: 2,
     root: {
       type: 'panel',
       id: crypto.randomUUID(),
-      content: { type: 'watched', channelId },
+      content:
+        channelId === 'home'
+          ? { type: 'main' }
+          : WatchedChannelStore.findById(channelId)
+            ? { type: 'watched', channelId }
+            : { type: 'empty' },
       flex: 100,
     },
     meta: { createdAt: Date.now(), updatedAt: Date.now() },
@@ -27,18 +34,16 @@ function createDefaultTabLayout(channelId: string): WatchedChannelsLayout {
 }
 
 function sanitizeTabLayout(layout: WatchedChannelsLayout, tabId: string): WatchedChannelsLayout {
+  // Only legacy channel-backed tabs inherited their watched channel from the tab ID.
+  if (tabId === 'home' || !WatchedChannelStore.findById(tabId)) return layout
   const sanitizeNode = (node: LayoutNode): void => {
-    if (node.type === 'panel' && node.content.type === 'main') {
+    if (node.type === 'panel' && node.content.type === 'main')
       node.content = { type: 'watched', channelId: tabId }
-    } else if (node.type === 'split') {
-      node.children.forEach(sanitizeNode)
-    }
+    else if (node.type === 'split') node.children.forEach(sanitizeNode)
   }
   sanitizeNode(layout.root)
-  // If root is a single empty panel, assign this tab's channel
-  if (layout.root.type === 'panel' && layout.root.content.type === 'empty') {
+  if (layout.root.type === 'panel' && layout.root.content.type === 'empty')
     layout.root.content = { type: 'watched', channelId: tabId }
-  }
   return layout
 }
 
@@ -63,7 +68,7 @@ export const WatchedChannelsLayoutStore = {
     }
 
     try {
-      const parsed = JSON.parse(row.value) as WatchedChannelsLayout
+      const parsed = watchedChannelsLayoutSchema.parse(JSON.parse(row.value))
       return sanitizeTabLayout(parsed, tabId)
     } catch {
       const defaultLayout = createDefaultTabLayout(tabId)

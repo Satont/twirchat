@@ -40,6 +40,7 @@ send-button eligibility and emitted payloads, keeping non-reply multi-platform s
 
   ```ts
   import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
+
   import {
     createChatMessageTargets,
     ownChatSendTargets,

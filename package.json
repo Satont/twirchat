@@ -14,17 +14,18 @@
   "scripts": {
     "dev:desktop": "bun run --cwd packages/desktop dev",
     "dev:backend": "bun run --cwd packages/backend dev",
-    "dev": "bun run --workspaces dev",
-    "test": "bun test --workspaces test",
+    "dev": "bun run --workspaces --if-present dev",
+    "test": "bun run test:quality && bun run --workspaces --if-present test",
     "typecheck": "bun run --workspaces typecheck",
-    "build": "bun run --workspaces build",
+    "build": "bun run --workspaces --if-present build",
     "generate-icons": "bun scripts/generate-icons.ts",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt . --write",
     "format:check": "oxfmt . --check",
-    "check": "bun run typecheck && bun run lint && bun run format:check",
-    "fix": "bun run lint:fix && bun run format"
+    "check": "bun run test:quality && bun run typecheck && bun run lint && bun run format:check",
+    "fix": "bun run lint:fix && bun run format",
+    "test:quality": "bun test scripts/quality-plugin.test.ts"
   },
   "dependencies": {
     "@grpc/grpc-js": "1.14.6",
@@ -37,6 +38,7 @@
     "@typescript/native-preview": "catalog:",
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "playwright": "1.64.1",
     "png-to-ico": "3.0.2",
     "sharp": "0.35.5"

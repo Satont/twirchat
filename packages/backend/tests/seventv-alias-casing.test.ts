@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test'
-import type { Platform } from '@twirchat/shared'
-import type { SevenTVEventEmoteUpdate } from '../src/seventv/event-client.ts'
+
 import { SevenTVCache } from '../src/seventv/cache.ts'
 import {
   createSevenTvEmote,
   createSevenTvEmoteFromEventValue,
   isSevenTvEventEmoteUpdate,
 } from '../src/seventv/emote.ts'
+import type { SevenTVEventEmoteUpdate } from '../src/seventv/event-client.ts'
 
 describe('7TV alias casing', () => {
   it('preserves exact alias casing when building emitted emotes', () => {
@@ -103,7 +103,7 @@ describe('7TV alias casing', () => {
 
   it('keeps case-distinct aliases in the cache', () => {
     const cache = new SevenTVCache()
-    const platform = 'kick' as Platform
+    const platform = 'kick'
     const channelId = 'channel-1'
 
     cache.set(platform, channelId, {
@@ -170,7 +170,7 @@ describe('7TV alias casing', () => {
 
   it('updates exact alias keys without adding lowercase variants', () => {
     const cache = new SevenTVCache()
-    const platform = 'kick' as Platform
+    const platform = 'kick'
     const channelId = 'channel-1'
 
     cache.set(platform, channelId, {

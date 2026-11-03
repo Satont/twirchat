@@ -113,7 +113,7 @@ export const accent = {
   tint20: 'rgba(167, 139, 250, 0.20)',
   tint25: 'rgba(167, 139, 250, 0.25)',
   tint45: 'rgba(167, 139, 250, 0.45)',
-} as const
+}
 
 /** Platform brand colors (see src/views/shared/utils/platform.ts) */
 export const platformColors: Record<string, string> = {
@@ -140,7 +140,7 @@ export const semantic = {
   cyan: '#06b6d4',
   sevenTv: '#6441a5',
   renamed: '#818cf8',
-} as const
+}
 
 /** Event type → color (from EventsFeed.vue) */
 export const eventColors: Record<string, string> = {
@@ -162,7 +162,7 @@ export const elevated = {
   dialog: '#2a2a35',
   dialogBorder: '#3a3a45',
   backdrop: 'rgba(0, 0, 0, 0.6)',
-} as const
+}
 
 /** Default self-ping highlight */
 export const DEFAULT_SELF_PING_COLOR = 'rgba(167, 139, 250, 0.15)'
@@ -192,7 +192,11 @@ function parseHex(color: string): [number, number, number] | null {
       .join('')
   }
   if (!/^[0-9a-f]{6}$/i.test(value)) return null
-  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16)) as [number, number, number]
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16),
+  ]
 }
 
 function luminance([r, g, b]: [number, number, number]): number {
@@ -229,7 +233,8 @@ export function readableOn(color: string, background: string): string {
     const target = luminance(bg) < 0.5 ? 255 : 0
     for (let step = 1; step <= 10; step++) {
       const t = step / 10
-      const mixed = fg.map((c) => Math.round(c + (target - c) * t)) as [number, number, number]
+      const mix = (channel: number) => Math.round(channel + (target - channel) * t)
+      const mixed: [number, number, number] = [mix(fg[0]), mix(fg[1]), mix(fg[2])]
       result = `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`
       if (contrast(mixed, bg) >= 4.5) break
     }

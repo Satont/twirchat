@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
+
 import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
+
 import { groupEmoteCatalog } from '../src/views/main/utils/emote-catalog'
 
 function emote(source: EmoteCatalogEntry['source'], alias: string): EmoteCatalogEntry {

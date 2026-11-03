@@ -1,3 +1,4 @@
+import { afterEach, describe, it, expect, mock } from 'bun:test'
 /**
  * Moderation API client tests
  *
@@ -9,9 +10,15 @@
  * - Platform-specific behavior
  */
 
-import { describe, it, expect, mock } from 'bun:test'
-import * as Twitch from '../src/api/moderation/twitch.ts'
 import * as Kick from '../src/api/moderation/kick.ts'
+import * as Twitch from '../src/api/moderation/twitch.ts'
+import { fetchUrl, textBody } from './literal'
+
+const originalFetch = globalThis.fetch
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+})
 
 const TWITCH_TOKEN = 'test-twitch-token'
 const TWITCH_BROADCASTER_ID = '123456'
@@ -25,16 +32,19 @@ const KICK_BROADCASTER_USER_ID = 999
 
 describe('Twitch Moderation', () => {
   it('should ban a user permanently', async () => {
-    global.fetch = mock(async () =>
-      Response.json({
-        data: [
-          {
-            user_id: '98765',
-            created_at: '2026-04-07T12:00:00Z',
-          },
-        ],
-      }),
-    ) as unknown as typeof global.fetch
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json({
+          data: [
+            {
+              user_id: '98765',
+              created_at: '2026-04-07T12:00:00Z',
+            },
+          ],
+        }),
+      ),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.banUser(TWITCH_TOKEN, TWITCH_BROADCASTER_ID, TWITCH_MODERATOR_ID, {
       user_id: '98765',
@@ -48,16 +58,19 @@ describe('Twitch Moderation', () => {
   })
 
   it('should timeout a user for 600 seconds', async () => {
-    global.fetch = mock(async () =>
-      Response.json({
-        data: [
-          {
-            user_id: '98765',
-            created_at: '2026-04-07T12:00:00Z',
-          },
-        ],
-      }),
-    ) as unknown as typeof global.fetch
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json({
+          data: [
+            {
+              user_id: '98765',
+              created_at: '2026-04-07T12:00:00Z',
+            },
+          ],
+        }),
+      ),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.banUser(TWITCH_TOKEN, TWITCH_BROADCASTER_ID, TWITCH_MODERATOR_ID, {
       user_id: '98765',
@@ -71,16 +84,19 @@ describe('Twitch Moderation', () => {
   })
 
   it('should handle 409 conflict when user already banned', async () => {
-    global.fetch = mock(async () =>
-      Response.json(
-        {
-          error: 'Conflict',
-          status: 409,
-          message: 'User is already banned',
-        },
-        { status: 409 },
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json(
+          {
+            error: 'Conflict',
+            status: 409,
+            message: 'User is already banned',
+          },
+          { status: 409 },
+        ),
       ),
-    ) as unknown as typeof global.fetch
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.banUser(TWITCH_TOKEN, TWITCH_BROADCASTER_ID, TWITCH_MODERATOR_ID, {
       user_id: '98765',
@@ -93,16 +109,19 @@ describe('Twitch Moderation', () => {
   })
 
   it('should handle 403 when not a moderator', async () => {
-    global.fetch = mock(async () =>
-      Response.json(
-        {
-          error: 'Forbidden',
-          status: 403,
-          message: 'User does not have the required moderator permissions',
-        },
-        { status: 403 },
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json(
+          {
+            error: 'Forbidden',
+            status: 403,
+            message: 'User does not have the required moderator permissions',
+          },
+          { status: 403 },
+        ),
       ),
-    ) as unknown as typeof global.fetch
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.banUser(TWITCH_TOKEN, TWITCH_BROADCASTER_ID, TWITCH_MODERATOR_ID, {
       user_id: '98765',
@@ -113,9 +132,10 @@ describe('Twitch Moderation', () => {
   })
 
   it('should delete a message successfully', async () => {
-    global.fetch = mock(
-      async () => new Response(null, { status: 204 }),
-    ) as unknown as typeof global.fetch
+    global.fetch = Object.assign(
+      mock(async () => new Response(null, { status: 204 })),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.deleteMessage(
       TWITCH_TOKEN,
@@ -129,16 +149,19 @@ describe('Twitch Moderation', () => {
   })
 
   it('should handle 404 when message not found', async () => {
-    global.fetch = mock(async () =>
-      Response.json(
-        {
-          error: 'Not Found',
-          status: 404,
-          message: 'Message not found',
-        },
-        { status: 404 },
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json(
+          {
+            error: 'Not Found',
+            status: 404,
+            message: 'Message not found',
+          },
+          { status: 404 },
+        ),
       ),
-    ) as unknown as typeof global.fetch
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.deleteMessage(
       TWITCH_TOKEN,
@@ -151,19 +174,26 @@ describe('Twitch Moderation', () => {
     expect(result.error?.code).toBe('TWITCH_NOT_FOUND')
   })
 
-  it('should check moderator status', async () => {
-    global.fetch = mock(async () =>
-      Response.json({
-        data: [
-          {
-            user_id: '654321',
-            user_name: 'ModUser',
-            user_login: 'moduser',
-          },
-        ],
-        pagination: {},
+  it('should check moderator status with the authenticated moderators own token', async () => {
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request, init?: RequestInit) => {
+        expect(fetchUrl(input)).toBe(
+          'https://api.twitch.tv/helix/moderation/channels?user_id=654321&first=100',
+        )
+        expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${TWITCH_TOKEN}`)
+        return Response.json({
+          data: [
+            {
+              broadcaster_id: TWITCH_BROADCASTER_ID,
+              broadcaster_name: 'Creator',
+              broadcaster_login: 'creator',
+            },
+          ],
+          pagination: {},
+        })
       }),
-    ) as unknown as typeof global.fetch
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.isModerator(TWITCH_TOKEN, TWITCH_BROADCASTER_ID, '654321')
 
@@ -171,13 +201,39 @@ describe('Twitch Moderation', () => {
     expect(result.platform).toBe('twitch')
   })
 
-  it('should return false for non-moderator', async () => {
-    global.fetch = mock(async () =>
-      Response.json({
-        data: [],
-        pagination: {},
+  it('finds a moderated channel on a later page instead of accepting any channel', async () => {
+    let calls = 0
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request) => {
+        calls++
+        const url = new URL(fetchUrl(input))
+        expect(url.searchParams.get('user_id')).toBe('654321')
+        if (calls === 1)
+          return Response.json({
+            data: [{ broadcaster_id: 'other' }],
+            pagination: { cursor: 'page2' },
+          })
+        expect(url.searchParams.get('after')).toBe('page2')
+        return Response.json({ data: [{ broadcaster_id: TWITCH_BROADCASTER_ID }], pagination: {} })
       }),
-    ) as unknown as typeof global.fetch
+      { preconnect: originalFetch.preconnect },
+    )
+    expect(
+      (await Twitch.isModerator(TWITCH_TOKEN, TWITCH_BROADCASTER_ID, '654321')).isModerator,
+    ).toBe(true)
+    expect(calls).toBe(2)
+  })
+
+  it('should return false for non-moderator', async () => {
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json({
+          data: [],
+          pagination: {},
+        }),
+      ),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Twitch.isModerator(TWITCH_TOKEN, TWITCH_BROADCASTER_ID, '999999')
 
@@ -191,16 +247,19 @@ describe('Twitch Moderation', () => {
 
 describe('Kick Moderation', () => {
   it('should ban a user permanently on Kick', async () => {
-    global.fetch = mock(async (input: string | URL, init?: RequestInit) => {
-      expect(String(input)).toBe('https://api.kick.com/public/v1/moderation/bans')
-      expect(init?.method).toBe('POST')
-      expect(JSON.parse(String(init?.body))).toEqual({
-        broadcaster_user_id: KICK_BROADCASTER_USER_ID,
-        user_id: 999,
-        reason: 'Harassment',
-      })
-      return Response.json({ data: {} })
-    }) as unknown as typeof global.fetch
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request, init?: RequestInit) => {
+        expect(fetchUrl(input)).toBe('https://api.kick.com/public/v1/moderation/bans')
+        expect(init?.method).toBe('POST')
+        expect(JSON.parse(textBody(init?.body))).toEqual({
+          broadcaster_user_id: KICK_BROADCASTER_USER_ID,
+          user_id: 999,
+          reason: 'Harassment',
+        })
+        return Response.json({ data: {} })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Kick.banUser(KICK_TOKEN, {
       broadcaster_user_id: KICK_BROADCASTER_USER_ID,
@@ -214,15 +273,18 @@ describe('Kick Moderation', () => {
   })
 
   it('should timeout a user for 5 minutes on Kick', async () => {
-    global.fetch = mock(async (input: string | URL, init?: RequestInit) => {
-      expect(String(input)).toBe('https://api.kick.com/public/v1/moderation/bans')
-      expect(JSON.parse(String(init?.body))).toEqual({
-        broadcaster_user_id: KICK_BROADCASTER_USER_ID,
-        user_id: 999,
-        duration: 5,
-      })
-      return Response.json({ data: {} })
-    }) as unknown as typeof global.fetch
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request, init?: RequestInit) => {
+        expect(fetchUrl(input)).toBe('https://api.kick.com/public/v1/moderation/bans')
+        expect(JSON.parse(textBody(init?.body))).toEqual({
+          broadcaster_user_id: KICK_BROADCASTER_USER_ID,
+          user_id: 999,
+          duration: 5,
+        })
+        return Response.json({ data: {} })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Kick.banUser(KICK_TOKEN, {
       broadcaster_user_id: KICK_BROADCASTER_USER_ID,
@@ -235,14 +297,17 @@ describe('Kick Moderation', () => {
   })
 
   it('should handle 401 unauthorized on Kick', async () => {
-    global.fetch = mock(async () =>
-      Response.json(
-        {
-          error: 'Unauthorized',
-        },
-        { status: 401 },
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json(
+          {
+            error: 'Unauthorized',
+          },
+          { status: 401 },
+        ),
       ),
-    ) as unknown as typeof global.fetch
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Kick.banUser(KICK_TOKEN, {
       broadcaster_user_id: KICK_BROADCASTER_USER_ID,
@@ -254,11 +319,14 @@ describe('Kick Moderation', () => {
   })
 
   it('should delete a message on Kick', async () => {
-    global.fetch = mock(async (input: string | URL, init?: RequestInit) => {
-      expect(String(input)).toBe('https://api.kick.com/public/v1/chat/msg-kick-123')
-      expect(init?.method).toBe('DELETE')
-      return new Response(null, { status: 204 })
-    }) as unknown as typeof global.fetch
+    global.fetch = Object.assign(
+      mock(async (input: string | URL | Request, init?: RequestInit) => {
+        expect(fetchUrl(input)).toBe('https://api.kick.com/public/v1/chat/msg-kick-123')
+        expect(init?.method).toBe('DELETE')
+        return new Response(null, { status: 204 })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Kick.deleteMessage(KICK_TOKEN, 'msg-kick-123')
 
@@ -267,14 +335,17 @@ describe('Kick Moderation', () => {
   })
 
   it('should handle 404 when message not found on Kick', async () => {
-    global.fetch = mock(async () =>
-      Response.json(
-        {
-          error: 'Not found',
-        },
-        { status: 404 },
+    global.fetch = Object.assign(
+      mock(async () =>
+        Response.json(
+          {
+            error: 'Not found',
+          },
+          { status: 404 },
+        ),
       ),
-    ) as unknown as typeof global.fetch
+      { preconnect: originalFetch.preconnect },
+    )
 
     const result = await Kick.deleteMessage(KICK_TOKEN, 'msg-invalid')
 

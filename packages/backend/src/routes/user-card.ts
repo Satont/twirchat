@@ -1,6 +1,8 @@
+import { logger } from '@twirchat/shared/logger'
+import { z } from 'zod'
+
 import { fetchUserCardMetadata } from '../api/user-card-metadata.ts'
 import { json, requireClient } from './utils.ts'
-import { logger } from '@twirchat/shared/logger'
 
 const log = logger('user-card-route')
 
@@ -11,7 +13,22 @@ export const userCardRoutes = {
       if (auth instanceof Response) return auth
 
       try {
-        const body = (await req.json()) as import('@twirchat/shared').UserCardMetadataBackendRequest
+        const body = z
+          .object({
+            platform: z.enum(['twitch', 'kick']),
+            platformUserId: z.string(),
+            username: z.string().optional(),
+            channelId: z.string().optional(),
+            channelSlug: z.string().optional(),
+            twitchAuth: z
+              .object({
+                accessToken: z.string(),
+                platformUserId: z.string(),
+                scopes: z.array(z.string()),
+              })
+              .optional(),
+          })
+          .parse(await req.json())
         const { platform, platformUserId } = body
 
         if ((platform !== 'twitch' && platform !== 'kick') || !platformUserId) {
@@ -25,4 +42,4 @@ export const userCardRoutes = {
       }
     },
   },
-} as const
+}

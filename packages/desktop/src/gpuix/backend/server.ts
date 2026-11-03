@@ -1,3 +1,7 @@
+import { logger } from '@twirchat/shared/logger'
+import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
+import type { NormalizedChatMessage, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
+import { z } from 'zod'
 /**
  * GPUIX backend bridge — process bootstrap.
  *
@@ -12,41 +16,53 @@
  * React tree without re-booting (and re-connecting) the whole backend.
  */
 
-import type { NormalizedChatMessage, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
-import type { DesktopToBackendMessage } from '@twirchat/shared'
-import { logger } from '@twirchat/shared/logger'
-
-import { initDb } from '../../store/db'
-import { getClientSecret } from '../../store/client-secret'
-import {
-  AccountStore,
-  ChannelStore,
-  MessageStore,
-  SettingsStore,
-  UsernameColorCache,
-} from '../../store'
+import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
 import { BackendConnection } from '../../backend-connection'
+import { BACKEND_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
 import { pushOverlayEvent, pushOverlayMessage, startOverlayServer } from '../../overlay-server'
-import { TwitchAdapter } from '../../platforms/twitch/adapter'
 import { KickAdapter } from '../../platforms/kick/adapter'
-import { YouTubeAdapter } from '../../platforms/youtube/adapter'
-import { sevenTVService } from '../../seventv'
-import { WatchedChannelManager } from '../../watched-channels/manager'
-import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
+import { TwitchAdapter } from '../../platforms/twitch/adapter'
+import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
+import { createYouTubeChatRelay } from '../../platforms/youtube/relay'
 import { setRuntimeConfig } from '../../runtime-config'
-import { BACKEND_URL } from '../../build-info'
-import { runVelopackStartup } from './updater'
-import type { WebviewSender } from '../../shared/rpc'
-
+import { createAccountSessions } from '../../services/account-sessions'
+import {
+  createChannelActions,
+  DEFAULT_PLAYER_SETTINGS,
+  PLAYER_SETTINGS_KEY,
+  validatePlayerSettings,
+  spawnChannelPlayer,
+} from '../../services/channel-actions'
+import { normalizedChatMessageSchema } from '../../services/persisted-schemas'
+import { createDesktopProviderRuntime } from '../../services/provider-runtime'
+import { createStreamerModeService } from '../../services/streamer-mode'
+import { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
+import { TwitchEventSubClient } from '../../services/twitch-eventsub'
+import { sevenTVService } from '../../seventv'
+import { AccountStore, ChannelStore, SettingsStore, UsernameColorCache } from '../../store'
+import { getClientSecret } from '../../store/client-secret'
+import { getDb } from '../../store/db'
+import { initDb } from '../../store/db'
+import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
+import { WatchedChannelManager } from '../../watched-channels/manager'
+import {
+  createDesktopApi,
+  twitchActivitiesRequest,
+  requestTwitchActivitiesSnapshot,
+  type DesktopApi,
+} from './api'
+import { twitchEventSubscriptionSchema } from './api-schemas'
+import { recordChatMessage } from './chat-history'
 import { createDesktopEvents, type DesktopEvents } from './events'
-import { createDesktopApi, type DesktopApi } from './api'
+import { runVelopackStartup } from './updater'
 
 const log = logger('gpuix-backend')
 
 export interface DesktopBackend {
   api: DesktopApi
   events: DesktopEvents
+  dispose?: () => void
 }
 
 /** Open a URL in the system default browser (replaces Electrobun Utils.openExternal). */
@@ -86,12 +102,20 @@ function boot(): DesktopBackend {
   setRuntimeConfig({ clientSecret })
 
   const events = createDesktopEvents()
+  const providerRuntime = createDesktopProviderRuntime(
+    (platform, channelId, emotes) =>
+      events.emit('channel_emote_catalog', { platform, channelId, emotes }),
+    (platform, authorId, emotes) =>
+      events.emit('author_emote_catalog', { platform, authorId, emotes }),
+  )
+  providerRuntime.start()
   const backendConn = new BackendConnection(clientSecret)
-  const aggregator = new ChatAggregator(500)
+  configureYouTubeChatRelay(createYouTubeChatRelay(backendConn))
+  const aggregator = new ChatAggregator(500, (message) => providerRuntime.enrich(message))
   const currentStatuses = new Map<string, PlatformStatusInfo>()
 
   sevenTVService.sendToBackend = (message) => {
-    backendConn.send(message as DesktopToBackendMessage)
+    backendConn.send(message)
   }
 
   const twitchAdapter = new TwitchAdapter()
@@ -103,33 +127,141 @@ function boot(): DesktopBackend {
 
   startOverlayServer()
 
-  const watchedChannelManager = new WatchedChannelManager()
+  const watchedChannelManager = new WatchedChannelManager((message) =>
+    providerRuntime.enrich(message),
+  )
+  let twitchEventSubConnected = false
+  let twitchActivityRefresh: TwitchActivityRefreshClient | undefined
+  const twitchEventSub = new TwitchEventSubClient({
+    hasAccount: () => !!AccountStore.findByPlatform('twitch'),
+    subscribe: (sessionId, channelSlug) =>
+      twitchActivitiesRequest(
+        'subscribe',
+        { sessionId, channelSlug },
+        z.object({
+          subscriptions: z.array(twitchEventSubscriptionSchema),
+          errors: z.array(z.string()),
+        }),
+      ),
+    unsubscribe: async (ids) => {
+      await twitchActivitiesRequest('unsubscribe', { ids }, z.object({ success: z.boolean() }))
+    },
+    activity: (event) => {
+      if (event.eventType === 'stream.online' || event.eventType === 'stream.offline')
+        twitchActivityRefresh?.setChannelOnline(
+          event.channelId,
+          event.eventType === 'stream.online',
+        )
+      events.emit('twitch_activity', event)
+    },
+    whisper: (event) => events.emit('twitch_whisper', event),
+    status: (status) => {
+      twitchEventSubConnected = status.status === 'connected'
+      events.emit('twitch_eventsub_status', status)
+    },
+  })
+  twitchActivityRefresh = new TwitchActivityRefreshClient({
+    async plan(channelSlug) {
+      const account = AccountStore.findByPlatform('twitch')
+      if (!account)
+        return {
+          mode: 'unavailable',
+          snapshotSections: [],
+          error: 'Connect Twitch to load channel activities.',
+        }
+      const own = channelSlug.toLowerCase() === account.username.toLowerCase()
+      const web = await TwitchWebSessionStore.status()
+      const hasWeb = web.configured && web.userId === account.platformUserId
+      const allowed = (...names: string[]) => names.some((scope) => account.scopes.includes(scope))
+      const polls = own && allowed('channel:read:polls', 'channel:manage:polls')
+      const predictions = own && allowed('channel:read:predictions', 'channel:manage:predictions')
+      const rewards = own && allowed('channel:read:redemptions', 'channel:manage:redemptions')
+      const eventsub = own && twitchEventSubConnected
+      const sections: TwitchActivitySnapshotPart[] = ['pinnedMessage']
+      if ((hasWeb || polls) && !(eventsub && polls)) sections.push('polls')
+      if ((hasWeb || predictions) && !(eventsub && predictions)) sections.push('predictions')
+      if ((hasWeb || rewards) && !(eventsub && rewards)) sections.push('rewards')
+      if (hasWeb) sections.push('pointsBalance')
+      return {
+        mode: eventsub && (polls || predictions || rewards) ? 'eventsub' : 'snapshot',
+        snapshotSections: sections,
+        intervalMs: 15000,
+        ...(!hasWeb && !(polls && predictions && rewards)
+          ? {
+              error:
+                'Save a Twitch web session for viewer polls, predictions, rewards and points. Pin snapshots remain available.',
+            }
+          : {}),
+      }
+    },
+    snapshot: (channelSlug, sections) => requestTwitchActivitiesSnapshot({ channelSlug, sections }),
+    publish: (update) => events.emit('twitch_activity_snapshot', update),
+    capability: (capability) => events.emit('twitch_activity_capability', capability),
+  })
+  let ownActivityChannel = AccountStore.findByPlatform('twitch')?.username
+  if (ownActivityChannel)
+    void twitchEventSub
+      .watch(ownActivityChannel, true)
+      .catch((error) =>
+        events.emit('twitch_eventsub_status', { status: 'error', message: String(error) }),
+      )
+  else twitchEventSub.start()
 
-  // ── Auth flow wiring ──────────────────────────────────────────────────────
+  const refreshTwitchEvents = async () => {
+    const next = AccountStore.findByPlatform('twitch')?.username
+    twitchEventSub.stop()
+    if (ownActivityChannel && ownActivityChannel !== next)
+      await twitchEventSub.watch(ownActivityChannel, false)
+    if (next && next !== ownActivityChannel) await twitchEventSub.watch(next, true)
+    else twitchEventSub.start()
+    ownActivityChannel = next
+    twitchActivityRefresh?.restart()
+  }
 
-  setOnAuthSuccessCallback(async (platform, channelSlug) => {
-    log.info('Authentication successful, reconnecting adapter', { platform })
+  const accountSessions = createAccountSessions({
+    find: (id) => AccountStore.findById(id),
+    active: (platform) => AccountStore.findByPlatform(platform),
+    select: (platform, id) => AccountStore.setActive(platform, id),
+    remove: (id) => AccountStore.delete(id),
+    removeSession: async (account) => {
+      if (account.platform === 'twitch')
+        await TwitchWebSessionStore.clearForUser(account.platformUserId)
+    },
+    disconnect: async (platform) => {
+      const channel = currentStatuses.get(platform)?.channelLogin
+      await aggregator.getAdapter(platform)?.disconnect()
+      providerRuntime.setJoined(`own:${platform}`, platform, null)
+      if (channel) await sevenTVService.unsubscribeFromChannel(platform, channel, `own:${platform}`)
+    },
+    refreshIdentity: async (platform) => {
+      providerRuntime.refreshAccounts()
+      if (platform === 'twitch') await refreshTwitchEvents()
+    },
+    connectOwn: async (platform, account) => {
+      if (!account) return
+      const adapter = aggregator.getAdapter(platform)
+      if (!adapter) return
+      ChannelStore.save(platform, account.username)
+      await adapter.connect(account.username)
+      const status = currentStatuses.get(platform)
+      if (status?.status === 'error')
+        throw new Error(status.error ?? 'The account chat could not connect.')
+      subscribeSevenTvFor(platform, account.username, aggregator)
+    },
+    reconnectWatched: (platform) => watchedChannelManager.reconnectByPlatform(platform),
+    changed: (platform, identityChanged) =>
+      events.emit('accounts_changed', { platform, identityChanged }),
+  })
 
-    const adapter = aggregator.getAdapter(platform)
-    if (!adapter) return
-
-    const targetChannel = channelSlug || ChannelStore.findByPlatform(platform)[0]
-    if (!targetChannel) return
-
+  // OAuth saves and selects atomically, then rejoins through the manual-switch queue.
+  setOnAuthSuccessCallback(async (platform, _channelSlug, accountId) => {
+    if (!accountId) return
     try {
-      await adapter.disconnect()
-      await adapter.connect(targetChannel)
-      subscribeSevenTvFor(platform, targetChannel, aggregator)
+      await accountSessions.select(platform, accountId, true)
     } catch (error) {
-      log.error('Failed to reconnect adapter after auth', { platform, error: String(error) })
+      log.error('Account saved but reconnection failed', { platform, error: String(error) })
+      events.emit('auth_error', { platform, error: String(error) })
     }
-
-    await watchedChannelManager.reconnectByPlatform(platform).catch((error) => {
-      log.error('Failed to reconnect watched channels after auth', {
-        platform,
-        error: String(error),
-      })
-    })
   })
 
   // Auth server pushes into the event bus through a WebviewSender-shaped adapter.
@@ -152,11 +284,55 @@ function boot(): DesktopBackend {
     channel_emote_added: forward('channel_emote_added'),
     channel_emote_removed: forward('channel_emote_removed'),
     channel_emote_updated: forward('channel_emote_updated'),
-  } as unknown as WebviewSender)
+  })
 
   startAuthServer()
 
+  const channelActions = createChannelActions({
+    activeAccounts: () => AccountStore.findAllActive(),
+    reconnectOwn: (platform) => accountSessions.reconnectOwn(platform),
+    reconnectWatched: (id) => watchedChannelManager.reconnect(id),
+    reloadEmotes: (platform, channel, kind) => providerRuntime.reload(platform, channel, kind),
+    readPlayerSettings: () => {
+      const row = getDb()
+        .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
+        .get(`gpuix_ui_${PLAYER_SETTINGS_KEY}`)
+      return row
+        ? validatePlayerSettings(JSON.parse(row.value))
+        : structuredClone(DEFAULT_PLAYER_SETTINGS)
+    },
+    writePlayerSettings: (settings) => {
+      getDb().run(
+        'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+        [`gpuix_ui_${PLAYER_SETTINGS_KEY}`, JSON.stringify(settings)],
+      )
+    },
+    openBrowser: (url) => openBrowser(url),
+    spawnPlayer: spawnChannelPlayer,
+  })
+  const streamerMode = createStreamerModeService({
+    read: () => {
+      const row = getDb()
+        .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key=?')
+        .get('gpuix_ui_streamer_mode_v1')
+      return row ? JSON.parse(row.value) : null
+    },
+    write: (value) => {
+      getDb().run(
+        'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+        ['gpuix_ui_streamer_mode_v1', JSON.stringify(value)],
+      )
+    },
+    publish: (status) => events.emit('streamer_mode_changed', status),
+  })
+  streamerMode.start()
   const api = createDesktopApi({
+    streamerMode,
+    channelActions,
+    accountSessions,
+    providerRuntime,
+    twitchActivityRefresh,
+    twitchEventSub,
     aggregator,
     backendConn,
     watchedChannelManager,
@@ -167,35 +343,77 @@ function boot(): DesktopBackend {
 
   // Auto-check on startup (auto-downloads; the toast offers "restart to apply").
   if (SettingsStore.get().autoCheckUpdates) {
-    void api.checkForUpdate().then((result) => {
-      if (result.updateAvailable) void api.downloadUpdate()
-    })
+    void api
+      .checkForUpdate()
+      .then(async (result) => {
+        if (result.updateAvailable) await api.downloadUpdate()
+      })
+      .catch((error) => log.warn('Automatic update failed', { error: String(error) }))
   }
 
   // ── Adapter events → stores / overlay / UI ────────────────────────────────
 
   aggregator.onMessage((msg) => {
-    MessageStore.save(msg)
+    recordChatMessage(msg)
     UsernameColorCache.addMessage(msg)
     pushOverlayMessage(msg)
     events.emit('chat_message', msg)
   })
 
+  const seenChatEvents = new Set<string>()
+  const emitChatEvent = (event: Parameters<typeof pushOverlayEvent>[0]) => {
+    const channelId =
+      typeof event.data.channelId === 'string'
+        ? event.data.channelId
+        : (AccountStore.findByPlatform(event.platform)?.username ?? '')
+    const key = JSON.stringify([
+      event.platform,
+      event.platform === 'youtube' && channelId.startsWith('UC')
+        ? channelId
+        : channelId.replace(/^@/, '').toLowerCase(),
+      event.id,
+    ])
+    if (seenChatEvents.has(key)) return
+    seenChatEvents.add(key)
+    if (seenChatEvents.size > 10000) seenChatEvents.delete(seenChatEvents.values().next().value!)
+    events.emit('chat_event', event)
+  }
   aggregator.onEvent((ev) => {
     pushOverlayEvent(ev)
-    events.emit('chat_event', ev)
+    emitChatEvent(ev)
   })
+  watchedChannelManager.onEvent((_channelId, event) => emitChatEvent(event))
 
   aggregator.onStatus((s) => {
+    providerRuntime.setJoined(
+      `own:${s.platform}`,
+      s.platform,
+      s.status === 'connected' ? (s.channelLogin ?? null) : null,
+    )
     currentStatuses.set(s.platform, s)
     events.emit('platform_status', s)
   })
+  aggregator.onModeration((outcome) => events.emit('chat_moderation', outcome))
+  aggregator.onRoomState((state) => events.emit('channel_room_state', state))
+  aggregator.onChatClear((clear) => events.emit('chat_clear', clear))
+  watchedChannelManager.onModeration((outcome) => events.emit('chat_moderation', outcome))
+  watchedChannelManager.onRoomState((state) => events.emit('channel_room_state', state))
+  watchedChannelManager.onChatClear((clear) => events.emit('chat_clear', clear))
 
   watchedChannelManager.onMessage((channelId, message) => {
+    recordChatMessage(message)
+    UsernameColorCache.addMessage(message)
     events.emit('watched_channel_message', { channelId, message })
   })
 
   watchedChannelManager.onStatus((channelId, status) => {
+    const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === channelId)
+    if (channel)
+      providerRuntime.setJoined(
+        `watched:${channelId}`,
+        channel.platform,
+        status.status === 'connected' ? channel.channelSlug : null,
+      )
     events.emit('watched_channel_status', { channelId, status })
   })
 
@@ -222,6 +440,7 @@ function boot(): DesktopBackend {
       }
       case 'seventv_emote_set': {
         sevenTVService.handleEmoteSet(msg.platform, msg.channelId, msg.emotes)
+        providerRuntime.refreshChannel(msg.platform, msg.channelId)
         events.emit('channel_emotes_set', {
           platform: msg.platform,
           channelId: msg.channelId,
@@ -231,6 +450,7 @@ function boot(): DesktopBackend {
       }
       case 'seventv_emote_added': {
         sevenTVService.handleEmoteAdded(msg.platform, msg.channelId, msg.emote)
+        providerRuntime.refreshChannel(msg.platform, msg.channelId)
         events.emit('channel_emote_added', {
           platform: msg.platform,
           channelId: msg.channelId,
@@ -240,6 +460,7 @@ function boot(): DesktopBackend {
       }
       case 'seventv_emote_removed': {
         sevenTVService.handleEmoteRemoved(msg.platform, msg.channelId, msg.emoteId)
+        providerRuntime.refreshChannel(msg.platform, msg.channelId)
         events.emit('channel_emote_removed', {
           platform: msg.platform,
           channelId: msg.channelId,
@@ -249,6 +470,7 @@ function boot(): DesktopBackend {
       }
       case 'seventv_emote_updated': {
         sevenTVService.handleEmoteUpdated(msg.platform, msg.channelId, msg.emoteId, msg.alias)
+        providerRuntime.refreshChannel(msg.platform, msg.channelId)
         events.emit('channel_emote_updated', {
           platform: msg.platform,
           channelId: msg.channelId,
@@ -278,33 +500,14 @@ function boot(): DesktopBackend {
     backendConn.send({ type: 'ping' })
   }, 30_000)
 
-  // ── Auto-connect persisted channels + authenticated own channels ──────────
+  // ── Connect authenticated own channels; watched chats follow open layouts ──
 
-  const savedChannels = ChannelStore.findAll()
-  const connectedPlatforms = new Set<string>()
-
-  for (const [platform, slugs] of Object.entries(savedChannels)) {
-    for (const slug of slugs ?? []) {
-      const adapter = aggregator.getAdapter(platform as Platform)
-      if (!adapter) continue
-      connectedPlatforms.add(platform)
-      adapter
-        .connect(slug)
-        .then(() => subscribeSevenTvFor(platform as Platform, slug, aggregator))
-        .catch((error) => {
-          log.error('Auto-connect failed', { platform, slug, error: String(error) })
-        })
-    }
-  }
-
-  for (const account of AccountStore.findAll()) {
-    if (account.platform !== 'youtube' && account.platform !== 'kick') continue
-    if (connectedPlatforms.has(account.platform)) continue
-
+  for (const account of AccountStore.findAllActive()) {
     const adapter = aggregator.getAdapter(account.platform)
     if (!adapter) continue
 
     const channelSlug = account.username
+    providerRuntime.setJoined(`own:${account.platform}`, account.platform, channelSlug)
     ChannelStore.save(account.platform, channelSlug)
     adapter
       .connect(channelSlug)
@@ -318,10 +521,6 @@ function boot(): DesktopBackend {
       })
   }
 
-  watchedChannelManager.autoConnect().catch((error) => {
-    log.error('Failed to auto-connect watched channels', { error: String(error) })
-  })
-
   // Dev-only chat injection endpoint (same as the Electrobun build, port 45824).
   if (nodeEnv !== 'production') {
     Bun.serve({
@@ -329,18 +528,19 @@ function boot(): DesktopBackend {
       async fetch(req) {
         const url = new URL(req.url)
         if (url.pathname === '/dev/inject-chat' && req.method === 'POST') {
-          const body = (await req.json()) as NormalizedChatMessage
-          events.emit('chat_message', { ...body, timestamp: new Date(body.timestamp) })
+          const parsed = normalizedChatMessageSchema.safeParse(await req.json().catch(() => null))
+          if (!parsed.success) return new Response('Invalid chat message', { status: 400 })
+          events.emit('chat_message', parsed.data)
           return new Response('ok')
         }
         if (url.pathname === '/dev/hook' && req.method === 'POST') {
           // Dev-only: let the UI layer register debug actions (see main.tsx).
-          const body = (await req.json()) as { action: string; payload?: unknown }
-          const hook = (
-            globalThis as {
-              __twirchatDevHook?: (action: string, payload?: unknown) => Promise<unknown>
-            }
-          ).__twirchatDevHook
+          const parsed = z
+            .object({ action: z.string(), payload: z.unknown().optional() })
+            .safeParse(await req.json().catch(() => null))
+          if (!parsed.success) return new Response('Invalid debug action', { status: 400 })
+          const body = parsed.data
+          const hook = globalThis.__twirchatDevHook
           if (!hook) return new Response('no hook', { status: 404 })
           const result = await hook(body.action, body.payload)
           return new Response(JSON.stringify(result ?? null), {
@@ -354,7 +554,16 @@ function boot(): DesktopBackend {
   }
 
   log.info('GPUIX backend ready')
-  return { api, events }
+  return {
+    api,
+    events,
+    dispose: () => {
+      streamerMode.stop()
+      providerRuntime.stop()
+      twitchEventSub.stop()
+      twitchActivityRefresh?.stop()
+    },
+  }
 }
 
 function subscribeSevenTvFor(
@@ -366,7 +575,8 @@ function subscribeSevenTvFor(
   let sevenTvChannelId = channelSlug
   let sevenTvPlatformUserId: string | undefined
   if (platform === 'kick' && adapter) {
-    const broadcasterUserId = (adapter as KickAdapter).getBroadcasterUserId()
+    const broadcasterUserId =
+      adapter instanceof KickAdapter ? adapter.getBroadcasterUserId() : undefined
     if (broadcasterUserId) sevenTvChannelId = String(broadcasterUserId)
   } else if (platform === 'twitch') {
     const twitchAccount = AccountStore.findByPlatform('twitch')
@@ -375,7 +585,13 @@ function subscribeSevenTvFor(
     }
   }
   sevenTVService
-    .subscribeToChannel(platform, sevenTvChannelId, [channelSlug], sevenTvPlatformUserId)
+    .subscribeToChannel(
+      platform,
+      sevenTvChannelId,
+      [channelSlug],
+      sevenTvPlatformUserId,
+      `own:${platform}`,
+    )
     .catch((error) => {
       log.error('Failed to subscribe to 7TV', { platform, channelSlug, error: String(error) })
     })
@@ -398,14 +614,14 @@ function buildSevenTvSystemMessage(msg: {
     id: '7tv-system',
     username: '7TV',
   }
-  const base = {
+  const base: Omit<NormalizedChatMessage, 'text'> = {
     author,
     channelId: msg.channelId,
-    emotes: [] as NormalizedChatMessage['emotes'],
+    emotes: [],
     id: `7tv-system-${Date.now()}-${Math.random()}`,
     platform: msg.platform,
     timestamp: new Date(),
-    type: 'system' as const,
+    type: 'system',
   }
 
   if (msg.action === 'set_changed') {
@@ -443,16 +659,11 @@ function buildSevenTvSystemMessage(msg: {
 
 // ── Singleton (survives `bun --hot` reloads) ────────────────────────────────
 
-const globalKey = '__twirchatGpuixBackend'
-
-interface GpuixGlobal {
-  [globalKey]?: DesktopBackend
+declare global {
+  var __twirchatGpuixBackend: DesktopBackend | undefined
+  var __twirchatDevHook: ((action: string, payload?: unknown) => Promise<unknown>) | undefined
 }
 
 export function getDesktopBackend(): DesktopBackend {
-  const g = globalThis as GpuixGlobal
-  if (!g[globalKey]) {
-    g[globalKey] = boot()
-  }
-  return g[globalKey]
+  return (globalThis.__twirchatGpuixBackend ??= boot())
 }

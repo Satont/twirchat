@@ -5,18 +5,18 @@
  * Vue handler in ChatList.vue.
  */
 
-import { useEffect, useRef, useState } from 'react'
 import { useGpuixRequired } from '@gpuix/react'
 import type { AppSettings } from '@twirchat/shared/types'
+import { useEffect, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
-import { useOverlayClose } from '../state/overlays'
 import { settingsStore } from '../state/app'
+import { useOverlayClose } from '../state/overlays'
 import { accent } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
-import { Switch } from './ui/Switch'
 import { Slider } from './ui/Slider'
+import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
 export function ChatAppearancePopover({ settings }: { settings: AppSettings }) {

@@ -1,0 +1,1125 @@
+diff --git a/crates/gpui/src/app.rs b/crates/gpui/src/app.rs
+index a2c2aff..216849e 100644
+--- a/crates/gpui/src/app.rs
++++ b/crates/gpui/src/app.rs
+@@ -3015,6 +3015,9 @@ pub struct KeystrokeEvent {
+     /// The keystroke that occurred
+     pub keystroke: Keystroke,
+ 
++    /// Whether this key down is a native held-key repeat.
++    pub is_held: bool,
++
+     /// The action that was resolved for the keystroke, if any
+     pub action: Option<Box<dyn Action>>,
+ 
+diff --git a/crates/gpui/src/platform.rs b/crates/gpui/src/platform.rs
+index e37ab99..18a299b 100644
+--- a/crates/gpui/src/platform.rs
++++ b/crates/gpui/src/platform.rs
+@@ -818,6 +818,15 @@ pub enum TextInputStateChange {
+     ContentChanged,
+ }
+ 
++/// Native window operations whose support differs between platform protocols.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct NativeWindowCapabilities {
++    /// Whether the application can request a global window origin.
++    pub position: bool,
++    /// Whether pointer input can pass through the whole surface.
++    pub pointer_passthrough: bool,
++}
++
+ #[expect(missing_docs)]
+ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+     fn bounds(&self) -> Bounds<Pixels>;
+@@ -825,6 +834,22 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+     fn window_bounds(&self) -> WindowBounds;
+     fn content_size(&self) -> Size<Pixels>;
+     fn resize(&mut self, size: Size<Pixels>);
++    /// Request client size and platform origin. Unsupported moves return an error.
++    fn set_native_bounds(&mut self, bounds: Bounds<Pixels>) -> anyhow::Result<()> {
++        if bounds.origin != self.bounds().origin {
++            anyhow::bail!("This platform does not support application-positioned windows");
++        }
++        self.resize(bounds.size);
++        Ok(())
++    }
++    /// Native protocol capabilities; unsupported operations are never reported as available.
++    fn native_window_capabilities(&self) -> NativeWindowCapabilities {
++        NativeWindowCapabilities::default()
++    }
++    /// Enable or disable whole-surface pointer passthrough.
++    fn set_pointer_passthrough(&self, _enabled: bool) -> anyhow::Result<()> {
++        anyhow::bail!("This platform does not support pointer passthrough")
++    }
+     fn scale_factor(&self) -> f32;
+     fn appearance(&self) -> WindowAppearance;
+     fn display(&self) -> Option<Rc<dyn PlatformDisplay>>;
+@@ -849,6 +874,12 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+     fn request_attention(&self) {}
+     fn is_active(&self) -> bool;
+     fn is_hovered(&self) -> bool;
++    /// Actual compositor visibility; unavailable protocols must return None.
++    fn native_window_visibility_state(
++        &self,
++    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicU8>> {
++        None
++    }
+     fn background_appearance(&self) -> WindowBackgroundAppearance;
+     fn set_title(&mut self, title: &str);
+     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance);
+diff --git a/crates/gpui/src/queue.rs b/crates/gpui/src/queue.rs
+index 76f6d67..ef71ff1 100644
+--- a/crates/gpui/src/queue.rs
++++ b/crates/gpui/src/queue.rs
+@@ -41,6 +41,13 @@ impl<T> PriorityQueueState<T> {
+         }
+ 
+         let mut queues = self.queues.lock();
++        if self
++            .receiver_count
++            .load(std::sync::atomic::Ordering::Acquire)
++            == 0
++        {
++            return Err(SendError(item));
++        }
+         Self::push(&mut queues, priority, item);
+         self.condvar.notify_one();
+         Ok(())
+@@ -61,6 +68,13 @@ impl<T> PriorityQueueState<T> {
+             }
+             std::hint::spin_loop();
+         };
++        if self
++            .receiver_count
++            .load(std::sync::atomic::Ordering::Acquire)
++            == 0
++        {
++            return Err(SendError(item));
++        }
+         Self::push(&mut queues, priority, item);
+         self.condvar.notify_one();
+         Ok(())
+@@ -80,12 +94,10 @@ impl<T> PriorityQueueState<T> {
+     fn recv<'a>(&'a self) -> Result<parking_lot::MutexGuard<'a, PriorityQueues<T>>, RecvError> {
+         let mut queues = self.queues.lock();
+ 
+-        let sender_count = self.sender_count.load(std::sync::atomic::Ordering::Relaxed);
+-        if queues.is_empty() && sender_count == 0 {
+-            return Err(crate::queue::RecvError);
+-        }
+-
+         while queues.is_empty() {
++            if self.sender_count.load(std::sync::atomic::Ordering::Acquire) == 0 {
++                return Err(crate::queue::RecvError);
++            }
+             self.condvar.wait(&mut queues);
+         }
+ 
+@@ -155,9 +167,17 @@ impl<T> PriorityQueueSender<T> {
+ 
+ impl<T> Drop for PriorityQueueSender<T> {
+     fn drop(&mut self) {
+-        self.state
++        if self
++            .state
+             .sender_count
+-            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
++            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel)
++            == 1
++        {
++            // Synchronize with the receiver's check-and-wait to avoid losing
++            // the disconnect notification while every worker is idle.
++            let _queues = self.state.queues.lock();
++            self.state.condvar.notify_all();
++        }
+     }
+ }
+ 
+@@ -359,9 +379,27 @@ impl<T> PriorityQueueReceiver<T> {
+ 
+ impl<T> Drop for PriorityQueueReceiver<T> {
+     fn drop(&mut self) {
+-        self.state
++        if self
++            .state
+             .receiver_count
+-            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
++            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel)
++            == 1
++        {
++            // Queued futures can own the dispatcher that owns this sender.
++            // Drop them outside the lock, on the receiver's owning thread.
++            let pending = {
++                let mut queues = self.state.queues.lock();
++                std::mem::replace(
++                    &mut *queues,
++                    PriorityQueues {
++                        high_priority: VecDeque::new(),
++                        medium_priority: VecDeque::new(),
++                        low_priority: VecDeque::new(),
++                    },
++                )
++            };
++            drop(pending);
++        }
+     }
+ }
+ 
+diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
+index 076d3c8..5a01b0e 100644
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -2261,6 +2261,7 @@ impl Window {
+             (callback)(
+                 &KeystrokeEvent {
+                     keystroke: key_down_event.keystroke.clone(),
++                    is_held: key_down_event.is_held,
+                     action: action.as_ref().map(|action| action.boxed_clone()),
+                     context_stack: context_stack.clone(),
+                 },
+@@ -2286,6 +2287,7 @@ impl Window {
+                 (callback)(
+                     &KeystrokeEvent {
+                         keystroke: key_down_event.keystroke.clone(),
++                        is_held: key_down_event.is_held,
+                         action: None,
+                         context_stack: context_stack.clone(),
+                     },
+@@ -2534,6 +2536,21 @@ impl Window {
+         self.platform_window.resize(size);
+     }
+ 
++    /// Request client size and platform origin without changing activation or stacking.
++    pub fn set_native_bounds(&mut self, bounds: Bounds<Pixels>) -> anyhow::Result<()> {
++        self.platform_window.set_native_bounds(bounds)
++    }
++
++    /// The native operations supported by this window's actual backend.
++    pub fn native_window_capabilities(&self) -> crate::NativeWindowCapabilities {
++        self.platform_window.native_window_capabilities()
++    }
++
++    /// Make pointer input pass through this window while preserving its pixels.
++    pub fn set_pointer_passthrough(&self, enabled: bool) -> anyhow::Result<()> {
++        self.platform_window.set_pointer_passthrough(enabled)
++    }
++
+     /// Returns whether or not the window is currently fullscreen
+     pub fn is_fullscreen(&self) -> bool {
+         self.platform_window.is_fullscreen()
+@@ -2571,6 +2588,13 @@ impl Window {
+     }
+ 
+     /// Returns whether this window is focused by the operating system (receiving key events).
++    /// Returns actual compositor visibility, independently of keyboard focus.
++    pub fn native_window_visibility_state(
++        &self,
++    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicU8>> {
++        self.platform_window.native_window_visibility_state()
++    }
++
+     pub fn is_window_active(&self) -> bool {
+         self.active.get()
+     }
+diff --git a/crates/gpui_linux/Cargo.toml b/crates/gpui_linux/Cargo.toml
+index 9956821..43c28fa 100644
+--- a/crates/gpui_linux/Cargo.toml
++++ b/crates/gpui_linux/Cargo.toml
+@@ -120,6 +120,7 @@ x11rb = { version = "0.13.1", features = [
+     "resource_manager",
+     "sync",
+     "dri3",
++    "shape",
+ ], optional = true }
+ # WARNING: If you change this, you must also publish a new version of zed-xim to crates.io
+ xim = { git = "https://github.com/zed-industries/xim-rs.git", rev = "16f35a2c881b815a2b6cdfd6687988e84f8447d8", features = [
+diff --git a/crates/gpui_linux/src/linux/dispatcher.rs b/crates/gpui_linux/src/linux/dispatcher.rs
+index fd9caf8..e187568 100644
+--- a/crates/gpui_linux/src/linux/dispatcher.rs
++++ b/crates/gpui_linux/src/linux/dispatcher.rs
+@@ -19,9 +19,12 @@ struct TimerAfter {
+ 
+ pub(crate) struct LinuxDispatcher {
+     main_sender: PriorityQueueCalloopSender<RunnableVariant>,
++    retired_foreground: parking_lot::Mutex<Vec<RunnableVariant>>,
+     timer_sender: Sender<TimerAfter>,
+     background_sender: PriorityQueueSender<RunnableVariant>,
+     _background_threads: Vec<thread::JoinHandle<()>>,
++    timer_signal: calloop::LoopSignal,
++    timer_thread: parking_lot::Mutex<Option<thread::JoinHandle<()>>>,
+     main_thread_id: thread::ThreadId,
+ }
+ 
+@@ -33,7 +36,7 @@ impl LinuxDispatcher {
+         let thread_count =
+             std::thread::available_parallelism().map_or(MIN_THREADS, |i| i.get().max(MIN_THREADS));
+ 
+-        let mut background_threads = (0..thread_count)
++        let background_threads = (0..thread_count)
+             .map(|i| {
+                 let receiver: PriorityQueueReceiver<RunnableVariant> = background_receiver.clone();
+                 std::thread::Builder::new()
+@@ -52,6 +55,7 @@ impl LinuxDispatcher {
+             .collect::<Vec<_>>();
+ 
+         let (timer_sender, timer_channel) = calloop::channel::channel::<TimerAfter>();
++        let (signal_sender, signal_receiver) = std::sync::mpsc::sync_channel(1);
+         let timer_thread = std::thread::Builder::new()
+             .name("Timer".to_owned())
+             .spawn(move || {
+@@ -59,10 +63,17 @@ impl LinuxDispatcher {
+                     EventLoop::try_new().expect("Failed to initialize timer loop!");
+ 
+                 let handle = event_loop.handle();
+-                let timer_handle = event_loop.handle();
++                let timer_handle = event_loop.handle().downgrade();
++                let signal = event_loop.get_signal();
++                signal_sender
++                    .send(signal.clone())
++                    .expect("Timer owner stopped before initialization");
+                 handle
+                     .insert_source(timer_channel, move |e, _, _| {
+                         if let channel::Event::Msg(timer) = e {
++                            let Some(timer_handle) = timer_handle.upgrade() else {
++                                return;
++                            };
+                             let mut runnable = Some(timer.runnable);
+                             timer_handle
+                                 .insert_source(
+@@ -79,6 +90,8 @@ impl LinuxDispatcher {
+                                     },
+                                 )
+                                 .expect("Failed to start timer");
++                        } else if matches!(e, channel::Event::Closed) {
++                            signal.stop();
+                         }
+                     })
+                     .expect("Failed to start timer thread");
+@@ -87,16 +100,53 @@ impl LinuxDispatcher {
+             })
+             .unwrap();
+ 
+-        background_threads.push(timer_thread);
++        let timer_signal = signal_receiver
++            .recv()
++            .expect("Timer thread failed to initialize");
+ 
+         Self {
+             main_sender,
++            retired_foreground: parking_lot::Mutex::new(Vec::new()),
+             timer_sender,
+             background_sender,
+             _background_threads: background_threads,
++            timer_signal,
++            timer_thread: parking_lot::Mutex::new(Some(timer_thread)),
+             main_thread_id: thread::current().id(),
+         }
+     }
++
++    pub(crate) fn finish_shutdown(&self) {
++        assert_eq!(thread::current().id(), self.main_thread_id);
++        loop {
++            let pending = std::mem::take(&mut *self.retired_foreground.lock());
++            if pending.is_empty() {
++                break;
++            }
++            // No queue/notification lock is held when local futures are freed.
++            drop(pending);
++        }
++    }
++
++    pub(crate) fn shutdown(&self) {
++        // Delayed runnables can themselves retain the dispatcher and its channel
++        // sender. Channel closure alone therefore cannot stop this event loop.
++        self.timer_signal.stop();
++        self.timer_signal.wakeup();
++        if let Some(thread) = self.timer_thread.lock().take() {
++            if thread.thread().id() != thread::current().id() {
++                if thread.join().is_err() {
++                    log::error!("Linux dispatcher timer thread panicked during shutdown");
++                }
++            }
++        }
++    }
++}
++
++impl Drop for LinuxDispatcher {
++    fn drop(&mut self) {
++        self.shutdown();
++    }
+ }
+ 
+ impl PlatformDispatcher for LinuxDispatcher {
+@@ -119,10 +169,16 @@ impl PlatformDispatcher for LinuxDispatcher {
+                 // This is usually safe because we only poll it on the main thread.
+                 // However if the send fails, we know that:
+                 // 1. main_receiver has been dropped (which implies the app is shutting down)
+-                // 2. we are on a background thread.
+-                // It is not safe to drop something !Send on the wrong thread, and
+-                // the app will exit soon anyway, so we must forget the runnable.
+-                std::mem::forget(runnable);
++                // A !Send future can be dropped on its owning UI thread. Late
++                // background completion cannot safely release it there.
++                if self.is_main_thread() {
++                    // Waking a task can occur while event_listener holds its
++                    // notification mutex. Dropping its future inline would
++                    // reenter that mutex through the listener destructor.
++                    self.retired_foreground.lock().push(runnable.0);
++                } else {
++                    std::mem::forget(runnable);
++                }
+             });
+     }
+ 
+diff --git a/crates/gpui_linux/src/linux/platform.rs b/crates/gpui_linux/src/linux/platform.rs
+index 53dec5d..a729fbc 100644
+--- a/crates/gpui_linux/src/linux/platform.rs
++++ b/crates/gpui_linux/src/linux/platform.rs
+@@ -115,7 +115,19 @@ pub(crate) struct PlatformHandlers {
+     pub(crate) system_wake: Option<Box<dyn FnMut()>>,
+ }
+ 
++// Kept as the last LinuxCommon field so platform callbacks, event-loop
++// sources, and executors release their local futures before this final drain.
++struct DispatcherCleanup(Arc<LinuxDispatcher>);
++
++impl Drop for DispatcherCleanup {
++    fn drop(&mut self) {
++        self.0.shutdown();
++        self.0.finish_shutdown();
++    }
++}
++
+ pub(crate) struct LinuxCommon {
++    dispatcher: Arc<LinuxDispatcher>,
+     pub(crate) background_executor: BackgroundExecutor,
+     pub(crate) foreground_executor: ForegroundExecutor,
+     pub(crate) text_system: Arc<dyn PlatformTextSystem>,
+@@ -133,6 +145,7 @@ pub(crate) struct LinuxCommon {
+     )]
+     wake_sender: Sender<()>,
+     wake_listener_started: bool,
++    _dispatcher_cleanup: DispatcherCleanup,
+ }
+ 
+ impl LinuxCommon {
+@@ -158,8 +171,9 @@ impl LinuxCommon {
+         let background_executor = BackgroundExecutor::new(dispatcher.clone());
+ 
+         let common = LinuxCommon {
++            dispatcher: dispatcher.clone(),
+             background_executor,
+-            foreground_executor: ForegroundExecutor::new(dispatcher),
++            foreground_executor: ForegroundExecutor::new(dispatcher.clone()),
+             text_system,
+             appearance: WindowAppearance::Light,
+             auto_hide_scrollbars: false,
+@@ -172,11 +186,16 @@ impl LinuxCommon {
+             ),
+             wake_sender,
+             wake_listener_started: false,
++            _dispatcher_cleanup: DispatcherCleanup(dispatcher.clone()),
+         };
+ 
+         (common, main_receiver, wake_receiver)
+     }
+ 
++    pub(crate) fn shutdown_dispatcher(&self) {
++        self.dispatcher.shutdown();
++    }
++
+     pub(crate) fn start_wake_listener(&mut self) {
+         if !self.wake_listener_started {
+             #[cfg(all(target_os = "linux", any(feature = "wayland", feature = "x11")))]
+@@ -275,6 +294,8 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
+         if let Some(mut fun) = quit {
+             fun();
+         }
++        let dispatcher = self.inner.with_common(|common| common.dispatcher.clone());
++        dispatcher.finish_shutdown();
+     }
+ 
+     fn quit(&self) {
+diff --git a/crates/gpui_linux/src/linux/wayland/client.rs b/crates/gpui_linux/src/linux/wayland/client.rs
+index a5c6dc8..734efd2 100644
+--- a/crates/gpui_linux/src/linux/wayland/client.rs
++++ b/crates/gpui_linux/src/linux/wayland/client.rs
+@@ -260,7 +260,7 @@ impl Globals {
+             primary_selection_manager: globals.bind(&qh, 1..=1, ()).ok(),
+             shm: globals.bind(&qh, 1..=1, ()).unwrap(),
+             seat,
+-            wm_base: globals.bind(&qh, 1..=5, ()).unwrap(),
++            wm_base: globals.bind(&qh, 1..=6, ()).unwrap(),
+             viewporter: globals.bind(&qh, 1..=1, ()).ok(),
+             fractional_scale_manager: globals.bind(&qh, 1..=1, ()).ok(),
+             decoration_manager: globals.bind(&qh, 1..=1, ()).ok(),
+@@ -792,9 +792,12 @@ impl WaylandClient {
+         let handle = event_loop.handle();
+         handle
+             .insert_source(main_receiver, {
+-                let handle = handle.clone();
++                let handle = handle.downgrade();
+                 move |event, _, _: &mut WaylandClientStatePtr| {
+                     if let calloop::channel::Event::Msg(runnable) = event {
++                        let Some(handle) = handle.upgrade() else {
++                            return;
++                        };
+                         handle.insert_idle(|_| {
+                             let location = runnable.metadata().location;
+                             let spawned = runnable.metadata().spawned;
+@@ -1203,6 +1206,7 @@ impl LinuxClient for WaylandClient {
+                 |_| {},
+             )
+             .log_err();
++        self.0.borrow().common.shutdown_dispatcher();
+     }
+ 
+     fn write_to_primary(&self, item: gpui::ClipboardItem) {
+diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/src/linux/wayland/window.rs
+index 2d25416..be441c0 100644
+--- a/crates/gpui_linux/src/linux/wayland/window.rs
++++ b/crates/gpui_linux/src/linux/wayland/window.rs
+@@ -121,6 +121,7 @@ pub struct WaylandWindowState {
+     client: WaylandClientStatePtr,
+     handle: AnyWindowHandle,
+     active: bool,
++    visibility: std::sync::Arc<std::sync::atomic::AtomicU8>,
+     hovered: bool,
+     redraw_requested: bool,
+     presentation: PresentationState,
+@@ -621,6 +622,7 @@ impl WaylandWindowState {
+             appearance,
+             handle,
+             active: false,
++            visibility: std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0)),
+             hovered: false,
+             redraw_requested: false,
+             presentation: PresentationState::Unpresented,
+@@ -1192,6 +1194,7 @@ impl WaylandWindowStatePtr {
+                 let mut fullscreen = false;
+                 let mut maximized = false;
+                 let mut resizing = false;
++                let mut suspended = false;
+ 
+                 for state in states {
+                     match state {
+@@ -1202,6 +1205,7 @@ impl WaylandWindowStatePtr {
+                             fullscreen = true;
+                         }
+                         xdg_toplevel::State::Resizing => resizing = true,
++                        xdg_toplevel::State::Suspended => suspended = true,
+                         xdg_toplevel::State::TiledTop => {
+                             tiling.top = true;
+                         }
+@@ -1225,6 +1229,16 @@ impl WaylandWindowStatePtr {
+                 }
+ 
+                 let mut state = self.state.borrow_mut();
++                state.visibility.store(
++                    if state.globals.wm_base.version() < 6 {
++                        0
++                    } else if suspended {
++                        2
++                    } else {
++                        1
++                    },
++                    std::sync::atomic::Ordering::Release,
++                );
+                 state.in_progress_configure = Some(InProgressConfigure {
+                     size,
+                     fullscreen,
+@@ -1704,6 +1718,26 @@ impl PlatformWindow for WaylandWindow {
+             .detach();
+     }
+ 
++    fn native_window_capabilities(&self) -> gpui::NativeWindowCapabilities {
++        gpui::NativeWindowCapabilities {
++            position: false,
++            pointer_passthrough: true,
++        }
++    }
++
++    fn set_native_bounds(&mut self, bounds: Bounds<Pixels>) -> anyhow::Result<()> {
++        if bounds.origin != self.bounds().origin {
++            anyhow::bail!("Wayland compositors control global window positions");
++        }
++        PlatformWindow::resize(self, bounds.size);
++        Ok(())
++    }
++
++    fn set_pointer_passthrough(&self, enabled: bool) -> anyhow::Result<()> {
++        self.set_input_region(if enabled { Some(&[]) } else { None });
++        Ok(())
++    }
++
+     fn scale_factor(&self) -> f32 {
+         self.borrow().scale
+     }
+@@ -1781,6 +1815,12 @@ impl PlatformWindow for WaylandWindow {
+         self.borrow().active
+     }
+ 
++    fn native_window_visibility_state(
++        &self,
++    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicU8>> {
++        Some(self.0.state.borrow().visibility.clone())
++    }
++
+     fn is_hovered(&self) -> bool {
+         self.borrow().hovered
+     }
+diff --git a/crates/gpui_linux/src/linux/x11/client.rs b/crates/gpui_linux/src/linux/x11/client.rs
+index 9b35125..d4650d2 100644
+--- a/crates/gpui_linux/src/linux/x11/client.rs
++++ b/crates/gpui_linux/src/linux/x11/client.rs
+@@ -315,9 +315,12 @@ impl X11Client {
+ 
+         handle
+             .insert_source(main_receiver, {
+-                let handle = handle.clone();
++                let handle = handle.downgrade();
+                 move |event, _, _: &mut X11Client| {
+                     if let calloop::channel::Event::Msg(runnable) = event {
++                        let Some(handle) = handle.upgrade() else {
++                            return;
++                        };
+                         // Insert the runnables as idle callbacks, so we make sure that user-input and X11
+                         // events have higher priority and runnables are only worked off after the event
+                         // callbacks.
+@@ -384,6 +387,12 @@ impl X11Client {
+             .context("Failed to get XCB atoms")?;
+ 
+         let root = xcb_connection.setup().roots[0].root;
++        let attributes = xcb_connection.get_window_attributes(root)?.reply()?;
++        xcb_connection.change_window_attributes(
++            root,
++            &xproto::ChangeWindowAttributesAux::new()
++                .event_mask(attributes.your_event_mask | xproto::EventMask::PROPERTY_CHANGE),
++        )?;
+         let compositor_present = check_compositor_present(&xcb_connection, root);
+         let gtk_frame_extents_supported =
+             check_gtk_frame_extents_supported(&xcb_connection, &atoms, root);
+@@ -800,6 +809,12 @@ impl X11Client {
+                 let mut state = self.0.borrow_mut();
+                 if let Some(window_ref) = state.windows.get_mut(&event.window) {
+                     window_ref.is_mapped = false;
++                    window_ref
++                        .window
++                        .state
++                        .borrow()
++                        .visibility
++                        .store(2, std::sync::atomic::Ordering::Release);
+                 }
+                 state.update_refresh_loop(event.window);
+             }
+@@ -807,6 +822,12 @@ impl X11Client {
+                 let mut state = self.0.borrow_mut();
+                 if let Some(window_ref) = state.windows.get_mut(&event.window) {
+                     window_ref.is_mapped = true;
++                    window_ref
++                        .window
++                        .state
++                        .borrow()
++                        .visibility
++                        .store(1, std::sync::atomic::Ordering::Release);
+                 }
+                 state.update_refresh_loop(event.window);
+             }
+@@ -814,6 +835,12 @@ impl X11Client {
+                 let mut state = self.0.borrow_mut();
+                 if let Some(window_ref) = state.windows.get_mut(&event.window) {
+                     window_ref.last_visibility = event.state;
++                    let visible =
++                        window_ref.is_mapped && !matches!(event.state, Visibility::FULLY_OBSCURED);
++                    window_ref.window.state.borrow().visibility.store(
++                        if visible { 1 } else { 2 },
++                        std::sync::atomic::Ordering::Release,
++                    );
+                 }
+                 state.update_refresh_loop(event.window);
+             }
+@@ -966,6 +993,17 @@ impl X11Client {
+                     .log_err();
+             }
+             Event::PropertyNotify(event) => {
++                {
++                    let state = self.0.borrow();
++                    if event.atom == state.atoms._NET_CURRENT_DESKTOP
++                        || event.atom == state.atoms._NET_WM_DESKTOP
++                        || event.atom == state.atoms._NET_WM_STATE
++                    {
++                        for window in state.windows.keys() {
++                            state.update_native_visibility(*window);
++                        }
++                    }
++                }
+                 let window = self.get_window(event.window)?;
+                 window
+                     .property_notify(event)
+@@ -1809,6 +1847,7 @@ impl LinuxClient for X11Client {
+         };
+ 
+         event_loop.run(None, &mut self.clone(), |_| {}).log_err();
++        self.0.borrow().common.shutdown_dispatcher();
+     }
+ 
+     fn active_window(&self) -> Option<AnyWindowHandle> {
+@@ -1899,7 +1938,34 @@ impl X11ClientState {
+         self.xim_handler = Some(xim_handler);
+     }
+ 
++    fn update_native_visibility(&self, x_window: xproto::Window) {
++        let Some(window) = self.windows.get(&x_window) else {
++            return;
++        };
++        let property = |window, atom| {
++            self.xcb_connection
++                .get_property(false, window, atom, xproto::AtomEnum::CARDINAL, 0, 1)
++                .ok()?
++                .reply()
++                .ok()?
++                .value32()?
++                .next()
++        };
++        let root = self.xcb_connection.setup().roots[self.x_root_index].root;
++        let assigned = property(x_window, self.atoms._NET_WM_DESKTOP);
++        let current = property(root, self.atoms._NET_CURRENT_DESKTOP);
++        let different_desktop = matches!((assigned,current), (Some(assigned),Some(current)) if assigned != u32::MAX && assigned != current);
++        let visible = window.is_mapped
++            && !matches!(window.last_visibility, Visibility::FULLY_OBSCURED)
++            && !different_desktop;
++        window.window.state.borrow().visibility.store(
++            if visible { 1 } else { 2 },
++            std::sync::atomic::Ordering::Release,
++        );
++    }
++
+     fn update_refresh_loop(&mut self, x_window: xproto::Window) {
++        self.update_native_visibility(x_window);
+         let Some(window_ref) = self.windows.get_mut(&x_window) else {
+             return;
+         };
+diff --git a/crates/gpui_linux/src/linux/x11/window.rs b/crates/gpui_linux/src/linux/x11/window.rs
+index 976606d..2fd5001 100644
+--- a/crates/gpui_linux/src/linux/x11/window.rs
++++ b/crates/gpui_linux/src/linux/x11/window.rs
+@@ -62,6 +62,8 @@ x11rb::atom_manager! {
+         _NET_WM_NAME,
+         _NET_WM_ICON,
+         _NET_WM_STATE,
++        _NET_WM_DESKTOP,
++        _NET_CURRENT_DESKTOP,
+         _NET_WM_STATE_MAXIMIZED_VERT,
+         _NET_WM_STATE_MAXIMIZED_HORZ,
+         _NET_WM_STATE_FULLSCREEN,
+@@ -277,6 +279,7 @@ pub struct X11WindowState {
+     maximized_horizontal: bool,
+     hidden: bool,
+     active: bool,
++    pub(crate) visibility: std::sync::Arc<std::sync::atomic::AtomicU8>,
+     hovered: bool,
+     pub(crate) force_render_after_recovery: bool,
+     fullscreen: bool,
+@@ -827,6 +830,7 @@ impl X11WindowState {
+                 atoms: *atoms,
+                 input_handler: None,
+                 active: false,
++                visibility: std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0)),
+                 hovered: false,
+                 force_render_after_recovery: false,
+                 fullscreen: false,
+@@ -1280,24 +1284,31 @@ impl X11WindowStatePtr {
+     }
+ 
+     pub fn set_bounds(&self, bounds: Bounds<i32>) -> anyhow::Result<()> {
+-        let (is_resize, content_size, scale_factor) = {
++        // ConfigureNotify can report a parent-relative origin after reparenting,
++        // and resizing may move the window in the same event. Read the actual
++        // client origin in root coordinates instead of guessing from its size.
++        let root = self.state.borrow().x_root_window;
++        let position = get_reply(
++            || "X11 TranslateCoordinates failed while observing native bounds.",
++            self.xcb.translate_coordinates(self.x_window, root, 0, 0),
++        )?;
++        let (did_move, content_size, scale_factor) = {
+             let mut state = self.state.borrow_mut();
+             let bounds = bounds.map(|f| px(f as f32 / state.scale_factor));
+ 
+-            let is_resize = bounds.size.width != state.bounds.size.width
+-                || bounds.size.height != state.bounds.size.height;
+-
+-            // If it's a resize event (only width/height changed), we ignore `bounds.origin`
+-            // because it contains wrong values.
+-            if is_resize {
+-                state.bounds.size = bounds.size;
+-            } else {
+-                state.bounds = bounds;
+-            }
++            let origin = gpui::point(
++                px(f32::from(position.dst_x) / state.scale_factor),
++                px(f32::from(position.dst_y) / state.scale_factor),
++            );
++            let did_move = origin != state.bounds.origin;
++            state.bounds = Bounds {
++                origin,
++                size: bounds.size,
++            };
+ 
+             let gpu_size = query_render_extent(&self.xcb, self.x_window)?;
+             state.renderer.update_drawable_size(gpu_size);
+-            let result = (is_resize, state.content_size(), state.scale_factor);
++            let result = (did_move, state.content_size(), state.scale_factor);
+             if let Some(value) = state.last_sync_counter.take() {
+                 check_reply(
+                     || "X11 sync SetCounter failed.",
+@@ -1312,7 +1323,7 @@ impl X11WindowStatePtr {
+             fun(content_size, scale_factor)
+         }
+ 
+-        if !is_resize && let Some(ref mut fun) = callbacks.moved {
++        if did_move && let Some(ref mut fun) = callbacks.moved {
+             fun();
+         }
+ 
+@@ -1437,6 +1448,75 @@ impl PlatformWindow for X11Window {
+         xcb_flush(&self.0.xcb);
+     }
+ 
++    fn native_window_capabilities(&self) -> gpui::NativeWindowCapabilities {
++        gpui::NativeWindowCapabilities {
++            position: true,
++            pointer_passthrough: self
++                .0
++                .xcb
++                .extension_information(x11rb::protocol::shape::X11_EXTENSION_NAME)
++                .ok()
++                .flatten()
++                .is_some(),
++        }
++    }
++
++    fn set_native_bounds(&mut self, bounds: Bounds<Pixels>) -> anyhow::Result<()> {
++        let scale = self.scale_factor();
++        let bounds = bounds.to_device_pixels(scale);
++        check_reply(
++            || "X11 ConfigureWindow failed while setting native bounds.",
++            self.0.xcb.configure_window(
++                self.0.x_window,
++                &xproto::ConfigureWindowAux::new()
++                    .x(bounds.origin.x.0)
++                    .y(bounds.origin.y.0)
++                    .width(bounds.size.width.0 as u32)
++                    .height(bounds.size.height.0 as u32),
++            ),
++        )?;
++        self.0.xcb.flush()?;
++        Ok(())
++    }
++
++    fn set_pointer_passthrough(&self, enabled: bool) -> anyhow::Result<()> {
++        use x11rb::protocol::shape::{self, SK, SO};
++        if !self.native_window_capabilities().pointer_passthrough {
++            anyhow::bail!("The X11 server does not support the SHAPE input extension");
++        }
++        if enabled {
++            check_reply(
++                || "X11 empty input shape failed.",
++                shape::rectangles(
++                    &*self.0.xcb,
++                    SO::SET,
++                    SK::INPUT,
++                    xproto::ClipOrdering::UNSORTED,
++                    self.0.x_window,
++                    0,
++                    0,
++                    &[],
++                ),
++            )?;
++        } else {
++            // A null bitmap restores the default region, including future resizes.
++            check_reply(
++                || "X11 input shape reset failed.",
++                shape::mask(
++                    &*self.0.xcb,
++                    SO::SET,
++                    SK::INPUT,
++                    self.0.x_window,
++                    0,
++                    0,
++                    x11rb::NONE,
++                ),
++            )?;
++        }
++        self.0.xcb.flush()?;
++        Ok(())
++    }
++
+     fn scale_factor(&self) -> f32 {
+         self.0.state.borrow().scale_factor
+     }
+@@ -1536,6 +1616,12 @@ impl PlatformWindow for X11Window {
+         self.0.state.borrow().active
+     }
+ 
++    fn native_window_visibility_state(
++        &self,
++    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicU8>> {
++        Some(self.0.state.borrow().visibility.clone())
++    }
++
+     fn is_hovered(&self) -> bool {
+         self.0.state.borrow().hovered
+     }
+diff --git a/crates/gpui_macos/src/window.rs b/crates/gpui_macos/src/window.rs
+index faf27e0..b676f5d 100644
+--- a/crates/gpui_macos/src/window.rs
++++ b/crates/gpui_macos/src/window.rs
+@@ -586,6 +586,7 @@ unsafe fn apply_simple_fullscreen_plan(
+ }
+ 
+ struct MacWindowState {
++    visibility: std::sync::Arc<std::sync::atomic::AtomicU8>,
+     handle: AnyWindowHandle,
+     foreground_executor: ForegroundExecutor,
+     background_executor: BackgroundExecutor,
+@@ -1012,6 +1013,7 @@ impl MacWindow {
+             assert!(!native_view.is_null());
+ 
+             let mut window = Self(Arc::new(Mutex::new(MacWindowState {
++                visibility: std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0)),
+                 handle,
+                 foreground_executor,
+                 background_executor,
+@@ -1366,6 +1368,63 @@ impl PlatformWindow for MacWindow {
+             .detach();
+     }
+ 
++    fn native_window_capabilities(&self) -> gpui::NativeWindowCapabilities {
++        gpui::NativeWindowCapabilities {
++            position: true,
++            pointer_passthrough: true,
++        }
++    }
++
++    fn set_native_bounds(&mut self, bounds: Bounds<Pixels>) -> anyhow::Result<()> {
++        let this = self.0.lock();
++        if this.closed.load(Ordering::Acquire) {
++            anyhow::bail!("The macOS window is closed");
++        }
++        let window = this.native_window;
++        let closed = this.closed.clone();
++        this.foreground_executor
++            .spawn(async move {
++                if_window_not_closed(closed, || unsafe {
++                    window.setContentSize_(NSSize::new(
++                        bounds.size.width.as_f32() as f64,
++                        bounds.size.height.as_f32() as f64,
++                    ));
++                    let screen = NSWindow::screen(window);
++                    if screen != nil {
++                        let screen_frame = NSScreen::frame(screen);
++                        let frame = NSWindow::frame(window);
++                        let origin = NSPoint::new(
++                            screen_frame.origin.x + bounds.origin.x.as_f32() as f64,
++                            screen_frame.origin.y + screen_frame.size.height
++                                - bounds.origin.y.as_f32() as f64
++                                - frame.size.height,
++                        );
++                        let _: () = msg_send![window, setFrameOrigin: origin];
++                    }
++                });
++            })
++            .detach();
++        Ok(())
++    }
++
++    fn set_pointer_passthrough(&self, enabled: bool) -> anyhow::Result<()> {
++        let this = self.0.lock();
++        if this.closed.load(Ordering::Acquire) {
++            anyhow::bail!("The macOS window is closed");
++        }
++        let window = this.native_window;
++        let closed = this.closed.clone();
++        this.foreground_executor
++            .spawn(async move {
++                if_window_not_closed(closed, || unsafe {
++                    let _: () =
++                        msg_send![window, setIgnoresMouseEvents: if enabled { YES } else { NO }];
++                });
++            })
++            .detach();
++        Ok(())
++    }
++
+     fn merge_all_windows(&self) {
+         let native_window = self.0.lock().native_window;
+         extern "C" fn merge_windows_async(context: *mut std::ffi::c_void) {
+@@ -1624,6 +1683,12 @@ impl PlatformWindow for MacWindow {
+         unsafe { self.0.lock().native_window.isKeyWindow() == YES }
+     }
+ 
++    fn native_window_visibility_state(
++        &self,
++    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicU8>> {
++        Some(self.0.lock().visibility.clone())
++    }
++
+     // is_hovered is unused on macOS. See Window::is_window_hovered.
+     fn is_hovered(&self) -> bool {
+         false
+@@ -2706,6 +2771,15 @@ extern "C" fn handle_view_event(this: &Object, _: Sel, native_event: id) {
+ extern "C" fn window_did_change_occlusion_state(this: &Object, _: Sel, _: id) {
+     let window_state = unsafe { get_window_state(this) };
+     let lock = &mut *window_state.lock();
++    let visible = unsafe {
++        lock.native_window
++            .occlusionState()
++            .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible)
++    };
++    lock.visibility.store(
++        if visible { 1 } else { 2 },
++        std::sync::atomic::Ordering::Release,
++    );
+     unsafe {
+         if lock
+             .native_window
+diff --git a/crates/gpui_windows/src/window.rs b/crates/gpui_windows/src/window.rs
+index 1a942ec..278e250 100644
+--- a/crates/gpui_windows/src/window.rs
++++ b/crates/gpui_windows/src/window.rs
+@@ -43,7 +43,9 @@ impl std::ops::Deref for WindowsWindow {
+ }
+ 
+ pub struct WindowsWindowState {
++    visibility: std::sync::Arc<std::sync::atomic::AtomicU8>,
+     pub origin: Cell<Point<Pixels>>,
++    pointer_passthrough_style: Cell<Option<isize>>,
+     pub logical_size: Cell<Size<Pixels>>,
+     pub min_size: Option<Size<Pixels>>,
+     pub fullscreen_restore_bounds: Cell<Bounds<Pixels>>,
+@@ -156,6 +158,8 @@ impl WindowsWindowState {
+             .context("initializing Direct Manipulation")?;
+ 
+         Ok(Self {
++            visibility: std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0)),
++            pointer_passthrough_style: Cell::new(None),
+             origin: Cell::new(origin),
+             logical_size: Cell::new(logical_size),
+             fullscreen_restore_bounds: Cell::new(fullscreen_restore_bounds),
+@@ -650,6 +654,69 @@ impl PlatformWindow for WindowsWindow {
+             .detach();
+     }
+ 
++    fn native_window_capabilities(&self) -> gpui::NativeWindowCapabilities {
++        gpui::NativeWindowCapabilities {
++            position: true,
++            pointer_passthrough: true,
++        }
++    }
++
++    fn set_native_bounds(&mut self, bounds: Bounds<Pixels>) -> anyhow::Result<()> {
++        let bounds = bounds.to_device_pixels(self.scale_factor());
++        let rect = calculate_window_rect(bounds, &self.state.border_offset);
++        let hwnd = self.0.hwnd;
++        self.0
++            .executor
++            .spawn(async move {
++                unsafe {
++                    SetWindowPos(
++                        hwnd,
++                        None,
++                        rect.left,
++                        rect.top,
++                        rect.right - rect.left,
++                        rect.bottom - rect.top,
++                        SWP_NOACTIVATE | SWP_NOZORDER,
++                    )
++                    .context("unable to set native window bounds")
++                    .log_err();
++                }
++            })
++            .detach();
++        Ok(())
++    }
++
++    fn set_pointer_passthrough(&self, enabled: bool) -> anyhow::Result<()> {
++        unsafe {
++            let current = GetWindowLongPtrW(self.0.hwnd, GWL_EXSTYLE);
++            let saved = self.state.pointer_passthrough_style.get();
++            let target = if enabled {
++                self.state
++                    .pointer_passthrough_style
++                    .set(saved.or(Some(current)));
++                current | (WS_EX_TRANSPARENT.0 | WS_EX_LAYERED.0) as isize
++            } else {
++                saved
++                    .map(|saved| {
++                        let owned = (WS_EX_TRANSPARENT.0 | WS_EX_LAYERED.0) as isize;
++                        (current & !owned) | (saved & owned)
++                    })
++                    .unwrap_or(current)
++            };
++            SetLastError(WIN32_ERROR(0));
++            let previous = SetWindowLongPtrW(self.0.hwnd, GWL_EXSTYLE, target);
++            if previous == 0 && GetLastError() != WIN32_ERROR(0) {
++                return Err(windows::core::Error::from_win32().into());
++            }
++            if enabled {
++                SetLayeredWindowAttributes(self.0.hwnd, COLORREF(0), 255, LWA_ALPHA)?;
++            } else {
++                self.state.pointer_passthrough_style.set(None);
++            }
++            Ok(())
++        }
++    }
++
+     fn scale_factor(&self) -> f32 {
+         self.state.scale_factor.get()
+     }
+@@ -852,6 +919,12 @@ impl PlatformWindow for WindowsWindow {
+         self.0.hwnd == unsafe { GetActiveWindow() }
+     }
+ 
++    fn native_window_visibility_state(
++        &self,
++    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicU8>> {
++        Some(self.state.visibility.clone())
++    }
++
+     fn is_hovered(&self) -> bool {
+         self.state.hovered.get()
+     }
+@@ -1417,7 +1490,31 @@ unsafe extern "system" fn window_procedure(
+     }
+     let inner = unsafe { &*ptr };
+     let result = if let Some(inner) = inner.upgrade() {
+-        inner.handle_msg(hwnd, msg, wparam, lparam)
++        let result = inner.handle_msg(hwnd, msg, wparam, lparam);
++        if matches!(
++            msg,
++            WM_SHOWWINDOW | WM_WINDOWPOSCHANGED | WM_SIZE | WM_ACTIVATE | WM_DWMCOMPOSITIONCHANGED
++        ) {
++            let mut cloaked = 0u32;
++            let visible = unsafe {
++                if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
++                    2
++                } else if DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, (&raw mut cloaked).cast(), 4)
++                    .is_err()
++                {
++                    0
++                } else if cloaked != 0 {
++                    2
++                } else {
++                    1
++                }
++            };
++            inner
++                .state
++                .visibility
++                .store(visible, std::sync::atomic::Ordering::Release);
++        }
++        result
+     } else {
+         unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+     };

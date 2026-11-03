@@ -1,14 +1,25 @@
+import type { ChatClear, RoomState } from '@twirchat/shared/channel-tools'
 import type {
   Emote,
   NormalizedChatMessage,
   NormalizedEvent,
   PlatformStatusInfo,
+  ModerationOutcome,
 } from '@twirchat/shared/types'
-import type { IPlatformAdapter } from '../platforms/base-adapter'
 import type { Platform } from '@twirchat/shared/types'
+
 import { parseMessageWithEmotes } from '../platforms/7tv/emote-parser'
+import type { IPlatformAdapter } from '../platforms/base-adapter'
 
 type AggregatorEventHandler<T> = (data: T) => void
+const messageKey = (message: NormalizedChatMessage): string =>
+  JSON.stringify([
+    message.platform,
+    message.platform === 'youtube'
+      ? message.channelId
+      : message.channelId.toLowerCase().replace(/^#/, ''),
+    message.id,
+  ])
 
 export class ChatAggregator {
   private adapters = new Map<Platform, IPlatformAdapter>()
@@ -18,26 +29,56 @@ export class ChatAggregator {
   private onMessageHandlers = new Set<AggregatorEventHandler<NormalizedChatMessage>>()
   private onEventHandlers = new Set<AggregatorEventHandler<NormalizedEvent>>()
   private onStatusHandlers = new Set<AggregatorEventHandler<PlatformStatusInfo>>()
+  private onModerationHandlers = new Set<AggregatorEventHandler<ModerationOutcome>>()
+  private onRoomStateHandlers = new Set<AggregatorEventHandler<RoomState>>()
+  private onClearHandlers = new Set<AggregatorEventHandler<ChatClear>>()
 
   private seenIds = new Set<string>()
 
-  constructor(bufferSize = 500) {
+  constructor(
+    bufferSize = 500,
+    private readonly enrich: (message: NormalizedChatMessage) => NormalizedChatMessage = (
+      message,
+    ) => message,
+  ) {
     this.bufferSize = bufferSize
   }
 
   registerAdapter(adapter: IPlatformAdapter): void {
     this.adapters.set(adapter.platform, adapter)
+    adapter.on('moderation', (outcome) => {
+      for (const handler of this.onModerationHandlers) handler(outcome)
+    })
+    adapter.on('room_state', (state) => {
+      for (const handler of this.onRoomStateHandlers) handler(state)
+    })
+    adapter.on('chat_clear', (clear) => {
+      this.messageBuffer = this.messageBuffer.filter((message) => {
+        if (
+          message.platform !== clear.platform ||
+          message.channelId.toLowerCase().replace(/^#/, '') !== clear.channelId
+        )
+          return true
+        this.seenIds.delete(messageKey(message))
+        return false
+      })
+      for (const handler of this.onClearHandlers) handler(clear)
+    })
 
     adapter.on('message', (msg) => {
-      if (this.seenIds.has(msg.id)) {
+      if (this.seenIds.has(messageKey(msg))) {
         return
       }
-      this.seenIds.add(msg.id)
+      this.seenIds.add(messageKey(msg))
 
       // Parse 7TV emotes and merge with platform emotes
       const parsed = parseMessageWithEmotes(msg.text, msg.platform, msg.channelId)
       const sevenTVEmotes: Emote[] = parsed.emotes.map((e) => ({
         aspectRatio: e.aspectRatio,
+        animated: e.animated,
+        zeroWidth: e.zeroWidth,
+        source: 'seventv',
+        provider: 'seventv',
         id: e.id,
         imageUrl: e.imageUrl,
         name: e.name,
@@ -63,17 +104,17 @@ export class ChatAggregator {
         }
       }
 
-      const enrichedMsg: NormalizedChatMessage = {
+      const enrichedMsg: NormalizedChatMessage = this.enrich({
         ...msg,
         emotes: mergedEmotes,
-      }
+      })
 
       // Кольцевой буфер
       this.messageBuffer.push(enrichedMsg)
       if (this.messageBuffer.length > this.bufferSize) {
         const removed = this.messageBuffer.shift()
         if (removed) {
-          this.seenIds.delete(removed.id)
+          this.seenIds.delete(messageKey(removed))
         }
       }
 
@@ -130,9 +171,26 @@ export class ChatAggregator {
     return () => this.onStatusHandlers.delete(handler)
   }
 
+  onModeration(handler: AggregatorEventHandler<ModerationOutcome>): () => void {
+    this.onModerationHandlers.add(handler)
+    return () => this.onModerationHandlers.delete(handler)
+  }
+
+  onRoomState(handler: AggregatorEventHandler<RoomState>): () => void {
+    this.onRoomStateHandlers.add(handler)
+    return () => this.onRoomStateHandlers.delete(handler)
+  }
+
+  onChatClear(handler: AggregatorEventHandler<ChatClear>): () => void {
+    this.onClearHandlers.add(handler)
+    return () => this.onClearHandlers.delete(handler)
+  }
+
   async connectAll(channels: Partial<Record<Platform, string>>): Promise<void> {
-    const promises = Object.entries(channels).map(([platform, slug]) => {
-      const adapter = this.adapters.get(platform as Platform)
+    const platforms: Platform[] = ['twitch', 'youtube', 'kick']
+    const promises = platforms.map((platform) => {
+      const slug = channels[platform]
+      const adapter = this.adapters.get(platform)
       if (adapter && slug) {
         return adapter.connect(slug).catch((error) => {
           console.error(`[Aggregator] Failed to connect ${platform}:`, error)
@@ -152,15 +210,19 @@ export class ChatAggregator {
 
   /** Inject a message directly (e.g. from backend WebSocket) */
   injectMessage(msg: NormalizedChatMessage): void {
-    if (this.seenIds.has(msg.id)) {
+    if (this.seenIds.has(messageKey(msg))) {
       return
     }
-    this.seenIds.add(msg.id)
+    this.seenIds.add(messageKey(msg))
 
     // Parse 7TV emotes and merge with platform emotes
     const parsed = parseMessageWithEmotes(msg.text, msg.platform, msg.channelId)
     const sevenTVEmotes: Emote[] = parsed.emotes.map((e) => ({
       aspectRatio: e.aspectRatio,
+      animated: e.animated,
+      zeroWidth: e.zeroWidth,
+      source: 'seventv',
+      provider: 'seventv',
       id: e.id,
       imageUrl: e.imageUrl,
       name: e.name,
@@ -186,16 +248,16 @@ export class ChatAggregator {
       }
     }
 
-    const enrichedMsg: NormalizedChatMessage = {
+    const enrichedMsg: NormalizedChatMessage = this.enrich({
       ...msg,
       emotes: mergedEmotes,
-    }
+    })
 
     this.messageBuffer.push(enrichedMsg)
     if (this.messageBuffer.length > this.bufferSize) {
       const removed = this.messageBuffer.shift()
       if (removed) {
-        this.seenIds.delete(removed.id)
+        this.seenIds.delete(messageKey(removed))
       }
     }
 

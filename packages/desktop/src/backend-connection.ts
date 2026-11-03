@@ -1,12 +1,17 @@
+declare const WebSocket: typeof globalThis.WebSocket & {
+  new (url: string | URL, options: Bun.WebSocketOptions): WebSocket
+}
 import type { BackendToDesktopMessage, DesktopToBackendMessage } from '@twirchat/shared'
-import { getBackendWsUrl } from './runtime-config'
 import { logger } from '@twirchat/shared/logger'
+
+import { getBackendWsUrl } from './runtime-config'
+import { backendToDesktopMessageSchema } from './services/persisted-schemas'
 import { sevenTVService } from './seventv'
 
 const log = logger('backend-connection')
 
 type MessageHandler = (msg: BackendToDesktopMessage) => void
-type SevenTVBackendMessage = Extract<BackendToDesktopMessage, { channelId: string }>
+
 type SystemMessageHandler = (
   msg: Extract<BackendToDesktopMessage, { type: 'seventv_system_message' }>,
 ) => void
@@ -21,6 +26,7 @@ const MAX_RECONNECT_DELAY_MS = 30_000
 export class BackendConnection {
   private ws: WebSocket | null = null
   private handlers: MessageHandler[] = []
+  private connectionHandlers = new Set<(connected: boolean) => void>()
   private systemMessageHandlers: SystemMessageHandler[] = []
   private reconnectDelay = RECONNECT_DELAY_MS
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -35,6 +41,7 @@ export class BackendConnection {
 
   disconnect(): void {
     this.stopped = true
+    this.notifyConnectionStatus(false)
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -57,6 +64,17 @@ export class BackendConnection {
     } else {
       log.warn('Cannot send — not connected')
     }
+  }
+
+  onConnectionStatus(handler: (connected: boolean) => void): () => void {
+    this.connectionHandlers.add(handler)
+    return () => {
+      this.connectionHandlers.delete(handler)
+    }
+  }
+
+  private notifyConnectionStatus(connected: boolean): void {
+    for (const handler of this.connectionHandlers) handler(connected)
   }
 
   onMessage(handler: MessageHandler): () => void {
@@ -85,35 +103,30 @@ export class BackendConnection {
       headers: {
         'X-Client-Secret': this.clientSecret,
       },
-      // Bun WebSocket constructor accepts { headers } but TS types expect string[] — cast required
-    } as unknown as string[])
+    })
     ws.addEventListener('open', () => {
+      if (this.ws !== ws || this.stopped) return
+      this.notifyConnectionStatus(true)
       log.info('Connected')
       this.reconnectDelay = RECONNECT_DELAY_MS
 
       const channels = sevenTVService.getSubscribedChannels()
       if (channels.length > 0) {
         log.info(`Resubscribing to ${channels.length} 7TV channels`)
-        for (const { platform, channelId, platformUserId } of channels) {
-          sevenTVService
-            .subscribeToChannel(platform, channelId, [], platformUserId)
-            .catch((error) => {
-              log.error('Failed to resubscribe to 7TV', {
-                platform,
-                channelId,
-                error: String(error),
-              })
-            })
-        }
+        sevenTVService.resubscribeToChannels(channels).catch((error) => {
+          log.error('Failed to resubscribe to 7TV', { error: String(error) })
+        })
       }
     })
 
     ws.addEventListener('message', (evt) => {
+      if (this.ws !== ws || this.stopped) return
       try {
-        const msg = JSON.parse(evt.data as string) as BackendToDesktopMessage
+        if (typeof evt.data !== 'string') return
+        const msg = backendToDesktopMessageSchema.parse(JSON.parse(evt.data))
 
-        if (msg.type.startsWith('seventv')) {
-          const sevenTVMessage = msg as SevenTVBackendMessage
+        if ('channelId' in msg) {
+          const sevenTVMessage = msg
           log.info('Received WebSocket message', {
             channelId: sevenTVMessage.channelId,
             platform: sevenTVMessage.platform,
@@ -169,7 +182,9 @@ export class BackendConnection {
     })
 
     ws.addEventListener('close', () => {
+      if (this.ws !== ws) return
       this.ws = null
+      this.notifyConnectionStatus(false)
       if (!this.stopped) {
         log.info(`Disconnected. Reconnecting in ${this.reconnectDelay}ms...`)
         this.reconnectTimer = setTimeout(() => {

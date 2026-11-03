@@ -1,34 +1,36 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { createModerationService } from '../src/api/moderation/service.ts'
 
-const baseInput = {
+import { createModerationService } from '../src/api/moderation/service.ts'
+import { literal } from './literal'
+
+const baseInput = literal({
   accessToken: 'token',
   channelSlug: 'streamer',
   platformUserId: '42',
   scopes: [
-    'moderator:read:moderators',
+    'user:read:moderated_channels',
     'moderator:manage:chat_messages',
     'moderator:manage:banned_users',
   ],
-} as const
+})
 
 function createService() {
   const twitch = {
     banUser: mock(async () => ({
       createdAt: new Date(),
       isPermanent: false,
-      platform: 'twitch' as const,
+      platform: literal('twitch'),
       success: true,
       userId: '77',
     })),
     deleteMessage: mock(async () => ({
       messageId: 'message-id',
-      platform: 'twitch' as const,
+      platform: literal('twitch'),
       success: true,
     })),
     isModerator: mock(async () => ({
       isModerator: true,
-      platform: 'twitch' as const,
+      platform: literal('twitch'),
       userId: '42',
     })),
   }
@@ -36,13 +38,13 @@ function createService() {
     banUser: mock(async () => ({
       createdAt: new Date(),
       isPermanent: false,
-      platform: 'kick' as const,
+      platform: literal('kick'),
       success: true,
       userId: '77',
     })),
     deleteMessage: mock(async () => ({
       messageId: 'message-id',
-      platform: 'kick' as const,
+      platform: literal('kick'),
       success: true,
     })),
   }
@@ -81,6 +83,69 @@ describe('desktop moderation service', () => {
     ).resolves.toEqual({ canModerate: false })
   })
 
+  test('keeps broadcaster moderation available without the moderated-channels read scope', async () => {
+    const { service, twitch } = createService()
+    expect(
+      await service.getCapabilities({
+        ...baseInput,
+        platform: 'twitch',
+        platformUserId: '100',
+        scopes: ['moderator:manage:chat_messages', 'moderator:manage:banned_users'],
+      }),
+    ).toEqual({ canModerate: true })
+    expect(twitch.isModerator).not.toHaveBeenCalled()
+  })
+
+  test('requires the actual moderated-channels scope for a watched moderator check', async () => {
+    const { service, twitch } = createService()
+    expect(
+      await service.getCapabilities({
+        ...baseInput,
+        platform: 'twitch',
+        scopes: [
+          'moderator:read:moderators',
+          'moderator:manage:chat_messages',
+          'moderator:manage:banned_users',
+        ],
+      }),
+    ).toEqual({ canModerate: false })
+    expect(twitch.isModerator).not.toHaveBeenCalled()
+  })
+
+  test('requires only the relevant identity for each action and permits one-second Twitch timeouts', async () => {
+    const { service, twitch } = createService()
+    await service.execute({
+      ...baseInput,
+      platform: 'twitch',
+      action: 'delete_message',
+      messageId: 'only-message-id',
+      scopes: ['moderator:manage:chat_messages'],
+    })
+    await service.execute({
+      ...baseInput,
+      platform: 'twitch',
+      action: 'timeout',
+      targetUserId: '77',
+      durationSeconds: 1,
+      scopes: ['moderator:manage:banned_users'],
+    })
+    expect(twitch.deleteMessage).toHaveBeenCalledWith('token', '100', '42', 'only-message-id')
+    expect(twitch.banUser).toHaveBeenCalledWith('token', '100', '42', {
+      duration: 1,
+      user_id: '77',
+    })
+    await expect(
+      service.execute({
+        ...baseInput,
+        platform: 'kick',
+        action: 'timeout',
+        targetUserId: '77',
+        durationSeconds: 1,
+        scopes: ['moderation:ban'],
+      }),
+    ).rejects.toThrow('at least 60 seconds')
+  })
+
   test('dispatches delete and timeout to distinct Twitch provider operations', async () => {
     const { service, twitch } = createService()
 
@@ -112,7 +177,7 @@ describe('desktop moderation service', () => {
     const kickInput = {
       accessToken: 'token',
       channelSlug: 'creator',
-      platform: 'kick' as const,
+      platform: literal('kick'),
       platformUserId: '42',
       scopes: ['moderation:chat_message:manage', 'moderation:ban'],
     }

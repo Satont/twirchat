@@ -1,119 +1,27 @@
 import { logger } from '@twirchat/shared/logger'
+import { z } from 'zod'
+
+import * as schemas from './event-schemas'
+import { sevenTVEventMessageSchema, sevenTVHelloSchema, sevenTVEventSchema } from './event-schemas'
 
 const log = logger('seventv:event')
 
 const SEVENTV_EVENT_API_URL = 'wss://events.7tv.io/v3'
 
-export interface SevenTVEventMessage {
-  op: number
-  t?: number
-  d?: unknown
-}
-
-export interface SevenTVHello {
-  heartbeat_interval: number
-  session_id: string
-  subscription_limit: number
-}
-
-export interface UserUpdateEventNestedField {
-  key: string
-  value: unknown
-  old_value?: unknown
-}
-
-export interface UserUpdateEvent {
-  id: string
-  updated?: {
-    key: string
-    index?: number | null
-    nested?: boolean
-    type?: string
-    // When nested === true, value is an array of UserUpdateEventNestedField.
-    // Otherwise, value can be any scalar/object (string, null, object, etc.)
-    value?: unknown
-    old_value?: unknown
-  }[]
-}
-
-export interface SevenTVEventImageFile {
-  url?: string | null
-  name?: string | null
-  mime?: string | null
-  size?: number | null
-  scale?: number | null
-  width?: number | null
-  height?: number | null
-  frameCount?: number | null
-}
-
-export interface SevenTVEventEmoteData {
-  animated: boolean
-  host: {
-    url: string
-    files: SevenTVEventImageFile[]
-  }
-}
-
-export interface SevenTVEventEmoteValue {
-  id: string
-  name: string
-  data: SevenTVEventEmoteData
-}
-
-export interface SevenTVEventEmoteInsert {
-  key: 'emotes'
-  index: number
-  type: 'emote'
-  value: SevenTVEventEmoteValue
-}
-
-export interface SevenTVEventEmoteRemove {
-  key: 'emotes'
-  index: number
-  type: 'emote'
-  old_value: SevenTVEventEmoteValue
-}
-
-export interface SevenTVEventEmoteUpdate {
-  key: 'emotes'
-  index?: number
-  type?: string
-  old_value: SevenTVEventEmoteValue
-  value: SevenTVEventEmoteValue
-}
-
-export interface SevenTVEventFieldUpdate {
-  key: string
-  index?: number
-  type?: string
-  old_value: unknown
-  value: unknown
-}
-
-export type SevenTVEvent =
-  | { type: 'emote_set.update'; body: EmoteSetUpdateEvent }
-  | { type: 'emote_set.delete'; body: EmoteSetDeleteEvent }
-  | { type: 'user.update'; body: UserUpdateEvent }
-
-export interface EmoteSetUpdateEvent {
-  id: string
-  actor?: {
-    id: string
-    display_name: string
-  }
-  pushed?: SevenTVEventEmoteInsert[]
-  pulled?: SevenTVEventEmoteRemove[]
-  updated?: Array<SevenTVEventEmoteUpdate | SevenTVEventFieldUpdate>
-}
-
-export interface EmoteSetDeleteEvent {
-  id: string
-  actor?: {
-    id: string
-    display_name: string
-  }
-}
+export type SevenTVEventMessage = z.infer<typeof schemas.sevenTVEventMessageSchema>
+export type SevenTVHello = z.infer<typeof schemas.sevenTVHelloSchema>
+export type UserUpdateEventNestedField = z.infer<typeof schemas.userUpdateNestedFieldSchema>
+export type UserUpdateEvent = z.infer<typeof schemas.userUpdateSchema>
+export type SevenTVEventImageFile = z.infer<typeof schemas.eventImageFileSchema>
+export type SevenTVEventEmoteData = z.infer<typeof schemas.sevenTVEventEmoteValueSchema.shape.data>
+export type SevenTVEventEmoteValue = z.infer<typeof schemas.sevenTVEventEmoteValueSchema>
+export type SevenTVEventEmoteInsert = z.infer<typeof schemas.emoteInsertSchema>
+export type SevenTVEventEmoteRemove = z.infer<typeof schemas.emoteRemoveSchema>
+export type SevenTVEventEmoteUpdate = z.infer<typeof schemas.emoteUpdateSchema>
+export type SevenTVEventFieldUpdate = z.infer<typeof schemas.fieldUpdateSchema>
+export type SevenTVEvent = z.infer<typeof schemas.sevenTVEventSchema>
+export type EmoteSetUpdateEvent = z.infer<typeof schemas.emoteSetUpdateSchema>
+export type EmoteSetDeleteEvent = z.infer<typeof schemas.emoteSetDeleteSchema>
 
 export type SevenTVEventHandler = (event: SevenTVEvent) => void
 
@@ -158,7 +66,7 @@ export class SevenTVEventClient {
       }
 
       this.ws.onmessage = (event) => {
-        this.handleMessage(event.data as string)
+        if (typeof event.data === 'string') this.handleMessage(event.data)
       }
 
       this.ws.onclose = (event) => {
@@ -171,7 +79,7 @@ export class SevenTVEventClient {
       }
 
       this.ws.onerror = (error) => {
-        log.error('WebSocket error', { error: String(error) })
+        log.error('WebSocket error', { error: error.type })
       }
     } catch (error) {
       log.error('Failed to connect', { error: String(error) })
@@ -215,7 +123,7 @@ export class SevenTVEventClient {
 
   private handleMessage(data: string): void {
     try {
-      const message: SevenTVEventMessage = JSON.parse(data)
+      const message = sevenTVEventMessageSchema.parse(JSON.parse(data))
 
       // Log ALL raw messages for debugging
       if (message.op === 0) {
@@ -225,7 +133,7 @@ export class SevenTVEventClient {
       if (message.op !== 2) {
         const dispatchType =
           typeof message.d === 'object' && message.d !== null && 'type' in message.d
-            ? String((message.d as { type?: unknown }).type)
+            ? String(message.d.type)
             : undefined
 
         log.info('7TV EventAPI message received', {
@@ -237,13 +145,13 @@ export class SevenTVEventClient {
       switch (message.op) {
         case 1: {
           // Hello
-          this.handleHello(message.d as SevenTVHello)
+          this.handleHello(sevenTVHelloSchema.parse(message.d))
           break
         }
         case 0: {
           // Dispatch
           if (message.d) {
-            const dispatch = message.d as SevenTVEvent
+            const dispatch = sevenTVEventSchema.parse(message.d)
             log.info('DISPATCH EVENT RECEIVED', { type: dispatch.type, bodyId: dispatch.body?.id })
             this.onEvent?.(dispatch)
           }
@@ -262,7 +170,9 @@ export class SevenTVEventClient {
         }
         case 5: {
           // Ack — server acknowledged our last command
-          const ack = message.d as { command: string; data?: unknown }
+          const ack = z
+            .object({ command: z.string(), data: z.unknown().optional() })
+            .parse(message.d)
           log.info('Server ack', { command: ack.command })
           if (ack.command === 'RESUME') {
             log.info('Session resumed successfully — server will replay missed events')
@@ -284,7 +194,7 @@ export class SevenTVEventClient {
         }
         case 7: {
           // End of Stream
-          const eos = message.d as { code: number; message: string }
+          const eos = z.object({ code: z.number(), message: z.string() }).parse(message.d)
           log.info('End of stream', { code: eos.code, message: eos.message })
           break
         }
@@ -418,7 +328,9 @@ export class SevenTVEventClient {
     // Save current session so handleHello can attempt resume
     this.previousSessionId = this.sessionId
     this.cleanup()
-    this.connect()
+    this.connect().catch((error: unknown) =>
+      log.error('Connection failed', { error: String(error) }),
+    )
   }
 
   private scheduleReconnect(closeCode?: number): void {
@@ -455,7 +367,9 @@ export class SevenTVEventClient {
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
-      this.connect()
+      this.connect().catch((error: unknown) =>
+        log.error('Connection failed', { error: String(error) }),
+      )
     }, delay)
   }
 

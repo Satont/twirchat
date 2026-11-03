@@ -1,3 +1,4 @@
+import type { ChatClear, RoomState } from '@twirchat/shared/channel-tools'
 /**
  * GPUIX backend bridge — event bus.
  *
@@ -5,7 +6,16 @@
  * exactly, so the UI layer is portable between transports. In the GPUIX build the
  * "backend" lives in the same Bun process, so events are plain function calls.
  */
-
+import type { EmoteCatalogEntry, SevenTVEmote } from '@twirchat/shared/protocol'
+import type {
+  TwitchActivityEvent,
+  TwitchWhisper,
+  TwitchEventSubStatus,
+} from '@twirchat/shared/twitch-activities'
+import type {
+  TwitchActivitySnapshotUpdate,
+  TwitchActivityCapability,
+} from '@twirchat/shared/twitch-activities'
 import type {
   ModerationOutcome,
   NormalizedChatMessage,
@@ -13,12 +23,24 @@ import type {
   Platform,
   PlatformStatusInfo,
 } from '@twirchat/shared/types'
-import type { SevenTVEmote } from '@twirchat/shared/protocol'
+
+import type { StreamerModeStatus } from '../../services/streamer-mode'
 
 export type DesktopEventMap = {
+  streamer_mode_changed: StreamerModeStatus
+  accounts_changed: { platform: Platform; identityChanged: boolean }
+  author_emote_catalog: { platform: Platform; authorId: string; emotes: EmoteCatalogEntry[] }
+  channel_emote_catalog: { platform: Platform; channelId: string; emotes: EmoteCatalogEntry[] }
   chat_message: NormalizedChatMessage
   chat_event: NormalizedEvent
   chat_moderation: ModerationOutcome
+  channel_room_state: RoomState
+  chat_clear: ChatClear
+  twitch_activity: TwitchActivityEvent
+  twitch_whisper: TwitchWhisper
+  twitch_eventsub_status: TwitchEventSubStatus
+  twitch_activity_snapshot: TwitchActivitySnapshotUpdate
+  twitch_activity_capability: TwitchActivityCapability
   platform_status: PlatformStatusInfo
   auth_url: { platform: Platform; url: string }
   auth_success: { platform: Platform; username: string; displayName: string }
@@ -50,28 +72,52 @@ export interface DesktopEvents {
   ): void
 }
 
+type EventHandlers = {
+  [Name in DesktopEventName]: Set<(payload: DesktopEventMap[Name]) => void>
+}
+
 export function createDesktopEvents(): DesktopEvents {
-  const handlers = new Map<DesktopEventName, Set<(payload: never) => void>>()
+  const handlers: EventHandlers = {
+    streamer_mode_changed: new Set(),
+    accounts_changed: new Set(),
+    author_emote_catalog: new Set(),
+    channel_emote_catalog: new Set(),
+    chat_message: new Set(),
+    chat_event: new Set(),
+    chat_moderation: new Set(),
+    channel_room_state: new Set(),
+    chat_clear: new Set(),
+    twitch_activity: new Set(),
+    twitch_whisper: new Set(),
+    twitch_eventsub_status: new Set(),
+    twitch_activity_snapshot: new Set(),
+    twitch_activity_capability: new Set(),
+    platform_status: new Set(),
+    auth_url: new Set(),
+    auth_success: new Set(),
+    auth_error: new Set(),
+    update_status: new Set(),
+    watched_channel_message: new Set(),
+    watched_channel_status: new Set(),
+    channel_emotes_set: new Set(),
+    channel_emote_added: new Set(),
+    channel_emote_removed: new Set(),
+    channel_emote_updated: new Set(),
+  }
 
   return {
     on(eventName, handler) {
-      let set = handlers.get(eventName)
-      if (!set) {
-        set = new Set()
-        handlers.set(eventName, set)
-      }
-      const typed = handler as (payload: never) => void
-      set.add(typed)
+      const set = handlers[eventName]
+      set.add(handler)
       return () => {
-        set.delete(typed)
+        set.delete(handler)
       }
     },
     emit(eventName, payload) {
-      const set = handlers.get(eventName)
-      if (!set) return
+      const set = handlers[eventName]
       for (const handler of [...set]) {
         try {
-          ;(handler as (payload: unknown) => void)(payload)
+          handler(payload)
         } catch (error) {
           console.error(`[events] handler for "${eventName}" failed:`, error)
         }

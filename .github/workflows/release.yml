@@ -101,18 +101,21 @@ jobs:
             target: linux
             main_exe: twirchat
             runtime: linux-x64
-          - os: windows-latest
+            native_target: linux-x64
+          - os: windows-2025
             channel: win
             target: win
             main_exe: twirchat.exe
             runtime: win-x64
+            native_target: win32-x64
           # macOS builds on the arm64 runner: bun --compile cannot produce
           # universal binaries, so the osx feed is Apple Silicon only.
-          - os: macos-latest
+          - os: macos-15
             channel: osx
             target: osx
             main_exe: TwirChat
             runtime: ''
+            native_target: darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -130,6 +133,40 @@ jobs:
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      - name: Verify native build architecture
+        shell: bash
+        env:
+          EXPECTED_NATIVE_TARGET: ${{ matrix.native_target }}
+        run: bun -e 'if (`${process.platform}-${process.arch}` !== process.env.EXPECTED_NATIVE_TARGET) throw new Error("Native release architecture mismatch")'
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          toolchain="$(bun -e 'console.log(require("./packages/desktop/native/gpuix/source.json").rustToolchain)')"
+          rustup toolchain install "$toolchain" --profile minimal
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc g++ clang cmake pkg-config \
+            libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev \
+            libssl-dev libzstd-dev libvulkan-dev libvulkan1 libxcb-shape0-dev
+      - name: Install Metal toolchain
+        if: runner.os == 'macOS'
+        run: xcodebuild -downloadComponent MetalToolchain
+      - name: Cache pinned native build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/twirchat/native
+            packages/desktop/dist/native
+          key: native-${{ matrix.native_target }}-${{ hashFiles('packages/desktop/native/gpuix/source.json', 'packages/desktop/native/gpuix/patches/*.patch', 'packages/desktop/scripts/build-gpuix-native.ts') }}
+      - name: Build patched native runtime on its native host
+        working-directory: packages/desktop
+        env:
+          CARGO_BUILD_JOBS: '2'
+        run: bun run build:native
       - name: Build desktop binary
         if: matrix.target != 'osx'
         working-directory: packages/desktop
@@ -142,10 +179,7 @@ jobs:
             --outfile "bin/${{ matrix.main_exe }}" \
             --define "__APP_VERSION__=\"${{ needs.version.outputs.version }}\"" \
             --define "__BACKEND_URL__=\"${BACKEND_URL}\""
-          # overlay assets + fonts are served from disk (see overlay-server.ts),
-          # ship them next to the executable
-          cp -r dist/overlay bin/overlay
-          cp -r public/fonts bin/fonts
+          bun run package:runtime bin
           test -x "bin/${{ matrix.main_exe }}"
       - name: Build macOS application bundle
         if: matrix.target == 'osx'
@@ -163,8 +197,7 @@ jobs:
             --outfile "$app/Contents/MacOS/TwirChat" \
             --define "__APP_VERSION__=\"${VERSION}\"" \
             --define "__BACKEND_URL__=\"${BACKEND_URL}\""
-          cp -r dist/overlay "$app/Contents/MacOS/overlay"
-          cp -r public/fonts "$app/Contents/MacOS/fonts"
+          bun run package:runtime "$app/Contents/MacOS"
           iconutil -c icns assets/icon.iconset -o "$app/Contents/Resources/icon.icns" || true
           cat > "$app/Contents/Info.plist" <<EOFPLIST
           <?xml version="1.0" encoding="UTF-8"?>

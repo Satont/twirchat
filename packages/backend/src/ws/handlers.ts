@@ -1,25 +1,36 @@
-import type { ServerWebSocket } from 'bun'
 import type { DesktopToBackendMessage } from '@twirchat/shared'
-import { connectionManager } from './connection-manager.ts'
-import type { WsData } from './connection-manager.ts'
-import { ClientStore } from '../db/index.ts'
+import type { BackendToDesktopMessage } from '@twirchat/shared'
+import { logger } from '@twirchat/shared/logger'
+import type { ServerWebSocket } from 'bun'
+
 import { startKickOAuth } from '../auth/kick.ts'
 import { buildTwitchAuthUrl } from '../auth/twitch.ts'
-import { AccountStore } from '../db/index.ts'
-import { logger } from '@twirchat/shared/logger'
 import { config } from '../config.ts'
+import { ClientStore } from '../db/index.ts'
+import { AccountStore } from '../db/index.ts'
 import { sevenTVManager } from '../seventv/index.ts'
-import type { BackendToDesktopMessage } from '@twirchat/shared'
+import { YouTubeChatRelay } from '../youtube/relay.ts'
+import { connectionManager } from './connection-manager.ts'
+import type { WsData } from './connection-manager.ts'
+import { desktopMessageSchema } from './message-schema'
 
 const log = logger('ws')
 
+export const youtubeChatRelay = new YouTubeChatRelay({
+  apiKey: config.YOUTUBE_API_KEY,
+  send: (client, event) => {
+    connectionManager.send(client, { type: 'youtube_chat_event', event })
+  },
+})
+
 // Setup 7TV manager to send messages to clients
-sevenTVManager.sendToClient = (clientSecret: string, message: unknown) => {
-  connectionManager.send(clientSecret, message as BackendToDesktopMessage)
+sevenTVManager.sendToClient = (clientSecret: string, message: BackendToDesktopMessage) => {
+  connectionManager.send(clientSecret, message)
 }
 
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   log.info('WebSocket opened', { client: ws.data.clientSecret.slice(0, 8) })
+  youtubeChatRelay.cleanupClient(ws.data.clientSecret)
   connectionManager.register(ws)
   await ClientStore.touch(ws.data.clientSecret)
 }
@@ -30,7 +41,8 @@ export function handleWsClose(ws: ServerWebSocket<WsData>, code: number, reason:
     code,
     reason,
   })
-  connectionManager.remove(ws)
+  if (!connectionManager.remove(ws)) return
+  youtubeChatRelay.cleanupClient(ws.data.clientSecret)
   // Cleanup 7TV subscriptions for this client
   sevenTVManager.cleanupClient(ws.data.clientSecret)
 }
@@ -39,16 +51,32 @@ export async function handleWsMessage(
   ws: ServerWebSocket<WsData>,
   raw: string | Buffer,
 ): Promise<void> {
+  if (!connectionManager.isCurrent(ws)) return
   let msg: DesktopToBackendMessage
 
   try {
-    msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString()) as DesktopToBackendMessage
+    msg = desktopMessageSchema.parse(JSON.parse(typeof raw === 'string' ? raw : raw.toString()))
   } catch {
     ws.send(JSON.stringify({ message: 'Invalid JSON', type: 'error' }))
     return
   }
 
+  if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
+    ws.send(JSON.stringify({ message: 'Invalid message', type: 'error' }))
+    return
+  }
+
   switch (msg.type) {
+    case 'youtube_chat_subscribe': {
+      await youtubeChatRelay.subscribe(ws.data.clientSecret, msg)
+      break
+    }
+    case 'youtube_chat_unsubscribe': {
+      if (typeof msg.subscriptionId === 'string') {
+        youtubeChatRelay.unsubscribe(ws.data.clientSecret, msg.subscriptionId)
+      }
+      break
+    }
     case 'ping': {
       ws.send(JSON.stringify({ type: 'pong' }))
       break
@@ -181,7 +209,7 @@ export async function handleWsMessage(
       ws.send(
         JSON.stringify({
           type: 'error',
-          message: `Unknown message type: ${(msg as { type: string }).type}`,
+          message: 'Unknown message type',
         }),
       )
     }

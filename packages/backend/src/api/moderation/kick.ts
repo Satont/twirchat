@@ -1,3 +1,4 @@
+import { logger } from '@twirchat/shared/logger'
 /**
  * Kick Public API moderation client.
  *
@@ -5,8 +6,8 @@
  * `DELETE /public/v1/chat/{message_id}` and
  * `POST /public/v1/moderation/bans`, respectively.
  */
+import { z } from 'zod'
 
-import { logger } from '@twirchat/shared/logger'
 import {
   ModerationException,
   type BanResult,
@@ -15,12 +16,6 @@ import {
 } from './types.ts'
 
 const log = logger('kick-moderation')
-
-interface KickErrorResponse {
-  error?: string
-  errors?: Record<string, string[]>
-  message?: string
-}
 
 /**
  * Ban a user permanently or apply a timeout in a broadcaster's chat.
@@ -135,7 +130,13 @@ export async function deleteMessage(
 
 async function readErrorMessage(response: Response): Promise<string | undefined> {
   try {
-    const payload = (await response.json()) as KickErrorResponse
+    const payload = z
+      .object({
+        error: z.string().optional(),
+        errors: z.record(z.string(), z.array(z.string())).optional(),
+        message: z.string().optional(),
+      })
+      .parse(await response.json())
     return payload.message ?? payload.error
   } catch {
     return undefined

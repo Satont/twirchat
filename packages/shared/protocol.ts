@@ -1,4 +1,5 @@
 import type { Platform } from './types'
+import type { YouTubeChatRelayEvent } from './youtube-chat'
 
 /**
  * Протокол WebSocket между backend и desktop-приложением.
@@ -24,7 +25,14 @@ export interface SevenTVEmote {
   imageUrl: string
 }
 
-export type EmoteSource = 'channel' | 'seventv' | 'collectibles' | 'global'
+export type EmoteSource =
+  | 'channel'
+  | 'seventv'
+  | 'collectibles'
+  | 'global'
+  | 'bttv'
+  | 'ffz'
+  | 'personal'
 
 export interface EmoteCatalogEntry {
   id: string
@@ -35,6 +43,8 @@ export interface EmoteCatalogEntry {
   zeroWidth: boolean
   aspectRatio: number
   source: EmoteSource
+  provider?: 'twitch' | 'seventv' | 'bttv' | 'ffz'
+  modifier?: boolean
 }
 
 // ============================================================
@@ -42,6 +52,7 @@ export interface EmoteCatalogEntry {
 // ============================================================
 
 export type BackendToDesktopMessage =
+  | { type: 'youtube_chat_event'; event: YouTubeChatRelayEvent }
   | { type: 'auth_url'; platform: Platform; url: string }
   | { type: 'auth_success'; platform: Platform; username: string; displayName: string }
   | { type: 'auth_error'; platform: Platform; error: string }
@@ -103,6 +114,14 @@ export type BackendToDesktopMessage =
 // ============================================================
 
 export type DesktopToBackendMessage =
+  | {
+      type: 'youtube_chat_subscribe'
+      subscriptionId: string
+      channelId: string
+      videoId?: string
+      pageToken?: string
+    }
+  | { type: 'youtube_chat_unsubscribe'; subscriptionId: string }
   | { type: 'ping' }
   | { type: 'auth_start'; platform: Exclude<Platform, 'twitch'> }
   | { type: 'auth_start_twitch'; codeChallenge: string; state: string }
@@ -412,4 +431,20 @@ export interface AccountsResponse {
     avatarUrl?: string
     connectedAt: number
   }[]
+}
+
+/** GET /api/accounts/saved — identities owned by this desktop client, without credentials. */
+export interface SavedAccountView {
+  id: string
+  platform: Platform
+  platformUserId: string
+  username: string
+  displayName: string
+  avatarUrl?: string
+  scopes: string[]
+  connectedAt: number
+  active: boolean
+}
+export interface SavedAccountsResponse {
+  accounts: SavedAccountView[]
 }

@@ -1,24 +1,29 @@
 import { AUTH_SERVER_PORT } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
-import { handleYouTubeCallback } from './youtube'
-import { handleTwitchCallback } from './twitch'
-import { handleKickCallback } from './kick'
-import { ChannelStore } from '../store/channel-store'
-import type { WebviewSender } from '../shared/rpc'
 import type { Platform } from '@twirchat/shared/types'
+
+import { runInBackground } from '../services/background-task'
+import type { WebviewSender } from '../shared/rpc'
+import { AccountStore } from '../store/account-store'
+import { ChannelStore } from '../store/channel-store'
+import { handleKickCallback } from './kick'
+import { handleTwitchCallback } from './twitch'
+import { handleYouTubeCallback } from './youtube'
 
 const log = logger('auth-server')
 
 let server: ReturnType<typeof Bun.serve> | null = null
 let sendToView: WebviewSender | null = null
-let onAuthSuccessCallback: ((platform: Platform, channelSlug?: string) => void) | null = null
+let onAuthSuccessCallback:
+  | ((platform: Platform, channelSlug?: string, accountId?: string) => void | Promise<void>)
+  | null = null
 
 export function setAuthServerRpcSender(sender: WebviewSender): void {
   sendToView = sender
 }
 
 export function setOnAuthSuccessCallback(
-  callback: (platform: Platform, channelSlug?: string) => void,
+  callback: (platform: Platform, channelSlug?: string, accountId?: string) => void | Promise<void>,
 ): void {
   onAuthSuccessCallback = callback
 }
@@ -43,15 +48,12 @@ export function startAuthServer(): void {
           // Save the channel to automatically join it
           ChannelStore.save('twitch', result.channelSlug)
 
-          // Notify the webview of successful authentication
-          if (sendToView) {
-            sendToView.auth_success(result.user)
-          }
-
-          // Trigger reconnection and auto-join the channel
-          if (onAuthSuccessCallback) {
-            onAuthSuccessCallback('twitch', result.channelSlug)
-          }
+          await onAuthSuccessCallback?.(
+            'twitch',
+            result.channelSlug,
+            AccountStore.findByPlatform('twitch')?.id,
+          )
+          sendToView?.auth_success(result.user)
 
           return result.response
         }
@@ -61,15 +63,12 @@ export function startAuthServer(): void {
           // Save the channel to automatically join it
           ChannelStore.save('youtube', result.channelSlug)
 
-          // Notify the webview of successful authentication
-          if (sendToView) {
-            sendToView.auth_success(result.user)
-          }
-
-          // Trigger reconnection and auto-join the channel
-          if (onAuthSuccessCallback) {
-            onAuthSuccessCallback('youtube', result.channelSlug)
-          }
+          await onAuthSuccessCallback?.(
+            'youtube',
+            result.channelSlug,
+            AccountStore.findByPlatform('youtube')?.id,
+          )
+          sendToView?.auth_success(result.user)
 
           return result.response
         }
@@ -79,15 +78,12 @@ export function startAuthServer(): void {
           // Save the channel to automatically join it
           ChannelStore.save('kick', result.channelSlug)
 
-          // Notify the webview of successful authentication
-          if (sendToView) {
-            sendToView.auth_success(result.user)
-          }
-
-          // Trigger reconnection and auto-join the channel
-          if (onAuthSuccessCallback) {
-            onAuthSuccessCallback('kick', result.channelSlug)
-          }
+          await onAuthSuccessCallback?.(
+            'kick',
+            result.channelSlug,
+            AccountStore.findByPlatform('kick')?.id,
+          )
+          sendToView?.auth_success(result.user)
 
           return result.response
         }
@@ -108,7 +104,7 @@ export function startAuthServer(): void {
 }
 
 export function stopAuthServer(): void {
-  server?.stop()
+  if (server) runInBackground(server.stop(), 'OAuth server shutdown failed')
   server = null
 }
 

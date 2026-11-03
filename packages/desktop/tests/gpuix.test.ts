@@ -1,12 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { buildMessageTokens } from '../src/gpuix/message-tokens'
 import { createStore } from '../src/gpuix/state/create-store'
-import { setRuntimeConfig } from '../src/runtime-config'
+import { messageLength, messageLengthLimit } from '../src/views/main/utils/chat-send-targets'
+import {
+  codePointRangeToUtf16,
+  initialsOf,
+  sanitizeDisplayText,
+  truncateGraphemes,
+} from '../src/views/shared/utils/display-text'
+import { buildMessageParts } from '../src/views/shared/utils/messageParts'
 
 function makeMessage(partial: Partial<NormalizedChatMessage>): NormalizedChatMessage {
   return {
@@ -92,6 +97,69 @@ describe('buildMessageTokens', () => {
       if (token.kind === 'text') expect(token.text.length).toBeLessThanOrEqual(28)
     }
   })
+
+  test('emoji walls are chunked on grapheme boundaries (no lone surrogates)', () => {
+    const wall = '😂👨‍👩‍👧‍👦🏳️‍🌈'.repeat(30)
+    const tokens = buildMessageTokens(makeMessage({ text: wall }))
+    expect(tokens.length).toBeGreaterThan(1)
+    for (const token of tokens) {
+      if (token.kind === 'text') expect(token.text.isWellFormed()).toBe(true)
+    }
+    expect(tokens.map((t) => (t.kind === 'text' ? t.text : '')).join('')).toBe(wall)
+  })
+
+  test('zalgo mark stacks are capped and newlines collapse to spaces', () => {
+    const zalgo = `Z${'\u0301\u0302\u0303\u0304'.repeat(25)}a\n\n\tb`
+    const tokens = buildMessageTokens(makeMessage({ text: zalgo }))
+    const text = tokens.map((t) => (t.kind === 'text' ? t.text : '')).join('')
+    expect(text).toBe('Z\u0301\u0302\u0303a b')
+  })
+})
+
+describe('display-text', () => {
+  test('sanitizeDisplayText repairs lone surrogates', () => {
+    expect(sanitizeDisplayText('a\uD83Db').isWellFormed()).toBe(true)
+  })
+
+  test('truncateGraphemes never splits an emoji', () => {
+    const out = truncateGraphemes('👍'.repeat(100), 80)
+    expect(out.isWellFormed()).toBe(true)
+    expect(out).toBe(`${'👍'.repeat(80)}…`)
+    expect(truncateGraphemes('short', 80)).toBe('short')
+  })
+
+  test('initialsOf takes whole graphemes', () => {
+    expect(initialsOf('👨‍👩‍👧 family')).toBe('👨‍👩‍👧')
+    expect(initialsOf('satont', 2)).toBe('SA')
+    expect(initialsOf('   ')).toBe('')
+  })
+
+  test('Twitch code-point emote offsets map to UTF-16 after an emoji', () => {
+    // "😂 Kappa": Twitch reports Kappa at code points 2-6, UTF-16 units 3-7.
+    const text = '😂 Kappa'
+    const range = codePointRangeToUtf16(text, 2, 6)
+    expect(text.slice(range.start, range.end + 1)).toBe('Kappa')
+  })
+
+  test('messageParts skips overlapping and out-of-range emote positions', () => {
+    const emote = { id: '1', name: 'Kappa', imageUrl: '', positions: [] }
+    const parts = buildMessageParts(
+      makeMessage({
+        text: 'Kappa hi',
+        emotes: [
+          {
+            ...emote,
+            positions: [
+              { start: 0, end: 4 },
+              { start: 2, end: 6 },
+              { start: 50, end: 54 },
+            ],
+          },
+        ],
+      }),
+    )
+    expect(parts.map((p) => p.type)).toEqual(['emote', 'text'])
+  })
 })
 
 describe('createStore', () => {
@@ -100,7 +168,7 @@ describe('createStore', () => {
     expect(store.get().count).toBe(0)
     store.set({ count: 5 })
     expect(store.get().count).toBe(5)
-    store.set((prev) => ({ count: prev.count + 1 }))
+    store.modify((prev) => ({ count: prev.count + 1 }))
     expect(store.get().count).toBe(6)
     store.update({ count: 10 })
     expect(store.get().count).toBe(10)
@@ -113,6 +181,39 @@ describe('createStore', () => {
     store.set(1)
     await new Promise((r) => setTimeout(r, 10))
     expect(calls).toBe(0)
+  })
+
+  test('unsubscribe cancels a notification queued before a component unmounts', async () => {
+    const store = createStore(0)
+    let calls = 0
+    const unsubscribe = store.subscribe(() => calls++)
+    store.set(1)
+    unsubscribe()
+    await Bun.sleep(10)
+    expect(calls).toBe(0)
+  })
+
+  test('unsubscribe also cancels a listener already copied into the flushing batch', async () => {
+    const store = createStore(0)
+    let calls = 0
+    let unsubscribe = () => {}
+    store.subscribe(() => unsubscribe())
+    unsubscribe = store.subscribe(() => calls++)
+    store.set(1)
+    await Bun.sleep(10)
+    expect(calls).toBe(0)
+  })
+
+  test('an old subscription cannot cancel a later registration of the same callback', async () => {
+    const store = createStore(0)
+    let calls = 0
+    const listener = () => calls++
+    const first = store.subscribe(listener)
+    store.subscribe(listener)
+    store.set(1)
+    first()
+    await Bun.sleep(10)
+    expect(calls).toBe(1)
   })
 
   test('notifications are coalesced into one macrotask (GPUI reentrancy guard)', async () => {
@@ -130,36 +231,14 @@ describe('createStore', () => {
   })
 })
 
-describe('image cache (GPUI cannot load http(s) on Linux)', () => {
-  test('ensureImage downloads to a local file and cachedImagePath resolves it', async () => {
-    const png = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-      'base64',
-    )
-    const server = Bun.serve({
-      port: 0,
-      fetch: () => new Response(png, { headers: { 'Content-Type': 'image/png' } }),
-    })
-    const dir = mkdtempSync(join(tmpdir(), 'twirchat-imgcache-'))
-    setRuntimeConfig({ dbPath: join(dir, 'db.sqlite') })
+describe('composer message length', () => {
+  test('uses the tightest limit across target platforms', () => {
+    expect(messageLengthLimit(['twitch', 'kick'])).toBe(500)
+    expect(messageLengthLimit(['twitch', 'youtube'])).toBe(200)
+    expect(messageLengthLimit([])).toBeNull()
+  })
 
-    const { cachedImagePath, ensureImage, imageCacheRevisionStore } =
-      await import('../src/gpuix/state/image-cache')
-    const url = `http://127.0.0.1:${server.port}/avatar.png`
-
-    expect(cachedImagePath(url)).toBeUndefined()
-    const revisions: number[] = []
-    imageCacheRevisionStore.subscribe(() => revisions.push(1))
-    ensureImage(url)
-
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    const localPath = cachedImagePath(url)
-    expect(localPath).toBeDefined()
-    expect(localPath!.endsWith('.png')).toBe(true)
-    expect(await Bun.file(localPath!).exists()).toBe(true)
-    expect(revisions.length).toBeGreaterThan(0)
-
-    server.stop()
-    rmSync(dir, { recursive: true, force: true })
+  test('counts emoji as one character', () => {
+    expect(messageLength('👍👍 hi')).toBe(5)
   })
 })

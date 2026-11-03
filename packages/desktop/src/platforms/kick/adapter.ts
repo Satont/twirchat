@@ -1,17 +1,48 @@
-import { BasePlatformAdapter } from '../base-adapter'
-import type { Badge, Emote, NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
-import { KICK_API_BASE, KICK_PUSHER_WS } from '@twirchat/shared/constants'
-import { getBackendUrl } from '../../runtime-config'
-import { AccountStore } from '../../store/account-store'
-import { refreshKickToken } from '../../auth/kick'
-import { getKickBadgeSvg } from './badges'
-import { resolveKickAvatarUrl, type KickAvatarResolver } from './avatar-cache'
+import { KICK_API_BASE } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
+import type {
+  Account,
+  ChatSendReceipt,
+  Emote,
+  NormalizedChatMessage,
+  NormalizedEvent,
+  PlatformStatusInfo,
+} from '@twirchat/shared/types'
+import { z } from 'zod'
+
+import { refreshKickToken } from '../../auth/kick'
+import { backendFetch } from '../../runtime-config'
+import { AccountStore } from '../../store/account-store'
+import { BasePlatformAdapter } from '../base-adapter'
+import { resolveKickAvatarUrl, type KickAvatarResolver } from './avatar-cache'
+import { kickBadgeCatalog } from './badge-catalog'
+import {
+  kickBadgeIdentitySchema,
+  normalizeKickBadges,
+  type KickBadgeIdentity,
+  type KickSubscriberBadge,
+} from './badge-data'
+import {
+  discoverKickRealtime,
+  requestKickRealtimeToken,
+  KickRealtimeSession,
+  KickConnectionError,
+  type KickRealtimeEvent,
+  type KickRealtimeDependencies,
+} from './realtime'
+import { createKickSocket } from './socket.js'
+export type { KickSocket, KickSocketEvents } from './realtime'
+import {
+  kickBackendFailure,
+  kickReconnectDelay,
+  kickRetryClock,
+  type KickRetryClock,
+} from './retry'
 
 const log = logger('kick')
 
 // ============================================================
-// Типы Kick Pusher events
+// Kick realtime events
 // ============================================================
 
 export interface KickChatMessage {
@@ -24,26 +55,12 @@ export interface KickChatMessage {
     id: number
     username: string
     slug: string
-    identity: {
+    identity: KickBadgeIdentity & {
       color: string
-      badges: {
-        type: string
-        text: string
-        count?: number
-      }[]
     }
     profile_picture?: string
   }
-  metadata?: {
-    original_sender: {
-      id: string
-      username: string
-    }
-    original_message: {
-      id: string
-      content: string
-    }
-  }
+  metadata?: z.output<typeof kickMessageMetadataSchema>
 }
 
 interface KickFollowEvent {
@@ -66,96 +83,141 @@ interface KickSubscriptionEvent {
   created_at: string
 }
 
-// Pusher protocol envelope
-interface PusherEvent {
-  event: string
-  channel?: string
-  data: string | Record<string, unknown>
+export interface KickSendBody {
+  broadcaster_user_id: number
+  content: string
+  type: 'user'
+  reply_to_message_id?: string
+}
+export interface KickAdapterDependencies extends KickRealtimeDependencies {
+  account(): Pick<Account, 'id'> | null
+  tokens: typeof AccountStore.getTokens
+  refreshToken: typeof refreshKickToken
+  chatroom(
+    channel: string,
+    signal: AbortSignal,
+  ): Promise<{
+    chatroomId: number
+    broadcasterUserId: number
+    subscriberBadges?: KickSubscriberBadge[]
+  }>
+  send(body: KickSendBody, token: string, signal: AbortSignal): Promise<Response>
+  clock: KickRetryClock
 }
 
-// ============================================================
-// Kick адаптер
-//
-// Подключается к Kick через Pusher WebSocket в анонимном режиме
-// (без токенов). Входящие сообщения чата и события (подписки,
-// Фолловы) приходят через Pusher. Отправка сообщений делегируется
-// Вовне — должна идти через backend WS (send_message).
-// ============================================================
+const kickSendAcknowledgementSchema = z.object({
+  data: z.object({ is_sent: z.boolean().optional(), message_id: z.string().min(1).optional() }),
+})
+
+const defaultDependencies: KickAdapterDependencies = {
+  account: () => AccountStore.findByPlatform('kick'),
+  tokens: (id) => AccountStore.getTokens(id),
+  refreshToken: refreshKickToken,
+  async chatroom(channel, signal) {
+    const [response, subscriberBadges] = await Promise.all([
+      backendFetch(`/api/kick/chatroom?slug=${encodeURIComponent(channel)}`, { signal }),
+      kickBadgeCatalog.load(channel),
+    ])
+    if (!response.ok)
+      throw new KickConnectionError(`Kick chatroom backend failed (HTTP ${response.status}).`)
+    const parsed = z
+      .object({
+        chatroomId: z.number().int().positive().optional(),
+        broadcasterUserId: z.number().int().positive().optional(),
+        error: z.string().optional(),
+      })
+      .safeParse(await response.json())
+    if (
+      !parsed.success ||
+      parsed.data.error ||
+      !parsed.data.chatroomId ||
+      !parsed.data.broadcasterUserId
+    )
+      throw new KickConnectionError(
+        'Kick chatroom backend returned an invalid or unavailable channel.',
+      )
+    return {
+      chatroomId: parsed.data.chatroomId,
+      broadcasterUserId: parsed.data.broadcasterUserId,
+      subscriberBadges,
+    }
+  },
+  discover: discoverKickRealtime,
+  token: requestKickRealtimeToken,
+  socket: createKickSocket,
+  send: (body, token, signal) =>
+    fetch(`${KICK_API_BASE}/chat`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    }),
+  clock: kickRetryClock,
+}
 
 export class KickAdapter extends BasePlatformAdapter {
-  readonly platform = 'kick' as const
-
-  private ws: WebSocket | null = null
-  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
+  readonly platform = 'kick'
+  private realtime: KickRealtimeSession | null = null
+  private cancelTimer?: () => void
+  private timerGeneration = 0
   private channelSlug = ''
-  private chatroomId: number | null = null
   private broadcasterUserId: number | null = null
+  private subscriberBadges: KickSubscriberBadge[] = []
   private isConnected = false
-  private shouldReconnect = true
-
-  private anonymous = true
+  private shouldReconnect = false
   private accessToken: string | null = null
+  private expiresAt?: number
+  private rejectedToken?: { accountId: string; accessToken: string }
   private accountId: string | null = null
   private messageQueue: Promise<void> = Promise.resolve()
-  private platformUserId: string | null = null
+  private identityRevision = 0
+  private identityAbort = new AbortController()
+  private connectionAttempt?: Promise<void>
+  private failures = 0
+  private retryIdentity = ''
+  private connectionStatus: PlatformStatusInfo['status'] = 'disconnected'
+  private connectionError?: string
+  private authenticationError?: string
 
-  async connect(channelSlug: string): Promise<void> {
-    this.channelSlug = channelSlug
-    this.shouldReconnect = true
+  constructor(private readonly dependencies: KickAdapterDependencies = defaultDependencies) {
+    super()
+  }
+
+  connect(channelSlug: string): Promise<void> {
+    channelSlug = channelSlug.trim().replace(/^#/, '').toLowerCase()
+    const account = this.dependencies.account()
+    const accountId = account?.id ?? null
+    if (this.connectionAttempt && this.channelSlug === channelSlug && this.accountId === accountId)
+      return this.connectionAttempt
+    const revision = ++this.identityRevision
+    this.identityAbort.abort()
+    this.identityAbort = new AbortController()
     this.clearTimers()
-
-    // Check for stored account
-    const account = AccountStore.findByPlatform('kick')
-    if (account) {
-      const tokens = AccountStore.getTokens(account.id)
-      if (tokens) {
-        this.anonymous = false
-        this.accessToken = tokens.accessToken
-        this.accountId = account.id
-        this.platformUserId = account.platformUserId
-
-        // Check if token needs refresh
-        const now = Math.floor(Date.now() / 1000)
-        if (tokens.expiresAt && tokens.expiresAt < now + 300) {
-          log.info('[Kick] Token expired or expiring soon, refreshing...')
-          try {
-            this.accessToken = await refreshKickToken(account.id)
-            log.info('[Kick] Token refreshed successfully')
-          } catch (error) {
-            log.error('[Kick] Failed to refresh token', { error: String(error) })
-          }
-        }
-      }
+    this.closeSocket()
+    this.shouldReconnect = true
+    this.channelSlug = channelSlug
+    this.accountId = accountId
+    this.broadcasterUserId = null
+    this.subscriberBadges = []
+    this.isConnected = false
+    this.accessToken = null
+    this.expiresAt = undefined
+    this.connectionError = undefined
+    this.authenticationError = undefined
+    this.messageQueue = Promise.resolve()
+    const retryIdentity = JSON.stringify([channelSlug, accountId])
+    if (retryIdentity !== this.retryIdentity) {
+      this.failures = 0
+      this.retryIdentity = retryIdentity
     }
-
-    if (this.anonymous) {
-      this.accessToken = null
+    this.connectionStatus = 'connecting'
+    if (accountId) {
+      const tokens = this.dependencies.tokens(accountId)
+      this.applyTokens(tokens)
+      if (tokens && (this.expiring(tokens) || !this.usable(tokens)))
+        this.refreshAuthentication(revision, true)
     }
-
-    this.emit('status', {
-      channelLogin: channelSlug,
-      mode: this.anonymous ? 'anonymous' : 'authenticated',
-      platform: 'kick',
-      status: 'connecting',
-    })
-
-    try {
-      const info = await this.fetchChatroomId(channelSlug)
-      this.chatroomId = info.chatroomId
-      this.broadcasterUserId = info.broadcasterUserId
-      await this.connectPusher()
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      log.error('[Kick] Failed to connect', { error: errorMessage })
-      this.emit('status', {
-        channelLogin: channelSlug,
-        error: errorMessage,
-        mode: this.anonymous ? 'anonymous' : 'authenticated',
-        platform: 'kick',
-        status: 'error',
-      })
-      this.scheduleReconnect()
-    }
+    return this.startAttempt(revision)
   }
 
   getBroadcasterUserId(): number | null {
@@ -163,278 +225,298 @@ export class KickAdapter extends BasePlatformAdapter {
   }
 
   async disconnect(): Promise<void> {
+    this.identityRevision++
     this.shouldReconnect = false
+    this.identityAbort.abort()
     this.clearTimers()
-    this.ws?.close()
-    this.ws = null
+    this.closeSocket()
+    this.accountId = null
+    this.accessToken = null
+    this.expiresAt = undefined
+    this.authenticationError = undefined
+    this.connectionError = undefined
     this.isConnected = false
-
-    this.emit('status', {
-      channelLogin: this.channelSlug,
-      mode: this.anonymous ? 'anonymous' : 'authenticated',
-      platform: 'kick',
-      status: 'disconnected',
-    })
+    this.connectionAttempt = undefined
+    this.publishStatus('disconnected')
   }
 
-  async sendMessage(_channelId: string, text: string, replyToMessageId?: string): Promise<void> {
-    if (this.anonymous) {
-      throw new Error('Cannot send messages in anonymous mode. Please log in to Kick.')
+  private current(revision: number): boolean {
+    return revision === this.identityRevision && this.shouldReconnect
+  }
+  private selected(): boolean {
+    return (this.dependencies.account()?.id ?? null) === this.accountId
+  }
+  private assertIdentity(revision: number, delivered = false): void {
+    if (!this.current(revision) || !this.selected())
+      throw new Error(
+        delivered
+          ? 'The Kick account changed while sending. Delivery could not be confirmed; check chat before retrying.'
+          : 'The Kick account changed. Review the draft and send again.',
+      )
+  }
+  private usable(tokens: { accessToken: string; expiresAt?: number } | null): boolean {
+    return (
+      Boolean(tokens?.accessToken) &&
+      !(
+        this.rejectedToken?.accountId === this.accountId &&
+        this.rejectedToken?.accessToken === tokens?.accessToken
+      ) &&
+      (tokens?.expiresAt === undefined ||
+        tokens.expiresAt > Math.floor(this.dependencies.clock.now() / 1000))
+    )
+  }
+  private expiring(tokens: { expiresAt?: number }): boolean {
+    return (
+      tokens.expiresAt !== undefined &&
+      tokens.expiresAt <= Math.floor(this.dependencies.clock.now() / 1000) + 300
+    )
+  }
+  private applyTokens(tokens: { accessToken: string; expiresAt?: number } | null): void {
+    this.accessToken = this.usable(tokens) && tokens ? tokens.accessToken : null
+    this.expiresAt = tokens?.expiresAt
+  }
+  private publishStatus(status: PlatformStatusInfo['status'] = this.connectionStatus): void {
+    this.connectionStatus = status
+    this.emit('status', {
+      channelLogin: this.channelSlug,
+      channelId: this.broadcasterUserId ? String(this.broadcasterUserId) : undefined,
+      platform: 'kick',
+      status,
+      mode: this.usable(
+        this.accessToken ? { accessToken: this.accessToken, expiresAt: this.expiresAt } : null,
+      )
+        ? 'authenticated'
+        : 'anonymous',
+      error: this.connectionError ?? this.authenticationError,
+    })
+  }
+  private refreshAuthentication(revision: number, manual: boolean): void {
+    const accountId = this.accountId
+    if (!accountId) return
+    this.dependencies
+      .refreshToken(accountId, { channelSlug: this.channelSlug, manual })
+      .then(() => {
+        if (!this.current(revision) || !this.selected()) return
+        const tokens = this.dependencies.tokens(accountId)
+        if (!this.usable(tokens))
+          throw new Error('Kick credentials remain unavailable after refresh. Sign in again.')
+        this.applyTokens(tokens)
+        this.authenticationError = undefined
+        this.publishStatus()
+      })
+      .catch((error: unknown) => {
+        if (!this.current(revision) || !this.selected()) return
+        this.applyTokens(this.dependencies.tokens(accountId))
+        this.authenticationError =
+          error instanceof Error
+            ? error.message
+            : 'Kick authentication is unavailable. Sign in again.'
+        this.publishStatus()
+      })
+  }
+  private async sendToken(revision: number, force: boolean): Promise<string> {
+    this.assertIdentity(revision)
+    const accountId = this.accountId
+    if (!accountId) throw new Error('Sign in to Kick before sending messages.')
+    let tokens = this.dependencies.tokens(accountId)
+    if (!force && this.usable(tokens) && tokens && !this.expiring(tokens)) {
+      this.applyTokens(tokens)
+      return tokens.accessToken
     }
-    if (!this.accessToken) {
-      throw new Error('Kick access token not available')
+    try {
+      await this.dependencies.refreshToken(accountId, { channelSlug: this.channelSlug })
+      this.assertIdentity(revision)
+      tokens = this.dependencies.tokens(accountId)
+      if (!this.usable(tokens) || !tokens)
+        throw new Error('Kick credentials are unavailable after refresh. Sign in again.')
+      this.applyTokens(tokens)
+      this.authenticationError = undefined
+      this.publishStatus()
+      return tokens.accessToken
+    } catch (error) {
+      this.assertIdentity(revision)
+      tokens = this.dependencies.tokens(accountId)
+      this.applyTokens(tokens)
+      this.authenticationError =
+        error instanceof Error ? error.message : 'Kick authentication is unavailable.'
+      this.publishStatus()
+      if (!force && tokens && this.usable(tokens)) return tokens.accessToken
+      throw error
     }
-    if (!this.accountId) {
-      throw new Error('Kick account ID not available')
-    }
+  }
 
-    // Check if token needs refresh before sending
-    await this.refreshTokenIfNeeded()
+  private rejectToken(token: string): void {
+    if (this.accountId) this.rejectedToken = { accountId: this.accountId, accessToken: token }
+    this.accessToken = null
+    this.authenticationError = 'Kick rejected the current credentials. Refresh or sign in again.'
+    this.publishStatus()
+  }
 
-    const body: {
-      broadcaster_user_id: number
-      content: string
-      type: string
-      reply_to_message_id?: string
-    } = {
-      broadcaster_user_id: this.broadcasterUserId ?? Number(this.platformUserId),
+  private async deliver(body: KickSendBody, token: string, revision: number): Promise<Response> {
+    const signal = AbortSignal.any([this.identityAbort.signal, AbortSignal.timeout(15000)])
+    try {
+      return await this.dependencies.send(body, token, signal)
+    } catch {
+      this.assertIdentity(revision, true)
+      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
+    }
+  }
+
+  async sendMessage(
+    _channelId: string,
+    text: string,
+    replyToMessageId?: string,
+  ): Promise<ChatSendReceipt> {
+    const revision = this.identityRevision
+    if (!this.broadcasterUserId)
+      throw new Error('Kick channel is not ready. Reconnect chat before sending.')
+    const body: KickSendBody = {
+      broadcaster_user_id: this.broadcasterUserId,
       content: text,
       type: 'user',
       ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
     }
-
-    const url = `${KICK_API_BASE}/chat`
-    let res = await fetch(url, {
-      body: JSON.stringify(body),
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-    })
-
-    // If 401, try to refresh token and retry once
-    if (res.status === 401) {
-      log.info('[Kick] Got 401, attempting token refresh...')
-      const refreshed = await this.refreshTokenIfNeeded()
-      if (refreshed) {
-        res = await fetch(url, {
-          body: JSON.stringify(body),
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          method: 'POST',
-        })
-      }
+    let token = await this.sendToken(revision, false)
+    this.assertIdentity(revision)
+    let response = await this.deliver(body, token, revision)
+    this.assertIdentity(revision, true)
+    if (response.status === 401) {
+      this.rejectToken(token)
+      token = await this.sendToken(revision, true)
+      this.assertIdentity(revision)
+      response = await this.deliver(body, token, revision)
+      this.assertIdentity(revision, true)
     }
+    if (response.status === 401) this.rejectToken(token)
+    if (!response.ok) throw new Error(`Kick message was rejected (HTTP ${response.status}).`)
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch {
+      this.assertIdentity(revision, true)
+      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
+    }
+    this.assertIdentity(revision, true)
+    const acknowledgement = kickSendAcknowledgementSchema.safeParse(payload)
+    if (!acknowledgement.success)
+      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
+    if (acknowledgement.data.data.is_sent === false)
+      throw new Error('Kick did not send the message.')
+    if (acknowledgement.data.data.is_sent !== true && !acknowledgement.data.data.message_id)
+      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
+    return {
+      channelId: String(body.broadcaster_user_id),
+      messageId: acknowledgement.data.data.message_id,
+    }
+  }
 
-    if (!res.ok) {
-      const responseBody = await res.text().catch(() => '')
-      throw new Error(
-        `Failed to send Kick message ${JSON.stringify(body)}: ${res.status} ${responseBody}`,
+  private closeSocket(): void {
+    const session = this.realtime
+    this.realtime = null
+    session?.close()
+  }
+  private startAttempt(revision: number): Promise<void> {
+    const controller = new AbortController()
+    const signal = AbortSignal.any([this.identityAbort.signal, controller.signal])
+    this.scheduleTimer(revision, 15000, () => {
+      controller.abort(new KickConnectionError('Kick connection timed out.'))
+    })
+    const attempt = Promise.resolve()
+      .then(() => this.runAttempt(revision, signal))
+      .finally(() => {
+        if (this.connectionAttempt === attempt) this.connectionAttempt = undefined
+      })
+    this.connectionAttempt = attempt
+    return attempt
+  }
+  private async runAttempt(revision: number, signal: AbortSignal): Promise<void> {
+    if (!this.current(revision) || !this.selected()) return
+    this.connectionError = undefined
+    this.publishStatus('connecting')
+    if (!this.current(revision) || !this.selected()) return
+    try {
+      const info = await this.dependencies.chatroom(this.channelSlug, signal)
+      if (!this.current(revision) || !this.selected()) return
+      if (signal.aborted) throw signal.reason
+      this.broadcasterUserId = info.broadcasterUserId
+      this.subscriberBadges = info.subscriberBadges ?? []
+      const session = new KickRealtimeSession({
+        chatroomId: info.chatroomId,
+        signal,
+        dependencies: this.dependencies,
+        event: (event) => {
+          if (!this.current(revision) || !this.selected()) return
+          try {
+            this.handleRealtimeEvent(event)
+          } catch {
+            log.warn('Invalid Kick chat event', { channel: this.channelSlug, event: event.event })
+          }
+        },
+        disconnected: (error) => {
+          if (this.current(revision) && this.selected())
+            this.connectionFailed(error.message, revision)
+        },
+      })
+      this.realtime = session
+      await session.ready
+      if (this.current(revision) && this.selected() && this.realtime === session)
+        this.emitConnected()
+    } catch (error) {
+      if (!this.current(revision) || !this.selected()) return
+      this.connectionFailed(
+        error instanceof KickConnectionError ? error.message : kickBackendFailure(error),
+        revision,
       )
     }
   }
 
-  private async refreshTokenIfNeeded(): Promise<boolean> {
-    if (!this.accountId) {
-      return false
-    }
-
-    const tokens = AccountStore.getTokens(this.accountId)
-    if (!tokens?.refreshToken) {
-      return false
-    }
-
-    const now = Math.floor(Date.now() / 1000)
-    if (tokens.expiresAt && tokens.expiresAt < now + 300) {
-      log.info('[Kick] Token expired or expiring soon, refreshing...')
-      try {
-        this.accessToken = await refreshKickToken(this.accountId)
-        log.info('[Kick] Token refreshed successfully')
-        return true
-      } catch (error) {
-        log.error('[Kick] Failed to refresh token', { error: String(error) })
-        return false
-      }
-    }
-    return false
-  }
-
-  // ============================================================
-  // Private
-  // ============================================================
-
-  private async fetchChatroomId(
-    channelSlug: string,
-  ): Promise<{ chatroomId: number; broadcasterUserId: number }> {
-    const url = `${getBackendUrl()}/api/kick/chatroom?slug=${encodeURIComponent(channelSlug)}`
-    const res = await fetch(url)
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      throw new Error(`Cannot fetch Kick chatroom for "${channelSlug}": ${res.status} ${body}`)
-    }
-
-    const data = (await res.json()) as {
-      chatroomId?: number
-      broadcasterUserId?: number
-      error?: string
-    }
-    if (data.error) {
-      throw new Error(`Kick chatroom error for "${channelSlug}": ${data.error}`)
-    }
-
-    const { chatroomId } = data
-    const { broadcasterUserId } = data
-    if (!chatroomId) {
-      throw new Error(`Kick chatroom ID not found for channel "${channelSlug}"`)
-    }
-    if (!broadcasterUserId) {
-      throw new Error(`Kick broadcaster user ID not found for channel "${channelSlug}"`)
-    }
-
-    log.info(
-      `[Kick] Channel "${channelSlug}" → chatroom_id=${chatroomId}, broadcaster_user_id=${broadcasterUserId}`,
-    )
-    return { broadcasterUserId, chatroomId }
-  }
-
-  private async connectPusher(): Promise<void> {
-    if (!this.chatroomId) {
-      throw new Error('chatroomId not set')
-    }
-
-    if (this.ws) {
-      this.ws.close()
-      this.ws = null
-    }
-
-    const wsUrl = `${KICK_PUSHER_WS}?protocol=7&client=js&version=8.4.0&flash=false`
-    const ws = new WebSocket(wsUrl)
-    this.ws = ws
-
-    ws.addEventListener('open', () => {
-      log.info(`[Kick] Pusher connected (${this.anonymous ? 'anonymous' : 'authenticated'})`)
-    })
-
-    ws.addEventListener('message', (event) => {
-      try {
-        const msg = JSON.parse(event.data as string) as PusherEvent
-        this.handlePusherEvent(msg)
-      } catch (error) {
-        log.error('[Kick] Failed to parse Pusher event', { error: String(error) })
-      }
-    })
-
-    ws.addEventListener('close', (event) => {
-      // Close of a stale socket torn down in connectPusher()/disconnect() —
-      // only the current socket drives status and reconnect.
-      if (this.ws !== ws) {
-        return
-      }
-
-      log.warn(`[Kick] Pusher disconnected: ${event.code} ${event.reason}`)
-      this.isConnected = false
-      this.ws = null
-
-      this.emit('status', {
-        channelLogin: this.channelSlug,
-        mode: this.anonymous ? 'anonymous' : 'authenticated',
-        platform: 'kick',
-        status: 'disconnected',
-      })
-
-      this.scheduleReconnect()
-    })
-
-    ws.addEventListener('error', (err) => {
-      log.error('[Kick] Pusher WebSocket error', { error: String(err) })
-    })
-  }
-
-  private handlePusherEvent(event: PusherEvent): void {
-    // Chatroom events only arrive over an active subscription — recover the
-    // status if subscription_succeeded was missed after a reconnect.
-    if (!event.event.startsWith('pusher') && !this.isConnected) {
-      this.emitConnected()
-    }
-
+  private handleRealtimeEvent(event: KickRealtimeEvent): void {
     switch (event.event) {
-      case 'pusher:connection_established': {
-        this.subscribeToChatroom()
-        break
-      }
-
-      case 'pusher:ping': {
-        this.ws?.send(JSON.stringify({ data: {}, event: 'pusher:pong' }))
-        break
-      }
-
-      case 'pusher_internal:subscription_succeeded': {
-        log.info(`[Kick] Subscribed to chatroom ${this.chatroomId}`)
-        this.emitConnected()
-        break
-      }
-
       case String.raw`App\Events\ChatMessageEvent`: {
-        const data =
-          typeof event.data === 'string'
-            ? (JSON.parse(event.data) as KickChatMessage)
-            : (event.data as unknown as KickChatMessage)
+        const data = kickPayload1Schema.parse(
+          typeof event.data === 'string' ? JSON.parse(event.data) : event.data,
+        )
+        const revision = this.identityRevision
         this.messageQueue = this.messageQueue
-          .then(() => this.handleChatMessage(data))
-          .catch((error) => {
-            log.error('[Kick] Failed to handle chat message', { error: String(error) })
+          .then(() => this.handleChatMessage(data, revision))
+          .catch(() => {
+            if (this.current(revision))
+              log.warn('Kick message processing failed', { channel: this.channelSlug })
           })
         break
       }
 
       case String.raw`App\Events\FollowersUpdated`: {
-        const data =
-          typeof event.data === 'string'
-            ? (JSON.parse(event.data) as KickFollowEvent)
-            : (event.data as unknown as KickFollowEvent)
+        const data = kickPayload2Schema.parse(
+          typeof event.data === 'string' ? JSON.parse(event.data) : event.data,
+        )
         this.handleFollowEvent(data)
         break
       }
 
       case String.raw`App\Events\SubscriptionEvent`: {
-        const data =
-          typeof event.data === 'string'
-            ? (JSON.parse(event.data) as KickSubscriptionEvent)
-            : (event.data as unknown as KickSubscriptionEvent)
+        const data = kickPayload3Schema.parse(
+          typeof event.data === 'string' ? JSON.parse(event.data) : event.data,
+        )
         this.handleSubscriptionEvent(data)
         break
       }
 
       default: {
-        if (!event.event.startsWith('pusher')) {
-          log.info(`[Kick] Unhandled Pusher event: ${event.event}`)
-        }
         break
       }
     }
   }
 
-  private subscribeToChatroom(): void {
-    if (!this.chatroomId || !this.ws) {
-      return
-    }
-
-    this.ws.send(
-      JSON.stringify({
-        data: {
-          auth: '',
-          channel: `chatrooms.${this.chatroomId}.v2`,
-        },
-        event: 'pusher:subscribe',
-      }),
+  private async handleChatMessage(msg: KickChatMessage, revision: number): Promise<void> {
+    if (!this.current(revision)) return
+    const normalized = await normalizeKickChatMessage(
+      msg,
+      this.broadcasterUserId,
+      resolveKickAvatarUrl,
+      this.subscriberBadges,
     )
-  }
-
-  private async handleChatMessage(msg: KickChatMessage): Promise<void> {
-    const normalized = await normalizeKickChatMessage(msg, this.broadcasterUserId)
+    if (!this.current(revision)) return
     this.emit('message', normalized)
   }
 
@@ -479,34 +561,58 @@ export class KickAdapter extends BasePlatformAdapter {
   }
 
   private clearTimers(): void {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout)
-      this.reconnectTimeout = null
-    }
+    this.timerGeneration++
+    const cancel = this.cancelTimer
+    this.cancelTimer = undefined
+    cancel?.()
   }
 
-  private scheduleReconnect(): void {
-    if (!this.shouldReconnect) {
-      return
-    }
+  private scheduleTimer(revision: number, delay: number, callback: () => void): void {
+    if (!this.current(revision)) return
     this.clearTimers()
-    log.info('[Kick] Reconnecting in 5s...')
-    this.reconnectTimeout = setTimeout(() => {
-      this.reconnectTimeout = null
-      // Full connect(): a failed initial connect may have no chatroomId yet,
-      // and the slug→chatroom mapping can change between attempts.
-      void this.connect(this.channelSlug)
-    }, 5000)
+    const generation = this.timerGeneration
+    this.cancelTimer = this.dependencies.clock.schedule(() => {
+      if (generation !== this.timerGeneration || !this.current(revision)) return
+      this.cancelTimer = undefined
+      callback()
+    }, delay)
+  }
+
+  private connectionFailed(message: string, revision: number): void {
+    if (!this.current(revision) || !this.selected()) return
+    this.clearTimers()
+    this.closeSocket()
+    this.isConnected = false
+    this.connectionError = message
+    this.publishStatus('error')
+    if (!this.current(revision) || !this.selected()) return
+    this.failures = Math.min(this.failures + 1, 5)
+    const retryMs = kickReconnectDelay(this.failures)
+    log.warn('Kick connection attempt failed', {
+      channel: this.channelSlug,
+      error: message,
+      retryMs,
+    })
+    this.scheduleTimer(revision, retryMs, () => {
+      if (!this.selected()) return
+      if (this.accountId) {
+        const tokens = this.dependencies.tokens(this.accountId)
+        this.applyTokens(tokens)
+        if (tokens && (this.expiring(tokens) || !this.usable(tokens)))
+          this.refreshAuthentication(revision, false)
+      }
+      this.startAttempt(revision).catch((error: unknown) => {
+        if (this.current(revision)) this.connectionFailed(kickBackendFailure(error), revision)
+      })
+    })
   }
 
   private emitConnected(): void {
     this.isConnected = true
-    this.emit('status', {
-      channelLogin: this.channelSlug,
-      mode: this.anonymous ? 'anonymous' : 'authenticated',
-      platform: 'kick',
-      status: 'connected',
-    })
+    this.failures = 0
+    this.connectionError = undefined
+    this.clearTimers()
+    this.publishStatus('connected')
   }
 }
 
@@ -514,13 +620,9 @@ export async function normalizeKickChatMessage(
   msg: KickChatMessage,
   broadcasterUserId: number | null,
   resolveAvatar: KickAvatarResolver = resolveKickAvatarUrl,
+  subscriberBadges: readonly KickSubscriberBadge[] = [],
 ): Promise<NormalizedChatMessage> {
-  const badges: Badge[] = msg.sender.identity.badges.map((b) => ({
-    id: b.type,
-    imageUrl: getKickBadgeSvg(b.type) || undefined,
-    text: b.text,
-    type: b.type,
-  }))
+  const badges = normalizeKickBadges(msg.sender.identity, subscriberBadges)
 
   // Parse Kick emotes from content
   // Format: [emote:37232:PeepoClap]
@@ -577,7 +679,7 @@ export async function normalizeKickChatMessage(
     text: cleanText,
     timestamp: new Date(msg.created_at),
     type: 'message',
-    ...(msg.type === 'reply' && msg.metadata
+    ...(msg.type === 'reply' && msg.metadata?.original_sender && msg.metadata.original_message
       ? {
           reply: {
             parentAuthor: {
@@ -592,3 +694,58 @@ export async function normalizeKickChatMessage(
       : {}),
   }
 }
+
+const kickReplySenderIdSchema = z
+  .union([z.string().min(1), z.number().int().nonnegative()])
+  .transform(String)
+
+const kickMessageMetadataSchema = z.preprocess(
+  (value: unknown) => {
+    if (typeof value !== 'string') return value
+    try {
+      const decoded: unknown = JSON.parse(value)
+      return decoded
+    } catch {
+      return null
+    }
+  },
+  z.object({
+    message_ref: z.string().optional(),
+    original_sender: z.object({ id: kickReplySenderIdSchema, username: z.string() }).optional(),
+    original_message: z.object({ id: z.string(), content: z.string() }).optional(),
+  }),
+)
+
+const kickPayload1Schema = z.object({
+  id: z.string(),
+  chatroom_id: z.number(),
+  content: z.string(),
+  type: z.union([z.literal('message'), z.literal('reply')]),
+  created_at: z.string(),
+  sender: z.object({
+    id: z.number(),
+    username: z.string(),
+    slug: z.string(),
+    identity: kickBadgeIdentitySchema,
+    profile_picture: z.string().optional(),
+  }),
+  metadata: kickMessageMetadataSchema.optional(),
+})
+const kickPayload2Schema = z.object({
+  channel_id: z.number(),
+  user_id: z.number(),
+  username: z.string(),
+  display_name: z.string(),
+  avatar_url: z.string().optional(),
+  followed_at: z.string(),
+})
+const kickPayload3Schema = z.object({
+  channel_id: z.number(),
+  user_id: z.number(),
+  username: z.string(),
+  display_name: z.string(),
+  avatar_url: z.string().optional(),
+  gifted_by: z.string().optional(),
+  duration: z.number().optional(),
+  created_at: z.string(),
+})

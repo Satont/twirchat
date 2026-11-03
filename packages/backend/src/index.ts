@@ -1,19 +1,24 @@
-import { runMigrations } from './db/migrations.ts'
+import { logger } from '@twirchat/shared/logger'
+
+import { handleTwitchBadges } from './api/twitch-badges.ts'
+import { config } from './config.ts'
 import { ClientStore } from './db/index.ts'
-import { handleWsClose, handleWsMessage, handleWsOpen } from './ws/handlers.ts'
-import { authRoutes } from './routes/auth.ts'
+import { runMigrations } from './db/migrations.ts'
 import { accountRoutes } from './routes/accounts.ts'
-import { streamRoutes } from './routes/stream.ts'
+import { authRoutes } from './routes/auth.ts'
+import { chatToolsRoutes } from './routes/chat-tools.ts'
+import { emoteCatalogRoutes } from './routes/emote-catalog.ts'
 import { moderationRoutes } from './routes/moderation.ts'
+import { streamRoutes } from './routes/stream.ts'
+import { twitchActivitiesRoutes } from './routes/twitch-activities.ts'
 import { userCardRoutes } from './routes/user-card.ts'
+import { userProfileRoutes } from './routes/user-profile.ts'
+import { json } from './routes/utils.ts'
 import { webhookRoutes } from './routes/webhooks.ts'
 import { youtubeRoutes } from './routes/youtube.ts'
-import { json } from './routes/utils.ts'
-import type { WsData } from './ws/connection-manager.ts'
-import { config } from './config.ts'
-import { logger } from '@twirchat/shared/logger'
-import { handleTwitchBadges } from './api/twitch-badges.ts'
 import { handleSevenTVImageProxy } from './seventv/index.ts'
+import type { WsData } from './ws/connection-manager.ts'
+import { handleWsClose, handleWsMessage, handleWsOpen, youtubeChatRelay } from './ws/handlers.ts'
 
 const log = logger('backend')
 
@@ -42,6 +47,9 @@ const server = Bun.serve<WsData>({
       if (!secret) {
         return json({ error: 'Missing X-Client-Secret' }, 401)
       }
+      if (!/^[A-Za-z0-9_-]{16,128}$/.test(secret)) {
+        return json({ error: 'Invalid X-Client-Secret' }, 401)
+      }
       await ClientStore.upsert(secret)
       const upgraded = server.upgrade(req, { data: { clientSecret: secret } })
       if (!upgraded) {
@@ -62,6 +70,10 @@ const server = Bun.serve<WsData>({
     ...streamRoutes,
     ...moderationRoutes,
     ...userCardRoutes,
+    ...userProfileRoutes,
+    ...chatToolsRoutes,
+    ...twitchActivitiesRoutes,
+    ...emoteCatalogRoutes,
     ...webhookRoutes,
     ...youtubeRoutes,
     '/health': () => json({ ok: true }),
@@ -72,10 +84,14 @@ const server = Bun.serve<WsData>({
       handleWsClose(ws, code, reason)
     },
     message(ws, message) {
-      void handleWsMessage(ws, message)
+      handleWsMessage(ws, message).catch((error: unknown) =>
+        log.error('WebSocket message failed', { error: String(error) }),
+      )
     },
     open(ws) {
-      void handleWsOpen(ws)
+      handleWsOpen(ws).catch((error: unknown) =>
+        log.error('WebSocket open failed', { error: String(error) }),
+      )
     },
   },
 })
@@ -84,3 +100,12 @@ log.info('TwirChat backend running', {
   url: `http://localhost:${server.port}`,
 })
 log.info('WebSocket endpoint', { url: `ws://localhost:${server.port}/ws` })
+
+for (const signal of ['SIGINT', 'SIGTERM'] satisfies NodeJS.Signals[]) {
+  process.once(signal, () => {
+    youtubeChatRelay.stop()
+    server
+      .stop(true)
+      .catch((error: unknown) => log.error('Server shutdown failed', { error: String(error) }))
+  })
+}

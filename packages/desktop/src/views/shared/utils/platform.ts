@@ -7,5 +7,9 @@ const PLATFORM_COLORS: Record<Platform, string> = {
 }
 
 export function platformColor(platform: string): string {
-  return PLATFORM_COLORS[platform as Platform] ?? '#888'
+  return (
+    (platform === 'twitch' || platform === 'youtube' || platform === 'kick'
+      ? PLATFORM_COLORS[platform]
+      : undefined) ?? '#888'
+  )
 }

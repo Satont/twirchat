@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { CHAT_BOTTOM_TOLERANCE, isChatNearBottom } from '../src/views/main/utils/chat-scroll'
 
 test('keeps following messages while the viewport is within the bottom tolerance', () => {

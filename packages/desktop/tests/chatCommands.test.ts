@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { parseUserCardCommand, resolveUserCardCommand } from '../src/views/main/utils/chatCommands'
@@ -51,7 +52,9 @@ describe('resolveUserCardCommand', () => {
   })
 
   test('resolves an exact alias match', () => {
-    const aliasMap = new Map([['twitch', new Map([['user-1', 'boss']])]])
+    const aliasMap: NonNullable<Parameters<typeof resolveUserCardCommand>[2]> = new Map([
+      ['twitch', new Map([['user-1', 'boss']])],
+    ])
 
     const result = resolveUserCardCommand('/user @boss', [createMessage({})], aliasMap)
 

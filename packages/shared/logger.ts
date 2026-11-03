@@ -30,7 +30,7 @@ const c = {
   gray: '\x1b[90m',
   white: '\x1b[97m',
   module: '\x1b[35m', // Magenta
-} as const
+}
 
 type Level = 'debug' | 'info' | 'warn' | 'error'
 
@@ -41,7 +41,19 @@ const LEVEL_ORDER: Record<Level, number> = {
   warn: 2,
 }
 
-const MIN_LEVEL: Level = (process.env.LOG_LEVEL as Level | undefined) ?? (isProd ? 'info' : 'debug')
+export function parseLogLevel(value: string | undefined, fallback: Level): Level {
+  switch (value) {
+    case 'debug':
+    case 'info':
+    case 'warn':
+    case 'error':
+      return value
+    default:
+      return fallback
+  }
+}
+
+const MIN_LEVEL = parseLogLevel(process.env.LOG_LEVEL, isProd ? 'info' : 'debug')
 
 function shouldLog(level: Level): boolean {
   return LEVEL_ORDER[level] >= LEVEL_ORDER[MIN_LEVEL]

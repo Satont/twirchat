@@ -22,12 +22,14 @@
  *   platforms   — comma-separated filter e.g. "twitch,kick" (default: all)
  */
 
-import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
-import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
-import type { ServerWebSocket } from 'bun'
 import { existsSync } from 'node:fs'
 import { dirname, extname, join } from 'path'
+
+import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
+import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
+import type { ServerWebSocket } from 'bun'
+
 import { buildMessageParts, type MessagePart } from './views/shared/utils/messageParts'
 
 const log = logger('overlay-server')

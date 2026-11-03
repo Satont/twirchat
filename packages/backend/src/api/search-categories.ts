@@ -1,3 +1,4 @@
+import type { CategorySearchResult, SearchCategoriesResponse } from '@twirchat/shared'
 /**
  * GET /api/search-categories?platform=twitch|kick&query=<text>
  *
@@ -5,9 +6,9 @@
  *
  * Response: SearchCategoriesResponse
  */
+import { z } from 'zod'
 
 import { config } from '../config.ts'
-import type { CategorySearchResult, SearchCategoriesResponse } from '@twirchat/shared'
 import { fetchTwitchHelixWithAppToken, getKickAppToken } from './stream-status.ts'
 
 // ----------------------------------------------------------------
@@ -23,13 +24,13 @@ async function searchTwitchCategories(query: string): Promise<CategorySearchResu
     throw new Error(`Twitch search/categories failed: ${res.status}`)
   }
 
-  const body = (await res.json()) as {
-    data: {
-      id: string
-      name: string
-      box_art_url?: string
-    }[]
-  }
+  const body = z
+    .object({
+      data: z.array(
+        z.object({ id: z.string(), name: z.string(), box_art_url: z.string().optional() }),
+      ),
+    })
+    .parse(await res.json())
 
   return body.data.map((g) => ({
     id: g.id,
@@ -61,13 +62,13 @@ async function searchKickCategories(query: string): Promise<CategorySearchResult
     throw new Error(`Kick categories search failed: ${res.status}`)
   }
 
-  const body = (await res.json()) as {
-    data?: {
-      id: number
-      name: string
-      thumbnail?: string
-    }[]
-  }
+  const body = z
+    .object({
+      data: z
+        .array(z.object({ id: z.number(), name: z.string(), thumbnail: z.string().optional() }))
+        .optional(),
+    })
+    .parse(await res.json())
 
   return (body.data ?? []).map((c) => ({
     id: String(c.id),

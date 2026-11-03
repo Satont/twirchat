@@ -1,0 +1,17 @@
+syntax = "proto2";
+package twirchat.codegen;
+import "google/protobuf/duration.proto";
+
+message RecursiveNode {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_ALPHA = 1;
+  }
+  optional Kind kind = 1;
+  optional uint64 value = 2;
+  optional RecursiveNode child = 3;
+  repeated string labels = 4;
+  optional google.protobuf.Duration duration = 5;
+  optional bool flag = 6 [default = true];
+  optional bool simple_flag = 7;
+}

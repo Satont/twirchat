@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+
 import { renderMessageText } from '../src/views/shared/utils/message-text'
 
 const mentionColors = new Map<string, string | null>()

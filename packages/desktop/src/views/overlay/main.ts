@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+
 import App from './App.vue'
 
 // The overlay is a standalone page served by overlay-server.ts via Bun.serve.

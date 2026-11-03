@@ -1,6 +1,8 @@
-import { getDb } from './db'
 import type { AppSettings } from '@twirchat/shared/types'
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
+
+import { appSettingsSchema, partialAppSettingsSchema } from '../services/persisted-schemas'
+import { getDb } from './db'
 import { deepMerge } from './utils'
 
 export const SettingsStore = {
@@ -13,10 +15,21 @@ export const SettingsStore = {
     if (!row) return { ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } }
 
     try {
-      const parsed = JSON.parse(row.value) as Partial<AppSettings>
+      const parsed = partialAppSettingsSchema.parse(JSON.parse(row.value))
       // Deep-merge with defaults so new fields added after the settings were saved
       // don't come back as undefined.
-      return deepMerge({ ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } }, parsed)
+      return appSettingsSchema.parse({
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        overlay: { ...DEFAULT_SETTINGS.overlay, ...parsed.overlay },
+        hotkeys: { ...DEFAULT_SETTINGS.hotkeys, ...parsed.hotkeys },
+        selfPing: parsed.selfPing
+          ? { ...DEFAULT_SETTINGS.selfPing, ...parsed.selfPing }
+          : DEFAULT_SETTINGS.selfPing,
+        chatLayout: parsed.chatLayout
+          ? { ...DEFAULT_SETTINGS.chatLayout, ...parsed.chatLayout }
+          : DEFAULT_SETTINGS.chatLayout,
+      })
     } catch {
       return { ...DEFAULT_SETTINGS, overlay: { ...DEFAULT_SETTINGS.overlay } }
     }

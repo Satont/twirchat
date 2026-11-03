@@ -15,9 +15,6 @@ export const APP_NAME = process.env['APP_NAME'] ?? 'TwirChat'
 // Platform-specific constants (not secrets, just API endpoints)
 export const TWITCH_ANON_PREFIX = 'justinfan'
 
-export const KICK_PUSHER_WS = 'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679'
-export const KICK_PUSHER_APP_KEY = '32cbd69e4b950bf97679'
-
 export const KICK_API_BASE = 'https://api.kick.com/public/v1'
 export const KICK_AUTH_URL = 'https://id.kick.com/oauth/authorize'
 export const KICK_TOKEN_URL = 'https://id.kick.com/oauth/token'

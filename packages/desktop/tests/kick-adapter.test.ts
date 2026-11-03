@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+
 import { normalizeKickChatMessage, type KickChatMessage } from '@desktop/platforms/kick/adapter'
 
 function createKickMessage(overrides: Partial<KickChatMessage> = {}): KickChatMessage {

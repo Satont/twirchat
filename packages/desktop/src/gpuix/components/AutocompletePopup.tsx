@@ -3,10 +3,10 @@
  * overlay (paints above the virtual list, unlike an absolute div).
  */
 
-import { useTheme } from '../theme-context'
-import { Text } from './ui/Text'
-import { RemoteImage } from './ui/RemoteImage'
 import type { AutocompleteSuggestion } from '../hooks/use-autocomplete'
+import { useTheme } from '../theme-context'
+import { RemoteImage } from './ui/RemoteImage'
+import { Text } from './ui/Text'
 
 export function AutocompletePopup({
   suggestions,
@@ -101,11 +101,17 @@ export function AutocompletePopup({
             </>
           ) : suggestion.type === 'emote' ? (
             <>
-              <RemoteImage
-                url={suggestion.imageUrl}
-                objectFit="contain"
-                style={{ width: 24, height: 24, flexShrink: 0 }}
-              />
+              {suggestion.emoji ? (
+                <Text style={{ width: 24, fontSize: 20, color: theme.text }}>
+                  {suggestion.emoji}
+                </Text>
+              ) : (
+                <RemoteImage
+                  url={suggestion.imageUrl}
+                  objectFit="contain"
+                  style={{ width: 24, height: 24, flexShrink: 0 }}
+                />
+              )}
               <Text style={{ fontSize: 14, color: theme.text }}>{suggestion.label}</Text>
             </>
           ) : (

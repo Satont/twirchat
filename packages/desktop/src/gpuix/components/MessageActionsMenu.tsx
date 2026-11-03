@@ -1,0 +1,305 @@
+import { PLATFORM_COMMAND_NAMES } from '@twirchat/shared/channel-tools'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import { useEffect, useRef, useState } from 'react'
+
+import { useBackend } from '../backend/context'
+import {
+  commandApplies,
+  expandCustomCommand,
+  runCommandActions,
+  type CommandContext,
+} from '../commands'
+import type { IgnoreRule } from '../message-rules'
+import { accountsStore, showNotice, streamStatusStore } from '../state/app'
+import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
+import { useStoreSelector } from '../state/create-store'
+import { customCommandsStore } from '../state/custom-commands'
+import { useOverlayClose } from '../state/overlays'
+import { requestMessageTranslation } from '../state/translation'
+import { useTheme } from '../theme-context'
+import { Icon } from './ui/Icon'
+import { Text } from './ui/Text'
+
+export function MessageActionsMenu({
+  message,
+  channelSlug,
+  visible,
+  onReply,
+  onOpenUserCard,
+  onSearch,
+  request = 0,
+}: {
+  message: NormalizedChatMessage
+  channelSlug?: string
+  visible: boolean
+  onReply?: () => void
+  onOpenUserCard?: () => void
+  onSearch?: (query: string) => void
+  request?: number
+}) {
+  const backend = useBackend()
+  const theme = useTheme()
+  const [open, setOpen] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const commands = useStoreSelector(customCommandsStore, (state) => state.commands)
+  const rules = useStoreSelector(chatRulesStore, (state) => state.value)
+  const abort = useRef<AbortController | null>(null)
+  useOverlayClose(open, () => setOpen(false))
+  useEffect(() => {
+    if (request) setOpen(true)
+  }, [request])
+  useEffect(() => () => abort.current?.abort(), [])
+  const channel = channelSlug ?? message.channelId
+  const account = accountsStore.get().find((candidate) => candidate.platform === message.platform)
+  const stream = streamStatusStore.get().get(`${message.platform}:${channel.toLowerCase()}`)
+  const context: CommandContext = {
+    platform: message.platform,
+    channel: { name: channel, id: message.channelId },
+    my: account ? { name: account.username, id: account.platformUserId } : undefined,
+    user: { name: message.author.username ?? message.author.displayName, id: message.author.id },
+    message: { id: message.id, text: message.text },
+    elementCopyText: message.text,
+    stream: { title: stream?.title, game: stream?.categoryName },
+  }
+  const matching = commands.filter(
+    (command) => command.showInMessageMenu && commandApplies(command, context),
+  )
+  const ignored = rules.ignores.some(
+    (rule) =>
+      rule.enabled &&
+      rule.target === 'user' &&
+      rule.userId === message.author.id &&
+      rule.platform === message.platform &&
+      (rule.action ?? 'hide') === 'hide',
+  )
+  async function action(run: () => Promise<unknown> | void) {
+    setOpen(false)
+    try {
+      await run()
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : String(error), 5000)
+    }
+  }
+  const copy = (text: string) => backend.api.copyText({ text })
+  async function ignore() {
+    const current = chatRulesStore.get().value
+    const ignores: IgnoreRule[] = ignored
+      ? current.ignores.filter(
+          (rule) =>
+            !(
+              rule.target === 'user' &&
+              rule.userId === message.author.id &&
+              rule.platform === message.platform &&
+              (rule.action ?? 'hide') === 'hide'
+            ),
+        )
+      : [
+          ...current.ignores,
+          {
+            id: crypto.randomUUID(),
+            name: message.author.displayName,
+            pattern: message.author.username || message.author.displayName || message.author.id,
+            enabled: true,
+            regex: false,
+            caseSensitive: false,
+            wholeWord: true,
+            target: 'user',
+            platform: message.platform,
+            userId: message.author.id,
+            placeholder: true,
+            action: 'hide',
+          },
+        ]
+    await chatRulesPreferences.save(backend.api, { ...current, ignores })
+  }
+  async function highlight() {
+    const current = chatRulesStore.get().value
+    await chatRulesPreferences.save(backend.api, {
+      ...current,
+      highlights: [
+        ...current.highlights,
+        {
+          id: crypto.randomUUID(),
+          name: `${message.author.displayName} messages`,
+          pattern: `author.user_id == ${JSON.stringify(message.author.id)} && platform.name == ${JSON.stringify(message.platform)}`,
+          enabled: true,
+          regex: false,
+          caseSensitive: false,
+          wholeWord: false,
+          target: 'filter',
+          color: '#a78bfa28',
+          mentions: true,
+          sound: false,
+          flash: false,
+        },
+      ],
+    })
+  }
+  async function runCustom(name: string) {
+    const result = expandCustomCommand(`/${name}`, commands, context)
+    if (!result.ok) throw new Error(result.error)
+    if (!result.matched) throw new Error('This command is unavailable in the current channel.')
+    abort.current?.abort()
+    abort.current = new AbortController()
+    await runCommandActions(
+      result.outputs.map((text) => async () => {
+        if (text.startsWith('/copytext ')) {
+          await copy(text.slice(10))
+          return
+        }
+        if (text.startsWith('/search ')) {
+          onSearch?.(text.slice(8))
+          return
+        }
+        if (text === '/user') {
+          onOpenUserCard?.()
+          return
+        }
+        const name = text.match(/^\/([a-z]+)/iu)?.[1]?.toLowerCase()
+        if (name && PLATFORM_COMMAND_NAMES.some((command) => command === name)) {
+          const response = await backend.api.executePlatformCommand({
+            platform: message.platform,
+            channelSlug: channel,
+            text,
+          })
+          if (response.message) showNotice('info', response.message, 6000)
+        } else {
+          if (name && name !== 'me') throw new Error(`Unsupported message action /${name}.`)
+          await backend.api.sendMessage({ platform: message.platform, channelId: channel, text })
+        }
+      }),
+      { signal: abort.current.signal },
+    )
+  }
+  const item = (label: string, run: () => Promise<unknown> | void) => (
+    <div
+      onClick={() => void action(run)}
+      style={{
+        paddingTop: 6,
+        paddingBottom: 6,
+        paddingLeft: 10,
+        paddingRight: 10,
+        cursor: 'pointer',
+        borderRadius: 4,
+        hover: { backgroundColor: theme.fillHover },
+      }}
+    >
+      <Text style={{ fontSize: 12, color: theme.text }}>{label}</Text>
+    </div>
+  )
+  return (
+    <div style={{ position: 'relative', display: 'flex' }}>
+      <div
+        testId="msg-more"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={() => setOpen((value) => !value)}
+        style={{
+          padding: 3,
+          borderRadius: 4,
+          cursor: 'pointer',
+          backgroundColor: visible || hovered || open ? theme.fill : 'transparent',
+        }}
+      >
+        <Icon
+          name="moreVertical"
+          size={13}
+          color={visible || hovered || open ? theme.text2 : 'transparent'}
+        />
+      </div>
+      {open ? (
+        <anchored deferred side="bottom" align="end" gap={4}>
+          <div
+            testId="message-actions-menu"
+            onMouseDownOutside={() => setOpen(false)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 4,
+              minWidth: 210,
+              maxHeight: 430,
+              overflowY: 'scroll',
+              backgroundColor: theme.popover,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 7,
+              boxShadow: {
+                offsetX: 0,
+                offsetY: 5,
+                blurRadius: 18,
+                spreadRadius: 0,
+                color: '#00000060',
+              },
+            }}
+          >
+            {onReply ? item('Reply', onReply) : null}
+            {onOpenUserCard ? item('Open user card', onOpenUserCard) : null}
+            {item('Copy message', () => copy(message.text))}
+            {item('Copy full message', () =>
+              copy(
+                `[${new Date(message.timestamp).toISOString()}] ${channel} ${message.author.displayName}: ${message.text}`,
+              ),
+            )}
+            {item('Copy message JSON', () => copy(JSON.stringify(message, null, 2)))}
+            {item('Translate message', () =>
+              requestMessageTranslation(backend, message, { channelId: channel, force: true }),
+            )}
+            {item('Copy username', () =>
+              copy(message.author.username ?? message.author.displayName),
+            )}
+            {item('Copy user ID', () => copy(message.author.id))}
+            {item('Copy message ID', () => copy(message.id))}
+            {item('Copy timestamp', () => copy(new Date(message.timestamp).toISOString()))}
+            {onSearch
+              ? item('Find messages from this user', () =>
+                  onSearch(
+                    `from:${JSON.stringify(message.author.username ?? message.author.displayName)}`,
+                  ),
+                )
+              : null}
+            {item(ignored ? 'Stop ignoring this user' : 'Ignore this user locally', ignore)}
+            {item('Highlight this user', highlight)}
+            {message.platform === 'twitch'
+              ? item('Block user on Twitch', async () => {
+                  await backend.api.executePlatformCommand({
+                    platform: 'twitch',
+                    channelSlug: channel,
+                    text: `/block ${message.author.username ?? message.author.id}`,
+                  })
+                  if (!ignored) await ignore()
+                })
+              : null}
+            {message.platform === 'twitch'
+              ? item('Unblock user on Twitch', async () => {
+                  await backend.api.executePlatformCommand({
+                    platform: 'twitch',
+                    channelSlug: channel,
+                    text: `/unblock ${message.author.username ?? message.author.id}`,
+                  })
+                  if (ignored) await ignore()
+                })
+              : null}
+            {message.platform === 'twitch' && !message.delivery
+              ? item('Pin this message', () =>
+                  backend.api.executeTwitchActivityAction({
+                    action: 'pin_message',
+                    channelSlug: channel,
+                    messageId: message.id,
+                    duration: 1200,
+                  }),
+                )
+              : null}
+            {matching.length ? (
+              <div
+                style={{ height: 1, backgroundColor: theme.border, marginTop: 4, marginBottom: 4 }}
+              />
+            ) : null}
+            {matching.map((command) => (
+              <div key={command.id}>{item(`/${command.name}`, () => runCustom(command.name))}</div>
+            ))}
+          </div>
+        </anchored>
+      ) : null}
+    </div>
+  )
+}

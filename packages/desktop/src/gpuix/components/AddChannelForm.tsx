@@ -3,30 +3,38 @@
  * input + confirm/cancel). Used inside empty panels and the add modal.
  */
 
-import { useState } from 'react'
+import type { PublicInstance } from '@gpuix/react'
+import { useState, type Ref } from 'react'
 
-import { platformColor, withAlpha } from '../theme'
+import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
 import { useTextInputFocusTracking } from '../state/focus'
+import { platformColor, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
-import { useStore } from '../state/create-store'
-import { accountsStore } from '../state/app'
-import { Icon, PlatformIcon } from './ui/Icon'
+import { PlatformIcon } from './ui/Icon'
 import { Text } from './ui/Text'
 
 type FormPlatform = 'twitch' | 'kick' | 'youtube'
 
 export function AddChannelForm({
   cancelable,
+  autoFocus = true,
+  popup = false,
+  popupContextId,
+  inputRef,
+  onFocus,
   onConfirm,
   onCancel,
 }: {
   cancelable?: boolean
+  autoFocus?: boolean
+  popup?: boolean
+  popupContextId?: string
+  inputRef?: Ref<PublicInstance>
+  onFocus?: () => void
   onConfirm: (platform: FormPlatform, channelSlug: string) => void
   onCancel?: () => void
 }) {
   const theme = useTheme()
-  const accounts = useStore(accountsStore)
-  const youtubeAuthenticated = accounts.some((a) => a.platform === 'youtube')
   const [platform, setPlatform] = useState<FormPlatform>('twitch')
   const [slug, setSlug] = useState('')
   const [inputFocused, setInputFocused] = useState(false)
@@ -40,23 +48,28 @@ export function AddChannelForm({
         : 'YouTube channel handle or ID'
 
   const confirm = () => {
-    const trimmed = slug.trim().toLowerCase()
+    const trimmed = platform === 'youtube' ? slug.trim() : slug.trim().toLowerCase()
     if (!trimmed) return
     onConfirm(platform, trimmed)
     setSlug('')
   }
 
+  usePopupHotkeys(
+    'add-channel',
+    { accept: slug.trim() ? confirm : null, reject: onCancel ?? null },
+    popup,
+    popupContextId,
+  )
+
   const selectPlatform = (p: FormPlatform) => {
-    if (p === 'youtube' && !youtubeAuthenticated) return
     setPlatform(p)
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
       <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
-        {(['twitch', 'kick', 'youtube'] as const).map((p) => {
+        {(['twitch', 'kick', 'youtube'] satisfies FormPlatform[]).map((p) => {
           const active = platform === p
-          const disabled = p === 'youtube' && !youtubeAuthenticated
           const color = platformColor(p)
           return (
             <div
@@ -78,12 +91,9 @@ export function AddChannelForm({
                 borderWidth: 1,
                 borderColor: active ? withAlpha(color, 0.45) : theme.hairline,
                 backgroundColor: active ? withAlpha(color, 0.15) : theme.fill,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.35 : 1,
+                cursor: 'pointer',
                 userSelect: 'none',
-                hover: active
-                  ? undefined
-                  : { backgroundColor: disabled ? undefined : theme.fillHover },
+                hover: active ? undefined : { backgroundColor: theme.fillHover },
               }}
             >
               <PlatformIcon platform={p} size={14} color={active ? color : theme.text2} />
@@ -96,7 +106,6 @@ export function AddChannelForm({
               >
                 {p === 'youtube' ? 'YouTube' : p === 'twitch' ? 'Twitch' : 'Kick'}
               </Text>
-              {disabled ? <Icon name="lock" size={11} color={theme.text2} /> : null}
             </div>
           )
         })}
@@ -116,13 +125,18 @@ export function AddChannelForm({
         }}
       >
         <input
+          ref={inputRef}
           testId="add-channel-input"
-          autoFocus
+          autoFocus={autoFocus}
           value={slug}
           placeholder={placeholder}
           onChange={(event) => setSlug(event.value ?? '')}
           onSubmit={confirm}
           {...inputFocus}
+          onFocus={() => {
+            inputFocus.onFocus()
+            onFocus?.()
+          }}
           onKeyDown={(event) => {
             if (event.key === 'escape') onCancel?.()
           }}
@@ -131,6 +145,11 @@ export function AddChannelForm({
         />
       </div>
 
+      {platform === 'youtube' ? (
+        <Text style={{ fontSize: 12, color: theme.text2 }}>
+          Enter an @handle or a case-sensitive UC channel ID.
+        </Text>
+      ) : null}
       <div
         style={{
           display: 'flex',

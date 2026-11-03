@@ -1,13 +1,25 @@
 import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
+
 import { fuzzyFilter } from './fuzzyFilter'
 
-const EMOTE_SOURCES: EmoteSource[] = ['channel', 'seventv', 'collectibles', 'global']
+const EMOTE_SOURCES: EmoteSource[] = [
+  'channel',
+  'seventv',
+  'collectibles',
+  'global',
+  'bttv',
+  'ffz',
+  'personal',
+]
 
 const SOURCE_LABELS: Record<EmoteSource, string> = {
   channel: 'Channel',
   seventv: '7TV',
   collectibles: 'Collectibles',
   global: 'Global',
+  bttv: 'BetterTTV',
+  ffz: 'FrankerFaceZ',
+  personal: 'Personal',
 }
 
 export interface EmoteGroup {

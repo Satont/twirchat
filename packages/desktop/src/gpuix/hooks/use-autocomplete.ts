@@ -1,17 +1,16 @@
-/**
- * React port of composables/useAutocomplete.ts.
- * Logic unchanged; Vue refs become React state + memos.
- */
-
-import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   NormalizedChatMessage,
   Platform,
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
+/**
+ * React port of composables/useAutocomplete.ts.
+ * Logic unchanged; Vue refs become React state + memos.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
+import { emojiShortcodeSuggestions } from '../../services/emoji-shortcodes'
 import {
   parseToken,
   replaceToken,
@@ -19,11 +18,20 @@ import {
   type CommandSuggestion,
   type EmoteSuggestion,
   type MentionSuggestion,
+  type ParsedToken,
 } from '../../views/main/utils/autocompleteUtils'
-import { mentionColor } from '../state/caches'
-import { emoteStore, loadEmotes } from '../state/app'
+import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
 import { useBackend } from '../backend/context'
-import { useStore } from '../state/create-store'
+import type { CustomCommandDefinition } from '../commands'
+import { emoteStore, loadEmotes } from '../state/app'
+import { mentionColor } from '../state/caches'
+import { useStore, useStoreSelector } from '../state/create-store'
+import {
+  emotePreferencesStore,
+  favoriteEmoteKey,
+  loadEmotePreferences,
+} from '../state/emote-preferences'
+import { runUiTask } from './run-ui-task'
 
 export { parseToken, replaceToken }
 export type { AutocompleteSuggestion, EmoteSuggestion, MentionSuggestion }
@@ -31,7 +39,71 @@ export type { AutocompleteSuggestion, EmoteSuggestion, MentionSuggestion }
 type AliasMap = Map<Platform, Map<string, string>>
 
 const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
+  {
+    type: 'command',
+    label: '/translate',
+    insertText: '/translate',
+    description: 'Preview a translation of text locally',
+  },
+  {
+    type: 'command',
+    label: '/translateto',
+    insertText: '/translateto',
+    description: 'Preview a translation: <language> <text>',
+  },
+  {
+    type: 'command',
+    label: '/saytranslate',
+    insertText: '/saytranslate',
+    description: 'Translate and send: <language> <text>',
+  },
+  {
+    type: 'command',
+    label: '/tl',
+    insertText: '/tl',
+    description: 'Translate and send: <language> <text>',
+  },
+  {
+    type: 'command',
+    label: '.w',
+    insertText: '.w',
+    description: 'Whisper privately: <username> <message>',
+  },
+  {
+    type: 'command',
+    label: '/r',
+    insertText: '/r',
+    description: 'Whisper to the last recipient: <message>',
+  },
+  { type: 'command', label: '/$', insertText: '/$', description: 'Whisper a $ command to Supibot' },
+  {
+    type: 'command',
+    label: '/_',
+    insertText: '/_',
+    description: 'Whisper an _ command to mm_sutilitybot',
+  },
   { type: 'command', label: '/user', insertText: '/user', description: 'Open user card' },
+  { type: 'command', label: '/search', insertText: '/search', description: 'Search this chat' },
+  {
+    type: 'command',
+    label: '/mentions',
+    insertText: '/mentions',
+    description: 'Toggle mentions only',
+  },
+  { type: 'command', label: '/pause', insertText: '/pause', description: 'Pause this chat view' },
+  { type: 'command', label: '/resume', insertText: '/resume', description: 'Resume live messages' },
+  {
+    type: 'command',
+    label: '/copy',
+    insertText: '/copy',
+    description: 'Copy visible chat messages',
+  },
+  {
+    type: 'command',
+    label: '/clearmessages',
+    insertText: '/clearmessages',
+    description: 'Clear this view locally',
+  },
 ]
 
 export function useAutocomplete(params: {
@@ -41,15 +113,32 @@ export function useAutocomplete(params: {
   watchedChannel: WatchedChannel | null | undefined
   statuses: Partial<Record<Platform, PlatformStatusInfo>>
   aliasMap: AliasMap | undefined
+  customCommands?: CustomCommandDefinition[]
 }) {
   const { text, setText, messages, watchedChannel, statuses, aliasMap } = params
   const backend = useBackend()
   const emotes = useStore(emoteStore)
+  const emotePreferences = useStoreSelector(emotePreferencesStore, (state) => state.value)
+  useEffect(() => {
+    runUiTask(loadEmotePreferences(backend.api))
+  }, [backend])
 
   const [closedQuery, setClosedQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
 
-  const token = useMemo(() => parseToken(text), [text])
+  const token = useMemo((): ParsedToken => {
+    const trimmed = text.trimStart()
+    if (trimmed.startsWith('.') && /^\.w?$/iu.test(trimmed))
+      return { mode: 'command', query: trimmed }
+    const query = trimmed.slice(1).toLowerCase()
+    if (
+      text.trimStart().startsWith('/') &&
+      params.customCommands?.some((command) => command.name.startsWith(query))
+    ) {
+      return { mode: 'command', query }
+    }
+    return parseToken(text)
+  }, [text, params.customCommands])
   const mode = token.mode
   const query = token.query
   const queryKey = mode === 'command' ? `/${query}` : query
@@ -90,7 +179,7 @@ export function useAutocomplete(params: {
     return result
   }, [messages, aliasMap])
 
-  function getCurrentChannelKey(): { platform: string; channelId: string } | null {
+  function getCurrentChannelKey(): { platform: Platform; channelId: string } | null {
     if (watchedChannel) {
       return { platform: watchedChannel.platform, channelId: watchedChannel.channelSlug }
     }
@@ -105,27 +194,53 @@ export function useAutocomplete(params: {
   const emoteSuggestions = useMemo((): EmoteSuggestion[] => {
     const ch = getCurrentChannelKey()
     if (!ch) return []
-    return (emotes.get(`${ch.platform}:${ch.channelId}`) ?? []).map((e) => ({
+    const favorites = new Set(emotePreferences.favorites.map(favoriteEmoteKey))
+    const entries = [...(emotes.get(`${ch.platform}:${ch.channelId}`) ?? [])].sort(
+      (a, b) =>
+        Number(favorites.has(favoriteEmoteKey(b))) - Number(favorites.has(favoriteEmoteKey(a))),
+    )
+    return entries.map((e) => ({
       type: 'emote',
       label: e.alias,
       imageUrl: e.imageUrl,
       animated: e.animated,
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emotes, watchedChannel?.id, statuses])
+  }, [emotes, watchedChannel?.id, statuses, emotePreferences.favorites])
 
   const suggestions = useMemo((): AutocompleteSuggestion[] => {
     if (!mode) return []
     if (mode === 'command') {
-      if (!query) return COMMAND_SUGGESTIONS.slice(0, 15)
-      return fuzzyFilter(COMMAND_SUGGESTIONS, query).slice(0, 15) as AutocompleteSuggestion[]
+      const custom: CommandSuggestion[] = (params.customCommands ?? []).map((command) => ({
+        type: 'command',
+        label: `/${command.name}`,
+        insertText: `/${command.name}`,
+        description: command.template.replace(/\n/g, ' · '),
+      }))
+      const commands = [...custom, ...COMMAND_SUGGESTIONS]
+      if (!query) return commands.slice(0, 15)
+      return fuzzyFilter(commands, query).slice(0, 15)
     }
     if (!query) return []
     if (mode === 'mention') {
-      return fuzzyFilter(mentionSuggestions, query).slice(0, 15) as AutocompleteSuggestion[]
+      return fuzzyFilter(mentionSuggestions, query).slice(0, 15)
     }
-    return fuzzyFilter(emoteSuggestions, query).slice(0, 15) as AutocompleteSuggestion[]
-  }, [mode, query, mentionSuggestions, emoteSuggestions])
+    const emoteMatches = fuzzyFilter(emoteSuggestions, query).slice(
+      0,
+      emotePreferences.emojiCompletion ? 10 : 15,
+    )
+    const emojis = emotePreferences.emojiCompletion
+      ? fuzzyFilter(emojiShortcodeSuggestions, query.replace(/:$/, '')).slice(0, 5)
+      : []
+    return [...emoteMatches, ...emojis]
+  }, [
+    mode,
+    query,
+    mentionSuggestions,
+    emoteSuggestions,
+    params.customCommands,
+    emotePreferences.emojiCompletion,
+  ])
 
   const isOpen = suggestions.length > 0 && queryKey !== closedQuery
 
@@ -140,22 +255,20 @@ export function useAutocomplete(params: {
   }, [text])
 
   // Load emotes for the active channel.
-  const channelKey = watchedChannel
-    ? `${watchedChannel.platform}:${watchedChannel.channelSlug}`
+  const channel = watchedChannel
+    ? { platform: watchedChannel.platform, channelId: watchedChannel.channelSlug }
     : getCurrentChannelKey()
-      ? `${getCurrentChannelKey()!.platform}:${getCurrentChannelKey()!.channelId}`
-      : null
+  const platform = channel?.platform
+  const channelId = channel?.channelId
   useEffect(() => {
-    if (!channelKey) return
-    const [platform, channelId] = channelKey.split(':') as [string, string]
-    void loadEmotes(backend, platform, channelId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelKey, backend])
+    if (!platform || !channelId) return
+    runUiTask(loadEmotes(backend, platform, channelId))
+  }, [platform, channelId, backend])
 
   function selectSuggestion(index: number): void {
     const s = suggestions[index]
     if (!s) return
-    setText(replaceToken(text, s))
+    setText(s.type === 'command' ? `${s.insertText} ` : replaceToken(text, s))
     setSelectedIndex(0)
     setClosedQuery('')
   }

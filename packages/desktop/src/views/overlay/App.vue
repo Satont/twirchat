@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+
 import { platformColor } from '../shared/utils/platform'
-import type { MessagePart } from '../shared/utils/messageParts'
+import {
+  overlayEventSchema,
+  parseOverlayAnimation,
+  parseOverlayPosition,
+  type OverlayChatMessage,
+} from './protocol'
 
 // ----------------------------------------------------------------
 // Config from URL query params
@@ -21,8 +26,8 @@ const cfg = {
   showPlatform: qp('showPlatform', '1') !== '0',
   showAvatar: qp('showAvatar', '1') !== '0',
   showBadges: qp('showBadges', '1') !== '0',
-  animation: qp('animation', 'slide') as 'slide' | 'fade' | 'none',
-  position: qp('position', 'bottom') as 'bottom' | 'top',
+  animation: parseOverlayAnimation(qp('animation', 'slide')),
+  position: parseOverlayPosition(qp('position', 'bottom')),
   platforms: qp('platforms', ''),
   port: Number(qp('port', '45823')),
 }
@@ -39,11 +44,6 @@ interface DisplayMessage {
   id: string
   payload: OverlayChatMessage
   expireAt?: number
-}
-
-interface OverlayChatMessage {
-  message: NormalizedChatMessage
-  parts: MessagePart[]
 }
 
 const messages = ref<DisplayMessage[]>([])
@@ -80,22 +80,26 @@ function clearMessages() {
 // WebSocket connection to overlay-server.ts
 // ----------------------------------------------------------------
 
+let stopped = false
 let ws: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let expireTimer: ReturnType<typeof setInterval> | null = null
 
 function connect() {
-  ws = new WebSocket(`ws://localhost:${cfg.port}`)
+  if (stopped) return
+  const socket = new WebSocket(`ws://localhost:${cfg.port}`)
+  ws = socket
 
-  ws.addEventListener('open', () => {
+  socket.addEventListener('open', () => {
     console.log('[Overlay] WS connected')
   })
 
-  ws.addEventListener('message', (ev) => {
+  socket.addEventListener('message', (ev) => {
     try {
-      const data = JSON.parse(ev.data as string)
+      if (stopped || ws !== socket || typeof ev.data !== 'string') return
+      const data = overlayEventSchema.parse(JSON.parse(ev.data))
       if (data.type === 'chat_message') {
-        addMessage(data.data as OverlayChatMessage)
+        addMessage(data.data)
       } else if (data.type === 'clear') {
         clearMessages()
       }
@@ -104,13 +108,14 @@ function connect() {
     }
   })
 
-  ws.addEventListener('close', () => {
+  socket.addEventListener('close', () => {
+    if (ws !== socket) return
     ws = null
-    reconnectTimer = setTimeout(connect, 3000)
+    if (!stopped) reconnectTimer = setTimeout(connect, 3000)
   })
 
-  ws.addEventListener('error', () => {
-    ws?.close()
+  socket.addEventListener('error', () => {
+    socket.close()
   })
 }
 
@@ -126,13 +131,16 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopped = true
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
   }
   if (expireTimer) {
     clearInterval(expireTimer)
   }
-  ws?.close()
+  const socket = ws
+  ws = null
+  socket?.close()
 })
 
 // ----------------------------------------------------------------

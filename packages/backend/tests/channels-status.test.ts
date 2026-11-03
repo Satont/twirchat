@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 
 import { handleChannelsStatus } from '../src/api/channels-status.ts'
+import { fetchUrl } from './literal'
 
 const originalFetch = globalThis.fetch
 const originalStdoutWrite = process.stdout.write
@@ -14,10 +15,13 @@ describe('channels status', () => {
   it('rejects oversized requests before any upstream fetch', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify({
@@ -41,10 +45,13 @@ describe('channels status', () => {
   it('rejects oversized multibyte bodies without relying on character count', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify({
@@ -66,10 +73,13 @@ describe('channels status', () => {
   it('returns an empty result when channels are missing', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify({}),
@@ -86,10 +96,13 @@ describe('channels status', () => {
   it('rejects invalid JSON as a bad request before any upstream fetch', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: '{bad json',
@@ -108,10 +121,13 @@ describe('channels status', () => {
   it('rejects non-object bodies before any upstream fetch', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify([]),
@@ -130,10 +146,13 @@ describe('channels status', () => {
   it('rejects malformed channel entries before any upstream fetch', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify({
@@ -154,10 +173,13 @@ describe('channels status', () => {
   it('rejects unsupported platforms before any upstream fetch', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify({
@@ -178,10 +200,13 @@ describe('channels status', () => {
   it('rejects oversized channel fields before any upstream fetch', async () => {
     let fetchCalled = false
 
-    globalThis.fetch = mock(async () => {
-      fetchCalled = true
-      return Response.json({})
-    }) as unknown as typeof global.fetch
+    globalThis.fetch = Object.assign(
+      mock(async () => {
+        fetchCalled = true
+        return Response.json({})
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify({
@@ -206,44 +231,47 @@ describe('channels status', () => {
     let tokenRequests = 0
     let maxInFlight = 0
 
-    globalThis.fetch = mock(async (input: string | URL | Request) => {
-      const url = String(input)
+    globalThis.fetch = Object.assign(
+      mock(async (input: string | URL | Request) => {
+        const url = fetchUrl(input)
 
-      if (url === 'https://id.kick.com/oauth/token') {
-        tokenRequests += 1
-        return Response.json({
-          access_token: 'kick-token',
-          expires_in: 3600,
-        })
-      }
-
-      if (url.startsWith('https://api.kick.com/public/v1/channels?slug=')) {
-        kickRequests += 1
-        inFlight += 1
-        maxInFlight = Math.max(maxInFlight, inFlight)
-
-        const slug = new URL(url).searchParams.get('slug') ?? ''
-
-        return await new Promise<Response>((resolve) => {
-          pendingResponses.push(() => {
-            inFlight -= 1
-            resolve(
-              Response.json({
-                data: [
-                  {
-                    category: { name: 'Games' },
-                    stream: { is_live: true, viewer_count: 12 },
-                    stream_title: `Live ${slug}`,
-                  },
-                ],
-              }),
-            )
+        if (url === 'https://id.kick.com/oauth/token') {
+          tokenRequests += 1
+          return Response.json({
+            access_token: 'kick-token',
+            expires_in: 3600,
           })
-        })
-      }
+        }
 
-      throw new Error(`Unexpected fetch: ${url}`)
-    }) as unknown as typeof global.fetch
+        if (url.startsWith('https://api.kick.com/public/v1/channels?slug=')) {
+          kickRequests += 1
+          inFlight += 1
+          maxInFlight = Math.max(maxInFlight, inFlight)
+
+          const slug = new URL(url).searchParams.get('slug') ?? ''
+
+          return await new Promise<Response>((resolve) => {
+            pendingResponses.push(() => {
+              inFlight -= 1
+              resolve(
+                Response.json({
+                  data: [
+                    {
+                      category: { name: 'Games' },
+                      stream: { is_live: true, viewer_count: 12 },
+                      stream_title: `Live ${slug}`,
+                    },
+                  ],
+                }),
+              )
+            })
+          })
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     const request = new Request('http://localhost/api/channels-status', {
       body: JSON.stringify({
@@ -301,31 +329,34 @@ describe('channels status', () => {
     const longBody = 'x'.repeat(500)
     let captured = ''
 
-    process.stdout.write = ((chunk: string | Uint8Array) => {
+    process.stdout.write = (chunk: string | Uint8Array) => {
       captured += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
       return true
-    }) as typeof process.stdout.write
+    }
 
-    globalThis.fetch = mock(async (input: string | URL | Request) => {
-      const url = String(input)
+    globalThis.fetch = Object.assign(
+      mock(async (input: string | URL | Request) => {
+        const url = fetchUrl(input)
 
-      if (url === 'https://id.twitch.tv/oauth2/token') {
-        return Response.json({
-          access_token: 'twitch-token',
-          expires_in: 3600,
-        })
-      }
+        if (url === 'https://id.twitch.tv/oauth2/token') {
+          return Response.json({
+            access_token: 'twitch-token',
+            expires_in: 3600,
+          })
+        }
 
-      if (url.startsWith('https://api.twitch.tv/helix/streams?')) {
-        return new Response(longBody, { status: 500 })
-      }
+        if (url.startsWith('https://api.twitch.tv/helix/streams?')) {
+          return new Response(longBody, { status: 500 })
+        }
 
-      if (url.startsWith('https://api.twitch.tv/helix/channels?')) {
-        return new Response(longBody, { status: 502 })
-      }
+        if (url.startsWith('https://api.twitch.tv/helix/channels?')) {
+          return new Response(longBody, { status: 502 })
+        }
 
-      throw new Error(`Unexpected fetch: ${url}`)
-    }) as unknown as typeof global.fetch
+        throw new Error(`Unexpected fetch: ${url}`)
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
     try {
       await handleChannelsStatus(

@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import { config } from '../config.ts'
 import { normalizeTwitchLogin, resolveTwitchUserId } from './twitch-users.ts'
 
@@ -56,7 +58,17 @@ function parseRequest(body: TwitchSendMessageRequest) {
 }
 
 export async function handleTwitchSendMessage(request: Request): Promise<TwitchSendMessageResult> {
-  const input = parseRequest((await request.json()) as TwitchSendMessageRequest)
+  const input = parseRequest(
+    z
+      .object({
+        accessToken: z.unknown().optional(),
+        channelLogin: z.unknown().optional(),
+        message: z.unknown().optional(),
+        replyToMessageId: z.unknown().optional(),
+        senderId: z.unknown().optional(),
+      })
+      .parse(await request.json()),
+  )
   const broadcasterID = await resolveTwitchUserId(input.channelLogin, input.accessToken)
   if (!broadcasterID) {
     throw new Error(`Twitch channel ${input.channelLogin} was not found`)
@@ -84,13 +96,21 @@ export async function handleTwitchSendMessage(request: Request): Promise<TwitchS
     )
   }
 
-  const payload = (await response.json()) as {
-    data?: Array<{
-      drop_reason?: { code?: string; message?: string }
-      is_sent?: boolean
-      message_id?: string
-    }>
-  }
+  const payload = z
+    .object({
+      data: z
+        .array(
+          z.object({
+            drop_reason: z
+              .object({ code: z.string().optional(), message: z.string().optional() })
+              .optional(),
+            is_sent: z.boolean().optional(),
+            message_id: z.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .parse(await response.json())
   const delivery = payload.data?.[0]
   if (!delivery) {
     throw new Error('Twitch send message failed: API returned no delivery result')

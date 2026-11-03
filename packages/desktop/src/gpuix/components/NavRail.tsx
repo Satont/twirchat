@@ -2,13 +2,14 @@
  * Left icon navigation rail — port of App.vue's .nav-rail.
  */
 
-import { useState } from 'react'
 import { motion } from '@gpuix/react'
+import { useState } from 'react'
 
-import { useStore } from '../state/create-store'
 import { accountsStore, activeTabStore, unreadEventsStore, type MainTab } from '../state/app'
+import { useStore } from '../state/create-store'
 import { accent } from '../theme'
 import { useTheme } from '../theme-context'
+import { AppStatusIcon } from './ui/AppStatusIcon'
 import { Icon, type IconName } from './ui/Icon'
 import { Text } from './ui/Text'
 
@@ -155,13 +156,12 @@ export function NavRail({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       <div
         style={{
           marginBottom: 12,
-          padding: 8,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="logo" size={24} color={accent.primary} />
+        <AppStatusIcon />
       </div>
 
       <div

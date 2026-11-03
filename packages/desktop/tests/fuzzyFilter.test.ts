@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+
 import { fuzzyFilter } from '../src/views/main/utils/fuzzyFilter'
 
 describe('fuzzyFilter', () => {

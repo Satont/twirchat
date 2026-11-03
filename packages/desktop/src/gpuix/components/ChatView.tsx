@@ -1,11 +1,10 @@
+import { Tooltip, TooltipContent, TooltipTrigger, useGpuixRequired } from '@gpuix/react'
 /**
  * Chat pane — port of ChatList.vue (header + virtualized list + composer)
  * onto GPUIX's native <virtual-list> (alignment="bottom" followTail replaces
  * the virtua VList + manual at-bottom tracking).
  */
-
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Tooltip, TooltipContent, TooltipTrigger, useGpuixRequired } from '@gpuix/react'
+import type { ChannelStatus } from '@twirchat/shared/protocol'
 import type {
   Account,
   NormalizedChatMessage,
@@ -13,30 +12,18 @@ import type {
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
-import type { ChannelStatus } from '@twirchat/shared/protocol'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { useBackend } from '../backend/context'
-import { useStore } from '../state/create-store'
 import {
-  accountsStore,
-  aliasesStore,
-  applyModerationOutcome,
-  channelStatusStore,
-  homeMessagesStore,
-  moderationOutcomeFor,
-  moderationRevisionStore,
-  settingsStore,
-  streamStatusStore,
-  watchedMessagesStore,
-  watchedStatusesStore,
-  showNotice,
-} from '../state/app'
-import { accent, platformColor, semantic, withAlpha } from '../theme'
-import { useFont, useTheme } from '../theme-context'
+  createPauseController,
+  matchesPauseModifier,
+  hoverPauseDurationMs,
+  DOUBLE_CLICK_PAUSE_MS,
+} from '../../services/chat-pause'
+import { appendLiveChatMessages } from '../../views/main/utils/chat-message-buffer'
 import { ownChatSendTargets } from '../../views/main/utils/chat-send-targets'
-import { useOverlayClose } from '../state/overlays'
-import { buildChattersTargets } from '../../views/main/utils/chatters'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
+import { buildChattersTargets } from '../../views/main/utils/chatters'
 import {
   confirmDelivery,
   createPendingMessage,
@@ -45,15 +32,70 @@ import {
   type DeliveryMessage,
 } from '../../views/main/utils/message-delivery'
 import type { ModerationDragAction } from '../../views/main/utils/moderation-drag'
-import { Icon, PlatformIcon, type IconName } from './ui/Icon'
-import { RemoteImage } from './ui/RemoteImage'
-import { Text } from './ui/Text'
-import { ChatMessage } from './ChatMessage'
-import { ChatInput } from './ChatInput'
+import { publicChannelURL } from '../../views/main/utils/public-channel-url'
+import { initialsOf } from '../../views/shared/utils/display-text'
+import { useBackend } from '../backend/context'
+import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
+import { runUiTask } from '../hooks/run-ui-task'
+import { parseHotkeyChoice } from '../hotkey-bindings'
+import { isMessageHiddenForStreamer } from '../message-privacy'
+import { compileMessageRules } from '../message-rules'
+import { useHotkeyContext, useHotkeyRoute, dispatchCustomHotkey } from '../state/action-bindings'
+import { activePaneByWindowStore, getActivePane, setActivePane } from '../state/active-pane'
+import {
+  accountsStore,
+  activeTabStore,
+  aliasesStore,
+  applyModerationOutcome,
+  channelStatusStore,
+  chatActivityStore,
+  chatMessageRate,
+  homeMessagesStore,
+  moderationViewStore,
+  settingsStore,
+  streamStatusStore,
+  watchedMessagesStore,
+  watchedStatusesStore,
+  showNotice,
+} from '../state/app'
+import { channelRoomStore, loadRoomState, roomKey } from '../state/channel-state'
+import { chatPauseStore } from '../state/chat-pause'
+import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
+import { chatSearchJumpStore, finishChatSearchJump } from '../state/chat-search'
+import { useStore, useStoreSelector } from '../state/create-store'
+import { useDesktopWindows } from '../state/desktop-windows'
+import { useTextInputFocusTracking } from '../state/focus'
+import { highlightFlashStore } from '../state/highlight-notifications'
+import { notificationPreferences } from '../state/highlight-notifications'
+import { invokeHotkeyUiAction } from '../state/hotkeys'
+import { allPanels, layoutStore, focusLayoutPanel } from '../state/layout'
+import { messageSimilarityStore, messageSimilarityReaderStore } from '../state/message-similarity'
+import { useOverlayClose } from '../state/overlays'
+import { streamerModeStore } from '../state/streamer-mode'
+import {
+  EMPTY_ACTIVITIES,
+  loadTwitchActivities,
+  twitchActivitiesStore,
+} from '../state/twitch-activities'
+import { windowActivityStore, updateWindowActivity } from '../state/window-activity'
+import { useWindowPresentation } from '../state/window-presentation'
+import { useWindowScope } from '../state/window-scope'
+import { accent, platformColor, semantic, withAlpha } from '../theme'
+import { useFont, useTheme } from '../theme-context'
 import { ChatAppearancePopover } from './ChatAppearancePopover'
-import { UserCardDialog } from './UserCardDialog'
+import { ChatHistoryPanel } from './ChatHistoryPanel'
+import { ChatInput } from './ChatInput'
+import { ChatMessage } from './ChatMessage'
 import { ChattersDialog } from './ChattersDialog'
-import { MessageModerationRail } from './MessageModerationRail'
+import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
+import { Icon, PlatformIcon, type IconName } from './ui/Icon'
+import { Modal } from './ui/Modal'
+import { RemoteImage } from './ui/RemoteImage'
+import { Switch } from './ui/Switch'
+import { Text } from './ui/Text'
+import { UserCardDialog } from './UserCardDialog'
+
+const EMPTY_MESSAGES: NormalizedChatMessage[] = []
 
 function platformName(platform: string): string {
   switch (platform) {
@@ -73,6 +115,10 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
   const theme = useTheme()
   const font = useFont()
   const color = platformColor(ch.platform)
+  const hideViewerCount = useStoreSelector(
+    streamerModeStore,
+    (state) => state.effectiveEnabled && state.settings.hideViewerCountAndDuration,
+  )
 
   return (
     <Tooltip delayDuration={200}>
@@ -116,7 +162,7 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
           >
             {ch.channelLogin}
           </Text>
-          {ch.isLive && ch.viewerCount !== undefined ? (
+          {ch.isLive && ch.viewerCount !== undefined && !hideViewerCount ? (
             <Text style={{ fontSize: 11, color: theme.text2, opacity: 0.75 }}>
               {formatViewers(ch.viewerCount)}
             </Text>
@@ -167,7 +213,7 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
               {`Category  ${ch.categoryName}`}
             </text>
           ) : null}
-          {ch.isLive && ch.viewerCount !== undefined ? (
+          {ch.isLive && ch.viewerCount !== undefined && !hideViewerCount ? (
             <text style={{ fontSize: 11, color: '#8b8b99', fontFamily: font }}>
               {`Viewers  ${ch.viewerCount.toLocaleString()}`}
             </text>
@@ -185,6 +231,10 @@ function formatViewers(n: number): string {
 }
 
 export interface ChatViewProps {
+  headerLeading?: ReactNode
+  paneId?: string
+  layoutTabId?: string
+  layoutPanelId?: string
   /** null/undefined = the combined "My channels" home pane */
   watchedChannel?: WatchedChannel | null
   isMain?: boolean
@@ -195,8 +245,11 @@ export interface ChatViewProps {
 }
 
 export function ChatView({
+  headerLeading,
+  paneId,
+  layoutTabId = 'home',
+  layoutPanelId,
   watchedChannel,
-  isMain,
   onGoToPlatforms,
   onSplitRight,
   onChangeChannel,
@@ -205,48 +258,347 @@ export function ChatView({
   const backend = useBackend()
   const theme = useTheme()
   const renderer = useGpuixRequired()
+  const scope = useWindowScope()
+  const windows = useDesktopWindows()
+  const presentation = useWindowPresentation()
 
-  const settings = useStore(settingsStore)
+  const baseSettings = useStore(settingsStore)
+  const settings = useMemo(
+    () =>
+      baseSettings
+        ? { ...baseSettings, fontSize: baseSettings.fontSize * presentation.zoom }
+        : null,
+    [baseSettings, presentation.zoom],
+  )
   const accounts = useStore(accountsStore)
   const aliases = useStore(aliasesStore)
+  const rules = useStoreSelector(chatRulesStore, (state) => state.value)
+  const similaritySettings = useStoreSelector(messageSimilarityStore, (state) => state.value)
+  const similarityReader = useStore(messageSimilarityReaderStore)
+  const streamerMode = useStore(streamerModeStore)
+  const pausePreferences = useStoreSelector(chatPauseStore, (state) => state.value)
+  const windowActivity = useStoreSelector(windowActivityStore, (entries) => entries.get(scope))
   const statuses = useStore(channelStatusStore)
-  const homeMessages = useStore(homeMessagesStore)
-  const watchedMessagesMap = useStore(watchedMessagesStore)
-  const watchedStatuses = useStore(watchedStatusesStore)
+  // A split only observes its channel; activity elsewhere must not repaint it.
+  const homeMessages = useStoreSelector(homeMessagesStore, (messages) =>
+    watchedChannel ? EMPTY_MESSAGES : messages,
+  )
+  const watchedMessages = useStoreSelector(watchedMessagesStore, (messages) =>
+    watchedChannel ? (messages.get(watchedChannel.id) ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
+  )
+  const watchedChannelStatus = useStoreSelector(watchedStatusesStore, (statuses) =>
+    watchedChannel ? (statuses.get(watchedChannel.id) ?? null) : null,
+  )
   const streamStatuses = useStore(streamStatusStore)
-  useStore(moderationRevisionStore) // re-resolve outcomes on change
-
-  const watchedChannelStatus = watchedChannel
-    ? (watchedStatuses.get(watchedChannel.id) ?? null)
-    : null
+  const moderationView = useStore(moderationViewStore)
+  const activityKey = watchedChannel?.id ?? 'home'
+  const flash = useStoreSelector(highlightFlashStore, (entries) =>
+    watchedChannel
+      ? entries.get(roomKey(watchedChannel.platform, watchedChannel.channelSlug))
+      : undefined,
+  )
+  const activity = useStoreSelector(chatActivityStore, (entries) => entries.get(activityKey))
 
   // ── Messages + optimistic delivery ─────────────────────────────────────────
 
   const [deliveryMessages, setDeliveryMessages] = useState<DeliveryMessage[]>([])
-
   const providerMessages = useMemo(
-    () => (watchedChannel ? (watchedMessagesMap.get(watchedChannel.id) ?? []) : homeMessages),
-    [watchedChannel, watchedMessagesMap, homeMessages],
+    () => (watchedChannel ? watchedMessages : homeMessages),
+    [watchedChannel, watchedMessages, homeMessages],
   )
 
-  // Drop optimistic echoes once the provider message arrives.
+  const visibleDeliveries = useMemo(() => {
+    const retained = deliveryMessages.filter(
+      (message) =>
+        message.delivery?.scope === activityKey &&
+        accounts.some(
+          (account) =>
+            account.platform === message.platform && account.platformUserId === message.author.id,
+        ),
+    )
+    return reconcilePendingMessages(
+      retained.length === deliveryMessages.length ? deliveryMessages : retained,
+      providerMessages,
+    )
+  }, [deliveryMessages, providerMessages, accounts, activityKey])
+
   useEffect(() => {
-    setDeliveryMessages((current) => reconcilePendingMessages(current, providerMessages))
-  }, [providerMessages])
+    if (visibleDeliveries !== deliveryMessages)
+      setDeliveryMessages((current) => (current === deliveryMessages ? visibleDeliveries : current))
+  }, [visibleDeliveries, deliveryMessages])
 
   const activeMessages = useMemo(
-    () => [...providerMessages, ...deliveryMessages],
-    [providerMessages, deliveryMessages],
+    () => appendLiveChatMessages(providerMessages, visibleDeliveries, 0),
+    [providerMessages, visibleDeliveries],
   )
+
+  const ruleEngine = useMemo(
+    () =>
+      compileMessageRules(rules, accounts, (message) => ({
+        similar: similarityReader.get(message)?.similar,
+      })),
+    [rules, accounts, similarityReader],
+  )
+  const paneKey = paneId ? `${paneId}:${activityKey}` : activityKey
+  const twitchChannel = watchedChannel
+    ? watchedChannel.platform === 'twitch'
+      ? watchedChannel.channelSlug
+      : null
+    : (accounts.find((account) => account.platform === 'twitch')?.username ?? null)
+  const room = useStoreSelector(channelRoomStore, (rooms) =>
+    twitchChannel ? rooms.get(roomKey('twitch', twitchChannel)) : undefined,
+  )
+  const twitchActivity = useStoreSelector(twitchActivitiesStore, (channels) =>
+    twitchChannel
+      ? (channels.get(twitchChannel.toLowerCase()) ?? EMPTY_ACTIVITIES)
+      : EMPTY_ACTIVITIES,
+  )
+  const [activitiesOpen, setActivitiesOpen] = useState(false)
+  const [activitiesTab, setActivitiesTab] = useState<'polls' | 'queue'>('polls')
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
+  const [moderationMode, setModerationMode] = useState(true)
+  const [activePlatform, setActivePlatform] = useState<Platform | undefined>(undefined)
+  const commandRunner = useRef<((text: string) => Promise<void>) | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [bannersHidden, setBannersHidden] = useState(false)
+  useEffect(() => {
+    if (!twitchChannel) return
+    runUiTask(loadRoomState(backend, 'twitch', twitchChannel))
+    runUiTask(loadTwitchActivities(backend, twitchChannel))
+    let disposed = false
+    let subscribed = false
+    runUiTask(
+      backend.api
+        .watchTwitchActivities({ channelSlug: twitchChannel, watch: true })
+        .then(() => {
+          if (disposed)
+            runUiTask(
+              backend.api.watchTwitchActivities({ channelSlug: twitchChannel, watch: false }),
+            )
+          else subscribed = true
+        })
+        .catch(() => {}),
+    )
+    return () => {
+      disposed = true
+      if (subscribed)
+        runUiTask(backend.api.watchTwitchActivities({ channelSlug: twitchChannel, watch: false }))
+    }
+  }, [backend, twitchChannel])
+  const aliasMap = useMemo(
+    () =>
+      new Map(aliases.map((alias) => [`${alias.platform}:${alias.platformUserId}`, alias.alias])),
+    [aliases],
+  )
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [mentionsOnly, setMentionsOnly] = useState(false)
+  const [paused, setPaused] = useState<{ messages: NormalizedChatMessage[]; total: number } | null>(
+    null,
+  )
+  const [clearedKeys, setClearedKeys] = useState<Set<string>>(new Set())
+  const [revealedMessageKey, setRevealedMessageKey] = useState<string | null>(null)
+  const searchJump = useStore(chatSearchJumpStore)
+  const pendingJump = useRef<{ requestId: string; messageKey: string } | null>(null)
+  const searchRef = useRef<import('@gpuix/react').PublicInstance | null>(null)
+  const resumeScrollRequested = useRef(false)
+  const pauseInput = useRef({ messages: activeMessages, total: activity?.total ?? 0 })
+  pauseInput.current = { messages: activeMessages, total: activity?.total ?? 0 }
+  const onPauseChanged = useRef<(value: boolean) => void>(() => {})
+  onPauseChanged.current = (value) => {
+    if (value) setPaused((current) => current ?? pauseInput.current)
+    else {
+      setRevealedMessageKey(null)
+      resumeScrollRequested.current = true
+      setPaused(null)
+    }
+  }
+  const pauseController = useMemo(
+    () => createPauseController({ onChange: (value) => onPauseChanged.current(value) }),
+    [],
+  )
+  useEffect(() => () => pauseController.dispose(), [pauseController])
+  useEffect(() => {
+    if (windowActivity?.active === false) {
+      pauseController.deactivate()
+      return
+    }
+    if (matchesPauseModifier(pausePreferences.modifier, windowActivity?.modifiers))
+      pauseController.add('keyboardModifier')
+    else pauseController.remove('keyboardModifier')
+  }, [pauseController, pausePreferences.modifier, windowActivity])
+  useEffect(() => {
+    if (pausePreferences.hoverSeconds === 0) pauseController.remove('mouse')
+    if (!pausePreferences.doubleClickLinks) pauseController.remove('doubleClick')
+  }, [pauseController, pausePreferences.hoverSeconds, pausePreferences.doubleClickLinks])
+  const searchFocus = useTextInputFocusTracking()
+  const search = useMemo(() => compileChatSearch(searchQuery), [searchQuery])
+  const readingMessages = paused?.messages ?? activeMessages
+  const displayedMessages = useMemo(
+    () =>
+      readingMessages.filter((message) => {
+        if (isMessageHiddenForStreamer(message, streamerMode)) return false
+        if (chatMessageKey(message) === revealedMessageKey) return true
+        if (clearedKeys.has(chatMessageKey(message))) return false
+        if (similaritySettings.hideSimilar && similarityReader.get(message)?.similar) return false
+        const classification = ruleEngine.classify(message)
+        if (classification.hidden && !classification.placeholder) return false
+        if (
+          !ruleEngine.matchesFilters(message, paneKey, {
+            channelName: watchedChannel?.channelSlug ?? statuses[message.platform]?.channelLogin,
+            deleted: moderationView.outcomeFor(message)?.isTombstone === true,
+          })
+        )
+          return false
+        if (
+          settings?.platformFilter !== undefined &&
+          settings.platformFilter !== 'all' &&
+          !settings.platformFilter.includes(message.platform)
+        )
+          return false
+        const highlighted = classification.highlighted
+        if (mentionsOnly && !classification.mention) return false
+        return search.matches(message, {
+          alias: aliasMap.get(`${message.platform}:${message.author.id}`),
+          highlighted,
+          similar: similarityReader.get(message)?.similar,
+          deleted: moderationView.outcomeFor(message)?.isTombstone === true,
+          channelName: watchedChannel?.channelSlug ?? statuses[message.platform]?.channelLogin,
+        })
+      }),
+    [
+      readingMessages,
+      clearedKeys,
+      settings?.platformFilter,
+      mentionsOnly,
+      search,
+      aliasMap,
+      moderationView,
+      watchedChannel?.channelSlug,
+      statuses,
+      ruleEngine,
+      paneKey,
+      revealedMessageKey,
+      similaritySettings,
+      similarityReader,
+      streamerMode,
+    ],
+  )
+  const mentionsCount = useMemo(
+    () => activeMessages.filter((message) => ruleEngine.classify(message).mention).length,
+    [activeMessages, ruleEngine],
+  )
+  const pendingCount = paused ? Math.max(0, (activity?.total ?? 0) - paused.total) : 0
+  const filtered =
+    !!searchQuery.trim() ||
+    mentionsOnly ||
+    (rules.paneFilters[paneKey]?.length ?? 0) > 0 ||
+    (settings?.platformFilter !== undefined && settings.platformFilter !== 'all')
+
+  function changePause(value: boolean) {
+    if (value) pauseController.add('manual')
+    else pauseController.clear()
+  }
+  const openSearch = useCallback(
+    (query?: string) => {
+      if (query !== undefined) setSearchQuery(query)
+      setSearchOpen(true)
+      if (searchRef.current) renderer.focusElement?.(searchRef.current.id)
+    },
+    [renderer],
+  )
+  function closeSearch() {
+    setSearchOpen(false)
+    setSearchQuery('')
+  }
+  function clearMessages() {
+    setClearedKeys(new Set(activeMessages.map(chatMessageKey)))
+    pauseController.clear()
+  }
+  function selectFilter(id: string, enabled: boolean) {
+    const current = chatRulesStore.get().value
+    const ids = current.paneFilters[paneKey] ?? []
+    const next = {
+      ...current,
+      paneFilters: {
+        ...current.paneFilters,
+        [paneKey]: enabled ? [...new Set([...ids, id])] : ids.filter((entry) => entry !== id),
+      },
+    }
+    void chatRulesPreferences
+      .save(backend.api, next)
+      .catch((error) => showNotice('error', String(error)))
+  }
+  function copyMessages() {
+    void backend.api
+      .copyText({ text: formatChatTranscript(displayedMessages) })
+      .then(() => showNotice('success', `Copied ${displayedMessages.length} messages`))
+      .catch(() => showNotice('error', 'Could not copy messages to the clipboard.'))
+  }
 
   // ── Virtual list + scroll pill ─────────────────────────────────────────────
 
   const listRef = useRef<import('@gpuix/react').PublicInstance | null>(null)
   const [atBottom, setAtBottom] = useState(true)
+  const [visibleRange, setVisibleRange] = useState<{ start: number; end: number } | null>(null)
+
+  useEffect(() => {
+    if (
+      !searchJump ||
+      searchJump.target.tabId !== layoutTabId ||
+      (searchJump.target.windowId ?? 'main') !== scope ||
+      searchJump.target.paneId !== paneId
+    )
+      return
+    if (pendingJump.current?.requestId === searchJump.requestId) return
+    const found = activeMessages.some(
+      (message) => chatMessageKey(message) === searchJump.messageKey,
+    )
+    if (!found) {
+      finishChatSearchJump(searchJump.requestId, false)
+      return
+    }
+    pendingJump.current = { requestId: searchJump.requestId, messageKey: searchJump.messageKey }
+    resumeScrollRequested.current = false
+    // Keep the retained message available while the user reads its context.
+    pauseController.add('search')
+    setPaused({ messages: activeMessages, total: activity?.total ?? 0 })
+    setRevealedMessageKey(searchJump.messageKey)
+  }, [searchJump, paneId, activeMessages, activity?.total, pauseController, layoutTabId, scope])
+
+  useEffect(() => {
+    const pending = pendingJump.current
+    if (!pending || revealedMessageKey !== pending.messageKey) return
+    const index = displayedMessages.findIndex(
+      (message) => chatMessageKey(message) === pending.messageKey,
+    )
+    if (index < 0) return
+    const timer = setTimeout(() => {
+      if (pendingJump.current !== pending) return
+      const list = listRef.current
+      if (list) renderer.scrollToItem?.(list.id, index)
+      pendingJump.current = null
+      setAtBottom(index === displayedMessages.length - 1)
+      finishChatSearchJump(pending.requestId, !!list)
+    }, 20)
+    return () => clearTimeout(timer)
+  }, [displayedMessages, revealedMessageKey, renderer])
+
+  useEffect(() => {
+    if (paused || !resumeScrollRequested.current) return
+    const timer = setTimeout(() => {
+      resumeScrollRequested.current = false
+      if (listRef.current)
+        renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedMessages.length - 1))
+      setAtBottom(true)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [paused, displayedMessages, renderer])
 
   const scrollToLatest = () => {
     if (listRef.current) {
-      renderer.scrollToItem?.(listRef.current.id, activeMessages.length)
+      renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedMessages.length - 1))
       setAtBottom(true)
     }
   }
@@ -261,26 +613,16 @@ export function ChatView({
   const [watchedModerationAllowed, setWatchedModerationAllowed] = useState(false)
   const [moderationPendingIds, setModerationPendingIds] = useState<Set<string>>(new Set())
 
-  function getChannelSlugForPlatform(platform: Platform): string | undefined {
-    if (watchedChannel?.platform === platform) return watchedChannel.channelSlug
-    return statuses[platform]?.channelLogin
-  }
+  const getChannelSlugForPlatform = useCallback(
+    (platform: Platform): string | undefined => {
+      if (watchedChannel?.platform === platform) return watchedChannel.channelSlug
+      return statuses[platform]?.channelLogin
+    },
+    [watchedChannel, statuses],
+  )
 
   const moderationPlatform = (platform: Platform): 'twitch' | 'kick' | undefined =>
     platform === 'twitch' || platform === 'kick' ? platform : undefined
-
-  const canShowModerationRail = (message: NormalizedChatMessage): boolean => {
-    if (
-      !moderationPlatform(message.platform) ||
-      message.type === 'system' ||
-      message.delivery ||
-      !message.id ||
-      !message.author.id
-    ) {
-      return false
-    }
-    return !watchedChannel || watchedModerationAllowed
-  }
 
   // Refresh the watched-channel moderation capability when inputs change.
   const accountsKey = accounts.map((a) => `${a.platform}:${a.id}`).join('|')
@@ -306,50 +648,53 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedChannel?.id, watchedChannel?.platform, watchedChannel?.channelSlug, accountsKey])
 
-  async function onModerate(message: NormalizedChatMessage, action: ModerationDragAction) {
-    const platform = moderationPlatform(message.platform)
-    if (!platform) return
-    const channelSlug =
-      watchedChannel?.channelSlug ?? getChannelSlugForPlatform(platform) ?? message.channelId
-    if (!channelSlug) {
-      showNotice('error', 'Could not determine the channel for this moderation action.', 3500)
-      return
-    }
+  const onModerate = useCallback(
+    async (message: NormalizedChatMessage, action: ModerationDragAction) => {
+      const platform = moderationPlatform(message.platform)
+      if (!platform) return
+      const channelSlug =
+        watchedChannel?.channelSlug ?? getChannelSlugForPlatform(platform) ?? message.channelId
+      if (!channelSlug) {
+        showNotice('error', 'Could not determine the channel for this moderation action.', 3500)
+        return
+      }
 
-    setModerationPendingIds((current) => new Set(current).add(message.id))
-    try {
-      await backend.api.moderateMessage({
-        action: action.action,
-        channelSlug,
-        messageId: message.id,
-        platform,
-        targetUserId: message.author.id,
-        ...(action.action === 'timeout' ? { durationSeconds: action.durationSeconds } : {}),
-      })
-      // Mirror the outcome into every open pane via the shared store.
-      applyModerationOutcome({
-        action: action.action,
-        channelId: message.channelId,
-        platform,
-        ...(action.action === 'delete_message'
-          ? { messageId: message.id }
-          : {
-              targetUserId: message.author.id,
-              ...(action.action === 'timeout' ? { durationSeconds: action.durationSeconds } : {}),
-            }),
-      })
-      showNotice('success', action.label, 3500)
-    } catch (error) {
-      const text = error instanceof Error ? error.message : String(error)
-      showNotice('error', text.replace(/^Error:\s*/, ''), 3500)
-    } finally {
-      setModerationPendingIds((current) => {
-        const next = new Set(current)
-        next.delete(message.id)
-        return next
-      })
-    }
-  }
+      setModerationPendingIds((current) => new Set(current).add(message.id))
+      try {
+        await backend.api.moderateMessage({
+          action: action.action,
+          channelSlug,
+          messageId: message.id,
+          platform,
+          targetUserId: message.author.id,
+          ...(action.action === 'timeout' ? { durationSeconds: action.durationSeconds } : {}),
+        })
+        // Mirror the outcome into every open pane via the shared store.
+        applyModerationOutcome({
+          action: action.action,
+          channelId: message.channelId,
+          platform,
+          ...(action.action === 'delete_message'
+            ? { messageId: message.id }
+            : {
+                targetUserId: message.author.id,
+                ...(action.action === 'timeout' ? { durationSeconds: action.durationSeconds } : {}),
+              }),
+        })
+        showNotice('success', action.label, 3500)
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error)
+        showNotice('error', text.replace(/^Error:\s*/, ''), 3500)
+      } finally {
+        setModerationPendingIds((current) => {
+          const next = new Set(current)
+          next.delete(message.id)
+          return next
+        })
+      }
+    },
+    [backend, watchedChannel?.channelSlug, getChannelSlugForPlatform],
+  )
 
   // ── Sending (optimistic) ───────────────────────────────────────────────────
 
@@ -383,19 +728,30 @@ export function ChatView({
       console.warn(`[chat] cannot prepare ${platform} optimistic message: no authenticated account`)
       return
     }
-    const message = createPendingMessage({ account, channelId, text, reply: pendingReply() })
+    const canonicalChannelId =
+      platform === 'kick'
+        ? watchedChannelId
+          ? (watchedChannelStatus?.channelId ?? channelId)
+          : account.platformUserId
+        : channelId
+    const message = createPendingMessage({
+      account,
+      channelId: canonicalChannelId,
+      text,
+      reply: pendingReply(),
+      providerMessages,
+      scope: activityKey,
+    })
     setDeliveryMessages((current) => [...current, message])
     try {
-      if (watchedChannelId) {
-        await backend.api.sendWatchedChannelMessage({
-          id: watchedChannelId,
-          text,
-          replyToMessageId,
-        })
-      } else {
-        await backend.api.sendMessage({ channelId, platform, text, replyToMessageId })
-      }
-      setDeliveryMessages((current) => confirmDelivery(current, message.id))
+      const receipt = watchedChannelId
+        ? await backend.api.sendWatchedChannelMessage({
+            id: watchedChannelId,
+            text,
+            replyToMessageId,
+          })
+        : await backend.api.sendMessage({ channelId, platform, text, replyToMessageId })
+      setDeliveryMessages((current) => confirmDelivery(current, message.id, receipt))
     } catch (error) {
       setDeliveryMessages((current) =>
         failDelivery(current, message.id, deliveryErrorMessage(error)),
@@ -404,16 +760,16 @@ export function ChatView({
   }
 
   async function onSend(
-    targets: { platform: string; channelLogin: string; text: string; replyToMessageId?: string }[],
+    targets: {
+      platform: Platform
+      channelLogin: string
+      text: string
+      replyToMessageId?: string
+    }[],
   ) {
     await Promise.all(
       targets.map((target) =>
-        submitDelivery(
-          target.platform as Platform,
-          target.channelLogin,
-          target.text,
-          target.replyToMessageId,
-        ),
+        submitDelivery(target.platform, target.channelLogin, target.text, target.replyToMessageId),
       ),
     )
     setReplyTarget(null)
@@ -460,20 +816,226 @@ export function ChatView({
       ? streamStatuses.get(`${watchedChannel.platform}:${watchedChannel.channelSlug.toLowerCase()}`)
       : undefined
 
-  const hasAnyConnection = ['twitch', 'youtube', 'kick'].some(
-    (p) => statuses[p as Platform]?.status === 'connected',
+  const hasAnyConnection = (['twitch', 'youtube', 'kick'] satisfies Platform[]).some(
+    (platform) => statuses[platform]?.status === 'connected',
   )
 
-  const aliasFor = (msg: NormalizedChatMessage): string | undefined =>
-    msg.author.id
-      ? aliases.find((a) => a.platform === msg.platform && a.platformUserId === msg.author.id)
-          ?.alias
-      : undefined
+  const activePane = useStoreSelector(activePaneByWindowStore, (entries) => entries.get(scope))
+  const paneLayout = useStoreSelector(layoutStore, (entries) => entries.get(layoutTabId)?.layout)
+  const paneIdentity = paneId ?? 'home'
+  const splitContextId = `split:${paneIdentity}`
+  useEffect(() => {
+    const panels = allPanels(paneLayout ?? null)
+    const current = getActivePane(scope)
+    if (
+      current?.tabId === layoutTabId &&
+      panels.some((panel) => `${layoutTabId}:${panel.id}` === current.paneId)
+    )
+      return
+    if (!panels.length || panels[0]?.id === layoutPanelId)
+      setActivePane({ tabId: layoutTabId, paneId: paneIdentity }, scope)
+  }, [scope, layoutTabId, layoutPanelId, paneIdentity, paneLayout])
+  const actionTarget = watchedChannel
+    ? { platform: watchedChannel.platform, channelSlug: watchedChannel.channelSlug }
+    : allChannels.find((channel) => channel.platform === activePlatform)
+      ? {
+          platform: activePlatform!,
+          channelSlug: allChannels.find((channel) => channel.platform === activePlatform)!
+            .channelLogin,
+        }
+      : allChannels[0]
+        ? { platform: allChannels[0].platform, channelSlug: allChannels[0].channelLogin }
+        : undefined
+  const setEnabledArgument = (argument: string | undefined, enabled: boolean) =>
+    argument === 'on' ? true : argument === 'off' ? false : !enabled
+  const openTargetUrl = (url: string | undefined) => {
+    if (!url) throw new Error('This channel does not have a public URL.')
+    return backend.api.openExternalUrl({ url })
+  }
+  useHotkeyContext({
+    id: splitContextId,
+    category: 'split',
+    handlers: {
+      changeChannel: onChangeChannel ?? null,
+      clearMessages,
+      createClip:
+        actionTarget?.platform === 'twitch'
+          ? async () => {
+              const result = await backend.api.executePlatformCommand({
+                ...actionTarget,
+                text: '/clip',
+              })
+              if (result.message) showNotice('info', result.message, 6000)
+            }
+          : null,
+      delete:
+        layoutTabId !== 'home' || (paneLayout && allPanels(paneLayout).length > 1)
+          ? async () => {
+              if (
+                windows?.descriptor.kind !== 'main' &&
+                paneLayout &&
+                allPanels(paneLayout).length === 1
+              )
+                await windows?.close()
+              else onClosePanel?.()
+            }
+          : null,
+      openInBrowser: actionTarget
+        ? () => openTargetUrl(publicChannelURL(actionTarget.platform, actionTarget.channelSlug))
+        : null,
+      openPlayerInBrowser: actionTarget
+        ? () => backend.api.openChannelPlayer({ ...actionTarget, mode: 'browser' })
+        : null,
+      openInCustomPlayer: actionTarget
+        ? () => backend.api.openChannelPlayer({ ...actionTarget, mode: 'custom' })
+        : null,
+      openInStreamlink: actionTarget
+        ? () => backend.api.openChannelPlayer({ ...actionTarget, mode: 'streamlink' })
+        : null,
+      openModView:
+        actionTarget?.platform === 'twitch'
+          ? () =>
+              openTargetUrl(
+                `https://www.twitch.tv/moderator/${encodeURIComponent(actionTarget.channelSlug)}`,
+              )
+          : null,
+      openRewardQueue: twitchChannel
+        ? () => {
+            setActivitiesTab('queue')
+            setActivitiesOpen(true)
+          }
+        : null,
+      openUnbanRequests:
+        actionTarget?.platform === 'twitch'
+          ? () =>
+              openTargetUrl(
+                `https://www.twitch.tv/popout/moderator/${encodeURIComponent(actionTarget.channelSlug)}/unban-requests`,
+              )
+          : null,
+      openViewerList: chattersTargets.length ? () => setChattersOpen(true) : null,
+      pickFilters: () => setFiltersOpen(true),
+      reconnect: watchedChannel
+        ? () => backend.api.reconnectChat({ watchedChannelId: watchedChannel.id })
+        : () => backend.api.reconnectChat({}),
+      scrollToBottom: () => {
+        changePause(false)
+        scrollToLatest()
+      },
+      scrollToTop: () => {
+        changePause(true)
+        if (listRef.current) renderer.scrollToItem?.(listRef.current.id, 0)
+      },
+      showSearch: () => openSearch(),
+      showGlobalSearch: () => invokeHotkeyUiAction('openAllChatSearch', scope),
+      debug: () => setDiagnosticsOpen(true),
+      popupOverlay: windows ? () => windows.openChat(layoutTabId, layoutPanelId, true) : null,
+      openSubscriptionPage: twitchChannel
+        ? () => openTargetUrl(`https://www.twitch.tv/subs/${encodeURIComponent(twitchChannel)}`)
+        : null,
+      focus: layoutPanelId
+        ? ([direction]) => {
+            focusLayoutPanel(
+              backend,
+              layoutTabId,
+              layoutPanelId,
+              parseHotkeyChoice(direction, ['left', 'right', 'up', 'above', 'down', 'below']),
+              scope,
+            )
+          }
+        : null,
+      reloadEmotes: actionTarget
+        ? ([kind]) =>
+            backend.api.reloadChatEmotes({
+              ...actionTarget,
+              kind:
+                kind === undefined ? undefined : parseHotkeyChoice(kind, ['channel', 'subscriber']),
+            })
+        : null,
+      runCommand: async ([text]) => {
+        if (!commandRunner.current) throw new Error('The message composer is not ready.')
+        await commandRunner.current(text!)
+      },
+      scrollPage: ([direction]) => {
+        if (!listRef.current) return
+        const id = listRef.current.id
+        const anchor = renderer.getListScrollTop?.(id)
+        const height = renderer.getElementBounds?.(id)?.height ?? anchor?.[2]
+        if (!anchor || !height) return
+        changePause(true)
+        renderer.scrollToItem?.(
+          id,
+          anchor[0] ?? 0,
+          (anchor[1] ?? 0) + (direction === 'up' ? -height : height),
+        )
+      },
+      setChannelNotification: actionTarget
+        ? async ([argument]) => {
+            await notificationPreferences.load(backend.api)
+            const value = notificationPreferences.store.get().value
+            const key = `${actionTarget.platform}:${actionTarget.channelSlug.toLowerCase()}`
+            const enabled = !value.mutedChannels.includes(key)
+            const next = setEnabledArgument(argument, enabled)
+            await notificationPreferences.save(backend.api, {
+              ...value,
+              mutedChannels: next
+                ? value.mutedChannels.filter((entry) => entry !== key)
+                : [...new Set([...value.mutedChannels, key])],
+            })
+          }
+        : null,
+      setModerationMode: ([argument]) =>
+        setModerationMode((value) => setEnabledArgument(argument, value)),
+      toggleOverlayInertia: windows
+        ? ([target]) =>
+            windows.toggleOverlayInertia(parseHotkeyChoice(target, ['this', 'thisOrAll', 'all']))
+        : null,
+      setHighlightSounds: async ([argument]) => {
+        await notificationPreferences.load(backend.api)
+        const value = notificationPreferences.store.get().value
+        await notificationPreferences.save(backend.api, {
+          ...value,
+          soundEnabled: setEnabledArgument(argument, value.soundEnabled),
+        })
+      },
+      changeMultichannelContext:
+        !watchedChannel && allChannels.length > 1
+          ? ([argument]) => {
+              const index = allChannels.findIndex((channel) => channel.platform === activePlatform)
+              const target =
+                argument === 'next'
+                  ? (index + 1) % allChannels.length
+                  : argument === 'prev'
+                    ? (index - 1 + allChannels.length) % allChannels.length
+                    : Number(argument)
+              const channel = allChannels[target]
+              if (channel) setActivePlatform(channel.platform)
+            }
+          : null,
+    },
+  })
+  useHotkeyRoute(
+    [splitContextId, 'window'],
+    activePane?.tabId === layoutTabId && activePane.paneId === paneIdentity,
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div
+      testId="chat-pane"
+      onMouseDown={() => setActivePane({ tabId: layoutTabId, paneId: paneIdentity }, scope)}
+      onKeyDown={(event) => {
+        if (dispatchCustomHotkey(event, scope)) return
+        if (
+          event.modifiers?.ctrl &&
+          !event.modifiers.alt &&
+          !event.modifiers.shift &&
+          event.key === 'f'
+        ) {
+          event.preventDefault()
+          openSearch()
+        }
+      }}
       style={{
         flexGrow: 1,
         minHeight: 0,
@@ -485,15 +1047,20 @@ export function ChatView({
     >
       {/* Header */}
       <div
+        testId="chat-header"
         style={{
+          backgroundColor: flash
+            ? withAlpha(flash.color?.slice(0, 7) ?? accent.primary, 0.22)
+            : undefined,
           display: 'flex',
           flexDirection: 'row',
+          flexWrap: 'wrap',
           alignItems: 'center',
           gap: 8,
           paddingTop: 8,
           paddingBottom: 8,
-          paddingLeft: 16,
-          paddingRight: 16,
+          paddingLeft: 12,
+          paddingRight: 12,
           borderBottomWidth: 1,
           borderColor: theme.border,
           flexShrink: 0,
@@ -501,6 +1068,7 @@ export function ChatView({
           userSelect: 'none',
         }}
       >
+        {headerLeading}
         {watchedChannel ? (
           <>
             <div
@@ -536,7 +1104,10 @@ export function ChatView({
             </Text>
             {watchedStreamStatus?.isLive ? (
               <>
-                {watchedStreamStatus.viewerCount !== undefined ? (
+                {watchedStreamStatus.viewerCount !== undefined &&
+                !(
+                  streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration
+                ) ? (
                   <Text style={{ fontSize: 11, fontWeight: 600, color: '#22c55e', flexShrink: 0 }}>
                     {formatViewers(watchedStreamStatus.viewerCount)}
                   </Text>
@@ -627,19 +1198,70 @@ export function ChatView({
         {/* Right side */}
         <div style={{ flexGrow: 1 }} />
         <div
+          testId="chat-header-actions"
           style={{
             display: 'flex',
             flexDirection: 'row',
+            flexWrap: 'wrap',
             alignItems: 'center',
-            gap: 4,
-            flexShrink: 0,
+            gap: 2,
+            maxWidth: '100%',
+            minWidth: 0,
           }}
         >
-          {activeMessages.length > 0 ? (
-            <Text style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}>
-              {`${activeMessages.length} messages`}
-            </Text>
+          <MessageRate activityKey={activityKey} />
+          <HeaderButton
+            testId="chat-history-button"
+            title="Search saved chat history"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <Icon name="clock" size={14} color={theme.text2} />
+          </HeaderButton>
+          {twitchChannel ? (
+            <HeaderButton
+              testId="twitch-activities-button"
+              title="Polls, predictions, rewards, pins & whispers"
+              onClick={() => setActivitiesOpen(true)}
+            >
+              <Icon name="globe" size={14} color={theme.text2} />
+            </HeaderButton>
           ) : null}
+          <HeaderButton
+            testId="chat-filters-button"
+            title="Apply saved message filters"
+            onClick={() => setFiltersOpen((value) => !value)}
+          >
+            <Icon
+              name="sliders"
+              size={14}
+              color={rules.paneFilters[paneKey]?.length ? accent.primary : theme.text2}
+            />
+          </HeaderButton>
+          <HeaderButton
+            testId="chat-search-button"
+            title="Search messages · Ctrl+F"
+            onClick={() => openSearch()}
+          >
+            <Icon name="search" size={14} color={searchOpen ? accent.primary : theme.text2} />
+          </HeaderButton>
+          <HeaderButton
+            testId="chat-mentions-button"
+            title="Show mentions and replies to you"
+            onClick={() => setMentionsOnly((value) => !value)}
+          >
+            <Icon name="bell" size={14} color={mentionsOnly ? accent.primary : theme.text2} />
+          </HeaderButton>
+          <HeaderButton
+            testId="chat-pause-button"
+            title={paused ? 'Resume live chat' : 'Pause chat to read'}
+            onClick={() => changePause(!paused)}
+          >
+            <Icon
+              name={paused ? 'play' : 'pause'}
+              size={14}
+              color={paused ? accent.primary : theme.text2}
+            />
+          </HeaderButton>
 
           {chattersTargets.length > 0 ? (
             <HeaderButton testId="chatters-button" onClick={() => setChattersOpen(true)}>
@@ -649,7 +1271,7 @@ export function ChatView({
 
           {settings ? <ChatAppearancePopover settings={settings} /> : null}
 
-          {!isMain ? (
+          {onSplitRight || onClosePanel || windows ? (
             <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
               <HeaderButton testId="split-right" onClick={() => onSplitRight?.()}>
                 <Icon name="plus" size={14} color={theme.text2} />
@@ -682,7 +1304,7 @@ export function ChatView({
                     },
                   }}
                 >
-                  {watchedChannel ? (
+                  {onChangeChannel ? (
                     <MenuItem
                       icon="refresh"
                       label="Change channel"
@@ -692,7 +1314,31 @@ export function ChatView({
                       }}
                     />
                   ) : null}
-                  {watchedChannel ? (
+                  {windows ? (
+                    <>
+                      <MenuItem
+                        icon="externalLink"
+                        label="Open chat in a new window"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          void windows
+                            .openChat(layoutTabId, layoutPanelId)
+                            .catch((error) => showNotice('error', String(error)))
+                        }}
+                      />
+                      <MenuItem
+                        icon="externalLink"
+                        label="Open chat overlay"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          void windows
+                            .openChat(layoutTabId, layoutPanelId, true)
+                            .catch((error) => showNotice('error', String(error)))
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  {onChangeChannel || windows ? (
                     <div
                       style={{
                         height: 1,
@@ -702,15 +1348,23 @@ export function ChatView({
                       }}
                     />
                   ) : null}
-                  <MenuItem
-                    icon="close"
-                    label="Close panel"
-                    danger
-                    onClick={() => {
-                      setMenuOpen(false)
-                      onClosePanel?.()
-                    }}
-                  />
+                  {layoutTabId !== 'home' || (paneLayout && allPanels(paneLayout).length > 1) ? (
+                    <MenuItem
+                      icon="close"
+                      label="Close panel"
+                      danger
+                      onClick={() => {
+                        setMenuOpen(false)
+                        if (
+                          windows?.descriptor.kind !== 'main' &&
+                          paneLayout &&
+                          allPanels(paneLayout).length === 1
+                        )
+                          void windows?.close().catch((error) => showNotice('error', String(error)))
+                        else onClosePanel?.()
+                      }}
+                    />
+                  ) : null}
                 </anchored>
               ) : null}
             </div>
@@ -718,8 +1372,271 @@ export function ChatView({
         </div>
       </div>
 
+      {room &&
+      (room.slowSeconds ||
+        (room.followersOnlyMinutes !== undefined && room.followersOnlyMinutes !== null) ||
+        room.subscribersOnly ||
+        room.emoteOnly ||
+        room.uniqueChat) ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: 5,
+            paddingBottom: 5,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          {room.slowSeconds ? (
+            <Text style={{ fontSize: 11, color: theme.text2 }}>{`Slow ${room.slowSeconds}s`}</Text>
+          ) : null}
+          {room.followersOnlyMinutes !== undefined && room.followersOnlyMinutes !== null ? (
+            <Text
+              style={{ fontSize: 11, color: theme.text2 }}
+            >{`Followers ${room.followersOnlyMinutes}m`}</Text>
+          ) : null}
+          {room.subscribersOnly ? (
+            <Text style={{ fontSize: 11, color: theme.text2 }}>Subscribers only</Text>
+          ) : null}
+          {room.emoteOnly ? (
+            <Text style={{ fontSize: 11, color: theme.text2 }}>Emote only</Text>
+          ) : null}
+          {room.uniqueChat ? (
+            <Text style={{ fontSize: 11, color: theme.text2 }}>Unique chat</Text>
+          ) : null}
+        </div>
+      ) : null}
+      {twitchChannel && twitchActivity.snapshot && !bannersHidden ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          {twitchActivity.snapshot.pinnedMessage ? (
+            <div onClick={() => setActivitiesOpen(true)} style={{ padding: 8, cursor: 'pointer' }}>
+              <Text
+                style={{ fontSize: 12, color: theme.text }}
+              >{`Pinned · ${twitchActivity.snapshot.pinnedMessage.authorName ?? ''}: ${twitchActivity.snapshot.pinnedMessage.text}`}</Text>
+            </div>
+          ) : null}
+          {twitchActivity.snapshot.polls
+            .filter((poll) => poll.status === 'ACTIVE')
+            .map((poll) => (
+              <div
+                key={poll.id}
+                onClick={() => setActivitiesOpen(true)}
+                style={{ padding: 8, cursor: 'pointer' }}
+              >
+                <Text
+                  style={{ fontSize: 12, color: theme.text }}
+                >{`Poll · ${poll.title} · ${poll.choices.reduce((total, choice) => total + choice.votes, 0)} votes`}</Text>
+              </div>
+            ))}
+          {twitchActivity.snapshot.predictions
+            .filter((prediction) => ['ACTIVE', 'LOCKED'].includes(prediction.status))
+            .map((prediction) => (
+              <div
+                key={prediction.id}
+                onClick={() => setActivitiesOpen(true)}
+                style={{ padding: 8, cursor: 'pointer' }}
+              >
+                <Text
+                  style={{ fontSize: 12, color: theme.text }}
+                >{`Prediction · ${prediction.title} · ${prediction.status}`}</Text>
+              </div>
+            ))}
+          {twitchActivity.snapshot.pinnedMessage ||
+          twitchActivity.snapshot.polls.some((poll) => poll.status === 'ACTIVE') ||
+          twitchActivity.snapshot.predictions.some((prediction) =>
+            ['ACTIVE', 'LOCKED'].includes(prediction.status),
+          ) ? (
+            <Text
+              onClick={() => setBannersHidden(true)}
+              style={{ fontSize: 11, color: theme.text2, padding: 6, cursor: 'pointer' }}
+            >
+              Hide activity banners
+            </Text>
+          ) : null}
+        </div>
+      ) : null}
+      {bannersHidden ? (
+        <Text
+          onClick={() => setBannersHidden(false)}
+          style={{ fontSize: 11, color: theme.link, padding: 6, cursor: 'pointer' }}
+        >
+          Restore activity banners
+        </Text>
+      ) : null}
+      {filtersOpen ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 7,
+            padding: 10,
+            flexShrink: 0,
+            maxHeight: 220,
+            overflowY: 'scroll',
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
+              Message filters · all selected rules must match
+            </Text>
+            <HeaderButton title="Close filters" onClick={() => setFiltersOpen(false)}>
+              <Icon name="close" size={13} color={theme.text2} />
+            </HeaderButton>
+          </div>
+          {rules.filters.map((filter) => (
+            <div
+              key={filter.id}
+              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}
+            >
+              <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>{filter.name}</Text>
+              <Switch
+                checked={(rules.paneFilters[paneKey] ?? []).includes(filter.id)}
+                onChange={(enabled) => selectFilter(filter.id, enabled)}
+              />
+            </div>
+          ))}
+          <Text
+            onClick={() => activeTabStore.set('settings')}
+            style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
+          >
+            {rules.filters.length
+              ? 'Edit filters in Settings'
+              : 'Create your first filter in Settings'}
+          </Text>
+        </div>
+      ) : null}
+      {searchOpen ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 5,
+            padding: 8,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input
+              ref={searchRef}
+              testId="chat-search"
+              autoFocus
+              value={searchQuery}
+              placeholder="Search · from:user has:link !is:reply"
+              {...searchFocus}
+              onChange={(event) => setSearchQuery(event.value ?? '')}
+              onKeyDown={(event) => {
+                if (event.key === 'escape') {
+                  event.preventDefault()
+                  closeSearch()
+                }
+              }}
+              theme={{ caret: accent.primary }}
+              style={{
+                flexGrow: 1,
+                minWidth: 0,
+                fontSize: 12,
+                color: theme.text,
+                backgroundColor: theme.surface2,
+                borderRadius: 5,
+                padding: 6,
+              }}
+            />
+            <Text
+              testId="chat-search-count"
+              style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}
+            >
+              {`${displayedMessages.length} / ${readingMessages.length}`}
+            </Text>
+            <HeaderButton
+              testId="chat-search-close"
+              title="Close search · Esc"
+              onClick={closeSearch}
+            >
+              <Icon name="close" size={14} color={theme.text2} />
+            </HeaderButton>
+          </div>
+          <Text style={{ fontSize: 11, color: search.error ? theme.warningText : theme.text2 }}>
+            {search.error ??
+              'from: · in: · platform: · badge: · has:link/emote · is:reply/highlighted/deleted · ! excludes'}
+          </Text>
+        </div>
+      ) : null}
+      {mentionsOnly ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            padding: 8,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            flexShrink: 0,
+          }}
+        >
+          <Text
+            style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}
+          >{`Mentions & replies · ${mentionsCount}`}</Text>
+          <HeaderButton title="Show all messages" onClick={() => setMentionsOnly(false)}>
+            <Icon name="close" size={13} color={theme.text2} />
+          </HeaderButton>
+        </div>
+      ) : null}
+
       {/* Messages + scroll pill */}
+      {revealedMessageKey ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            padding: 8,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          <Text style={{ fontSize: 12, color: theme.text2, flexGrow: 1 }}>
+            Search result · chat paused to keep its context
+          </Text>
+          <Text
+            onClick={() => changePause(false)}
+            style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
+          >
+            Return to live chat
+          </Text>
+        </div>
+      ) : null}
       <div
+        testId="chat-messages"
+        onMouseMove={(event) => {
+          updateWindowActivity(scope, windowActivity?.active ?? true, event.modifiers)
+          if (pausePreferences.hoverSeconds !== 0)
+            pauseController.add('mouse', hoverPauseDurationMs(pausePreferences.hoverSeconds))
+        }}
+        onMouseLeave={() => pauseController.remove('mouse')}
         style={{
           flexGrow: 1,
           minHeight: 0,
@@ -729,15 +1646,19 @@ export function ChatView({
           overflow: 'hidden',
         }}
       >
-        {activeMessages.length > 0 ? (
+        {displayedMessages.length > 0 ? (
           <virtual-list
             ref={listRef}
             alignment="bottom"
-            followTail
+            followTail={!paused}
             estimatedItemHeight={56}
             onVisibleRange={(event) => {
               const end = event.endIndex ?? 0
-              setAtBottom(end >= activeMessages.length - 1)
+              const start = event.startIndex ?? 0
+              setVisibleRange((current) =>
+                current?.start === start && current.end === end ? current : { start, end },
+              )
+              setAtBottom(end >= displayedMessages.length - 1)
             }}
             style={{
               flexGrow: 1,
@@ -746,16 +1667,53 @@ export function ChatView({
               scrollbarWidth: 5,
             }}
           >
-            {activeMessages.map((message) => {
-              const outcome = moderationOutcomeFor(message)
+            {displayedMessages.map((message, index) => {
+              const outcome = moderationView.outcomeFor(message)
+              const classification = ruleEngine.classify(message)
               return (
                 // Plain block wrapper: flex containers shrink to content in
                 // virtual-list rows, block divs stretch to the list width.
-                <div key={message.id} style={{ width: '100%' }}>
+                <div
+                  key={chatMessageKey(message)}
+                  onMouseDown={
+                    pausePreferences.doubleClickLinks && !classification.hidden
+                      ? (event) => {
+                          if (event.button === 0)
+                            pauseController.add('doubleClick', DOUBLE_CLICK_PAUSE_MS)
+                        }
+                      : undefined
+                  }
+                  testId={
+                    revealedMessageKey === chatMessageKey(message)
+                      ? 'revealed-search-message'
+                      : undefined
+                  }
+                  style={{
+                    width: '100%',
+                    opacity: similarityReader.get(message)?.gray ? 0.55 : 1,
+                    ...(revealedMessageKey === chatMessageKey(message)
+                      ? { borderLeftWidth: 2, borderColor: accent.primary }
+                      : {}),
+                  }}
+                >
                   <ChatMessage
-                    message={message}
+                    visible={
+                      visibleRange
+                        ? index >= visibleRange.start - 4 && index <= visibleRange.end + 4
+                        : index >= displayedMessages.length - 32
+                    }
+                    message={
+                      revealedMessageKey === chatMessageKey(message)
+                        ? message
+                        : classification.message
+                    }
+                    hiddenLabel={
+                      classification.hidden && revealedMessageKey !== chatMessageKey(message)
+                        ? 'Message from an ignored user or phrase · click to reveal'
+                        : undefined
+                    }
                     channelSlug={getChannelSlugForPlatform(message.platform)}
-                    alias={aliasFor(message)}
+                    alias={aliasMap.get(`${message.platform}:${message.author.id}`)}
                     showPlatformColorStripe={
                       watchedChannel ? false : settings?.showPlatformColorStripe
                     }
@@ -767,33 +1725,49 @@ export function ChatView({
                     chatTheme={settings?.chatTheme}
                     accounts={accounts}
                     selfPingEnabled={settings?.selfPing?.enabled}
-                    selfPingColor={settings?.selfPing?.color}
+                    selfPingColor={
+                      classification.color
+                        ? classification.color.length === 7
+                          ? withAlpha(classification.color, 0.16)
+                          : classification.color
+                        : settings?.selfPing?.color
+                    }
+                    highlighted={
+                      classification.highlighted &&
+                      (classification.rules.length > 0 ||
+                        message.metadata?.highlighted === true ||
+                        settings?.selfPing?.enabled === true)
+                    }
                     moderationOutcome={outcome}
-                    onOpenUserCard={(target) =>
-                      setUserCardTarget({
-                        ...target,
-                        channelSlug:
-                          target.channelSlug ?? getChannelSlugForPlatform(target.platform),
-                      })
-                    }
+                    onOpenUserCard={setUserCardTarget}
                     onReply={setReplyTarget}
-                    renderModerationRail={
-                      canShowModerationRail(message) && (!outcome || outcome.isTombstone)
-                        ? (rowHovered) => (
-                            <MessageModerationRail
-                              disabled={moderationPendingIds.has(message.id)}
-                              platform={moderationPlatform(message.platform)!}
-                              rowHovered={rowHovered}
-                              onModerate={(action) => void onModerate(message, action)}
-                            />
-                          )
-                        : undefined
-                    }
+                    onSearch={openSearch}
+                    canModerate={moderationMode && (!watchedChannel || watchedModerationAllowed)}
+                    moderationPending={moderationPendingIds.has(message.id)}
+                    onModerate={(...args) => runUiTask(onModerate(...args))}
                   />
                 </div>
               )
             })}
           </virtual-list>
+        ) : filtered || clearedKeys.size > 0 || paused ? (
+          <div
+            style={{
+              flexGrow: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: theme.text2 }}>
+              {filtered
+                ? 'No matching messages. Try a different search or filter.'
+                : paused
+                  ? 'Chat is paused. Resume to see new messages.'
+                  : 'Messages cleared locally. Waiting for new messages…'}
+            </Text>
+          </div>
         ) : (
           <EmptyState
             watchedChannel={watchedChannel}
@@ -805,7 +1779,7 @@ export function ChatView({
         )}
 
         {/* Scroll-to-latest pill */}
-        {!atBottom && activeMessages.length > 0 ? (
+        {paused || (!atBottom && displayedMessages.length > 0) ? (
           <div
             style={{
               position: 'absolute',
@@ -820,7 +1794,7 @@ export function ChatView({
           >
             <div
               testId="scroll-to-latest"
-              onClick={scrollToLatest}
+              onClick={() => (paused ? changePause(false) : scrollToLatest())}
               style={{
                 pointerEvents: 'auto',
                 display: 'flex',
@@ -841,7 +1815,9 @@ export function ChatView({
             >
               <Icon name="chevronDown" size={14} color={theme.text} />
               <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
-                Scroll to latest
+                {paused
+                  ? `Resume live chat${pendingCount ? ` · ${pendingCount} new` : ''}`
+                  : 'Scroll to latest'}
               </Text>
             </div>
           </div>
@@ -851,6 +1827,14 @@ export function ChatView({
       {/* Composer */}
       {settings ? (
         <ChatInput
+          hotkeyContextId={`input:${paneKey}`}
+          hotkeyParentContextIds={[splitContextId, 'window']}
+          onCommandRunnerReady={(runner) => {
+            commandRunner.current = runner
+          }}
+          activePlatform={activePlatform}
+          onActivePlatformChange={(platform) => setActivePlatform(platform ?? undefined)}
+          composerKey={paneKey}
           accounts={accounts}
           settings={settings}
           statuses={statuses}
@@ -862,10 +1846,77 @@ export function ChatView({
           onOpenUserCard={setUserCardTarget}
           onSend={(targets) => void onSend(targets)}
           onSendWatched={(payload) => void onSendWatched(payload)}
+          onClearMessages={clearMessages}
+          onCopyMessages={copyMessages}
+          onPauseChange={changePause}
+          onToggleMentions={() => setMentionsOnly((value) => !value)}
+          onSearch={openSearch}
+          onPlatformCommand={async (text, target) => {
+            const result = await backend.api.executePlatformCommand({
+              platform: target.platform,
+              channelSlug: target.channelSlug,
+              text,
+            })
+            if (result.message) showNotice('info', result.message, 6000)
+          }}
         />
       ) : null}
 
       {/* Dialogs */}
+      {diagnosticsOpen ? (
+        <Modal width={620} onClose={() => setDiagnosticsOpen(false)}>
+          <div
+            style={{
+              padding: 16,
+              maxHeight: 600,
+              overflow: 'scroll',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <Text style={{ color: theme.text, fontWeight: 600 }}>Chat diagnostics</Text>
+            <Text style={{ color: theme.text2, fontSize: 12 }}>
+              {JSON.stringify(
+                {
+                  window: scope,
+                  tab: layoutTabId,
+                  panel: layoutPanelId,
+                  channel: actionTarget,
+                  received: activeMessages.length,
+                  shown: displayedMessages.length,
+                  paused: !!paused,
+                  visibleRange,
+                  status: watchedChannelStatus ?? statuses,
+                },
+                null,
+                2,
+              )}
+            </Text>
+          </div>
+        </Modal>
+      ) : null}
+      {historyOpen ? (
+        <ChatHistoryPanel
+          channel={
+            watchedChannel
+              ? {
+                  platform: watchedChannel.platform,
+                  channelId: watchedChannel.channelSlug,
+                  displayName: watchedChannel.displayName,
+                }
+              : undefined
+          }
+          onClose={() => setHistoryOpen(false)}
+        />
+      ) : null}
+      {activitiesOpen && twitchChannel ? (
+        <TwitchActivitiesPanel
+          channelSlug={twitchChannel}
+          initialTab={activitiesTab}
+          onClose={() => setActivitiesOpen(false)}
+        />
+      ) : null}
       {chattersOpen && chattersTargets.length > 0 ? (
         <ChattersDialog targets={chattersTargets} onClose={() => setChattersOpen(false)} />
       ) : null}
@@ -890,22 +1941,25 @@ function HeaderButton({
   children,
   onClick,
   testId,
+  title,
 }: {
   children: React.ReactNode
   onClick?: () => void
   testId?: string
+  title?: string
 }) {
   const theme = useTheme()
   const [hovered, setHovered] = useState(false)
-  return (
+  const button = (
     <div
       testId={testId}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        width: 26,
-        height: 26,
+        width: 22,
+        height: 24,
+        flexShrink: 0,
         borderRadius: 4,
         cursor: 'pointer',
         display: 'flex',
@@ -920,7 +1974,36 @@ function HeaderButton({
       {children}
     </div>
   )
+  return title ? (
+    <Tooltip delayDuration={250}>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        style={{ backgroundColor: theme.popover, color: theme.text, padding: 7, borderRadius: 5 }}
+      >
+        <Text style={{ fontSize: 12, color: theme.text }}>{title}</Text>
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    button
+  )
 }
+
+/** The one-second clock only repaints the tiny rate indicator. */
+const MessageRate = memo(function MessageRate({ activityKey }: { activityKey: string }) {
+  const theme = useTheme()
+  const activity = useStoreSelector(chatActivityStore, (entries) => entries.get(activityKey))
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  return (
+    <Text testId="chat-message-rate" style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}>
+      {`${chatMessageRate(activity, now).toFixed(1)} msg/s`}
+    </Text>
+  )
+})
 
 function MenuItem({
   icon,
@@ -1088,6 +2171,7 @@ function EmptyState({
                 {acc.avatarUrl ? (
                   <RemoteImage
                     url={acc.avatarUrl}
+                    avatarSize={22}
                     objectFit="cover"
                     style={{
                       width: 22,
@@ -1110,7 +2194,7 @@ function EmptyState({
                     }}
                   >
                     <Text style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>
-                      {acc.displayName.charAt(0).toUpperCase()}
+                      {initialsOf(acc.displayName)}
                     </Text>
                   </div>
                 )}

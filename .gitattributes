@@ -1,0 +1,7 @@
+# Preserve pinned upstream text and the context markers in unified patches.
+.agents/skills/** -whitespace
+packages/desktop/native/gpuix/patches/*.patch -whitespace
+packages/shared/youtube/codegen/ts-proto.patch -whitespace
+
+# Benchmark logs are raw measurement evidence.
+docs/benchmarks/**/*.log -whitespace

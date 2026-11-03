@@ -153,7 +153,7 @@ scalar CustomerId
 
 scalar DateTime # Implement the DateTime<Utc> scalar
 
-The input/output is a string in RFC3339 format.
+# The input/output is a string in RFC3339 format.
 
 type EditorEmotePermission {
   admin: Boolean!
@@ -968,8 +968,8 @@ type StoreQuery {
 }
 
 scalar String # The `String` scalar type represents textual data, represented as UTF-8
-character sequences. The String type is most often used by GraphQL to
-represent free-form human-readable text.
+# character sequences. The String type is most often used by GraphQL to
+# represent free-form human-readable text.
 
 scalar StripeProductId
 

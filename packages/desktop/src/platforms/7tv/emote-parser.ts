@@ -1,5 +1,6 @@
-import { sevenTVService } from '../../seventv'
 import type { Platform } from '@twirchat/shared'
+
+import { sevenTVService } from '../../seventv'
 
 export interface ParsedEmote {
   id: string

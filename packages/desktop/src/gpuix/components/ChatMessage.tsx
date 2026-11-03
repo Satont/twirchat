@@ -8,24 +8,37 @@
  * because parent `hover` styles do not reach children.
  */
 
-import { memo, useEffect, useState } from 'react'
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
+import { memo, useEffect, useMemo, useState } from 'react'
 
-import { useBackend } from '../backend/context'
-import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
-import { useStore } from '../state/create-store'
-import type { ResolvedModerationOutcome } from '../state/app'
-import { platformColor, readableOn, semantic } from '../theme'
-import { useFont, useTheme } from '../theme-context'
+import { deleteOldestEntry } from '../../services/bounded-cache'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
-import { Icon, PlatformIcon } from './ui/Icon'
+import type { ModerationDragAction } from '../../views/main/utils/moderation-drag'
+import {
+  initialsOf,
+  sanitizeDisplayText,
+  truncateGraphemes,
+} from '../../views/shared/utils/display-text'
+import { useBackend } from '../backend/context'
+import { createMentionMatcher } from '../chat-tools'
 import { icons } from '../icons'
-import { RemoteImage } from './ui/RemoteImage'
-import { Text } from './ui/Text'
+import type { ResolvedModerationOutcome } from '../state/app'
+import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
+import { useStoreSelector } from '../state/create-store'
+import { platformColor, readableOn, semantic } from '../theme'
+import { useFont, useTheme } from '../theme-context'
+import { CosmeticAuthorName, CosmeticBadges, useAuthorCosmetics } from './CosmeticAuthor'
+import { MessageActionsMenu } from './MessageActionsMenu'
+import { MessageModerationRail } from './MessageModerationRail'
 import { MessageText, MessageTokens } from './MessageText'
+import { MessageTranslation } from './MessageTranslation'
+import { Icon, PlatformIcon } from './ui/Icon'
+import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
+import { Text } from './ui/Text'
 
 const DEFAULT_FONT_SIZE = 14
+const MAX_NAME_GRAPHEMES = 32
 
 function badgeSize(fontSize: number): number {
   return Math.max(12, Math.round(fontSize * 1.15))
@@ -59,13 +72,25 @@ export function formatMessageTime(ts: Date): string {
 
 // ── Avatar (fallback circle with the image layered on top once decoded) ─────
 
-export function Avatar({ message, size }: { message: NormalizedChatMessage; size: number }) {
-  useStore(avatarRevisionStore)
-  useEffect(() => ensureAvatar(message), [message])
-  const url = avatarUrlFor(message)
+export function Avatar({
+  message,
+  size,
+  visible = true,
+}: {
+  message: NormalizedChatMessage
+  size: number
+  visible?: boolean
+}) {
+  const url = useStoreSelector(avatarRevisionStore, () => avatarUrlFor(message))
+  useEffect(() => {
+    if (visible) ensureAvatar(message)
+  }, [message, visible])
 
   return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+    <div
+      testId={`chat-avatar-${message.id}`}
+      style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}
+    >
       <div
         style={{
           position: 'absolute',
@@ -87,12 +112,13 @@ export function Avatar({ message, size }: { message: NormalizedChatMessage; size
             color: 'rgba(255, 255, 255, 0.9)',
           }}
         >
-          {message.author.displayName.slice(0, 1).toUpperCase()}
+          {initialsOf(message.author.displayName)}
         </Text>
       </div>
       {url ? (
         <RemoteImage
           url={url}
+          avatarSize={size}
           objectFit="cover"
           style={{
             position: 'absolute',
@@ -110,8 +136,15 @@ export function Avatar({ message, size }: { message: NormalizedChatMessage; size
 
 // ── Badges ──────────────────────────────────────────────────────────────────
 
+const badgeDataUrls = new Map<string, string>()
+
 function badgeDataUrl(svg: string): string {
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+  const cached = badgeDataUrls.get(svg)
+  if (cached) return cached
+  const url = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+  if (badgeDataUrls.size >= 64) deleteOldestEntry(badgeDataUrls)
+  badgeDataUrls.set(svg, url)
+  return url
 }
 
 function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size: number }) {
@@ -180,10 +213,7 @@ function ReplyPreview({ message, fontSize }: { message: NormalizedChatMessage; f
   const theme = useTheme()
   const reply = message.reply
   if (!reply) return null
-  const text =
-    reply.parentMessageText.length > 80
-      ? `${reply.parentMessageText.slice(0, 80)}…`
-      : reply.parentMessageText
+  const text = truncateGraphemes(sanitizeDisplayText(reply.parentMessageText), 80)
   return (
     <div
       style={{
@@ -203,7 +233,7 @@ function ReplyPreview({ message, fontSize }: { message: NormalizedChatMessage; f
           whiteSpace: 'nowrap',
         }}
       >
-        {reply.parentAuthor.displayName}
+        {displayName(reply.parentAuthor.displayName)}
       </Text>
       <Text
         style={{ fontSize: Math.round(fontSize * 0.8), color: theme.text2, whiteSpace: 'nowrap' }}
@@ -287,11 +317,21 @@ function HoverActions({
   onReply,
   onCopy,
   copySuccess,
+  message,
+  channelSlug,
+  onOpenUserCard,
+  onSearch,
+  menuRequest,
 }: {
   rowHovered: boolean
   onReply: () => void
   onCopy: () => void
   copySuccess: boolean
+  message: NormalizedChatMessage
+  channelSlug?: string
+  onOpenUserCard: () => void
+  onSearch?: (query: string) => void
+  menuRequest: number
 }) {
   const theme = useTheme()
   const [replyHover, setReplyHover] = useState(false)
@@ -329,6 +369,15 @@ function HoverActions({
         color={copySuccess ? semantic.successSoft : theme.text2}
         bg={copySuccess ? 'rgba(74, 222, 128, 0.2)' : undefined}
       />
+      <MessageActionsMenu
+        message={message}
+        channelSlug={channelSlug}
+        visible={visible}
+        onReply={onReply}
+        onOpenUserCard={onOpenUserCard}
+        onSearch={onSearch}
+        request={menuRequest}
+      />
     </div>
   )
 }
@@ -343,42 +392,65 @@ export interface ChatMessageProps {
   showTimestamp?: boolean
   showAvatar?: boolean
   showBadges?: boolean
+  visible?: boolean
   fontSize?: number
   chatTheme?: 'modern' | 'compact'
   accounts?: Account[]
   selfPingEnabled?: boolean
   selfPingColor?: string
+  highlighted?: boolean
+  hiddenLabel?: string
   alias?: string
   moderationOutcome?: ResolvedModerationOutcome
+  canModerate?: boolean
+  moderationPending?: boolean
+  onModerate?: (message: NormalizedChatMessage, action: ModerationDragAction) => void
   /** Moderation drag rail over the row's left edge; gets the row hover. */
   renderModerationRail?: (rowHovered: boolean) => import('react').ReactNode
   onOpenUserCard?: (target: UserCardTarget) => void
   onReply?: (message: NormalizedChatMessage) => void
+  onSearch?: (query: string) => void
 }
 
-export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
+const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessageProps) {
   const { message } = props
   const theme = useTheme()
   const font = useFont()
   const backend = useBackend()
   const [hovered, setHovered] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [ignoredRevealed, setIgnoredRevealed] = useState(false)
+  const [menuRequest, setMenuRequest] = useState(0)
+  const cosmetics = useAuthorCosmetics(
+    message,
+    props.visible !== false && (!props.hiddenLabel || ignoredRevealed),
+  )
 
   const fontSize = props.fontSize ?? DEFAULT_FONT_SIZE
   const isSystem = message.type === 'system'
   const isAction = message.type === 'action'
   const isTombstone = props.moderationOutcome?.isTombstone === true
-
-  const isSelfPing = (() => {
-    if (!props.selfPingEnabled || !props.accounts?.length) return false
-    const myAccount = props.accounts.find((a) => a.platform === message.platform)
-    if (!myAccount) return false
-    const lower = message.text.toLowerCase()
-    return (
-      lower.includes(`@${myAccount.username.toLowerCase()}`) ||
-      lower.includes(`@${myAccount.displayName.toLowerCase()}`)
+  const mentionMatcher = useMemo(() => createMentionMatcher(props.accounts ?? []), [props.accounts])
+  const isSelfPing =
+    props.highlighted ?? (props.selfPingEnabled === true && mentionMatcher(message))
+  const moderationRail =
+    props.canModerate &&
+    props.onModerate &&
+    (message.platform === 'twitch' || message.platform === 'kick') &&
+    !isSystem &&
+    !message.delivery &&
+    message.id &&
+    message.author.id &&
+    (!props.moderationOutcome || isTombstone) ? (
+      <MessageModerationRail
+        disabled={props.moderationPending}
+        platform={message.platform}
+        rowHovered={hovered}
+        onModerate={(action) => props.onModerate?.(message, action)}
+      />
+    ) : (
+      props.renderModerationRail?.(hovered)
     )
-  })()
 
   const copyMessage = () => {
     void backend.api
@@ -406,7 +478,29 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
 
   // Platform name colors are user-picked — lift them to 4.5:1 on our bg.
   const authorColor = message.author.color ? readableOn(message.author.color, theme.bg) : theme.text
-  const authorName = props.alias ?? message.author.displayName
+  const authorName = displayName(props.alias ?? message.author.displayName)
+
+  if (props.hiddenLabel && !ignoredRevealed)
+    return (
+      <div
+        testId="ignored-message"
+        onClick={() => setIgnoredRevealed(true)}
+        style={{
+          paddingTop: 5,
+          paddingBottom: 5,
+          paddingLeft: 14,
+          paddingRight: 14,
+          cursor: 'pointer',
+          backgroundColor: theme.fill,
+          borderBottomWidth: 1,
+          borderColor: theme.divider,
+        }}
+      >
+        <Text style={{ fontSize: Math.round(fontSize * 0.85), color: theme.text2 }}>
+          {props.hiddenLabel}
+        </Text>
+      </div>
+    )
 
   // ── System message ────────────────────────────────────────────────────────
   if (isSystem) {
@@ -513,6 +607,9 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
     const tsSize = timestampSize(fontSize)
     return (
       <div
+        onMouseDown={(event) => {
+          if (event.button === 2) setMenuRequest((value) => value + 1)
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
@@ -549,11 +646,13 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
         >
           {props.showTimestamp ? (
             <Text
+              testId={`chat-timestamp-${message.id}`}
               style={{
                 fontSize: tsSize,
                 color: theme.text2,
                 whiteSpace: 'nowrap',
-                width: Math.round(tsSize * 5.2),
+                width: Math.ceil(tsSize * 4.6),
+                textAlign: 'right',
                 flexShrink: 0,
                 marginRight: 6,
               }}
@@ -563,7 +662,11 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           ) : null}
           {props.showAvatar !== false ? (
             <div style={{ marginRight: 5, flexShrink: 0, display: 'flex' }}>
-              <Avatar message={message} size={compactAvatarSize(fontSize)} />
+              <Avatar
+                message={message}
+                size={compactAvatarSize(fontSize)}
+                visible={props.visible}
+              />
             </div>
           ) : null}
           {props.showPlatformIcon ? (
@@ -576,19 +679,16 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
               <BadgeList badges={message.author.badges ?? []} size={badgeSize(fontSize)} />
             </div>
           ) : null}
-          <Text
+          {props.showBadges !== false && cosmetics?.badges.length ? (
+            <CosmeticBadges badges={cosmetics.badges} size={badgeSize(fontSize)} />
+          ) : null}
+          <CosmeticAuthorName
+            name={authorName}
+            paint={cosmetics?.paint}
+            fontSize={fontSize}
+            color={authorColor}
             onClick={openUserCard}
-            style={{
-              fontWeight: 700,
-              fontSize,
-              color: authorColor,
-              cursor: 'pointer',
-              fontFamily: font,
-              lineHeight: Math.round(fontSize * 1.45),
-            }}
-          >
-            {authorName}
-          </Text>
+          />
           <Text
             style={{
               color: theme.text,
@@ -618,6 +718,11 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           ) : null}
           {!isTombstone ? (
             <HoverActions
+              message={message}
+              channelSlug={props.channelSlug}
+              onOpenUserCard={openUserCard}
+              onSearch={props.onSearch}
+              menuRequest={menuRequest}
               rowHovered={hovered}
               onReply={() => props.onReply?.(message)}
               onCopy={copyMessage}
@@ -628,7 +733,10 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
 
         {/* Paint order = document order: the rail sits last so its fill and
             preview draw above the row content. */}
-        {props.renderModerationRail?.(hovered)}
+        {!isTombstone ? (
+          <MessageTranslation message={message} channelId={props.channelSlug} fontSize={fontSize} />
+        ) : null}
+        {moderationRail}
       </div>
     )
   }
@@ -636,6 +744,9 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
   // ── Modern (default) ──────────────────────────────────────────────────────
   return (
     <div
+      onMouseDown={(event) => {
+        if (event.button === 2) setMenuRequest((value) => value + 1)
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -664,7 +775,7 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
 
       {props.showAvatar !== false ? (
         <div style={{ marginTop: 1, flexShrink: 0 }}>
-          <Avatar message={message} size={modernAvatarSize(fontSize)} />
+          <Avatar message={message} size={modernAvatarSize(fontSize)} visible={props.visible} />
         </div>
       ) : null}
 
@@ -693,18 +804,16 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           {props.showBadges !== false ? (
             <BadgeList badges={message.author.badges ?? []} size={badgeSize(fontSize)} />
           ) : null}
-          <Text
+          {props.showBadges !== false && cosmetics?.badges.length ? (
+            <CosmeticBadges badges={cosmetics.badges} size={badgeSize(fontSize)} />
+          ) : null}
+          <CosmeticAuthorName
+            name={authorName}
+            paint={cosmetics?.paint}
+            fontSize={fontSize}
+            color={authorColor}
             onClick={openUserCard}
-            style={{
-              fontWeight: 700,
-              fontSize,
-              color: authorColor,
-              cursor: 'pointer',
-              fontFamily: font,
-            }}
-          >
-            {authorName}
-          </Text>
+          />
           {props.showTimestamp ? (
             <Text
               style={{
@@ -718,6 +827,11 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           ) : null}
           {!isTombstone ? (
             <HoverActions
+              message={message}
+              channelSlug={props.channelSlug}
+              onOpenUserCard={openUserCard}
+              onSearch={props.onSearch}
+              menuRequest={menuRequest}
               rowHovered={hovered}
               onReply={() => props.onReply?.(message)}
               onCopy={copyMessage}
@@ -733,6 +847,9 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
           isAction={isAction}
           actionColor={isAction ? authorColor : undefined}
         />
+        {!isTombstone ? (
+          <MessageTranslation message={message} channelId={props.channelSlug} fontSize={fontSize} />
+        ) : null}
 
         {message.delivery?.state === 'failed' ? (
           <Text
@@ -756,7 +873,20 @@ export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
 
       {/* Paint order = document order: the rail sits last so its fill and
           preview draw above the row content. */}
-      {props.renderModerationRail?.(hovered)}
+      {moderationRail}
     </div>
   )
 })
+
+export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {
+  return (
+    <ImageLoadingContext.Provider value={props.visible !== false}>
+      <ChatMessageContent {...props} />
+    </ImageLoadingContext.Provider>
+  )
+})
+
+/** Names are untrusted too: no zalgo, no newlines, no row-wide 60-char nicks. */
+function displayName(name: string): string {
+  return truncateGraphemes(sanitizeDisplayText(name).trim(), MAX_NAME_GRAPHEMES)
+}

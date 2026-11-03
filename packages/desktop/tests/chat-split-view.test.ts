@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+
 import type { ChatLayout, SplitConfig, WatchedChannel } from '@twirchat/shared/types'
+
+import { required } from './fixture-values'
 
 function watchedChannelForSplit(
   split: SplitConfig,
@@ -26,7 +29,7 @@ function platformForSplit(
   split: SplitConfig,
   watchedChannels: WatchedChannel[],
 ): string | undefined {
-  return watchedChannelForSplit(split, watchedChannels)?.platform as string | undefined
+  return watchedChannelForSplit(split, watchedChannels)?.platform
 }
 
 function channelNameForSplit(
@@ -42,7 +45,7 @@ function makeWatchedChannel(overrides: Partial<WatchedChannel> = {}): WatchedCha
     platform: 'twitch',
     channelSlug: 'streamer1',
     displayName: 'Streamer One',
-    createdAt: new Date().toISOString(),
+    createdAt: Date.now(),
     ...overrides,
   }
 }
@@ -105,7 +108,7 @@ describe('watchedChannelForSplit()', () => {
     const channel = makeWatchedChannel({ id: 'twitch:streamer1' })
     const result = watchedChannelForSplit(split, [channel])
     expect(result).not.toBeUndefined()
-    expect(result!.id).toBe('twitch:streamer1')
+    expect(required(result).id).toBe('twitch:streamer1')
   })
 
   test('returns first match when multiple channels with same id', () => {
@@ -113,7 +116,7 @@ describe('watchedChannelForSplit()', () => {
     const first = makeWatchedChannel({ id: 'twitch:x', displayName: 'First' })
     const second = makeWatchedChannel({ id: 'twitch:x', displayName: 'Second' })
     const result = watchedChannelForSplit(split, [first, second])
-    expect(result!.displayName).toBe('First')
+    expect(required(result).displayName).toBe('First')
   })
 })
 
@@ -157,8 +160,8 @@ describe('buildResizedLayout()', () => {
 
     const updated = buildResizedLayout(layout, [{ size: 30 }, { size: 70 }])
 
-    expect(updated.splits[0]!.size).toBe(30)
-    expect(updated.splits[1]!.size).toBe(70)
+    expect(required(updated.splits[0]).size).toBe(30)
+    expect(required(updated.splits[1]).size).toBe(70)
   })
 
   test('preserves split ids after resize', () => {
@@ -169,8 +172,8 @@ describe('buildResizedLayout()', () => {
 
     const updated = buildResizedLayout(layout, [{ size: 40 }, { size: 60 }])
 
-    expect(updated.splits[0]!.id).toBe('alpha')
-    expect(updated.splits[1]!.id).toBe('beta')
+    expect(required(updated.splits[0]).id).toBe('alpha')
+    expect(required(updated.splits[1]).id).toBe('beta')
   })
 
   test('preserves split type and channelId after resize', () => {
@@ -181,9 +184,9 @@ describe('buildResizedLayout()', () => {
 
     const updated = buildResizedLayout(layout, [{ size: 35 }, { size: 65 }])
 
-    expect(updated.splits[0]!.channelId).toBe('kick:test')
-    expect(updated.splits[0]!.type).toBe('channel')
-    expect(updated.splits[1]!.type).toBe('combined')
+    expect(required(updated.splits[0]).channelId).toBe('kick:test')
+    expect(required(updated.splits[0]).type).toBe('channel')
+    expect(required(updated.splits[1]).type).toBe('combined')
   })
 
   test('preserves layout mode after resize', () => {
@@ -201,9 +204,9 @@ describe('buildResizedLayout()', () => {
 
     const updated = buildResizedLayout(layout, [{ size: 50 }, { size: 50 }])
 
-    expect(updated.splits[0]!.size).toBe(50)
-    expect(updated.splits[1]!.size).toBe(50)
-    expect(updated.splits[2]!.size).toBe(34)
+    expect(required(updated.splits[0]).size).toBe(50)
+    expect(required(updated.splits[1]).size).toBe(50)
+    expect(required(updated.splits[2]).size).toBe(34)
   })
 
   test('does not mutate original layout', () => {
@@ -214,8 +217,8 @@ describe('buildResizedLayout()', () => {
 
     buildResizedLayout(layout, [{ size: 20 }, { size: 80 }])
 
-    expect(layout.splits[0]!.size).toBe(70)
-    expect(layout.splits[1]!.size).toBe(30)
+    expect(required(layout.splits[0]).size).toBe(70)
+    expect(required(layout.splits[1]).size).toBe(30)
   })
 
   test('extract sizes array matches paneInfos order', () => {

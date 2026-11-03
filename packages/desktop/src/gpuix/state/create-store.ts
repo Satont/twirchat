@@ -1,25 +1,15 @@
 /**
- * Minimal observable store for the GPUIX UI.
- *
- * Pinia is Vue-only and zustand would pull a dependency whose semantics we
- * don't control; this is a few dozen lines and does exactly what the app
- * needs.
- *
- * IMPORTANT: listener notification is deferred to a coalesced macrotask
- * (`setTimeout(0)`). `useSyncExternalStore` re-renders SYNCHRONOUSLY when
- * notified, so notifying inside a GPUI event callback (a click that updates a
- * store) makes React commit → `applyBatch` while the GPUI view is still being
- * updated, which panics the Rust side ("cannot update GpuixView while it is
- * already being updated"). A microtask is NOT enough: napi invokes the event
- * handler synchronously from inside the view update, and microtasks drain
- * before the JS stack unwinds. A timer escapes both.
+ * Observable UI state. Notifications must escape the native event callback:
+ * synchronous React commits there re-enter GPUI's active view update.
+ * A coalesced macrotask provides that boundary; a microtask does not.
  */
 
 import { useSyncExternalStore } from 'react'
 
 export interface Store<T> {
   get(): T
-  set(next: T | ((prev: T) => T)): void
+  set(next: T): void
+  modify(update: (prev: T) => T): void
   update(patch: Partial<T>): void
   subscribe(listener: () => void): () => void
 }
@@ -39,53 +29,33 @@ function scheduleNotification(listener: () => void): void {
   }, 0)
 }
 
-export function createStore<T>(initial: T, persistKey?: string): Store<T> {
-  // Desktop `bun --hot` re-evaluates the whole module graph on every save, so
-  // module-level stores would reset to their initial value. Pin named stores
-  // on globalThis: the second evaluation returns the SAME store instance with
-  // all its state (the backend singleton works the same way).
-  if (persistKey) {
-    const registry = storeRegistry()
-    const existing = registry.get(persistKey)
-    if (existing) return existing as Store<T>
-    const created = buildStore(initial)
-    registry.set(persistKey, created as Store<unknown>)
-    return created
-  }
-  return buildStore(initial)
-}
-
-const REGISTRY_KEY = '__twirchatGpuixStores'
-
-interface StoreRegistryGlobal {
-  [REGISTRY_KEY]?: Map<string, Store<unknown>>
-}
-
-function storeRegistry(): Map<string, Store<unknown>> {
-  const g = globalThis as StoreRegistryGlobal
-  g[REGISTRY_KEY] ??= new Map()
-  return g[REGISTRY_KEY]
-}
-
-function buildStore<T>(initial: T): Store<T> {
+export function createStore<T>(initial: T): Store<T> {
   let state = initial
   const listeners = new Set<() => void>()
 
   return {
     get: () => state,
     set(next) {
-      const value = typeof next === 'function' ? (next as (prev: T) => T)(state) : next
-      if (Object.is(value, state)) return
-      state = value
+      if (Object.is(next, state)) return
+      state = next
       for (const listener of [...listeners]) scheduleNotification(listener)
     },
+    modify(update) {
+      this.set(update(state))
+    },
     update(patch) {
-      this.set({ ...(state as object), ...patch } as T)
+      this.set({ ...state, ...patch })
     },
     subscribe(listener) {
-      listeners.add(listener)
+      let active = true
+      const notify = () => {
+        if (active) listener()
+      }
+      listeners.add(notify)
       return () => {
-        listeners.delete(listener)
+        active = false
+        listeners.delete(notify)
+        pendingListeners.delete(notify)
       }
     },
   }

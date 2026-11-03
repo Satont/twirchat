@@ -2,29 +2,51 @@
  * `<img>` for remote URLs — downloads via the local image cache first,
  * because GPUI's Linux build cannot load http(s) sources.
  * Renders an empty box of the declared size until the file is ready
- * (same contract as GPUI's loading state, minus the failure placeholder).
+ * (same contract as GPUI's loading state); `fallback` replaces the box once
+ * the download has failed.
  */
 
-import { useEffect } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 
-import { cachedImagePath, ensureImage, imageCacheRevisionStore } from '../../state/image-cache'
-import { useStore } from '../../state/create-store'
+import { useAvatarImage } from '../../state/avatar-images'
+import { ensureImage, imageSnapshot, subscribeImage } from '../../state/image-cache'
+export const ImageLoadingContext = createContext(true)
 
 export function RemoteImage({
   url,
   style,
   objectFit = 'contain',
+  fallback,
+  avatarSize,
 }: {
   url: string | undefined
   style?: Record<string, unknown>
   objectFit?: 'fill' | 'contain' | 'cover' | 'scaleDown' | 'none'
+  fallback?: ReactNode
+  avatarSize?: number
 }) {
-  useStore(imageCacheRevisionStore)
-  useEffect(() => ensureImage(url), [url])
+  const visible = useContext(ImageLoadingContext)
+  const subscribe = useCallback(
+    (listener: () => void) => (visible ? subscribeImage(url, listener) : () => {}),
+    [url, visible],
+  )
+  const snapshot = useCallback(() => imageSnapshot(url), [url])
+  const localPath = useSyncExternalStore(subscribe, snapshot, snapshot)
+  const preparedPath = useAvatarImage(localPath, avatarSize, visible)
+  useEffect(() => {
+    if (visible) ensureImage(url)
+  }, [url, visible])
 
-  const localPath = cachedImagePath(url)
-  if (!localPath) {
+  if (!preparedPath) {
+    if (fallback !== undefined && localPath === null) return fallback
     return <div style={style} />
   }
-  return <img src={localPath} objectFit={objectFit} style={style} />
+  return <img src={preparedPath} objectFit={objectFit} style={style} />
 }

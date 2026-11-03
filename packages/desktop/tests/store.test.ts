@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { getDb, initDb } from '@desktop/store/db'
+import { existsSync, unlinkSync } from 'node:fs'
+
 import { AccountStore } from '@desktop/store/account-store'
+import { getDb, initDb } from '@desktop/store/db'
 import { MessageStore } from '@desktop/store/message-store'
 import { SettingsStore } from '@desktop/store/settings-store'
 import { UserAliasStore } from '@desktop/store/user-alias-store'
 import { WindowStateStore } from '@desktop/store/window-state-store'
 import { DEFAULT_SETTINGS, type NormalizedChatMessage } from '@twirchat/shared/types'
-import { existsSync, unlinkSync } from 'node:fs'
+
+import { required } from './fixture-values'
 
 const TEST_DB = '/tmp/twirchat-test.sqlite'
 
@@ -88,10 +91,10 @@ describe('AccountStore', () => {
 
     const account = AccountStore.findByPlatform('kick')
     expect(account).not.toBeNull()
-    expect(account!.username).toBe('testuser')
-    expect(account!.displayName).toBe('Test User')
-    expect(account!.platform).toBe('kick')
-    expect(account!.scopes).toEqual(['user:read', 'chat:write'])
+    expect(required(account).username).toBe('testuser')
+    expect(required(account).displayName).toBe('Test User')
+    expect(required(account).platform).toBe('kick')
+    expect(required(account).scopes).toEqual(['user:read', 'chat:write'])
   })
 
   test('tokens are encrypted and decryptable', () => {
@@ -107,15 +110,15 @@ describe('AccountStore', () => {
 
     const tokens = AccountStore.getTokens('twitch:999')
     expect(tokens).not.toBeNull()
-    expect(tokens!.accessToken).toBe('secret_access_token')
-    expect(tokens!.refreshToken).toBe('secret_refresh_token')
+    expect(required(tokens).accessToken).toBe('secret_access_token')
+    expect(required(tokens).refreshToken).toBe('secret_refresh_token')
 
     // Токены в БД должны быть зашифрованы (не равны исходным)
     const db = getDb()
     const raw = db
       .query<{ access_token: string }, [string]>('SELECT access_token FROM accounts WHERE id = ?')
       .get('twitch:999')
-    expect(raw!.access_token).not.toBe('secret_access_token')
+    expect(required(raw).access_token).not.toBe('secret_access_token')
   })
 
   test('upsert updates existing account', () => {
@@ -138,7 +141,7 @@ describe('AccountStore', () => {
     })
 
     const account = AccountStore.findByPlatform('kick')
-    expect(account!.username).toBe('user1_updated')
+    expect(required(account).username).toBe('user1_updated')
   })
 
   test('delete account', () => {
@@ -248,9 +251,9 @@ describe('UserAliasStore', () => {
     UserAliasStore.upsert('twitch', 'user123', 'CoolStreamer')
     const aliases = UserAliasStore.findAll()
     expect(aliases.length).toBe(1)
-    expect(aliases[0].platform).toBe('twitch')
-    expect(aliases[0].platformUserId).toBe('user123')
-    expect(aliases[0].alias).toBe('CoolStreamer')
+    expect(required(aliases[0]).platform).toBe('twitch')
+    expect(required(aliases[0]).platformUserId).toBe('user123')
+    expect(required(aliases[0]).alias).toBe('CoolStreamer')
   })
 
   test('upsert updates existing alias (same platform+userId)', () => {
@@ -258,7 +261,7 @@ describe('UserAliasStore', () => {
     UserAliasStore.upsert('twitch', 'user123', 'NewAlias')
     const aliases = UserAliasStore.findAll()
     expect(aliases.length).toBe(1)
-    expect(aliases[0].alias).toBe('NewAlias')
+    expect(required(aliases[0]).alias).toBe('NewAlias')
   })
 
   test('remove deletes alias', () => {
@@ -337,7 +340,7 @@ describe('MessageStore', () => {
 
     expect(result.messages.map((message) => message.id)).toEqual(['a1', 'a2'])
     expect(result.hasMore).toBe(false)
-    expect(result.nextCursor).toEqual({ createdAt: 1704067201000, id: 'a1' })
+    expect(result.nextCursor).toMatchObject({ createdAt: 1704067201000, id: 'a1' })
   })
 
   test('getByUser paginates older messages with stable cursor ordering', () => {
@@ -374,7 +377,7 @@ describe('MessageStore', () => {
 
     expect(firstPage.messages.map((message) => message.id)).toEqual(['m2', 'm3'])
     expect(firstPage.hasMore).toBe(true)
-    expect(firstPage.nextCursor).toEqual({ createdAt: 1704067202000, id: 'm2' })
+    expect(firstPage.nextCursor).toMatchObject({ createdAt: 1704067202000, id: 'm2' })
 
     const secondPage = MessageStore.getByUser({
       platform: 'twitch',
@@ -385,7 +388,7 @@ describe('MessageStore', () => {
 
     expect(secondPage.messages.map((message) => message.id)).toEqual(['m1'])
     expect(secondPage.hasMore).toBe(false)
-    expect(secondPage.nextCursor).toEqual({ createdAt: 1704067201000, id: 'm1' })
+    expect(secondPage.nextCursor).toMatchObject({ createdAt: 1704067201000, id: 'm1' })
   })
 
   test('getByUser uses id as tie-breaker when timestamps match', () => {

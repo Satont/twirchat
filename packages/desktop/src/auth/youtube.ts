@@ -1,3 +1,10 @@
+import type {
+  YouTubeBuildUrlRequest,
+  YouTubeExchangeRequest,
+  YouTubeRefreshRequest,
+} from '@twirchat/shared'
+import { YOUTUBE_REDIRECT_URI } from '@twirchat/shared/constants'
+import { logger } from '@twirchat/shared/logger'
 /**
  * YouTube OAuth — desktop side (PKCE flow).
  *
@@ -15,21 +22,14 @@
  *  - Desktop calls POST /api/auth/youtube/refresh on backend → receives new tokens
  *  - Desktop updates the account record in SQLite
  */
+import type { Platform } from '@twirchat/shared/types'
+import { z } from 'zod'
 
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
-import { AccountStore } from '../store/account-store'
-import { successPage } from './server'
-import { YOUTUBE_REDIRECT_URI } from '@twirchat/shared/constants'
 import { getBackendUrl } from '../runtime-config'
-import { logger } from '@twirchat/shared/logger'
-import type {
-  YouTubeBuildUrlRequest,
-  YouTubeBuildUrlResponse,
-  YouTubeExchangeRequest,
-  YouTubeExchangeResponse,
-  YouTubeRefreshRequest,
-  YouTubeRefreshResponse,
-} from '@twirchat/shared'
+import { AccountStore } from '../store/account-store'
+import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
+import { authUrlSchema, exchangedTokenSchema, refreshedTokenSchema } from './response-schemas'
+import { successPage } from './server'
 
 const log = logger('auth-youtube')
 
@@ -95,7 +95,7 @@ export async function getYouTubeAuthUrl(codeChallenge: string, state: string): P
     throw new Error(`YouTube auth URL request failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as YouTubeBuildUrlResponse
+  const data = authUrlSchema.parse(await res.json())
   return data.url
 }
 
@@ -149,7 +149,7 @@ export async function handleYouTubeCallback(url: URL): Promise<{
     throw new Error(`YouTube token exchange failed: ${exchangeRes.status} ${body}`)
   }
 
-  const tokens = (await exchangeRes.json()) as YouTubeExchangeResponse
+  const tokens = exchangedTokenSchema.parse(await exchangeRes.json())
 
   // Fetch user info from YouTube Data API
   const userRes = await fetch(
@@ -165,22 +165,31 @@ export async function handleYouTubeCallback(url: URL): Promise<{
   let avatarUrl: string | undefined
 
   if (userRes.ok) {
-    const userData = (await userRes.json()) as {
-      items?: {
-        id: string
-        snippet: {
-          title: string
-          customUrl?: string
-          thumbnails?: { default?: { url: string } }
-        }
-      }[]
-    }
+    const userData = z
+      .object({
+        items: z
+          .array(
+            z.object({
+              id: z.string(),
+              snippet: z.object({
+                title: z.string(),
+                customUrl: z.string().optional(),
+                thumbnails: z
+                  .object({ default: z.object({ url: z.string() }).optional() })
+                  .optional(),
+              }),
+            }),
+          )
+          .optional(),
+      })
+      .parse(await userRes.json())
 
     if (!userData.items || userData.items.length === 0) {
       throw new Error('YouTube user info response empty — account may have no YouTube channel')
     }
 
-    const channel = userData.items[0]!
+    const channel = userData.items[0]
+    if (!channel) throw new Error('YouTube channel response was empty.')
     userId = channel.id
     displayName = channel.snippet.title
     ;({ customUrl } = channel.snippet)
@@ -203,12 +212,14 @@ export async function handleYouTubeCallback(url: URL): Promise<{
       )
     }
 
-    const info = (await infoRes.json()) as {
-      sub: string
-      name?: string
-      given_name?: string
-      picture?: string
-    }
+    const info = z
+      .object({
+        sub: z.string(),
+        name: z.string().optional(),
+        given_name: z.string().optional(),
+        picture: z.string().optional(),
+      })
+      .parse(await infoRes.json())
 
     userId = info.sub
     displayName = info.name ?? info.given_name ?? info.sub
@@ -220,6 +231,7 @@ export async function handleYouTubeCallback(url: URL): Promise<{
   const username = customUrl ?? userId
 
   AccountStore.upsert({
+    activate: true,
     accessToken: tokens.accessToken,
     avatarUrl,
     displayName,
@@ -241,7 +253,7 @@ export async function handleYouTubeCallback(url: URL): Promise<{
     }),
     user: {
       displayName,
-      platform: 'youtube' as const,
+      platform: 'youtube' satisfies Platform,
       username,
     },
   }
@@ -270,7 +282,7 @@ export async function refreshYouTubeToken(accountId: string): Promise<string> {
     throw new Error(`YouTube token refresh failed: ${res.status} ${body}`)
   }
 
-  const data = (await res.json()) as YouTubeRefreshResponse
+  const data = refreshedTokenSchema.parse(await res.json())
 
   const expiresAt = data.expiresIn ? Math.floor(Date.now() / 1000) + data.expiresIn : undefined
 

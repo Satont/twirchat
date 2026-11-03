@@ -93,5 +93,6 @@ export function resolveUserCardCommand(
     return { ok: false, error: 'ambiguous' }
   }
 
-  return { ok: true, target: matches[0]! }
+  const target = matches[0]
+  return target ? { ok: true, target } : { ok: false, error: 'not-found' }
 }

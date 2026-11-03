@@ -1,3 +1,4 @@
+import { logger } from '@twirchat/shared/logger'
 /**
  * Twitch Helix moderation API client
  *
@@ -5,16 +6,14 @@
  *
  * Reference: https://dev.twitch.tv/docs/api/reference#ban-user
  *            https://dev.twitch.tv/docs/api/reference#delete-chat-messages
- *            https://dev.twitch.tv/docs/api/reference#get-moderators
+ *            https://dev.twitch.tv/docs/api/reference#get-moderated-channels
  */
+import { z } from 'zod'
 
 import { config } from '../../config.ts'
-import { logger } from '@twirchat/shared/logger'
 import {
   ModerationException,
   type TwitchBanRequest,
-  type TwitchBanResponse,
-  type TwitchModeratorResponse,
   type BanResult,
   type DeleteMessageResult,
   type IsModerator,
@@ -32,7 +31,8 @@ interface HelixErrorResponse {
  * Check if response is an error response
  */
 function isHelixError(data: unknown): data is HelixErrorResponse {
-  return typeof data === 'object' && data !== null && 'error' in data && 'status' in data
+  return z.object({ error: z.string(), status: z.number(), message: z.string() }).safeParse(data)
+    .success
 }
 
 /**
@@ -84,7 +84,12 @@ export async function banUser(
       },
     )
 
-    const data = (await res.json()) as TwitchBanResponse | HelixErrorResponse
+    const data = z
+      .union([
+        z.object({ error: z.string(), status: z.number(), message: z.string() }),
+        z.object({ data: z.array(z.object({ user_id: z.string(), created_at: z.string() })) }),
+      ])
+      .parse(await res.json())
 
     if (!res.ok || isHelixError(data)) {
       const error = isHelixError(data)
@@ -105,8 +110,8 @@ export async function banUser(
       })
     }
 
-    const result = data as TwitchBanResponse
-    const banData = result.data[0]
+    const result = data
+    const banData = 'data' in result ? result.data[0] : undefined
 
     log.info('User banned', {
       userId: request.user_id,
@@ -231,7 +236,7 @@ export async function deleteMessage(
  * Note: This only returns users with moderator badge. To check if someone is the broadcaster,
  * you need to compare against the broadcaster_id separately.
  *
- * @param broadcasterToken - Access token (any scope works, but moderator:read:blocked_terms recommended)
+ * @param broadcasterToken - User token with user:read:moderated_channels for userId
  * @param broadcasterUserId - The channel owner ID
  * @param userId - The user ID to check
  * @returns IsModerator with moderator status
@@ -247,33 +252,40 @@ export async function isModerator(
       userId,
     })
 
-    const res = await fetch(
-      `https://api.twitch.tv/helix/moderation/moderators?broadcaster_id=${broadcasterUserId}&user_id=${userId}`,
-      {
+    let isMod = false
+    let cursor: string | undefined
+    do {
+      const query = new URLSearchParams({ user_id: userId, first: '100' })
+      if (cursor) query.set('after', cursor)
+      // Pagination depends on the cursor from the previous response.
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetch(`https://api.twitch.tv/helix/moderation/channels?${query}`, {
         headers: {
           Authorization: `Bearer ${broadcasterToken}`,
           'Client-Id': config.TWITCH_CLIENT_ID,
         },
-      },
-    )
-
-    if (!res.ok) {
-      const errorCode = mapHelixError(res.status, res.statusText)
-      log.warn('Moderator check failed', {
-        status: res.status,
-        code: errorCode,
+        signal: AbortSignal.timeout(15000),
       })
-
-      throw new ModerationException(
-        errorCode,
-        res.status,
-        `Failed to check moderator status: ${res.statusText}`,
-        { userId },
-      )
-    }
-
-    const data = (await res.json()) as TwitchModeratorResponse
-    const isMod = data.data.length > 0
+      if (!res.ok) {
+        throw new ModerationException(
+          mapHelixError(res.status, res.statusText),
+          res.status,
+          `Failed to check moderated channels: ${res.statusText}`,
+          { userId },
+        )
+      }
+      const data = z
+        .object({
+          data: z.array(z.object({ broadcaster_id: z.string() })),
+          pagination: z.object({ cursor: z.string().optional() }).optional(),
+        })
+        .parse(await res.json())
+      isMod = data.data.some((channel) => channel.broadcaster_id === broadcasterUserId)
+      if (isMod) break
+      const next = data.pagination?.cursor
+      if (next === cursor) break
+      cursor = next
+    } while (cursor)
 
     log.debug('Moderator status checked', {
       userId,

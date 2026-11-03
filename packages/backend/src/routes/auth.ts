@@ -1,4 +1,18 @@
-import { ClientStore } from '../db/index.ts'
+import type {
+  AuthStartResponse,
+  KickBuildUrlResponse,
+  KickExchangeResponse,
+  KickRefreshResponse,
+  TwitchBuildUrlResponse,
+  TwitchExchangeResponse,
+  TwitchRefreshResponse,
+  YouTubeBuildUrlResponse,
+  YouTubeExchangeResponse,
+  YouTubeRefreshResponse,
+} from '@twirchat/shared'
+import { logger } from '@twirchat/shared/logger'
+import { z } from 'zod'
+
 import {
   buildKickAuthUrl,
   exchangeKickCode,
@@ -8,33 +22,22 @@ import {
 } from '../auth/kick.ts'
 import { buildTwitchAuthUrl, exchangeTwitchCode, refreshTwitchToken } from '../auth/twitch.ts'
 import { buildYouTubeAuthUrl, exchangeYouTubeCode, refreshYouTubeToken } from '../auth/youtube.ts'
+import { ClientStore } from '../db/index.ts'
 import { json } from './utils.ts'
-import { logger } from '@twirchat/shared/logger'
-import type {
-  AuthStartRequest,
-  AuthStartResponse,
-  KickBuildUrlRequest,
-  KickBuildUrlResponse,
-  KickExchangeRequest,
-  KickExchangeResponse,
-  KickRefreshRequest,
-  KickRefreshResponse,
-  TwitchBuildUrlRequest,
-  TwitchBuildUrlResponse,
-  TwitchExchangeRequest,
-  TwitchExchangeResponse,
-  TwitchRefreshRequest,
-  TwitchRefreshResponse,
-  YouTubeBuildUrlRequest,
-  YouTubeBuildUrlResponse,
-  YouTubeExchangeRequest,
-  YouTubeExchangeResponse,
-  YouTubeRefreshRequest,
-  YouTubeRefreshResponse,
-  // @ts-ignore — false positive in tsgo for workspace packages
-} from '@twirchat/shared'
 
 const log = logger('auth')
+const buildUrlSchema = z.object({
+  codeChallenge: z.string().min(1),
+  state: z.string().min(1),
+  redirectUri: z.string().min(1),
+})
+const exchangeSchema = z.object({
+  code: z.string().min(1),
+  codeVerifier: z.string().min(1),
+  redirectUri: z.string().min(1),
+})
+const refreshSchema = z.object({ refreshToken: z.string().min(1) })
+const legacyStartSchema = z.object({ clientSecret: z.string().min(1) })
 
 export const authRoutes = {
   // ============================================================
@@ -43,10 +46,11 @@ export const authRoutes = {
 
   '/api/auth/kick/start': {
     async POST(req: Request) {
-      const body = (await req.json()) as KickBuildUrlRequest
-      if (!body.codeChallenge || !body.state || !body.redirectUri) {
+      const parsed = buildUrlSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'codeChallenge, state, and redirectUri are required' }, 400)
       }
+      const body = parsed.data
       try {
         const { url } = buildKickAuthUrl(body.codeChallenge, body.state, body.redirectUri)
         return json({ url } satisfies KickBuildUrlResponse)
@@ -59,10 +63,11 @@ export const authRoutes = {
 
   '/api/auth/kick/exchange': {
     async POST(req: Request) {
-      const body = (await req.json()) as KickExchangeRequest
-      if (!body.code || !body.codeVerifier || !body.redirectUri) {
+      const parsed = exchangeSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'code, codeVerifier, and redirectUri are required' }, 400)
       }
+      const body = parsed.data
       try {
         const tokens = await exchangeKickCode(body.code, body.codeVerifier, body.redirectUri)
         return json(tokens satisfies KickExchangeResponse)
@@ -75,10 +80,11 @@ export const authRoutes = {
 
   '/api/auth/kick/refresh': {
     async POST(req: Request) {
-      const body = (await req.json()) as KickRefreshRequest
-      if (!body.refreshToken) {
+      const parsed = refreshSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'refreshToken is required' }, 400)
       }
+      const body = parsed.data
       try {
         const tokens = await refreshKickToken(body.refreshToken)
         return json(tokens satisfies KickRefreshResponse)
@@ -95,10 +101,11 @@ export const authRoutes = {
 
   '/api/auth/kick/legacy-start': {
     async POST(req: Request) {
-      const body = (await req.json()) as AuthStartRequest
-      if (!body.clientSecret) {
+      const parsed = legacyStartSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'clientSecret is required' }, 400)
       }
+      const body = parsed.data
       await ClientStore.upsert(body.clientSecret)
       try {
         const url = await startKickOAuth(body.clientSecret)
@@ -140,10 +147,11 @@ export const authRoutes = {
 
   '/api/auth/twitch/start': {
     async POST(req: Request) {
-      const body = (await req.json()) as TwitchBuildUrlRequest
-      if (!body.codeChallenge || !body.state || !body.redirectUri) {
+      const parsed = buildUrlSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'codeChallenge, state, and redirectUri are required' }, 400)
       }
+      const body = parsed.data
       try {
         const { url } = buildTwitchAuthUrl(body.codeChallenge, body.state, body.redirectUri)
         return json({ url } satisfies TwitchBuildUrlResponse)
@@ -156,10 +164,11 @@ export const authRoutes = {
 
   '/api/auth/twitch/exchange': {
     async POST(req: Request) {
-      const body = (await req.json()) as TwitchExchangeRequest
-      if (!body.code || !body.codeVerifier || !body.redirectUri) {
+      const parsed = exchangeSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'code, codeVerifier, and redirectUri are required' }, 400)
       }
+      const body = parsed.data
       try {
         const tokens = await exchangeTwitchCode(body.code, body.codeVerifier, body.redirectUri)
         return json(tokens satisfies TwitchExchangeResponse)
@@ -172,10 +181,11 @@ export const authRoutes = {
 
   '/api/auth/twitch/refresh': {
     async POST(req: Request) {
-      const body = (await req.json()) as TwitchRefreshRequest
-      if (!body.refreshToken) {
+      const parsed = refreshSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'refreshToken is required' }, 400)
       }
+      const body = parsed.data
       try {
         const tokens = await refreshTwitchToken(body.refreshToken)
         return json(tokens satisfies TwitchRefreshResponse)
@@ -192,10 +202,11 @@ export const authRoutes = {
 
   '/api/auth/youtube/start': {
     async POST(req: Request) {
-      const body = (await req.json()) as YouTubeBuildUrlRequest
-      if (!body.codeChallenge || !body.state || !body.redirectUri) {
+      const parsed = buildUrlSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'codeChallenge, state, and redirectUri are required' }, 400)
       }
+      const body = parsed.data
       try {
         const { url } = buildYouTubeAuthUrl(body.codeChallenge, body.state, body.redirectUri)
         return json({ url } satisfies YouTubeBuildUrlResponse)
@@ -208,10 +219,11 @@ export const authRoutes = {
 
   '/api/auth/youtube/exchange': {
     async POST(req: Request) {
-      const body = (await req.json()) as YouTubeExchangeRequest
-      if (!body.code || !body.codeVerifier || !body.redirectUri) {
+      const parsed = exchangeSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'code, codeVerifier, and redirectUri are required' }, 400)
       }
+      const body = parsed.data
       try {
         const tokens = await exchangeYouTubeCode(body.code, body.codeVerifier, body.redirectUri)
         return json(tokens satisfies YouTubeExchangeResponse)
@@ -224,10 +236,11 @@ export const authRoutes = {
 
   '/api/auth/youtube/refresh': {
     async POST(req: Request) {
-      const body = (await req.json()) as YouTubeRefreshRequest
-      if (!body.refreshToken) {
+      const parsed = refreshSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
         return json({ error: 'refreshToken is required' }, 400)
       }
+      const body = parsed.data
       try {
         const tokens = await refreshYouTubeToken(body.refreshToken)
         return json(tokens satisfies YouTubeRefreshResponse)
@@ -237,4 +250,4 @@ export const authRoutes = {
       }
     },
   },
-} as const
+}

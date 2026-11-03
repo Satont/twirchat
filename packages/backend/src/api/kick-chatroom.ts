@@ -1,3 +1,4 @@
+import { logger } from '@twirchat/shared/logger'
 /**
  * GET /api/kick/chatroom?slug=<slug>
  *
@@ -5,8 +6,7 @@
  * Uses kick.com/api/v2/channels/{slug} — public, no auth required.
  * The public/v1 API does NOT expose chatroom.id; v2 does.
  */
-
-import { logger } from '@twirchat/shared/logger'
+import { z } from 'zod'
 
 const log = logger('kick-chatroom')
 
@@ -44,12 +44,14 @@ export async function handleKickChatroom(url: URL): Promise<KickChatroomResponse
     throw new Error(`Kick API returned ${res.status} for slug "${slug}"`)
   }
 
-  const body = (await res.json()) as {
-    id?: number
-    user_id?: number
-    user?: { profile_pic?: string | null }
-    chatroom?: { id?: number }
-  }
+  const body = z
+    .object({
+      id: z.number().optional(),
+      user_id: z.number().optional(),
+      user: z.object({ profile_pic: z.union([z.string(), z.null()]).optional() }).optional(),
+      chatroom: z.object({ id: z.number().optional() }).optional(),
+    })
+    .parse(await res.json())
 
   const chatroomId = body.chatroom?.id
   const broadcasterUserId = body.user_id

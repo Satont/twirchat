@@ -1,3 +1,4 @@
+import type { UpdateStreamRequest, UpdateStreamResponse } from '@twirchat/shared'
 /**
  * POST /api/update-stream
  *
@@ -8,9 +9,9 @@
  * Body: UpdateStreamRequest
  * Response: UpdateStreamResponse
  */
+import { z } from 'zod'
 
 import { config } from '../config.ts'
-import type { UpdateStreamRequest, UpdateStreamResponse } from '@twirchat/shared'
 
 // ----------------------------------------------------------------
 // Twitch
@@ -98,7 +99,17 @@ async function updateKickStream(
 // ----------------------------------------------------------------
 
 export async function handleUpdateStream(req: Request): Promise<UpdateStreamResponse> {
-  const body = (await req.json()) as UpdateStreamRequest
+  const body = z
+    .toZod<UpdateStreamRequest>()(
+      z.object({
+        platform: z.enum(['twitch', 'kick']),
+        channelId: z.string(),
+        userAccessToken: z.string(),
+        title: z.string().optional(),
+        categoryId: z.string().optional(),
+      }),
+    )
+    .parse(await req.json())
   const { platform, channelId, userAccessToken, title, categoryId } = body
 
   if (!platform || !channelId || !userAccessToken) {

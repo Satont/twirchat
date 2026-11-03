@@ -35,7 +35,7 @@ src/
 │   ├── message-tokens.ts   # Message → flex-wrap token list (emotes/links/mentions)
 │   └── README.md           # Detailed GPUIX architecture + known limitations
 ├── store/                  # SQLite (bun:sqlite): accounts, settings, messages…
-├── platforms/              # Twitch (twurple) / Kick (pusher) / YouTube (gRPC)
+├── platforms/              # Twitch (twurple) / Kick (Centrifugo) / YouTube (gRPC)
 ├── chat/aggregator.ts      # Dedup + 7TV enrichment
 ├── watched-channels/       # WatchedChannelManager (per-channel adapters)
 ├── seventv/                # 7TV emote service (via backend WS)
@@ -73,8 +73,14 @@ bun run typecheck     # tsc -p tsconfig.json && tsc -p tsconfig.gpuix.json
 bun test tests/
 ```
 
-Debug helpers: `GPUIX_BACKGROUND=1` (no focus steal), `TWIRCHAT_GPUIX_START_MAIN_TAB=…`,
-`TWIRCHAT_GPUIX_START_TAB=…`, dev chat injection `POST :45824/dev/inject-chat`.
+Agent GUI tests must use `bun run qa:gui --timeout 30 -- bun src/gpuix/main.tsx`
+or `bun run qa:native`. The launcher uses a private virtual display inside bwrap;
+if isolation fails, abort the test. Never launch a native renderer directly, use
+the user's Hyprland workspaces, or forward their display sockets. `focus: false`
+and `GPUIX_BACKGROUND=1` alone do not protect the Linux desktop.
+
+Inside the isolated launcher, debug helpers include `TWIRCHAT_GPUIX_START_MAIN_TAB=…`,
+`TWIRCHAT_GPUIX_START_TAB=…`, and dev chat injection `POST :45824/dev/inject-chat`.
 
 ## CONVENTIONS
 

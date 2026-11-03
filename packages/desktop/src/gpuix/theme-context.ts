@@ -1,6 +1,7 @@
-import { createContext, useContext } from 'react'
-import { darkTheme, fontFamily, lightTheme, type Theme } from './theme'
 import type { AppSettings } from '@twirchat/shared/types'
+import { createContext, useContext } from 'react'
+
+import { darkTheme, fontFamily, lightTheme, type Theme } from './theme'
 
 export const ThemeContext = createContext<Theme>(darkTheme)
 export const FontContext = createContext<string | undefined>('Inter')

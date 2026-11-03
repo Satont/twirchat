@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
+
 import {
   createKickAvatarResolver,
   KICK_AVATAR_NEGATIVE_TTL_MS,
   KICK_AVATAR_FETCH_TIMEOUT_MS,
   KICK_AVATAR_POSITIVE_TTL_MS,
 } from '@desktop/platforms/kick/avatar-cache'
+
+import { required } from './fixture-values'
 
 function createJsonResponse(profilePicture?: string | null, status = 200): Response {
   return new Response(JSON.stringify({ user: { profile_pic: profilePicture ?? null } }), {
@@ -230,7 +233,7 @@ describe('createKickAvatarResolver', () => {
       fetchFn: async (_input, init) => {
         fetchCount += 1
         expect(init?.signal).toBeDefined()
-        const timeoutSignal = init?.signal as AbortSignal
+        const timeoutSignal = required(init?.signal)
         expect(timeoutSignal.aborted).toBe(false)
         throw new DOMException('timed out', 'TimeoutError')
       },

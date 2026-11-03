@@ -1,4 +1,5 @@
 import type { Platform, WatchedChannel } from '@twirchat/shared/types'
+
 import type {
   ChattersTarget,
   ChatterGroup,

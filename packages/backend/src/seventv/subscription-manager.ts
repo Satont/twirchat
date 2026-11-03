@@ -1,7 +1,10 @@
-import type { Platform } from '@twirchat/shared'
+import type { Platform, BackendToDesktopMessage } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
+import { z } from 'zod'
+
 import { isTwitchUserId, resolveTwitchUserId } from '../api/twitch-users.ts'
 import { sevenTVCache } from './cache'
+import { getEmoteSetById, getUserByConnection } from './client'
 import {
   createSevenTvEmote,
   createSevenTvEmoteFromEventValue,
@@ -11,9 +14,13 @@ import {
 import type { SevenTVEmote } from './emote'
 import { sevenTVEventClient } from './event-client'
 import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event-client'
-import { getEmoteSetById, getUserByConnection } from './client'
 
 const log = logger('seventv:manager')
+function parseChannelKey(key: string): [Platform, string] {
+  const separator = key.indexOf(':')
+  const platform = z.enum(['twitch', 'kick', 'youtube']).parse(key.slice(0, separator))
+  return [platform, key.slice(separator + 1)]
+}
 
 interface ClientSubscription {
   platform: Platform
@@ -34,7 +41,7 @@ export class SevenTVSubscriptionManager {
   private channelKeyToUserId = new Map<string, string>()
 
   // Callback to send messages to desktop clients
-  sendToClient: ((clientSecret: string, message: unknown) => void) | null = null
+  sendToClient: ((clientSecret: string, message: BackendToDesktopMessage) => void) | null = null
 
   constructor() {
     // Setup event handler
@@ -196,7 +203,8 @@ export class SevenTVSubscriptionManager {
     log.info('Fetching emote set from 7TV', { channelKey })
 
     // Convert platform to 7TV Platform enum
-    const sevenTVPlatform = platform.toUpperCase()
+    if (platform === 'youtube') return null
+    const sevenTVPlatform = platform === 'twitch' ? 'TWITCH' : 'KICK'
 
     let sevenTVPlatformId = channelId
     if (platform === 'twitch') {
@@ -215,10 +223,7 @@ export class SevenTVSubscriptionManager {
       })
     }
 
-    const result = await getUserByConnection(
-      sevenTVPlatform as 'TWITCH' | 'KICK',
-      sevenTVPlatformId,
-    )
+    const result = await getUserByConnection(sevenTVPlatform, sevenTVPlatformId)
 
     const user = result.users?.userByConnection
     if (!user) {
@@ -361,7 +366,9 @@ export class SevenTVSubscriptionManager {
 
       // Ensure connection is established
       if (!sevenTVEventClient.isConnected) {
-        sevenTVEventClient.connect()
+        sevenTVEventClient
+          .connect()
+          .catch((error: unknown) => log.error('Connection failed', { error: String(error) }))
       }
     }
 
@@ -377,7 +384,9 @@ export class SevenTVSubscriptionManager {
       log.info('Subscribing to 7TV user.update', { channelKey, userId })
       sevenTVEventClient.subscribe('user.update', { object_id: userId })
       if (!sevenTVEventClient.isConnected) {
-        sevenTVEventClient.connect()
+        sevenTVEventClient
+          .connect()
+          .catch((error: unknown) => log.error('Connection failed', { error: String(error) }))
       }
     }
     channelKeys.add(channelKey)
@@ -401,7 +410,9 @@ export class SevenTVSubscriptionManager {
     log.info('handleEvent called', { eventType: event.type, hasBody: Boolean(event.body) })
 
     if (event.type === 'user.update') {
-      this.handleUserUpdateEvent(event.body)
+      this.handleUserUpdateEvent(event.body).catch((error: unknown) =>
+        log.error('User update failed', { error: String(error) }),
+      )
       return
     }
 
@@ -443,7 +454,7 @@ export class SevenTVSubscriptionManager {
         })
 
         for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = channelKey.split(':') as [Platform, string]
+          const [platform, channelId] = parseChannelKey(channelKey)
           sevenTVCache.addEmote(platform, channelId, emote)
 
           this.broadcastToChannel(channelKey, {
@@ -476,7 +487,7 @@ export class SevenTVSubscriptionManager {
         })
 
         for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = channelKey.split(':') as [Platform, string]
+          const [platform, channelId] = parseChannelKey(channelKey)
           sevenTVCache.removeEmote(platform, channelId, emote.id)
 
           this.broadcastToChannel(channelKey, {
@@ -509,7 +520,7 @@ export class SevenTVSubscriptionManager {
         })
 
         for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = channelKey.split(':') as [Platform, string]
+          const [platform, channelId] = parseChannelKey(channelKey)
 
           const cachedSet = sevenTVCache.get(platform, channelId)
           if (cachedSet) {
@@ -539,7 +550,7 @@ export class SevenTVSubscriptionManager {
         })
 
         for (const channelKey of emoteSetSub.channelKeys) {
-          const [platform, channelId] = channelKey.split(':') as [Platform, string]
+          const [platform, channelId] = parseChannelKey(channelKey)
           sevenTVCache.updateEmote(platform, channelId, newValue.id, {
             alias: newValue.name,
           })
@@ -587,7 +598,7 @@ export class SevenTVSubscriptionManager {
     log.info('7TV emote set DELETED', { emoteSetId: body.id })
 
     for (const channelKey of emoteSetSub.channelKeys) {
-      const [platform, channelId] = channelKey.split(':') as [Platform, string]
+      const [platform, channelId] = parseChannelKey(channelKey)
       const cachedSet = sevenTVCache.get(platform, channelId)
       const setName = cachedSet?.name ?? body.id
 
@@ -629,7 +640,7 @@ export class SevenTVSubscriptionManager {
         continue
       }
       const nested = Array.isArray(update.value)
-        ? (update.value as { key: string; value: unknown }[])
+        ? z.array(z.object({ key: z.string(), value: z.unknown() })).parse(update.value)
         : []
       log.info('[handleUserUpdateEvent] connections nested fields', {
         count: nested.length,
@@ -659,7 +670,7 @@ export class SevenTVSubscriptionManager {
     })
 
     for (const channelKey of channelKeys) {
-      const [platform, channelId] = channelKey.split(':') as [Platform, string]
+      const [platform, channelId] = parseChannelKey(channelKey)
 
       const existing = this.findClientSubscriptionForChannel(platform, channelId)
       if (!existing) {
@@ -789,8 +800,8 @@ export class SevenTVSubscriptionManager {
     })
   }
 
-  private broadcastToChannel(channelKey: string, message: unknown): void {
-    const [platform, channelId] = channelKey.split(':') as [Platform, string]
+  private broadcastToChannel(channelKey: string, message: BackendToDesktopMessage): void {
+    const [platform, channelId] = parseChannelKey(channelKey)
 
     // Find all clients subscribed to this channel
     let foundClients = 0
@@ -809,7 +820,7 @@ export class SevenTVSubscriptionManager {
       clientCount: foundClients,
       messageType:
         typeof message === 'object' && message !== null && 'type' in message
-          ? String((message as { type?: unknown }).type)
+          ? message.type
           : undefined,
     })
   }
