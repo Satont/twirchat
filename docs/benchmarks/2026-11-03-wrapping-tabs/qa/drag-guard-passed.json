@@ -1,0 +1,1 @@
+{"compositor":"xvfb","display":":99","runtime":"/tmp/twirchat-gui-qa-jqgqXA/runtime","displayCards":false,"virtualTerminals":false,"privateBus":"unix:path=/tmp/twirchat-gui-qa-jqgqXA/runtime/bus","pid":2}

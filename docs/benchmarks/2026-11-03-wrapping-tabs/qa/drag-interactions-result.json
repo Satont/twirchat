@@ -1,0 +1,390 @@
+{
+  "ok": true,
+  "originalTabs": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l"
+  ],
+  "tabSaves": 2,
+  "paneSaves": 2,
+  "freshBoundsCalls": 0,
+  "heartbeatTicks": 299,
+  "maximumLagMs": 64.09292000000005,
+  "messages": 482,
+  "screenshot": "/tmp/twirchat-gui-qa-jqgqXA/drag-interactions.png",
+  "wrapping": [
+    {
+      "width": 900,
+      "rows": 2,
+      "bounds": [
+        {
+          "testId": "tab-home",
+          "id": 4,
+          "x": 8,
+          "y": 6,
+          "width": 109,
+          "height": 32
+        },
+        {
+          "testId": "tab-a",
+          "id": 9,
+          "x": 119,
+          "y": 6,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-b",
+          "id": 15,
+          "x": 218,
+          "y": 6,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-c",
+          "id": 21,
+          "x": 317,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-d",
+          "id": 27,
+          "x": 417,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-e",
+          "id": 33,
+          "x": 517,
+          "y": 6,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-f",
+          "id": 39,
+          "x": 615,
+          "y": 6,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-g",
+          "id": 45,
+          "x": 713,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-h",
+          "id": 51,
+          "x": 8,
+          "y": 39,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-i",
+          "id": 57,
+          "x": 108,
+          "y": 39,
+          "width": 92,
+          "height": 32
+        },
+        {
+          "testId": "tab-j",
+          "id": 63,
+          "x": 202,
+          "y": 39,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-k",
+          "id": 69,
+          "x": 300,
+          "y": 39,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-l",
+          "id": 75,
+          "x": 399,
+          "y": 39,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-add",
+          "id": 78,
+          "x": 497,
+          "y": 41,
+          "width": 26,
+          "height": 26
+        }
+      ],
+      "screenshot": "/tmp/twirchat-gui-qa-jqgqXA/wrapping-tabs-900.png"
+    },
+    {
+      "width": 420,
+      "rows": 4,
+      "bounds": [
+        {
+          "testId": "tab-home",
+          "id": 4,
+          "x": 8,
+          "y": 6,
+          "width": 109,
+          "height": 32
+        },
+        {
+          "testId": "tab-a",
+          "id": 9,
+          "x": 8,
+          "y": 39,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-b",
+          "id": 15,
+          "x": 119,
+          "y": 6,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-c",
+          "id": 21,
+          "x": 218,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-d",
+          "id": 27,
+          "x": 107,
+          "y": 39,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-e",
+          "id": 33,
+          "x": 207,
+          "y": 39,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-f",
+          "id": 39,
+          "x": 305,
+          "y": 39,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-g",
+          "id": 45,
+          "x": 8,
+          "y": 72,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-h",
+          "id": 51,
+          "x": 108,
+          "y": 72,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-i",
+          "id": 57,
+          "x": 208,
+          "y": 72,
+          "width": 92,
+          "height": 32
+        },
+        {
+          "testId": "tab-j",
+          "id": 63,
+          "x": 302,
+          "y": 72,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-k",
+          "id": 69,
+          "x": 8,
+          "y": 105,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-l",
+          "id": 75,
+          "x": 107,
+          "y": 105,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-add",
+          "id": 78,
+          "x": 205,
+          "y": 107,
+          "width": 26,
+          "height": 26
+        }
+      ],
+      "screenshot": "/tmp/twirchat-gui-qa-jqgqXA/wrapping-tabs-420.png"
+    },
+    {
+      "width": 900,
+      "rows": 2,
+      "bounds": [
+        {
+          "testId": "tab-home",
+          "id": 4,
+          "x": 8,
+          "y": 6,
+          "width": 109,
+          "height": 32
+        },
+        {
+          "testId": "tab-a",
+          "id": 9,
+          "x": 219,
+          "y": 6,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-b",
+          "id": 15,
+          "x": 397,
+          "y": 39,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-c",
+          "id": 21,
+          "x": 119,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-d",
+          "id": 27,
+          "x": 318,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-e",
+          "id": 33,
+          "x": 418,
+          "y": 6,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-f",
+          "id": 39,
+          "x": 516,
+          "y": 6,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-g",
+          "id": 45,
+          "x": 614,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-h",
+          "id": 51,
+          "x": 714,
+          "y": 6,
+          "width": 98,
+          "height": 32
+        },
+        {
+          "testId": "tab-i",
+          "id": 57,
+          "x": 8,
+          "y": 39,
+          "width": 92,
+          "height": 32
+        },
+        {
+          "testId": "tab-j",
+          "id": 63,
+          "x": 102,
+          "y": 39,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-k",
+          "id": 69,
+          "x": 200,
+          "y": 39,
+          "width": 97,
+          "height": 32
+        },
+        {
+          "testId": "tab-l",
+          "id": 75,
+          "x": 299,
+          "y": 39,
+          "width": 96,
+          "height": 32
+        },
+        {
+          "testId": "tab-add",
+          "id": 78,
+          "x": 496,
+          "y": 41,
+          "width": 26,
+          "height": 26
+        }
+      ],
+      "screenshot": "/tmp/twirchat-gui-qa-jqgqXA/wrapping-tabs-900.png"
+    }
+  ],
+  "wrappedReorder": true,
+  "lostButtonCancel": true,
+  "outsideCancel": true,
+  "blurCancel": true,
+  "escapeCancel": true,
+  "followUpDock": true,
+  "reactErrors": []
+}

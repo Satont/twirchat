@@ -1,0 +1,37 @@
+{"level":"info","module":"gpuix-backend","msg":"Starting GPUIX backend...","ts":"2026-11-03T10:43:46.345Z"}
+{"level":"info","module":"db","msg":"Migrations applied","ts":"2026-11-03T10:43:46.347Z"}
+{"level":"info","module":"gpuix-backend","msg":"Database ready","ts":"2026-11-03T10:43:46.347Z"}
+{"level":"info","module":"client-secret","msg":"Generated new client secret: 3e234876...","ts":"2026-11-03T10:43:46.347Z"}
+{"level":"info","module":"overlay-server","msg":"Resolved overlay runtime paths","ts":"2026-11-03T10:43:46.347Z","fontsDir":"/home/satont/.codex/worktrees/b7bd/chat/packages/desktop/public/fonts","overlayDir":null}
+{"level":"info","module":"overlay-server","msg":"Server running on http://localhost:45823","ts":"2026-11-03T10:43:46.348Z"}
+{"level":"info","module":"overlay-server","msg":"OBS URL: http://localhost:45823/?bg=transparent","ts":"2026-11-03T10:43:46.348Z"}
+{"level":"info","module":"auth-server","msg":"OAuth server listening on port 45821","ts":"2026-11-03T10:43:46.348Z"}
+{"level":"info","module":"backend-connection","msg":"Connecting to ws://127.0.0.1:3000/ws...","ts":"2026-11-03T10:43:46.350Z"}
+{"level":"info","module":"gpuix-backend","msg":"GPUIX backend ready","ts":"2026-11-03T10:43:46.350Z"}
+{"level":"info","module":"backend-connection","msg":"Disconnected. Reconnecting in 3000ms...","ts":"2026-11-03T10:43:46.448Z"}
+{"level":"info","module":"backend-connection","msg":"Connecting to ws://127.0.0.1:3000/ws...","ts":"2026-11-03T10:43:49.448Z"}
+{"level":"info","module":"backend-connection","msg":"Disconnected. Reconnecting in 6000ms...","ts":"2026-11-03T10:43:49.448Z"}
+{"level":"info","module":"backend-connection","msg":"Connecting to ws://127.0.0.1:3000/ws...","ts":"2026-11-03T10:43:55.448Z"}
+{"level":"info","module":"backend-connection","msg":"Disconnected. Reconnecting in 12000ms...","ts":"2026-11-03T10:43:55.449Z"}
+{"level":"info","module":"backend-connection","msg":"Connecting to ws://127.0.0.1:3000/ws...","ts":"2026-11-03T10:44:07.449Z"}
+{"level":"info","module":"backend-connection","msg":"Disconnected. Reconnecting in 24000ms...","ts":"2026-11-03T10:44:07.449Z"}
+{"level":"warn","module":"backend-connection","msg":"Cannot send — not connected","ts":"2026-11-03T10:44:16.350Z"}
+{"ok":true,"channels":50,"target":5000,"panes":4,"cpu":111.73602694038323,"rate":4995.859814756323,"rssMiB":647.50390625,"gpu":[{"device":"0000:03:00.0","driver":"amdgpu","engines":{"gfx":0.8999390157590201},"residentBytes":{"gtt":6299648,"vram":84537344}},{"device":"0000:47:00.0","driver":"amdgpu","engines":{},"residentBytes":{"gtt":2097152,"vram":12288}}],"termination":"completed"}
+s) headless
+[13:43:46.207] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: yes
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: yes
+               color operations: yes
+               color representation: yes
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[13:43:46.207] Loading module '/tmp/twirchat-weston-15.0.1-3/usr/lib/weston/kiosk-shell.so'
+{"level":"error","module":"backend-connection","msg":"WebSocket error","ts":"2026-11-03T10:43:46.448Z","event":"{\"isTrusted\":true}"}
+{"level":"error","module":"backend-connection","msg":"WebSocket error","ts":"2026-11-03T10:43:49.448Z","event":"{\"isTrusted\":true}"}
+{"level":"error","module":"backend-connection","msg":"WebSocket error","ts":"2026-11-03T10:43:55.449Z","event":"{\"isTrusted\":true}"}
+{"level":"error","module":"backend-connection","msg":"WebSocket error","ts":"2026-11-03T10:44:07.449Z","event":"{\"isTrusted\":true}"}
+[13:44:21.718] caught signal 15

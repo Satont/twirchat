@@ -182,7 +182,10 @@ export function ChannelTabBar({
         style={{
           display: 'flex',
           flexDirection: 'row',
+          flexWrap: 'wrap',
           alignItems: 'center',
+          alignContent: 'start',
+          minWidth: 0,
           gap: 2,
           paddingTop: 6,
           paddingLeft: 8,
@@ -191,7 +194,6 @@ export function ChannelTabBar({
           borderColor: theme.border,
           backgroundColor: theme.navBg,
           flexShrink: 0,
-          overflowX: 'scroll',
           userSelect: 'none',
         }}
       >
@@ -336,6 +338,9 @@ export function ChannelTabBar({
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
+                flexShrink: 0,
+                minWidth: 0,
+                maxWidth: '100%',
               }}
             >
               {dropId === channel.id ? (
@@ -603,6 +608,8 @@ function Tab({
         borderColor: active ? activeColor : 'transparent',
         backgroundColor: active ? accent.tint10 : hovered ? theme.fillHover : undefined,
         flexShrink: 0,
+        minWidth: 0,
+        maxWidth: '100%',
         marginBottom: -1,
       }}
     >
@@ -619,6 +626,8 @@ function Tab({
                 ? theme.text
                 : theme.text2,
           maxWidth: 150,
+          minWidth: 0,
+          flexShrink: 1,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
