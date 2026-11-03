@@ -2,7 +2,7 @@ import type { NativeRenderer, PublicInstance } from '@gpuix/react'
 import { useId, type RefObject } from 'react'
 
 import type { HotkeyContext } from '../hotkey-bindings'
-import type { NativeWindowControls } from '../native-window'
+import type { NativePaintedElementBounds, NativeWindowControls } from '../native-window'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
 
 type PopupAction =
@@ -40,7 +40,7 @@ type PopupSearchRenderer = Pick<NativeRenderer, 'focusElement'> &
 type PopupElementRef = RefObject<Pick<PublicInstance, 'id'> | null>
 interface PopupViewportRenderer {
   getListScrollTop?(id: number): readonly number[] | null
-  getElementBounds?(id: number): { height: number } | null
+  getPaintedElementBounds?(id: number): Pick<NativePaintedElementBounds, 'height'> | null
   scrollToItem?(id: number, index: number, offset?: number): void
   getScrollOffset?(id: number): readonly number[] | null
   scrollTo?(id: number, x: number, y: number): void
@@ -78,7 +78,7 @@ export function scrollPopupPage(
   if (!viewport.current) return
   const id = viewport.current.id
   const anchor = renderer.getListScrollTop?.(id)
-  const height = renderer.getElementBounds?.(id)?.height ?? anchor?.[2]
+  const height = renderer.getPaintedElementBounds?.(id)?.height ?? anchor?.[2]
   const target = popupPageTarget(anchor ?? null, height, direction)
   if (target) renderer.scrollToItem?.(id, ...target)
   else if (height && ['up', 'down'].includes(direction)) {

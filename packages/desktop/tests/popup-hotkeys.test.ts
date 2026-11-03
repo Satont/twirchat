@@ -146,11 +146,49 @@ test('page scrolling moves one measured viewport from the exact virtual-list anc
   const calls: unknown[] = []
   const renderer = {
     getListScrollTop: () => [7, 13, 186],
-    getElementBounds: () => ({ height: 186 }),
+    getPaintedElementBounds: () => ({ height: 186 }),
     scrollToItem: (...args: unknown[]) => calls.push(args),
   }
   scrollPopupPage(renderer, { current: { id: 42 } }, 'down')
   expect(calls).toEqual([[42, 7, 199]])
+})
+test('page scrolling uses painted geometry and preserves anchor height before the next paint', () => {
+  const calls: unknown[] = []
+  let paintedHeight: number | null = 210
+  const renderer = {
+    getListScrollTop: () => [7, 13, 186],
+    getElementBounds: () => {
+      throw new Error('Fresh geometry must not run in a hotkey')
+    },
+    getPaintedElementBounds: () => (paintedHeight === null ? null : { height: paintedHeight }),
+    scrollToItem: (...args: unknown[]) => {
+      calls.push(args)
+    },
+  }
+  scrollPopupPage(renderer, { current: { id: 42 } }, 'down')
+  paintedHeight = null
+  scrollPopupPage(renderer, { current: { id: 42 } }, 'up')
+  expect(calls).toEqual([
+    [42, 7, 223],
+    [42, 7, -173],
+  ])
+})
+test('ordinary popup scrollers page from their painted viewport height', () => {
+  const calls: unknown[] = []
+  const renderer = {
+    getListScrollTop: () => null,
+    getPaintedElementBounds: () => ({ height: 80 }),
+    getScrollOffset: () => [5, -30],
+    scrollTo: (...args: unknown[]) => {
+      calls.push(args)
+    },
+  }
+  scrollPopupPage(renderer, { current: { id: 42 } }, 'down')
+  scrollPopupPage(renderer, { current: { id: 42 } }, 'up')
+  expect(calls).toEqual([
+    [42, 5, -110],
+    [42, 5, 50],
+  ])
 })
 test('popup search focuses the actual editor before native select-all', async () => {
   const calls: unknown[] = []

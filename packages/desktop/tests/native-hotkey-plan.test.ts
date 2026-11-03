@@ -9,6 +9,7 @@ import {
   refreshNativeHotkeyPlan,
   registerHotkeyContext,
   registerHotkeyRecorder,
+  registerSupplementalHotkeys,
   setHotkeyRoute,
   type NativeHotkeyPlan,
 } from '../src/gpuix/state/action-bindings'
@@ -86,6 +87,72 @@ function fixture(scope: string) {
     },
   }
 }
+
+test('focused completion bindings precede custom shortcuts and retire with their source', () => {
+  const scope = 'completion-priority'
+  const f = fixture(scope)
+  const calls: string[] = []
+  try {
+    f.stops.push(
+      registerHotkeyContext({
+        id: 'popup',
+        windowId: scope,
+        category: 'popupWindow',
+        handlers: {
+          openTab: () => {
+            calls.push('custom')
+          },
+        },
+      }),
+      setHotkeyRoute(scope, ['popup']),
+      registerSupplementalHotkeys(scope, 'navigation', () => [
+        {
+          id: 'normal',
+          keys: ['down'],
+          handler: () => {
+            calls.push('normal')
+          },
+        },
+      ]),
+    )
+    const stopCompletion = registerSupplementalHotkeys(
+      scope,
+      'completion',
+      () => [
+        {
+          id: 'next',
+          keys: ['down'],
+          handler: () => {
+            calls.push('completion')
+          },
+        },
+      ],
+      'beforeCustom',
+    )
+    f.stops.push(stopCompletion)
+    expect(f.plan.bindings.map((binding) => binding.id)).toEqual([
+      'legacy:completion:next',
+      'popup-next',
+      'legacy:navigation:normal',
+    ])
+    const captured = f.captured('legacy:completion:next', 'legacy:completion')
+    expect(dispatchCustomHotkey(captured, scope)).toBe(true)
+    expect(calls).toEqual(['completion'])
+    const stopOverlay = pushOverlayClose(() => {}, scope)
+    expect(f.plan.bindings).toEqual([])
+    stopOverlay()
+    const stale = f.captured('legacy:completion:next', 'legacy:completion')
+    stopCompletion()
+    expect(f.plan.bindings.map((binding) => binding.id)).toEqual([
+      'popup-next',
+      'legacy:navigation:normal',
+    ])
+    expect(dispatchCustomHotkey(stale, scope)).toBe(true)
+    expect(calls).toEqual(['completion'])
+  } finally {
+    f.dispose()
+  }
+})
 
 test('plans contain available handlers only, dedupe routed IDs, and consume captured prefixes without JS replay', () => {
   const f = fixture('plan-availability')

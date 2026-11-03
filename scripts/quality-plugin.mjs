@@ -46,10 +46,37 @@ const noLocalTypeDeclarations = {
   },
 }
 
+/** @type {Parameters<import('oxlint/plugins-dev').RuleTester['run']>[1]} */
+const noBlockingNativeGeometry = {
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: {
+      blockingGeometry:
+        'Use getPaintedElementBounds in the UI. getElementBounds blocks until a native UI frame.',
+    },
+  },
+  create(context) {
+    return {
+      MemberExpression(node) {
+        const property = node.property
+        const name =
+          !node.computed && property.type === 'Identifier'
+            ? property.name
+            : node.computed && property.type === 'Literal'
+              ? property.value
+              : undefined
+        if (name === 'getElementBounds') context.report({ node, messageId: 'blockingGeometry' })
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'project-quality' },
   rules: {
     'no-type-assertions': noTypeAssertions,
     'no-local-type-declarations': noLocalTypeDeclarations,
+    'no-blocking-native-geometry': noBlockingNativeGeometry,
   },
 }

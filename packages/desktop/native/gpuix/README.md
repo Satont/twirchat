@@ -65,9 +65,15 @@ and exercises the Unicode SQLite function used by chat search. It does not start
 platform accounts or the application backend. The report is saved as
 `packaged-runtime-result.json` in the private QA session.
 
-## Native API version 2
+## Native API version 3
 
-Each `GpuixRenderer` exposes `getTwirNativeApiVersion(): 2` (also exported by the raw addon) and adds:
+Each `GpuixRenderer` exposes `getTwirNativeApiVersion(): 3` (also exported by the raw addon) and adds:
+
+`getPaintedElementBounds(id)` reads the last completed paint without waiting for layout or the
+UI command queue. It returns null before an element paints, after removal/close, or during a
+contended publication. Use it for input/drag hit testing; `getElementBounds` retains its fresh
+automation-query semantics. Snapshots share the completed native bounds map and do not request
+extra frames.
 
 - `closeWindow(): void`: requests removal of this window; already closed is harmless.
 - `isWindowActive(): boolean`: cached actual native window activation, false before

@@ -5,7 +5,7 @@ import { hasNativeControls, type NativeWindowControls } from '../src/gpuix/nativ
 function controls(): NativeWindowControls {
   return {
     getTwirNativeApiVersion() {
-      return 2
+      return 3
     },
     closeWindow() {},
     isWindowOpen() {
@@ -25,6 +25,9 @@ function controls(): NativeWindowControls {
       return []
     },
     setHotkeyPlan() {},
+    getPaintedElementBounds() {
+      return null
+    },
     getWindowBounds() {
       return null
     },
@@ -42,7 +45,7 @@ function controls(): NativeWindowControls {
 test('native controls guard checks every required method and keeps the actual receiver', () => {
   const renderer = controls()
   renderer.getTwirNativeApiVersion = function () {
-    return this === renderer ? 2 : 0
+    return this === renderer ? 3 : 0
   }
   expect(hasNativeControls(renderer)).toBe(true)
   for (const method of Object.keys(controls())) {
@@ -57,7 +60,9 @@ test('native controls guard checks every required method and keeps the actual re
 
 test('native controls guard rejects incompatible API versions before narrowing', () => {
   const renderer = controls()
-  renderer.getTwirNativeApiVersion = () => 0
-  expect(hasNativeControls(renderer)).toBe(false)
+  for (const version of [0, 2, 4]) {
+    renderer.getTwirNativeApiVersion = () => version
+    expect(hasNativeControls(renderer)).toBe(false)
+  }
   expect(hasNativeControls({})).toBe(false)
 })

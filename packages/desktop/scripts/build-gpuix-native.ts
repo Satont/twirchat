@@ -23,7 +23,7 @@ const sourceManifestSchema = z.strictObject({
     .min(1),
 })
 const cachedArtifactSchema = z.object({
-  apiVersion: z.literal(2),
+  apiVersion: z.literal(3),
   patchDigest: z.string(),
   upstreamSHA: z.string(),
   gpuiSHA: z.string(),
@@ -98,7 +98,7 @@ export async function buildNative(args: string[] = process.argv.slice(2)): Promi
     const previous = cached.success ? cached.data : null
     if (
       previous !== null &&
-      previous.apiVersion === 2 &&
+      previous.apiVersion === 3 &&
       previous.patchDigest === identity &&
       previous.upstreamSHA === manifest.revision &&
       previous.gpuiSHA === manifest.gpuiRevision &&
@@ -191,7 +191,7 @@ export async function buildNative(args: string[] = process.argv.slice(2)): Promi
     .digest('hex')
   await Bun.write(
     `${destination}.json`,
-    `${JSON.stringify({ apiVersion: 2, version: manifest.version, upstreamSHA: manifest.revision, gpuiSHA: manifest.gpuiRevision, patchDigest: identity, rustToolchain: manifest.rustToolchain, target: `${process.platform}-${process.arch}`, size: Bun.file(destination).size, sha256 }, null, 2)}\n`,
+    `${JSON.stringify({ apiVersion: 3, version: manifest.version, upstreamSHA: manifest.revision, gpuiSHA: manifest.gpuiRevision, patchDigest: identity, rustToolchain: manifest.rustToolchain, target: `${process.platform}-${process.arch}`, size: Bun.file(destination).size, sha256 }, null, 2)}\n`,
   )
   console.log(destination)
 }

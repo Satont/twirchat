@@ -15,7 +15,7 @@ afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 const manifest = () => ({
-  apiVersion: 2,
+  apiVersion: 3,
   upstreamSHA: GPUIX_SOURCE_REVISION,
   gpuiSHA: GPUI_SOURCE_REVISION,
   target: 'linux-x64',

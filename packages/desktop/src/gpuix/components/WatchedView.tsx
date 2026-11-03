@@ -11,8 +11,10 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
 import { parseHotkeyChoice } from '../hotkey-bindings'
 import { dockSideAt, resizedPair, type DockSide } from '../layout-operations'
+import { nativeWindow, type NativePaintedElementBounds } from '../native-window'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
 import { setActivePane, activePaneByWindowStore } from '../state/active-pane'
 import { showNotice, tabChannelNamesStore, watchedChannelsStore } from '../state/app'
@@ -45,6 +47,7 @@ interface DockPreview {
   sourceId: string
   targetId: string
   side: DockSide
+  bounds: NativePaintedElementBounds
 }
 interface PaneDragContextValue {
   elements: Map<string, number>
@@ -70,6 +73,7 @@ export function WatchedView({
   const layoutRevision = useStore(layoutRevisionStore)
   const watchedChannels = useStore(watchedChannelsStore)
   const renderer = useGpuixRequired()
+  const native = nativeWindow(renderer)
   const elements = useMemo(() => new Map<string, number>(), [])
   const [preview, setPreview] = useState<DockPreview | null>(null)
   const previewRef = useRef<DockPreview | null>(null)
@@ -80,7 +84,7 @@ export function WatchedView({
       let next: DockPreview | null = null
       for (const [targetId, elementId] of elements) {
         if (targetId === sourceId) continue
-        const bounds = renderer.getElementBounds?.(elementId)
+        const bounds = native.getPaintedElementBounds(elementId)
         if (
           bounds &&
           x >= bounds.x &&
@@ -88,13 +92,15 @@ export function WatchedView({
           x < bounds.x + bounds.width &&
           y < bounds.y + bounds.height
         ) {
-          next = { sourceId, targetId, side: dockSideAt(bounds, x, y) }
+          next = { sourceId, targetId, side: dockSideAt(bounds, x, y), bounds }
           break
         }
       }
       if (
         next?.targetId === previewRef.current?.targetId &&
-        next?.side === previewRef.current?.side
+        next?.side === previewRef.current?.side &&
+        next?.bounds.width === previewRef.current?.bounds.width &&
+        next?.bounds.height === previewRef.current?.bounds.height
       )
         return
       previewRef.current = next
@@ -241,17 +247,20 @@ function SplitContainer({ split, tabId }: { split: SplitNode; tabId: string }) {
   const [flexes, setFlexes] = useState<number[]>(() => split.children.map((c) => c.flex))
   const flexesRef = useRef(flexes)
   const renderer = useGpuixRequired()
+  const native = nativeWindow(renderer)
   const childElements = useRef(new Map<string, number>())
   const drag = useRef<{ start: number[]; pixels: number } | null>(null)
 
   // Keep local flexes in sync when the layout reloads (split/assign/etc.).
-  const childrenKey = split.children.map((c) => `${c.id}:${c.flex}`).join('|')
   useEffect(() => {
     const next = split.children.map((c) => c.flex)
     flexesRef.current = next
-    setFlexes(next)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [childrenKey])
+    setFlexes((current) =>
+      current.length === next.length && current.every((flex, index) => flex === next[index])
+        ? current
+        : next,
+    )
+  }, [split.children])
 
   const persist = (next: number[]) => updateSplitFlexes(backend, tabId, split.id, next)
 
@@ -291,31 +300,37 @@ function SplitContainer({ split, tabId }: { split: SplitNode; tabId: string }) {
           pieces.push(
             <Divider
               key={`divider-${child.id}`}
+              id={`${tabId}:${split.id}:${child.id}`}
               horizontal={horizontal}
               onDragStart={() => {
                 const firstId = childElements.current.get(child.id)
-                const secondId = childElements.current.get(split.children[index + 1]!.id)
-                const first = firstId === undefined ? null : renderer.getElementBounds?.(firstId)
-                const second = secondId === undefined ? null : renderer.getElementBounds?.(secondId)
+                const nextChild = split.children[index + 1]
+                const secondId = nextChild ? childElements.current.get(nextChild.id) : undefined
+                const first = firstId === undefined ? null : native.getPaintedElementBounds(firstId)
+                const second =
+                  secondId === undefined ? null : native.getPaintedElementBounds(secondId)
+                if (!first || !second) return false
                 drag.current = {
                   start: [...flexesRef.current],
-                  pixels:
-                    first && second
-                      ? horizontal
-                        ? first.height + second.height
-                        : first.width + second.width
-                      : 0,
+                  pixels: horizontal ? first.height + second.height : first.width + second.width,
                 }
+                return true
               }}
               onDrag={(deltaPx) => {
                 if (!drag.current) return
                 const next = resizedPair(drag.current.start, index, deltaPx, drag.current.pixels)
+                if (next.every((flex, flexIndex) => flex === flexesRef.current[flexIndex])) return
                 flexesRef.current = next
                 setFlexes(next)
               }}
               onDragEnd={() => {
+                const current = drag.current
                 drag.current = null
-                persist(flexesRef.current)
+                if (
+                  current &&
+                  current.start.some((flex, flexIndex) => flex !== flexesRef.current[flexIndex])
+                )
+                  persist(flexesRef.current)
               }}
               onDragCancel={() => {
                 if (drag.current) {
@@ -334,22 +349,39 @@ function SplitContainer({ split, tabId }: { split: SplitNode; tabId: string }) {
 }
 
 function Divider({
+  id,
   horizontal,
   onDragStart,
   onDrag,
   onDragEnd,
   onDragCancel,
 }: {
+  id: string
   /** true = divider between vertically stacked rows (drag moves in Y). */
   horizontal: boolean
-  onDragStart: () => void
+  onDragStart: () => boolean
   onDrag: (deltaPx: number) => void
   onDragEnd: () => void
   onDragCancel: () => void
 }) {
   const theme = useTheme()
+  const renderer = useGpuixRequired()
+  const native = nativeWindow(renderer)
   const [active, setActive] = useState(false)
-  const dragState = useRef<{ startPos: number } | null>(null)
+  const dragState = useRef<{ x: number; y: number } | null>(null)
+  const motion = useDragMotion(({ x, y }) => {
+    const start = dragState.current
+    if (!start) return
+    onDrag(horizontal ? y - start.y : x - start.x)
+  })
+  const cancelDrag = () => {
+    motion.cancel()
+    if (!dragState.current) return
+    dragState.current = null
+    setActive(false)
+    onDragCancel()
+  }
+  useDragCancellation(active, `divider-drag:${id}`, cancelDrag)
   const hoverColor = '#a78bfa'
 
   return (
@@ -358,9 +390,7 @@ function Divider({
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.key === 'escape' && dragState.current) {
-          dragState.current = null
-          setActive(false)
-          onDragCancel()
+          cancelDrag()
           event.preventDefault()
           return
         }
@@ -368,25 +398,40 @@ function Divider({
         const next = horizontal ? 'down' : 'right'
         if (event.key === previous || event.key === next) {
           event.preventDefault()
-          onDragStart()
+          cancelDrag()
+          if (!onDragStart()) return
           onDrag((event.key === previous ? -1 : 1) * (event.modifiers?.shift ? 1 : 10))
           onDragEnd()
         }
       }}
       onMouseDown={(event) => {
         if (event.button !== 0) return
-        dragState.current = { startPos: horizontal ? (event.y ?? 0) : (event.x ?? 0) }
-        onDragStart()
+        cancelDrag()
+        if (!onDragStart()) return
+        dragState.current = { x: event.x ?? 0, y: event.y ?? 0 }
         setActive(true)
       }}
       onMouseMove={(event) => {
         if (!dragState.current) return
-        const pos = horizontal ? (event.y ?? 0) : (event.x ?? 0)
-        const delta = pos - dragState.current.startPos
-        if (delta !== 0) onDrag(delta)
+        if (event.pressedButton !== 0) {
+          cancelDrag()
+          return
+        }
+        motion.schedule({ x: event.x ?? dragState.current.x, y: event.y ?? dragState.current.y })
       }}
-      onMouseUp={() => {
-        if (!dragState.current) return
+      onMouseUp={(event) => {
+        if (event.button !== 0 || !dragState.current) return
+        const point = { x: event.x ?? dragState.current.x, y: event.y ?? dragState.current.y }
+        const window = native.getWindowBounds()
+        if (
+          window &&
+          (point.x < 0 || point.y < 0 || point.x >= window.width || point.y >= window.height)
+        ) {
+          cancelDrag()
+          return
+        }
+        motion.schedule(point)
+        motion.flush()
         dragState.current = null
         setActive(false)
         onDragEnd()
@@ -436,16 +481,26 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
     [tabId, panel.id, renderer, scope],
   )
   const dragStart = useRef<{ x: number; y: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const motion = useDragMotion(({ x, y }) => {
+    const start = dragStart.current
+    if (start && Math.hypot(x - start.x, y - start.y) >= 5) docking?.move(panel.id, x, y)
+  })
+  const cancelDrag = () => {
+    motion.cancel()
+    if (!dragStart.current) return
+    dragStart.current = null
+    setDragging(false)
+    docking?.cancel()
+  }
+  useDragCancellation(dragging, `pane-drag:${tabId}:${panel.id}`, cancelDrag)
   const registerPane = (element: PublicInstance | null) => {
     paneElement.current = element?.id ?? null
     if (element) docking?.elements.set(panel.id, element.id)
     else docking?.elements.delete(panel.id)
   }
   const dropSide = docking?.preview?.targetId === panel.id ? docking.preview.side : null
-  const dropBounds =
-    dropSide && paneElement.current !== null
-      ? renderer.getElementBounds?.(paneElement.current)
-      : null
+  const dropBounds = dropSide ? docking?.preview?.bounds : null
 
   const isMain = panel.content.type === 'main'
   const isEmpty = panel.content.type === 'empty'
@@ -514,25 +569,33 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
       aria-label="Drag to move this chat pane"
       onKeyDown={(event) => {
         if (event.key === 'escape') {
-          dragStart.current = null
-          docking?.cancel()
+          cancelDrag()
           event.preventDefault()
           event.stopPropagation()
         }
       }}
       onMouseDown={(event) => {
-        if (event.button === 0) dragStart.current = { x: event.x ?? 0, y: event.y ?? 0 }
+        if (event.button !== 0) return
+        cancelDrag()
+        dragStart.current = { x: event.x ?? 0, y: event.y ?? 0 }
+        setDragging(true)
       }}
       onMouseMove={(event) => {
         const start = dragStart.current
-        if (start && Math.hypot((event.x ?? 0) - start.x, (event.y ?? 0) - start.y) >= 5)
-          docking?.move(panel.id, event.x ?? 0, event.y ?? 0)
-      }}
-      onMouseUp={() => {
-        if (dragStart.current) {
-          dragStart.current = null
-          docking?.finish()
+        if (!start) return
+        if (event.pressedButton !== 0) {
+          cancelDrag()
+          return
         }
+        motion.schedule({ x: event.x ?? start.x, y: event.y ?? start.y })
+      }}
+      onMouseUp={(event) => {
+        if (event.button !== 0 || !dragStart.current) return
+        motion.schedule({ x: event.x ?? dragStart.current.x, y: event.y ?? dragStart.current.y })
+        motion.flush()
+        dragStart.current = null
+        setDragging(false)
+        docking?.finish()
       }}
       style={{
         height: 24,

@@ -97,7 +97,7 @@ const currentUiRuntime: WindowUiRuntime = {
 
 /** Each window owns its React root, native editor, event route and lifetime. */
 export class DesktopWindowManager {
-  readonly runtimeVersion = 3
+  readonly runtimeVersion = 4
   private readonly mounted = new Map<string, MountedWindow>()
   private readonly session
   private readonly poller: ReturnType<typeof setInterval>
@@ -263,7 +263,6 @@ export class DesktopWindowManager {
     let window: MountedWindow | undefined
     try {
       const native = nativeWindow(createRenderer())
-      let disposing = false
       const cleanupMethods = new Set([
         'applyBatch',
         'destroyElement',
@@ -281,8 +280,7 @@ export class DesktopWindowManager {
         Object.defineProperty(native, property, {
           configurable: true,
           value: (...args: unknown[]) => {
-            if (disposing && !native.isWindowOpen())
-              return property === 'applyBatch' ? [] : undefined
+            if (!native.isWindowOpen()) return property === 'applyBatch' ? [] : undefined
             return value.apply(native, args)
           },
         })
@@ -324,7 +322,6 @@ export class DesktopWindowManager {
         getWindowBounds: () => renderer!.getWindowBounds(),
         closeWindow: () => renderer!.closeWindow(),
         dispose: () => {
-          disposing = true
           window!.loop?.stop()
           window!.stopHotkeyPlan?.()
           try {
@@ -485,7 +482,7 @@ export function mountDesktopWindows(
 ): DesktopWindowManager {
   const global = globalThis
   if (global.__twirchatWindows) {
-    if (global.__twirchatWindows.runtimeVersion !== 3)
+    if (global.__twirchatWindows.runtimeVersion !== 4)
       throw new Error('Restart TwirChat once to apply the hot-reload runtime upgrade.')
     global.__twirchatWindows.remount(factory, currentUiRuntime)
   } else {

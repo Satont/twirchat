@@ -1,0 +1,100 @@
+{
+  "rounds": [
+    {
+      "round": 1,
+      "stage": 1,
+      "sameReact": true,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 0,
+      "clicked": true,
+      "shortcuts": 1
+    },
+    {
+      "round": 2,
+      "stage": 2,
+      "sameReact": false,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 1,
+      "clicked": true,
+      "shortcuts": 1
+    },
+    {
+      "round": 3,
+      "stage": 3,
+      "sameReact": false,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 2,
+      "clicked": true,
+      "shortcuts": 1
+    },
+    {
+      "round": 4,
+      "stage": 4,
+      "sameReact": false,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 3,
+      "clicked": true,
+      "shortcuts": 1
+    },
+    {
+      "round": 5,
+      "stage": 5,
+      "sameReact": false,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 4,
+      "clicked": true,
+      "shortcuts": 1
+    },
+    {
+      "round": 6,
+      "stage": 6,
+      "sameReact": false,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 5,
+      "clicked": true,
+      "shortcuts": 1
+    },
+    {
+      "round": 7,
+      "stage": 7,
+      "sameReact": false,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 6,
+      "clicked": true,
+      "shortcuts": 1
+    },
+    {
+      "round": 8,
+      "stage": 8,
+      "sameReact": false,
+      "sameRenderer": true,
+      "sameBackend": true,
+      "scope": "main",
+      "window": "main",
+      "retained": 7,
+      "clicked": true,
+      "shortcuts": 1
+    }
+  ]
+}

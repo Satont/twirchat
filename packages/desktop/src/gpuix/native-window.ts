@@ -9,6 +9,8 @@ export interface NativeWindowBounds {
   height: number
   mode: 'windowed' | 'maximized' | 'fullscreen'
 }
+export type NativePaintedElementBounds = Pick<NativeWindowBounds, 'x' | 'y' | 'width' | 'height'>
+
 export type NativeTextAction =
   | 'undo'
   | 'redo'
@@ -31,6 +33,7 @@ export interface NativeWindowControls {
   notifyFromTray(title: string, body: string): Promise<boolean>
   takeTrayEvents(): string[]
   setHotkeyPlan(json: string): void
+  getPaintedElementBounds(elementId: number): NativePaintedElementBounds | null
   getWindowBounds(): NativeWindowBounds | null
   getWindowCapabilities(): { position: boolean; clickThrough: boolean }
   setWindowBounds(bounds: Partial<NativeWindowBounds>): Promise<void>
@@ -52,6 +55,7 @@ const nativeControlMethods: (keyof NativeWindowControls)[] = [
   'notifyFromTray',
   'takeTrayEvents',
   'setHotkeyPlan',
+  'getPaintedElementBounds',
   'getWindowBounds',
   'getWindowCapabilities',
   'setWindowBounds',
@@ -63,7 +67,7 @@ export function hasNativeControls(renderer: object): renderer is NativeWindowCon
   if (!nativeControlMethods.every((name) => typeof Reflect.get(renderer, name) === 'function'))
     return false
   const version: unknown = Reflect.get(renderer, 'getTwirNativeApiVersion')
-  return typeof version === 'function' && Reflect.apply(version, renderer, []) === 2
+  return typeof version === 'function' && Reflect.apply(version, renderer, []) === 3
 }
 
 export function nativeWindow<T extends NativeRenderer>(renderer: T): T & NativeWindowControls {

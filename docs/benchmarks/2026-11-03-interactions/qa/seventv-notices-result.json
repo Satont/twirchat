@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "evidence": [
+    {
+      "width": 900,
+      "cached": "/tmp/twirchat-gui-qa-wc3Zxl/seventv-cached-900.png",
+      "pending": "/tmp/twirchat-gui-qa-wc3Zxl/seventv-pending-900.png",
+      "failed": "/tmp/twirchat-gui-qa-wc3Zxl/seventv-failed-900.png",
+      "artworkPixels": 815,
+      "differenceBounds": [
+        208,
+        83,
+        241,
+        106
+      ]
+    },
+    {
+      "width": 420,
+      "cached": "/tmp/twirchat-gui-qa-wc3Zxl/seventv-cached-420.png",
+      "pending": "/tmp/twirchat-gui-qa-wc3Zxl/seventv-pending-420.png",
+      "failed": "/tmp/twirchat-gui-qa-wc3Zxl/seventv-failed-420.png",
+      "artworkPixels": 815,
+      "differenceBounds": [
+        208,
+        83,
+        241,
+        106
+      ]
+    }
+  ]
+}

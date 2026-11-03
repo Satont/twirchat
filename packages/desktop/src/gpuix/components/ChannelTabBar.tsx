@@ -1,8 +1,10 @@
 import { DismissableLayer, useGpuixRequired, type Props } from '@gpuix/react'
 import type { PlatformStatusInfo } from '@twirchat/shared/types'
-import { useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { useBackend } from '../backend/context'
+import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
+import { nativeWindow } from '../native-window'
 import { showNotice } from '../state/app'
 import type { ChatTabView } from '../state/chat-tabs'
 import {
@@ -66,18 +68,64 @@ export function ChannelTabBar({
   const theme = useTheme()
   const backend = useBackend()
   const renderer = useGpuixRequired()
+  const native = nativeWindow(renderer)
   const state = useStore(chatTabsStore)
+  const barElement = useRef<number | null>(null)
   const elements = useRef(new Map<string, number>())
-  const drag = useRef<{ id: string; x: number; y: number; moved: boolean; target: number } | null>(
-    null,
-  )
+  const drag = useRef<{
+    id: string
+    x: number
+    y: number
+    moved: boolean
+    target: string | null
+  } | null>(null)
   const suppressClick = useRef(false)
+  const [dragging, setDragging] = useState(false)
   const [dropId, setDropId] = useState<string | null>(null)
   const [menuId, setMenuId] = useState<string | null>(null)
   useOverlayClose(menuId !== null, () => setMenuId(null))
   const [edit, setEdit] = useState<{ id: string; title: string; color: string } | null>(null)
   const [editError, setEditError] = useState('')
   const [saving, setSaving] = useState(false)
+  const motion = useDragMotion(({ x, y }) => {
+    const current = drag.current
+    if (!current || (!current.moved && Math.hypot(x - current.x, y - current.y) < 5)) return
+    current.moved = true
+    suppressClick.current = true
+    const bar =
+      barElement.current === null ? null : native.getPaintedElementBounds(barElement.current)
+    let targetId: string | null = null
+    if (bar && x >= bar.x && x < bar.x + bar.width && y >= bar.y && y < bar.y + bar.height) {
+      for (const channel of watchedChannels) {
+        const elementId = elements.current.get(channel.id)
+        const box = elementId === undefined ? null : native.getPaintedElementBounds(elementId)
+        if (box && x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height) {
+          targetId = channel.id
+          break
+        }
+      }
+    }
+    current.target = targetId
+    setDropId((previous) => (previous === targetId ? previous : targetId))
+  })
+  const cancelDrag = useCallback(() => {
+    motion.cancel()
+    if (!drag.current) return
+    drag.current = null
+    suppressClick.current = true
+    setDragging(false)
+    setDropId(null)
+  }, [motion])
+  useDragCancellation(dragging, 'tab-drag', cancelDrag)
+  useEffect(() => {
+    const current = drag.current
+    if (
+      current &&
+      (!watchedChannels.some((channel) => channel.id === current.id) ||
+        state.value.metadata[current.id]?.locked)
+    )
+      cancelDrag()
+  }, [cancelDrag, state.value.metadata, watchedChannels])
   const action = (operation: () => Promise<unknown>) => {
     setMenuId(null)
     void operation().catch((error) =>
@@ -118,6 +166,10 @@ export function ChannelTabBar({
   return (
     <>
       <div
+        ref={(element) => {
+          barElement.current = element?.id ?? null
+        }}
+        testId="channel-tab-bar"
         style={{
           display: 'flex',
           flexDirection: 'row',
@@ -193,9 +245,7 @@ export function ChannelTabBar({
           > = {
             onKeyDown: (event) => {
               if (event.key === 'escape') {
-                drag.current = null
-                suppressClick.current = true
-                setDropId(null)
+                cancelDrag()
                 setMenuId(null)
                 event.preventDefault()
               }
@@ -220,51 +270,50 @@ export function ChannelTabBar({
             },
             onMouseDown: (event) => {
               if (event.button === 2) {
+                cancelDrag()
                 setMenuId(channel.id)
                 return
               }
               if (event.button !== 0) return
+              cancelDrag()
               suppressClick.current = false
-              if (!locked)
+              if (!locked) {
                 drag.current = {
                   id: channel.id,
                   x: event.x ?? 0,
                   y: event.y ?? 0,
                   moved: false,
-                  target: index,
+                  target: null,
                 }
+                setDragging(true)
+              }
             },
             onMouseMove: (event) => {
               const current = drag.current
               if (!current) return
-              const x = event.x ?? 0,
-                y = event.y ?? 0
-              if (Math.hypot(x - current.x, y - current.y) < 5 && !current.moved) return
-              current.moved = true
-              suppressClick.current = true
-              for (let target = 0; target < watchedChannels.length; target++) {
-                const id = watchedChannels[target]!.id
-                const elementId = elements.current.get(id)
-                const box = elementId === undefined ? null : renderer.getElementBounds?.(elementId)
-                if (
-                  box &&
-                  x >= box.x &&
-                  x <= box.x + box.width &&
-                  y >= box.y - 12 &&
-                  y <= box.y + box.height + 12
-                ) {
-                  current.target = target
-                  setDropId(id)
-                  break
-                }
+              if (event.pressedButton !== 0) {
+                cancelDrag()
+                return
               }
+              motion.schedule({ x: event.x ?? current.x, y: event.y ?? current.y })
             },
-            onMouseUp: () => {
+            onMouseUp: (event) => {
+              if (event.button !== 0 || !drag.current) return
+              motion.schedule({ x: event.x ?? drag.current.x, y: event.y ?? drag.current.y })
+              motion.flush()
               const current = drag.current
               drag.current = null
+              setDragging(false)
               setDropId(null)
-              if (current?.moved && current.target !== index)
-                action(() => reorderChatTab(backend, current.id, current.target))
+              const sourceIndex = watchedChannels.findIndex((tab) => tab.id === current.id)
+              const targetIndex = watchedChannels.findIndex((tab) => tab.id === current.target)
+              if (
+                current.moved &&
+                sourceIndex >= 0 &&
+                targetIndex >= 0 &&
+                targetIndex !== sourceIndex
+              )
+                action(() => reorderChatTab(backend, current.id, targetIndex))
             },
           }
           return (
@@ -278,10 +327,21 @@ export function ChannelTabBar({
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
-                borderLeftWidth: dropId === channel.id ? 2 : 0,
-                borderColor: accent.primary,
               }}
             >
+              {dropId === channel.id ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    backgroundColor: accent.primary,
+                    pointerEvents: 'none',
+                  }}
+                />
+              ) : null}
               <Tab
                 testId={`tab-${channel.id}`}
                 interaction={interaction}
@@ -403,7 +463,9 @@ export function ChannelTabBar({
           : null}
         {state.error ? (
           <Text
-            onClick={() => showNotice('error', state.error!, 8000)}
+            onClick={() => {
+              if (state.error) showNotice('error', state.error, 8000)
+            }}
             style={{
               fontSize: 11,
               color: theme.warningText,

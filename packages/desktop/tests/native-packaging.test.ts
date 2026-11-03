@@ -59,7 +59,7 @@ async function fixture() {
     .slice(0, 16)
   const bytes = binary()
   const manifest = {
-    apiVersion: 2,
+    apiVersion: 3,
     version: source.version,
     rustToolchain: source.rustToolchain,
     target: `${process.platform}-${process.arch}`,

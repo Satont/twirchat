@@ -82,6 +82,13 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-03 interaction fixes](2026-11-03-interactions/report.md) records the native painted-bounds
+snapshot, autocomplete and drag regressions, together with a completed 15-case development matrix
+and three production repetitions. At the target, production CPU was 93–94% of one logical core,
+RSS medians 500–508 MiB and peaks 589–621 MiB; actual throughput remained 4994 messages/s.
+The later 7TV artwork fix has separate pixel-based GUI evidence and two completed supplementary
+production runs. The redundant repeat was stopped; source provenance distinguishes both versions.
+
 [2026-11-03 high-rate optimization](2026-11-03-heavy/report.md) adds a complete same-mode
 development comparison and three 30-second production repetitions for 50 channels / four panes /
 5000 messages/s. Production processed 4994–4996 messages/s at 94–105% of one logical core,

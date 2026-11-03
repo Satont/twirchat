@@ -12,6 +12,111 @@ index a2c2aff..216849e 100644
      /// The action that was resolved for the keystroke, if any
      pub action: Option<Box<dyn Action>>,
  
+diff --git a/crates/gpui/src/elements/list.rs b/crates/gpui/src/elements/list.rs
+index 693ffcd..67dcc36 100644
+--- a/crates/gpui/src/elements/list.rs
++++ b/crates/gpui/src/elements/list.rs
+@@ -389,12 +389,18 @@ impl ListState {
+             height,
+         };
+         let mut state = self.0.borrow_mut();
++        if !state.items.summary().has_unknown_height {
++            return;
++        }
+         let new_items = state
+             .items
+             .iter()
+-            .map(|item| ListItem::Unmeasured {
+-                size_hint: Some(item.size_hint().unwrap_or(size_hint)),
+-                focus_handle: item.focus_handle(),
++            .map(|item| match item {
++                ListItem::Unmeasured { size_hint: None, focus_handle } => ListItem::Unmeasured {
++                    size_hint: Some(size_hint),
++                    focus_handle: focus_handle.clone(),
++                },
++                _ => item.clone(),
+             })
+             .collect::<Vec<_>>();
+         let mut tree = SumTree::default();
+@@ -1810,6 +1816,78 @@ impl sum_tree::SeekTarget<'_, ListItemSummary, ListItemSummary> for Height {
+     }
+ }
+ 
++#[cfg(test)]
++mod measurement_retention_tests {
++    use super::{ListAlignment, ListItem, ListState};
++    use crate::{px, size};
++    use sum_tree::SumTree;
++
++    fn measured_state() -> ListState {
++        let state = ListState::new(0, ListAlignment::Top, px(0.));
++        let mut items = SumTree::default();
++        items.extend(
++            [
++                ListItem::Measured { size: size(px(70.), px(10.)), focus_handle: None },
++                ListItem::Measured { size: size(px(80.), px(30.)), focus_handle: None },
++                ListItem::Unmeasured { size_hint: Some(size(px(90.), px(45.))), focus_handle: None },
++                ListItem::Unmeasured { size_hint: None, focus_handle: None },
++                ListItem::Measured { size: size(px(100.), px(20.)), focus_handle: None },
++            ],
++            (),
++        );
++        state.0.borrow_mut().items = items;
++        state
++    }
++
++    #[test]
++    fn uniform_hints_preserve_nonuniform_measurements_and_existing_hints() {
++        let state = measured_state().with_uniform_item_height(px(50.));
++        let inner = state.0.borrow();
++        let summary = inner.items.summary();
++        assert_eq!(summary.rendered_count, 3);
++        assert_eq!(summary.measured_height, px(60.));
++        assert_eq!(summary.height, px(155.));
++        let items: Vec<_> = inner.items.iter().collect();
++        assert_eq!(items[0].size(), Some(size(px(70.), px(10.))));
++        assert_eq!(items[2].size_hint(), Some(size(px(90.), px(45.))));
++        assert_eq!(items[3].size_hint(), Some(size(px(0.), px(50.))));
++        assert!(!summary.has_unknown_height);
++    }
++
++    #[test]
++    fn sliding_a_measured_list_only_hints_the_arriving_rows() {
++        let state = measured_state().with_uniform_item_height(px(50.));
++        state.splice(0..1, 0);
++        state.splice(4..4, 1);
++        let state = state.with_uniform_item_height(px(50.));
++        let inner = state.0.borrow();
++        let summary = inner.items.summary();
++        assert_eq!(summary.count, 5);
++        assert_eq!(summary.rendered_count, 2);
++        assert_eq!(summary.measured_height, px(50.));
++        let items: Vec<_> = inner.items.iter().collect();
++        assert_eq!(items[0].size(), Some(size(px(80.), px(30.))));
++        assert_eq!(items[3].size(), Some(size(px(100.), px(20.))));
++        assert_eq!(items[4].size(), None);
++        assert_eq!(items[4].size_hint(), Some(size(px(0.), px(50.))));
++    }
++
++    #[test]
++    fn explicit_remeasurement_and_reset_still_invalidate_measurements() {
++        let state = measured_state().with_uniform_item_height(px(50.));
++        state.remeasure_items(0..1);
++        let state = state.with_uniform_item_height(px(50.));
++        assert_eq!(state.0.borrow().items.summary().rendered_count, 2);
++        assert_eq!(state.0.borrow().items.iter().next().and_then(ListItem::size), None);
++        state.reset_with_uniform_height(3, px(17.));
++        let inner = state.0.borrow();
++        assert_eq!(inner.items.summary().rendered_count, 0);
++        assert_eq!(inner.items.summary().count, 3);
++        assert_eq!(inner.items.summary().height, px(51.));
++        assert!(!inner.items.summary().has_unknown_height);
++    }
++}
++
+ #[cfg(test)]
+ mod test {
+ 
 diff --git a/crates/gpui/src/platform.rs b/crates/gpui/src/platform.rs
 index e37ab99..18a299b 100644
 --- a/crates/gpui/src/platform.rs
@@ -167,10 +272,26 @@ index 76f6d67..ef71ff1 100644
  }
  
 diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
-index 076d3c8..5a01b0e 100644
+index 076d3c8..2d2e5ba 100644
 --- a/crates/gpui/src/window.rs
 +++ b/crates/gpui/src/window.rs
-@@ -2261,6 +2261,7 @@ impl Window {
+@@ -1176,6 +1176,7 @@ pub struct Window {
+     pub(crate) next_tooltip_id: TooltipId,
+     pub(crate) tooltip_bounds: Option<TooltipBounds>,
+     pub(crate) next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>>,
++    after_paint_observers: Vec<Box<dyn Fn(&Window)>>,
+     pub(crate) dirty_views: FxHashSet<EntityId>,
+     focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
+     pub(crate) focus_lost_listeners: SubscriberSet<(), AnyObserver>,
+@@ -1861,6 +1862,7 @@ impl Window {
+             rendered_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+             next_frame_callbacks,
++            after_paint_observers: Vec::new(),
+             next_hitbox_id: HitboxId(0),
+             next_tooltip_id: TooltipId::default(),
+             tooltip_bounds: None,
+@@ -2261,6 +2263,7 @@ impl Window {
              (callback)(
                  &KeystrokeEvent {
                      keystroke: key_down_event.keystroke.clone(),
@@ -178,7 +299,7 @@ index 076d3c8..5a01b0e 100644
                      action: action.as_ref().map(|action| action.boxed_clone()),
                      context_stack: context_stack.clone(),
                  },
-@@ -2286,6 +2287,7 @@ impl Window {
+@@ -2286,6 +2289,7 @@ impl Window {
                  (callback)(
                      &KeystrokeEvent {
                          keystroke: key_down_event.keystroke.clone(),
@@ -186,7 +307,20 @@ index 076d3c8..5a01b0e 100644
                          action: None,
                          context_stack: context_stack.clone(),
                      },
-@@ -2534,6 +2536,21 @@ impl Window {
+@@ -2399,6 +2403,12 @@ impl Window {
+         AsyncWindowContext::new_context(cx.to_async(), self.handle)
+     }
+ 
++    /// Observe completed paints, including deferred layers, for this window's lifetime.
++    /// Registration creates no frame demand; callbacks run only after an actual draw.
++    pub fn on_after_paint(&mut self, observer: impl Fn(&Window) + 'static) {
++        self.after_paint_observers.push(Box::new(observer));
++    }
++
+     /// Schedule the given closure to be run directly after the current frame is rendered.
+     pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static) {
+         RefCell::borrow_mut(&self.next_frame_callbacks).push(Box::new(callback));
+@@ -2534,6 +2544,21 @@ impl Window {
          self.platform_window.resize(size);
      }
  
@@ -208,7 +342,7 @@ index 076d3c8..5a01b0e 100644
      /// Returns whether or not the window is currently fullscreen
      pub fn is_fullscreen(&self) -> bool {
          self.platform_window.is_fullscreen()
-@@ -2571,6 +2588,13 @@ impl Window {
+@@ -2571,6 +2596,13 @@ impl Window {
      }
  
      /// Returns whether this window is focused by the operating system (receiving key events).
@@ -222,6 +356,19 @@ index 076d3c8..5a01b0e 100644
      pub fn is_window_active(&self) -> bool {
          self.active.get()
      }
+@@ -3055,6 +3087,12 @@ impl Window {
+             self.debug_frame_overlay.record_frame(draw_duration);
+         }
+ 
++        if !cx.mode.skip_drawing() {
++            for observer in &self.after_paint_observers {
++                observer(self);
++            }
++        }
++
+         // Exit the scope to obtain the arena-clear token this draw owes; the
+         // scope's teardown itself happens in `ElementArenaScope::drop`.
+         arena_scope.exit(&cx.element_arena)
 diff --git a/crates/gpui_linux/Cargo.toml b/crates/gpui_linux/Cargo.toml
 index 9956821..43c28fa 100644
 --- a/crates/gpui_linux/Cargo.toml
@@ -1123,108 +1270,3 @@ index 1a942ec..278e250 100644
      } else {
          unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
      };
-diff --git a/crates/gpui/src/elements/list.rs b/crates/gpui/src/elements/list.rs
-index 693ffcd..67dcc36 100644
---- a/crates/gpui/src/elements/list.rs
-+++ b/crates/gpui/src/elements/list.rs
-@@ -389,12 +389,18 @@ impl ListState {
-             height,
-         };
-         let mut state = self.0.borrow_mut();
-+        if !state.items.summary().has_unknown_height {
-+            return;
-+        }
-         let new_items = state
-             .items
-             .iter()
--            .map(|item| ListItem::Unmeasured {
--                size_hint: Some(item.size_hint().unwrap_or(size_hint)),
--                focus_handle: item.focus_handle(),
-+            .map(|item| match item {
-+                ListItem::Unmeasured { size_hint: None, focus_handle } => ListItem::Unmeasured {
-+                    size_hint: Some(size_hint),
-+                    focus_handle: focus_handle.clone(),
-+                },
-+                _ => item.clone(),
-             })
-             .collect::<Vec<_>>();
-         let mut tree = SumTree::default();
-@@ -1810,6 +1816,78 @@ impl sum_tree::SeekTarget<'_, ListItemSummary, ListItemSummary> for Height {
-     }
- }
- 
-+#[cfg(test)]
-+mod measurement_retention_tests {
-+    use super::{ListAlignment, ListItem, ListState};
-+    use crate::{px, size};
-+    use sum_tree::SumTree;
-+
-+    fn measured_state() -> ListState {
-+        let state = ListState::new(0, ListAlignment::Top, px(0.));
-+        let mut items = SumTree::default();
-+        items.extend(
-+            [
-+                ListItem::Measured { size: size(px(70.), px(10.)), focus_handle: None },
-+                ListItem::Measured { size: size(px(80.), px(30.)), focus_handle: None },
-+                ListItem::Unmeasured { size_hint: Some(size(px(90.), px(45.))), focus_handle: None },
-+                ListItem::Unmeasured { size_hint: None, focus_handle: None },
-+                ListItem::Measured { size: size(px(100.), px(20.)), focus_handle: None },
-+            ],
-+            (),
-+        );
-+        state.0.borrow_mut().items = items;
-+        state
-+    }
-+
-+    #[test]
-+    fn uniform_hints_preserve_nonuniform_measurements_and_existing_hints() {
-+        let state = measured_state().with_uniform_item_height(px(50.));
-+        let inner = state.0.borrow();
-+        let summary = inner.items.summary();
-+        assert_eq!(summary.rendered_count, 3);
-+        assert_eq!(summary.measured_height, px(60.));
-+        assert_eq!(summary.height, px(155.));
-+        let items: Vec<_> = inner.items.iter().collect();
-+        assert_eq!(items[0].size(), Some(size(px(70.), px(10.))));
-+        assert_eq!(items[2].size_hint(), Some(size(px(90.), px(45.))));
-+        assert_eq!(items[3].size_hint(), Some(size(px(0.), px(50.))));
-+        assert!(!summary.has_unknown_height);
-+    }
-+
-+    #[test]
-+    fn sliding_a_measured_list_only_hints_the_arriving_rows() {
-+        let state = measured_state().with_uniform_item_height(px(50.));
-+        state.splice(0..1, 0);
-+        state.splice(4..4, 1);
-+        let state = state.with_uniform_item_height(px(50.));
-+        let inner = state.0.borrow();
-+        let summary = inner.items.summary();
-+        assert_eq!(summary.count, 5);
-+        assert_eq!(summary.rendered_count, 2);
-+        assert_eq!(summary.measured_height, px(50.));
-+        let items: Vec<_> = inner.items.iter().collect();
-+        assert_eq!(items[0].size(), Some(size(px(80.), px(30.))));
-+        assert_eq!(items[3].size(), Some(size(px(100.), px(20.))));
-+        assert_eq!(items[4].size(), None);
-+        assert_eq!(items[4].size_hint(), Some(size(px(0.), px(50.))));
-+    }
-+
-+    #[test]
-+    fn explicit_remeasurement_and_reset_still_invalidate_measurements() {
-+        let state = measured_state().with_uniform_item_height(px(50.));
-+        state.remeasure_items(0..1);
-+        let state = state.with_uniform_item_height(px(50.));
-+        assert_eq!(state.0.borrow().items.summary().rendered_count, 2);
-+        assert_eq!(state.0.borrow().items.iter().next().and_then(ListItem::size), None);
-+        state.reset_with_uniform_height(3, px(17.));
-+        let inner = state.0.borrow();
-+        assert_eq!(inner.items.summary().rendered_count, 0);
-+        assert_eq!(inner.items.summary().count, 3);
-+        assert_eq!(inner.items.summary().height, px(51.));
-+        assert!(!inner.items.summary().has_unknown_height);
-+    }
-+}
-+
- #[cfg(test)]
- mod test {
- 

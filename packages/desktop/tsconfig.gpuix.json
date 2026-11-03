@@ -23,6 +23,14 @@
       "@twirchat/shared/*": ["../shared/*"]
     }
   },
-  "include": ["src/gpuix/**/*", "src/views/shared/utils/**/*", "src/views/main/utils/**/*"],
+  "include": [
+    "src/gpuix/**/*",
+    "src/views/shared/utils/**/*",
+    "src/views/main/utils/**/*",
+    "scripts/qa-autocomplete.tsx",
+    "scripts/qa-painted-geometry.tsx",
+    "scripts/qa-drag-interactions.tsx",
+    "scripts/qa-seventv-notices.tsx"
+  ],
   "exclude": ["node_modules"]
 }

@@ -1,0 +1,47 @@
+{
+  "ok": true,
+  "apiVersion": 3,
+  "readsMs": 3.7634289999999737,
+  "paintedReads": 10000,
+  "firstBounds": {
+    "x": 0,
+    "y": 0,
+    "width": 620,
+    "height": 320
+  },
+  "secondBounds": {
+    "x": 0,
+    "y": 0,
+    "width": 360,
+    "height": 250
+  },
+  "beforeScroll": {
+    "x": 252,
+    "y": 12,
+    "width": 120,
+    "height": 40
+  },
+  "afterScroll": {
+    "x": 112,
+    "y": 12,
+    "width": 120,
+    "height": 40
+  },
+  "beforeResize": {
+    "x": 558,
+    "y": 72,
+    "width": 50,
+    "height": 22
+  },
+  "afterResize": {
+    "x": 418,
+    "y": 72,
+    "width": 50,
+    "height": 22
+  },
+  "sameSizeScrollWithoutReactCommit": true,
+  "sameSizeReorder": true,
+  "removedIdsPruned": true,
+  "independentWindows": true,
+  "closedSnapshotsCleared": true
+}

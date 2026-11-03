@@ -47,7 +47,11 @@ import {
 } from '../commands'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
 import { nativeWindow, type NativeTextAction } from '../native-window'
-import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
+import {
+  registerSupplementalHotkeys,
+  useHotkeyContext,
+  useHotkeyRoute,
+} from '../state/action-bindings'
 import { aliasesStore, streamStatusStore } from '../state/app'
 import { emoteStore } from '../state/app'
 import {
@@ -69,6 +73,7 @@ import { customCommandsStore, loadCustomCommands } from '../state/custom-command
 import { useTextInputFocusTracking } from '../state/focus'
 import { loadTranslationSettings, translationSettingsStore } from '../state/translation'
 import { lastWhisperRecipientStore, rememberWhisperRecipient } from '../state/twitch-activities'
+import { useWindowScope } from '../state/window-scope'
 import { accent, platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { AutocompletePopup } from './AutocompletePopup'
@@ -107,6 +112,11 @@ interface HistorySearch {
   loop: boolean
   anchor: number
   index: number
+}
+interface ComposerFrameSize {
+  id: number | null
+  width: number
+  height: number
 }
 
 export interface ChatInputProps {
@@ -179,7 +189,13 @@ export function ChatInput(props: ChatInputProps) {
   }, [])
   const aliases = useStore(aliasesStore)
   const renderer = useGpuixRequired()
+  const windowScope = useWindowScope()
   const textareaRef = useRef<PublicInstance | null>(null)
+  const [composerSize, setComposerSize] = useState<ComposerFrameSize>({
+    id: null,
+    width: 0,
+    height: 0,
+  })
   const composerKey =
     props.composerKey ?? (props.watchedChannel ? `watched:${props.watchedChannel.id}` : 'home')
   useComposerFocusRegistration(
@@ -214,8 +230,21 @@ export function ChatInput(props: ChatInputProps) {
     void loadCustomCommands(backend.api).catch(() => {})
   }, [backend])
   const [editorFocused, setEditorFocused] = useState(false)
+  const editorFocusedRef = useRef(false)
   const [searchFocused, setSearchFocused] = useState(false)
-  const composerFocus = useTextInputFocusTracking(setEditorFocused)
+  const editorFocusTracking = useTextInputFocusTracking()
+  const composerFocus = {
+    onFocus() {
+      editorFocusedRef.current = true
+      setEditorFocused(true)
+      editorFocusTracking.onFocus()
+    },
+    onBlur() {
+      editorFocusedRef.current = false
+      setEditorFocused(false)
+      editorFocusTracking.onBlur()
+    },
+  }
   const searchFocus = useTextInputFocusTracking(setSearchFocused)
   const [historySearch, setHistorySearch] = useState<HistorySearch | null>(null)
   const historyMatches = useMemo(
@@ -393,6 +422,31 @@ export function ChatInput(props: ChatInputProps) {
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
     ),
   })
+  const autocompleteActive = editorFocused && autocomplete.isOpen && !historySearch
+  const autocompleteKey = useEffectEvent((key: 'up' | 'down' | 'enter' | 'tab' | 'escape') => {
+    if (key === 'up') autocomplete.moveUp()
+    else if (key === 'down') autocomplete.moveDown()
+    else if (key === 'escape') autocomplete.close()
+    else autocomplete.selectSuggestion(autocomplete.selectedIndex)
+  })
+  useEffect(() => {
+    if (!autocompleteActive) return undefined
+    return registerSupplementalHotkeys(
+      windowScope,
+      `autocomplete:${inputContextId}`,
+      () =>
+        editorFocusedRef.current && textareaRef.current
+          ? [
+              { id: 'previous', keys: ['up'], handler: () => autocompleteKey('up') },
+              { id: 'next', keys: ['down'], handler: () => autocompleteKey('down') },
+              { id: 'select-enter', keys: ['enter'], handler: () => autocompleteKey('enter') },
+              { id: 'select-tab', keys: ['tab'], handler: () => autocompleteKey('tab') },
+              { id: 'dismiss', keys: ['escape'], handler: () => autocompleteKey('escape') },
+            ]
+          : [],
+      'beforeCustom',
+    )
+  }, [autocompleteActive, windowScope, inputContextId])
 
   // Validate the complete expansion before executing its first action.
   function privateAction(command: { text: string; recipient: string }): PreparedAction {
@@ -1238,12 +1292,14 @@ export function ChatInput(props: ChatInputProps) {
 
       {/* Autocomplete + input row */}
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        {autocomplete.isOpen && !historySearch ? (
+        {autocompleteActive && composerSize.width > 0 ? (
           <AutocompletePopup
             suggestions={autocomplete.suggestions}
             selectedIndex={autocomplete.selectedIndex}
             mode={autocomplete.mode}
             onSelect={autocomplete.selectSuggestion}
+            anchorId={composerSize.id}
+            anchorWidth={composerSize.width}
           />
         ) : null}
 
@@ -1279,6 +1335,15 @@ export function ChatInput(props: ChatInputProps) {
 
         <div
           testId="composer-frame"
+          onLayout={(event) => {
+            const { elementId: id, width, height } = event
+            if (id === undefined || width === undefined || height === undefined) return
+            setComposerSize((current) =>
+              current.id === id && current.width === width && current.height === height
+                ? current
+                : { id, width, height },
+            )
+          }}
           style={{
             display: 'flex',
             flexDirection: 'row',

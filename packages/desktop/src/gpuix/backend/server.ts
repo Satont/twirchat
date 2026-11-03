@@ -1,6 +1,6 @@
 import { logger } from '@twirchat/shared/logger'
 import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
-import type { NormalizedChatMessage, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
+import type { Platform, PlatformStatusInfo } from '@twirchat/shared/types'
 import { z } from 'zod'
 /**
  * GPUIX backend bridge — process bootstrap.
@@ -36,6 +36,7 @@ import {
 } from '../../services/channel-actions'
 import { normalizedChatMessageSchema } from '../../services/persisted-schemas'
 import { createDesktopProviderRuntime } from '../../services/provider-runtime'
+import { buildSevenTvSystemMessage } from '../../services/seventv-system-message'
 import { createStreamerModeService } from '../../services/streamer-mode'
 import { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchEventSubClient } from '../../services/twitch-eventsub'
@@ -491,8 +492,12 @@ function boot(): DesktopBackend {
   })
 
   backendConn.onSystemMessage((msg) => {
-    const systemMsg = buildSevenTvSystemMessage(msg)
-    if (systemMsg) aggregator.injectMessage(systemMsg)
+    aggregator.injectMessage(
+      buildSevenTvSystemMessage(msg, {
+        id: `7tv-system-${Date.now()}-${Math.random()}`,
+        timestamp: new Date(),
+      }),
+    )
   })
 
   backendConn.connect()
@@ -595,66 +600,6 @@ function subscribeSevenTvFor(
     .catch((error) => {
       log.error('Failed to subscribe to 7TV', { platform, channelSlug, error: String(error) })
     })
-}
-
-function buildSevenTvSystemMessage(msg: {
-  action: string
-  platform: Platform
-  channelId: string
-  setName?: string
-  oldName?: string
-  newName?: string
-  emote?: { id: string; alias: string; aspectRatio?: number }
-  oldAlias?: string
-}): NormalizedChatMessage | null {
-  const author = {
-    badges: [],
-    color: '#6441a5',
-    displayName: '7TV',
-    id: '7tv-system',
-    username: '7TV',
-  }
-  const base: Omit<NormalizedChatMessage, 'text'> = {
-    author,
-    channelId: msg.channelId,
-    emotes: [],
-    id: `7tv-system-${Date.now()}-${Math.random()}`,
-    platform: msg.platform,
-    timestamp: new Date(),
-    type: 'system',
-  }
-
-  if (msg.action === 'set_changed') {
-    return { ...base, text: `Active emote set changed to «${msg.setName}»` }
-  }
-  if (msg.action === 'set_renamed') {
-    return { ...base, text: `Emote set «${msg.oldName}» renamed to «${msg.newName}»` }
-  }
-  if (msg.action === 'set_deleted') {
-    return { ...base, text: `Emote set «${msg.setName}» was deleted` }
-  }
-  if (!msg.emote) return null
-
-  const actionText =
-    msg.action === 'added' ? 'added to' : msg.action === 'removed' ? 'removed from' : 'renamed in'
-  const oldAliasText = msg.oldAlias ? ` (was ${msg.oldAlias})` : ''
-  const emoteWithColons = `:${msg.emote.alias}:`
-  const textBeforeEmote = 'Emote '
-  const startPos = textBeforeEmote.length
-
-  return {
-    ...base,
-    emotes: [
-      {
-        id: msg.emote.id,
-        name: msg.emote.alias,
-        imageUrl: sevenTVService.getImageUrl(msg.emote.id),
-        positions: [{ start: startPos, end: startPos + emoteWithColons.length - 1 }],
-        aspectRatio: msg.emote.aspectRatio,
-      },
-    ],
-    text: `${textBeforeEmote}${emoteWithColons}${oldAliasText} ${actionText} the channel`,
-  }
 }
 
 // ── Singleton (survives `bun --hot` reloads) ────────────────────────────────

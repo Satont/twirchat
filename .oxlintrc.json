@@ -94,6 +94,12 @@
   },
   "overrides": [
     {
+      "files": ["packages/desktop/src/gpuix/**/*.ts", "packages/desktop/src/gpuix/**/*.tsx"],
+      "rules": {
+        "project-quality/no-blocking-native-geometry": "error"
+      }
+    },
+    {
       "files": ["**/tests/**/*.ts", "**/tests/**/*.tsx", "**/*.test.ts", "**/*.test.tsx"],
       "rules": {
         "typescript/await-thenable": "off"

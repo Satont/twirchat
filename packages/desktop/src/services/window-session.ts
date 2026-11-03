@@ -99,6 +99,7 @@ export function createWindowSessionController(options: {
   >()
   let mainBounds: NativeWindowBounds | undefined
   let shuttingDown = false
+  let emptyNotified = false
   let writes = Promise.resolve()
   let signature = ''
   const snapshot = (): WindowSession => {
@@ -130,7 +131,14 @@ export function createWindowSessionController(options: {
     windows.delete(id)
     window.handle.dispose()
     if (!shuttingDown) void persist().catch(() => {})
-    if (!windows.size) void writes.finally(options.onEmpty).catch(options.onError)
+    if (!windows.size)
+      void writes
+        .finally(() => {
+          if (windows.size || emptyNotified) return
+          emptyNotified = true
+          options.onEmpty()
+        })
+        .catch(options.onError)
   }
   return {
     restore(session: WindowSession): void {
@@ -152,14 +160,20 @@ export function createWindowSessionController(options: {
     },
     closed: remove,
     async close(id: string): Promise<void> {
-      windows.get(id)?.handle.closeWindow()
+      const window = windows.get(id)
+      if (!window) return
+      remove(id)
+      if (window.handle.isWindowOpen()) window.handle.closeWindow()
     },
     async quit(): Promise<void> {
       if (shuttingDown) return
       shuttingDown = true
       // Remember the session before native close callbacks remove its windows.
       await persist().catch(() => {})
-      for (const { handle } of windows.values()) handle.closeWindow()
+      for (const [id, { handle }] of [...windows]) {
+        remove(id)
+        if (handle.isWindowOpen()) handle.closeWindow()
+      }
     },
   }
 }

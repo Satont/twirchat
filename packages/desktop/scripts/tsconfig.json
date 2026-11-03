@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.gpuix.json",
+  "include": [
+    "qa-autocomplete.tsx",
+    "qa-painted-geometry.tsx",
+    "qa-drag-interactions.tsx",
+    "qa-seventv-notices.tsx"
+  ]
+}

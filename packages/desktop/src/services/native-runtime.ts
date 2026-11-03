@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-export const GPUIX_NATIVE_API_VERSION = 2
+export const GPUIX_NATIVE_API_VERSION = 3
 export const GPUIX_SOURCE_REVISION = '2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf'
 export const GPUI_SOURCE_REVISION = 'f77e5cfe9dad04288566f00c66ecf3c58d6f84b3'
 

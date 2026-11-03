@@ -8,6 +8,7 @@ interface QualityFixture {
   extension?: 'ts' | 'tsx'
   assertions?: number
   localTypes?: number
+  blockingGeometry?: number
 }
 interface QualityDiagnostic {
   filename: string
@@ -40,6 +41,14 @@ const fixtures: QualityFixture[] = [
   { code: 'const render = function () { interface Bounds { width: number } }', localTypes: 1 },
   { code: 'class View { render() { type Bounds = { width: number } } }', localTypes: 1 },
   { code: 'async function render() { if (true) { interface Bounds {} } }', localTypes: 1 },
+  { code: 'renderer.getPaintedElementBounds(id)' },
+  { code: 'renderer.getPaintedElementBounds?.(id)' },
+  { code: 'const label = "getElementBounds"' },
+  { code: 'renderer.getElementBounds(id)', blockingGeometry: 1 },
+  { code: 'renderer.getElementBounds?.(id)', blockingGeometry: 1 },
+  { code: 'renderer?.getElementBounds(id)', blockingGeometry: 1 },
+  { code: 'renderer["getElementBounds"](id)', blockingGeometry: 1 },
+  { code: 'const read = renderer.getElementBounds', blockingGeometry: 1 },
 ]
 const directory = mkdtempSync(join(tmpdir(), 'twirchat-quality-'))
 let diagnostics: QualityDiagnostic[] = []
@@ -75,6 +84,7 @@ beforeAll(async () => {
       rules: {
         'project-quality/no-type-assertions': 'error',
         'project-quality/no-local-type-declarations': 'error',
+        'project-quality/no-blocking-native-geometry': 'error',
       },
     }),
   )
@@ -114,7 +124,14 @@ for (const [index, fixture] of fixtures.entries()) {
         (diagnostic) => diagnostic.code === 'project-quality(no-local-type-declarations)',
       ),
     ).toHaveLength(fixture.localTypes ?? 0)
-    expect(found).toHaveLength((fixture.assertions ?? 0) + (fixture.localTypes ?? 0))
+    expect(
+      found.filter(
+        (diagnostic) => diagnostic.code === 'project-quality(no-blocking-native-geometry)',
+      ),
+    ).toHaveLength(fixture.blockingGeometry ?? 0)
+    expect(found).toHaveLength(
+      (fixture.assertions ?? 0) + (fixture.localTypes ?? 0) + (fixture.blockingGeometry ?? 0),
+    )
   })
 }
 

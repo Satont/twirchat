@@ -61,7 +61,7 @@ async function until(check: () => boolean, label: string): Promise<void> {
   }
 }
 try {
-  assert.equal(renderer.getTwirNativeApiVersion(), 2)
+  assert.equal(renderer.getTwirNativeApiVersion(), 3)
   await until(
     () => renderer.getPaintedText().includes('TwirChat native Wayland visibility smoke'),
     'Wayland native text paints',
@@ -139,7 +139,7 @@ try {
     JSON.stringify(
       {
         passed: true,
-        apiVersion: 2,
+        apiVersion: 3,
         backend: 'wayland',
         negotiatedXdgShellVersion: version,
         visibility: renderer.getWindowVisibility(),

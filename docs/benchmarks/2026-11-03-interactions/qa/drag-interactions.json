@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "originalTabs": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l"
+  ],
+  "tabSaves": 2,
+  "paneSaves": 2,
+  "freshBoundsCalls": 0,
+  "heartbeatTicks": 298,
+  "maximumLagMs": 39.83038000000033,
+  "messages": 470,
+  "screenshot": "/tmp/twirchat-gui-qa-iyECuy/drag-interactions.png",
+  "scrolledReorder": true,
+  "lostButtonCancel": true,
+  "outsideCancel": true,
+  "blurCancel": true,
+  "escapeCancel": true,
+  "followUpDock": true,
+  "reactErrors": []
+}

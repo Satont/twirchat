@@ -40,6 +40,7 @@ import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { compileMessageRules } from '../message-rules'
+import { nativeWindow } from '../native-window'
 import { useHotkeyContext, useHotkeyRoute, dispatchCustomHotkey } from '../state/action-bindings'
 import { activePaneByWindowStore, getActivePane, setActivePane } from '../state/active-pane'
 import {
@@ -967,7 +968,7 @@ export function ChatView({
         if (!listRef.current) return
         const id = listRef.current.id
         const anchor = renderer.getListScrollTop?.(id)
-        const height = renderer.getElementBounds?.(id)?.height ?? anchor?.[2]
+        const height = nativeWindow(renderer).getPaintedElementBounds(id)?.height ?? anchor?.[2]
         if (!anchor || !height) return
         changePause(true)
         renderer.scrollToItem?.(

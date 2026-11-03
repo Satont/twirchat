@@ -20,6 +20,55 @@
   feature-parity acceptance. Resume them only when the user reopens their scope.
 - Avatar/emote rendering and ordinary text-link handling remain in the current scope.
 
+## Desktop performance is an acceptance requirement
+
+- Treat CPU, process RSS, throughput and input responsiveness as correctness requirements.
+  Do not declare a desktop change complete while a confirmed performance regression remains
+  unexplained. Fix the regression or document a concrete measured tradeoff and call it out.
+- Before changing message ingestion, stores/subscriptions, classification/filtering, rendering,
+  native layout or caches, preserve a baseline. After the change run the full default matrix:
+  `bun run --cwd packages/desktop bench:chat`. Also repeat the target workload at least three
+  times with fresh output directories:
+  `bun run --cwd packages/desktop bench:chat --scenario c50-r5000-p4 --mode production --duration 30`.
+  Target: 50 channels, four panes, 5000 total messages/s, 200 retained messages per channel.
+- Reuse completed measurements when a later narrow fix does not affect the measured workload.
+  Preserve their exact source provenance and run focused functional/GUI checks for that fix.
+  Do not repeat the full load matrix just because an unrelated file or cold event path changed.
+- Compare identical modes, timings, workloads, window sizes and retention. Record source/native
+  provenance, actual processed rate, CPU, RSS median/peak, JS heap and event-loop lag. Report
+  medians and ranges for repeated runs. A repeated regression above 5% in CPU or RSS requires
+  investigation before completion; repeat the baseline when host variation makes it inconclusive.
+  At this target, preserve at least 99% of the offered rate. The coupled generator is not proof
+  of maximum sustainable external throughput.
+- Production and development results are separate. Verify the loaded React/JSX/reconciler mode;
+  do not present disabling development instrumentation as an algorithmic improvement.
+  `start` must explicitly use production; `dev` keeps HMR/debug checks. Keep the latest evidence
+  and comparisons in `docs/benchmarks/` (current target report: `2026-11-03-interactions/report.md`).
+- Freeze sources and native artifacts for each measured run. Do not run builds, tests, profilers
+  or other application instances concurrently with resource measurements. Keep all native GUI
+  activity inside the isolated launcher described above.
+- Do not improve numbers by dropping messages, shrinking retention, lowering refresh rate,
+  disabling existing features, forcing GC, trimming allocators or clearing performance entries.
+  Any workload or execution-mode experiment must be labeled separately.
+- Hot work must scale with the arriving batch or changed rows. Reuse identity indexes and
+  policy results; avoid scanning all retained messages/channels, recreating callbacks/objects,
+  or rebuilding completion/filter data when the feature is inactive. Preserve immutable
+  snapshots and correct behavior when branching from an older snapshot.
+- Bound caches, queues and native bookkeeping by explicit limits or live identities. Remove
+  retired entries and dispose subscriptions/timers/gestures on close, unmount and HMR. A bounded
+  Map is insufficient if its eviction path repeatedly scans deleted entries.
+- Never block an input/drag callback on fresh-layout queries, synchronous native request/reply,
+  network, storage or file I/O. Use painted geometry snapshots and transient drag state;
+  persist layout only for an accepted drop. Coalesce motion updates and skip unchanged targets.
+  Escape, release outside the target, focus loss and cancellation must leave the next gesture usable.
+  `project-quality/no-blocking-native-geometry` rejects fresh `getElementBounds` references in
+  GPUIX application code; those queries remain available only to automation outside the UI.
+- For interaction-only fixes, test actual native keyboard/pointer input at small and normal window
+  sizes, including long lists, rapid repeated input, cancelled drags and live chat traffic.
+  Verify selected items remain visible, popups stay clipped/in bounds, chat continues updating,
+  and no input callback stalls. If the fix touches a hot path listed above, the benchmark gate
+  also applies. Preserve useful measured evidence rather than relying on visual smoothness alone.
+
 ## TypeScript and React quality
 
 - Apply the project-local [TypeScript skill](.agents/skills/typescript-best-practices/SKILL.md),

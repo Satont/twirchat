@@ -19,7 +19,7 @@ const bounds = (width = 680): NativeWindowBounds => ({
   height: 820,
   mode: 'windowed',
 })
-const chat = (id = 'child'): DesktopWindowDescriptor => ({
+const chat = (id = 'child'): Extract<DesktopWindowDescriptor, { kind: 'chat' | 'overlay' }> => ({
   id: `window:${id}`,
   kind: 'chat',
   title: id,
@@ -122,6 +122,126 @@ describe('saved desktop window validation', () => {
 })
 
 describe('window session lifecycle', () => {
+  test('an OS-closed window is disposed without trying to close its native handle again', async () => {
+    const f = fixture()
+    const child = f.handle()
+    f.controller.add(chat(), child)
+    child.open = false
+    await f.controller.close('window:child')
+    f.controller.closed('window:child')
+    f.controller.poll()
+    await f.controller.persist()
+    await Promise.resolve()
+    expect(child.disposed).toBe(1)
+    expect(child.closes).toBe(0)
+    expect(f.emptied).toBe(1)
+  })
+
+  test('programmatic close disposes its root before native close and ignores reentrant callbacks', async () => {
+    const f = fixture()
+    const main = f.handle(),
+      child = f.handle()
+    const order: string[] = []
+    f.controller.add({ id: 'main', kind: 'main', title: 'Main' }, main)
+    child.dispose = () => {
+      expect(child.open).toBe(true)
+      order.push('dispose')
+      child.disposed++
+      f.controller.closed('window:child')
+    }
+    child.closeWindow = () => {
+      expect(child.disposed).toBe(1)
+      expect(f.controller.entries().map((entry) => entry.descriptor.id)).toEqual(['main'])
+      order.push('native-close')
+      child.closes++
+      child.open = false
+      f.controller.closed('window:child')
+    }
+    f.controller.add(chat(), child)
+    await f.controller.close('window:child')
+    await f.controller.close('window:child')
+    f.controller.poll()
+    expect(order).toEqual(['dispose', 'native-close'])
+    expect(child.disposed).toBe(1)
+    expect(child.closes).toBe(1)
+    expect(main.open).toBe(true)
+    expect(main.disposed).toBe(0)
+    expect(f.emptied).toBe(0)
+  })
+
+  test('quit snapshots every live window and disposes each before closing, with one empty callback', async () => {
+    const saved: WindowSession[] = []
+    const order: string[] = []
+    const f = fixture(async (session) => {
+      saved.push(structuredClone(session))
+      order.push('save')
+    })
+    const main = f.handle(),
+      child = f.handle(),
+      overlay = f.handle()
+    const descriptors: DesktopWindowDescriptor[] = [
+      { id: 'main', kind: 'main', title: 'Main' },
+      chat(),
+      { ...chat('overlay'), kind: 'overlay' },
+    ]
+    for (const [index, handle] of [main, child, overlay].entries()) {
+      const descriptor = descriptors[index]
+      if (!descriptor) throw new Error('Missing test descriptor')
+      handle.dispose = () => {
+        expect(handle.open).toBe(true)
+        handle.disposed++
+        order.push(`dispose:${descriptor.id}`)
+        f.controller.closed(descriptor.id)
+      }
+      handle.closeWindow = () => {
+        expect(handle.disposed).toBe(1)
+        handle.open = false
+        handle.closes++
+        order.push(`close:${descriptor.id}`)
+        f.controller.closed(descriptor.id)
+      }
+      f.controller.add(descriptor, handle)
+    }
+    await f.controller.quit()
+    await f.controller.quit()
+    f.controller.poll()
+    for (const descriptor of descriptors) f.controller.closed(descriptor.id)
+    await Promise.resolve()
+    expect(saved).toHaveLength(1)
+    expect(saved[0]?.windows.map((window) => window.id)).toEqual(['window:child', 'window:overlay'])
+    expect(order).toEqual([
+      'save',
+      'dispose:main',
+      'close:main',
+      'dispose:window:child',
+      'close:window:child',
+      'dispose:window:overlay',
+      'close:window:overlay',
+    ])
+    expect(f.controller.entries()).toEqual([])
+    expect(f.emptied).toBe(1)
+    for (const handle of [main, child, overlay]) {
+      expect(handle.disposed).toBe(1)
+      expect(handle.closes).toBe(1)
+    }
+  })
+
+  test('an empty-session callback does not tear down a window opened while the save was pending', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>()
+    const f = fixture(async () => promise)
+    f.controller.add(chat(), f.handle())
+    await f.controller.close('window:child')
+    f.controller.add(chat('replacement'), f.handle())
+    resolve()
+    await f.controller.persist()
+    await Promise.resolve()
+    expect(f.emptied).toBe(0)
+    await f.controller.close('window:replacement')
+    await f.controller.persist()
+    await Promise.resolve()
+    expect(f.emptied).toBe(1)
+  })
+
   test('closing main keeps its child alive and each root is disposed exactly once', async () => {
     const f = fixture()
     const main = f.handle(),

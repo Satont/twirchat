@@ -48,6 +48,7 @@ export interface SupplementalHotkeyBinding {
 interface SupplementalSource {
   id: string
   bindings: () => readonly SupplementalHotkeyBinding[]
+  priority: 'beforeCustom' | 'afterCustom'
 }
 type PlanRecord =
   | { kind: 'custom'; contextId: string; binding: HotkeyBinding }
@@ -155,6 +156,20 @@ function buildPlan(scope: string): { plan: NativeHotkeyPlan; entries: Map<string
       entries,
     }
   const used = new Set<string>()
+  const appendSupplements = (priority: SupplementalSource['priority']) => {
+    if (getTopOverlayHotkeyContext(scope) !== undefined) return
+    for (const source of supplements.get(scope)?.values() ?? []) {
+      if (source.priority !== priority) continue
+      for (const binding of supplementalBindings(source)) {
+        if (bindings.length >= 520) return
+        const id = `legacy:${source.id}:${binding.id}`
+        const contextId = `legacy:${source.id}`
+        bindings.push(Object.freeze({ id, contextId, keys: Object.freeze([...binding.keys]) }))
+        entries.set(entryKey(contextId, id), { kind: 'supplemental', contextId, source, binding })
+      }
+    }
+  }
+  appendSupplements('beforeCustom')
   for (const contextId of eligibleContexts(scope)) {
     const context = contexts.get(key(scope, contextId))
     if (!context) continue
@@ -173,17 +188,7 @@ function buildPlan(scope: string): { plan: NativeHotkeyPlan; entries: Map<string
       entries.set(entryKey(contextId, binding.id), { kind: 'custom', contextId, binding })
     }
   }
-  if (getTopOverlayHotkeyContext(scope) === undefined) {
-    for (const source of supplements.get(scope)?.values() ?? []) {
-      for (const binding of supplementalBindings(source)) {
-        if (bindings.length >= 520) break
-        const id = `legacy:${source.id}:${binding.id}`,
-          contextId = `legacy:${source.id}`
-        bindings.push(Object.freeze({ id, contextId, keys: Object.freeze([...binding.keys]) }))
-        entries.set(entryKey(contextId, id), { kind: 'supplemental', contextId, source, binding })
-      }
-    }
-  }
+  appendSupplements('afterCustom')
   return {
     plan: Object.freeze({ generation: ++generation, bindings: Object.freeze(bindings) }),
     entries,
@@ -252,9 +257,10 @@ export function registerSupplementalHotkeys(
   scope: string,
   id: string,
   bindings: SupplementalSource['bindings'],
+  priority: SupplementalSource['priority'] = 'afterCustom',
 ): () => void {
   const sources = supplements.get(scope) ?? new Map<string, SupplementalSource>()
-  const source = { id, bindings }
+  const source = { id, bindings, priority }
   sources.set(id, source)
   supplements.set(scope, sources)
   refreshNativeHotkeyPlan(scope)
