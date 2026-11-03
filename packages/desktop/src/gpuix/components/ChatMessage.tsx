@@ -39,6 +39,12 @@ import { Text } from './ui/Text'
 
 const DEFAULT_FONT_SIZE = 14
 const MAX_NAME_GRAPHEMES = 32
+const timeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
 
 function badgeSize(fontSize: number): number {
   return Math.max(12, Math.round(fontSize * 1.15))
@@ -62,12 +68,7 @@ function compactAvatarSize(fontSize: number): number {
 }
 
 export function formatMessageTime(ts: Date): string {
-  return new Date(ts).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  })
+  return Number.isNaN(ts.getTime()) ? 'Invalid Date' : timeFormatter.format(ts)
 }
 
 // ── Avatar (fallback circle with the image layered on top once decoded) ─────

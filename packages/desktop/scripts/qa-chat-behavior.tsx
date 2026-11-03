@@ -16,7 +16,8 @@ const { messageSimilarityStore, getMessageSimilarity } =
   await import('../src/gpuix/state/message-similarity')
 const { chatRulesStore } = await import('../src/gpuix/state/chat-rules')
 const { streamerModeStore } = await import('../src/gpuix/state/streamer-mode')
-const { wireHighlightNotifications } = await import('../src/gpuix/state/highlight-notifications')
+const { wireHighlightNotifications, notificationPreferences } =
+  await import('../src/gpuix/state/highlight-notifications')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
@@ -253,6 +254,13 @@ try {
     },
   })
   await Bun.sleep(60)
+  assert.equal(notificationPreferences.store.get().value.backgroundOnly, true)
+  incoming('visible-highlight', 'PING_visible_notification_gate_distinct_message_0123456789')
+  await until(() => painted('PING_visible_'), 'visible-window highlight')
+  assert.equal(alerts.length, 0, 'visible window suppresses background-only notifications')
+  notificationPreferences.store.update({
+    value: { ...notificationPreferences.store.get().value, backgroundOnly: false },
+  })
   incoming('repeat-a', 'PING_REPEAT')
   await until(() => alerts.length === 1, 'first highlight')
   await Bun.sleep(1600)

@@ -1022,7 +1022,7 @@ index c5f4fa1..353cdc3 100644
  #[cfg(not(target_family = "wasm"))]
  mod updater;
 diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
-index 8c104a4..e79df90 100644
+index 8c104a4..9198a7e 100644
 --- a/packages/native/src/renderer.rs
 +++ b/packages/native/src/renderer.rs
 @@ -170,7 +170,7 @@ thread_local! {
@@ -2158,23 +2158,19 @@ index 8c104a4..e79df90 100644
          startup_receiver
              .recv()
              .map_err(|_| Error::from_reason("The GPUI UI thread stopped during initialization"))?
-@@ -1525,47 +2291,257 @@ impl GpuixRenderer {
-         Ok(destroyed)
-     }
+@@ -1537,35 +2303,245 @@ impl GpuixRenderer {
+             ));
+         }
  
--    // ── Frame loop ───────────────────────────────────────────────────
-+    // ── Frame loop ───────────────────────────────────────────────────
-+
-+    /// Pump the native event loop. Returns false after the last window closes.
-+    #[napi]
-+    pub fn tick(&self) -> Result<bool> {
-+        let initialized = *self.initialized.lock().unwrap();
-+        if !initialized {
-+            return Err(Error::from_reason(
-+                "Renderer not initialized. Call init() first.",
-+            ));
-+        }
-+
+-        #[cfg(target_os = "macos")]
+-        {
+-            let running = EMBEDDED_PLATFORM.with(|p| {
+-                p.borrow()
+-                    .as_ref()
+-                    .map(|platform| platform.pump_events())
+-                    .unwrap_or(false)
+-            });
+-            return Ok(running);
 +        #[cfg(target_os = "macos")]
 +        {
 +            let running = EMBEDDED_PLATFORM.with(|p| {
@@ -2298,42 +2294,25 @@ index 8c104a4..e79df90 100644
 +    pub fn is_window_open(&self) -> bool {
 +        self.window_state.lock().open
 +    }
- 
--    /// Pump the native event loop. Returns false after the last window closes.
-     #[napi]
--    pub fn tick(&self) -> Result<bool> {
--        let initialized = *self.initialized.lock().unwrap();
--        if !initialized {
--            return Err(Error::from_reason(
--                "Renderer not initialized. Call init() first.",
--            ));
--        }
++
++    #[napi]
 +    pub fn get_window_bounds(&self) -> Option<NativeWindowBounds> {
 +        self.window_state.lock().bounds.clone()
 +    }
- 
--        #[cfg(target_os = "macos")]
--        {
--            let running = EMBEDDED_PLATFORM.with(|p| {
--                p.borrow()
--                    .as_ref()
--                    .map(|platform| platform.pump_events())
--                    .unwrap_or(false)
--            });
--            return Ok(running);
--        }
++
 +    #[napi]
 +    pub fn get_window_capabilities(&self) -> NativeWindowCapabilities {
 +        self.window_state.lock().capabilities.clone()
 +    }
- 
++
 +    #[napi]
 +    pub fn close_window(&self) -> Result<()> {
 +        if !self.is_window_open() {
 +            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 +            self.queue_ui_thread_reap();
 +            return Ok(());
-+        }
+         }
+-
 +        #[cfg(target_os = "macos")]
 +        return update_window_without_view(self.renderer_id, |window, _| window.remove_window());
          #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -3258,7 +3237,76 @@ index 8c104a4..e79df90 100644
              }
              current = parent_id;
          };
-@@ -4764,7 +5831,12 @@ impl VirtualListEntry {
+@@ -4534,6 +5601,47 @@ struct VirtualListEntry {
+     seen_rows: HashSet<u64>,
+ }
+ 
++fn retain_current_seen_rows(seen_rows: &mut HashSet<u64>, child_ids: &[u64]) {
++    if seen_rows.is_empty() {
++        return;
++    }
++    let current_rows: HashSet<u64> = child_ids.iter().copied().collect();
++    seen_rows.retain(|id| current_rows.contains(id));
++}
++
++#[cfg(test)]
++mod virtual_list_seen_rows_tests {
++    use super::retain_current_seen_rows;
++    use std::collections::HashSet;
++
++    #[test]
++    fn sliding_windows_only_retain_painted_rows_still_in_the_window() {
++        let mut seen_rows: HashSet<u64> = (0..200).collect();
++        for start in 1..=5_000 {
++            let child_ids: Vec<u64> = (start..start + 200).collect();
++            retain_current_seen_rows(&mut seen_rows, &child_ids);
++            assert_eq!(seen_rows.len(), 199);
++            assert!(!seen_rows.contains(&(start - 1)));
++            assert!(child_ids[..199].iter().all(|id| seen_rows.contains(id)));
++            let arriving_row = start + 199;
++            assert!(!seen_rows.contains(&arriving_row));
++            seen_rows.insert(arriving_row);
++            assert_eq!(seen_rows.len(), 200);
++        }
++        retain_current_seen_rows(&mut seen_rows, &[]);
++        assert!(seen_rows.is_empty());
++    }
++
++    #[test]
++    fn unpainted_rows_stay_unseen_when_the_window_changes() {
++        let mut seen_rows = HashSet::from([10, 11]);
++        retain_current_seen_rows(&mut seen_rows, &[11, 12, 13]);
++        assert_eq!(seen_rows, HashSet::from([11]));
++        retain_current_seen_rows(&mut seen_rows, &[13, 11, 12]);
++        assert_eq!(seen_rows, HashSet::from([11]));
++    }
++}
++
+ impl VirtualListEntry {
+     fn new(
+         config: VirtualListConfig,
+@@ -4605,6 +5713,10 @@ impl VirtualListEntry {
+             return;
+         }
+ 
++        if self.child_ids != child_ids {
++            retain_current_seen_rows(&mut self.seen_rows, &child_ids);
++        }
++
+         let old_rows: HashMap<u64, (u64, Option<gpui::FocusHandle>)> = self
+             .child_ids
+             .iter()
+@@ -4636,9 +5748,6 @@ impl VirtualListEntry {
+                 row_focus_handles,
+             );
+             replacement.seen_rows = std::mem::take(&mut self.seen_rows);
+-            replacement
+-                .seen_rows
+-                .retain(|id| replacement.child_ids.contains(id));
+             if !should_follow {
+                 replacement.state.scroll_to(scroll_top);
+             }
+@@ -4764,7 +5873,12 @@ impl VirtualListEntry {
  }
  
  impl GpuixView {
@@ -3272,7 +3320,7 @@ index 8c104a4..e79df90 100644
          self.reveal_virtual_list_ancestor(id);
          if let Some(handle) = self.focus_handles.get(&id) {
              self.pending_focus_element = None;
-@@ -4921,7 +5993,11 @@ impl GpuixView {
+@@ -4921,7 +6035,11 @@ impl GpuixView {
          }
  
          let before = entry.state.logical_scroll_top();
@@ -3285,7 +3333,7 @@ index 8c104a4..e79df90 100644
          entry.state.scroll_by(gpui::px(step));
          let after = entry.state.logical_scroll_top();
          let list_moved =
-@@ -4985,6 +6061,7 @@ impl GpuixView {
+@@ -4985,6 +6103,7 @@ impl GpuixView {
          // the rest of the tree is orders of magnitude larger.
          //
          // Create handles for elements that need focus but don't have one yet.
@@ -3293,7 +3341,7 @@ index 8c104a4..e79df90 100644
          for &id in &tree.focusable_ids {
              let Some(element) = tree.elements.get(&id) else {
                  continue;
-@@ -5001,7 +6078,7 @@ impl GpuixView {
+@@ -5001,7 +6120,7 @@ impl GpuixView {
                  // Focus once, at creation. Re-focusing every frame would
                  // steal focus back from whatever the user clicked next.
                  if element.auto_focus {
@@ -3302,7 +3350,7 @@ index 8c104a4..e79df90 100644
                  }
                  self.focus_handles.insert(id, handle);
              } else if let (Some(handle), Some(index)) =
-@@ -5014,17 +6091,6 @@ impl GpuixView {
+@@ -5014,17 +6133,6 @@ impl GpuixView {
              }
          }
  
@@ -3320,7 +3368,7 @@ index 8c104a4..e79df90 100644
          self.focus_subscriptions.retain(|(id, event), _| {
              tree.elements
                  .get(id)
-@@ -5061,6 +6127,23 @@ impl GpuixView {
+@@ -5061,6 +6169,23 @@ impl GpuixView {
          // Clean up handles for elements that no longer exist.
          self.focus_handles
              .retain(|id, _| tree.focusable_ids.contains(id));
@@ -3344,7 +3392,7 @@ index 8c104a4..e79df90 100644
      }
  }
  
-@@ -5090,6 +6173,8 @@ impl gpui::Render for GpuixView {
+@@ -5090,6 +6215,8 @@ impl gpui::Render for GpuixView {
      ) -> impl gpui::IntoElement {
          use gpui::IntoElement;
  
@@ -3353,7 +3401,7 @@ index 8c104a4..e79df90 100644
          window.set_window_title(&self.window_title);
  
          #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-@@ -5223,14 +6308,14 @@ impl gpui::Render for GpuixView {
+@@ -5223,14 +6350,14 @@ impl gpui::Render for GpuixView {
  
          // Sync scroll handles to thread_local so napi methods (scrollTo,
          // getScrollOffset) can access them without an App context.
@@ -3370,7 +3418,7 @@ index 8c104a4..e79df90 100644
              let mut states = cell.borrow_mut();
              states.clear();
              for (&id, entry) in &self.virtual_lists {
-@@ -5240,7 +6325,7 @@ impl gpui::Render for GpuixView {
+@@ -5240,7 +6367,7 @@ impl gpui::Render for GpuixView {
          // One-shot: a queued scroll for a list that did not build this frame
          // would otherwise fire on some later frame, against child indices that
          // no longer match what JS meant.
@@ -3379,7 +3427,7 @@ index 8c104a4..e79df90 100644
  
          if motion_active {
              window.request_animation_frame();
-@@ -5361,6 +6446,7 @@ fn build_virtual_list(
+@@ -5361,6 +6488,7 @@ fn build_virtual_list(
      window: &mut gpui::Window,
      cx: &mut gpui::Context<GpuixView>,
  ) -> gpui::AnyElement {
@@ -3387,7 +3435,7 @@ index 8c104a4..e79df90 100644
      use gpui::prelude::*;
  
      let child_ids: Vec<u64> = element
-@@ -5457,7 +6543,7 @@ fn build_virtual_list(
+@@ -5457,7 +6585,7 @@ fn build_virtual_list(
      // changes, so the indices JS computed against its committed child list are
      // the indices the splice-adjusted ListState sees.
      if let Some(offset) =
@@ -3396,7 +3444,7 @@ index 8c104a4..e79df90 100644
      {
          list_state.scroll_to(offset);
      }
-@@ -6296,6 +7382,7 @@ pub(crate) fn apply_styles<E: gpui::Styled>(mut el: E, style: &StyleDesc) -> E {
+@@ -6296,6 +7424,7 @@ pub(crate) fn apply_styles<E: gpui::Styled>(mut el: E, style: &StyleDesc) -> E {
      match style.display.as_deref() {
          Some("flex") => el = el.flex(),
          Some("grid") => el = el.grid(),
@@ -3404,7 +3452,7 @@ index 8c104a4..e79df90 100644
          _ => {}
      }
      if let Some(cols) = style.grid_template_columns {
-@@ -6731,10 +7818,7 @@ fn report_layout(
+@@ -6731,10 +7860,7 @@ fn report_layout(
      callback: &EventCallback,
      cx: &mut gpui::App,
  ) {
@@ -3416,7 +3464,7 @@ index 8c104a4..e79df90 100644
      {
          let mut reports = reports.borrow_mut();
          let unchanged = reports.sizes.get(&id).is_some_and(|last| {
-@@ -7498,6 +8582,9 @@ pub struct WindowOptions {
+@@ -7498,6 +8624,9 @@ pub struct WindowOptions {
      /// `title`. It does NOT set the title of the application menu itself: macOS
      /// takes that from the executable, and only a `.app` bundle changes it.
      pub app_name: Option<String>,
@@ -3426,7 +3474,7 @@ index 8c104a4..e79df90 100644
      pub width: Option<f64>,
      pub height: Option<f64>,
      pub min_width: Option<f64>,
-@@ -7538,6 +8625,9 @@ impl Default for WindowOptions {
+@@ -7538,6 +8667,9 @@ impl Default for WindowOptions {
          Self {
              title: Some("GPUIX".to_string()),
              app_name: None,
@@ -3436,7 +3484,7 @@ index 8c104a4..e79df90 100644
              width: Some(800.0),
              height: Some(600.0),
              min_width: None,
-@@ -7617,8 +8707,14 @@ fn to_layer_shell_options(options: &LayerShellOptions) -> gpui::layer_shell::Lay
+@@ -7617,8 +8749,14 @@ fn to_layer_shell_options(options: &LayerShellOptions) -> gpui::layer_shell::Lay
  
  fn to_gpui_window_options(
      options: &WindowOptions,
@@ -3452,7 +3500,7 @@ index 8c104a4..e79df90 100644
      let title = options.title.clone().unwrap_or_else(|| "GPUIX".to_string());
      let titlebar_transparent = options.titlebar_transparent.unwrap_or(false);
      let traffic_light_position = match (options.traffic_light_x, options.traffic_light_y) {
-@@ -7651,6 +8747,11 @@ fn to_gpui_window_options(
+@@ -7651,6 +8789,11 @@ fn to_gpui_window_options(
              appears_transparent: titlebar_transparent,
              traffic_light_position,
          }),
@@ -3464,7 +3512,7 @@ index 8c104a4..e79df90 100644
          is_resizable: options.resizable.unwrap_or(true),
          window_background,
          window_min_size,
-@@ -8329,3 +9430,179 @@ fn check_font(bytes: &[u8]) -> std::result::Result<(), String> {
+@@ -8329,3 +9472,179 @@ fn check_font(bytes: &[u8]) -> std::result::Result<(), String> {
      }
      Ok(())
  }

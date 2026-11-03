@@ -14,7 +14,7 @@
     {
       "path": "patches/gpuix-window-lifecycle.patch",
       "root": "gpuix",
-      "sha256": "b2614b56461b9310fa5708bd64c417c19ed2f833d01cf2ec408ae5b1b1a684d2"
+      "sha256": "b74ccc80d35ca7c2ca258aa3d34a2dbc9462e59f58fe7dfa1ad14df6c111e0ce"
     }
   ]
 }

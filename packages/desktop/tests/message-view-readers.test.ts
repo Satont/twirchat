@@ -107,6 +107,26 @@ test('a new policy publishes a new reader while old readers retain their capture
   expect(getMessageSimilarity(second)?.gray).toBe(false)
 })
 
+test('similarity results cannot be mutated to change the appearance of other messages', async () => {
+  await configure()
+  const first = message('immutable-first', 100)
+  const second = message('immutable-second', 101)
+  const third = message('immutable-third', 102)
+  for (const entry of [first, second, third]) classifyIncomingSimilarity(entry)
+  const reader = messageSimilarityReaderStore.get()
+  const normal = reader.get(first)
+  const similar = reader.get(second)
+  if (!normal || !similar) throw new Error('Expected classified messages')
+  expect(Reflect.set(normal, 'gray', true)).toBe(false)
+  expect(Reflect.set(similar, 'triggerHighlights', true)).toBe(false)
+  expect(reader.get(first)).toEqual({ similar: false, gray: false, triggerHighlights: true })
+  expect(reader.get(third)).toEqual({ similar: true, gray: true, triggerHighlights: false })
+  const current = getMessageSimilarity(second)
+  if (!current) throw new Error('Expected a classified message')
+  expect(Reflect.set(current, 'gray', false)).toBe(false)
+  expect(getMessageSimilarity(third)?.gray).toBe(true)
+})
+
 test('moderation publishes immutable resolver snapshots while imperative lookup follows the newest view', () => {
   const entry = message(
     `moderation-${crypto.randomUUID()}`,

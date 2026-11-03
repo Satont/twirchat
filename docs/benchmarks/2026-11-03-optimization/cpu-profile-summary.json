@@ -1,0 +1,358 @@
+[
+  {
+    "label": "before",
+    "aggregation": "Self samples grouped by function name and source URL across stack nodes",
+    "samples": 7763,
+    "durationMicroseconds": 17416299,
+    "top": [
+      {
+        "function": "measure",
+        "url": "",
+        "selfSamples": 1463,
+        "lines": [],
+        "selfPercent": 18.84580703336339
+      },
+      {
+        "function": "toLocaleTimeString",
+        "url": "",
+        "selfSamples": 1236,
+        "lines": [],
+        "selfPercent": 15.92167976297823
+      },
+      {
+        "function": "addObjectDiffToProperties",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 560,
+        "lines": [
+          957
+        ],
+        "selfPercent": 7.21370604147881
+      },
+      {
+        "function": "(anonymous)",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/scheduler@0.27.0/node_modules/scheduler/cjs/scheduler.development.js",
+        "selfSamples": 418,
+        "lines": [
+          188
+        ],
+        "selfPercent": 5.384516295246683
+      },
+      {
+        "function": "ReactElement",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react@19.3.1/node_modules/react/cjs/react-jsx-dev-runtime.development.js",
+        "selfSamples": 345,
+        "lines": [
+          155
+        ],
+        "selfPercent": 4.444158186268195
+      },
+      {
+        "function": "freeze",
+        "url": "",
+        "selfSamples": 204,
+        "lines": [],
+        "selfPercent": 2.6278500579672808
+      },
+      {
+        "function": "commitMutationEffectsOnFiber",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 165,
+        "lines": [
+          12144
+        ],
+        "selfPercent": 2.1254669586500063
+      },
+      {
+        "function": "diffEventListeners",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/@gpuix+react@0.11.0+0441d6f8f57aca1e/node_modules/@gpuix/react/dist/reconciler/host-config.js",
+        "selfSamples": 154,
+        "lines": [
+          64
+        ],
+        "selfPercent": 1.9837691614066726
+      },
+      {
+        "function": "diffCustomProps",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/@gpuix+react@0.11.0+0441d6f8f57aca1e/node_modules/@gpuix/react/dist/reconciler/host-config.js",
+        "selfSamples": 122,
+        "lines": [
+          142
+        ],
+        "selfPercent": 1.5715573876078837
+      },
+      {
+        "function": "createWorkInProgress",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 118,
+        "lines": [
+          16474
+        ],
+        "selfPercent": 1.520030915883035
+      },
+      {
+        "function": "logComponentRender",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 97,
+        "lines": [
+          1108
+        ],
+        "selfPercent": 1.2495169393275796
+      },
+      {
+        "function": "areHookInputsEqual",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 90,
+        "lines": [
+          5274
+        ],
+        "selfPercent": 1.1593456138090945
+      },
+      {
+        "function": "stringify",
+        "url": "",
+        "selfSamples": 83,
+        "lines": [],
+        "selfPercent": 1.0691742882906092
+      },
+      {
+        "function": "reconcileChildrenArray",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 77,
+        "lines": [
+          4191
+        ],
+        "selfPercent": 0.9918845807033363
+      },
+      {
+        "function": "sameMutationValue",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/@gpuix+native@0.11.0/node_modules/@gpuix/native/dist/mutations.js",
+        "selfSamples": 74,
+        "lines": [
+          141
+        ],
+        "selfPercent": 0.9532397269096998
+      },
+      {
+        "function": "updateSyncExternalStore",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 74,
+        "lines": [
+          5835
+        ],
+        "selfPercent": 0.9532397269096998
+      },
+      {
+        "function": "applyBatch",
+        "url": "",
+        "selfSamples": 68,
+        "lines": [],
+        "selfPercent": 0.8759500193224269
+      },
+      {
+        "function": "init",
+        "url": "",
+        "selfSamples": 65,
+        "lines": [],
+        "selfPercent": 0.8373051655287904
+      },
+      {
+        "function": "commitBeforeMutationEffects",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 60,
+        "lines": [
+          11417
+        ],
+        "selfPercent": 0.7728970758727296
+      },
+      {
+        "function": "setCurrentFiber",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 59,
+        "lines": [
+          2516
+        ],
+        "selfPercent": 0.7600154579415175
+      }
+    ]
+  },
+  {
+    "label": "formatter-and-callback-only",
+    "aggregation": "Self samples grouped by function name and source URL across stack nodes",
+    "samples": 3320,
+    "durationMicroseconds": 17403221.25,
+    "top": [
+      {
+        "function": "measure",
+        "url": "",
+        "selfSamples": 790,
+        "lines": [],
+        "selfPercent": 23.795180722891565
+      },
+      {
+        "function": "addObjectDiffToProperties",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 300,
+        "lines": [
+          957
+        ],
+        "selfPercent": 9.036144578313253
+      },
+      {
+        "function": "stringify",
+        "url": "",
+        "selfSamples": 153,
+        "lines": [],
+        "selfPercent": 4.608433734939759
+      },
+      {
+        "function": "applyBatch",
+        "url": "",
+        "selfSamples": 98,
+        "lines": [],
+        "selfPercent": 2.9518072289156625
+      },
+      {
+        "function": "(anonymous)",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/scheduler@0.27.0/node_modules/scheduler/cjs/scheduler.development.js",
+        "selfSamples": 97,
+        "lines": [
+          188
+        ],
+        "selfPercent": 2.9216867469879517
+      },
+      {
+        "function": "addValueToProperties",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 97,
+        "lines": [
+          786
+        ],
+        "selfPercent": 2.9216867469879517
+      },
+      {
+        "function": "ReactElement",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react@19.3.1/node_modules/react/cjs/react-jsx-dev-runtime.development.js",
+        "selfSamples": 82,
+        "lines": [
+          155
+        ],
+        "selfPercent": 2.4698795180722892
+      },
+      {
+        "function": "outcomeFor",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/app.ts",
+        "selfSamples": 79,
+        "lines": [
+          310
+        ],
+        "selfPercent": 2.3795180722891565
+      },
+      {
+        "function": "init",
+        "url": "",
+        "selfSamples": 69,
+        "lines": [],
+        "selfPercent": 2.0783132530120483
+      },
+      {
+        "function": "get",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/message-similarity.ts",
+        "selfSamples": 60,
+        "lines": [
+          63
+        ],
+        "selfPercent": 1.8072289156626506
+      },
+      {
+        "function": "repeat",
+        "url": "",
+        "selfSamples": 54,
+        "lines": [],
+        "selfPercent": 1.6265060240963856
+      },
+      {
+        "function": "Error",
+        "url": "",
+        "selfSamples": 52,
+        "lines": [],
+        "selfPercent": 1.5662650602409638
+      },
+      {
+        "function": "(anonymous)",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/components/ChatView.tsx",
+        "selfSamples": 50,
+        "lines": [
+          280,
+          286,
+          295,
+          348,
+          440,
+          489,
+          570,
+          1674,
+          1999
+        ],
+        "selfPercent": 1.5060240963855422
+      },
+      {
+        "function": "diffEventListeners",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/@gpuix+react@0.11.0+0441d6f8f57aca1e/node_modules/@gpuix/react/dist/reconciler/host-config.js",
+        "selfSamples": 45,
+        "lines": [
+          64
+        ],
+        "selfPercent": 1.355421686746988
+      },
+      {
+        "function": "anonymous",
+        "url": "",
+        "selfSamples": 43,
+        "lines": [],
+        "selfPercent": 1.2951807228915662
+      },
+      {
+        "function": "ChatView",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/components/ChatView.tsx",
+        "selfSamples": 42,
+        "lines": [
+          247
+        ],
+        "selfPercent": 1.2650602409638554
+      },
+      {
+        "function": "commitMutationEffectsOnFiber",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 37,
+        "lines": [
+          12144
+        ],
+        "selfPercent": 1.1144578313253013
+      },
+      {
+        "function": "freeze",
+        "url": "",
+        "selfSamples": 32,
+        "lines": [],
+        "selfPercent": 0.963855421686747
+      },
+      {
+        "function": "updateSimpleMemoComponent",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 31,
+        "lines": [
+          7358
+        ],
+        "selfPercent": 0.9337349397590361
+      },
+      {
+        "function": "createWorkInProgress",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 28,
+        "lines": [
+          16474
+        ],
+        "selfPercent": 0.8433734939759037
+      }
+    ]
+  }
+]

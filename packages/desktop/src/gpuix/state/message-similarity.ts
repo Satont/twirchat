@@ -44,7 +44,7 @@ const { classifier, flags } = runtime
 /** A policy-bound reader over the bounded live cache; fresh appends do not notify every pane. */
 export interface MessageSimilarityReader {
   readonly policy: Readonly<MessageSimilaritySettings>
-  get(message: NormalizedChatMessage): MessageSimilarityFlags | undefined
+  get(message: NormalizedChatMessage): Readonly<MessageSimilarityFlags> | undefined
 }
 function derive(
   similar: boolean,
@@ -58,14 +58,17 @@ function derive(
   }
 }
 function createReader(policy: MessageSimilaritySettings): MessageSimilarityReader {
+  const normal = Object.freeze(derive(false, policy))
+  const similar = Object.freeze(derive(true, policy))
   return {
     policy,
     get(message) {
       const entry = flags.get(chatMessageKey(message))
-      return entry ? derive(entry.flags.similar, policy) : undefined
+      return entry ? (entry.flags.similar ? similar : normal) : undefined
     },
   }
 }
+let currentReader = createReader(messageSimilarityStore.get().value)
 export const messageSimilarityReaderStore = persistentResource('messageSimilarityReader', () =>
   createStore(createReader(messageSimilarityStore.get().value)),
 )
@@ -105,9 +108,10 @@ export function classifyIncomingSimilarity(
 }
 export function getMessageSimilarity(
   message: NormalizedChatMessage,
-): MessageSimilarityFlags | undefined {
-  const entry = flags.get(chatMessageKey(message))
-  return entry ? derive(entry.flags.similar, messageSimilarityStore.get().value) : undefined
+): Readonly<MessageSimilarityFlags> | undefined {
+  const policy = messageSimilarityStore.get().value
+  if (currentReader.policy !== policy) currentReader = createReader(policy)
+  return currentReader.get(message)
 }
 export function hydrateSimilarityHistory(
   channelKey: string,

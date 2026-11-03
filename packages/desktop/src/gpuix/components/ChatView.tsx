@@ -85,7 +85,7 @@ import { useFont, useTheme } from '../theme-context'
 import { ChatAppearancePopover } from './ChatAppearancePopover'
 import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
-import { ChatMessage } from './ChatMessage'
+import { ChatMessageRow } from './ChatMessageRow'
 import { ChattersDialog } from './ChattersDialog'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
 import { Icon, PlatformIcon, type IconName } from './ui/Icon'
@@ -418,6 +418,10 @@ export function ChatView({
     () => createPauseController({ onChange: (value) => onPauseChanged.current(value) }),
     [],
   )
+  const pauseForDoubleClick = useCallback(
+    () => pauseController.add('doubleClick', DOUBLE_CLICK_PAUSE_MS),
+    [pauseController],
+  )
   useEffect(() => () => pauseController.dispose(), [pauseController])
   useEffect(() => {
     if (windowActivity?.active === false) {
@@ -694,6 +698,10 @@ export function ChatView({
       }
     },
     [backend, watchedChannel?.channelSlug, getChannelSlugForPlatform],
+  )
+  const handleModeration = useCallback(
+    (...args: Parameters<typeof onModerate>) => runUiTask(onModerate(...args)),
+    [onModerate],
   )
 
   // ── Sending (optimistic) ───────────────────────────────────────────────────
@@ -1668,85 +1676,65 @@ export function ChatView({
             }}
           >
             {displayedMessages.map((message, index) => {
+              const key = chatMessageKey(message)
+              const revealed = revealedMessageKey === key
               const outcome = moderationView.outcomeFor(message)
               const classification = ruleEngine.classify(message)
               return (
-                // Plain block wrapper: flex containers shrink to content in
-                // virtual-list rows, block divs stretch to the list width.
-                <div
-                  key={chatMessageKey(message)}
-                  onMouseDown={
+                <ChatMessageRow
+                  key={key}
+                  gray={similarityReader.get(message)?.gray ?? false}
+                  revealed={revealed}
+                  onPauseDoubleClick={
                     pausePreferences.doubleClickLinks && !classification.hidden
-                      ? (event) => {
-                          if (event.button === 0)
-                            pauseController.add('doubleClick', DOUBLE_CLICK_PAUSE_MS)
-                        }
+                      ? pauseForDoubleClick
                       : undefined
                   }
-                  testId={
-                    revealedMessageKey === chatMessageKey(message)
-                      ? 'revealed-search-message'
+                  visible={
+                    visibleRange
+                      ? index >= visibleRange.start - 4 && index <= visibleRange.end + 4
+                      : index >= displayedMessages.length - 32
+                  }
+                  message={revealed ? message : classification.message}
+                  hiddenLabel={
+                    classification.hidden && !revealed
+                      ? 'Message from an ignored user or phrase · click to reveal'
                       : undefined
                   }
-                  style={{
-                    width: '100%',
-                    opacity: similarityReader.get(message)?.gray ? 0.55 : 1,
-                    ...(revealedMessageKey === chatMessageKey(message)
-                      ? { borderLeftWidth: 2, borderColor: accent.primary }
-                      : {}),
-                  }}
-                >
-                  <ChatMessage
-                    visible={
-                      visibleRange
-                        ? index >= visibleRange.start - 4 && index <= visibleRange.end + 4
-                        : index >= displayedMessages.length - 32
-                    }
-                    message={
-                      revealedMessageKey === chatMessageKey(message)
-                        ? message
-                        : classification.message
-                    }
-                    hiddenLabel={
-                      classification.hidden && revealedMessageKey !== chatMessageKey(message)
-                        ? 'Message from an ignored user or phrase · click to reveal'
-                        : undefined
-                    }
-                    channelSlug={getChannelSlugForPlatform(message.platform)}
-                    alias={aliasMap.get(`${message.platform}:${message.author.id}`)}
-                    showPlatformColorStripe={
-                      watchedChannel ? false : settings?.showPlatformColorStripe
-                    }
-                    showPlatformIcon={watchedChannel ? false : settings?.showPlatformIcon}
-                    showTimestamp={settings?.showTimestamp}
-                    showAvatar={settings?.showAvatars}
-                    showBadges={settings?.showBadges}
-                    fontSize={settings?.fontSize}
-                    chatTheme={settings?.chatTheme}
-                    accounts={accounts}
-                    selfPingEnabled={settings?.selfPing?.enabled}
-                    selfPingColor={
-                      classification.color
-                        ? classification.color.length === 7
-                          ? withAlpha(classification.color, 0.16)
-                          : classification.color
-                        : settings?.selfPing?.color
-                    }
-                    highlighted={
-                      classification.highlighted &&
-                      (classification.rules.length > 0 ||
-                        message.metadata?.highlighted === true ||
-                        settings?.selfPing?.enabled === true)
-                    }
-                    moderationOutcome={outcome}
-                    onOpenUserCard={setUserCardTarget}
-                    onReply={setReplyTarget}
-                    onSearch={openSearch}
-                    canModerate={moderationMode && (!watchedChannel || watchedModerationAllowed)}
-                    moderationPending={moderationPendingIds.has(message.id)}
-                    onModerate={(...args) => runUiTask(onModerate(...args))}
-                  />
-                </div>
+                  channelSlug={getChannelSlugForPlatform(message.platform)}
+                  alias={aliasMap.get(`${message.platform}:${message.author.id}`)}
+                  showPlatformColorStripe={
+                    watchedChannel ? false : settings?.showPlatformColorStripe
+                  }
+                  showPlatformIcon={watchedChannel ? false : settings?.showPlatformIcon}
+                  showTimestamp={settings?.showTimestamp}
+                  showAvatar={settings?.showAvatars}
+                  showBadges={settings?.showBadges}
+                  fontSize={settings?.fontSize}
+                  chatTheme={settings?.chatTheme}
+                  accounts={accounts}
+                  selfPingEnabled={settings?.selfPing?.enabled}
+                  selfPingColor={
+                    classification.color
+                      ? classification.color.length === 7
+                        ? withAlpha(classification.color, 0.16)
+                        : classification.color
+                      : settings?.selfPing?.color
+                  }
+                  highlighted={
+                    classification.highlighted &&
+                    (classification.rules.length > 0 ||
+                      message.metadata?.highlighted === true ||
+                      settings?.selfPing?.enabled === true)
+                  }
+                  moderationOutcome={outcome}
+                  onOpenUserCard={setUserCardTarget}
+                  onReply={setReplyTarget}
+                  onSearch={openSearch}
+                  canModerate={moderationMode && (!watchedChannel || watchedModerationAllowed)}
+                  moderationPending={moderationPendingIds.has(message.id)}
+                  onModerate={handleModeration}
+                />
               )
             })}
           </virtual-list>

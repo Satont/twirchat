@@ -19,6 +19,10 @@ Weston package into a private temporary cache and runs its headless GL backend. 
 system packages or connect to the user's desktop. GUI tests must continue to use `qa:gui` or
 `qa:native`; `bench:chat` invokes `qa:gui` for every scenario.
 
+The isolated launcher sets `NODE_ENV=development`, so this command measures development React
+and its reconciler. Compare runs in the same mode; these numbers do not describe the compiled
+release binary. A production measurement needs its own verified build and provenance.
+
 ## Scenarios and output
 
 The default matrix contains 15 scenarios: 1, 10 and 50 channels at 0, 100, 1000 and 5000 total
@@ -61,6 +65,12 @@ and `generatorMissedMessages` alongside the target rate; a missed target does no
 absolute application throughput limit. The machine remains shared with the user's normal work.
 
 ## Saved baseline and next session
+
+[2026-11-03 optimization comparison](2026-11-03-optimization/report.md) preserves a fresh run
+of the pushed `a4e3308` checkout and a second complete run after the rendering/allocation fixes.
+Both use the unchanged default command and development mode. At 50 channels / four panes /
+5000 target messages/s, actual throughput increased from 2691 to 4992 messages/s while RSS peak
+fell from 1891 to 1134 MiB. The comparison also records the scenario that did not improve.
 
 [2026-11-03 report](2026-11-03/report.md), [CSV](2026-11-03/results.csv),
 [JSON](2026-11-03/results.json) and [source provenance](2026-11-03/provenance.json) preserve the
