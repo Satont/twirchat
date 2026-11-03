@@ -11,6 +11,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { memo, useEffect, useMemo, useContext } from 'react'
 
 import { authorEmoteCatalog, enrichProviderEmotes } from '../../services/provider-emotes'
+import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { buildMessageTokens } from '../message-tokens'
@@ -19,8 +20,8 @@ import { ensureMentionColors, mentionColor, mentionColorRevisionStore } from '..
 import { chatPauseStore } from '../state/chat-pause'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
-import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
+import { MessageMention } from './MessageMention'
 import { EmoteArtwork } from './ui/EmoteArtwork'
 import { EmoteTooltip } from './ui/EmoteTooltip'
 import { ImageLoadingContext } from './ui/RemoteImage'
@@ -40,6 +41,8 @@ export const MessageTokens = memo(function MessageTokens({
   deleted,
   isSystem,
   actionColor,
+  channelSlug,
+  onOpenUserCard,
 }: {
   message: NormalizedChatMessage
   fontSize: number
@@ -48,6 +51,8 @@ export const MessageTokens = memo(function MessageTokens({
   isSystem?: boolean
   /** `/me` messages render in the author's color (no italics in GPUIX). */
   actionColor?: string
+  channelSlug?: string
+  onOpenUserCard?: (target: UserCardTarget) => void
 }) {
   const theme = useTheme()
   const font = useFont()
@@ -202,20 +207,16 @@ export const MessageTokens = memo(function MessageTokens({
     }
     if (token.kind === 'mention') {
       return (
-        <text
+        <MessageMention
           key={index}
-          style={{
-            color: token.color ? readableOn(token.color, theme.bg) : baseColor,
-            fontWeight: token.color ? 600 : 400,
-            fontSize,
-            fontFamily: font,
-            cursor: 'pointer',
-            lineHeight,
-            opacity: textOpacity,
-          }}
-        >
-          {token.text}
-        </text>
+          token={token}
+          message={message}
+          channelSlug={channelSlug}
+          onOpenUserCard={onOpenUserCard}
+          fontSize={fontSize}
+          baseColor={baseColor}
+          opacity={textOpacity}
+        />
       )
     }
     return (
@@ -242,6 +243,8 @@ export const MessageText = memo(function MessageText(props: {
   isAction?: boolean
   isSystem?: boolean
   actionColor?: string
+  channelSlug?: string
+  onOpenUserCard?: (target: UserCardTarget) => void
 }) {
   return (
     <div

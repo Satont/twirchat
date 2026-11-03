@@ -69,6 +69,11 @@ import {
   type CosmeticPaint,
 } from '../../services/cosmetics'
 import { getProviderErrors } from '../../services/emote-providers'
+import {
+  resolveMentionUser,
+  type MentionUser,
+  type MentionUserRequest,
+} from '../../services/mention-user'
 import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
 import { createSnapshotRequests } from '../../services/snapshot-requests'
 import type {
@@ -315,6 +320,7 @@ export interface DesktopApi {
   saveModerationSettings(settings: ModerationSettings): Promise<void>
   getStatuses(): Promise<PlatformStatusInfo[]>
   getUsernameColor(params: { platform: Platform; username: string }): Promise<string | null>
+  resolveMentionUser(params: MentionUserRequest): Promise<MentionUser | null>
   getChannelEmotes(params: { platform: Platform; channelId: string }): Promise<EmoteCatalogEntry[]>
   getEmoteProviderErrors(): Promise<Array<{ url: string; error: string }>>
   getUserCosmetics(params: {
@@ -1117,6 +1123,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getUsernameColor: async ({ platform, username }) => {
       return UsernameColorCache.get(platform, username) ?? null
     },
+    resolveMentionUser,
 
     getChannelEmotes: async ({ platform, channelId }) => {
       const runtime = (ctx.providerRuntime ??= createDesktopProviderRuntime())

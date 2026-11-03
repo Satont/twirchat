@@ -38,7 +38,8 @@
     "scripts/qa-distribution.ts",
     "scripts/qa-tray.tsx",
     "scripts/qa-built-app.ts",
-    "scripts/qa-wayland-tray.tsx"
+    "scripts/qa-wayland-tray.tsx",
+    "scripts/qa-mention-user-card.tsx"
   ],
   "exclude": ["node_modules"]
 }

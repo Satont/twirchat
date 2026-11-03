@@ -12,6 +12,7 @@
     "qa-badge-tooltips.tsx",
     "qa-tray.tsx",
     "qa-built-app.ts",
-    "qa-wayland-tray.tsx"
+    "qa-wayland-tray.tsx",
+    "qa-mention-user-card.tsx"
   ]
 }
