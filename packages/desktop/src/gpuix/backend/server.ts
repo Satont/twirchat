@@ -1,3 +1,4 @@
+import { DEV_SERVER_PORT } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
@@ -567,10 +568,10 @@ function boot(): DesktopBackend {
       })
   }
 
-  // Dev-only chat injection endpoint (same as the Electrobun build, port 45824).
+  // Dev-only chat injection endpoint.
   if (nodeEnv !== 'production') {
     Bun.serve({
-      port: 45824,
+      port: DEV_SERVER_PORT,
       async fetch(req) {
         const url = new URL(req.url)
         if (url.pathname === '/dev/inject-chat' && req.method === 'POST') {
@@ -596,7 +597,7 @@ function boot(): DesktopBackend {
         return new Response('not found', { status: 404 })
       },
     })
-    log.info('[Dev] Test injection endpoint listening on port 45824')
+    log.info(`[Dev] Test injection endpoint listening on port ${DEV_SERVER_PORT}`)
   }
 
   log.info('GPUIX backend ready')

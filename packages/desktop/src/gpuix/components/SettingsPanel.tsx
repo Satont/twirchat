@@ -1,4 +1,5 @@
 import { useGpuixRequired, useWindowSize, type PublicInstance } from '@gpuix/react'
+import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
 import type { AppSettings, HotkeySettings, SelfPingConfig } from '@twirchat/shared/types'
 /**
  * Settings panel — port of SettingsPanel.vue: appearance (theme + font),
@@ -283,7 +284,7 @@ export function SettingsPanel() {
       ['position', p.position],
     ]
     const query = params.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&')
-    return `http://localhost:${p.port}/?${query}`
+    return `http://localhost:${OVERLAY_SERVER_PORT}/?${query}`
   }, [local.overlay])
 
   const copyOverlayUrl = () => {

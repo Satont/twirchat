@@ -41,7 +41,7 @@ src/
 ├── seventv/                # 7TV emote service (via backend WS)
 ├── auth/                   # PKCE OAuth flows + local callback server
 ├── backend-connection.ts   # WS client to the backend service
-├── overlay-server.ts       # OBS overlay HTTP+WS (port 45823)
+├── overlay-server.ts       # OBS overlay HTTP+WS (prod 45823, dev 55823)
 ├── shared/rpc.ts           # WebviewSender + history DTOs (legacy, small)
 ├── views/
 │   ├── overlay/            # OBS overlay Vue app (vite build → dist/overlay)
@@ -68,7 +68,7 @@ src/
 bun run dev           # bun --hot src/gpuix/main.tsx (remounts React on save)
 bun run start         # plain run
 bun run build         # production compiler + packaged runtime assets → bin/
-bun run build:overlay # overlay only (dist/overlay, port 45823)
+bun run build:overlay # overlay only (dist/overlay; prod port 45823, dev 55823)
 bun run typecheck     # tsc -p tsconfig.json && tsc -p tsconfig.gpuix.json
 bun test tests/
 ```
@@ -80,7 +80,7 @@ the user's Hyprland workspaces, or forward their display sockets. `focus: false`
 and `GPUIX_BACKGROUND=1` alone do not protect the Linux desktop.
 
 Inside the isolated launcher, debug helpers include `TWIRCHAT_GPUIX_START_MAIN_TAB=…`,
-`TWIRCHAT_GPUIX_START_TAB=…`, and dev chat injection `POST :45824/dev/inject-chat`.
+`TWIRCHAT_GPUIX_START_TAB=…`, and dev chat injection `POST :55824/dev/inject-chat`.
 
 ## CONVENTIONS
 

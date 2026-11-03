@@ -126,7 +126,7 @@ mountDesktopWindows(
   () => process.exit(0),
 )
 
-// Dev-only debug actions driven through POST :45824/dev/hook.
+// Dev-only debug actions driven through POST :55824/dev/hook by default.
 const debugPayloadSchema = z.object({
   tabId: z.string().optional(),
   panelId: z.string().optional(),
