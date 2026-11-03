@@ -47,6 +47,7 @@ export const badgeSchema = z.toZod<Badge>()(
       z.string(),
     ]),
     text: z.string(),
+    description: z.string().optional(),
     imageUrl: z.string().optional(),
   }),
 )

@@ -13,6 +13,7 @@ export interface Badge {
   id: string
   type: string
   text: string
+  description?: string
   imageUrl?: string
 }
 
@@ -364,4 +365,5 @@ export interface WatchedChannelsLayout {
 export interface TwitchBadgesResponse {
   /** "setId/version" → imageUrl, например "subscriber/6" → "https://..." */
   badges: Record<string, string>
+  badgeMetadata?: Record<string, { title: string; description: string }>
 }

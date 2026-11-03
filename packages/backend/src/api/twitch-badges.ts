@@ -5,41 +5,20 @@ import type { TwitchBadgesResponse } from '@twirchat/shared'
  * Fetches global Twitch chat badges + channel-specific badges via Helix API
  * using the app access token (no user login required).
  *
- * Returns a flat map: "setId/version" → imageUrl_1x
- *
- * Example: { "subscriber/6": "https://static-cdn.jtvnw.net/badges/v1/<uuid>/1" }
+ * Returns image URLs and titles/descriptions keyed by "setId/version".
  */
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
 import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
+import { helixBadgesSchema, mergeHelixBadges } from './twitch-badge-data'
 
 const log = logger('twitch-badges')
-
-interface HelixBadgeSet {
-  set_id: string
-  versions: {
-    id: string
-    image_url_1x: string
-  }[]
-}
-
-interface HelixBadgesBody {
-  data: HelixBadgeSet[]
-}
-
-function mergeHelixBadges(result: Record<string, string>, body: HelixBadgesBody): void {
-  for (const set of body.data) {
-    for (const version of set.versions) {
-      result[`${set.set_id}/${version.id}`] = version.image_url_1x
-    }
-  }
-}
 
 export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse> {
   const broadcasterLogin = url.searchParams.get('broadcasterLogin')
 
-  const badges: Record<string, string> = {}
+  const result: Required<TwitchBadgesResponse> = { badges: {}, badgeMetadata: {} }
 
   // 1. Global badges
   const globalRes = await fetchTwitchHelixWithAppToken(
@@ -48,17 +27,8 @@ export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse
   if (!globalRes.ok) {
     throw new Error(`Helix global badges failed: ${globalRes.status}`)
   }
-  const globalBody = z
-    .object({
-      data: z.array(
-        z.object({
-          set_id: z.string(),
-          versions: z.array(z.object({ id: z.string(), image_url_1x: z.string() })),
-        }),
-      ),
-    })
-    .parse(await globalRes.json())
-  mergeHelixBadges(badges, globalBody)
+  const globalBody = helixBadgesSchema.parse(await globalRes.json())
+  mergeHelixBadges(result, globalBody)
   log.info('Global badges fetched', {
     count: globalBody.data.reduce((n, s) => n + s.versions.length, 0),
   })
@@ -79,17 +49,8 @@ export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse
           `https://api.twitch.tv/helix/chat/badges?broadcaster_id=${broadcasterId}`,
         )
         if (chanRes.ok) {
-          const chanBody = z
-            .object({
-              data: z.array(
-                z.object({
-                  set_id: z.string(),
-                  versions: z.array(z.object({ id: z.string(), image_url_1x: z.string() })),
-                }),
-              ),
-            })
-            .parse(await chanRes.json())
-          mergeHelixBadges(badges, chanBody)
+          const chanBody = helixBadgesSchema.parse(await chanRes.json())
+          mergeHelixBadges(result, chanBody)
           log.info('Channel badges fetched', {
             channel: broadcasterLogin,
             count: chanBody.data.reduce((n, s) => n + s.versions.length, 0),
@@ -101,7 +62,7 @@ export async function handleTwitchBadges(url: URL): Promise<TwitchBadgesResponse
 
   log.info('Badge cache ready', {
     channel: broadcasterLogin ?? 'global-only',
-    total: Object.keys(badges).length,
+    total: Object.keys(result.badges).length,
   })
-  return { badges }
+  return result
 }

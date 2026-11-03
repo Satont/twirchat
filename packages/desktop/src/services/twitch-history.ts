@@ -3,10 +3,11 @@ import type {
   TwitchHistoryResponse,
   TwitchHistorySource,
 } from '@twirchat/shared/twitch-history'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatMessage, extractMessageText, parseTwitchMessage } from '@twurple/chat'
 import { z } from 'zod'
 
+import { parseTwitchBadgeCatalog } from '../platforms/twitch/badge-data'
 import { normalizeTwitchChatMessage } from '../platforms/twitch/normalize-message'
 import { backendFetch } from '../runtime-config'
 
@@ -55,13 +56,13 @@ interface QueuedRequest {
 export interface TwitchHistoryClientOptions {
   fetch?: typeof backendFetch
   now?: () => number
-  loadBadges?: (channel: string) => Promise<ReadonlyMap<string, string>>
+  loadBadges?: (channel: string) => Promise<ReadonlyMap<string, Badge>>
 }
 
 export function parseTwitchHistoryLine(
   line: string,
   channel: string,
-  badges: ReadonlyMap<string, string> = new Map(),
+  badges: ReadonlyMap<string, Badge> = new Map(),
 ): NormalizedChatMessage | null {
   try {
     const parsed = parseTwitchMessage(line)
@@ -112,7 +113,7 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
   const pending = new Map<string, Promise<TwitchHistoryBatch>>()
   const queue: QueuedRequest[] = []
   const lifetime = new AbortController()
-  const badgeCache = new Map<string, { badges: ReadonlyMap<string, string>; expiresAt: number }>()
+  const badgeCache = new Map<string, { badges: ReadonlyMap<string, Badge>; expiresAt: number }>()
   const loadBadges =
     options.loadBadges ??
     (async (channel: string) => {
@@ -125,10 +126,7 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
         },
       )
       if (!response.ok) throw new Error('Channel badges are unavailable.')
-      const body = z
-        .object({ badges: z.record(z.string(), z.string()) })
-        .parse(await response.json())
-      const badges = new Map(Object.entries(body.badges))
+      const badges = parseTwitchBadgeCatalog(await response.json())
       badgeCache.delete(channel)
       badgeCache.set(channel, { badges, expiresAt: now() + 30 * 60 * 1000 })
       while (badgeCache.size > 64) {
@@ -181,7 +179,7 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
                   body: JSON.stringify(query),
                   signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(20000)]),
                 }),
-                loadBadges(query.channel).catch(() => new Map<string, string>()),
+                loadBadges(query.channel).catch(() => new Map<string, Badge>()),
               ])
               if (!response.ok) {
                 const failure = z

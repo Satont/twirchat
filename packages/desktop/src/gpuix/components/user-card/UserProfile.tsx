@@ -6,6 +6,7 @@ import type { UserCardTarget } from '../../../views/main/utils/chatCommands'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useTheme } from '../../theme-context'
+import { BadgeTooltip } from '../ui/BadgeTooltip'
 import { ActionButton } from '../ui/Form'
 import { RemoteImage } from '../ui/RemoteImage'
 import { Text } from '../ui/Text'
@@ -154,19 +155,27 @@ export function UserProfile({
                 style={{ width: paintImage.width, height: paintImage.height }}
               />
             ) : null}
-            {cosmetics.badges.map((badge) =>
-              badge.imageUrl ? (
-                <RemoteImage
-                  key={badge.id}
-                  url={badge.imageUrl}
-                  style={{ width: 24, height: 24 }}
-                />
-              ) : (
-                <Text key={badge.id} style={{ color: theme.text, fontSize: 12 }}>
-                  {badge.text}
-                </Text>
-              ),
-            )}
+            {cosmetics.badges.map((badge) => (
+              <BadgeTooltip key={badge.id} badge={badge}>
+                {badge.imageUrl ? (
+                  <RemoteImage
+                    url={badge.imageUrl}
+                    style={{ width: 24, height: 24, pointerEvents: 'none' }}
+                  />
+                ) : (
+                  <Text
+                    style={{
+                      color: theme.text,
+                      fontSize: 12,
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {badge.text}
+                  </Text>
+                )}
+              </BadgeTooltip>
+            ))}
           </div>
           {cosmetics.paint ? (
             <Text style={{ color: theme.text2, fontSize: 12 }}>

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { chatMessageIdentity } from '@twirchat/shared/message-identity'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import {
   defaultChatLoggingSettings,
@@ -13,6 +13,7 @@ import {
   flushChatLogs,
 } from '../src/gpuix/backend/chat-history'
 import { createTwitchHistoryRuntime, mergeHistoryPage } from '../src/gpuix/backend/twitch-history'
+import { parseTwitchBadgeCatalog } from '../src/platforms/twitch/badge-data'
 import { createTwitchHistoryClient, parseTwitchHistoryLine } from '../src/services/twitch-history'
 import { getDb, initDb } from '../src/store/db'
 import { MessageStore } from '../src/store/message-store'
@@ -23,7 +24,7 @@ const raw = (id: string, text = 'same', extra = '') =>
 const source = { id: 'one', kind: 'recent', status: 'ok', messages: 1, capabilities: ['recent'] }
 const response = (messages: string[]) =>
   Response.json({ messages, sources: [source], partial: false, truncated: false })
-const emptyBadges = async () => new Map<string, string>()
+const emptyBadges = async () => new Map<string, Badge>()
 let database: Database | undefined
 let directory: string | undefined
 const cleanups: Array<() => void | Promise<void>> = []
@@ -58,7 +59,7 @@ test('history uses Twitch IRC metadata, canonical IDs, badges, emotes and replie
       'emotes=25:2-6;reply-parent-msg-id=parent;reply-parent-user-id=9;reply-parent-user-login=bob;reply-parent-msg-body=hello;',
     ),
     'channel',
-    new Map([['broadcaster/1', 'https://badge/image']]),
+    parseTwitchBadgeCatalog({ badges: { 'broadcaster/1': 'https://badge/image' } }),
   )
   expect(parsed).toMatchObject({
     id: 'a',
@@ -101,6 +102,23 @@ test('malformed, idless, deleted and foreign-channel lines never become syntheti
   )
 })
 
+test('local chat history preserves badge titles and descriptions after storage', async () => {
+  const db = await setup()
+  const badges = parseTwitchBadgeCatalog({
+    badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
+    badgeMetadata: {
+      'broadcaster/1': { title: 'Broadcaster', description: 'The channel owner.' },
+    },
+  })
+  const parsed = parseTwitchHistoryLine(raw('metadata'), 'channel', badges)
+  if (!parsed) throw new Error('Invalid history fixture')
+  MessageStore.saveMany([parsed], { maxMessages: 1000 }, db)
+  expect(
+    MessageStore.search({ platform: 'twitch', channelId: 'channel' }, db).messages[0]?.author
+      .badges,
+  ).toEqual(parsed.author.badges)
+})
+
 test('history client reaches only backend and coalesces concurrent requests', async () => {
   let calls = 0
   const gate = Promise.withResolvers<Response>()
@@ -121,6 +139,31 @@ test('history client reaches only backend and coalesces concurrent requests', as
   await second
   await client.load({ channel: 'channel', limit: 100 })
   expect(calls).toBe(1)
+})
+
+test('default history badge loading retains backend metadata in imported messages', async () => {
+  const client = createTwitchHistoryClient({
+    fetch: async (path) =>
+      path.startsWith('/api/twitch/badges?')
+        ? Response.json({
+            badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
+            badgeMetadata: {
+              'broadcaster/1': { title: 'Broadcaster', description: 'The channel owner.' },
+            },
+          })
+        : response([raw('metadata')]),
+  })
+  cleanups.push(() => client.dispose())
+  const batch = await client.load({ channel: 'channel', limit: 100 })
+  expect(batch.messages[0]?.author.badges).toEqual([
+    {
+      id: 'broadcaster/1',
+      type: 'broadcaster',
+      text: 'Broadcaster',
+      description: 'The channel owner.',
+      imageUrl: 'https://example.com/broadcaster.png',
+    },
+  ])
 })
 
 test('backend provider failure is explicit while local logs remain readable', async () => {
