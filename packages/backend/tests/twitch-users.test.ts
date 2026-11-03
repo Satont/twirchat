@@ -20,12 +20,29 @@ describe('twitch-users helpers', () => {
   it('normalizes Twitch logins', () => {
     expect(normalizeTwitchLogin('@Satont ')).toBe('satont')
     expect(normalizeTwitchLogin('https://www.twitch.tv/Satont/')).toBe('satont')
+    expect(normalizeTwitchLogin(' @XQC ')).toBe('xqc')
+    expect(normalizeTwitchLogin('https://www.twitch.tv/XQC/')).toBe('xqc')
+  })
+
+  it('accepts existing short logins and the maximum supported length', () => {
+    for (const login of ['a', 'ab', 'xqc', 'a'.repeat(25)]) {
+      expect(normalizeTwitchLogin(login)).toBe(login)
+    }
   })
 
   it('rejects invalid Twitch logins', () => {
-    expect(normalizeTwitchLogin('ab')).toBeNull()
-    expect(normalizeTwitchLogin('bad slug')).toBeNull()
-    expect(normalizeTwitchLogin('@bad/slash')).toBeNull()
+    for (const login of [
+      '',
+      '   ',
+      '@',
+      'bad slug',
+      '@bad/slash',
+      'bad-slug',
+      'тест',
+      'a'.repeat(26),
+    ]) {
+      expect(normalizeTwitchLogin(login)).toBeNull()
+    }
   })
 
   it('detects Twitch numeric user ids', () => {

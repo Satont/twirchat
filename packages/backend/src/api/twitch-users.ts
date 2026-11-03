@@ -13,7 +13,7 @@ export interface HelixUserProfile extends HelixUser {
   profile_image_url?: string
 }
 
-const TWITCH_LOGIN_RE = /^[a-z0-9_]{4,25}$/
+const TWITCH_LOGIN_RE = /^[a-z0-9_]{1,25}$/
 const TWITCH_USER_ID_RE = /^\d+$/
 
 export function normalizeTwitchLogin(login: string): string | null {
