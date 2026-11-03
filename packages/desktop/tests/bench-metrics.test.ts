@@ -1,6 +1,16 @@
 import { describe, expect, test } from 'bun:test'
+import { join } from 'node:path'
 
-import { drmSnapshot, gpuMeasurements, parseDrmFdinfo, percentile } from '../scripts/bench-metrics'
+import {
+  benchmarkResultSchema,
+  drmSnapshot,
+  gpuMeasurements,
+  parseBenchmarkArguments,
+  parseDrmFdinfo,
+  percentile,
+  selectBenchmarkScenarios,
+  verifyBenchmarkReactMode,
+} from '../scripts/bench-metrics'
 
 function info(counter: number, client = '4', extra = ''): string {
   return `drm-driver: amdgpu\ndrm-pdev: 0000:03:00.0\ndrm-client-id: ${client}\ndrm-engine-gfx: ${counter} ns\ndrm-resident-vram: 2048 KiB\ndrm-memory-vram: 2048 KiB\n${extra}`
@@ -54,5 +64,131 @@ describe('process DRM resource metrics', () => {
     expect(percentile([4, 1, 3, 2], 0.5)).toBe(2)
     expect(percentile([4, 1, 3, 2], 0.95)).toBe(4)
     expect(percentile([], 0.95)).toBe(0)
+  })
+})
+
+describe('benchmark workload and React mode', () => {
+  test('keeps the default matrix and timing while selecting only an explicitly requested case', () => {
+    const defaults = parseBenchmarkArguments([])
+    expect(defaults).toMatchObject({ mode: 'development', warmup: 3, duration: 12, smoke: false })
+    expect(selectBenchmarkScenarios(defaults)).toHaveLength(15)
+    expect(selectBenchmarkScenarios(parseBenchmarkArguments(['--smoke']))).toEqual([
+      { channels: 10, rate: 1000, panes: 1 },
+    ])
+    const focused = parseBenchmarkArguments(['--scenario', 'c50-r5000-p4', '--mode', 'production'])
+    expect(focused).toMatchObject({ mode: 'production', warmup: 3, duration: 12 })
+    expect(selectBenchmarkScenarios(focused)).toEqual([{ channels: 50, rate: 5000, panes: 4 }])
+    expect(() => parseBenchmarkArguments(['--scenario', 'c50-r5000-p3'])).toThrow(
+      'Unknown benchmark scenario',
+    )
+    expect(() => parseBenchmarkArguments(['--scenario'])).toThrow('requires a value')
+    expect(() => parseBenchmarkArguments(['--mode', 'staging'])).toThrow()
+    expect(() => parseBenchmarkArguments(['--smoke', '--scenario', 'c50-r5000-p4'])).toThrow(
+      'cannot be combined',
+    )
+  })
+
+  test('historical results default to development and new results reject an unknown mode', () => {
+    const legacy = {
+      config: { channels: 50, rate: 5000, panes: 4, warmupSeconds: 3, durationSeconds: 12 },
+      wallMs: 12000,
+      cpuPercent: 0,
+      requestedMessages: 0,
+      generatedMessages: 0,
+      processedMessages: 0,
+      processedAfterDrain: 0,
+      achievedRate: 0,
+      generatorMissedMessages: 0,
+      rssBaselineBytes: 0,
+      rssMedianBytes: 0,
+      rssPeakBytes: 0,
+      heapPeakBytes: 0,
+      eventLoopLagP50Ms: 0,
+      eventLoopLagP95Ms: 0,
+      eventLoopLagMaxMs: 0,
+      gpu: [],
+      samples: [],
+      retainedMessages: 10000,
+      nativeWindow: { width: 1200, height: 800 },
+      bunVersion: '1.4.4',
+      timestamp: '2026-11-03T00:00:00Z',
+      compositor: 'weston',
+      hardwareGpuCountersAvailable: true,
+      paintedTextVerified: true,
+      provenance: { gitHead: 'head', dirtyHash: 'dirty', sourceHash: 'source', sourceFiles: 1 },
+      termination: 'completed',
+    }
+    expect(benchmarkResultSchema.parse(legacy).reactMode).toBe('development')
+    expect(benchmarkResultSchema.parse(legacy).userTimingMeasureCount).toBeUndefined()
+    expect(
+      benchmarkResultSchema.parse({ ...legacy, userTimingMeasureCount: 123 })
+        .userTimingMeasureCount,
+    ).toBe(123)
+    expect(() => benchmarkResultSchema.parse({ ...legacy, userTimingMeasureCount: -1 })).toThrow()
+    expect(benchmarkResultSchema.parse({ ...legacy, reactMode: 'production' }).reactMode).toBe(
+      'production',
+    )
+    expect(() => benchmarkResultSchema.parse({ ...legacy, reactMode: 'staging' })).toThrow()
+  })
+
+  test('refuses mixed runtime, JSX and reconciler evidence', () => {
+    const loadedModules = ['react', 'react-jsx-runtime', 'react-reconciler'].map(
+      (name) => `/node_modules/${name}/cjs/${name}.production.js`,
+    )
+    const evidence = {
+      requested: 'production',
+      nodeEnv: 'production',
+      hasCaptureOwnerStack: false,
+      loadedModules,
+    } satisfies Parameters<typeof verifyBenchmarkReactMode>[0]
+    expect(verifyBenchmarkReactMode(evidence)).toBe('production')
+    expect(() => verifyBenchmarkReactMode({ ...evidence, nodeEnv: 'development' })).toThrow(
+      'runtime',
+    )
+    expect(() => verifyBenchmarkReactMode({ ...evidence, hasCaptureOwnerStack: true })).toThrow(
+      'runtime',
+    )
+    expect(() =>
+      verifyBenchmarkReactMode({ ...evidence, loadedModules: loadedModules.slice(0, 2) }),
+    ).toThrow('reconciler')
+    expect(() =>
+      verifyBenchmarkReactMode({
+        ...evidence,
+        loadedModules: [...loadedModules, '/react/cjs/react-jsx-dev-runtime.development.js'],
+      }),
+    ).toThrow('react-jsx-runtime')
+  })
+
+  test('verifies the actual Bun-loaded module families in both runtime environments', async () => {
+    const desktop = join(import.meta.dir, '..')
+    const metrics = join(desktop, 'scripts/bench-metrics.ts')
+    const source = `
+      const desktop = ${JSON.stringify(desktop)}
+      const React = require(Bun.resolveSync('react', desktop))
+      require(Bun.resolveSync('react/jsx-runtime', desktop))
+      require(Bun.resolveSync('react-reconciler', Bun.resolveSync('@gpuix/react', desktop)))
+      const { verifyBenchmarkReactMode, benchmarkReactModeSchema } = await import(${JSON.stringify(metrics)})
+      console.log(verifyBenchmarkReactMode({
+        requested: benchmarkReactModeSchema.parse(process.env.NODE_ENV),
+        nodeEnv: process.env.NODE_ENV,
+        hasCaptureOwnerStack: typeof React.captureOwnerStack === 'function',
+        loadedModules: Object.keys(require.cache),
+      }))
+    `
+    for (const mode of ['development', 'production']) {
+      const child = Bun.spawn([process.execPath, '--eval', source], {
+        env: { ...process.env, NODE_ENV: mode },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ])
+      expect(stderr).toBe('')
+      expect(code).toBe(0)
+      expect(stdout.trim()).toBe(mode)
+    }
   })
 })

@@ -7,33 +7,14 @@ import { z } from 'zod'
 import {
   benchmarkCaseSchema,
   benchmarkResultSchema,
+  benchmarkScenarioName,
+  parseBenchmarkArguments,
   readBenchmarkProvenance,
+  selectBenchmarkScenarios,
   type BenchmarkResult,
 } from './bench-metrics'
 
-const argumentsSchema = z.object({
-  duration: z.coerce.number().min(2).max(30).default(12),
-  warmup: z.coerce.number().min(1).max(15).default(3),
-  smoke: z.boolean().default(false),
-  resume: z.boolean().default(false),
-  output: z.string().optional(),
-  compositor: z.enum(['xvfb', 'weston']).default('weston'),
-})
-const values: Record<string, unknown> = {}
-for (let index = 0; index < process.argv.slice(2).length; index++) {
-  const argument = process.argv[index + 2]
-  if (argument === '--smoke') values.smoke = true
-  else if (argument === '--resume') values.resume = true
-  else if (
-    argument === '--duration' ||
-    argument === '--warmup' ||
-    argument === '--output' ||
-    argument === '--compositor'
-  ) {
-    values[argument.slice(2)] = process.argv[++index + 2]
-  } else throw new Error(`Unknown benchmark argument: ${argument}`)
-}
-const options = argumentsSchema.parse(values)
+const options = parseBenchmarkArguments(process.argv.slice(2))
 const directory = options.output
   ? resolve(options.output)
   : await mkdtemp(join(tmpdir(), 'twirchat-benchmark-'))
@@ -46,14 +27,7 @@ async function assertSourceUnchanged(): Promise<void> {
   if (current.gitHead !== provenance.gitHead || current.sourceHash !== provenance.sourceHash)
     throw new Error('Benchmark inputs changed. Use a frozen checkout and a new output directory.')
 }
-const scenarios = [
-  ...[1, 10, 50].flatMap((channels) =>
-    [0, 100, 1000, 5000].map((rate) => ({ channels, rate, panes: 1 })),
-  ),
-  ...[1000, 5000].map((rate) => ({ channels: 50, rate, panes: 4 })),
-  { channels: 100, rate: 5000, panes: 4 },
-]
-const selected = options.smoke ? [{ channels: 10, rate: 1000, panes: 1 }] : scenarios
+const selected = selectBenchmarkScenarios(options)
 const results: BenchmarkResult[] = options.resume
   ? z
       .object({ results: z.array(benchmarkResultSchema) })
@@ -65,6 +39,7 @@ if (
       result.config.warmupSeconds !== options.warmup ||
       result.config.durationSeconds !== options.duration ||
       result.compositor !== options.compositor ||
+      result.reactMode !== options.mode ||
       result.provenance.gitHead !== provenance.gitHead ||
       result.provenance.sourceHash !== provenance.sourceHash,
   )
@@ -92,6 +67,7 @@ function gfxDevice(result: BenchmarkResult): string | null {
 }
 function row(result: BenchmarkResult): Array<number | string | null> {
   return [
+    result.reactMode,
     result.config.channels,
     result.config.panes,
     result.config.rate,
@@ -111,9 +87,11 @@ function row(result: BenchmarkResult): Array<number | string | null> {
     result.processedAfterDrain,
     result.generatorMissedMessages,
     result.termination,
+    result.userTimingMeasureCount ?? null,
   ]
 }
 const headers = [
+  'react_mode',
   'channels',
   'visible_panes',
   'target_total_msg_s',
@@ -133,6 +111,7 @@ const headers = [
   'processed_after_drain',
   'generator_missed_messages',
   'termination',
+  'user_timing_measure_entries',
 ]
 for (const [index, scenario] of selected.entries()) {
   const config = benchmarkCaseSchema.parse({
@@ -149,13 +128,15 @@ for (const [index, scenario] of selected.entries()) {
     )
   )
     continue
-  const name = `c${config.channels}-r${config.rate}-p${config.panes}`
+  const name = benchmarkScenarioName(config)
   const artifacts = join(directory, name)
   await assertSourceUnchanged()
   const child = Bun.spawn(
     [
       process.execPath,
       'scripts/qa-gui.ts',
+      '--node-env',
+      options.mode,
       '--compositor',
       options.compositor,
       '--keep',
@@ -168,6 +149,7 @@ for (const [index, scenario] of selected.entries()) {
       'scripts/bench-chat-case.tsx',
       JSON.stringify(config),
       JSON.stringify(provenance),
+      options.mode,
     ],
     {
       cwd: join(import.meta.dir, '..'),
@@ -194,6 +176,10 @@ for (const [index, scenario] of selected.entries()) {
   const result = benchmarkResultSchema.parse(
     await Bun.file(join(session, 'benchmark-result.json')).json(),
   )
+  if (result.reactMode !== options.mode)
+    throw new Error(
+      `Benchmark ${name} loaded ${result.reactMode} instead of ${options.mode} React.`,
+    )
   results.push(result)
   const csv = [
     'elapsed_ms,rss_bytes,heap_bytes,processed,gpu_json',
@@ -217,6 +203,7 @@ for (const [index, scenario] of selected.entries()) {
           logicalCpus: cpus().length,
           kernel: release(),
           bun: Bun.version,
+          reactMode: options.mode,
           timestamp: new Date().toISOString(),
         },
         provenance,
@@ -246,6 +233,7 @@ const report = [
   '# TwirChat native chat resource benchmark',
   '',
   `CPU: ${cpus()[0]?.model ?? 'unknown'} (${cpus().length} logical CPUs). Linux ${release()}; Bun ${Bun.version}.`,
+  `React mode: ${options.mode}, verified against the loaded React, JSX runtime and reconciler modules. This runs native application source, not a compiled release binary. Compare algorithm changes only within the same mode.`,
   `Source commit ${provenance.gitHead}; dirty tree SHA-256 ${provenance.dirtyHash}; runtime inputs SHA-256 ${provenance.sourceHash} (${provenance.sourceFiles} files). Input hashes are verified before and after every case.`,
   `GPU clients: ${[...new Set(results.flatMap((result) => result.gpu.map((device) => `${device.driver} ${device.device}`)))].join(', ') || 'No DRM hardware counters available; GPU unavailable.'}`,
   '',
@@ -256,6 +244,7 @@ const report = [
   'This measures DesktopEvents → real batched stores, similarity path and native ChatView rendering. Process CPU also includes the in-process synthetic message generator and metrics sampler; the isolated display compositor is a separate process. It excludes platform network sockets, protocol parsing, provider enrichment and SQLite chat logging. The host is shared with normal work; clocks and scheduling are not isolated. A generator that falls behind skips excess work instead of accumulating unbounded catch-up; both offered and processed counts are retained in JSON/CSV. React commits are not presented as FPS.',
   '',
   'The process RSS safety bound is 2 GiB. A case reaching it stops gracefully and records its actual shorter measurement duration; such rows are marked STOPPED and are not full-duration throughput results.',
+  'User Timing measure entries are counted once after CPU, RSS and GPU measurement ends. This diagnostic does not clear entries or change instrumentation. Counts include warmup and are recorded in JSON/CSV.',
   '',
   '| Channels | Panes | Target total msg/s | Actual msg/s | CPU % | GPU gfx max-device % | RSS median MiB | RSS peak MiB | VRAM sum MiB | Lag p95 ms | Outcome |',
   '|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---|',

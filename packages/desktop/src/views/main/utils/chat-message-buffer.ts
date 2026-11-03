@@ -1,5 +1,7 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
+const identityIndexes = new WeakMap<NormalizedChatMessage[], Set<string>>()
+
 function messageTimestamp(message: NormalizedChatMessage): number {
   const timestamp =
     message.timestamp instanceof Date
@@ -20,17 +22,26 @@ function compareMessages(left: NormalizedChatMessage, right: NormalizedChatMessa
   return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
 }
 
-/** Append live messages without rebuilding and sorting the entire buffer. */
-export function appendLiveChatMessages(
+interface LiveChatAppendResult {
+  messages: NormalizedChatMessage[]
+  newMessageCount: number
+}
+
+/** Retention and activity share one identity pass over a live batch. */
+export function appendLiveChatMessagesWithCount(
   current: NormalizedChatMessage[],
   incoming: readonly NormalizedChatMessage[],
   limit = 500,
-): NormalizedChatMessage[] {
-  if (incoming.length === 0) return current
-  // A batch pays for one identity index and one array copy. For a single
-  // message a linear identity check avoids allocating an index altogether.
-  const keys = incoming.length > 1 ? new Set(current.map(messageKey)) : null
+): LiveChatAppendResult {
+  if (incoming.length === 0) return { messages: current, newMessageCount: 0 }
+  // Transfer index ownership to the returned version. A branch from an older
+  // snapshot rebuilds its own index rather than observing newer membership.
+  const keys =
+    identityIndexes.get(current) ?? (incoming.length > 1 ? new Set(current.map(messageKey)) : null)
+  identityIndexes.delete(current)
   let next = current
+  let newMessageCount = 0
+  let discardedKeys: string[] | undefined
   for (const message of incoming) {
     const key = messageKey(message)
     if (
@@ -40,8 +51,10 @@ export function appendLiveChatMessages(
     )
       continue
     keys?.add(key)
+    newMessageCount++
     const first = next[0]
     if (limit > 0 && next.length >= limit && first && compareMessages(message, first) <= 0) {
+      if (keys) (discardedKeys ??= []).push(key)
       continue
     }
     if (next === current) next = current.slice()
@@ -62,7 +75,32 @@ export function appendLiveChatMessages(
     }
     next.splice(low, 0, message)
   }
-  return limit > 0 && next.length > limit ? next.slice(-limit) : next
+  if (keys && discardedKeys) for (const key of discardedKeys) keys.delete(key)
+  if (limit > 0 && next.length > limit) {
+    if (keys) {
+      for (let index = 0; index < next.length - limit; index++) {
+        const message = next[index]
+        if (message) keys.delete(messageKey(message))
+      }
+    }
+    next = next.slice(-limit)
+  }
+  if (keys) identityIndexes.set(next, keys)
+  return {
+    messages: next,
+    newMessageCount,
+  }
+}
+
+/** Append live messages without rebuilding and sorting the entire buffer. */
+export function appendLiveChatMessages(
+  current: NormalizedChatMessage[],
+  incoming: readonly NormalizedChatMessage[],
+  limit = 500,
+): NormalizedChatMessage[] {
+  return incoming.length === 0
+    ? current
+    : appendLiveChatMessagesWithCount(current, incoming, limit).messages
 }
 
 // A history request is only a snapshot: live Wails events can arrive while it

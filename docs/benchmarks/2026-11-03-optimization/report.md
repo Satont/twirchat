@@ -89,12 +89,14 @@ matter. Short RSS measurements do not prove or disprove a long-session memory le
    is checked with a temporary set rather than a quadratic scan on configuration changes.
 
 A separate Bun CPU profile of one channel / 100 messages/s found `toLocaleTimeString` at
-15.9% of self samples before the fixes, plus native `measure` at 18.8% and development React
+15.9% of self samples before the fixes, plus `performance.measure` at 18.8% and development React
 object-diff work at 7.2%. A diagnostic run after only the formatter and stable-callback changes
 removed `toLocaleTimeString` from the hot list; CPU changed from 103.4% to 73.5% and RSS peak
 from 1186.0 to 602.3 MiB. Those profiler runs include profiler overhead and precede the remaining
-fixes, so they are supporting diagnostics, not rows in the main comparison. `measure` identifies
-a sampled native call; its full cost cannot be attributed to development mode from its name.
+fixes, so they are supporting diagnostics, not rows in the main comparison. Subsequent stack
+inspection traced `measure` to React's `logComponentRender` / User Timing instrumentation;
+it is a JavaScript runtime builtin, not GPUI text measurement. This attribution does not change
+the recorded samples or the same-mode before/after comparison.
 
 The [CPU profile summary](cpu-profile-summary.json) retains top self-sample counts and locations
 for those two diagnostic profiles. Allocation reduction is supported by removing identified

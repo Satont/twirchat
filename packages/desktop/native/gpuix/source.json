@@ -9,12 +9,12 @@
     {
       "path": "patches/gpui-native-window-operations.patch",
       "root": "gpui",
-      "sha256": "da8029e68a015618d7e103409a5c779eafa61c2a65dcfe6ba9ccfd74b0e00d6e"
+      "sha256": "384c7ddd394a605f6f3bd6383bfb239c098369532bc4fc087bca0d3871b1c4df"
     },
     {
       "path": "patches/gpuix-window-lifecycle.patch",
       "root": "gpuix",
-      "sha256": "b74ccc80d35ca7c2ca258aa3d34a2dbc9462e59f58fe7dfa1ad14df6c111e0ce"
+      "sha256": "e039f2f75b13de0bcc9e2fb415499b1aa8677b4d40f1e801179479ef00486041"
     }
   ]
 }

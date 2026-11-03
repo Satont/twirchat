@@ -96,10 +96,10 @@ type OwnAccount = Pick<Account, 'platform' | 'platformUserId' | 'username'>
 export const similarityChannelKey = (message: NormalizedChatMessage): string =>
   JSON.stringify([message.platform, message.channelId])
 const authorKey = (message: NormalizedChatMessage) =>
-  JSON.stringify([
-    message.platform,
-    message.author.username ?? message.author.id ?? message.author.displayName,
-  ])
+  `${message.platform}:${message.author.username ?? message.author.id ?? message.author.displayName}`
+const messageKey = (message: NormalizedChatMessage): string =>
+  `${message.platform}:${message.channelId.length}:${message.channelId}${message.id}`
+const CLASSIFICATION_LIMIT = 25000
 export function createMessageSimilarityClassifier(
   settings = DEFAULT_MESSAGE_SIMILARITY_SETTINGS,
   ownAccounts: readonly OwnAccount[] = [],
@@ -109,16 +109,21 @@ export function createMessageSimilarityClassifier(
   let accounts = ownAccounts
   const history = new Map<string, PreviousMessage[]>()
   const classifications = new Map<string, { channelKey: string; similar: boolean }>()
-  const derived = (similar: boolean): MessageSimilarityFlags => ({
-    similar,
-    gray: similar && configuration.graySimilar,
-    triggerHighlights:
-      !similar || (!configuration.hideSimilar && configuration.shownSimilarTriggerHighlights),
-  })
-  const previous = (message: NormalizedChatMessage): PreviousMessage => {
-    const timestamp = new Date(message.timestamp).getTime()
+  let classificationKeys: string[] = []
+  let classificationCursor = 0
+  const derived = (similar: boolean): Readonly<MessageSimilarityFlags> =>
+    Object.freeze({
+      similar,
+      gray: similar && configuration.graySimilar,
+      triggerHighlights:
+        !similar || (!configuration.hideSimilar && configuration.shownSimilarTriggerHighlights),
+    })
+  let normalFlags = derived(false)
+  let similarFlags = derived(true)
+  const previous = (message: NormalizedChatMessage, id: string): PreviousMessage => {
+    const timestamp = message.timestamp.getTime()
     return {
-      id: JSON.stringify([message.platform, message.channelId, message.id]),
+      id,
       text: message.text,
       timestamp: Number.isFinite(timestamp) ? timestamp : now(),
       author: authorKey(message),
@@ -126,34 +131,66 @@ export function createMessageSimilarityClassifier(
   }
   const remember = (key: string, messages: PreviousMessage[]) => {
     history.delete(key)
-    history.set(key, messages.slice(0, configuration.maxMessages))
+    history.set(
+      key,
+      messages.length > configuration.maxMessages
+        ? messages.slice(0, configuration.maxMessages)
+        : messages,
+    )
     if (history.size > 256) deleteOldestEntry(history)
   }
+  const rememberClassification = (id: string, channelKey: string, similar: boolean): void => {
+    if (classificationKeys.length < CLASSIFICATION_LIMIT) {
+      classificationKeys.push(id)
+    } else {
+      const oldest = classificationKeys[classificationCursor]
+      if (oldest !== undefined) classifications.delete(oldest)
+      classificationKeys[classificationCursor] = id
+      classificationCursor = (classificationCursor + 1) % CLASSIFICATION_LIMIT
+    }
+    classifications.set(id, { channelKey, similar })
+  }
   return {
+    getSimilarity(message: NormalizedChatMessage): boolean | undefined {
+      return classifications.get(messageKey(message))?.similar
+    },
+    seedClassification(
+      message: NormalizedChatMessage,
+      channelKey: string,
+      similar: boolean,
+    ): boolean {
+      const id = messageKey(message)
+      if (classifications.has(id)) return false
+      rememberClassification(id, channelKey, similar)
+      return true
+    },
     classifyIncoming(
       message: NormalizedChatMessage,
       channelKey = similarityChannelKey(message),
-    ): MessageSimilarityFlags {
-      const id = JSON.stringify([channelKey, message.platform, message.channelId, message.id])
+    ): Readonly<MessageSimilarityFlags> {
+      const id = messageKey(message)
       const known = classifications.get(id)
-      if (known) return derived(known.similar)
-      const incoming = previous(message)
-      const own = accounts.some(
-        (account) =>
-          account.platform === message.platform &&
-          (account.platformUserId === message.author.id ||
-            (message.author.username !== undefined &&
-              account.username === message.author.username)),
-      )
+      if (known) return known.similar ? similarFlags : normalFlags
+      const incoming = previous(message, id)
+      const priorMessages = history.get(channelKey) ?? []
       let similar = false
       if (
         configuration.enabled &&
         message.type !== 'system' &&
         (message.platform === 'twitch' || message.platform === 'kick') &&
-        !(configuration.excludeOwn && own)
+        !(
+          configuration.excludeOwn &&
+          accounts.some(
+            (account) =>
+              account.platform === message.platform &&
+              (account.platformUserId === message.author.id ||
+                (message.author.username !== undefined &&
+                  account.username === message.author.username)),
+          )
+        )
       ) {
         // The underlying snapshot is limited BEFORE applying the user condition.
-        for (const prior of (history.get(channelKey) ?? []).slice(0, configuration.maxMessages)) {
+        for (const prior of priorMessages) {
           if (
             Math.trunc((incoming.timestamp - prior.timestamp) / 1000) >= configuration.delaySeconds
           )
@@ -165,16 +202,26 @@ export function createMessageSimilarityClassifier(
           }
         }
       }
-      remember(channelKey, [incoming, ...(history.get(channelKey) ?? [])])
-      classifications.set(id, { channelKey, similar })
-      if (classifications.size > 25000) deleteOldestEntry(classifications)
-      return derived(similar)
+      const nextHistory = configuration.maxMessages > 0 ? [incoming] : []
+      for (
+        let index = 0;
+        index < Math.min(priorMessages.length, configuration.maxMessages - 1);
+        index++
+      ) {
+        const prior = priorMessages[index]
+        if (prior) nextHistory.push(prior)
+      }
+      remember(channelKey, nextHistory)
+      rememberClassification(id, channelKey, similar)
+      return similar ? similarFlags : normalFlags
     },
     hydrate(channelKey: string, newestFirstMessages: readonly NormalizedChatMessage[]): void {
       const merged = new Map<string, PreviousMessage>()
       for (const entry of [
         ...(history.get(channelKey) ?? []),
-        ...newestFirstMessages.slice(0, configuration.maxMessages).map(previous),
+        ...newestFirstMessages
+          .slice(0, configuration.maxMessages)
+          .map((message) => previous(message, messageKey(message))),
       ])
         if (!merged.has(entry.id)) merged.set(entry.id, entry)
       remember(
@@ -186,14 +233,19 @@ export function createMessageSimilarityClassifier(
       if (channelKey === undefined) {
         history.clear()
         classifications.clear()
+        classificationKeys = []
       } else {
         history.delete(channelKey)
         for (const [id, entry] of classifications)
           if (entry.channelKey === channelKey) classifications.delete(id)
+        classificationKeys = Array.from(classifications.keys())
       }
+      classificationCursor = 0
     },
     configure(next: MessageSimilaritySettings, own?: readonly OwnAccount[]): void {
       configuration = validateMessageSimilaritySettings(next)
+      normalFlags = derived(false)
+      similarFlags = derived(true)
       if (own) accounts = own
       for (const [key, messages] of history)
         history.set(key, messages.slice(0, configuration.maxMessages))

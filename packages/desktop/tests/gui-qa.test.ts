@@ -34,10 +34,26 @@ test('GUI QA arguments retain literal command arguments and require an explicit 
     seconds: 12,
     keep: true,
     command: ['bun', 'qa.ts', '$(echo bad)'],
+    nodeEnv: 'development',
   })
   expect(() => parseGuiQaArguments(['--timeout', '0'])).toThrow('at most 600')
   expect(() => parseGuiQaArguments(['--timeout', 'Infinity'])).toThrow('at most 600')
   expect(() => parseGuiQaArguments(['bun', 'qa.ts'])).toThrow('Put the command after --')
+  expect(parseGuiQaArguments(['--node-env', 'production']).nodeEnv).toBe('production')
+  expect(() => parseGuiQaArguments(['--node-env', 'staging'])).toThrow('development or production')
+  expect(() => parseGuiQaArguments(['--node-env'])).toThrow('development or production')
+})
+
+test('GUI QA React mode defaults never inherit the host NODE_ENV', () => {
+  const previous = process.env.NODE_ENV
+  try {
+    process.env.NODE_ENV = 'production'
+    expect(parseGuiQaArguments([]).nodeEnv).toBe('development')
+    expect(parseGuiQaArguments(['--node-env', 'production']).nodeEnv).toBe('production')
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previous
+  }
 })
 
 test('private QA bus rejects host addresses, alternate transports and unowned sockets', async () => {
@@ -114,6 +130,7 @@ test('headless GPU QA requires an explicit compositor and cannot choose a physic
     seconds: 30,
     keep: false,
     compositor: 'weston',
+    nodeEnv: 'development',
   })
   expect(() => parseGuiQaArguments(['--compositor', 'drm'])).toThrow('xvfb or weston')
   expect(() => parseGuiQaArguments(['--compositor'])).toThrow('xvfb or weston')

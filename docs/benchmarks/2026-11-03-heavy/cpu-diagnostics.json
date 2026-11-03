@@ -1,0 +1,371 @@
+[
+  {
+    "label": "e3cff68-development",
+    "aggregation": "Self samples grouped by function and URL; CPU profiler overhead, not main benchmark rows",
+    "samples": 9560,
+    "measureParents": [
+      {
+        "selfSamples": 42,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 48,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 42,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 59,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 1668,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 9,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 46,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 5,
+        "parent": "logComponentTrigger"
+      },
+      {
+        "selfSamples": 6,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 5,
+        "parent": "prepareFreshStack"
+      },
+      {
+        "selfSamples": 1,
+        "parent": "prepareFreshStack"
+      },
+      {
+        "selfSamples": 1,
+        "parent": "logComponentRender"
+      },
+      {
+        "selfSamples": 1,
+        "parent": "logComponentRender"
+      }
+    ],
+    "top": [
+      {
+        "function": "measure",
+        "url": "",
+        "selfSamples": 1933,
+        "selfPercent": 20.219665271966527
+      },
+      {
+        "function": "Set",
+        "url": "",
+        "selfSamples": 598,
+        "selfPercent": 6.2552301255230125
+      },
+      {
+        "function": "addObjectDiffToProperties",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 553,
+        "selfPercent": 5.7845188284518825
+      },
+      {
+        "function": "classifyIncoming",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/services/message-similarity.ts",
+        "selfSamples": 462,
+        "selfPercent": 4.832635983263598
+      },
+      {
+        "function": "classifyIncomingSimilarity",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/message-similarity.ts",
+        "selfSamples": 411,
+        "selfPercent": 4.299163179916318
+      },
+      {
+        "function": "applyBatch",
+        "url": "",
+        "selfSamples": 353,
+        "selfPercent": 3.692468619246862
+      },
+      {
+        "function": "stringify",
+        "url": "",
+        "selfSamples": 337,
+        "selfPercent": 3.5251046025104604
+      },
+      {
+        "function": "addValueToProperties",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 239,
+        "selfPercent": 2.5
+      },
+      {
+        "function": "outcomeFor",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/app.ts",
+        "selfSamples": 227,
+        "selfPercent": 2.3744769874476988
+      },
+      {
+        "function": "repeat",
+        "url": "",
+        "selfSamples": 222,
+        "selfPercent": 2.3221757322175733
+      },
+      {
+        "function": "get",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/message-similarity.ts",
+        "selfSamples": 208,
+        "selfPercent": 2.1757322175732217
+      },
+      {
+        "function": "",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/scheduler@0.27.0/node_modules/scheduler/cjs/scheduler.development.js",
+        "selfSamples": 180,
+        "selfPercent": 1.8828451882845187
+      },
+      {
+        "function": "ReactElement",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react@19.3.1/node_modules/react/cjs/react-jsx-dev-runtime.development.js",
+        "selfSamples": 159,
+        "selfPercent": 1.6631799163179917
+      },
+      {
+        "function": "",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/components/ChatView.tsx",
+        "selfSamples": 142,
+        "selfPercent": 1.4853556485355648
+      },
+      {
+        "function": "",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/app.ts",
+        "selfSamples": 139,
+        "selfPercent": 1.4539748953974896
+      },
+      {
+        "function": "countNewMessages",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/app.ts",
+        "selfSamples": 137,
+        "selfPercent": 1.4330543933054394
+      },
+      {
+        "function": "map",
+        "url": "",
+        "selfSamples": 115,
+        "selfPercent": 1.202928870292887
+      },
+      {
+        "function": "ChatView",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/components/ChatView.tsx",
+        "selfSamples": 95,
+        "selfPercent": 0.9937238493723849
+      },
+      {
+        "function": "moderationUserKey",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/app.ts",
+        "selfSamples": 76,
+        "selfPercent": 0.7949790794979079
+      },
+      {
+        "function": "",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/hooks/use-autocomplete.ts",
+        "selfSamples": 75,
+        "selfPercent": 0.7845188284518828
+      },
+      {
+        "function": "init",
+        "url": "",
+        "selfSamples": 72,
+        "selfPercent": 0.7531380753138075
+      },
+      {
+        "function": "freeze",
+        "url": "",
+        "selfSamples": 67,
+        "selfPercent": 0.700836820083682
+      },
+      {
+        "function": "completeWork",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.development.js",
+        "selfSamples": 62,
+        "selfPercent": 0.6485355648535565
+      },
+      {
+        "function": "Error",
+        "url": "",
+        "selfSamples": 60,
+        "selfPercent": 0.6276150627615062
+      },
+      {
+        "function": "mentionColor",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/caches.ts",
+        "selfSamples": 58,
+        "selfPercent": 0.606694560669456
+      }
+    ]
+  },
+  {
+    "label": "intermediate-production-before-index-reuse",
+    "aggregation": "Self samples grouped by function and URL; CPU profiler overhead, not main benchmark rows",
+    "samples": 4558,
+    "measureParents": [],
+    "top": [
+      {
+        "function": "Set",
+        "url": "",
+        "selfSamples": 695,
+        "selfPercent": 15.247915752523037
+      },
+      {
+        "function": "rememberClassification",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/services/message-similarity.ts",
+        "selfSamples": 392,
+        "selfPercent": 8.600263273365512
+      },
+      {
+        "function": "applyBatch",
+        "url": "",
+        "selfSamples": 345,
+        "selfPercent": 7.569109258446687
+      },
+      {
+        "function": "getSimilarity",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/services/message-similarity.ts",
+        "selfSamples": 183,
+        "selfPercent": 4.014918824045634
+      },
+      {
+        "function": "",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/components/ChatView.tsx",
+        "selfSamples": 173,
+        "selfPercent": 3.79552435278631
+      },
+      {
+        "function": "messageKey",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/views/main/utils/chat-message-buffer.ts",
+        "selfSamples": 131,
+        "selfPercent": 2.8740675734971477
+      },
+      {
+        "function": "",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/hooks/use-autocomplete.ts",
+        "selfSamples": 115,
+        "selfPercent": 2.5230364194822292
+      },
+      {
+        "function": "map",
+        "url": "",
+        "selfSamples": 114,
+        "selfPercent": 2.501096972356297
+      },
+      {
+        "function": "stringify",
+        "url": "",
+        "selfSamples": 104,
+        "selfPercent": 2.2817025010969725
+      },
+      {
+        "function": "appendLiveChatMessagesWithCount",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/views/main/utils/chat-message-buffer.ts",
+        "selfSamples": 88,
+        "selfPercent": 1.9306713470820536
+      },
+      {
+        "function": "mentionColor",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/state/caches.ts",
+        "selfSamples": 78,
+        "selfPercent": 1.7112768758227292
+      },
+      {
+        "function": "init",
+        "url": "",
+        "selfSamples": 67,
+        "selfPercent": 1.4699429574374725
+      },
+      {
+        "function": "shallowEqual",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js",
+        "selfSamples": 58,
+        "selfPercent": 1.2724879333040808
+      },
+      {
+        "function": "mapRemainingChildren",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js",
+        "selfSamples": 56,
+        "selfPercent": 1.228609039052216
+      },
+      {
+        "function": "ChatView",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/components/ChatView.tsx",
+        "selfSamples": 53,
+        "selfPercent": 1.1627906976744187
+      },
+      {
+        "function": "commitUpdate",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/@gpuix+react@0.11.0+0441d6f8f57aca1e/node_modules/@gpuix/react/dist/reconciler/host-config.js",
+        "selfSamples": 52,
+        "selfPercent": 1.1408512505484862
+      },
+      {
+        "function": "updateSimpleMemoComponent",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js",
+        "selfSamples": 49,
+        "selfPercent": 1.075032909170689
+      },
+      {
+        "function": "classify",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/gpuix/message-rules.ts",
+        "selfSamples": 49,
+        "selfPercent": 1.075032909170689
+      },
+      {
+        "function": "completeWork",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js",
+        "selfSamples": 46,
+        "selfPercent": 1.0092145677928916
+      },
+      {
+        "function": "updateFromMap",
+        "url": "file:///home/satont/Documents/Projects/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js",
+        "selfSamples": 46,
+        "selfPercent": 1.0092145677928916
+      },
+      {
+        "function": "classifyIncoming",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/services/message-similarity.ts",
+        "selfSamples": 44,
+        "selfPercent": 0.9653356735410268
+      },
+      {
+        "function": "entries",
+        "url": "",
+        "selfSamples": 42,
+        "selfPercent": 0.9214567792891619
+      },
+      {
+        "function": "segment",
+        "url": "",
+        "selfSamples": 38,
+        "selfPercent": 0.8336989907854322
+      },
+      {
+        "function": "compareMessages",
+        "url": "file:///home/satont/Documents/Projects/chat/packages/desktop/src/views/main/utils/chat-message-buffer.ts",
+        "selfSamples": 36,
+        "selfPercent": 0.7898200965335673
+      },
+      {
+        "function": "anonymous",
+        "url": "",
+        "selfSamples": 35,
+        "selfPercent": 0.7678806494076349
+      }
+    ]
+  }
+]

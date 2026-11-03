@@ -23,6 +23,96 @@ export interface GpuMeasurement {
   residentBytes: Record<string, number>
 }
 
+export const benchmarkReactModeSchema = z.enum(['development', 'production'])
+export type BenchmarkReactMode = z.infer<typeof benchmarkReactModeSchema>
+
+export const benchmarkArgumentsSchema = z
+  .object({
+    duration: z.coerce.number().min(2).max(30).default(12),
+    warmup: z.coerce.number().min(1).max(15).default(3),
+    smoke: z.boolean().default(false),
+    resume: z.boolean().default(false),
+    output: z.string().optional(),
+    compositor: z.enum(['xvfb', 'weston']).default('weston'),
+    mode: benchmarkReactModeSchema.default('development'),
+    scenario: z.string().optional(),
+  })
+  .refine((options) => !options.smoke || options.scenario === undefined, {
+    message: '--smoke and --scenario cannot be combined.',
+  })
+
+export function parseBenchmarkArguments(args: string[]): z.infer<typeof benchmarkArgumentsSchema> {
+  const values: Record<string, unknown> = {}
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index]
+    if (argument === '--smoke') values.smoke = true
+    else if (argument === '--resume') values.resume = true
+    else if (
+      argument === '--duration' ||
+      argument === '--warmup' ||
+      argument === '--output' ||
+      argument === '--compositor' ||
+      argument === '--mode' ||
+      argument === '--scenario'
+    ) {
+      const value = args[++index]
+      if (!value) throw new Error(`${argument} requires a value.`)
+      values[argument.slice(2)] = value
+    } else throw new Error(`Unknown benchmark argument: ${argument}`)
+  }
+  const options = benchmarkArgumentsSchema.parse(values)
+  selectBenchmarkScenarios(options)
+  return options
+}
+
+export function benchmarkScenarioName(
+  config: Pick<BenchmarkCase, 'channels' | 'rate' | 'panes'>,
+): string {
+  return `c${config.channels}-r${config.rate}-p${config.panes}`
+}
+
+export function selectBenchmarkScenarios(
+  options: Pick<z.infer<typeof benchmarkArgumentsSchema>, 'smoke' | 'scenario'>,
+): Array<Pick<BenchmarkCase, 'channels' | 'rate' | 'panes'>> {
+  const scenarios = [
+    ...[1, 10, 50].flatMap((channels) =>
+      [0, 100, 1000, 5000].map((rate) => ({ channels, rate, panes: 1 })),
+    ),
+    ...[1000, 5000].map((rate) => ({ channels: 50, rate, panes: 4 })),
+    { channels: 100, rate: 5000, panes: 4 },
+  ]
+  if (options.scenario !== undefined) {
+    const scenario = scenarios.find((entry) => benchmarkScenarioName(entry) === options.scenario)
+    if (!scenario) throw new Error(`Unknown benchmark scenario: ${options.scenario}`)
+    return [scenario]
+  }
+  return options.smoke ? [{ channels: 10, rate: 1000, panes: 1 }] : scenarios
+}
+
+interface ReactModeEvidence {
+  requested: BenchmarkReactMode
+  nodeEnv: string | undefined
+  hasCaptureOwnerStack: boolean
+  loadedModules: readonly string[]
+}
+
+export function verifyBenchmarkReactMode(evidence: ReactModeEvidence): BenchmarkReactMode {
+  const { requested, nodeEnv, hasCaptureOwnerStack, loadedModules } = evidence
+  if (nodeEnv !== requested || hasCaptureOwnerStack !== (requested === 'development'))
+    throw new Error(`Requested ${requested} React does not match the loaded React runtime.`)
+  for (const family of ['react', 'react-jsx-runtime', 'react-reconciler']) {
+    const modules = loadedModules.filter((path) => {
+      const name = path.replaceAll('\\', '/').split('/').at(-1) ?? ''
+      return family === 'react-jsx-runtime'
+        ? /^react-jsx-(?:dev-)?runtime\.(?:development|production)\.js$/u.test(name)
+        : name === `${family}.development.js` || name === `${family}.production.js`
+    })
+    if (!modules.length || modules.some((path) => !path.endsWith(`.${requested}.js`)))
+      throw new Error(`Requested ${requested} React does not match the loaded ${family} modules.`)
+  }
+  return requested
+}
+
 export const benchmarkProvenanceSchema = z.object({
   gitHead: z.string(),
   dirtyHash: z.string(),
@@ -215,6 +305,8 @@ export const resourceSampleSchema = z.object({
 export type ResourceSample = z.infer<typeof resourceSampleSchema>
 export const benchmarkResultSchema = z.object({
   config: benchmarkCaseSchema,
+  reactMode: benchmarkReactModeSchema.default('development'),
+  userTimingMeasureCount: z.number().int().min(0).optional(),
   wallMs: z.number(),
   cpuPercent: z.number(),
   requestedMessages: z.number(),

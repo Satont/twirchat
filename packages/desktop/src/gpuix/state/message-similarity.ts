@@ -1,16 +1,13 @@
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 
-import { deleteOldestEntry } from '../../services/bounded-cache'
 import {
   createMessageSimilarityClassifier,
   DEFAULT_MESSAGE_SIMILARITY_SETTINGS,
   validateMessageSimilaritySettings,
-  similarityChannelKey,
   type MessageSimilarityFlags,
   type MessageSimilaritySettings,
 } from '../../services/message-similarity'
 import type { DesktopBackend } from '../backend/server'
-import { chatMessageKey } from '../chat-tools'
 import { accountsStore } from './app'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
@@ -31,15 +28,20 @@ export const similarityRevisionStore = persistentResource('messageSimilarityRevi
 )
 interface SimilarityRuntime {
   classifier: ReturnType<typeof createMessageSimilarityClassifier>
-  flags: Map<string, { flags: MessageSimilarityFlags; channelKey: string }>
   previousSettings?: MessageSimilaritySettings
   previousAccounts?: Account[]
 }
-const runtime = persistentResource('messageSimilarityRuntime', (): SimilarityRuntime => ({
+const resources = globalThis.__twirchatGpuixResources
+const upgradingRuntime = resources !== undefined && 'messageSimilarityRuntime' in resources
+if (upgradingRuntime) {
+  resources.messageSimilarityPolicySubscription?.()
+  delete resources.messageSimilarityPolicySubscription
+  delete resources.messageSimilarityRuntime
+}
+const runtime = persistentResource('messageSimilarityRuntimeV2', (): SimilarityRuntime => ({
   classifier: createMessageSimilarityClassifier(),
-  flags: new Map(),
 }))
-const { classifier, flags } = runtime
+const { classifier } = runtime
 
 /** A policy-bound reader over the bounded live cache; fresh appends do not notify every pane. */
 export interface MessageSimilarityReader {
@@ -63,8 +65,8 @@ function createReader(policy: MessageSimilaritySettings): MessageSimilarityReade
   return {
     policy,
     get(message) {
-      const entry = flags.get(chatMessageKey(message))
-      return entry ? (entry.flags.similar ? similar : normal) : undefined
+      const classified = classifier.getSimilarity(message)
+      return classified === undefined ? undefined : classified ? similar : normal
     },
   }
 }
@@ -76,6 +78,7 @@ function publishReader(): void {
   messageSimilarityReaderStore.set(createReader(messageSimilarityStore.get().value))
   similarityRevisionStore.modify((revision) => revision + 1)
 }
+if (upgradingRuntime) publishReader()
 persistentResource('messageSimilarityPolicySubscription', () =>
   messageSimilarityStore.subscribe(() => {
     const policy = messageSimilarityStore.get().value
@@ -96,15 +99,9 @@ export function loadMessageSimilaritySettings(backend: Pick<DesktopBackend, 'api
 export function classifyIncomingSimilarity(
   message: NormalizedChatMessage,
   channelKey?: string,
-): MessageSimilarityFlags {
-  const key = chatMessageKey(message)
-  const existing = flags.get(key)
-  if (existing) return derive(existing.flags.similar, messageSimilarityStore.get().value)
+): Readonly<MessageSimilarityFlags> {
   configure()
-  const result = classifier.classifyIncoming(message, channelKey)
-  flags.set(key, { flags: result, channelKey: channelKey ?? similarityChannelKey(message) })
-  if (flags.size > 25000) deleteOldestEntry(flags)
-  return result
+  return classifier.classifyIncoming(message, channelKey)
 }
 export function getMessageSimilarity(
   message: NormalizedChatMessage,
@@ -125,20 +122,13 @@ export function hydrateSimilarityHistory(
   let changed = false
   for (const message of newestFirstMessages.toReversed()) {
     const classified = temporary.classifyIncoming(message, channelKey)
-    const key = chatMessageKey(message)
-    if (!flags.has(key)) {
-      flags.set(key, { flags: classified, channelKey })
-      changed = true
-      if (flags.size > 25000) deleteOldestEntry(flags)
-    }
+    changed = classifier.seedClassification(message, channelKey, classified.similar) || changed
   }
   classifier.hydrate(channelKey, newestFirstMessages)
   if (changed) publishReader()
 }
 export function resetSimilarityHistory(channelKey?: string): void {
   classifier.reset(channelKey)
-  if (channelKey === undefined) flags.clear()
-  else for (const [key, value] of flags) if (value.channelKey === channelKey) flags.delete(key)
   publishReader()
 }
 
@@ -146,7 +136,7 @@ declare module './persistent-resources' {
   interface PersistentResources {
     'preference:message_similarity_v1': PreferenceStore<typeof DEFAULT_MESSAGE_SIMILARITY_SETTINGS>
     messageSimilarityRevision: Store<number>
-    messageSimilarityRuntime: SimilarityRuntime
+    messageSimilarityRuntimeV2: SimilarityRuntime
     messageSimilarityReader: Store<MessageSimilarityReader>
     messageSimilarityPolicySubscription: () => void
   }

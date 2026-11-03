@@ -1123,3 +1123,108 @@ index 1a942ec..278e250 100644
      } else {
          unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
      };
+diff --git a/crates/gpui/src/elements/list.rs b/crates/gpui/src/elements/list.rs
+index 693ffcd..67dcc36 100644
+--- a/crates/gpui/src/elements/list.rs
++++ b/crates/gpui/src/elements/list.rs
+@@ -389,12 +389,18 @@ impl ListState {
+             height,
+         };
+         let mut state = self.0.borrow_mut();
++        if !state.items.summary().has_unknown_height {
++            return;
++        }
+         let new_items = state
+             .items
+             .iter()
+-            .map(|item| ListItem::Unmeasured {
+-                size_hint: Some(item.size_hint().unwrap_or(size_hint)),
+-                focus_handle: item.focus_handle(),
++            .map(|item| match item {
++                ListItem::Unmeasured { size_hint: None, focus_handle } => ListItem::Unmeasured {
++                    size_hint: Some(size_hint),
++                    focus_handle: focus_handle.clone(),
++                },
++                _ => item.clone(),
+             })
+             .collect::<Vec<_>>();
+         let mut tree = SumTree::default();
+@@ -1810,6 +1816,78 @@ impl sum_tree::SeekTarget<'_, ListItemSummary, ListItemSummary> for Height {
+     }
+ }
+ 
++#[cfg(test)]
++mod measurement_retention_tests {
++    use super::{ListAlignment, ListItem, ListState};
++    use crate::{px, size};
++    use sum_tree::SumTree;
++
++    fn measured_state() -> ListState {
++        let state = ListState::new(0, ListAlignment::Top, px(0.));
++        let mut items = SumTree::default();
++        items.extend(
++            [
++                ListItem::Measured { size: size(px(70.), px(10.)), focus_handle: None },
++                ListItem::Measured { size: size(px(80.), px(30.)), focus_handle: None },
++                ListItem::Unmeasured { size_hint: Some(size(px(90.), px(45.))), focus_handle: None },
++                ListItem::Unmeasured { size_hint: None, focus_handle: None },
++                ListItem::Measured { size: size(px(100.), px(20.)), focus_handle: None },
++            ],
++            (),
++        );
++        state.0.borrow_mut().items = items;
++        state
++    }
++
++    #[test]
++    fn uniform_hints_preserve_nonuniform_measurements_and_existing_hints() {
++        let state = measured_state().with_uniform_item_height(px(50.));
++        let inner = state.0.borrow();
++        let summary = inner.items.summary();
++        assert_eq!(summary.rendered_count, 3);
++        assert_eq!(summary.measured_height, px(60.));
++        assert_eq!(summary.height, px(155.));
++        let items: Vec<_> = inner.items.iter().collect();
++        assert_eq!(items[0].size(), Some(size(px(70.), px(10.))));
++        assert_eq!(items[2].size_hint(), Some(size(px(90.), px(45.))));
++        assert_eq!(items[3].size_hint(), Some(size(px(0.), px(50.))));
++        assert!(!summary.has_unknown_height);
++    }
++
++    #[test]
++    fn sliding_a_measured_list_only_hints_the_arriving_rows() {
++        let state = measured_state().with_uniform_item_height(px(50.));
++        state.splice(0..1, 0);
++        state.splice(4..4, 1);
++        let state = state.with_uniform_item_height(px(50.));
++        let inner = state.0.borrow();
++        let summary = inner.items.summary();
++        assert_eq!(summary.count, 5);
++        assert_eq!(summary.rendered_count, 2);
++        assert_eq!(summary.measured_height, px(50.));
++        let items: Vec<_> = inner.items.iter().collect();
++        assert_eq!(items[0].size(), Some(size(px(80.), px(30.))));
++        assert_eq!(items[3].size(), Some(size(px(100.), px(20.))));
++        assert_eq!(items[4].size(), None);
++        assert_eq!(items[4].size_hint(), Some(size(px(0.), px(50.))));
++    }
++
++    #[test]
++    fn explicit_remeasurement_and_reset_still_invalidate_measurements() {
++        let state = measured_state().with_uniform_item_height(px(50.));
++        state.remeasure_items(0..1);
++        let state = state.with_uniform_item_height(px(50.));
++        assert_eq!(state.0.borrow().items.summary().rendered_count, 2);
++        assert_eq!(state.0.borrow().items.iter().next().and_then(ListItem::size), None);
++        state.reset_with_uniform_height(3, px(17.));
++        let inner = state.0.borrow();
++        assert_eq!(inner.items.summary().rendered_count, 0);
++        assert_eq!(inner.items.summary().count, 3);
++        assert_eq!(inner.items.summary().height, px(51.));
++        assert!(!inner.items.summary().has_unknown_height);
++    }
++}
++
+ #[cfg(test)]
+ mod test {
+ 

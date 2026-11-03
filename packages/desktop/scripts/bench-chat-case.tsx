@@ -17,9 +17,11 @@ import {
   benchmarkCaseSchema,
   benchmarkProvenanceSchema,
   benchmarkResultSchema,
+  benchmarkReactModeSchema,
   gpuMeasurements,
   percentile,
   readDrmSnapshot,
+  verifyBenchmarkReactMode,
   type ResourceSample,
 } from './bench-metrics'
 
@@ -37,6 +39,12 @@ const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot'
 const configuration: unknown = JSON.parse(process.argv[2] ?? '{}')
 const config = benchmarkCaseSchema.parse(configuration)
 const provenance = benchmarkProvenanceSchema.parse(JSON.parse(process.argv[3] ?? '{}'))
+const reactMode = verifyBenchmarkReactMode({
+  requested: benchmarkReactModeSchema.parse(process.argv[4] ?? 'development'),
+  nodeEnv: process.env.NODE_ENV,
+  hasCaptureOwnerStack: typeof React.captureOwnerStack === 'function',
+  loadedModules: Object.keys(require.cache),
+})
 const directory = process.env.TWIRCHAT_QA_SESSION_DIR
 assert.ok(directory)
 const backend = getDesktopBackend()
@@ -255,6 +263,7 @@ try {
   const count = processed() - initialProcessed
   sample()
   const endGpu = readDrmSnapshot()
+  const userTimingMeasureCount = performance.getEntriesByType('measure').length
   await Bun.sleep(2000)
   const bounds = nativeWindow(renderer).getWindowBounds()
   assert.ok(bounds)
@@ -264,6 +273,8 @@ try {
   const gpu = gpuMeasurements(initialGpu, endGpu)
   const result = benchmarkResultSchema.parse({
     config,
+    reactMode,
+    userTimingMeasureCount,
     wallMs,
     cpuPercent: ((cpu.user + cpu.system) / (wallMs * 1000)) * 100,
     requestedMessages,

@@ -19,9 +19,25 @@ Weston package into a private temporary cache and runs its headless GL backend. 
 system packages or connect to the user's desktop. GUI tests must continue to use `qa:gui` or
 `qa:native`; `bench:chat` invokes `qa:gui` for every scenario.
 
-The isolated launcher sets `NODE_ENV=development`, so this command measures development React
-and its reconciler. Compare runs in the same mode; these numbers do not describe the compiled
-release binary. A production measurement needs its own verified build and provenance.
+By default the isolated launcher sets `NODE_ENV=development`, so this command measures
+development React and its reconciler. Compare algorithm changes in the same mode.
+
+To measure the 50-channel / four-pane / 5000 messages/s scenario with production React:
+
+```bash
+bun run --cwd packages/desktop bench:chat --scenario c50-r5000-p4 --mode production
+```
+
+`--mode development|production` is explicit in results, CSV and reports; the runner verifies
+the loaded React, JSX runtime and reconciler modules and refuses mixed-mode resume. This runs
+native application source, rather than a compiled release binary. `--scenario` accepts an ID
+from the default matrix; omit it to run all 15 cases. `--smoke` and `--scenario` cannot be combined.
+
+For ordinary use, `bun run --cwd packages/desktop start` now explicitly uses production React.
+`dev` keeps development checks and HMR. React's development Performance Tracks collect User
+Timing entries, which Bun retains in the process; production disables that instrumentation.
+Benchmarks count retained measure entries after measurement without clearing them. Switching
+modes is reported separately from improvements to application algorithms.
 
 ## Scenarios and output
 
@@ -65,6 +81,13 @@ and `generatorMissedMessages` alongside the target rate; a missed target does no
 absolute application throughput limit. The machine remains shared with the user's normal work.
 
 ## Saved baseline and next session
+
+[2026-11-03 high-rate optimization](2026-11-03-heavy/report.md) adds a complete same-mode
+development comparison and three 30-second production repetitions for 50 channels / four panes /
+5000 messages/s. Production processed 4994–4996 messages/s at 94–105% of one logical core,
+with RSS medians 496–520 MiB and peaks 596–653 MiB. The same-mode development target case
+reduced CPU 149% → 132%, while peak RSS increased 1134 → 1169 MiB; execution-mode savings
+are reported separately from algorithm changes.
 
 [2026-11-03 optimization comparison](2026-11-03-optimization/report.md) preserves a fresh run
 of the pushed `a4e3308` checkout and a second complete run after the rendering/allocation fixes.

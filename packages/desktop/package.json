@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run build:native && bun --hot src/gpuix/main.tsx",
-    "start": "bun run build:native && bun src/gpuix/main.tsx",
+    "start": "bun run build:native && NODE_ENV=production bun src/gpuix/main.tsx",
     "qa:gui": "bun scripts/qa-gui.ts",
     "qa:native": "bun scripts/qa-gui.ts --timeout 45 -- bun scripts/qa-native.tsx",
     "qa:settings": "bun scripts/qa-gui.ts --timeout 45 -- bun scripts/qa-settings.tsx",

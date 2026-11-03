@@ -25,12 +25,13 @@ interface Options {
   artifacts?: string
   compositor?: 'xvfb' | 'weston'
   dbus?: boolean
+  nodeEnv: 'development' | 'production'
 }
 
 const commandResultSchema = z.object({ code: z.number().int() })
 
 export function parseGuiQaArguments(args: string[]): Options {
-  const options: Options = { command: [], seconds: 30, keep: false }
+  const options: Options = { command: [], seconds: 30, keep: false, nodeEnv: 'development' }
   for (let index = 0; index < args.length; index++) {
     const argument = args[index]!
     if (argument === '--') {
@@ -43,6 +44,13 @@ export function parseGuiQaArguments(args: string[]): Options {
     }
     if (argument === '--dbus') {
       options.dbus = true
+      continue
+    }
+    if (argument === '--node-env') {
+      const nodeEnv = args[++index]
+      if (nodeEnv !== 'development' && nodeEnv !== 'production')
+        throw new Error('--node-env must be development or production.')
+      options.nodeEnv = nodeEnv
       continue
     }
     if (argument === '--compositor') {
@@ -362,7 +370,7 @@ async function run(options: Options): Promise<number> {
     TWIRCHAT_QA_CWD: process.cwd(),
     DB_PATH: join(session, 'profile', 'db.sqlite'),
     LANG: process.env.LANG ?? 'C.UTF-8',
-    NODE_ENV: 'development',
+    NODE_ENV: options.nodeEnv,
   }
   const command = options.command.length
     ? options.command

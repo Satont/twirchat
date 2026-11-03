@@ -1,0 +1,39 @@
+[90m05:48:19[0m [32m[1mINFO [0m [35m[gpuix-backend][0m [97mStarting GPUIX backend...[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[db][0m [97mMigrations applied[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[gpuix-backend][0m [97mDatabase ready[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[client-secret][0m [97mGenerated new client secret: d5b26514...[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[overlay-server][0m [97mResolved overlay runtime paths[0m  [2mfontsDir[0m=[36m/home/satont/Documents/Projects/chat/packages/desktop/public/fonts[0m [2moverlayDir[0m=[36m/home/satont/Documents/Projects/chat/packages/desktop/dist/overlay[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[overlay-server][0m [97mServer running on http://localhost:55823[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[overlay-server][0m [97mOBS URL: http://localhost:55823/?bg=transparent[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[auth-server][0m [97mOAuth server listening on port 55821[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[backend-connection][0m [97mConnecting to ws://127.0.0.1:3000/ws...[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[gpuix-backend][0m [97m[Dev] Test injection endpoint listening on port 45824[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[gpuix-backend][0m [97mGPUIX backend ready[0m
+[90m05:48:19[0m [32m[1mINFO [0m [35m[backend-connection][0m [97mDisconnected. Reconnecting in 3000ms...[0m
+[90m05:48:22[0m [32m[1mINFO [0m [35m[backend-connection][0m [97mConnecting to ws://127.0.0.1:3000/ws...[0m
+[90m05:48:22[0m [32m[1mINFO [0m [35m[backend-connection][0m [97mDisconnected. Reconnecting in 6000ms...[0m
+[90m05:48:28[0m [32m[1mINFO [0m [35m[backend-connection][0m [97mConnecting to ws://127.0.0.1:3000/ws...[0m
+[90m05:48:28[0m [32m[1mINFO [0m [35m[backend-connection][0m [97mDisconnected. Reconnecting in 12000ms...[0m
+{"ok":true,"channels":50,"target":5000,"panes":1,"cpu":60.39690450853064,"rate":4991.402579255781,"rssMiB":557.5,"gpu":[{"device":"0000:03:00.0","driver":"amdgpu","engines":{"gfx":0.9281193542721685},"residentBytes":{"gtt":6299648,"vram":84455424}},{"device":"0000:47:00.0","driver":"amdgpu","engines":{},"residentBytes":{"gtt":2097152,"vram":12288}}],"termination":"completed"}
+ndowed_output_api_headless_v2' of size 16
+[05:48:19.440] Color manager: no-op
+                 protocol support: no
+[05:48:19.440] Output 'headless' attempts EOTF mode SDR and colorimetry mode default.
+[05:48:19.440] Output 'headless' using color profile: stock sRGB color profile
+[05:48:19.440] Output 'headless' enabled with head(s) headless
+[05:48:19.440] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: yes
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: yes
+               color operations: yes
+               color representation: yes
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[05:48:19.440] Loading module '/tmp/twirchat-weston-15.0.1-3/usr/lib/weston/kiosk-shell.so'
+[90m05:48:19[0m [31m[1mERROR[0m [35m[backend-connection][0m [31mWebSocket error[0m  [2mevent[0m=[36m{"isTrusted":true}[0m
+[90m05:48:22[0m [31m[1mERROR[0m [35m[backend-connection][0m [31mWebSocket error[0m  [2mevent[0m=[36m{"isTrusted":true}[0m
+[90m05:48:28[0m [31m[1mERROR[0m [35m[backend-connection][0m [31mWebSocket error[0m  [2mevent[0m=[36m{"isTrusted":true}[0m
+[05:48:36.867] caught signal 15

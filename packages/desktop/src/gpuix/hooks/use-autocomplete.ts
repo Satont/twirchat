@@ -38,6 +38,9 @@ export type { AutocompleteSuggestion, EmoteSuggestion, MentionSuggestion }
 
 type AliasMap = Map<Platform, Map<string, string>>
 
+const EMPTY_MENTION_SUGGESTIONS: MentionSuggestion[] = []
+const EMPTY_EMOTE_SUGGESTIONS: EmoteSuggestion[] = []
+
 const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
   {
     type: 'command',
@@ -142,8 +145,16 @@ export function useAutocomplete(params: {
   const mode = token.mode
   const query = token.query
   const queryKey = mode === 'command' ? `/${query}` : query
+  const mentionCompletionActive = mode === 'mention' && query.length > 0
+  const emoteCompletionActive = mode === 'emote' && query.length > 0
+  const connectedChannel = watchedChannel
+    ? undefined
+    : Object.values(statuses).find((info) => info?.channelLogin && info.status === 'connected')
+  const platform = watchedChannel?.platform ?? connectedChannel?.platform
+  const channelId = watchedChannel?.channelSlug ?? connectedChannel?.channelLogin
 
   const mentionSuggestions = useMemo((): MentionSuggestion[] => {
+    if (!mentionCompletionActive) return EMPTY_MENTION_SUGGESTIONS
     const seen = new Set<string>()
     const result: MentionSuggestion[] = []
 
@@ -177,25 +188,12 @@ export function useAutocomplete(params: {
       })
     }
     return result
-  }, [messages, aliasMap])
-
-  function getCurrentChannelKey(): { platform: Platform; channelId: string } | null {
-    if (watchedChannel) {
-      return { platform: watchedChannel.platform, channelId: watchedChannel.channelSlug }
-    }
-    for (const info of Object.values(statuses)) {
-      if (info?.channelLogin && info.status === 'connected') {
-        return { platform: info.platform, channelId: info.channelLogin }
-      }
-    }
-    return null
-  }
+  }, [mentionCompletionActive, messages, aliasMap])
 
   const emoteSuggestions = useMemo((): EmoteSuggestion[] => {
-    const ch = getCurrentChannelKey()
-    if (!ch) return []
+    if (!emoteCompletionActive || !platform || !channelId) return EMPTY_EMOTE_SUGGESTIONS
     const favorites = new Set(emotePreferences.favorites.map(favoriteEmoteKey))
-    const entries = [...(emotes.get(`${ch.platform}:${ch.channelId}`) ?? [])].sort(
+    const entries = [...(emotes.get(`${platform}:${channelId}`) ?? [])].sort(
       (a, b) =>
         Number(favorites.has(favoriteEmoteKey(b))) - Number(favorites.has(favoriteEmoteKey(a))),
     )
@@ -205,8 +203,7 @@ export function useAutocomplete(params: {
       imageUrl: e.imageUrl,
       animated: e.animated,
     }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emotes, watchedChannel?.id, statuses, emotePreferences.favorites])
+  }, [emoteCompletionActive, emotes, platform, channelId, emotePreferences.favorites])
 
   const suggestions = useMemo((): AutocompleteSuggestion[] => {
     if (!mode) return []
@@ -255,11 +252,6 @@ export function useAutocomplete(params: {
   }, [text])
 
   // Load emotes for the active channel.
-  const channel = watchedChannel
-    ? { platform: watchedChannel.platform, channelId: watchedChannel.channelSlug }
-    : getCurrentChannelKey()
-  const platform = channel?.platform
-  const channelId = channel?.channelId
   useEffect(() => {
     if (!platform || !channelId) return
     runUiTask(loadEmotes(backend, platform, channelId))

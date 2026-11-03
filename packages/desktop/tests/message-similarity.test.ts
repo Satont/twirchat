@@ -224,3 +224,129 @@ test('visibility alone does not enable checks; system rows occupy the limited un
   classifier.classifyIncoming(message('system', 'system row', 100, 'viewer', { type: 'system' }))
   expect(classifier.classifyIncoming(message('b', 'same text', 200)).similar).toBe(false)
 })
+
+test('disabled checks retain preceding arrival history for a later enable without reclassifying duplicates', () => {
+  const classifier = createMessageSimilarityClassifier({
+    ...DEFAULT_MESSAGE_SIMILARITY_SETTINGS,
+    maxMessages: 1,
+  })
+  const first = message('disabled-first')
+  expect(classifier.classifyIncoming(first).similar).toBe(false)
+  classifier.configure({ ...settings, maxMessages: 1 })
+  expect(classifier.classifyIncoming({ ...first }).similar).toBe(false)
+  expect(classifier.classifyIncoming(message('enabled-second', 'same text', 100)).similar).toBe(
+    true,
+  )
+})
+
+test('the same provider message observed through another group keeps its original classification and history', () => {
+  const classifier = createMessageSimilarityClassifier({ ...settings, maxMessages: 1 })
+  classifier.classifyIncoming(message('group-first'), 'first-view')
+  const repeated = message('group-repeat', 'same text', 100)
+  expect(classifier.classifyIncoming(repeated, 'first-view').similar).toBe(true)
+  classifier.configure({ ...settings, maxMessages: 1, threshold: 1 })
+  expect(classifier.classifyIncoming({ ...repeated }, 'second-view').similar).toBe(true)
+  classifier.configure({ ...settings, maxMessages: 1 })
+  expect(
+    classifier.classifyIncoming(message('other-group-first', 'same text', 200), 'second-view')
+      .similar,
+  ).toBe(false)
+  classifier.reset('second-view')
+  expect(classifier.getSimilarity(repeated)).toBe(true)
+  classifier.reset('first-view')
+  expect(classifier.getSimilarity(repeated)).toBeUndefined()
+})
+
+test('a hydrated historical duplicate cannot replace the newer live arrival used for comparison', () => {
+  messageSimilarityStore.update({ value: { ...settings, maxMessages: 1 } })
+  const old = message('hydrate-old', 'old text', 100)
+  const oldRepeat = message('hydrate-repeat', 'old text', 200)
+  const live = message('hydrate-live', 'new live text', 10000)
+  const channel = similarityChannelKey(live)
+  classifyIncomingSimilarity(live)
+  hydrateSimilarityHistory(channel, [oldRepeat, old])
+  expect(classifyIncomingSimilarity({ ...oldRepeat }).similar).toBe(true)
+  expect(
+    classifyIncomingSimilarity(message('after-hydrated-duplicate', 'new live text', 10100)).similar,
+  ).toBe(true)
+})
+
+test('classification retention is bounded independently of the preceding-message history size', () => {
+  const classifier = createMessageSimilarityClassifier({
+    ...DEFAULT_MESSAGE_SIMILARITY_SETTINGS,
+    maxMessages: 0,
+  })
+  const first = message('retention-0')
+  classifier.classifyIncoming(first)
+  for (let index = 1; index <= 25000; index++) {
+    classifier.classifyIncoming(message(`retention-${index}`))
+  }
+  expect(classifier.getSimilarity(first)).toBeUndefined()
+  expect(classifier.getSimilarity(message('retention-1'))).toBe(false)
+  expect(classifier.getSimilarity(message('retention-25000'))).toBe(false)
+})
+
+test('classification identity cannot collide across channel and message ID delimiters', () => {
+  const classifier = createMessageSimilarityClassifier(settings)
+  const first = message('z', 'same text', 0, 'viewer', { channelId: 'x:y' })
+  const other = message('y:z', 'same text', 100, 'viewer', { channelId: 'x' })
+  classifier.classifyIncoming(first)
+  expect(classifier.getSimilarity(other)).toBeUndefined()
+  expect(classifier.classifyIncoming(other).similar).toBe(false)
+  expect(
+    classifier.classifyIncoming(message('next', 'same text', 200, 'viewer', { channelId: 'x' }))
+      .similar,
+  ).toBe(true)
+  classifier.reset(similarityChannelKey(first))
+  expect(classifier.getSimilarity(first)).toBeUndefined()
+  expect(classifier.getSimilarity(other)).toBe(false)
+})
+
+test('classification FIFO wraps without refreshing duplicate arrivals or forgetting reinserted IDs', () => {
+  const classifier = createMessageSimilarityClassifier({
+    ...DEFAULT_MESSAGE_SIMILARITY_SETTINGS,
+    maxMessages: 0,
+  })
+  for (let index = 0; index < 50005; index++) {
+    classifier.seedClassification(message(`fifo-${index}`), 'fifo', true)
+  }
+  const oldest = message('fifo-25005')
+  expect(classifier.getSimilarity(message('fifo-25004'))).toBeUndefined()
+  expect(classifier.classifyIncoming(oldest).similar).toBe(true)
+  classifier.seedClassification(message('fifo-50005'), 'fifo', false)
+  expect(classifier.getSimilarity(oldest)).toBeUndefined()
+  expect(classifier.getSimilarity(message('fifo-25006'))).toBe(true)
+  expect(classifier.seedClassification(oldest, 'fifo', true)).toBe(true)
+  expect(classifier.getSimilarity(message('fifo-25006'))).toBeUndefined()
+  expect(classifier.getSimilarity(oldest)).toBe(true)
+  expect(classifier.seedClassification(oldest, 'fifo', false)).toBe(false)
+  classifier.seedClassification(message('fifo-50006'), 'fifo', false)
+  expect(classifier.getSimilarity(message('fifo-25007'))).toBeUndefined()
+  expect(classifier.getSimilarity(oldest)).toBe(true)
+})
+
+test('partial classification reset rebuilds FIFO order and full reset removes every retained key', () => {
+  const classifier = createMessageSimilarityClassifier({
+    ...DEFAULT_MESSAGE_SIMILARITY_SETTINGS,
+    maxMessages: 0,
+  })
+  for (let index = 0; index < 25002; index++) {
+    classifier.seedClassification(message(`reset-${index}`), index % 2 ? 'remove' : 'keep', true)
+  }
+  classifier.reset('remove')
+  expect(classifier.getSimilarity(message('reset-3'))).toBeUndefined()
+  classifier.seedClassification(message('reset-1'), 'keep', true)
+  for (let index = 50000; index < 62499; index++) {
+    classifier.seedClassification(message(`reset-${index}`), 'keep', true)
+  }
+  expect(classifier.getSimilarity(message('reset-2'))).toBe(true)
+  classifier.seedClassification(message('final'), 'keep', false)
+  expect(classifier.getSimilarity(message('reset-2'))).toBeUndefined()
+  expect(classifier.getSimilarity(message('reset-4'))).toBe(true)
+  expect(classifier.getSimilarity(message('reset-1'))).toBe(true)
+  classifier.reset()
+  expect(classifier.getSimilarity(message('reset-4'))).toBeUndefined()
+  expect(classifier.getSimilarity(message('reset-1'))).toBeUndefined()
+  expect(classifier.seedClassification(message('reset-4'), 'keep', false)).toBe(true)
+  expect(classifier.getSimilarity(message('reset-4'))).toBe(false)
+})

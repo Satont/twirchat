@@ -17,7 +17,7 @@ import type {
 
 import { similarityChannelKey } from '../../services/message-similarity'
 import {
-  appendLiveChatMessages,
+  appendLiveChatMessagesWithCount,
   mergeChatMessageSnapshot,
 } from '../../views/main/utils/chat-message-buffer'
 /**
@@ -141,21 +141,6 @@ export function chatMessageRate(activity: ChatActivity | undefined, now = Date.n
   )
 }
 
-function countNewMessages(
-  current: NormalizedChatMessage[],
-  incoming: NormalizedChatMessage[],
-): number {
-  const seen = new Set(current.map((message) => `${message.platform}:${message.id}`))
-  let count = 0
-  for (const message of incoming) {
-    const key = `${message.platform}:${message.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    count += 1
-  }
-  return count
-}
-
 function recordChatActivity(counts: Map<string, number>): void {
   if (counts.size === 0) return
   const second = Math.floor(Date.now() / 1000)
@@ -213,6 +198,7 @@ interface ModerationState {
 export interface ModerationView {
   outcomeFor(message: NormalizedChatMessage): ResolvedModerationOutcome | undefined
 }
+const EMPTY_MODERATION_VIEW: ModerationView = { outcomeFor: () => undefined }
 const moderationState = persistentResource('moderationState', (): ModerationState => ({
   deletedMessages: new Map(),
   userSanctions: new Map(),
@@ -303,6 +289,8 @@ export function applyModerationOutcome(outcome: ModerationOutcome): void {
 }
 
 function createModerationView(): ModerationView {
+  if (deletedMessages.size === 0 && userSanctions.size === 0 && channelClears.size === 0)
+    return EMPTY_MODERATION_VIEW
   const deletions = new Map(deletedMessages)
   const sanctions = new Map(userSanctions)
   const clears = new Map(channelClears)
@@ -679,16 +667,21 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
     if (home.length > 0) {
       const filtered = filterHomeChatMessages(home, accountsStore.get())
       const current = homeBuffer.get()
-      activityCounts.set('home', countNewMessages(current, filtered))
-      homeBuffer.set(appendLiveChatMessages(current, filtered, HOME_BUFFER_LIMIT))
+      const result = appendLiveChatMessagesWithCount(current, filtered, HOME_BUFFER_LIMIT)
+      activityCounts.set('home', result.newMessageCount)
+      homeBuffer.set(result.messages)
     }
     if (watched.size > 0) {
       watchedMessagesStore.modify((current) => {
         let next = current
         for (const [channelId, incoming] of watched) {
           const existing = current.get(channelId) ?? []
-          activityCounts.set(channelId, countNewMessages(existing, incoming))
-          const messages = appendLiveChatMessages(existing, incoming, 200)
+          const { messages, newMessageCount } = appendLiveChatMessagesWithCount(
+            existing,
+            incoming,
+            200,
+          )
+          activityCounts.set(channelId, newMessageCount)
           if (messages === existing) continue
           if (next === current) next = new Map(current)
           next.set(channelId, messages)

@@ -1022,7 +1022,7 @@ index c5f4fa1..353cdc3 100644
  #[cfg(not(target_family = "wasm"))]
  mod updater;
 diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
-index 8c104a4..9198a7e 100644
+index 8c104a4..3b8ba48 100644
 --- a/packages/native/src/renderer.rs
 +++ b/packages/native/src/renderer.rs
 @@ -170,7 +170,7 @@ thread_local! {
@@ -2158,27 +2158,11 @@ index 8c104a4..9198a7e 100644
          startup_receiver
              .recv()
              .map_err(|_| Error::from_reason("The GPUI UI thread stopped during initialization"))?
-@@ -1537,35 +2303,245 @@ impl GpuixRenderer {
-             ));
-         }
- 
--        #[cfg(target_os = "macos")]
--        {
--            let running = EMBEDDED_PLATFORM.with(|p| {
--                p.borrow()
--                    .as_ref()
--                    .map(|platform| platform.pump_events())
--                    .unwrap_or(false)
--            });
+@@ -1545,27 +2311,237 @@ impl GpuixRenderer {
+                     .map(|platform| platform.pump_events())
+                     .unwrap_or(false)
+             });
 -            return Ok(running);
-+        #[cfg(target_os = "macos")]
-+        {
-+            let running = EMBEDDED_PLATFORM.with(|p| {
-+                p.borrow()
-+                    .as_ref()
-+                    .map(|platform| platform.pump_events())
-+                    .unwrap_or(false)
-+            });
 +            return Ok(running && self.window_state.lock().open);
 +        }
 +
@@ -2190,8 +2174,9 @@ index 8c104a4..9198a7e 100644
 +                self.queue_ui_thread_reap();
 +            }
 +            return Ok(running && self.window_state.lock().open);
-+        }
-+
+         }
+ 
+-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 +        #[cfg(not(any(
 +            target_os = "macos",
 +            target_os = "windows",
@@ -2311,31 +2296,21 @@ index 8c104a4..9198a7e 100644
 +            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 +            self.queue_ui_thread_reap();
 +            return Ok(());
-         }
--
++        }
 +        #[cfg(target_os = "macos")]
 +        return update_window_without_view(self.renderer_id, |window, _| window.remove_window());
-         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
-         {
--            let running = self.ui_running.load(Ordering::Acquire);
--            if !running {
--                self.ui_commands.lock().unwrap().take();
--            }
--            return Ok(running);
++        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
++        {
 +            self.send_ui_command(UiCommand::CloseWindow)?;
 +            self.queue_ui_thread_reap();
 +            return Ok(());
-         }
--
-         #[cfg(not(any(
-             target_os = "macos",
-             target_os = "windows",
-             target_os = "linux",
-             target_os = "freebsd"
-         )))]
--        Err(Error::from_reason(
--            "The production GPUIX renderer does not support this operating system",
--        ))
++        }
++        #[cfg(not(any(
++            target_os = "macos",
++            target_os = "windows",
++            target_os = "linux",
++            target_os = "freebsd"
++        )))]
 +        Err(Error::from_reason("Unsupported operating system"))
 +    }
 +
@@ -2395,7 +2370,10 @@ index 8c104a4..9198a7e 100644
 +        native_text_action(&name)?;
 +        let (deferred, promise): (TextActionDeferred, Object<'env>) = env.create_deferred()?;
 +        #[cfg(target_os = "macos")]
-+        {
+         {
+-            let running = self.ui_running.load(Ordering::Acquire);
+-            if !running {
+-                self.ui_commands.lock().unwrap().take();
 +            let can_copy = update_window(self.renderer_id, |view, window, cx| {
 +                view.can_copy_native_selection(&name, window, cx)
 +            });
@@ -2412,8 +2390,19 @@ index 8c104a4..9198a7e 100644
 +            match result {
 +                Ok(Ok(available)) => deferred.resolve(Box::new(move |_| Ok(available))),
 +                Ok(Err(error)) | Err(error) => deferred.reject(error),
-+            }
-+        }
+             }
+-            return Ok(running);
+         }
+-
+-        #[cfg(not(any(
+-            target_os = "macos",
+-            target_os = "windows",
+-            target_os = "linux",
+-            target_os = "freebsd"
+-        )))]
+-        Err(Error::from_reason(
+-            "The production GPUIX renderer does not support this operating system",
+-        ))
 +        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 +        self.send_window_operation(UiCommand::RunTextInputAction {
 +            name,
@@ -3237,7 +3226,7 @@ index 8c104a4..9198a7e 100644
              }
              current = parent_id;
          };
-@@ -4534,6 +5601,47 @@ struct VirtualListEntry {
+@@ -4534,6 +5601,160 @@ struct VirtualListEntry {
      seen_rows: HashSet<u64>,
  }
  
@@ -3247,6 +3236,119 @@ index 8c104a4..9198a7e 100644
 +    }
 +    let current_rows: HashSet<u64> = child_ids.iter().copied().collect();
 +    seen_rows.retain(|id| current_rows.contains(id));
++}
++
++fn virtual_list_overlap(
++    previous: &[u64],
++    current: &[u64],
++) -> Option<(std::ops::Range<usize>, std::ops::Range<usize>)> {
++    let first = current.first()?;
++    if let Some(start) = previous.iter().position(|id| id == first) {
++        let retained = previous.len() - start;
++        if start > 0 && retained <= current.len() && previous[start..] == current[..retained] {
++            return Some((start..previous.len(), 0..retained));
++        }
++    }
++    let first = previous.first()?;
++    let start = current.iter().position(|id| id == first)?;
++    let retained = current.len() - start;
++    (start > 0 && retained <= previous.len() && current[start..] == previous[..retained])
++        .then_some((0..retained, start..current.len()))
++}
++
++fn splice_virtual_list_children(
++    state: &gpui::ListState,
++    previous: &[u64],
++    current: &[u64],
++    focus_handles: &[Option<gpui::FocusHandle>],
++) {
++    if let Some((old, new)) = virtual_list_overlap(previous, current) {
++        // Keep the shared rows themselves so their measured heights and scroll anchor survive.
++        if old.end < previous.len() {
++            state.splice(old.end..previous.len(), 0);
++        }
++        if old.start > 0 {
++            state.splice(0..old.start, 0);
++        }
++        if new.end < current.len() {
++            state.splice_focusable(old.len()..old.len(), focus_handles[new.end..].iter().cloned());
++        }
++        if new.start > 0 {
++            state.splice_focusable(0..0, focus_handles[..new.start].iter().cloned());
++        }
++        return;
++    }
++    let prefix = previous
++        .iter()
++        .zip(current)
++        .take_while(|(old, new)| old == new)
++        .count();
++    let suffix = previous[prefix..]
++        .iter()
++        .rev()
++        .zip(current[prefix..].iter().rev())
++        .take_while(|(old, new)| old == new)
++        .count();
++    state.splice_focusable(
++        prefix..previous.len() - suffix,
++        focus_handles[prefix..focus_handles.len() - suffix]
++            .iter()
++            .cloned(),
++    );
++}
++
++#[cfg(test)]
++mod virtual_list_splice_tests {
++    use super::{splice_virtual_list_children, virtual_list_overlap};
++    use gpui::{FollowMode, ListAlignment, ListOffset, ListState, px};
++
++    #[test]
++    fn sliding_windows_retain_the_contiguous_shared_rows() {
++        assert_eq!(virtual_list_overlap(&[0, 1, 2, 3], &[2, 3, 4, 5]), Some((2..4, 0..2)));
++        assert_eq!(virtual_list_overlap(&[2, 3, 4, 5], &[0, 1, 2, 3]), Some((0..2, 2..4)));
++        assert_eq!(virtual_list_overlap(&[0, 1, 2, 3], &[2, 3, 4]), Some((2..4, 0..2)));
++        assert_eq!(virtual_list_overlap(&[2, 3, 4], &[0, 1, 2, 3]), Some((0..2, 2..4)));
++        assert_eq!(virtual_list_overlap(&[0, 1, 2], &[3, 4, 5]), None);
++        assert_eq!(virtual_list_overlap(&[0, 1, 2], &[0, 2, 1]), None);
++        assert_eq!(virtual_list_overlap(&[], &[0]), None);
++        assert_eq!(virtual_list_overlap(&[0], &[]), None);
++    }
++
++    #[test]
++    fn sliding_updates_preserve_a_paused_logical_anchor() {
++        let state = ListState::new(200, ListAlignment::Top, px(0.))
++            .with_uniform_item_height(px(20.));
++        state.scroll_to(ListOffset { item_ix: 100, offset_in_item: px(7.) });
++        let previous: Vec<u64> = (0..200).collect();
++        let current: Vec<u64> = (5..205).collect();
++        splice_virtual_list_children(&state, &previous, &current, &vec![None; 200]);
++        assert_eq!(state.item_count(), 200);
++        let offset = state.logical_scroll_top();
++        assert_eq!((offset.item_ix, offset.offset_in_item), (95, px(7.)));
++        splice_virtual_list_children(&state, &current, &previous, &vec![None; 200]);
++        let offset = state.logical_scroll_top();
++        assert_eq!((offset.item_ix, offset.offset_in_item), (100, px(7.)));
++    }
++
++    #[test]
++    fn sliding_updates_do_not_stop_following_the_tail() {
++        let state = ListState::new(4, ListAlignment::Top, px(0.));
++        state.set_follow_mode(FollowMode::Tail);
++        splice_virtual_list_children(&state, &[0, 1, 2, 3], &[2, 3, 4, 5], &vec![None; 4]);
++        assert!(state.is_following_tail());
++        assert_eq!(state.item_count(), 4);
++    }
++
++    #[test]
++    fn arbitrary_replacement_and_empty_lists_keep_the_correct_count() {
++        let state = ListState::new(4, ListAlignment::Top, px(0.));
++        splice_virtual_list_children(&state, &[0, 1, 2, 3], &[0, 5, 2, 3], &vec![None; 4]);
++        assert_eq!(state.item_count(), 4);
++        splice_virtual_list_children(&state, &[0, 5, 2, 3], &[], &[]);
++        assert_eq!(state.item_count(), 0);
++        splice_virtual_list_children(&state, &[], &[6, 7], &vec![None; 2]);
++        assert_eq!(state.item_count(), 2);
++    }
 +}
 +
 +#[cfg(test)]
@@ -3285,7 +3387,7 @@ index 8c104a4..9198a7e 100644
  impl VirtualListEntry {
      fn new(
          config: VirtualListConfig,
-@@ -4605,6 +5713,10 @@ impl VirtualListEntry {
+@@ -4605,6 +5826,10 @@ impl VirtualListEntry {
              return;
          }
  
@@ -3296,7 +3398,7 @@ index 8c104a4..9198a7e 100644
          let old_rows: HashMap<u64, (u64, Option<gpui::FocusHandle>)> = self
              .child_ids
              .iter()
-@@ -4636,9 +5748,6 @@ impl VirtualListEntry {
+@@ -4636,9 +5861,6 @@ impl VirtualListEntry {
                  row_focus_handles,
              );
              replacement.seen_rows = std::mem::take(&mut self.seen_rows);
@@ -3306,7 +3408,33 @@ index 8c104a4..9198a7e 100644
              if !should_follow {
                  replacement.state.scroll_to(scroll_top);
              }
-@@ -4764,7 +5873,12 @@ impl VirtualListEntry {
+@@ -4670,24 +5892,7 @@ impl VirtualListEntry {
+         // A windowed list's children are a sliding viewport. Splicing by
+         // child position would treat a scroll as a rewrite of items 0..N.
+         if config.item_count.is_none() && self.child_ids != child_ids {
+-            let prefix = self
+-                .child_ids
+-                .iter()
+-                .zip(&child_ids)
+-                .take_while(|(old, new)| old == new)
+-                .count();
+-            let suffix = self.child_ids[prefix..]
+-                .iter()
+-                .rev()
+-                .zip(child_ids[prefix..].iter().rev())
+-                .take_while(|(old, new)| old == new)
+-                .count();
+-            self.state.splice_focusable(
+-                prefix..self.child_ids.len().saturating_sub(suffix),
+-                row_focus_handles[prefix..row_focus_handles.len().saturating_sub(suffix)]
+-                    .iter()
+-                    .cloned(),
+-            );
++            splice_virtual_list_children(&self.state, &self.child_ids, &child_ids, &row_focus_handles);
+             if let Some(height) = config.estimated_item_height {
+                 self.state = self
+                     .state
+@@ -4764,7 +5969,12 @@ impl VirtualListEntry {
  }
  
  impl GpuixView {
@@ -3320,7 +3448,7 @@ index 8c104a4..9198a7e 100644
          self.reveal_virtual_list_ancestor(id);
          if let Some(handle) = self.focus_handles.get(&id) {
              self.pending_focus_element = None;
-@@ -4921,7 +6035,11 @@ impl GpuixView {
+@@ -4921,7 +6131,11 @@ impl GpuixView {
          }
  
          let before = entry.state.logical_scroll_top();
@@ -3333,7 +3461,7 @@ index 8c104a4..9198a7e 100644
          entry.state.scroll_by(gpui::px(step));
          let after = entry.state.logical_scroll_top();
          let list_moved =
-@@ -4985,6 +6103,7 @@ impl GpuixView {
+@@ -4985,6 +6199,7 @@ impl GpuixView {
          // the rest of the tree is orders of magnitude larger.
          //
          // Create handles for elements that need focus but don't have one yet.
@@ -3341,7 +3469,7 @@ index 8c104a4..9198a7e 100644
          for &id in &tree.focusable_ids {
              let Some(element) = tree.elements.get(&id) else {
                  continue;
-@@ -5001,7 +6120,7 @@ impl GpuixView {
+@@ -5001,7 +6216,7 @@ impl GpuixView {
                  // Focus once, at creation. Re-focusing every frame would
                  // steal focus back from whatever the user clicked next.
                  if element.auto_focus {
@@ -3350,7 +3478,7 @@ index 8c104a4..9198a7e 100644
                  }
                  self.focus_handles.insert(id, handle);
              } else if let (Some(handle), Some(index)) =
-@@ -5014,17 +6133,6 @@ impl GpuixView {
+@@ -5014,17 +6229,6 @@ impl GpuixView {
              }
          }
  
@@ -3368,7 +3496,7 @@ index 8c104a4..9198a7e 100644
          self.focus_subscriptions.retain(|(id, event), _| {
              tree.elements
                  .get(id)
-@@ -5061,6 +6169,23 @@ impl GpuixView {
+@@ -5061,6 +6265,23 @@ impl GpuixView {
          // Clean up handles for elements that no longer exist.
          self.focus_handles
              .retain(|id, _| tree.focusable_ids.contains(id));
@@ -3392,7 +3520,7 @@ index 8c104a4..9198a7e 100644
      }
  }
  
-@@ -5090,6 +6215,8 @@ impl gpui::Render for GpuixView {
+@@ -5090,6 +6311,8 @@ impl gpui::Render for GpuixView {
      ) -> impl gpui::IntoElement {
          use gpui::IntoElement;
  
@@ -3401,7 +3529,7 @@ index 8c104a4..9198a7e 100644
          window.set_window_title(&self.window_title);
  
          #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-@@ -5223,14 +6350,14 @@ impl gpui::Render for GpuixView {
+@@ -5223,14 +6446,14 @@ impl gpui::Render for GpuixView {
  
          // Sync scroll handles to thread_local so napi methods (scrollTo,
          // getScrollOffset) can access them without an App context.
@@ -3418,7 +3546,7 @@ index 8c104a4..9198a7e 100644
              let mut states = cell.borrow_mut();
              states.clear();
              for (&id, entry) in &self.virtual_lists {
-@@ -5240,7 +6367,7 @@ impl gpui::Render for GpuixView {
+@@ -5240,7 +6463,7 @@ impl gpui::Render for GpuixView {
          // One-shot: a queued scroll for a list that did not build this frame
          // would otherwise fire on some later frame, against child indices that
          // no longer match what JS meant.
@@ -3427,7 +3555,7 @@ index 8c104a4..9198a7e 100644
  
          if motion_active {
              window.request_animation_frame();
-@@ -5361,6 +6488,7 @@ fn build_virtual_list(
+@@ -5361,6 +6584,7 @@ fn build_virtual_list(
      window: &mut gpui::Window,
      cx: &mut gpui::Context<GpuixView>,
  ) -> gpui::AnyElement {
@@ -3435,7 +3563,7 @@ index 8c104a4..9198a7e 100644
      use gpui::prelude::*;
  
      let child_ids: Vec<u64> = element
-@@ -5457,7 +6585,7 @@ fn build_virtual_list(
+@@ -5457,7 +6681,7 @@ fn build_virtual_list(
      // changes, so the indices JS computed against its committed child list are
      // the indices the splice-adjusted ListState sees.
      if let Some(offset) =
@@ -3444,7 +3572,7 @@ index 8c104a4..9198a7e 100644
      {
          list_state.scroll_to(offset);
      }
-@@ -6296,6 +7424,7 @@ pub(crate) fn apply_styles<E: gpui::Styled>(mut el: E, style: &StyleDesc) -> E {
+@@ -6296,6 +7520,7 @@ pub(crate) fn apply_styles<E: gpui::Styled>(mut el: E, style: &StyleDesc) -> E {
      match style.display.as_deref() {
          Some("flex") => el = el.flex(),
          Some("grid") => el = el.grid(),
@@ -3452,7 +3580,7 @@ index 8c104a4..9198a7e 100644
          _ => {}
      }
      if let Some(cols) = style.grid_template_columns {
-@@ -6731,10 +7860,7 @@ fn report_layout(
+@@ -6731,10 +7956,7 @@ fn report_layout(
      callback: &EventCallback,
      cx: &mut gpui::App,
  ) {
@@ -3464,7 +3592,7 @@ index 8c104a4..9198a7e 100644
      {
          let mut reports = reports.borrow_mut();
          let unchanged = reports.sizes.get(&id).is_some_and(|last| {
-@@ -7498,6 +8624,9 @@ pub struct WindowOptions {
+@@ -7498,6 +8720,9 @@ pub struct WindowOptions {
      /// `title`. It does NOT set the title of the application menu itself: macOS
      /// takes that from the executable, and only a `.app` bundle changes it.
      pub app_name: Option<String>,
@@ -3474,7 +3602,7 @@ index 8c104a4..9198a7e 100644
      pub width: Option<f64>,
      pub height: Option<f64>,
      pub min_width: Option<f64>,
-@@ -7538,6 +8667,9 @@ impl Default for WindowOptions {
+@@ -7538,6 +8763,9 @@ impl Default for WindowOptions {
          Self {
              title: Some("GPUIX".to_string()),
              app_name: None,
@@ -3484,7 +3612,7 @@ index 8c104a4..9198a7e 100644
              width: Some(800.0),
              height: Some(600.0),
              min_width: None,
-@@ -7617,8 +8749,14 @@ fn to_layer_shell_options(options: &LayerShellOptions) -> gpui::layer_shell::Lay
+@@ -7617,8 +8845,14 @@ fn to_layer_shell_options(options: &LayerShellOptions) -> gpui::layer_shell::Lay
  
  fn to_gpui_window_options(
      options: &WindowOptions,
@@ -3500,7 +3628,7 @@ index 8c104a4..9198a7e 100644
      let title = options.title.clone().unwrap_or_else(|| "GPUIX".to_string());
      let titlebar_transparent = options.titlebar_transparent.unwrap_or(false);
      let traffic_light_position = match (options.traffic_light_x, options.traffic_light_y) {
-@@ -7651,6 +8789,11 @@ fn to_gpui_window_options(
+@@ -7651,6 +8885,11 @@ fn to_gpui_window_options(
              appears_transparent: titlebar_transparent,
              traffic_light_position,
          }),
@@ -3512,7 +3640,7 @@ index 8c104a4..9198a7e 100644
          is_resizable: options.resizable.unwrap_or(true),
          window_background,
          window_min_size,
-@@ -8329,3 +9472,179 @@ fn check_font(bytes: &[u8]) -> std::result::Result<(), String> {
+@@ -8329,3 +9568,179 @@ fn check_font(bytes: &[u8]) -> std::result::Result<(), String> {
      }
      Ok(())
  }
