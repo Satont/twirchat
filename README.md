@@ -7,22 +7,28 @@ Multi-platform chat manager for streamers (Twitch, YouTube, Kick).
 
 ## Installation
 
-Desktop releases are published from stable `vX.Y.Z` tags only. Velopack publishes one feed per
-platform: `releases.linux.json`, `releases.win.json`, and `releases.osx.json`. Current installers are
-unsigned and the macOS build is not notarized.
+Desktop releases are published from stable `vX.Y.Z` tags. Builds are available for Linux x64,
+Windows x64, and macOS Apple Silicon and Intel. Current installers are unsigned; macOS builds
+are not notarized. Download the matching installer and `SHA256SUMS` from
+[Releases](https://github.com/Satont/twirchat/releases/latest).
 
 ### Linux
 
-To install the latest stable Linux AppImage:
+Download the Linux x64 `.AppImage` and verify its checksum before launching it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Satont/twirchat/main/scripts/install-linux.sh | bash
+sha256sum --check --ignore-missing SHA256SUMS &&
+  chmod +x ./*linux-x64*.AppImage &&
+  ./*linux-x64*.AppImage
 ```
 
-The script detects the `.AppImage` asset from the latest GitHub Release, installs it under
-`~/.local/share/dev.twirchat.app`, creates a `twirchat` symlink, and adds a desktop entry. You can
-also download the standalone `.AppImage` directly from the
-[Releases](https://github.com/Satont/twirchat/releases/latest) page.
+Alternatively, download and inspect [the Linux installation script](scripts/install-linux.sh),
+then run `bash install-linux.sh`. It requires `curl`, `jq`, and `sha256sum`, checks the CPU and
+installer checksum, and adds an application menu entry and `~/.local/bin/twirchat`.
+
+Linux requires glibc 2.35 or newer and a working Vulkan driver. Keep the AppImage in a writable
+directory to allow updates. FUSE 2 is required to mount AppImages on systems that do not provide
+an AppImage integration service.
 
 ### Windows
 
@@ -32,15 +38,39 @@ also download the standalone `.AppImage` directly from the
 
 ### macOS
 
-1. Download the latest macOS Velopack `.pkg` (Apple Silicon only) from
+1. Download the macOS installer or application archive for Apple Silicon or Intel from
    [Releases](https://github.com/Satont/twirchat/releases/latest).
-2. Run the package installer. The packaged app bundle is `TwirChat.app`.
+2. Install `TwirChat.app`. macOS 13 or newer is required.
 
 ## Updates
 
-Packaged desktop builds initialize Velopack at startup, check the platform feed on startup while
+Packaged desktop builds initialize Velopack at startup, check their architecture-specific feed while
 automatic checks are enabled, show an in-app update toast when a stable update is available, and
 can download the update before restarting to apply it.
+
+Users of the previous distribution should install the new GPUIX package manually once because
+the old release feeds are being retired. Preserve the `~/.twirchat` profile before reinstalling.
+
+## Release and backend delivery
+
+Pull requests validate types, lint, formatting, tests, native desktop packages and backend Docker
+builds. Stable version tags build all platforms before publishing a complete GitHub release and
+versioned backend images at `ghcr.io/satont/twirchat/backend`.
+
+See [the release guide](docs/releasing.md) for release commands, update channels, signing status,
+checksums, production Compose configuration, database backups and rollback.
+
+To run the production backend and PostgreSQL from the repository root:
+
+```bash
+cp .env.production.example .env
+# Fill in OAuth credentials, database credentials and public HTTPS URLs in .env.
+docker compose up -d
+```
+
+The default backend image is `1.0.0`; set `TWIRCHAT_VERSION` in `.env` to select a release.
+The backend binds to `127.0.0.1:3000`, and PostgreSQL has no host port. Put an HTTPS reverse
+proxy with WebSocket support in front of the backend for public access.
 
 ## Development benchmarks
 

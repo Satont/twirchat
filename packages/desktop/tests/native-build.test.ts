@@ -12,6 +12,7 @@ describe('pinned native build contract', () => {
   test('maps supported host platforms to stable packaged names', () => {
     expect(nativeArtifactName('linux', 'x64')).toBe('gpuix.linux-x64.node')
     expect(nativeArtifactName('darwin', 'arm64')).toBe('gpuix.darwin-arm64.node')
+    expect(nativeArtifactName('darwin', 'x64')).toBe('gpuix.darwin-x64.node')
     expect(nativeArtifactName('win32', 'x64')).toBe('gpuix.win32-x64.node')
     expect(nativeArtifactName('win32', 'arm64')).toBe('gpuix.win32-arm64.node')
     expect(() => nativeArtifactName('linux', 'arm64')).toThrow('No pinned')

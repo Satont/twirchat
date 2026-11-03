@@ -2,7 +2,9 @@ name: Quality
 
 on:
   push:
+    branches: [main, gpuix]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,13 +14,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  validation:
+    uses: ./.github/workflows/validation.yml
+
+  backend:
+    uses: ./.github/workflows/backend-build.yml
+
+  desktop:
+    uses: ./.github/workflows/desktop-build.yml
+    with:
+      version: 0.0.0
+      backend-url: ${{ vars.BACKEND_URL || 'https://chat.twir.app' }}
+
+  required:
+    name: Required checks
+    if: always()
+    needs: [validation, backend, desktop]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      - run: bun run check
-      - run: bun run --cwd packages/shared check:youtube
+      - name: Require every validation and build
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          DESKTOP_RESULT: ${{ needs.desktop.result }}
+        run: |
+          test "$VALIDATION_RESULT" = success
+          test "$BACKEND_RESULT" = success
+          test "$DESKTOP_RESULT" = success

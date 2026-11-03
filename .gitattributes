@@ -1,3 +1,5 @@
+* text=auto eol=lf
+
 # Preserve pinned upstream text and the context markers in unified patches.
 .agents/skills/** -whitespace
 packages/desktop/native/gpuix/patches/*.patch -whitespace

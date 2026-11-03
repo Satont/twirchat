@@ -1,10 +1,9 @@
 /**
  * Velopack auto-updater for the Bun/GPUIX build.
  *
- * Release contract (unchanged since the Wails/Rust builds, so installed
- * clients keep updating through the same feeds):
+ * Release contract:
  *   package id  dev.twirchat.app
- *   channels    linux / win / osx (baked into the package manifest at
+ *   channels    linux-x64 / win-x64 / osx-x64 / osx-arm64 (baked into the package manifest at
  *               `vpk pack -c <channel>`; UpdateManager reads it from there)
  *   feed        GitHub Releases `releases.<channel>.json` on Satont/twirchat
  *
@@ -12,7 +11,7 @@
  */
 
 import { logger } from '@twirchat/shared/logger'
-import { GithubSource, UpdateManager, VelopackApp } from 'velopack'
+import { GithubSource, UpdateManager } from 'velopack'
 import type { UpdateInfo, VelopackAsset } from 'velopack'
 
 import { APP_VERSION } from '../../build-info'
@@ -49,22 +48,6 @@ function setSkippedHash(hash: string): void {
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     [SKIPPED_UPDATE_KEY, hash],
   )
-}
-
-/**
- * Velopack process bootstrap — must run before anything else at startup.
- * Handles install/update/restart hooks and may re-exec or exit the process.
- */
-export function runVelopackStartup(): void {
-  if (APP_VERSION === 'dev') return
-  try {
-    VelopackApp.build()
-      .setAutoApplyOnStartup(true)
-      .setLogger((level, msg) => log.debug('velopack', { level, msg }))
-      .run()
-  } catch (error) {
-    log.warn('velopack startup failed', { error: String(error) })
-  }
 }
 
 export function createUpdater(events: DesktopEvents): Updater {

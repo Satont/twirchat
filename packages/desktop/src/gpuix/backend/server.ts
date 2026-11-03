@@ -19,7 +19,7 @@ import { z } from 'zod'
 
 import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
 import { BackendConnection } from '../../backend-connection'
-import { BACKEND_URL } from '../../build-info'
+import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
 import { pushOverlayEvent, pushOverlayMessage, startOverlayServer } from '../../overlay-server'
 import { KickAdapter } from '../../platforms/kick/adapter'
@@ -58,7 +58,6 @@ import { twitchEventSubscriptionSchema } from './api-schemas'
 import { recordChatMessage } from './chat-history'
 import { createDesktopEvents, type DesktopEvents } from './events'
 import { createTwitchHistoryRuntime } from './twitch-history'
-import { runVelopackStartup } from './updater'
 
 const log = logger('gpuix-backend')
 
@@ -87,14 +86,11 @@ function openBrowser(url: string): void {
 function boot(): DesktopBackend {
   log.info('Starting GPUIX backend...')
 
-  // Velopack install/update/restart hooks — must run before anything else.
-  runVelopackStartup()
-
   // Runtime config: baked in at release build (--define), env overridable in dev.
-  const nodeEnv = process.env.NODE_ENV ?? 'development'
+  const nodeEnv = APP_ENV
   setRuntimeConfig({
     backendUrl: BACKEND_URL,
-    backendWsUrl: process.env.CHATRIX_BACKEND_WS_URL ?? 'ws://127.0.0.1:3000/ws',
+    backendWsUrl: BACKEND_WS_URL,
     nodeEnv,
   })
 

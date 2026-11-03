@@ -1,0 +1,261 @@
+name: Desktop build
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ''
+      version:
+        type: string
+        required: true
+      backend-url:
+        type: string
+        required: true
+      release:
+        type: boolean
+        default: false
+      signing:
+        type: boolean
+        default: false
+    secrets:
+      MACOS_CERTIFICATES_P12_BASE64:
+        required: false
+      MACOS_CERTIFICATE_PASSWORD:
+        required: false
+      MACOS_SIGN_APP_IDENTITY:
+        required: false
+      MACOS_SIGN_INSTALL_IDENTITY:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+      APPLE_APP_PASSWORD:
+        required: false
+      WINDOWS_CERTIFICATE_BASE64:
+        required: false
+      WINDOWS_CERTIFICATE_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.runtime }} installer and updater
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            runtime: linux-x64
+            native-target: linux-x64
+            main-exe: twirchat
+            pack-dir: bin
+          - os: windows-2025
+            runtime: win-x64
+            native-target: win32-x64
+            main-exe: twirchat.exe
+            pack-dir: bin
+          - os: macos-15
+            runtime: osx-arm64
+            native-target: darwin-arm64
+            main-exe: TwirChat
+            pack-dir: bin/TwirChat.app
+          - os: macos-15-intel
+            runtime: osx-x64
+            native-target: darwin-x64
+            main-exe: TwirChat
+            pack-dir: bin/TwirChat.app
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: '2'
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      RELEASE_VERSION: ${{ inputs.version }}
+      BACKEND_URL: ${{ inputs.backend-url }}
+      RUNTIME: ${{ matrix.runtime }}
+      MAIN_EXE: ${{ matrix.main-exe }}
+      PACK_DIR: ${{ matrix.pack-dir }}
+      SIGNING_ENABLED: ${{ inputs.release && inputs.signing }}
+      TWIRCHAT_NATIVE_CACHE: ${{ github.workspace }}/.native-cache
+    steps:
+      - name: Preserve source and patch line endings on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 8.0.x
+      - name: Install lockfile dependencies
+        run: bun install --frozen-lockfile
+      - name: Verify host architecture
+        env:
+          EXPECTED_NATIVE_TARGET: ${{ matrix.native-target }}
+        run: bun -e 'if (`${process.platform}-${process.arch}` !== process.env.EXPECTED_NATIVE_TARGET) throw new Error("Native release architecture mismatch")'
+      - name: Read pinned native toolchain
+        id: native
+        run: |
+          toolchain="$(bun -e 'console.log(require("./packages/desktop/native/gpuix/source.json").rustToolchain)')"
+          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
+          rustup toolchain install "$toolchain" --profile minimal
+      - name: Install Linux native and AppImage dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc g++ clang cmake pkg-config libfuse2 \
+            libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev \
+            libssl-dev libzstd-dev libvulkan-dev libvulkan1 libxcb-shape0-dev
+      - name: Install Metal compiler
+        if: runner.os == 'macOS'
+        run: xcodebuild -downloadComponent MetalToolchain
+      - name: Cache Cargo registry and git dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-${{ hashFiles('packages/desktop/native/gpuix/source.json') }}
+          restore-keys: cargo-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-
+      - name: Cache pinned native artifact and build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .native-cache
+            packages/desktop/dist/native
+          key: native-v1-macos13-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-${{ hashFiles('packages/desktop/native/gpuix/source.json', 'packages/desktop/native/gpuix/patches/*.patch', 'packages/desktop/scripts/build-gpuix-native.ts') }}
+      - name: Import macOS release signing identities
+        if: inputs.release && inputs.signing && runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATES_P12_BASE64: ${{ secrets.MACOS_CERTIFICATES_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_APP_IDENTITY: ${{ secrets.MACOS_SIGN_APP_IDENTITY }}
+          MACOS_SIGN_INSTALL_IDENTITY: ${{ secrets.MACOS_SIGN_INSTALL_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          : "${MACOS_CERTIFICATES_P12_BASE64:?Missing macOS signing certificate bundle}"
+          : "${MACOS_CERTIFICATE_PASSWORD:?Missing macOS certificate password}"
+          : "${MACOS_SIGN_APP_IDENTITY:?Missing Developer ID Application identity}"
+          : "${MACOS_SIGN_INSTALL_IDENTITY:?Missing Developer ID Installer identity}"
+          : "${APPLE_ID:?Missing Apple account ID}"
+          : "${APPLE_TEAM_ID:?Missing Apple team ID}"
+          : "${APPLE_APP_PASSWORD:?Missing Apple app-specific password}"
+          keychain="$RUNNER_TEMP/twirchat-signing.keychain-db"
+          password="$(uuidgen)"
+          echo "::add-mask::$password"
+          printf '%s' "$MACOS_CERTIFICATES_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$password" "$keychain"
+          echo "MACOS_KEYCHAIN_PATH=$keychain" >> "$GITHUB_ENV"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/signing.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          xcrun notarytool store-credentials twirchat --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --keychain "$keychain"
+      - name: Import Windows release signing certificate
+        if: inputs.release && inputs.signing && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE_BASE64 -or -not $env:WINDOWS_CERTIFICATE_PASSWORD) {
+            throw 'Windows signing certificate and password are required when RELEASE_SIGNING=true'
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'twirchat-signing.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificates = @(Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password | Where-Object HasPrivateKey)
+          if ($certificates.Count -ne 1) { throw 'Expected one code signing certificate with a private key' }
+          "WINDOWS_SIGN_THUMBPRINT=$($certificates[0].Thumbprint)" >> $env:GITHUB_ENV
+      - name: Build production application and verify compiled runtime
+        working-directory: packages/desktop
+        env:
+          MACOS_SIGN_APP_IDENTITY: ${{ inputs.release && inputs.signing && runner.os == 'macOS' && secrets.MACOS_SIGN_APP_IDENTITY || '' }}
+        run: bun scripts/build-release.ts "$RELEASE_VERSION" "$BACKEND_URL"
+      - name: Verify Linux glibc baseline
+        if: runner.os == 'Linux'
+        run: |
+          versions="$(objdump -T packages/desktop/dist/native/gpuix.linux-x64.node | sed -n 's/.*GLIBC_\([0-9.]*\).*/\1/p' | sort -Vu)"
+          test -n "$versions"
+          printf 'Required glibc versions:\n%s\n' "$versions"
+          test "$(printf '%s\n2.35\n' "$versions" | sort -V | tail -n 1)" = 2.35
+      - name: Install matching Velopack CLI
+        run: |
+          dotnet tool install --global vpk --version 1.3.39-g8d2844f
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: Download previous full package for delta generation
+        if: inputs.release
+        working-directory: packages/desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .assets[].name' > "$RUNNER_TEMP/release-assets.txt"
+          if grep -Fxq "releases.$RUNTIME.json" "$RUNNER_TEMP/release-assets.txt"; then
+            vpk download github --repoUrl "https://github.com/$GITHUB_REPOSITORY" \
+              --token "$GH_TOKEN" --channel "$RUNTIME" --outputDir releases
+          else
+            echo "No published $RUNTIME feed; this is the first release for this architecture."
+          fi
+      - name: Package installer and architecture-specific update feed
+        working-directory: packages/desktop
+        env:
+          MACOS_SIGN_APP_IDENTITY: ${{ inputs.release && inputs.signing && runner.os == 'macOS' && secrets.MACOS_SIGN_APP_IDENTITY || '' }}
+          MACOS_SIGN_INSTALL_IDENTITY: ${{ inputs.release && inputs.signing && runner.os == 'macOS' && secrets.MACOS_SIGN_INSTALL_IDENTITY || '' }}
+        run: |
+          printf 'TwirChat %s\n\nProduction GPUIX desktop build.\n' "$RELEASE_VERSION" > release-notes.md
+          signing=()
+          icon=()
+          signature=unsigned
+          if test "$RUNNER_OS" = Linux; then icon+=(--icon assets/icon.png); fi
+          if test "$RUNNER_OS" = Windows; then icon+=(--icon assets/icon.ico); fi
+          if test "$SIGNING_ENABLED" = true && test "$RUNNER_OS" = macOS; then
+            signing+=(--signAppIdentity "$MACOS_SIGN_APP_IDENTITY" --signInstallIdentity "$MACOS_SIGN_INSTALL_IDENTITY"
+              --keychain "$MACOS_KEYCHAIN_PATH" --notaryProfile twirchat
+              --signEntitlements build/bun.entitlements --signDisableDeep)
+            signature='signed and notarized'
+          elif test "$SIGNING_ENABLED" = true && test "$RUNNER_OS" = Windows; then
+            signing+=(--signParams "/sha1 $WINDOWS_SIGN_THUMBPRINT /fd SHA256 /tr http://timestamp.digicert.com /td SHA256"
+              --signExclude '\.node$')
+            signature=signed
+          fi
+          vpk pack --packId dev.twirchat.app --packVersion "$RELEASE_VERSION" \
+            --packDir "$PACK_DIR" --mainExe "$MAIN_EXE" \
+            --runtime "$RUNTIME" --channel "$RUNTIME" --outputDir releases \
+            --packAuthors Satont --packTitle TwirChat --delta BestSpeed \
+            --releaseNotes release-notes.md "${icon[@]}" "${signing[@]}"
+          printf 'Platform: %s\nVersion: %s\nSigning: %s\n' "$RUNTIME" "$RELEASE_VERSION" "$signature" > "releases/signature-$RUNTIME.txt"
+          test -s "releases/releases.$RUNTIME.json"
+      - name: Preserve installers and feeds
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-${{ matrix.runtime }}
+          path: packages/desktop/releases/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Remove temporary macOS signing keychain
+        if: always() && inputs.release && inputs.signing && runner.os == 'macOS'
+        run: |
+          if test -n "${MACOS_KEYCHAIN_PATH:-}"; then security delete-keychain "$MACOS_KEYCHAIN_PATH"; fi
+          rm -f "$RUNNER_TEMP/signing.p12"
+      - name: Remove temporary Windows signing certificate
+        if: always() && inputs.release && inputs.signing && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:WINDOWS_SIGN_THUMBPRINT) { Remove-Item "Cert:\CurrentUser\My\$env:WINDOWS_SIGN_THUMBPRINT" }
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'twirchat-signing.pfx') -ErrorAction SilentlyContinue

@@ -1,0 +1,48 @@
+name: Validation
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Types, lint, format and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Validate GitHub Actions workflows
+        run: |
+          directory="$RUNNER_TEMP/actionlint"
+          mkdir -p "$directory"
+          curl --fail --location --retry 3 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$directory/actionlint.tar.gz"
+          printf '%s  %s\n' 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8 "$directory/actionlint.tar.gz" | sha256sum --check
+          tar -xzf "$directory/actionlint.tar.gz" -C "$directory" actionlint
+          "$directory/actionlint" -shellcheck='' .github/workflows/*.yml
+          bash -n .github/scripts/verify-release-assets.sh .github/scripts/test-release-assets.sh
+      - run: bun run check
+      - run: bun run test
+      - run: bun run --cwd packages/shared check:youtube
+      - name: Verify release asset integrity checks
+        run: bash .github/scripts/test-release-assets.sh
+      - name: Validate production Compose configuration
+        run: docker compose --env-file .env.production.example config --no-env-resolution --quiet
+      - name: Load isolated PostgreSQL test image
+        run: docker pull postgres:17-alpine
+      - name: Test real PostgreSQL account transactions
+        run: bun packages/backend/tests/run-multi-account-postgres.ts

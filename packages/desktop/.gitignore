@@ -1,5 +1,6 @@
 build/*
 !build/config.yml
+!build/bun.entitlements
 dist/*
 !dist/main/
 dist/main/*
@@ -11,3 +12,4 @@ dist
 !dist/
 !dist/main/
 !dist/main/.gitkeep
+/releases/

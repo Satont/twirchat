@@ -1,29 +1,6 @@
-version: '3.8'
+name: twirchat
 
-services:
-  twirchat-backend:
-    image: ghcr.io/satont/twirchat/backend:latest
-    restart: unless-stopped
-    env_file: .env
-    depends_on:
-      twirchat-postgres:
-        condition: service_healthy
-
-  twirchat-postgres:
-    image: postgres:18-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: twirchat
-      POSTGRES_PASSWORD: twirchat
-      POSTGRES_DB: twirchat
-    ports:
-      - '5432:5432'
-    volumes:
-      - twirchat-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U twirchat -d twirchat']
-      interval: 5s
-      timeout: 5s
-
-volumes:
-  twirchat-postgres-data:
+# Compatibility entry point; the root file owns the production configuration.
+include:
+  - path: ../docker-compose.yml
+    project_directory: ..

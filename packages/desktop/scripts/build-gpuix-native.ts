@@ -41,6 +41,7 @@ export function nativeArtifactName(platform = process.platform, arch = process.a
   const target = `${platform}-${arch}`
   if (target === 'linux-x64') return 'gpuix.linux-x64.node'
   if (target === 'darwin-arm64') return 'gpuix.darwin-arm64.node'
+  if (target === 'darwin-x64') return 'gpuix.darwin-x64.node'
   if (target === 'win32-x64') return 'gpuix.win32-x64.node'
   if (target === 'win32-arm64') return 'gpuix.win32-arm64.node'
   throw new Error(`No pinned GPUIX native build for ${target}`)
