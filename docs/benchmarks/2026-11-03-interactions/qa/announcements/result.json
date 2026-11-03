@@ -1,0 +1,346 @@
+{
+  "ok": true,
+  "nodeEnv": "production",
+  "reactVersion": "19.3.1",
+  "evidence": [
+    {
+      "width": 900,
+      "light": false,
+      "chatTheme": "compact",
+      "screenshot": "announcements-900-dark-compact.png",
+      "backgroundPixels": {
+        "primary": [
+          47,
+          32,
+          73
+        ],
+        "blue": [
+          24,
+          39,
+          73
+        ],
+        "green": [
+          18,
+          52,
+          43
+        ],
+        "orange": [
+          69,
+          54,
+          27
+        ],
+        "purple": [
+          47,
+          32,
+          73
+        ],
+        "unknown": [
+          47,
+          32,
+          73
+        ]
+      },
+      "emotePixels": 4914,
+      "hiddenRevealed": true
+    },
+    {
+      "width": 900,
+      "light": false,
+      "chatTheme": "modern",
+      "screenshot": "announcements-900-dark-modern.png",
+      "backgroundPixels": {
+        "primary": [
+          47,
+          32,
+          73
+        ],
+        "blue": [
+          24,
+          39,
+          73
+        ],
+        "green": [
+          18,
+          52,
+          43
+        ],
+        "orange": [
+          69,
+          54,
+          27
+        ],
+        "purple": [
+          47,
+          32,
+          73
+        ],
+        "unknown": [
+          47,
+          32,
+          73
+        ]
+      },
+      "emotePixels": 4914,
+      "hiddenRevealed": true
+    },
+    {
+      "width": 900,
+      "light": true,
+      "chatTheme": "compact",
+      "screenshot": "announcements-900-light-compact.png",
+      "backgroundPixels": {
+        "primary": [
+          229,
+          219,
+          245
+        ],
+        "blue": [
+          215,
+          223,
+          245
+        ],
+        "green": [
+          211,
+          230,
+          227
+        ],
+        "orange": [
+          242,
+          232,
+          217
+        ],
+        "purple": [
+          229,
+          219,
+          245
+        ],
+        "unknown": [
+          229,
+          219,
+          245
+        ]
+      },
+      "emotePixels": 4914,
+      "hiddenRevealed": true
+    },
+    {
+      "width": 900,
+      "light": true,
+      "chatTheme": "modern",
+      "screenshot": "announcements-900-light-modern.png",
+      "backgroundPixels": {
+        "primary": [
+          229,
+          219,
+          245
+        ],
+        "blue": [
+          215,
+          223,
+          245
+        ],
+        "green": [
+          211,
+          230,
+          227
+        ],
+        "orange": [
+          242,
+          232,
+          217
+        ],
+        "purple": [
+          229,
+          219,
+          245
+        ],
+        "unknown": [
+          229,
+          219,
+          245
+        ]
+      },
+      "emotePixels": 4914,
+      "hiddenRevealed": true
+    },
+    {
+      "width": 420,
+      "light": false,
+      "chatTheme": "compact",
+      "screenshot": "announcements-420-dark-compact.png",
+      "backgroundPixels": {
+        "primary": [
+          47,
+          32,
+          73
+        ],
+        "blue": [
+          24,
+          39,
+          73
+        ],
+        "green": [
+          18,
+          52,
+          43
+        ],
+        "orange": [
+          69,
+          54,
+          27
+        ],
+        "purple": [
+          47,
+          32,
+          73
+        ],
+        "unknown": [
+          47,
+          32,
+          73
+        ]
+      },
+      "emotePixels": 4914,
+      "hiddenRevealed": true
+    },
+    {
+      "width": 420,
+      "light": false,
+      "chatTheme": "modern",
+      "screenshot": "announcements-420-dark-modern.png",
+      "backgroundPixels": {
+        "primary": [
+          47,
+          32,
+          73
+        ],
+        "blue": [
+          24,
+          39,
+          73
+        ],
+        "green": [
+          18,
+          52,
+          43
+        ],
+        "orange": [
+          69,
+          54,
+          27
+        ],
+        "purple": [
+          47,
+          32,
+          73
+        ],
+        "unknown": [
+          47,
+          32,
+          73
+        ]
+      },
+      "emotePixels": 4763,
+      "hiddenRevealed": true
+    },
+    {
+      "width": 420,
+      "light": true,
+      "chatTheme": "compact",
+      "screenshot": "announcements-420-light-compact.png",
+      "backgroundPixels": {
+        "primary": [
+          229,
+          219,
+          245
+        ],
+        "blue": [
+          215,
+          223,
+          245
+        ],
+        "green": [
+          211,
+          230,
+          227
+        ],
+        "orange": [
+          242,
+          232,
+          217
+        ],
+        "purple": [
+          229,
+          219,
+          245
+        ],
+        "unknown": [
+          229,
+          219,
+          245
+        ]
+      },
+      "emotePixels": 4914,
+      "hiddenRevealed": true
+    },
+    {
+      "width": 420,
+      "light": true,
+      "chatTheme": "modern",
+      "screenshot": "announcements-420-light-modern.png",
+      "backgroundPixels": {
+        "primary": [
+          229,
+          219,
+          245
+        ],
+        "blue": [
+          215,
+          223,
+          245
+        ],
+        "green": [
+          211,
+          230,
+          227
+        ],
+        "orange": [
+          242,
+          232,
+          217
+        ],
+        "purple": [
+          229,
+          219,
+          245
+        ],
+        "unknown": [
+          229,
+          219,
+          245
+        ]
+      },
+      "emotePixels": 4763,
+      "hiddenRevealed": true
+    }
+  ],
+  "provenance": {
+    "baseCommit": "82552a53694517829df7500d6c4b96e44f87dd27",
+    "bun": "1.4.4",
+    "native": {
+      "apiVersion": 3,
+      "version": "0.11.0-twirchat.3",
+      "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+      "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+      "patchDigest": "ad7fc24cef2eaf2f",
+      "rustToolchain": "1.97.1",
+      "target": "linux-x64",
+      "size": 56166296,
+      "sha256": "cd10c5ab9042a0ef0c485c3b320f7862128b78e6809fba8aa4181ad1a379d248"
+    },
+    "sourceSha256": {
+      "packages/desktop/src/gpuix/components/ChatMessage.tsx": "9e3d464091bb06cb75151bbd5267ad2c35542c9dfd77632494910d4a7a8c3571",
+      "packages/desktop/src/gpuix/components/ChatAnnouncement.tsx": "678770daad97a1e4ca92c76c18f825d3333832f718f8e9c09ad82dc909d4cfcc"
+    }
+  }
+}

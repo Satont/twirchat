@@ -224,16 +224,20 @@ describe('Twitch self message badges', () => {
     expect(messages.at(-1)?.author.color).toBeUndefined()
   })
 
-  test('announcements preserve their actual sender badges and color', () => {
-    const { client, messages } = selfFixture()
-    client.irc.receiveLine(
-      '@badges=moderator/1;color=#ABCDEF;display-name=Mod;user-id=456;msg-id=announcement;msg-param-color=PRIMARY :tmi.twitch.tv USERNOTICE #satont :announcement body',
-    )
-    expect(messages.at(-1)?.author.badges?.at(0)?.type).toBe('moderator')
-    expect(messages.at(-1)?.author.color).toBe('#ABCDEF')
-    expect(messages.at(-1)?.metadata?.announcement).toBe('primary')
-    expect(messages.at(-1)?.channelId).toBe('satont')
-  })
+  test.each(['PRIMARY', 'BLUE', 'GREEN', 'ORANGE', 'PURPLE'])(
+    '%s announcements preserve their color separately from sender appearance',
+    (color) => {
+      const { client, messages } = selfFixture()
+      client.irc.receiveLine(
+        `@badges=moderator/1;color=#ABCDEF;display-name=Mod;user-id=456;msg-id=announcement;msg-param-color=${color} :tmi.twitch.tv USERNOTICE #satont :announcement body`,
+      )
+      expect(messages.at(-1)?.author.badges?.at(0)?.type).toBe('moderator')
+      expect(messages.at(-1)?.author.color).toBe('#ABCDEF')
+      expect(messages.at(-1)?.metadata?.announcement).toBe(color.toLowerCase())
+      expect(messages.at(-1)?.text).toBe('announcement body')
+      expect(messages.at(-1)?.channelId).toBe('satont')
+    },
+  )
 
   test('a delayed badge fetch cannot replace the next channel or account badge cache', async () => {
     const adapter = new TwitchAdapter()

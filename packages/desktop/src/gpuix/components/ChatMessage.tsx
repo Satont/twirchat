@@ -28,6 +28,7 @@ import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches
 import { useStoreSelector } from '../state/create-store'
 import { platformColor, readableOn, semantic } from '../theme'
 import { useFont, useTheme } from '../theme-context'
+import { ChatAnnouncement } from './ChatAnnouncement'
 import { CosmeticAuthorName, CosmeticBadges, useAuthorCosmetics } from './CosmeticAuthor'
 import { MessageActionsMenu } from './MessageActionsMenu'
 import { MessageModerationRail } from './MessageModerationRail'
@@ -584,6 +585,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         : undefined
   const rowOpacity =
     message.delivery?.state === 'pending' ? 0.52 : props.moderationOutcome ? 0.48 : 1
+  const announcement = message.platform === 'twitch' ? message.metadata?.announcement : undefined
 
   // Platform stripe: one continuous hairline down the list (rows are flush),
   // so a run of same-platform messages reads as a single column.
@@ -606,7 +608,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   // ── Compact (single wrapping line, Chatterino-like) ──────────────────────
   if (props.chatTheme === 'compact') {
     const tsSize = timestampSize(fontSize)
-    return (
+    const content = (
       <div
         onMouseDown={(event) => {
           if (event.button === 2) setMenuRequest((value) => value + 1)
@@ -740,10 +742,17 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         {moderationRail}
       </div>
     )
+    return announcement ? (
+      <ChatAnnouncement id={message.id} color={announcement} fontSize={fontSize}>
+        {content}
+      </ChatAnnouncement>
+    ) : (
+      content
+    )
   }
 
   // ── Modern (default) ──────────────────────────────────────────────────────
-  return (
+  const content = (
     <div
       onMouseDown={(event) => {
         if (event.button === 2) setMenuRequest((value) => value + 1)
@@ -876,6 +885,13 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           preview draw above the row content. */}
       {moderationRail}
     </div>
+  )
+  return announcement ? (
+    <ChatAnnouncement id={message.id} color={announcement} fontSize={fontSize}>
+      {content}
+    </ChatAnnouncement>
+  ) : (
+    content
   )
 })
 
