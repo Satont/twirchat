@@ -7,6 +7,7 @@ import { namePaintCache, userCosmeticsCache } from '../state/cosmetics'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
 import { useFont } from '../theme-context'
+import { BadgeTooltip } from './ui/BadgeTooltip'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
@@ -122,7 +123,12 @@ export function CosmeticBadges({
     <div style={{ display: 'flex', flexDirection: 'row', gap: 3, alignItems: 'center' }}>
       {badges.map((badge) =>
         badge.imageUrl ? (
-          <RemoteImage key={badge.id} url={badge.imageUrl} style={{ width: size, height: size }} />
+          <BadgeTooltip key={badge.id} badge={badge}>
+            <RemoteImage
+              url={badge.imageUrl}
+              style={{ width: size, height: size, pointerEvents: 'none' }}
+            />
+          </BadgeTooltip>
         ) : null,
       )}
     </div>

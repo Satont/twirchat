@@ -16,7 +16,6 @@ import { StaticAuthProvider } from '@twurple/auth'
 import { ChatClient, UserState } from '@twurple/chat'
 import type { ChatMessage, UserNotice } from '@twurple/chat'
 import { LogLevel } from '@twurple/chat'
-import { z } from 'zod'
 
 import { refreshTwitchToken } from '../../auth/twitch'
 import { getBackendUrl } from '../../runtime-config'
@@ -25,6 +24,7 @@ import { AccountStore } from '../../store/account-store'
 import { MessageStore } from '../../store/message-store'
 import { BasePlatformAdapter } from '../base-adapter'
 import { resolveTwitchAvatarUrl } from './avatar-cache'
+import { parseTwitchBadgeCatalog } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
 
 const log = logger('twitch')
@@ -96,8 +96,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.emit('room_state', this.roomState)
   }
 
-  /** "setId/version" → imageUrl_1x, populated from backend /api/twitch/badges */
-  private badgeCache = new Map<string, string>()
+  /** "setId/version" → badge appearance and metadata from backend /api/twitch/badges */
+  private badgeCache = new Map<string, Badge>()
 
   private anonymous = true
   private accessToken: string | null = null
@@ -832,9 +832,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
         log.warn(`[Twitch] Badge fetch failed: ${res.status}`)
         return
       }
-      const data = z.object({ badges: z.record(z.string(), z.string()) }).parse(await res.json())
+      const badges = parseTwitchBadgeCatalog(await res.json())
       if (revision !== this.identityRevision || channelName !== this.channelName) return
-      this.badgeCache = new Map(Object.entries(data.badges))
+      this.badgeCache = badges
       log.info(`[Twitch] Badge cache updated: ${this.badgeCache.size} entries`)
     } catch (error) {
       log.warn('[Twitch] Badge fetch error', { error: String(error) })

@@ -5,7 +5,7 @@ import { codePointRangeToUtf16 } from '../../views/shared/utils/display-text'
 
 export function twitchAuthorAppearance(
   tags: ReadonlyMap<string, string>,
-  badgeCache: ReadonlyMap<string, string>,
+  badgeCache: ReadonlyMap<string, Badge>,
   broadcaster = false,
 ): Pick<NormalizedChatMessage['author'], 'badges' | 'color'> {
   const badges: Badge[] = []
@@ -13,15 +13,16 @@ export function twitchAuthorAppearance(
     const [type, version = '1'] = badge.split('/')
     if (!type) continue
     const id = `${type}/${version}`
-    badges.push({ id, type, text: type, imageUrl: badgeCache.get(id) })
+    badges.push(badgeCache.get(id) ?? { id, type, text: type })
   }
   if (broadcaster && !badges.some((badge) => badge.type === 'broadcaster'))
-    badges.unshift({
-      id: 'broadcaster/1',
-      type: 'broadcaster',
-      text: 'broadcaster',
-      imageUrl: badgeCache.get('broadcaster/1'),
-    })
+    badges.unshift(
+      badgeCache.get('broadcaster/1') ?? {
+        id: 'broadcaster/1',
+        type: 'broadcaster',
+        text: 'broadcaster',
+      },
+    )
   return { badges, color: tags.get('color') || undefined }
 }
 
@@ -60,7 +61,7 @@ interface TwitchMessageOptions {
 }
 export function normalizeTwitchChatMessage(
   msg: ChatMessage,
-  badgeCache: ReadonlyMap<string, string>,
+  badgeCache: ReadonlyMap<string, Badge>,
   options: TwitchMessageOptions = {},
 ): NormalizedChatMessage {
   const channel = msg.target

@@ -10,6 +10,8 @@ import { AccountStore } from '@desktop/store/account-store'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatClient } from '@twurple/chat'
 
+import { parseTwitchBadgeCatalog } from '../src/platforms/twitch/badge-data'
+
 describe('createLocalTwitchSentMessage', () => {
   test('preserves Twitch first/returning/highlight/reward/bits/subscription/shared-chat metadata', () => {
     expect(
@@ -137,11 +139,13 @@ function selfFixture(login = 'satont', channel = 'satont') {
     login,
     displayName: login,
     platformUserId: '123',
-    badgeCache: new Map([
-      ['broadcaster/1', 'https://example.com/broadcaster.png'],
-      ['moderator/1', 'https://example.com/moderator.png'],
-      ['subscriber/12', 'https://example.com/subscriber.png'],
-    ]),
+    badgeCache: parseTwitchBadgeCatalog({
+      badges: {
+        'broadcaster/1': 'https://example.com/broadcaster.png',
+        'moderator/1': 'https://example.com/moderator.png',
+        'subscriber/12': 'https://example.com/subscriber.png',
+      },
+    }),
   })
   accountLookups.push(spyOn(AccountStore, 'findByPlatform').mockReturnValue(null))
   adapter['setupEventHandlers']()
@@ -159,7 +163,7 @@ describe('Twitch self message badges', () => {
           ['badges', 'broadcaster/1,subscriber/12'],
           ['color', '#123456'],
         ]),
-        new Map([['subscriber/12', 'https://example.com/sub.png']]),
+        parseTwitchBadgeCatalog({ badges: { 'subscriber/12': 'https://example.com/sub.png' } }),
         true,
       ),
     ).toEqual({
@@ -252,6 +256,31 @@ describe('Twitch self message badges', () => {
       )
       await pending
       expect(adapter['badgeCache'].size).toBe(0)
+    } finally {
+      fetcher.mockRestore()
+    }
+  })
+
+  test('live badge catalog fetch preserves backend titles and descriptions', async () => {
+    const { adapter, messages } = selfFixture()
+    const fetcher = spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json({
+        badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
+        badgeMetadata: {
+          'broadcaster/1': { title: 'Broadcaster', description: 'The channel owner.' },
+        },
+      }),
+    )
+    try {
+      await adapter['fetchBadges']()
+      adapter['emitLocalSentMessage']('satont', 'with metadata')
+      expect(messages.at(-1)?.author.badges[0]).toEqual({
+        id: 'broadcaster/1',
+        type: 'broadcaster',
+        text: 'Broadcaster',
+        description: 'The channel owner.',
+        imageUrl: 'https://example.com/broadcaster.png',
+      })
     } finally {
       fetcher.mockRestore()
     }

@@ -8,7 +8,7 @@
  * because parent `hover` styles do not reach children.
  */
 
-import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Account, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { memo, useEffect, useMemo, useState } from 'react'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
@@ -34,6 +34,7 @@ import { MessageActionsMenu } from './MessageActionsMenu'
 import { MessageModerationRail } from './MessageModerationRail'
 import { MessageText, MessageTokens } from './MessageText'
 import { MessageTranslation } from './MessageTranslation'
+import { BadgeTooltip } from './ui/BadgeTooltip'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
@@ -159,7 +160,7 @@ function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size
       <img
         src={badgeDataUrl(resolved)}
         objectFit="contain"
-        style={{ width: size, height: size, flexShrink: 0 }}
+        style={{ width: size, height: size, flexShrink: 0, pointerEvents: 'none' }}
       />
     )
   }
@@ -170,7 +171,7 @@ function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size
       <RemoteImage
         url={resolved}
         objectFit="contain"
-        style={{ height: size, width: size, flexShrink: 0 }}
+        style={{ height: size, width: size, flexShrink: 0, pointerEvents: 'none' }}
       />
     )
   }
@@ -178,6 +179,7 @@ function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size
     <div
       style={{
         minHeight: size,
+        pointerEvents: 'none',
         paddingLeft: Math.round(size * 0.35),
         paddingRight: Math.round(size * 0.35),
         paddingTop: 1,
@@ -187,7 +189,17 @@ function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size
         alignItems: 'center',
       }}
     >
-      <Text style={{ fontSize: size - 4, color: theme.text, lineHeight: size - 2 }}>{text}</Text>
+      <Text
+        style={{
+          fontSize: size - 4,
+          color: theme.text,
+          lineHeight: size - 2,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        {text}
+      </Text>
     </div>
   )
 }
@@ -195,15 +207,19 @@ function Badge({ imageUrl, text, size }: { imageUrl?: string; text: string; size
 export function BadgeList({
   badges,
   size,
+  platform,
 }: {
   badges: NormalizedChatMessage['author']['badges']
   size: number
+  platform?: Platform
 }) {
   if (badges.length === 0) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 3 }}>
       {badges.map((badge) => (
-        <Badge key={badge.id} imageUrl={badge.imageUrl} text={badge.text} size={size} />
+        <BadgeTooltip key={badge.id} badge={badge} platform={platform}>
+          <Badge imageUrl={badge.imageUrl} text={badge.text} size={size} />
+        </BadgeTooltip>
       ))}
     </div>
   )
@@ -679,7 +695,11 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           ) : null}
           {props.showBadges !== false && (message.author.badges?.length ?? 0) > 0 ? (
             <div style={{ marginRight: 5, flexShrink: 0, display: 'flex' }}>
-              <BadgeList badges={message.author.badges ?? []} size={badgeSize(fontSize)} />
+              <BadgeList
+                badges={message.author.badges ?? []}
+                size={badgeSize(fontSize)}
+                platform={message.platform}
+              />
             </div>
           ) : null}
           {props.showBadges !== false && cosmetics?.badges.length ? (
@@ -812,7 +832,11 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           }}
         >
           {props.showBadges !== false ? (
-            <BadgeList badges={message.author.badges ?? []} size={badgeSize(fontSize)} />
+            <BadgeList
+              badges={message.author.badges ?? []}
+              size={badgeSize(fontSize)}
+              platform={message.platform}
+            />
           ) : null}
           {props.showBadges !== false && cosmetics?.badges.length ? (
             <CosmeticBadges badges={cosmetics.badges} size={badgeSize(fontSize)} />

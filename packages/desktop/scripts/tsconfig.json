@@ -8,6 +8,7 @@
     "qa-history-logs.tsx",
     "qa-tab-counts.tsx",
     "qa-deferred-chat-rows.tsx",
-    "qa-announcements.tsx"
+    "qa-announcements.tsx",
+    "qa-badge-tooltips.tsx"
   ]
 }

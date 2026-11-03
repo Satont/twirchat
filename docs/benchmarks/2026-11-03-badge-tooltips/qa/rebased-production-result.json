@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "checks": [
+    "compact-420: image, SVG, text, providers, edge bounds",
+    "modern-420: image, SVG, text, providers, edge bounds",
+    "compact-900: image, SVG, text, providers, edge bounds",
+    "modern-900: image, SVG, text, providers, edge bounds",
+    "Escape, focus/blur, rapid cancel, unmount/remount, live ChatView, user profile"
+  ],
+  "screenshots": [
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-compact-420.png",
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-edge-compact-420.png",
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-modern-420.png",
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-edge-modern-420.png",
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-compact-900.png",
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-edge-compact-900.png",
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-modern-900.png",
+    "/tmp/twirchat-gui-qa-1EaJ5i/badges-edge-modern-900.png"
+  ],
+  "cosmeticsRequests": 2,
+  "incomingMessages": 234,
+  "heartbeat": 234,
+  "largestLagMs": 38.132980000000316
+}
