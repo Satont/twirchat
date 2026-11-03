@@ -38,3 +38,34 @@ for mutation in \
   expect_rejection "$mutation"
 done
 echo 'Release integrity checks reject missing, corrupted, mismatched and unsafe assets.'
+
+assemble="$(dirname "$0")/assemble-release-assets.sh"
+input="$directory/artifacts"
+for runtime in linux-x64 win-x64 osx-arm64 osx-x64; do
+  mkdir -p "$input/desktop-$runtime"
+  cp "$directory/package.nupkg" "$input/desktop-$runtime/package-$runtime.nupkg"
+  jq --arg filename "package-$runtime.nupkg" '.Assets[0].FileName = $filename' \
+    "$directory/valid.json" > "$input/desktop-$runtime/releases.$runtime.json"
+  printf 'Signing: unsigned\n' > "$input/desktop-$runtime/signature-$runtime.txt"
+done
+bash "$assemble" "$input" "$directory/assembled" 1.0.0
+(cd "$directory/assembled" && sha256sum --check --status SHA256SUMS)
+expect_assembly_rejection() {
+  if bash "$assemble" "$input" "$directory/rejected-$1" 1.0.0 > /dev/null 2>&1; then
+    echo "Invalid release assembly was accepted: $1" >&2
+    exit 1
+  fi
+}
+printf 'duplicate\n' > "$input/desktop-linux-x64/duplicate.txt"
+printf 'duplicate\n' > "$input/desktop-win-x64/duplicate.txt"
+expect_assembly_rejection collision
+rm "$input/desktop-linux-x64/duplicate.txt" "$input/desktop-win-x64/duplicate.txt"
+rm "$input/desktop-linux-x64/signature-linux-x64.txt"
+expect_assembly_rejection missing-signature
+printf 'Signing: unsigned\n' > "$input/desktop-linux-x64/signature-linux-x64.txt"
+printf 'unexpected checksum file\n' > "$input/desktop-linux-x64/SHA256SUMS"
+expect_assembly_rejection supplied-checksums
+rm "$input/desktop-linux-x64/SHA256SUMS"
+printf 'corruption' >> "$input/desktop-linux-x64/package-linux-x64.nupkg"
+expect_assembly_rejection corrupt-package
+echo 'Release assembly validates all four artifact directories and creates checked SHA256SUMS.'

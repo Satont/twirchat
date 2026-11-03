@@ -23,7 +23,7 @@ jobs:
   desktop:
     uses: ./.github/workflows/desktop-build.yml
     with:
-      version: 0.0.0
+      version: 0.0.1
       backend-url: ${{ vars.BACKEND_URL || 'https://chat.twir.app' }}
 
   required:
@@ -41,3 +41,12 @@ jobs:
           test "$VALIDATION_RESULT" = success
           test "$BACKEND_RESULT" = success
           test "$DESKTOP_RESULT" = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: desktop-*
+          path: release-assets
+      - name: Validate every built installer and update feed
+        run: bash .github/scripts/assemble-release-assets.sh release-assets final-assets 0.0.1

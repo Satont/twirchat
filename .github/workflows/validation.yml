@@ -39,7 +39,7 @@ jobs:
           printf '%s  %s\n' 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8 "$directory/actionlint.tar.gz" | sha256sum --check
           tar -xzf "$directory/actionlint.tar.gz" -C "$directory" actionlint
           "$directory/actionlint" -shellcheck='' .github/workflows/*.yml
-          bash -n .github/scripts/verify-release-assets.sh .github/scripts/test-release-assets.sh
+          bash -n .github/scripts/*.sh
       - run: bun run check
       - run: bun run test
       - run: bun run --cwd packages/shared check:youtube

@@ -76,8 +76,27 @@ jobs:
       WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
+  assets-preflight:
+    name: Validate complete release assets
+    needs: [version, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: desktop-*
+          path: release-assets
+      - name: Validate installers, feeds and checksums before publication
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: bash .github/scripts/assemble-release-assets.sh release-assets final-assets "$RELEASE_VERSION"
+
   backend:
-    needs: [version, validation, desktop]
+    needs: [version, validation, desktop, assets-preflight]
     permissions:
       contents: read
       packages: write
@@ -89,7 +108,7 @@ jobs:
 
   publish:
     name: Publish complete release
-    needs: [version, validation, desktop, backend]
+    needs: [version, validation, desktop, assets-preflight, backend]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -112,20 +131,7 @@ jobs:
           path: release-assets
       - name: Assemble assets without silent filename collisions
         shell: bash
-        run: |
-          mkdir final-assets
-          while IFS= read -r -d '' asset; do
-            destination="final-assets/$(basename "$asset")"
-            test ! -e "$destination" || { echo "Duplicate release asset: $(basename "$asset")"; exit 1; }
-            cp "$asset" "$destination"
-          done < <(find release-assets -type f -print0)
-          for runtime in linux-x64 win-x64 osx-arm64 osx-x64; do
-            test -s "final-assets/releases.$runtime.json"
-            test -s "final-assets/signature-$runtime.txt"
-          done
-          bash .github/scripts/verify-release-assets.sh final-assets "$RELEASE_VERSION"
-          (cd final-assets && sha256sum -- * > ../SHA256SUMS)
-          mv SHA256SUMS final-assets/SHA256SUMS
+        run: bash .github/scripts/assemble-release-assets.sh release-assets final-assets "$RELEASE_VERSION"
       - name: Create or resume draft release
         shell: bash
         run: |
