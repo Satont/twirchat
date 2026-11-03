@@ -1,0 +1,1807 @@
+{
+  "ok": true,
+  "expectPaused": false,
+  "expectUnsynchronized": false,
+  "mounts": [
+    {
+      "copies": 1,
+      "elapsedMs": 195.2469410000001
+    },
+    {
+      "copies": 2,
+      "elapsedMs": 390.42879199999993
+    }
+  ],
+  "nativePath": "/home/satont/.codex/worktrees/background-emote-animation/chat/packages/desktop/dist/native/gpuix.linux-x64.node",
+  "nativeSha256": "59103c5ea08259a920d336bf8790743becd93860759f519d1ae327463b169b0d",
+  "manifest": {
+    "apiVersion": 3,
+    "version": "0.11.0-twirchat.4",
+    "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+    "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+    "patchDigest": "630fc2f223ba5e4a",
+    "rustToolchain": "1.97.1",
+    "target": "linux-x64",
+    "size": 56146976,
+    "sha256": "59103c5ea08259a920d336bf8790743becd93860759f519d1ae327463b169b0d"
+  },
+  "transformed": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/profile/image-cache/modifiers/ddd6598d100e3d6aa4223019bba14ec3.webp",
+  "evidence": [
+    {
+      "width": 900,
+      "phase": "focused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-900-focused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 2
+      },
+      "crossWindowTiming": {
+        "durationMs": 1503.7123530000003,
+        "main": [
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 95.34193699999969
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 193.57017899999983
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 287.081776
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 384.3480639999998
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 497.202139
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 594.2943869999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 686.8982689999998
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 785.2750499999997
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 897.2568799999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 989.6387529999997
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1086.2675939999995
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1182.751065
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1297.5429499999996
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1390.1278319999997
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1487.4673289999996
+          }
+        ],
+        "other": [
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 90.00277499999993
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 182.93744500000003
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 281.76082499999984
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 421.92302599999994
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 518.7927850000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 615.669754
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 713.9482659999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 806.8331159999998
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 902.7008719999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1000.7279750000002
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1096.8424579999996
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1193.3507089999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1286.3705889999997
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1384.8222300000002
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1481.6461100000001
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          -5.33916199999976,
+          -10.6327339999998,
+          -5.32095100000015,
+          37.57496200000014,
+          21.590646000000106,
+          21.375367000000097,
+          27.049997000000076,
+          21.558066000000053,
+          5.44399199999998,
+          11.089222000000518,
+          10.574864000000161,
+          10.599643999999898,
+          -11.17236099999991,
+          -5.305601999999453
+        ],
+        "otherToMainSkewsMs": [
+          5.33916199999976,
+          10.6327339999998,
+          5.32095100000015,
+          -37.57496200000014,
+          -21.590646000000106,
+          -21.375367000000097,
+          -27.049997000000076,
+          -21.558066000000053,
+          -5.44399199999998,
+          -11.089222000000518,
+          -10.574864000000161,
+          -10.599643999999898,
+          11.17236099999991,
+          5.305601999999453
+        ],
+        "polling": {
+          "samples": 276,
+          "medianMs": 5.311512000000221,
+          "p95Ms": 5.887068999999883,
+          "maxMs": 6.6564360000002125
+        }
+      }
+    },
+    {
+      "width": 900,
+      "phase": "inactive",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-900-inactive.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 4
+      },
+      "crossWindowTiming": {
+        "durationMs": 1501.9340519999996,
+        "main": [
+          {
+            "signature": "141ef0",
+            "elapsedMs": 77.87518899999941
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 177.23728599999959
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 273.12932
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 370.91128500000013
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 464.05502400000023
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 610.4647919999998
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 702.0472589999999
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 799.4851159999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 896.4839839999995
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 994.5299770000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1086.102984
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1184.2103470000002
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1281.188376
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1373.971697
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1474.950715
+          }
+        ],
+        "other": [
+          {
+            "signature": "141ef0",
+            "elapsedMs": 72.26632900000004
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 171.92783400000008
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 262.5073560000001
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 360.29099099999985
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 475.4926439999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 566.7692820000002
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 664.4082870000002
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 761.6726749999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 874.604319
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 967.0085220000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1064.8387469999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1163.0496789999997
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1270.6327620000002
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1368.6742649999997
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1464.2978709999998
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          -5.608859999999368,
+          -5.30945199999951,
+          -10.621963999999934,
+          -10.620294000000285,
+          11.437619999999697,
+          -43.69550999999956,
+          -37.63897199999974,
+          -37.812441000000035,
+          -21.879664999999477,
+          -27.52145500000006,
+          -21.26423700000032,
+          -21.16066800000044,
+          -10.555613999999878,
+          -5.297432000000299
+        ],
+        "otherToMainSkewsMs": [
+          5.30945199999951,
+          10.621963999999934,
+          10.620294000000285,
+          -11.437619999999697,
+          43.69550999999956,
+          37.63897199999974,
+          37.812441000000035,
+          21.879664999999477,
+          27.52145500000006,
+          21.26423700000032,
+          21.16066800000044,
+          10.555613999999878,
+          5.297432000000299
+        ],
+        "polling": {
+          "samples": 277,
+          "medianMs": 5.310081999999966,
+          "p95Ms": 5.85374899999988,
+          "maxMs": 6.5035649999999805
+        }
+      }
+    },
+    {
+      "width": 900,
+      "phase": "refocused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-900-refocused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 3
+      },
+      "crossWindowTiming": {
+        "durationMs": 1502.7456469999997,
+        "main": [
+          {
+            "signature": "f01e14",
+            "elapsedMs": 50.31214499999987
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 142.58283800000027
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 257.99222999999984
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 354.7610600000007
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 451.126671
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 545.4514240000008
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 659.4154629999994
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 752.93397
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 849.7887190000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 942.9319180000002
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1056.8315579999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1156.2427239999997
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1250.0497190000006
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1346.7882289999998
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1459.5507940000007
+          }
+        ],
+        "other": [
+          {
+            "signature": "f01e14",
+            "elapsedMs": 73.1607839999997
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 169.5000060000002
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 263.2925319999995
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 360.5389290000003
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 457.0767799999994
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 556.197067000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 648.8562889999994
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 746.9924919999994
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 844.4754969999995
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 985.8225120000006
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1084.1489739999997
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1177.619571000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1271.1580080000003
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1368.2692659999993
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1464.8634359999996
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          26.917167999999947,
+          5.300301999999647,
+          5.777868999999555,
+          5.950108999999429,
+          10.7456430000002,
+          -10.559173999999985,
+          -5.941478000000643,
+          -5.313222000000678,
+          42.89059400000042,
+          27.317415999999866,
+          21.376847000001362,
+          21.108288999999786,
+          21.48103699999956
+        ],
+        "otherToMainSkewsMs": [
+          -26.917167999999947,
+          -5.300301999999647,
+          -5.777868999999555,
+          -5.950108999999429,
+          -10.7456430000002,
+          10.559173999999985,
+          5.941478000000643,
+          5.313222000000678,
+          -42.89059400000042,
+          -27.317415999999866,
+          -21.376847000001362,
+          -21.108288999999786,
+          -21.48103699999956
+        ],
+        "polling": {
+          "samples": 276,
+          "medianMs": 5.313172000000122,
+          "p95Ms": 5.9481679999989865,
+          "maxMs": 6.640695000000051
+        }
+      }
+    },
+    {
+      "width": 900,
+      "phase": "inactive-again",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-900-inactive-again.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 5
+      },
+      "crossWindowTiming": {
+        "durationMs": 1504.4015369999997,
+        "main": [
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 66.75658800000019
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 167.39386699999886
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 258.73840500000006
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 355.7398039999989
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 452.6730630000002
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 550.4222269999991
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 644.1385829999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 741.8918780000004
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 834.5165489999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 932.3939829999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1030.4317859999992
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1170.9540450000004
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1267.5711159999992
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1363.9215679999998
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1461.4803329999995
+          }
+        ],
+        "other": [
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 28.612348999999085
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 122.39271399999961
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 236.9043700000002
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 333.87619900000027
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 426.2730419999989
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 523.6168589999997
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 638.4704929999989
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 731.1980640000002
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 829.2298869999995
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 921.7686689999991
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1035.737798
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1133.0485950000002
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1229.6919959999996
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1326.3490659999989
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1434.5915349999996
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          -45.00115299999925,
+          -21.834034999999858,
+          -21.863604999998643,
+          -26.40002100000129,
+          -26.805367999999362,
+          -5.66809000000103,
+          -10.693814000000202,
+          -5.286662000000433,
+          -10.625314000000799,
+          5.306012000000919,
+          -37.9054500000002,
+          -37.8791199999996,
+          -37.572502000000895
+        ],
+        "otherToMainSkewsMs": [
+          45.00115299999925,
+          21.834034999999858,
+          21.863604999998643,
+          26.40002100000129,
+          26.805367999999362,
+          5.66809000000103,
+          10.693814000000202,
+          5.286662000000433,
+          10.625314000000799,
+          -5.306012000000919,
+          37.9054500000002,
+          37.8791199999996,
+          37.572502000000895
+        ],
+        "polling": {
+          "samples": 277,
+          "medianMs": 5.31155199999921,
+          "p95Ms": 5.853269000001092,
+          "maxMs": 6.5261459999983344
+        }
+      }
+    },
+    {
+      "width": 420,
+      "phase": "focused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-420-focused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 2
+      },
+      "crossWindowTiming": {
+        "durationMs": 1502.3812679999992,
+        "main": [
+          {
+            "signature": "141ef0",
+            "elapsedMs": 16.572642999999516
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 115.86683899999844
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 208.7495289999988
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 306.4711639999987
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 418.6581019999994
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 515.1946239999997
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 610.1983819999987
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 708.4324339999985
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 818.5168539999995
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 914.7775459999993
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1012.5370810000004
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1104.0150080000003
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1218.8248330000006
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1317.0903149999995
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1408.7987909999993
+          }
+        ],
+        "other": [
+          {
+            "signature": "141ef0",
+            "elapsedMs": 27.854702999999063
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 121.14906100000007
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 219.81139099999928
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 317.29997699999876
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 413.37236999999914
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 509.39406400000007
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 604.8959099999993
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 747.486617999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 845.1458829999992
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 941.789404000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1034.293685999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1131.376964000001
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1229.6687760000004
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1322.897594
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1420.1700010000004
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          5.282222000001639,
+          11.061862000000474,
+          10.828813000000082,
+          -5.28573200000028,
+          -5.8005599999996775,
+          -5.302471999999398,
+          39.05418400000053,
+          26.62902899999972,
+          27.011858000001666,
+          21.75660499999867,
+          27.361956000000646,
+          10.843942999999854,
+          5.8072790000005625,
+          11.371210000001156
+        ],
+        "otherToMainSkewsMs": [
+          -5.282222000001639,
+          -11.061862000000474,
+          -10.828813000000082,
+          5.28573200000028,
+          5.8005599999996775,
+          5.302471999999398,
+          -39.05418400000053,
+          -26.62902899999972,
+          -27.011858000001666,
+          -21.75660499999867,
+          -27.361956000000646,
+          -10.843942999999854,
+          -5.8072790000005625,
+          -11.371210000001156
+        ],
+        "polling": {
+          "samples": 275,
+          "medianMs": 5.306471999998394,
+          "p95Ms": 5.958238999999594,
+          "maxMs": 6.5740160000004835
+        }
+      }
+    },
+    {
+      "width": 420,
+      "phase": "inactive",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-420-inactive.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 4
+      },
+      "crossWindowTiming": {
+        "durationMs": 1504.2293370000007,
+        "main": [
+          {
+            "signature": "f01e14",
+            "elapsedMs": 28.950597999999445
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 127.135119999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 219.64739199999894
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 316.82832000000053
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 413.7494579999984
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 509.82593199999974
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 607.2459080000008
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 698.8499149999989
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 794.6711900000009
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 941.0298779999976
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1038.6244729999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1131.3161739999996
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1228.4480019999974
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1327.1228709999996
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1423.273573999999
+          }
+        ],
+        "other": [
+          {
+            "signature": "f01e14",
+            "elapsedMs": 6.000938999997743
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 100.10647199999948
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 198.05103600000075
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 295.5114519999988
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 403.1630440000008
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 504.55063999999766
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 596.2137559999974
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 693.5876529999987
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 806.1836289999992
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 902.9997980000007
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 995.4854099999975
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1092.8820269999997
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1207.159294000001
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1300.2414629999985
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1396.3603660000008
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1493.6494329999987
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          -27.02864799999952,
+          -21.596355999998195,
+          -21.316868000001705,
+          -10.586413999997603,
+          -5.275292000002082,
+          -11.032152000003407,
+          -5.262262000000192,
+          11.512438999998267,
+          -38.030079999996815,
+          -43.13906300000235,
+          -38.43414699999994,
+          -21.288707999996404,
+          -26.8814080000011,
+          -26.91320799999812
+        ],
+        "otherToMainSkewsMs": [
+          27.02864799999952,
+          21.596355999998195,
+          21.316868000001705,
+          10.586413999997603,
+          5.275292000002082,
+          11.032152000003407,
+          5.262262000000192,
+          -11.512438999998267,
+          38.030079999996815,
+          43.13906300000235,
+          38.43414699999994,
+          21.288707999996404,
+          26.8814080000011,
+          26.91320799999812
+        ],
+        "polling": {
+          "samples": 278,
+          "medianMs": 5.30503200000021,
+          "p95Ms": 5.833378999999695,
+          "maxMs": 6.536036000001332
+        }
+      }
+    },
+    {
+      "width": 420,
+      "phase": "refocused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-420-refocused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 4
+      },
+      "crossWindowTiming": {
+        "durationMs": 1504.3913060000014,
+        "main": [
+          {
+            "signature": "141ef0",
+            "elapsedMs": 83.56472900000153
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 197.91911600000094
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 293.45938300000125
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 387.7533949999997
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 484.921663000001
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 598.107125999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 690.8786760000003
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 787.7967849999986
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 885.3066910000016
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 994.9878629999985
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1093.1140950000008
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1190.3058520000013
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1283.0620430000017
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1396.8073030000014
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1493.8052820000012
+          }
+        ],
+        "other": [
+          {
+            "signature": "141ef0",
+            "elapsedMs": 127.38205899999957
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 219.44572300000073
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 316.7339299999985
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 414.69733300000007
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 511.9131699999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 603.3980379999994
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 701.920188
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 798.7532380000011
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 891.1160999999993
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 989.0358940000006
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1087.406214999999
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1179.6643790000016
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1325.932557
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1423.312023999999
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          43.81732999999804,
+          21.526606999999785,
+          23.274546999997256,
+          26.943938000000344,
+          26.99150699999882,
+          5.2909120000003895,
+          11.041511999999784,
+          10.956453000002512,
+          5.809408999997686,
+          -5.951968999997916,
+          -5.707880000001751,
+          -10.641472999999678,
+          42.870513999998366,
+          26.504720999997517
+        ],
+        "otherToMainSkewsMs": [
+          -43.81732999999804,
+          -21.526606999999785,
+          -23.274546999997256,
+          -26.943938000000344,
+          -26.99150699999882,
+          -5.2909120000003895,
+          -11.041511999999784,
+          -10.956453000002512,
+          -5.809408999997686,
+          5.951968999997916,
+          5.707880000001751,
+          10.641472999999678,
+          -42.870513999998366,
+          -26.504720999997517
+        ],
+        "polling": {
+          "samples": 276,
+          "medianMs": 5.315431999999419,
+          "p95Ms": 5.920619000000443,
+          "maxMs": 6.373036000000866
+        }
+      }
+    },
+    {
+      "width": 420,
+      "phase": "inactive-again",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-420-inactive-again.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 4
+      },
+      "crossWindowTiming": {
+        "durationMs": 1501.1996409999992,
+        "main": [
+          {
+            "signature": "f01e14",
+            "elapsedMs": 73.07518400000117
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 170.2937209999982
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 316.06979299999875
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 407.45086100000117
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 505.8241019999987
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 603.7055049999981
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 698.2010669999981
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 791.8580529999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 890.1492749999998
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 988.2794470000008
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1080.6043499999978
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1178.6534229999997
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1276.405447000001
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1370.0350030000009
+          }
+        ],
+        "other": [
+          {
+            "signature": "f01e14",
+            "elapsedMs": 67.6872629999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 181.9459999999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 277.38140700000076
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 369.6457599999994
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 467.801911999999
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 577.039216000001
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 676.0234539999983
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 770.4679859999997
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 868.3058199999978
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 977.1394660000005
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1074.8278199999986
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1173.340780999999
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1265.7440029999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1380.6478470000002
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1474.1130139999987
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          11.652279000001727,
+          -38.68838599999799,
+          -37.80510100000174,
+          -38.02218999999968,
+          -26.66628899999705,
+          -22.177612999999837,
+          -21.390067000000272,
+          -21.843455000001995,
+          -11.139981000000262,
+          -5.776529999999184,
+          -5.312642000000778,
+          -10.661444000001211,
+          10.612843999999313
+        ],
+        "otherToMainSkewsMs": [
+          -11.652279000001727,
+          38.68838599999799,
+          37.80510100000174,
+          38.02218999999968,
+          26.66628899999705,
+          22.177612999999837,
+          21.390067000000272,
+          21.843455000001995,
+          11.139981000000262,
+          5.776529999999184,
+          5.312642000000778,
+          10.661444000001211,
+          -10.612843999999313
+        ],
+        "polling": {
+          "samples": 273,
+          "medianMs": 5.3637220000018715,
+          "p95Ms": 6.101956999998947,
+          "maxMs": 6.564155000000028
+        }
+      }
+    },
+    {
+      "width": 420,
+      "phase": "restored",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/anim-qa-fixed/twirchat-gui-qa-dz9kle/background-420-restored.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 0,
+        "transformedMismatches": 0,
+        "crossWindowMismatches": 2
+      },
+      "crossWindowTiming": {
+        "durationMs": 1504.012206000003,
+        "main": [
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 5.474670999999944
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 95.53829600000245
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 193.466550000001
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 286.2235099999998
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 383.6774060000025
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 481.99464799999987
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 576.0207620000001
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 669.881016000003
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 767.548611000002
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 913.5333410000021
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1006.4462710000007
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1103.9412069999998
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1201.7886910000016
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1294.9965090000005
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1393.366670000003
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1486.2816500000008
+          }
+        ],
+        "other": [
+          {
+            "signature": "141ef0",
+            "elapsedMs": 73.45877300000211
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 166.97039900000163
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 280.9168580000005
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 373.0957720000006
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 471.13027500000317
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 565.4258070000033
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 680.4960000000028
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 772.849843
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 869.8138620000027
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 968.0011940000004
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1077.3695770000013
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1174.8270730000004
+          },
+          {
+            "signature": "141ef0",
+            "elapsedMs": 1273.4233230000027
+          },
+          {
+            "signature": "f01e14",
+            "elapsedMs": 1366.138804000002
+          },
+          {
+            "signature": "14dc1e",
+            "elapsedMs": 1480.9991580000024
+          }
+        ],
+        "mainToOtherSkewsMs": [
+          -22.079523000000336,
+          -26.496150999999372,
+          -5.306651999999303,
+          -10.58163400000194,
+          -10.864372999996704,
+          -10.594954999996844,
+          10.614983999999822,
+          5.301231999997981,
+          -43.71947899999941,
+          -38.44507700000031,
+          -26.57162999999855,
+          -26.96161800000118,
+          -21.573185999997804,
+          -27.227866000001086
+        ],
+        "otherToMainSkewsMs": [
+          26.496150999999372,
+          5.306651999999303,
+          10.58163400000194,
+          10.864372999996704,
+          10.594954999996844,
+          -10.614983999999822,
+          -5.301231999997981,
+          43.71947899999941,
+          38.44507700000031,
+          26.57162999999855,
+          26.96161800000118,
+          21.573185999997804,
+          27.227866000001086
+        ],
+        "polling": {
+          "samples": 275,
+          "medianMs": 5.325401999998576,
+          "p95Ms": 5.982239000000845,
+          "maxMs": 7.225701999999728
+        }
+      }
+    }
+  ],
+  "resources": [
+    {
+      "repetition": 1,
+      "phase": "focused",
+      "durationMs": 3000.066712,
+      "cpuPercent": 18.34202545559927,
+      "rssMedian": 355680256,
+      "rssPeak": 369606656,
+      "heapPeak": 61432323,
+      "lagP95Ms": 0.059646000001521315,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 1,
+      "phase": "inactive",
+      "durationMs": 3000.062641999997,
+      "cpuPercent": 14.527063331899601,
+      "rssMedian": 355332096,
+      "rssPeak": 355332096,
+      "heapPeak": 47373950,
+      "lagP95Ms": 0.05774600000586361,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 1,
+      "phase": "hidden",
+      "durationMs": 3000.061379999999,
+      "cpuPercent": 10.918609938573994,
+      "rssMedian": 355270656,
+      "rssPeak": 355270656,
+      "heapPeak": 47387892,
+      "lagP95Ms": 0.09601599999587052,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 2,
+      "phase": "focused",
+      "durationMs": 3000.063488,
+      "cpuPercent": 18.06568434861069,
+      "rssMedian": 355270656,
+      "rssPeak": 355270656,
+      "heapPeak": 47395082,
+      "lagP95Ms": 0.05742599999939557,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 2,
+      "phase": "inactive",
+      "durationMs": 3000.0607569999993,
+      "cpuPercent": 14.651469940213618,
+      "rssMedian": 355135488,
+      "rssPeak": 355270656,
+      "heapPeak": 47405381,
+      "lagP95Ms": 0.05675600000540726,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 2,
+      "phase": "hidden",
+      "durationMs": 3000.061376000005,
+      "cpuPercent": 9.880597856141977,
+      "rssMedian": 354594816,
+      "rssPeak": 355135488,
+      "heapPeak": 47414595,
+      "lagP95Ms": 0.2323949999990873,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 3,
+      "phase": "focused",
+      "durationMs": 3000.0630239999955,
+      "cpuPercent": 18.175218175016607,
+      "rssMedian": 354443264,
+      "rssPeak": 354443264,
+      "heapPeak": 47426557,
+      "lagP95Ms": 0.057405999999900814,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 3,
+      "phase": "inactive",
+      "durationMs": 3000.0389829999986,
+      "cpuPercent": 14.597110320282802,
+      "rssMedian": 354443264,
+      "rssPeak": 354443264,
+      "heapPeak": 47433934,
+      "lagP95Ms": 0.5679029999955674,
+      "nativeBatches": 0
+    },
+    {
+      "repetition": 3,
+      "phase": "hidden",
+      "durationMs": 3000.061050999997,
+      "cpuPercent": 9.587104899219609,
+      "rssMedian": 354443264,
+      "rssPeak": 354443264,
+      "heapPeak": 47439916,
+      "lagP95Ms": 0.05894599999737693,
+      "nativeBatches": 0
+    }
+  ]
+}

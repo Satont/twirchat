@@ -1,0 +1,230 @@
+{
+  "ok": true,
+  "expectPaused": true,
+  "expectUnsynchronized": true,
+  "mounts": [
+    {
+      "copies": 1,
+      "elapsedMs": 195.30653200000006
+    },
+    {
+      "copies": 2,
+      "elapsedMs": 390.755183
+    }
+  ],
+  "nativePath": "/tmp/twirchat-background-animation-baseline/gpuix.linux-x64.node",
+  "nativeSha256": "cd10c5ab9042a0ef0c485c3b320f7862128b78e6809fba8aa4181ad1a379d248",
+  "manifest": {
+    "apiVersion": 3,
+    "version": "0.11.0-twirchat.3",
+    "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+    "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+    "patchDigest": "ad7fc24cef2eaf2f",
+    "rustToolchain": "1.97.1",
+    "target": "linux-x64",
+    "size": 56166296,
+    "sha256": "cd10c5ab9042a0ef0c485c3b320f7862128b78e6809fba8aa4181ad1a379d248"
+  },
+  "transformed": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/profile/image-cache/modifiers/0240a7c15d3b7185911759142dbd0638.webp",
+  "evidence": [
+    {
+      "width": 900,
+      "phase": "focused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 1
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-900-focused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 14
+      }
+    },
+    {
+      "width": 900,
+      "phase": "inactive",
+      "uniqueFrames": {
+        "gif": 1,
+        "webp": 1,
+        "transformed": 1,
+        "gif-late-a": 1,
+        "gif-late-b": 1,
+        "transformed-late": 1,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-900-inactive.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 16
+      }
+    },
+    {
+      "width": 900,
+      "phase": "refocused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 1
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-900-refocused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 15
+      }
+    },
+    {
+      "width": 900,
+      "phase": "inactive-again",
+      "uniqueFrames": {
+        "gif": 1,
+        "webp": 1,
+        "transformed": 1,
+        "gif-late-a": 1,
+        "gif-late-b": 1,
+        "transformed-late": 1,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-900-inactive-again.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 16
+      }
+    },
+    {
+      "width": 420,
+      "phase": "focused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 1
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-420-focused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 15
+      }
+    },
+    {
+      "width": 420,
+      "phase": "inactive",
+      "uniqueFrames": {
+        "gif": 1,
+        "webp": 1,
+        "transformed": 1,
+        "gif-late-a": 1,
+        "gif-late-b": 1,
+        "transformed-late": 1,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-420-inactive.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 16
+      }
+    },
+    {
+      "width": 420,
+      "phase": "refocused",
+      "uniqueFrames": {
+        "gif": 3,
+        "webp": 3,
+        "transformed": 3,
+        "gif-late-a": 3,
+        "gif-late-b": 3,
+        "transformed-late": 3,
+        "other-gif": 1
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-420-refocused.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 16
+      }
+    },
+    {
+      "width": 420,
+      "phase": "inactive-again",
+      "uniqueFrames": {
+        "gif": 1,
+        "webp": 1,
+        "transformed": 1,
+        "gif-late-a": 1,
+        "gif-late-b": 1,
+        "transformed-late": 1,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-420-inactive-again.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 15
+      }
+    },
+    {
+      "width": 420,
+      "phase": "restored",
+      "uniqueFrames": {
+        "gif": 1,
+        "webp": 1,
+        "transformed": 1,
+        "gif-late-a": 1,
+        "gif-late-b": 1,
+        "transformed-late": 1,
+        "other-gif": 3
+      },
+      "nativeBatches": 0,
+      "renders": 0,
+      "screenshot": "/tmp/twirchat-background-animation-baseline/synchronization/twirchat-gui-qa-zFwjFL/background-420-restored.png",
+      "synchronization": {
+        "samples": 21,
+        "sameWindowMismatches": 21,
+        "transformedMismatches": 21,
+        "crossWindowMismatches": 14
+      }
+    }
+  ],
+  "resources": []
+}

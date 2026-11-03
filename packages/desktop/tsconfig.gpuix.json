@@ -31,6 +31,7 @@
     "scripts/qa-painted-geometry.tsx",
     "scripts/qa-drag-interactions.tsx",
     "scripts/qa-seventv-notices.tsx",
+    "scripts/qa-background-images.tsx",
     "scripts/qa-history-logs.tsx",
     "scripts/qa-tab-counts.tsx",
     "scripts/qa-deferred-chat-rows.tsx",

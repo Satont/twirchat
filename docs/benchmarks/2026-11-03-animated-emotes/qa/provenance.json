@@ -1,0 +1,17 @@
+{
+  "gitHead": "61721d24a2a476346afbc646de371563aa0aa023",
+  "fixtureSha256": "cdc6e92462ebfc60998170aeb3c65e96240449eb999e4a6d8f145bfe29d9664a",
+  "nativeSha256": "0425e9a85b1702023e79a13a047b44e6ff5474f1f7c51c36f1c0a5eec227f89b",
+  "nativePatchDigest": "fd5041e808e7ccca",
+  "bun": "1.4.4",
+  "reactMode": "production",
+  "compositor": "private Xvfb",
+  "imageCount": {
+    "main": 6,
+    "other": 1
+  },
+  "imageSize": 48,
+  "frameDelayMs": 100,
+  "resourcePhaseSeconds": 3,
+  "repetitions": 3
+}

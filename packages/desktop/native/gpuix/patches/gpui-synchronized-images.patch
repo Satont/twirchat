@@ -1,0 +1,302 @@
+diff --git a/crates/gpui/src/image_animation.rs b/crates/gpui/src/image_animation.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/gpui/src/image_animation.rs
+@@ -0,0 +1,101 @@
++use std::time::Duration;
++
++#[derive(Default)]
++pub(crate) struct ImageAnimationTimeline {
++    frame_end_nanos: Vec<u128>,
++}
++
++impl ImageAnimationTimeline {
++    pub(crate) fn new(delays: impl ExactSizeIterator<Item = Duration>) -> Self {
++        if delays.len() <= 1 {
++            return Self::default();
++        }
++        let mut frame_end_nanos = Vec::with_capacity(delays.len());
++        let mut end_nanos = 0;
++        for delay in delays {
++            let delay = if delay.is_zero() {
++                Duration::from_millis(10)
++            } else {
++                delay
++            };
++            end_nanos += delay.as_nanos();
++            frame_end_nanos.push(end_nanos);
++        }
++        Self { frame_end_nanos }
++    }
++
++    pub(crate) fn frame_index_at(&self, elapsed: Duration) -> usize {
++        let Some(&cycle_nanos) = self.frame_end_nanos.last() else {
++            return 0;
++        };
++        let phase_nanos = elapsed.as_nanos() % cycle_nanos;
++        self.frame_end_nanos
++            .partition_point(|&end| end <= phase_nanos)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn timeline(delays: &[u64]) -> ImageAnimationTimeline {
++        ImageAnimationTimeline::new(delays.iter().map(|&delay| Duration::from_millis(delay)))
++    }
++
++    #[test]
++    fn unequal_delays_keep_exact_boundaries_and_wrap() {
++        let timeline = timeline(&[100, 250, 50]);
++        let observed: Vec<_> = [0, 99, 100, 349, 350, 399, 400, 499, 500]
++            .into_iter()
++            .map(|time| timeline.frame_index_at(Duration::from_millis(time)))
++            .collect();
++        assert_eq!(observed, [0, 0, 1, 1, 2, 2, 0, 0, 1]);
++    }
++
++    #[test]
++    fn zero_delays_receive_a_ten_millisecond_frame() {
++        let timeline = timeline(&[0, 25]);
++        let observed: Vec<_> = [0, 9, 10, 34, 35]
++            .into_iter()
++            .map(|time| timeline.frame_index_at(Duration::from_millis(time)))
++            .collect();
++        assert_eq!(observed, [0, 0, 1, 1, 0]);
++    }
++
++    #[test]
++    fn positive_submillisecond_delays_are_preserved() {
++        let timeline = ImageAnimationTimeline::new(
++            [Duration::from_micros(500), Duration::from_millis(2)].into_iter(),
++        );
++        let observed: Vec<_> = [499_999, 500_000, 2_499_999, 2_500_000]
++            .into_iter()
++            .map(|time| timeline.frame_index_at(Duration::from_nanos(time)))
++            .collect();
++        assert_eq!(observed, [0, 1, 1, 0]);
++    }
++
++    #[test]
++    fn empty_and_static_images_stay_on_frame_zero() {
++        let timelines = [timeline(&[]), timeline(&[0]), timeline(&[125])];
++        assert!(timelines.iter().all(|timeline| {
++            [Duration::ZERO, Duration::from_secs(123), Duration::MAX]
++                .into_iter()
++                .all(|elapsed| timeline.frame_index_at(elapsed) == 0)
++        }));
++    }
++
++    #[test]
++    fn large_elapsed_times_wrap_without_integer_truncation() {
++        assert_eq!(timeline(&[100, 250, 50]).frame_index_at(Duration::MAX), 2);
++    }
++
++    #[test]
++    fn independently_constructed_images_share_a_phase() {
++        let original = timeline(&[100, 250, 50]);
++        let later_copy = timeline(&[100, 250, 50]);
++        assert!([0, 101, 351, 812, 1_000_000].into_iter().all(|time| {
++            let elapsed = Duration::from_millis(time);
++            original.frame_index_at(elapsed) == later_copy.frame_index_at(elapsed)
++        }));
++    }
++}
+diff --git a/crates/gpui/src/gpui.rs b/crates/gpui/src/gpui.rs
+--- a/crates/gpui/src/gpui.rs
++++ b/crates/gpui/src/gpui.rs
+@@ -28,6 +28,7 @@
+ mod geometry;
+ mod gestures;
+ mod global;
++mod image_animation;
+ mod input;
+ mod inspector;
+ mod interactive;
+diff --git a/crates/gpui/src/assets.rs b/crates/gpui/src/assets.rs
+--- a/crates/gpui/src/assets.rs
++++ b/crates/gpui/src/assets.rs
+@@ -1,4 +1,6 @@
+-use crate::{DevicePixels, Pixels, Result, SharedString, Size, size};
++use crate::{
++    DevicePixels, Pixels, Result, SharedString, Size, image_animation::ImageAnimationTimeline, size,
++};
+ use smallvec::SmallVec;
+ 
+ use image::{Delay, Frame};
+@@ -7,6 +9,7 @@
+     fmt,
+     hash::Hash,
+     sync::atomic::{AtomicUsize, Ordering::SeqCst},
++    time::Duration,
+ };
+ 
+ /// A source of assets for this app to use.
+@@ -46,6 +49,7 @@
+     /// The scale factor of this image on render.
+     pub(crate) scale_factor: f32,
+     data: SmallVec<[Frame; 1]>,
++    animation: ImageAnimationTimeline,
+ }
+ 
+ impl PartialEq for RenderImage {
+@@ -60,11 +64,15 @@
+     /// Create a new image from the given data.
+     pub fn new(data: impl Into<SmallVec<[Frame; 1]>>) -> Self {
+         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
++        let data = data.into();
++        let animation =
++            ImageAnimationTimeline::new(data.iter().map(|frame| Duration::from(frame.delay())));
+ 
+         Self {
+             id: ImageId(NEXT_ID.fetch_add(1, SeqCst)),
+             scale_factor: 1.0,
+-            data: data.into(),
++            data,
++            animation,
+         }
+     }
+ 
+@@ -106,6 +114,11 @@
+             .unwrap_or(Delay::from_numer_denom_ms(100, 1))
+     }
+ 
++    /// Select a frame on the repeating animation timeline at the given elapsed time.
++    pub(crate) fn frame_index_at(&self, elapsed: Duration) -> usize {
++        self.animation.frame_index_at(elapsed)
++    }
++
+     /// Get the number of frames for this image.
+     pub fn frame_count(&self) -> usize {
+         self.data.len()
+@@ -145,4 +158,25 @@
+         assert_eq!(image.as_bytes(0), Some(bytes.as_slice()));
+         assert!(RenderImage::from_bgra(2, 1, vec![0; 4]).is_none());
+     }
++
++    #[test]
++    fn separately_constructed_render_images_select_the_same_frame() {
++        let make_image = || {
++            RenderImage::new(SmallVec::from_iter([100, 250, 50].map(|delay| {
++                Frame::from_parts(
++                    image::RgbaImage::new(1, 1),
++                    0,
++                    0,
++                    Delay::from_numer_denom_ms(delay, 1),
++                )
++            })))
++        };
++        let original = make_image();
++        let later_copy = make_image();
++        assert_ne!(original.id, later_copy.id);
++        assert!([0, 101, 351, 812].into_iter().all(|millis| {
++            let elapsed = Duration::from_millis(millis);
++            original.frame_index_at(elapsed) == later_copy.frame_index_at(elapsed)
++        }));
++    }
+ }
+diff --git a/crates/gpui/src/elements/img.rs b/crates/gpui/src/elements/img.rs
+--- a/crates/gpui/src/elements/img.rs
++++ b/crates/gpui/src/elements/img.rs
+@@ -21,7 +21,7 @@
+     ops::{Deref, DerefMut},
+     path::{Path, PathBuf},
+     str::FromStr,
+-    sync::Arc,
++    sync::{Arc, OnceLock},
+     time::Duration,
+ };
+ use thiserror::Error;
+@@ -31,6 +31,8 @@
+ /// The delay before showing the loading state.
+ pub const LOADING_DELAY: Duration = Duration::from_millis(200);
+ 
++static ANIMATION_EPOCH: OnceLock<Instant> = OnceLock::new();
++
+ /// A type alias to the resource loader that the `img()` element uses.
+ ///
+ /// Note: that this is only for Resources, like URLs or file paths.
+@@ -129,6 +131,7 @@
+ pub struct ImageStyle {
+     grayscale: bool,
+     animate_when_inactive: bool,
++    synchronize_animation: bool,
+     object_fit: ObjectFit,
+     loading: Option<Box<dyn Fn() -> AnyElement>>,
+     fallback: Option<Box<dyn Fn() -> AnyElement>>,
+@@ -139,6 +142,7 @@
+         Self {
+             grayscale: false,
+             animate_when_inactive: false,
++            synchronize_animation: false,
+             object_fit: ObjectFit::Contain,
+             loading: None,
+             fallback: None,
+@@ -164,6 +168,12 @@
+         self
+     }
+ 
++    /// Use a process-wide animation phase instead of starting at mount time.
++    fn synchronize_animation(mut self, synchronize: bool) -> Self {
++        self.image_style().synchronize_animation = synchronize;
++        self
++    }
++
+     /// Set the object fit for the image.
+     fn object_fit(mut self, object_fit: ObjectFit) -> Self {
+         self.image_style().object_fit = object_fit;
+@@ -349,7 +359,13 @@
+ 
+                             if let Some(state) = &mut state {
+                                 state.frame_index = state.frame_index.min(max_frame_index);
+-                                if animate {
++                                if animate && self.style.synchronize_animation {
++                                    let epoch = ANIMATION_EPOCH.get_or_init(Instant::now);
++                                    state.frame_index = data.frame_index_at(
++                                        window.animation_time().saturating_duration_since(*epoch),
++                                    );
++                                    state.last_frame_time = None;
++                                } else if animate {
+                                     let current_time = Instant::now();
+                                     if let Some(last_frame_time) = state.last_frame_time {
+                                         let elapsed = current_time - last_frame_time;
+diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -1171,6 +1171,7 @@
+     pub(crate) requested_autoscroll: Option<Bounds<Pixels>>,
+     pub(crate) image_cache_stack: Vec<AnyImageCache>,
+     pub(crate) rendered_frame: Frame,
++    animation_time: Instant,
+     pub(crate) next_frame: Frame,
+     next_hitbox_id: HitboxId,
+     pub(crate) next_tooltip_id: TooltipId,
+@@ -1860,6 +1861,7 @@
+             element_opacity: 1.0,
+             requested_autoscroll: None,
+             rendered_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
++            animation_time: Instant::now(),
+             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+             next_frame_callbacks,
+             after_paint_observers: Vec::new(),
+@@ -2418,6 +2420,10 @@
+         self.invalidator.wake_platform();
+     }
+ 
++    pub(crate) fn animation_time(&self) -> Instant {
++        self.animation_time
++    }
++
+     /// Schedule a frame to be drawn on the next animation frame.
+     ///
+     /// This is useful for elements that need to animate continuously, such as a video player or an animated GIF.
+@@ -2950,6 +2956,7 @@
+     /// the contents of the new [`Scene`], use [`Self::present`].
+     #[profiling::function]
+     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
++        self.animation_time = Instant::now();
+         // Drain every draw in profiler builds so a previous frame's
+         // first-invalidation timestamp can't be attributed to this one.
+         #[cfg(feature = "profiler")]

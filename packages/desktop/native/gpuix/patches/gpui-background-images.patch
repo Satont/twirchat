@@ -1,0 +1,100 @@
+diff --git a/crates/gpui/src/elements/img.rs b/crates/gpui/src/elements/img.rs
+--- a/crates/gpui/src/elements/img.rs
++++ b/crates/gpui/src/elements/img.rs
+@@ -128,6 +128,7 @@
+ /// The style of an image element.
+ pub struct ImageStyle {
+     grayscale: bool,
++    animate_when_inactive: bool,
+     object_fit: ObjectFit,
+     loading: Option<Box<dyn Fn() -> AnyElement>>,
+     fallback: Option<Box<dyn Fn() -> AnyElement>>,
+@@ -137,6 +138,7 @@
+     fn default() -> Self {
+         Self {
+             grayscale: false,
++            animate_when_inactive: false,
+             object_fit: ObjectFit::Contain,
+             loading: None,
+             fallback: None,
+@@ -155,6 +157,13 @@
+         self
+     }
+ 
++    /// Keep animating while unfocused, unless the window is explicitly hidden.
++    /// System reduced-motion preferences still take precedence.
++    fn animate_when_inactive(mut self, animate: bool) -> Self {
++        self.image_style().animate_when_inactive = animate;
++        self
++    }
++
+     /// Set the object fit for the image.
+     fn object_fit(mut self, object_fit: ObjectFit) -> Self {
+         self.image_style().object_fit = object_fit;
+@@ -325,28 +334,36 @@
+                         Some(Ok(data)) => {
+                             let frame_count = data.frame_count();
+                             let max_frame_index = frame_count.saturating_sub(1);
++                            let animate = frame_count > 1
++                                && !cx.reduce_motion()
++                                && if self.style.animate_when_inactive {
++                                    window.native_window_visibility_state().is_none_or(
++                                        |visibility| {
++                                            visibility.load(std::sync::atomic::Ordering::Relaxed)
++                                                != 2
++                                        },
++                                    )
++                                } else {
++                                    window.is_window_active()
++                                };
+ 
+                             if let Some(state) = &mut state {
+                                 state.frame_index = state.frame_index.min(max_frame_index);
+-                                if frame_count > 1 && !cx.reduce_motion() {
+-                                    if window.is_window_active() {
+-                                        let current_time = Instant::now();
+-                                        if let Some(last_frame_time) = state.last_frame_time {
+-                                            let elapsed = current_time - last_frame_time;
+-                                            let frame_duration =
+-                                                Duration::from(data.delay(state.frame_index));
+-
+-                                            if elapsed >= frame_duration {
+-                                                state.frame_index =
+-                                                    (state.frame_index + 1) % frame_count;
+-                                                state.last_frame_time =
+-                                                    Some(current_time - (elapsed - frame_duration));
+-                                            }
+-                                        } else {
+-                                            state.last_frame_time = Some(current_time);
++                                if animate {
++                                    let current_time = Instant::now();
++                                    if let Some(last_frame_time) = state.last_frame_time {
++                                        let elapsed = current_time - last_frame_time;
++                                        let frame_duration =
++                                            Duration::from(data.delay(state.frame_index));
++
++                                        if elapsed >= frame_duration {
++                                            state.frame_index =
++                                                (state.frame_index + 1) % frame_count;
++                                            state.last_frame_time =
++                                                Some(current_time - (elapsed - frame_duration));
+                                         }
+                                     } else {
+-                                        state.last_frame_time = None;
++                                        state.last_frame_time = Some(current_time);
+                                     }
+                                 } else {
+                                     state.last_frame_time = None;
+@@ -389,11 +406,7 @@
+                                 };
+                             }
+ 
+-                            if global_id.is_some()
+-                                && data.frame_count() > 1
+-                                && window.is_window_active()
+-                                && !cx.reduce_motion()
+-                            {
++                            if global_id.is_some() && animate {
+                                 window.request_animation_frame();
+                             }
+                         }

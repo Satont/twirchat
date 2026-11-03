@@ -207,3 +207,9 @@ QA base: `1455a1dd59690e5e17aed753825f1b1c120c25f1` plus this change. Runtime SH
 Native `0.11.0-twirchat.4`, API 3, digest `9fb2fa0507af39a4`, 56,224,840 bytes, SHA-256
 `32df77db2384eb22f77a2eb5442b9c67356d857720ee7248d80b35c4ed63bcf7`; Bun 1.4.4.
 Workspace formatting, lint, typecheck and tests passed: 1175 tests, 15 PostgreSQL tests skipped.
+
+## Animated emote follow-up
+
+Visible GIF/WebP emotes now play without focus, share a timeline across copies, and request
+redraws at encoded frame deadlines. The [animation report](../2026-11-03-animated-emotes/report.md)
+records native pixel/lifecycle checks, the complete development matrix and final production repeats.
