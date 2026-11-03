@@ -272,6 +272,12 @@ afterEach(() => {
   chatTabsStore.set(oldStores.chatTabs)
 })
 function tabApi() {
+  chatTabsStore.set({
+    value: { version: 1, openIds: [], metadata: {}, closed: [] },
+    loaded: false,
+    saving: false,
+    error: null,
+  })
   let raw = JSON.stringify({
     version: 1,
     openIds: tabChannelIdsStore.get(),

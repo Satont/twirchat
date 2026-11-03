@@ -118,22 +118,44 @@ jobs:
             libssl-dev libzstd-dev libvulkan-dev libvulkan1 libxcb-shape0-dev
       - name: Install Metal compiler
         if: runner.os == 'macOS'
-        run: xcodebuild -downloadComponent MetalToolchain
-      - name: Cache Cargo registry and git dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        run: |
+          if ! xcrun metal --version; then xcodebuild -downloadComponent MetalToolchain; fi
+          xcrun metal --version
+      - name: Restore Cargo registry and git dependencies
+        id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: cargo-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-${{ hashFiles('packages/desktop/native/gpuix/source.json') }}
           restore-keys: cargo-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-
-      - name: Cache pinned native artifact and build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore pinned native artifact and build
+        id: native-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .native-cache
             packages/desktop/dist/native
           key: native-v1-macos13-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-${{ hashFiles('packages/desktop/native/gpuix/source.json', 'packages/desktop/native/gpuix/patches/*.patch', 'packages/desktop/scripts/build-gpuix-native.ts') }}
+      - name: Build pinned native runtime
+        run: bun run --cwd packages/desktop build:native
+      - name: Save Cargo dependencies before packaging
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
+      - name: Save native artifact and build before packaging
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .native-cache
+            packages/desktop/dist/native
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Import macOS release signing identities
         if: inputs.release && inputs.signing && runner.os == 'macOS'
         env:

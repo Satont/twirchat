@@ -24,6 +24,11 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      - name: Install native runtime libraries for desktop tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1 libwayland-client0 libwayland-cursor0 \
+            libxkbcommon-x11-0 libx11-xcb1 libxcb-shape0 libvulkan1
       - name: Validate GitHub Actions workflows
         run: |
           directory="$RUNNER_TEMP/actionlint"
