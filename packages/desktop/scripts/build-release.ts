@@ -33,6 +33,7 @@ const smokeReportSchema = z.object({
   nativeApiVersion: z.literal(3),
   reactVersion: z.string(),
   reactMode: z.literal('production'),
+  jsxRuntime: z.literal('production'),
   velopackStartup: z.literal(true),
   executable: z.string(),
   cwd: z.string(),
@@ -76,10 +77,10 @@ export async function sameFileSystemPath(actual: string, expected: string): Prom
   return actualPath === expectedPath
 }
 
-async function run(args: string[], env?: Record<string, string>): Promise<void> {
+async function run(args: string[]): Promise<void> {
   const child = Bun.spawn(args, {
     cwd: desktop,
-    env: { ...process.env, ...env },
+    env: process.env,
     stdin: 'ignore',
     stdout: 'inherit',
     stderr: 'inherit',
@@ -187,35 +188,33 @@ export async function buildRelease(args = process.argv.slice(2)): Promise<void> 
   await run([process.execPath, 'run', 'build:overlay'])
   await rm(paths.output, { recursive: true, force: true })
   await mkdir(paths.runtime, { recursive: true })
-  await run(
-    [
-      process.execPath,
-      'build',
-      '--compile',
-      '--minify',
-      '--no-compile-autoload-dotenv',
-      '--no-compile-autoload-bunfig',
-      'src/gpuix/release.ts',
-      '--outfile',
-      paths.executable,
-      '--define',
-      `__APP_VERSION__=${JSON.stringify(version)}`,
-      '--define',
-      `__BACKEND_URL__=${JSON.stringify(backendUrl)}`,
-      '--define',
-      'process.env.NODE_ENV="production"',
+  const compiled = await Bun.build({
+    entrypoints: [join(desktop, 'src/gpuix/release.ts')],
+    target: 'bun',
+    minify: true,
+    jsx: { runtime: 'automatic', importSource: '@gpuix/react', development: false },
+    define: {
+      __APP_VERSION__: JSON.stringify(version),
+      __BACKEND_URL__: JSON.stringify(backendUrl),
+      'process.env.NODE_ENV': '"production"',
+    },
+    compile: {
+      outfile: paths.executable,
+      autoloadDotenv: false,
+      autoloadBunfig: false,
       ...(process.platform === 'win32'
-        ? [
-            '--windows-icon',
-            'assets/icon.ico',
-            '--windows-hide-console',
-            '--windows-title',
-            'TwirChat',
-          ]
-        : []),
-    ],
-    { NODE_ENV: 'production' },
-  )
+        ? {
+            windows: {
+              icon: join(desktop, 'assets/icon.ico'),
+              hideConsole: true,
+              title: 'TwirChat',
+            },
+          }
+        : {}),
+    },
+  })
+  if (!compiled.success)
+    throw new AggregateError(compiled.logs, 'Could not compile desktop release.')
   await packageRuntimeAssets(paths.runtime)
   if (process.platform === 'darwin') {
     await createMacBundle(paths.packDirectory, version)

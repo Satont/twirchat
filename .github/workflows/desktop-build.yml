@@ -116,7 +116,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc g++ clang cmake pkg-config libfuse2 \
             libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev \
-            libssl-dev libzstd-dev libvulkan-dev libvulkan1 libxcb-shape0-dev
+            libssl-dev libzstd-dev libvulkan-dev libvulkan1 libxcb-shape0-dev \
+            bubblewrap xvfb xauth xdotool mesa-vulkan-drivers libegl1-mesa libgl1-mesa-dri
       - name: Install Metal compiler
         if: runner.os == 'macOS'
         run: |
@@ -327,6 +328,23 @@ jobs:
             --releaseNotes release-notes.md "${icon[@]}" "${signing[@]}"
           printf 'Platform: %s\nVersion: %s\nSigning: %s\n' "$RUNTIME" "$RELEASE_VERSION" "$signature" > "releases/signature-$RUNTIME.txt"
           test -s "releases/releases.$RUNTIME.json"
+      - name: Test the actual AppImage on an isolated virtual display
+        if: runner.os == 'Linux'
+        working-directory: packages/desktop
+        run: |
+          bun_executable="$(bun -e 'console.log(process.execPath)')"
+          image="$PWD/releases/dev.twirchat.app-linux-x64.AppImage"
+          test -x "$image"
+          bun run qa:gui --node-env production --artifacts "$RUNNER_TEMP/distribution-qa" \
+            --timeout 45 -- "$bun_executable" "$PWD/scripts/qa-distribution.ts" "$image"
+      - name: Preserve isolated distribution diagnostics
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: distribution-qa-${{ matrix.runtime }}
+          path: ${{ runner.temp }}/distribution-qa
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Preserve installers and feeds
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

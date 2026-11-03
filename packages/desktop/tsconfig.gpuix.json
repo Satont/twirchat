@@ -33,7 +33,8 @@
     "scripts/qa-seventv-notices.tsx",
     "scripts/qa-history-logs.tsx",
     "scripts/qa-tab-counts.tsx",
-    "scripts/qa-deferred-chat-rows.tsx"
+    "scripts/qa-deferred-chat-rows.tsx",
+    "scripts/qa-distribution.ts"
   ],
   "exclude": ["node_modules"]
 }
