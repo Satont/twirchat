@@ -8,17 +8,25 @@ await import('../src/gpuix/native-bootstrap')
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 
+import {
+  clickPrivateTrayMenu,
+  privateTrayBus as bus,
+  privateTrayMenu,
+  privateTrayNames as names,
+} from './qa-tray-dbus'
+
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop } = await import('@gpuix/react')
 const { initializeManagedRenderer } = await import('../src/gpuix/managed-renderer')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
-const { focusNativeQaWindow } = await import('./qa-x11')
+const { closeNativeQaWindow, focusNativeQaWindow } = await import('./qa-x11')
 const first = nativeWindow(createRenderer())
 const second = nativeWindow(createRenderer())
 initializeManagedRenderer(first, { title: 'TwirChat tray QA', width: 320, height: 240 })
 initializeManagedRenderer(second, { title: 'TwirChat visibility QA', width: 320, height: 240 })
 const roots = [createRoot(first), createRoot(second)]
+const activeRoots = new Set(roots)
 const loops = [startFrameLoop(first), startFrameLoop(second)]
 for (const [index, root] of roots.entries())
   root.render(
@@ -45,42 +53,12 @@ async function command(args: string[]): Promise<string> {
   if (code !== 0) throw new Error(`${args[0]} failed: ${stderr}`)
   return stdout
 }
-async function bus(
-  destination: string,
-  path: string,
-  method: string,
-  args: string[] = [],
-): Promise<string> {
-  return command([
-    '/usr/bin/gdbus',
-    'call',
-    '--session',
-    '--dest',
-    destination,
-    '--object-path',
-    path,
-    '--method',
-    method,
-    '--',
-    ...args,
-  ])
-}
 async function until(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
   const deadline = performance.now() + 8000
   while (!(await check())) {
     assert(performance.now() < deadline, `Timed out: ${label}`)
     await Bun.sleep(30)
   }
-}
-async function names(): Promise<string[]> {
-  const result = await bus(
-    'org.freedesktop.DBus',
-    '/org/freedesktop/DBus',
-    'org.freedesktop.DBus.ListNames',
-  )
-  return [...result.matchAll(/'([^']+)'/g)]
-    .map((match) => match[1])
-    .filter((name): name is string => name !== undefined)
 }
 let item = ''
 try {
@@ -102,13 +80,7 @@ try {
     'ToolTip',
   ])
   assert(title.includes('TwirChat'))
-  const menu = await bus(item, '/StatusNotifierItem', 'org.freedesktop.DBus.Properties.Get', [
-    'org.kde.StatusNotifierItem',
-    'Menu',
-  ])
-  const menuPath = menu.match(/'(\/[^']*)'/)?.[1]
-  assert(menuPath, 'SNI exports its native menu path.')
-  const layout = await bus(item, menuPath, 'com.canonical.dbusmenu.GetLayout', ['0', '-1', '[]'])
+  const { layout } = await privateTrayMenu(item)
   for (const label of ['Open TwirChat', 'Mention notifications', 'Quit TwirChat'])
     assert(layout.includes(label), label)
   await bus(item, '/StatusNotifierItem', 'org.kde.StatusNotifierItem.Activate', ['0', '0'])
@@ -117,9 +89,7 @@ try {
     events.push(...first.takeTrayEvents())
     return events.includes('show')
   }, 'tray activation reaches native event queue')
-  const menuId = layout.match(/\((\d+),\s*\{[^}]*'label':\s*<'Mention notifications'>/)?.[1]
-  assert(menuId, 'The native menu exposes its notifications item.')
-  await bus(item, menuPath, 'com.canonical.dbusmenu.Event', [menuId, 'clicked', '<0>', '0'])
+  await clickPrivateTrayMenu(item, 'Mention notifications')
   await until(() => {
     events.push(...first.takeTrayEvents())
     return events.includes('notifications')
@@ -141,6 +111,43 @@ try {
     () => first.getWindowVisibility() === 'visible',
     'mapped native window becomes visible',
   )
+  for (let cycle = 0; cycle < 3; cycle++) {
+    closeNativeQaWindow('TwirChat tray QA')
+    await until(() => first.getWindowVisibility() === 'hidden', 'WM close hides the tray owner')
+    assert(first.isWindowOpen(), 'WM close must preserve the tray owner and its renderer.')
+    const retainedRoot = roots[0]
+    assert(retainedRoot)
+    retainedRoot.render(
+      React.createElement(
+        'div',
+        { style: { width: '100%', height: '100%', backgroundColor: '#443066' } },
+        React.createElement('text', {}, `Hidden update ${cycle}`),
+      ),
+    )
+    await Bun.sleep(200)
+    assert.equal(first.getWindowVisibility(), 'hidden', 'Background updates must not remap it.')
+    await clickPrivateTrayMenu(item, 'Open TwirChat')
+    await until(() => {
+      const actions = first.takeTrayEvents()
+      events.push(...actions)
+      if (!actions.includes('show')) return false
+      first.activateWindow()
+      return true
+    }, 'Open menu reaches the retained window')
+    await until(() => first.getWindowVisibility() === 'visible', 'tray restores the same window')
+    await until(
+      () => first.getPaintedText().includes(`Hidden update ${cycle}`),
+      'restored window paints its latest content',
+    )
+    await focusNativeQaWindow('TwirChat tray QA')
+  }
+  const secondaryRoot = roots[1]
+  assert(secondaryRoot)
+  secondaryRoot.unmount()
+  activeRoots.delete(secondaryRoot)
+  closeNativeQaWindow('TwirChat visibility QA')
+  await until(() => !second.isWindowOpen(), 'window without a tray still closes')
+  assert(first.isWindowOpen(), 'Closing another window must preserve the tray owner.')
   const started = performance.now()
   for (let index = 0; index < 10000; index++) first.getWindowVisibility()
   const readsMs = performance.now() - started
@@ -148,6 +155,12 @@ try {
   const screenshot = await captureGuiQaDisplay('tray-and-visible-windows')
   await first.configureTray(false, false)
   await until(async () => !(await names()).includes(item), 'tray unregisters on disposal')
+  const primaryRoot = roots[0]
+  assert(primaryRoot)
+  primaryRoot.unmount()
+  activeRoots.delete(primaryRoot)
+  closeNativeQaWindow('TwirChat tray QA')
+  await until(() => !first.isWindowOpen(), 'tray removal restores ordinary OS close')
   const directory = process.env.TWIRCHAT_QA_SESSION_DIR
   assert(directory)
   await Bun.write(
@@ -159,6 +172,10 @@ try {
         events,
         inactiveVisible: true,
         mapVisibility: true,
+        closeRestoreCycles: 3,
+        hiddenUpdatesStayHidden: true,
+        unownedWindowCloses: true,
+        trayRemovalRestoresClose: true,
         readsMs,
         screenshot,
       },
@@ -168,8 +185,9 @@ try {
   )
   console.log('Native tray and compositor visibility QA passed.')
 } finally {
-  await first.configureTray(false, false).catch(() => {})
-  for (const root of roots) root.unmount()
+  if (first.isWindowOpen()) await first.configureTray(false, false).catch(() => {})
+  for (const root of activeRoots)
+    if ((root === roots[0] ? first : second).isWindowOpen()) root.unmount()
   first.closeWindow()
   second.closeWindow()
   await Bun.sleep(100)

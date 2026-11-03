@@ -1,0 +1,2 @@
+react_mode,channels,visible_panes,target_total_msg_s,target_msg_s_per_channel,processed_msg_s,cpu_percent_one_core,gpu_gfx_max_device_percent,gpu_gfx_pci_device,rss_median_mib,rss_peak_mib,rss_growth_mib,gpu_vram_mib,gpu_gtt_mib,event_loop_lag_p95_ms,generated_messages,processed_messages,processed_after_drain,generator_missed_messages,termination,user_timing_measure_entries
+production,50.000,4.000,5000.000,100.000,4995.545,113.326,1.136,0000:03:00.0,499.836,612.711,156.484,80.633,8.008,2.830,149972.000,149867.000,149972.000,28.000,completed,0.000

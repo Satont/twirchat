@@ -56,6 +56,27 @@ test('GUI QA React mode defaults never inherit the host NODE_ENV', () => {
   }
 })
 
+test('Weston controls require the private Weston backend and preserve the child command', () => {
+  expect(() => parseGuiQaArguments(['--weston-controls'])).toThrow('--compositor weston')
+  expect(() => parseGuiQaArguments(['--weston-controls', '--compositor', 'xvfb'])).toThrow(
+    '--compositor weston',
+  )
+  const options = parseGuiQaArguments([
+    '--weston-controls',
+    '--dbus',
+    '--compositor',
+    'weston',
+    '--',
+    'bun',
+    'probe.ts',
+    '--weston-controls',
+  ])
+  expect(options.compositor).toBe('weston')
+  expect(options.westonControls).toBe(true)
+  expect(options.dbus).toBe(true)
+  expect(options.command).toEqual(['bun', 'probe.ts', '--weston-controls'])
+})
+
 test('private QA bus rejects host addresses, alternate transports and unowned sockets', async () => {
   const runtime = mkdtempSync(join(tmpdir(), 'qa-bus-'))
   const socket = join(runtime, 'bus')

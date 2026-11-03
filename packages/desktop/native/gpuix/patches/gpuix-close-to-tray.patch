@@ -1,0 +1,38 @@
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -1294,6 +1294,19 @@
+         .update(cx, |view, window, cx| {
+             view.window_id = Some(window_id);
+             capture_native_window(window, &observer_state);
++            #[cfg(target_os = "linux")]
++            {
++                let close_state = observer_state.clone();
++                window.on_window_should_close(cx, move |window, _| {
++                    if !crate::tray::is_enabled(renderer_id) || !window.hide_window() {
++                        return true;
++                    }
++                    let mut state = close_state.lock();
++                    state.active = false;
++                    state.hotkeys.cancel();
++                    false
++                });
++            }
+             let painted_bounds = observer_state.lock().painted_bounds.clone();
+             window.on_after_paint(move |_| {
+                 painted_bounds.publish(crate::automation::bounds_snapshot(window_id));
+diff --git a/packages/native/src/tray.rs b/packages/native/src/tray.rs
+--- a/packages/native/src/tray.rs
++++ b/packages/native/src/tray.rs
+@@ -120,6 +120,11 @@
+     })
+ }
+ 
++#[cfg(target_os = "linux")]
++pub(crate) fn is_enabled(renderer_id: u64) -> bool {
++    TRAYS.with(|trays| trays.borrow().contains_key(&renderer_id))
++}
++
+ pub(crate) fn remove(renderer_id: u64) {
+     EVENTS.lock().remove(&renderer_id);
+     TRAYS.with(|trays| {

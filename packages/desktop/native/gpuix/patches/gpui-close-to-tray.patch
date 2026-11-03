@@ -1,0 +1,318 @@
+diff --git a/crates/gpui/src/platform.rs b/crates/gpui/src/platform.rs
+--- a/crates/gpui/src/platform.rs
++++ b/crates/gpui/src/platform.rs
+@@ -870,6 +870,10 @@
+         answers: &[PromptButton],
+     ) -> Option<oneshot::Receiver<usize>>;
+     fn activate(&self);
++    /// Hide this window while retaining its native resources, if supported.
++    fn hide(&self) -> bool {
++        false
++    }
+     /// Requests that the operating system draw attention to this window.
+     fn request_attention(&self) {}
+     fn is_active(&self) -> bool;
+diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -6025,6 +6025,11 @@
+         self.platform_window.activate();
+     }
+ 
++    /// Hide this window without removing it. Returns false when unsupported.
++    pub fn hide_window(&self) -> bool {
++        self.platform_window.hide()
++    }
++
+     /// Requests that the operating system draw attention to this window.
+     pub fn request_attention(&self) {
+         self.platform_window.request_attention();
+diff --git a/crates/gpui_linux/src/linux/wayland/client.rs b/crates/gpui_linux/src/linux/wayland/client.rs
+--- a/crates/gpui_linux/src/linux/wayland/client.rs
++++ b/crates/gpui_linux/src/linux/wayland/client.rs
+@@ -1443,7 +1443,7 @@
+ impl Dispatch<WlCallback, ObjectId> for WaylandClientStatePtr {
+     fn event(
+         state: &mut WaylandClientStatePtr,
+-        _: &wl_callback::WlCallback,
++        callback: &wl_callback::WlCallback,
+         event: wl_callback::Event,
+         surface_id: &ObjectId,
+         _: &Connection,
+@@ -1457,7 +1457,7 @@
+         drop(state);
+ 
+         if let wl_callback::Event::Done { .. } = event {
+-            window.frame_callback_fired();
++            window.frame_callback_fired(callback);
+         }
+     }
+ }
+diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/src/linux/wayland/window.rs
+--- a/crates/gpui_linux/src/linux/wayland/window.rs
++++ b/crates/gpui_linux/src/linux/wayland/window.rs
+@@ -94,6 +94,15 @@
+     tiling: Tiling,
+ }
+ 
++enum SurfaceMapping {
++    Mapped,
++    Hidden {
++        barrier: Option<wl_callback::WlCallback>,
++        restore_requested: bool,
++    },
++    AwaitingConfigure,
++}
++
+ pub struct WaylandWindowState {
+     surface_state: WaylandSurfaceState,
+     parent: Option<WaylandWindowStatePtr>,
+@@ -102,6 +111,9 @@
+     children: FxHashMap<ObjectId, bool>,
+     pub surface: wl_surface::WlSurface,
+     app_id: Option<String>,
++    title: String,
++    min_size: Option<Size<Pixels>>,
++    mapping: SurfaceMapping,
+     appearance: WindowAppearance,
+     blur: Option<org_kde_kwin_blur::OrgKdeKwinBlur>,
+     viewport: Option<wp_viewport::WpViewport>,
+@@ -578,10 +590,13 @@
+             WgpuRenderer::new(gpu_context, &raw_window, config, compositor_gpu)?
+         };
+ 
++        let title = options
++            .titlebar
++            .and_then(|titlebar| titlebar.title)
++            .unwrap_or_default()
++            .to_string();
+         if let WaylandSurfaceState::Xdg(ref xdg_state) = surface_state {
+-            if let Some(title) = options.titlebar.and_then(|titlebar| titlebar.title) {
+-                xdg_state.toplevel.set_title(title.to_string());
+-            }
++            xdg_state.toplevel.set_title(title.clone());
+ 
+             if let Some(app_id) = options.app_id.as_ref() {
+                 xdg_state.toplevel.set_app_id(app_id.clone());
+@@ -601,6 +616,9 @@
+             children: FxHashMap::default(),
+             surface,
+             app_id: options.app_id,
++            title,
++            min_size: options.window_min_size,
++            mapping: SurfaceMapping::Mapped,
+             blur: None,
+             viewport,
+             globals,
+@@ -634,6 +652,30 @@
+         })
+     }
+ 
++    fn restore_mapping(&mut self) {
++        let Some(toplevel) = self.surface_state.toplevel() else {
++            return;
++        };
++        // Unmapping resets all xdg_toplevel attributes. Reapply them before
++        // the initial empty commit, after the unmap barrier drained old events.
++        toplevel.set_title(self.title.clone());
++        if let Some(app_id) = &self.app_id {
++            toplevel.set_app_id(app_id.clone());
++        }
++        if let Some(size) = self.min_size {
++            toplevel.set_min_size(f32::from(size.width) as i32, f32::from(size.height) as i32);
++        }
++        let max_size = self.renderer.max_texture_size() as i32;
++        toplevel.set_max_size(max_size, max_size);
++        if self.fullscreen {
++            toplevel.set_fullscreen(None);
++        } else if self.maximized {
++            toplevel.set_maximized();
++        }
++        self.mapping = SurfaceMapping::AwaitingConfigure;
++        self.surface.commit();
++    }
++
+     pub fn is_transparent(&self) -> bool {
+         self.decorations == WindowDecorations::Client
+             || self.background_appearance != WindowBackgroundAppearance::Opaque
+@@ -987,10 +1029,28 @@
+         self.frame_loop.set(FrameLoop::Parked);
+     }
+ 
+-    pub fn frame_callback_fired(&self) {
++    pub fn frame_callback_fired(&self, callback: &wl_callback::WlCallback) {
++        let mut state = self.state.borrow_mut();
++        if let SurfaceMapping::Hidden {
++            barrier,
++            restore_requested,
++        } = &mut state.mapping
++        {
++            if barrier.as_ref() == Some(callback) {
++                *barrier = None;
++                if *restore_requested {
++                    state.restore_mapping();
++                }
++            }
++            return;
++        }
++        if state.pending_frame_callback.as_ref() != Some(callback) {
++            return;
++        }
++        state.pending_frame_callback = None;
++        drop(state);
+         // Another wl_surface commit may have carried this callback while a retry
+         // timer owned the render-loop wakeup.
+-        self.state.borrow_mut().pending_frame_callback = None;
+         if self.frame_loop.get() == FrameLoop::AwaitingCallback {
+             self.frame();
+         }
+@@ -1060,6 +1120,13 @@
+ 
+     pub fn handle_xdg_surface_event(&self, event: xdg_surface::Event) {
+         if let xdg_surface::Event::Configure { serial } = event {
++            {
++                let mut state = self.state.borrow_mut();
++                if matches!(state.mapping, SurfaceMapping::Hidden { .. }) {
++                    state.in_progress_configure = None;
++                    return;
++                }
++            }
+             {
+                 let mut state = self.state.borrow_mut();
+                 if let Some(window_controls) = state.in_progress_window_controls.take() {
+@@ -1106,8 +1173,9 @@
+                     }
+                 }
+             }
+-            let state = self.state.borrow_mut();
++            let mut state = self.state.borrow_mut();
+             state.surface_state.ack_configure(serial);
++            state.mapping = SurfaceMapping::Mapped;
+ 
+             let window_geometry = inset_by_tiling(
+                 state.bounds.map_origin(|_| px(0.0)),
+@@ -1230,7 +1298,9 @@
+ 
+                 let mut state = self.state.borrow_mut();
+                 state.visibility.store(
+-                    if state.globals.wm_base.version() < 6 {
++                    if matches!(state.mapping, SurfaceMapping::Hidden { .. }) {
++                        2
++                    } else if state.globals.wm_base.version() < 6 {
+                         0
+                     } else if suspended {
+                         2
+@@ -1793,6 +1863,19 @@
+     }
+ 
+     fn activate(&self) {
++        {
++            let mut state = self.borrow_mut();
++            if let SurfaceMapping::Hidden {
++                barrier,
++                restore_requested,
++            } = &mut state.mapping
++            {
++                *restore_requested = true;
++                if barrier.is_none() {
++                    state.restore_mapping();
++                }
++            }
++        }
+         // Try to request an activation token. Even though the activation is likely going to be rejected,
+         // KWin and Mutter can use the app_id to visually indicate we're requesting attention.
+         let state = self.borrow();
+@@ -1809,6 +1892,40 @@
+         }
+     }
+ 
++    fn hide(&self) -> bool {
++        let mut state = self.borrow_mut();
++        if !matches!(state.surface_state, WaylandSurfaceState::Xdg(_)) {
++            return false;
++        }
++        if matches!(state.mapping, SurfaceMapping::Hidden { .. }) {
++            return true;
++        }
++        let Some(backend) = state.surface.backend().upgrade() else {
++            return false;
++        };
++        state.surface.attach(None, 0, 0);
++        state.surface.commit();
++        let barrier = wayland_client::Connection::from_backend(backend)
++            .display()
++            .sync(&state.globals.qh, state.surface.id());
++        state.mapping = SurfaceMapping::Hidden {
++            barrier: Some(barrier),
++            restore_requested: false,
++        };
++        state
++            .visibility
++            .store(2, std::sync::atomic::Ordering::Release);
++        state.active = false;
++        state.pending_frame_callback = None;
++        state.in_progress_configure = None;
++        state.in_progress_window_controls = None;
++        state.resize_throttle = false;
++        state.redraw_requested = true;
++        state.presentation = PresentationState::Unpresented;
++        self.0.frame_loop.set(FrameLoop::Unconfigured);
++        true
++    }
++
+     fn request_attention(&self) {}
+ 
+     fn is_active(&self) -> bool {
+@@ -1826,7 +1943,9 @@
+     }
+ 
+     fn set_title(&mut self, title: &str) {
+-        if let Some(toplevel) = self.borrow().surface_state.toplevel() {
++        let mut state = self.borrow_mut();
++        state.title = title.to_string();
++        if let Some(toplevel) = state.surface_state.toplevel() {
+             toplevel.set_title(title.to_string());
+         }
+     }
+@@ -1940,6 +2059,10 @@
+ 
+     fn draw(&self, scene: &Scene) {
+         let mut state = self.borrow_mut();
++        if !matches!(state.mapping, SurfaceMapping::Mapped) {
++            state.redraw_requested = true;
++            return;
++        }
+ 
+         if state.renderer.device_lost() {
+             let raw_window = RawWindow {
+diff --git a/crates/gpui_linux/src/linux/x11/window.rs b/crates/gpui_linux/src/linux/x11/window.rs
+--- a/crates/gpui_linux/src/linux/x11/window.rs
++++ b/crates/gpui_linux/src/linux/x11/window.rs
+@@ -1585,6 +1585,7 @@
+     }
+ 
+     fn activate(&self) {
++        self.0.xcb.map_window(self.0.x_window).log_err();
+         let data = [1, xproto::Time::CURRENT_TIME.into(), 0, 0, 0];
+         let message = xproto::ClientMessageEvent::new(
+             32,
+@@ -1602,6 +1603,19 @@
+             )
+             .log_err();
+         xcb_flush(&self.0.xcb);
++    }
++
++    fn hide(&self) -> bool {
++        match self.0.xcb.unmap_window(self.0.x_window) {
++            Ok(_) => {
++                xcb_flush(&self.0.xcb);
++                true
++            }
++            Err(error) => {
++                log::error!("Could not hide X11 window: {error}");
++                false
++            }
++        }
+     }
+ 
+     fn request_attention(&self) {

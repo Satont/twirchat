@@ -1,0 +1,4 @@
+$ bun run --workspaces typecheck
+@twirchat/shared typecheck: Exited with code 0
+@twirchat/backend typecheck: Exited with code 0
+@twirchat/desktop typecheck: Exited with code 0

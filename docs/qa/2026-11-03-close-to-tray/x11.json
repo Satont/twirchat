@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "item": "org.kde.StatusNotifierItem-28-1",
+  "events": ["show", "notifications", "show", "show", "show"],
+  "inactiveVisible": true,
+  "mapVisibility": true,
+  "closeRestoreCycles": 3,
+  "hiddenUpdatesStayHidden": true,
+  "unownedWindowCloses": true,
+  "trayRemovalRestoresClose": true,
+  "readsMs": 1.3998819999999341,
+  "screenshot": "/tmp/twirchat-gui-qa-Yqj9qE/tray-and-visible-windows.png"
+}

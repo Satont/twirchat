@@ -16,7 +16,7 @@ import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 
 import { assertGuiQaEnvironment, assertGuiQaSandbox } from '../src/services/gui-qa'
-import { prepareQaWeston } from './qa-weston'
+import { prepareQaWeston, prepareQaWestonControls } from './qa-weston'
 
 interface Options {
   command: string[]
@@ -25,6 +25,7 @@ interface Options {
   artifacts?: string
   compositor?: 'xvfb' | 'weston'
   dbus?: boolean
+  westonControls?: boolean
   nodeEnv: 'development' | 'production'
 }
 
@@ -44,6 +45,10 @@ export function parseGuiQaArguments(args: string[]): Options {
     }
     if (argument === '--dbus') {
       options.dbus = true
+      continue
+    }
+    if (argument === '--weston-controls') {
+      options.westonControls = true
       continue
     }
     if (argument === '--node-env') {
@@ -76,6 +81,8 @@ export function parseGuiQaArguments(args: string[]): Options {
     }
     throw new Error(`Unknown GUI QA argument: ${argument}. Put the command after --.`)
   }
+  if (options.westonControls && options.compositor !== 'weston')
+    throw new Error('--weston-controls requires --compositor weston.')
   return options
 }
 
@@ -243,20 +250,24 @@ async function westonSession(command: string[]): Promise<number> {
   const root = process.env.TWIRCHAT_QA_WESTON_ROOT
   if (!runtime || !root) throw new Error('Private Weston runtime or tool directory is missing.')
   const binary = join(root, 'usr/bin/weston')
-  const server = Bun.spawn([binary, ...westonArguments()], {
-    stdout: 'inherit',
-    stderr: 'inherit',
-    stdin: 'ignore',
-    env: {
-      ...process.env,
-      LD_LIBRARY_PATH: `${root}/usr/lib:${root}/usr/lib/weston`,
-      WESTON_MODULE_MAP: [
-        `headless-backend.so=${root}/usr/lib/libweston-15/headless-backend.so`,
-        `gl-renderer.so=${root}/usr/lib/libweston-15/gl-renderer.so`,
-        `kiosk-shell.so=${root}/usr/lib/weston/kiosk-shell.so`,
-      ].join(';'),
+  const module = process.env.TWIRCHAT_QA_WESTON_CONTROLS
+  const server = Bun.spawn(
+    [binary, ...westonArguments(), ...(module ? [`--modules=${module}`] : [])],
+    {
+      stdout: 'inherit',
+      stderr: 'inherit',
+      stdin: 'ignore',
+      env: {
+        ...process.env,
+        LD_LIBRARY_PATH: `${root}/usr/lib:${root}/usr/lib/weston`,
+        WESTON_MODULE_MAP: [
+          `headless-backend.so=${root}/usr/lib/libweston-15/headless-backend.so`,
+          `gl-renderer.so=${root}/usr/lib/libweston-15/gl-renderer.so`,
+          `kiosk-shell.so=${root}/usr/lib/weston/kiosk-shell.so`,
+        ].join(';'),
+      },
     },
-  })
+  )
   try {
     const socket = join(runtime, 'twirchat-qa')
     const deadline = Date.now() + 10000
@@ -349,6 +360,10 @@ async function run(options: Options): Promise<number> {
   chmodSync(session, 0o700)
   for (const directory of ['runtime', 'home', 'profile', 'config', 'cache'])
     mkdirSync(join(session, directory), { mode: 0o700 })
+  const westonControls =
+    options.westonControls && westonRoot
+      ? await prepareQaWestonControls(westonRoot, session)
+      : undefined
   const nonce = randomBytes(12).toString('hex')
   await Bun.write(join(session, 'isolation.json'), JSON.stringify({ version: 1, nonce }))
   chmodSync(join(session, 'isolation.json'), 0o600)
@@ -376,6 +391,7 @@ async function run(options: Options): Promise<number> {
     ? options.command
     : [process.execPath, join(desktop, 'src/gpuix/main.tsx')]
   if (westonRoot) env.TWIRCHAT_QA_WESTON_ROOT = westonRoot
+  if (westonControls) env.TWIRCHAT_QA_WESTON_CONTROLS = westonControls
   if (options.dbus) env.TWIRCHAT_QA_DBUS_REQUESTED = '1'
   const args = sandboxArguments(session, repository, process.execPath, command)
   if (westonRoot) args.push('--ro-bind', westonRoot, westonRoot)

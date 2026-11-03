@@ -1,0 +1,11 @@
+{
+  "apiVersion": 3,
+  "version": "0.11.0-twirchat.4",
+  "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+  "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+  "patchDigest": "9fb2fa0507af39a4",
+  "rustToolchain": "1.97.1",
+  "target": "linux-x64",
+  "size": 56224840,
+  "sha256": "32df77db2384eb22f77a2eb5442b9c67356d857720ee7248d80b35c4ed63bcf7"
+}

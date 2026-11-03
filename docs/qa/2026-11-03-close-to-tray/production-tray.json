@@ -1,0 +1,8 @@
+{
+  "code": 0,
+  "executable": "/home/satont/.codex/worktrees/linux-close-to-tray-mr/chat/packages/desktop/bin/twirchat",
+  "cwd": "/tmp/twirchat-gui-qa-3okwsH/built-app-cwd",
+  "screenshot": "/tmp/twirchat-gui-qa-3okwsH/built-app-restored.png",
+  "privateBus": true,
+  "closeRestoreCycles": 3
+}

@@ -36,6 +36,9 @@
     "scripts/qa-deferred-chat-rows.tsx",
     "scripts/qa-badge-tooltips.tsx",
     "scripts/qa-distribution.ts",
+    "scripts/qa-tray.tsx",
+    "scripts/qa-built-app.ts",
+    "scripts/qa-wayland-tray.tsx",
     "scripts/qa-mention-user-card.tsx"
   ],
   "exclude": ["node_modules"]
