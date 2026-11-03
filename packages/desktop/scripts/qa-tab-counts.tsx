@@ -47,6 +47,7 @@ const state = createStore<CounterState>({
   active: 'a',
   mode: 'uniform',
 })
+const fixtureWidth = createStore(900)
 const backend = getDesktopBackend()
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
@@ -80,6 +81,7 @@ const channels: Parameters<typeof ChannelTabBar>[0]['watchedChannels'] = [
 function Content() {
   const active = useGpuixRequired()
   const value = useStore(state)
+  const width = useStore(fixtureWidth)
   React.useEffect(() => {
     assert(active instanceof NativeRenderer)
     renderer = nativeWindow(active)
@@ -101,7 +103,7 @@ function Content() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        width: '100%',
+        width,
         height: '100%',
         backgroundColor: '#16161c',
       }}
@@ -175,7 +177,7 @@ const geometry: Array<{
   width: number
   mode: string
   checked: number
-  baseline: Record<string, { x: number; width: number }>
+  baseline: Record<string, { x: number; y: number; width: number }>
 }> = []
 const compactWidths: Array<{ width: number; empty: number; oneViewer: number; both: number }> = []
 const groups = [
@@ -192,9 +194,9 @@ async function setState(next: CounterState) {
 try {
   await manager.start()
   await until(() => !!renderer, 'renderer')
-  for (const width of [900, 420]) {
-    await current().setWindowBounds({ width, height: 220 })
-    current().scrollTo(idFor('channel-tab-bar'), 0, 0)
+  for (const width of [900, 420, 320, 248, 900]) {
+    fixtureWidth.set(width)
+    await current().setWindowBounds({ width: Math.max(320, width), height: 220 })
     current().simulateMouseMove(20, 120)
     for (const group of groups) {
       await setState({ viewers: 9, unread: 9, mentions: 0, active: 'a', mode: 'uniform' })
@@ -207,13 +209,29 @@ try {
         active: 'a',
         mode: 'uniform',
       })
-      const testIds =
-        width === 900
-          ? ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-add']
-          : ['tab-home', 'tab-a', 'tab-b']
+      const testIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add', 'tab-search-all']
       const baseline = Object.fromEntries(
-        testIds.map((testId) => [testId, { x: bounds(testId).x, width: bounds(testId).width }]),
+        testIds.map((testId) => {
+          const { x, y, width } = bounds(testId)
+          return [testId, { x, y, width }]
+        }),
       )
+      const bar = bounds('channel-tab-bar')
+      for (const testId of testIds) {
+        const tab = bounds(testId)
+        assert(tab.x >= bar.x && tab.x + tab.width <= bar.x + bar.width, `${testId} fits the row`)
+        assert(tab.y >= bar.y && tab.y + tab.height <= bar.y + bar.height, `${testId} fits the bar`)
+      }
+      for (const channel of channels) {
+        const tab = bounds(`tab-${channel.id}`)
+        const counts = bounds(`tab-${channel.id}-counts`)
+        assert(
+          counts.x >= tab.x && counts.x + counts.width <= tab.x + tab.width,
+          'Counts fit the tab',
+        )
+      }
+      if (width <= 420)
+        assert(bounds('tab-d').y > bounds('tab-home').y, 'Narrow tabs wrap to another row')
       for (const [index, viewers] of group.values.entries()) {
         await setState({
           viewers,
@@ -235,6 +253,10 @@ try {
             testId + ' moved in ' + group.name + ' at ' + viewers,
           )
           assert(
+            Math.abs(actual.y - expected.y) < 0.01,
+            testId + ' changed row in ' + group.name + ' at ' + viewers,
+          )
+          assert(
             Math.abs(actual.width - expected.width) < 0.01,
             testId + ' resized in ' + group.name + ' at ' + viewers,
           )
@@ -253,25 +275,22 @@ try {
     const oneViewer = bounds('tab-a').width
     assert(empty < 90, 'The empty xqc tab should stay compact')
     assert(oneViewer < 120, 'The single-viewer Satont tab should stay compact')
-    if (width === 900) {
-      await until(
-        () =>
-          current().getPaintedText().join(' ').includes('62.2K') &&
-          current().getPaintedText().join(' ').includes('99+'),
-        'both visible count labels',
-      )
-    }
-    compactWidths.push({ width, empty, oneViewer, both: width === 900 ? bounds('tab-c').width : 0 })
+    await until(
+      () =>
+        current().getPaintedText().join(' ').includes('62.2K') &&
+        current().getPaintedText().join(' ').includes('99+'),
+      'both visible count labels without scrolling',
+    )
+    const lowerTab = bounds('tab-d')
+    current().simulateMouseDown(lowerTab.x + 10, lowerTab.y + 10, 0)
+    current().simulateMouseUp(lowerTab.x + 10, lowerTab.y + 10, 0)
+    await until(() => state.get().active === 'd', 'pointer selection on a wrapped tab')
+    await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'mixed' })
+    current().focusElement(idFor('tab-d'))
+    current().simulateKeystrokes('enter')
+    await until(() => state.get().active === 'd', 'keyboard selection on a wrapped tab')
+    compactWidths.push({ width, empty, oneViewer, both: bounds('tab-c').width })
     screenshots.push(await captureGuiQaDisplay('tab-counts-' + width))
-    if (width === 420) {
-      current().scrollTo(idFor('channel-tab-bar'), -160, 0)
-      await Bun.sleep(100)
-      await until(
-        () => current().getPaintedText().join(' ').includes('62.2K'),
-        'compact counts after scrolling',
-      )
-      screenshots.push(await captureGuiQaDisplay('tab-counts-420-scrolled'))
-    }
     await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'uniform' })
     assert(
       !nodeFor('tab-a-counts'),

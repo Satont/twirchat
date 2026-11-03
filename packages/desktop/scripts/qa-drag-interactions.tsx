@@ -270,6 +270,30 @@ function firstFlex() {
   assert(root.type === 'split')
   return root.children[0]?.flex
 }
+const wrapping: Array<{
+  width: number
+  rows: number
+  bounds: Array<ReturnType<typeof find> & { testId: string }>
+  screenshot: string
+}> = []
+async function recordWrapping(width: number) {
+  const bar = find('channel-tab-bar')
+  const bounds = ['tab-home', ...channels.map((channel) => `tab-${channel.id}`), 'tab-add'].map(
+    (testId) => ({ testId, ...find(testId) }),
+  )
+  for (const tab of bounds) {
+    assert(tab.x >= bar.x && tab.x + tab.width <= bar.x + bar.width, 'Tabs fit the row width')
+    assert(tab.y >= bar.y && tab.y + tab.height <= bar.y + bar.height, 'Tabs fit the bar height')
+  }
+  const rows = new Set(bounds.filter((tab) => tab.testId !== 'tab-add').map((tab) => tab.y)).size
+  wrapping.push({
+    width,
+    rows,
+    bounds,
+    screenshot: await captureGuiQaDisplay(`wrapping-tabs-${width}`),
+  })
+  return rows
+}
 function dragResult(
   originalTabs: string[],
   screenshot: Awaited<ReturnType<typeof captureGuiQaDisplay>>,
@@ -284,7 +308,8 @@ function dragResult(
     maximumLagMs,
     messages: sequence,
     screenshot,
-    scrolledReorder: true,
+    wrapping,
+    wrappedReorder: true,
     lostButtonCancel: true,
     outsideCancel: true,
     blurCancel: true,
@@ -311,9 +336,10 @@ console.error = (...args: unknown[]) => {
 try {
   await manager.start()
   await until(() => renderer !== undefined, 'main renderer')
-  await current().setWindowBounds({ width: 1000, height: 700 })
+  await current().setWindowBounds({ width: 900, height: 600 })
   await focusNativeQaWindow('TwirChat')
   await Bun.sleep(150)
+  const normalRows = await recordWrapping(900)
   const fresh = current().getElementBounds.bind(current())
   current().getElementBounds = (id) => {
     if (checkingDrag) {
@@ -362,35 +388,29 @@ try {
   endMeasurement()
   assert.deepEqual(app.tabChannelIdsStore.get(), reordered, 'Missing left button cancels tab drag')
 
-  await current().setWindowBounds({ width: 420, height: 500 })
+  await current().setWindowBounds({ width: 420, height: 300 })
   await Bun.sleep(80)
-  const bar = find('channel-tab-bar')
-  const beforeScroll = find('tab-f')
-  const beforeScrollTarget = find('tab-g')
-  const pairWidth = beforeScrollTarget.x + beforeScrollTarget.width - beforeScroll.x
-  const desiredLeft = bar.x + Math.max(8, (bar.width - pairWidth) / 2)
-  const previousOffset = current().getScrollOffset(bar.id)?.[0] ?? 0
-  current().scrollTo(bar.id, previousOffset + desiredLeft - beforeScroll.x, 0)
-  await until(() => {
-    const first = current().getPaintedElementBounds(beforeScroll.id)
-    const last = current().getPaintedElementBounds(beforeScrollTarget.id)
-    return !!first && !!last && first.x >= bar.x && last.x + last.width <= bar.x + bar.width
-  }, 'scrolled targets paint inside the tab viewport')
-  source = find('tab-f')
-  target = find('tab-g')
-  assert(source.x < beforeScroll.x - 50, 'Horizontal scroll changes the tab position')
-  assert.equal(source.width, beforeScroll.width, 'Scroll must not resize the tab')
-  const scrolledX = source.x
+  const narrowRows = await recordWrapping(420)
+  assert(narrowRows > normalRows, 'Narrower windows move tabs onto more rows')
+  source = find('tab-b')
+  target = find('tab-l')
+  assert(target.y > source.y, 'The reorder target is on a later row')
+  const previousY = source.y
+  saved = tabSaves
   beginMeasurement()
   await dragTo(source, target.x + target.width / 2, target.y + 4)
   current().simulateMouseUp(target.x + target.width / 2, target.y + 4, 0)
   await Bun.sleep(100)
   endMeasurement()
   assert(
-    app.tabChannelIdsStore.get().indexOf('g') < app.tabChannelIdsStore.get().indexOf('f'),
-    'Reorder uses position-only scrolled geometry',
+    app.tabChannelIdsStore.get().indexOf('l') < app.tabChannelIdsStore.get().indexOf('b'),
+    'Reorder uses both coordinates of wrapped tab geometry',
   )
-  assert(find('tab-f').x !== scrolledX, 'Reordered tab bounds update without a resize')
+  assert.equal(tabSaves, saved + 1, 'A cross-row drop persists once')
+  assert(find('tab-b').y > previousY, 'Reordered tab moves to the target row')
+  await current().setWindowBounds({ width: 900, height: 600 })
+  await Bun.sleep(80)
+  assert.equal(await recordWrapping(900), normalRows, 'Widening restores the original row count')
 
   layoutStore.modify((states) =>
     new Map(states).set(tabId, { layout: paneLayout, isLoading: false, error: null }),

@@ -1,5 +1,8 @@
 # Native interaction fixes and performance gate
 
+The later [wrapping-tabs gate](../2026-11-03-wrapping-tabs/report.md) adds native multi-row tab
+layout, cross-row input/drag QA, and fresh default-matrix/production target measurements.
+
 The later [animated-image resource gate](../2026-11-03-emote-resources/report.md) adds native
 decoded-frame ownership, inline 1x sizing, real GIF checks, and a complete fresh default matrix
 plus three production target repetitions. Its own source/native provenance is recorded there.

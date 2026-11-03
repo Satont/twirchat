@@ -1,0 +1,297 @@
+diff --git a/packages/desktop/scripts/qa-drag-interactions.tsx b/packages/desktop/scripts/qa-drag-interactions.tsx
+index 5253d67..ca3c3e4 100644
+--- a/packages/desktop/scripts/qa-drag-interactions.tsx
++++ b/packages/desktop/scripts/qa-drag-interactions.tsx
+@@ -270,6 +270,30 @@ function firstFlex() {
+   assert(root.type === 'split')
+   return root.children[0]?.flex
+ }
++const wrapping: Array<{
++  width: number
++  rows: number
++  bounds: Array<ReturnType<typeof find> & { testId: string }>
++  screenshot: string
++}> = []
++async function recordWrapping(width: number) {
++  const bar = find('channel-tab-bar')
++  const bounds = ['tab-home', ...channels.map((channel) => `tab-${channel.id}`), 'tab-add'].map(
++    (testId) => ({ testId, ...find(testId) }),
++  )
++  for (const tab of bounds) {
++    assert(tab.x >= bar.x && tab.x + tab.width <= bar.x + bar.width, 'Tabs fit the row width')
++    assert(tab.y >= bar.y && tab.y + tab.height <= bar.y + bar.height, 'Tabs fit the bar height')
++  }
++  const rows = new Set(bounds.filter((tab) => tab.testId !== 'tab-add').map((tab) => tab.y)).size
++  wrapping.push({
++    width,
++    rows,
++    bounds,
++    screenshot: await captureGuiQaDisplay(`wrapping-tabs-${width}`),
++  })
++  return rows
++}
+ function dragResult(
+   originalTabs: string[],
+   screenshot: Awaited<ReturnType<typeof captureGuiQaDisplay>>,
+@@ -284,7 +308,8 @@ function dragResult(
+     maximumLagMs,
+     messages: sequence,
+     screenshot,
+-    scrolledReorder: true,
++    wrapping,
++    wrappedReorder: true,
+     lostButtonCancel: true,
+     outsideCancel: true,
+     blurCancel: true,
+@@ -311,9 +336,10 @@ console.error = (...args: unknown[]) => {
+ try {
+   await manager.start()
+   await until(() => renderer !== undefined, 'main renderer')
+-  await current().setWindowBounds({ width: 1000, height: 700 })
++  await current().setWindowBounds({ width: 900, height: 600 })
+   await focusNativeQaWindow('TwirChat')
+   await Bun.sleep(150)
++  const normalRows = await recordWrapping(900)
+   const fresh = current().getElementBounds.bind(current())
+   current().getElementBounds = (id) => {
+     if (checkingDrag) {
+@@ -362,35 +388,29 @@ try {
+   endMeasurement()
+   assert.deepEqual(app.tabChannelIdsStore.get(), reordered, 'Missing left button cancels tab drag')
+ 
+-  await current().setWindowBounds({ width: 420, height: 500 })
++  await current().setWindowBounds({ width: 420, height: 300 })
+   await Bun.sleep(80)
+-  const bar = find('channel-tab-bar')
+-  const beforeScroll = find('tab-f')
+-  const beforeScrollTarget = find('tab-g')
+-  const pairWidth = beforeScrollTarget.x + beforeScrollTarget.width - beforeScroll.x
+-  const desiredLeft = bar.x + Math.max(8, (bar.width - pairWidth) / 2)
+-  const previousOffset = current().getScrollOffset(bar.id)?.[0] ?? 0
+-  current().scrollTo(bar.id, previousOffset + desiredLeft - beforeScroll.x, 0)
+-  await until(() => {
+-    const first = current().getPaintedElementBounds(beforeScroll.id)
+-    const last = current().getPaintedElementBounds(beforeScrollTarget.id)
+-    return !!first && !!last && first.x >= bar.x && last.x + last.width <= bar.x + bar.width
+-  }, 'scrolled targets paint inside the tab viewport')
+-  source = find('tab-f')
+-  target = find('tab-g')
+-  assert(source.x < beforeScroll.x - 50, 'Horizontal scroll changes the tab position')
+-  assert.equal(source.width, beforeScroll.width, 'Scroll must not resize the tab')
+-  const scrolledX = source.x
++  const narrowRows = await recordWrapping(420)
++  assert(narrowRows > normalRows, 'Narrower windows move tabs onto more rows')
++  source = find('tab-b')
++  target = find('tab-l')
++  assert(target.y > source.y, 'The reorder target is on a later row')
++  const previousY = source.y
++  saved = tabSaves
+   beginMeasurement()
+   await dragTo(source, target.x + target.width / 2, target.y + 4)
+   current().simulateMouseUp(target.x + target.width / 2, target.y + 4, 0)
+   await Bun.sleep(100)
+   endMeasurement()
+   assert(
+-    app.tabChannelIdsStore.get().indexOf('g') < app.tabChannelIdsStore.get().indexOf('f'),
+-    'Reorder uses position-only scrolled geometry',
++    app.tabChannelIdsStore.get().indexOf('l') < app.tabChannelIdsStore.get().indexOf('b'),
++    'Reorder uses both coordinates of wrapped tab geometry',
+   )
+-  assert(find('tab-f').x !== scrolledX, 'Reordered tab bounds update without a resize')
++  assert.equal(tabSaves, saved + 1, 'A cross-row drop persists once')
++  assert(find('tab-b').y > previousY, 'Reordered tab moves to the target row')
++  await current().setWindowBounds({ width: 900, height: 600 })
++  await Bun.sleep(80)
++  assert.equal(await recordWrapping(900), normalRows, 'Widening restores the original row count')
+ 
+   layoutStore.modify((states) =>
+     new Map(states).set(tabId, { layout: paneLayout, isLoading: false, error: null }),
+diff --git a/packages/desktop/scripts/qa-tab-counts.tsx b/packages/desktop/scripts/qa-tab-counts.tsx
+index 52be292..efbd760 100644
+--- a/packages/desktop/scripts/qa-tab-counts.tsx
++++ b/packages/desktop/scripts/qa-tab-counts.tsx
+@@ -47,6 +47,7 @@ const state = createStore<CounterState>({
+   active: 'a',
+   mode: 'uniform',
+ })
++const fixtureWidth = createStore(900)
+ const backend = getDesktopBackend()
+ const session = process.env.TWIRCHAT_QA_SESSION_DIR
+ assert(session)
+@@ -80,6 +81,7 @@ const channels: Parameters<typeof ChannelTabBar>[0]['watchedChannels'] = [
+ function Content() {
+   const active = useGpuixRequired()
+   const value = useStore(state)
++  const width = useStore(fixtureWidth)
+   React.useEffect(() => {
+     assert(active instanceof NativeRenderer)
+     renderer = nativeWindow(active)
+@@ -101,7 +103,7 @@ function Content() {
+       style={{
+         display: 'flex',
+         flexDirection: 'column',
+-        width: '100%',
++        width,
+         height: '100%',
+         backgroundColor: '#16161c',
+       }}
+@@ -175,7 +177,7 @@ const geometry: Array<{
+   width: number
+   mode: string
+   checked: number
+-  baseline: Record<string, { x: number; width: number }>
++  baseline: Record<string, { x: number; y: number; width: number }>
+ }> = []
+ const compactWidths: Array<{ width: number; empty: number; oneViewer: number; both: number }> = []
+ const groups = [
+@@ -192,9 +194,9 @@ async function setState(next: CounterState) {
+ try {
+   await manager.start()
+   await until(() => !!renderer, 'renderer')
+-  for (const width of [900, 420]) {
+-    await current().setWindowBounds({ width, height: 220 })
+-    current().scrollTo(idFor('channel-tab-bar'), 0, 0)
++  for (const width of [900, 420, 320, 248, 900]) {
++    fixtureWidth.set(width)
++    await current().setWindowBounds({ width: Math.max(320, width), height: 220 })
+     current().simulateMouseMove(20, 120)
+     for (const group of groups) {
+       await setState({ viewers: 9, unread: 9, mentions: 0, active: 'a', mode: 'uniform' })
+@@ -207,13 +209,29 @@ try {
+         active: 'a',
+         mode: 'uniform',
+       })
+-      const testIds =
+-        width === 900
+-          ? ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-add']
+-          : ['tab-home', 'tab-a', 'tab-b']
++      const testIds = ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-add', 'tab-search-all']
+       const baseline = Object.fromEntries(
+-        testIds.map((testId) => [testId, { x: bounds(testId).x, width: bounds(testId).width }]),
++        testIds.map((testId) => {
++          const { x, y, width } = bounds(testId)
++          return [testId, { x, y, width }]
++        }),
+       )
++      const bar = bounds('channel-tab-bar')
++      for (const testId of testIds) {
++        const tab = bounds(testId)
++        assert(tab.x >= bar.x && tab.x + tab.width <= bar.x + bar.width, `${testId} fits the row`)
++        assert(tab.y >= bar.y && tab.y + tab.height <= bar.y + bar.height, `${testId} fits the bar`)
++      }
++      for (const channel of channels) {
++        const tab = bounds(`tab-${channel.id}`)
++        const counts = bounds(`tab-${channel.id}-counts`)
++        assert(
++          counts.x >= tab.x && counts.x + counts.width <= tab.x + tab.width,
++          'Counts fit the tab',
++        )
++      }
++      if (width <= 420)
++        assert(bounds('tab-d').y > bounds('tab-home').y, 'Narrow tabs wrap to another row')
+       for (const [index, viewers] of group.values.entries()) {
+         await setState({
+           viewers,
+@@ -234,6 +252,10 @@ try {
+             Math.abs(actual.x - expected.x) < 0.01,
+             testId + ' moved in ' + group.name + ' at ' + viewers,
+           )
++          assert(
++            Math.abs(actual.y - expected.y) < 0.01,
++            testId + ' changed row in ' + group.name + ' at ' + viewers,
++          )
+           assert(
+             Math.abs(actual.width - expected.width) < 0.01,
+             testId + ' resized in ' + group.name + ' at ' + viewers,
+@@ -253,25 +275,22 @@ try {
+     const oneViewer = bounds('tab-a').width
+     assert(empty < 90, 'The empty xqc tab should stay compact')
+     assert(oneViewer < 120, 'The single-viewer Satont tab should stay compact')
+-    if (width === 900) {
+-      await until(
+-        () =>
+-          current().getPaintedText().join(' ').includes('62.2K') &&
+-          current().getPaintedText().join(' ').includes('99+'),
+-        'both visible count labels',
+-      )
+-    }
+-    compactWidths.push({ width, empty, oneViewer, both: width === 900 ? bounds('tab-c').width : 0 })
++    await until(
++      () =>
++        current().getPaintedText().join(' ').includes('62.2K') &&
++        current().getPaintedText().join(' ').includes('99+'),
++      'both visible count labels without scrolling',
++    )
++    const lowerTab = bounds('tab-d')
++    current().simulateMouseDown(lowerTab.x + 10, lowerTab.y + 10, 0)
++    current().simulateMouseUp(lowerTab.x + 10, lowerTab.y + 10, 0)
++    await until(() => state.get().active === 'd', 'pointer selection on a wrapped tab')
++    await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'mixed' })
++    current().focusElement(idFor('tab-d'))
++    current().simulateKeystrokes('enter')
++    await until(() => state.get().active === 'd', 'keyboard selection on a wrapped tab')
++    compactWidths.push({ width, empty, oneViewer, both: bounds('tab-c').width })
+     screenshots.push(await captureGuiQaDisplay('tab-counts-' + width))
+-    if (width === 420) {
+-      current().scrollTo(idFor('channel-tab-bar'), -160, 0)
+-      await Bun.sleep(100)
+-      await until(
+-        () => current().getPaintedText().join(' ').includes('62.2K'),
+-        'compact counts after scrolling',
+-      )
+-      screenshots.push(await captureGuiQaDisplay('tab-counts-420-scrolled'))
+-    }
+     await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'uniform' })
+     assert(
+       !nodeFor('tab-a-counts'),
+diff --git a/packages/desktop/src/gpuix/components/ChannelTabBar.tsx b/packages/desktop/src/gpuix/components/ChannelTabBar.tsx
+index 9a6680f..1191b46 100644
+--- a/packages/desktop/src/gpuix/components/ChannelTabBar.tsx
++++ b/packages/desktop/src/gpuix/components/ChannelTabBar.tsx
+@@ -182,7 +182,10 @@ export function ChannelTabBar({
+         style={{
+           display: 'flex',
+           flexDirection: 'row',
++          flexWrap: 'wrap',
+           alignItems: 'center',
++          alignContent: 'start',
++          minWidth: 0,
+           gap: 2,
+           paddingTop: 6,
+           paddingLeft: 8,
+@@ -191,7 +194,6 @@ export function ChannelTabBar({
+           borderColor: theme.border,
+           backgroundColor: theme.navBg,
+           flexShrink: 0,
+-          overflowX: 'scroll',
+           userSelect: 'none',
+         }}
+       >
+@@ -336,6 +338,9 @@ export function ChannelTabBar({
+                 position: 'relative',
+                 display: 'flex',
+                 alignItems: 'center',
++                flexShrink: 0,
++                minWidth: 0,
++                maxWidth: '100%',
+               }}
+             >
+               {dropId === channel.id ? (
+@@ -603,6 +608,8 @@ function Tab({
+         borderColor: active ? activeColor : 'transparent',
+         backgroundColor: active ? accent.tint10 : hovered ? theme.fillHover : undefined,
+         flexShrink: 0,
++        minWidth: 0,
++        maxWidth: '100%',
+         marginBottom: -1,
+       }}
+     >
+@@ -619,6 +626,8 @@ function Tab({
+                 ? theme.text
+                 : theme.text2,
+           maxWidth: 150,
++          minWidth: 0,
++          flexShrink: 1,
+           overflow: 'hidden',
+           textOverflow: 'ellipsis',
+           whiteSpace: 'nowrap',
