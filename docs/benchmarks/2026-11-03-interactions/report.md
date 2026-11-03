@@ -138,3 +138,17 @@ These two repetitions are not presented as a new three-run gate.
 - [Eight-stage HMR](qa/hmr.json) and [complete production App](qa/app-production.json) passed.
 - All native tests/screenshots used private virtual displays. No host window, compositor
   configuration, notification or desktop screenshot was used. No live backend/app was restarted.
+
+## Exact 7TV alias matching
+
+The follow-up to source commit `82552a53694517829df7500d6c4b96e44f87dd27` removes case
+folding from the desktop 7TV service's alias keys and lookups. `Pog` and `pog` remain distinct
+through initial loading, live additions, renames and removal; an unmatched `POG` stays text.
+Channel-name normalization is unchanged.
+
+This narrow fix reuses the complete matrix and three production repetitions above, with their
+recorded source/native provenance. `scripts/bench-chat-case.tsx` disables emote providers,
+generates `emotes: []`, and emits `watched_channel_message` directly through DesktopEvents.
+It bypasses the changed service and message parser, so repeating that workload would not
+exercise this fix. Focused service and real message-parser regressions cover exact aliases
+and token positions; no CPU/RSS improvement is claimed.

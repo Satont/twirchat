@@ -1,7 +1,19 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
 
 import { DesktopSevenTVService } from '@desktop/seventv'
-import type { DesktopToBackendMessage } from '@twirchat/shared'
+import type { DesktopToBackendMessage, SevenTVEmote } from '@twirchat/shared'
+
+function makeEmote(id: string, alias: string): SevenTVEmote {
+  return {
+    id,
+    alias,
+    name: `Original${id}`,
+    animated: false,
+    zeroWidth: false,
+    aspectRatio: 1,
+    imageUrl: `https://cdn.7tv.app/emote/${id}/4x.webp`,
+  }
+}
 
 let sevenTVService = new DesktopSevenTVService()
 function resetSevenTVService(): void {
@@ -11,6 +23,70 @@ function resetSevenTVService(): void {
 describe('sevenTVService', () => {
   beforeEach(() => {
     resetSevenTVService()
+  })
+
+  it('preserves distinct case-sensitive aliases in an incoming emote set', () => {
+    const upper = makeEmote('upper', 'Pog')
+    const lower = makeEmote('lower', 'pog')
+    sevenTVService.handleEmoteSet('twitch', 'satont', [upper, lower])
+
+    expect(sevenTVService.getEmotes('twitch', '#Satont')).toEqual([upper, lower])
+    expect(sevenTVService.getEmote('twitch', '#Satont', 'Pog')).toBe(upper)
+    expect(sevenTVService.getEmote('twitch', 'satont', 'pog')).toBe(lower)
+    expect(sevenTVService.getEmote('twitch', 'satont', 'POG')).toBeUndefined()
+    expect(sevenTVService.getEmote('twitch', 'satont', upper.name)).toBeUndefined()
+  })
+
+  it('adds an emote without replacing an alias with different casing', () => {
+    const upper = makeEmote('upper', 'Pog')
+    const lower = makeEmote('lower', 'pog')
+    sevenTVService.handleEmoteSet('twitch', 'satont', [upper])
+    sevenTVService.handleEmoteAdded('twitch', 'satont', lower)
+
+    expect(sevenTVService.getEmotes('twitch', 'satont')).toEqual([upper, lower])
+    expect(sevenTVService.getEmote('twitch', 'satont', 'Pog')).toBe(upper)
+    expect(sevenTVService.getEmote('twitch', 'satont', 'pog')).toBe(lower)
+  })
+
+  it('preserves casing and removes the previous alias on rename', () => {
+    const renamed = makeEmote('renamed', 'Before')
+    const lower = makeEmote('lower', 'pog')
+    sevenTVService.handleEmoteSet('twitch', 'satont', [renamed, lower])
+    sevenTVService.handleEmoteUpdated('twitch', 'satont', renamed.id, 'Pog')
+
+    expect(sevenTVService.getEmote('twitch', 'satont', 'Before')).toBeUndefined()
+    expect(sevenTVService.getEmote('twitch', 'satont', 'Pog')).toMatchObject({
+      id: renamed.id,
+      alias: 'Pog',
+    })
+    expect(sevenTVService.getEmote('twitch', 'satont', 'pog')).toBe(lower)
+    expect(sevenTVService.getEmotes('twitch', 'satont')).toHaveLength(2)
+  })
+
+  it('updates only the exact alias during a case-only rename', () => {
+    const upper = makeEmote('upper', 'Pog')
+    const lower = makeEmote('lower', 'pog')
+    sevenTVService.handleEmoteSet('twitch', 'satont', [upper, lower])
+    sevenTVService.handleEmoteUpdated('twitch', 'satont', upper.id, 'POG')
+
+    expect(sevenTVService.getEmote('twitch', 'satont', 'Pog')).toBeUndefined()
+    expect(sevenTVService.getEmote('twitch', 'satont', 'POG')).toMatchObject({
+      id: upper.id,
+      alias: 'POG',
+    })
+    expect(sevenTVService.getEmote('twitch', 'satont', 'pog')).toBe(lower)
+    expect(sevenTVService.getEmotes('twitch', 'satont')).toHaveLength(2)
+  })
+
+  it('removes an emote by ID without removing an alias with different casing', () => {
+    const upper = makeEmote('upper', 'Pog')
+    const lower = makeEmote('lower', 'pog')
+    sevenTVService.handleEmoteSet('twitch', 'satont', [upper, lower])
+    sevenTVService.handleEmoteRemoved('twitch', 'satont', upper.id)
+
+    expect(sevenTVService.getEmote('twitch', 'satont', 'Pog')).toBeUndefined()
+    expect(sevenTVService.getEmote('twitch', 'satont', 'pog')).toBe(lower)
+    expect(sevenTVService.getEmotes('twitch', 'satont')).toEqual([lower])
   })
 
   it('sends optional Twitch platformUserId to backend', async () => {
