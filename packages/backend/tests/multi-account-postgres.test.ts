@@ -25,6 +25,7 @@ describe.skipIf(!enabled)('isolated PostgreSQL multi-account migration and owner
     database = new SQL({
       adapter: 'postgres',
       path: socket,
+      port: 5432,
       username: 'twirchat_test',
       password: '',
       database: 'twirchat_multi_account_test',

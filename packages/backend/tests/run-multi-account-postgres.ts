@@ -92,6 +92,7 @@ try {
   const child = Bun.spawn(
     [process.execPath, 'test', join(import.meta.dir, 'multi-account-postgres.test.ts')],
     {
+      cwd: join(import.meta.dir, '..'),
       stdin: 'ignore',
       stdout: 'inherit',
       stderr: 'inherit',
