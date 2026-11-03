@@ -1,5 +1,9 @@
 # Native interaction fixes and performance gate
 
+The later [animated-image resource gate](../2026-11-03-emote-resources/report.md) adds native
+decoded-frame ownership, inline 1x sizing, real GIF checks, and a complete fresh default matrix
+plus three production target repetitions. Its own source/native provenance is recorded there.
+
 Autocomplete now scrolls its selected row and stays within the composer/window. Tab and pane
 motion uses a nonblocking snapshot of the last completed native paint, with coalesced motion,
 cancellation and layout persistence after an accepted drop. 7TV notices preserve the event's

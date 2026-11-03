@@ -2,13 +2,17 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
 
+import { getBackendUrl } from '../../../runtime-config'
 import { modifiedEmoteImage } from '../../../services/emote-image'
+import { inlineEmoteImageSource } from '../../../services/emote-image-source'
 import { ensureImage, imageSnapshot, subscribeImage } from '../../state/image-cache'
+import { useWindowScale } from '../../state/window-scale'
 import { ImageLoadingContext, RemoteImage } from './RemoteImage'
 
 /** Transform animations once; GPUI plays the cached WebP without row timers. */
@@ -28,11 +32,17 @@ export function EmoteArtwork({
   fallback?: ReactNode
 }) {
   const visible = useContext(ImageLoadingContext)
-  const subscribe = useCallback(
-    (listener: () => void) => (visible ? subscribeImage(url, listener) : () => {}),
-    [url, visible],
+  const scale = useWindowScale()
+  const backendUrl = getBackendUrl()
+  const source = useMemo(
+    () => inlineEmoteImageSource(url, { height, scale, backendUrl }),
+    [url, height, scale, backendUrl],
   )
-  const snapshot = useCallback(() => imageSnapshot(url), [url])
+  const subscribe = useCallback(
+    (listener: () => void) => (visible ? subscribeImage(source, listener) : () => {}),
+    [source, visible],
+  )
+  const snapshot = useCallback(() => imageSnapshot(source), [source])
   const local = useSyncExternalStore(subscribe, snapshot, snapshot)
   const [modified, setModified] = useState<{ key: string; path: string } | null>(null)
   const modifierKey = modifiers.join(',')
@@ -48,9 +58,9 @@ export function EmoteArtwork({
     ].includes(modifier),
   )
   useEffect(() => {
-    if (visible) ensureImage(url)
-  }, [url, visible])
-  const key = `${url}:${modifierKey}:${width}:${height}`
+    if (visible) ensureImage(source)
+  }, [source, visible])
+  const key = `${source}:${modifierKey}:${width}:${height}:${scale}`
   useEffect(() => {
     if (!visible || !transform || !local) return
     let active = true
@@ -69,7 +79,7 @@ export function EmoteArtwork({
       <img src={modified.path} objectFit="fill" style={style} />
     ) : (
       <RemoteImage
-        url={url}
+        url={source}
         objectFit={modifiers.includes('wide') ? 'fill' : 'contain'}
         style={style}
         fallback={fallback}

@@ -1,0 +1,653 @@
+{
+  "ok": true,
+  "config": {
+    "case": "functional",
+    "source": "seventv",
+    "durationSeconds": 12,
+    "warmupSeconds": 3,
+    "delayMs": 100,
+    "rate": 20,
+    "backgroundAnimation": true
+  },
+  "reactMode": "production",
+  "bunVersion": "1.4.4",
+  "compositor": "xvfb",
+  "provenance": {
+    "gitHead": "5c4f706ba2fe21bdad9bc065bf690ba3e2389c74",
+    "dirtyHash": "5e4f2448b1ca8810a42a91b5e68c5eaa66364788342fee9844073c554cd1a0ca",
+    "sourceHash": "3a70a065cd949a806304a6b536803336309ef2ffd8121b5bec649b929ef93738",
+    "sourceFiles": 370
+  },
+  "scriptSha256": "213407f98a9ee73a922e1918286f359cac9487d02f01d74834553a5aa01ebe21",
+  "nativeManifest": {
+    "apiVersion": 3,
+    "version": "0.11.0-twirchat.6",
+    "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+    "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+    "patchDigest": "cb782c083032b0ed",
+    "rustToolchain": "1.97.1",
+    "target": "linux-x64",
+    "size": 56576904,
+    "sha256": "459aa1d3165395c0fbb97f7bb10abf2daf03a1996a7e59659114f29bc2ff6c26"
+  },
+  "nativeWindow": {
+    "x": 20,
+    "y": 20,
+    "width": 900,
+    "height": 600,
+    "mode": "windowed"
+  },
+  "channels": 10,
+  "initialRetainedMessages": 2000,
+  "sourceWidth": 128,
+  "sourceHeight": 128,
+  "framesPerImage": 32,
+  "uniqueFixtureUrls": 8,
+  "fixtures": [
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=0",
+      "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77",
+      "encodedBytes": 84716,
+      "delayMs": 100,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=0",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/741e2d04269c92305cc3d9d0465291e2.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7516b168289ecb5f267ca67dd6baad0466df370d3369a81e10ba1403743bd770"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=0",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/da6290b7a1b2b67542837cf34f534606.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "2670c2cf115ead9dde027967b86cfcdbde9ab03d70902e78f27e40b7c2b09943"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=0",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/264ab7977f3e5c750ddbf0e75186a8ea.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=0",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/efd014efdca558a2e5f0d4c0a9e90b56.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77"
+        }
+      ]
+    },
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=1",
+      "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc",
+      "encodedBytes": 84716,
+      "delayMs": 20,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=1",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/4b3ba7018ef593e21309251e14073293.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7f7a0a3a3d1707b61adac840d1545ee900d83d66166f30c5a9c050fa93ca5e2a"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=1",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/df10b95f621b103348564fb41c0b285c.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "972b56770c50a8ac58c58a1db249b396ce4ff74dc6fcac9d8b06de2e0158be2d"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=1",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/91fcacb4e4c7d4df5783c718d60a6ed5.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "cc20469bcb912fde1ce1b37b8f5bc3bed3e95f40070d2d31bd7733a882daed2f"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=1",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/a757ab8f850547d637010f300e31e2ba.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc"
+        }
+      ]
+    },
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=2",
+      "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77",
+      "encodedBytes": 84716,
+      "delayMs": 100,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=2",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/b9b8dfd30459e2434ba281f203317e86.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7516b168289ecb5f267ca67dd6baad0466df370d3369a81e10ba1403743bd770"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=2",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/5fcec8d19fc1b5c7be15d62f12a1dafb.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "2670c2cf115ead9dde027967b86cfcdbde9ab03d70902e78f27e40b7c2b09943"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=2",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/7ab5b1939b5efb07a0f89ba463cd42c2.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=2",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/943a41e7a2af162d017d7c5c42ed9a4f.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77"
+        }
+      ]
+    },
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=3",
+      "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc",
+      "encodedBytes": 84716,
+      "delayMs": 20,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=3",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/e7f999aa6e6fbd3e6926e22c6b09eba3.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7f7a0a3a3d1707b61adac840d1545ee900d83d66166f30c5a9c050fa93ca5e2a"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=3",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/445cb900cd2ba3f3f3e32dbe13abda2e.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "972b56770c50a8ac58c58a1db249b396ce4ff74dc6fcac9d8b06de2e0158be2d"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=3",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/0eabedf667593e02fe9c7911c2df9529.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "cc20469bcb912fde1ce1b37b8f5bc3bed3e95f40070d2d31bd7733a882daed2f"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=3",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/e18e73af3f38e9b01a0db844f170fa6a.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc"
+        }
+      ]
+    },
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=4",
+      "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77",
+      "encodedBytes": 84716,
+      "delayMs": 100,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=4",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/806b356a93f1756f40eef2087b5b650d.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7516b168289ecb5f267ca67dd6baad0466df370d3369a81e10ba1403743bd770"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=4",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/84c0b4d21de77955ad83d57879721c4f.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "2670c2cf115ead9dde027967b86cfcdbde9ab03d70902e78f27e40b7c2b09943"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=4",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/bebe2ecac27903e92fa847cec3811a01.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=4",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/88e3c9d264dba520139e10ed7d4c1039.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77"
+        }
+      ]
+    },
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=5",
+      "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc",
+      "encodedBytes": 84716,
+      "delayMs": 20,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=5",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/4c66a8c130f8504e3d5484a68d6fff74.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7f7a0a3a3d1707b61adac840d1545ee900d83d66166f30c5a9c050fa93ca5e2a"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=5",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/cd0a7fc176fafdb77feb6156f93c032f.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "972b56770c50a8ac58c58a1db249b396ce4ff74dc6fcac9d8b06de2e0158be2d"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=5",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/7da90ed426173a7c4446a6ca618a8c38.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "cc20469bcb912fde1ce1b37b8f5bc3bed3e95f40070d2d31bd7733a882daed2f"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=5",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/408d5704aecefc502b26962794f7eb54.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc"
+        }
+      ]
+    },
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=6",
+      "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77",
+      "encodedBytes": 84716,
+      "delayMs": 100,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=6",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/0653beb87310d960214ae4f56b9a9fdc.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7516b168289ecb5f267ca67dd6baad0466df370d3369a81e10ba1403743bd770"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=6",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/eabab03400e2c78f773f7efa9bccc05d.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "2670c2cf115ead9dde027967b86cfcdbde9ab03d70902e78f27e40b7c2b09943"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=6",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/c12a7dfa03afbe1495f8c66e56d9ffa4.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=6",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/85c34158ef113d1f054ef8d544f74ec5.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "42b9a7509f010dc4572dd6e9305cd5dd2baf950af305308512e74f5824b48d77"
+        }
+      ]
+    },
+    {
+      "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=7",
+      "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc",
+      "encodedBytes": 84716,
+      "delayMs": 20,
+      "frames": 32,
+      "variants": [
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=7",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/43f31ea60785ba923af84cde62f72c31.webp",
+          "width": 32,
+          "height": 32,
+          "variant": 1,
+          "sha256": "7f7a0a3a3d1707b61adac840d1545ee900d83d66166f30c5a9c050fa93ca5e2a"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/2x.webp?qa-fixture=7",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/ea0336ffc37ea6a74ec0fc318f67224f.webp",
+          "width": 64,
+          "height": 64,
+          "variant": 2,
+          "sha256": "972b56770c50a8ac58c58a1db249b396ce4ff74dc6fcac9d8b06de2e0158be2d"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.webp?qa-fixture=7",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/f63c60d3aaecac8cd90f671cd2381ae3.webp",
+          "width": 96,
+          "height": 96,
+          "variant": 3,
+          "sha256": "cc20469bcb912fde1ce1b37b8f5bc3bed3e95f40070d2d31bd7733a882daed2f"
+        },
+        {
+          "url": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=7",
+          "path": "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/500e3912c300fd1dc123e4f20b79435c.webp",
+          "width": 128,
+          "height": 128,
+          "variant": 4,
+          "sha256": "96d18b9576744210d1df85982eb945d210b07872451e3ddbadaa17866b1321dc"
+        }
+      ]
+    }
+  ],
+  "measurement": {
+    "evidence": [
+      {
+        "width": 420,
+        "motionPixels": 1568,
+        "resumedPixels": 1617,
+        "frozenPixels": 1372,
+        "focusedFrames": 24,
+        "blurredFrames": 11,
+        "sourceSelection": {
+          "scale": 1,
+          "logicalHeight": 28,
+          "physicalHeight": 28,
+          "selection": [
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=0",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=0",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=1",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=1",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=2",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=2",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=3",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=3",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=4",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=4",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": false
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=5",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=5",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": false
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=6",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=6",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": false
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=7",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=7",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            }
+          ],
+          "nativePaintedSources": [
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/43f31ea60785ba923af84cde62f72c31.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/741e2d04269c92305cc3d9d0465291e2.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/4b3ba7018ef593e21309251e14073293.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/b9b8dfd30459e2434ba281f203317e86.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/e7f999aa6e6fbd3e6926e22c6b09eba3.webp"
+          ]
+        }
+      },
+      {
+        "width": 900,
+        "motionPixels": 1840,
+        "resumedPixels": 1829,
+        "frozenPixels": 476,
+        "focusedFrames": 26,
+        "blurredFrames": 12,
+        "sourceSelection": {
+          "scale": 1,
+          "logicalHeight": 28,
+          "physicalHeight": 28,
+          "selection": [
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=0",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=0",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=1",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=1",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=2",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=2",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=3",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=3",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=4",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=4",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=5",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=5",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=6",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=6",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 100,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            },
+            {
+              "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=7",
+              "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=7",
+              "expectedVariant": 1,
+              "width": 32,
+              "height": 32,
+              "pages": 32,
+              "delayMs": 20,
+              "previewWidth": 128,
+              "nativeSourceObserved": true
+            }
+          ],
+          "nativePaintedSources": [
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/43f31ea60785ba923af84cde62f72c31.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/741e2d04269c92305cc3d9d0465291e2.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/4b3ba7018ef593e21309251e14073293.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/b9b8dfd30459e2434ba281f203317e86.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/e7f999aa6e6fbd3e6926e22c6b09eba3.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/806b356a93f1756f40eef2087b5b650d.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/4c66a8c130f8504e3d5484a68d6fff74.webp",
+            "/tmp/twirchat-emote-resources-after/functional-seventv/twirchat-gui-qa-23JJzO/profile/image-cache/0653beb87310d960214ae4f56b9a9fdc.webp"
+          ]
+        }
+      }
+    ],
+    "sharedImagesPerMessage": 2,
+    "secondWindowStatsBeforeClose": {
+      "entries": 8,
+      "loading": 0,
+      "decodedBytes": 1048576,
+      "evictions": 0,
+      "decodes": 8,
+      "maxEntries": 256,
+      "maxDecodedBytes": 67108864
+    },
+    "secondWindowStatsAfterClose": {
+      "entries": 0,
+      "loading": 0,
+      "decodedBytes": 0,
+      "evictions": 0,
+      "decodes": 8,
+      "maxEntries": 256,
+      "maxDecodedBytes": 67108864
+    },
+    "afterCloseMotionPixels": 1891
+  },
+  "settledImageStats": {
+    "entries": 8,
+    "loading": 0,
+    "decodedBytes": 1048576,
+    "evictions": 0,
+    "decodes": 8,
+    "maxEntries": 256,
+    "maxDecodedBytes": 67108864
+  },
+  "churnCacheBounds": null,
+  "afterRemoval": {
+    "memory": {
+      "rss": 429432832,
+      "heapTotal": 54865920,
+      "heapUsed": 101920206,
+      "external": 54544557,
+      "arrayBuffers": 27437584
+    },
+    "imageStats": {
+      "entries": 8,
+      "loading": 0,
+      "decodedBytes": 1048576,
+      "evictions": 0,
+      "decodes": 8,
+      "maxEntries": 256,
+      "maxDecodedBytes": 67108864
+    },
+    "retainedMessages": 0
+  },
+  "timestamp": "2026-11-03T09:43:57.802Z"
+}

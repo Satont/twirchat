@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "evidence": [
+    {
+      "width": 900,
+      "cached": "/tmp/twirchat-emote-resources-after/real-ragey/twirchat-gui-qa-wDLI8x/seventv-cached-900.png",
+      "pending": "/tmp/twirchat-emote-resources-after/real-ragey/twirchat-gui-qa-wDLI8x/seventv-pending-900.png",
+      "failed": "/tmp/twirchat-emote-resources-after/real-ragey/twirchat-gui-qa-wDLI8x/seventv-failed-900.png",
+      "artworkPixels": 809,
+      "differenceBounds": [
+        208,
+        83,
+        241,
+        106
+      ]
+    },
+    {
+      "width": 420,
+      "cached": "/tmp/twirchat-emote-resources-after/real-ragey/twirchat-gui-qa-wDLI8x/seventv-cached-420.png",
+      "pending": "/tmp/twirchat-emote-resources-after/real-ragey/twirchat-gui-qa-wDLI8x/seventv-pending-420.png",
+      "failed": "/tmp/twirchat-emote-resources-after/real-ragey/twirchat-gui-qa-wDLI8x/seventv-failed-420.png",
+      "artworkPixels": 806,
+      "differenceBounds": [
+        208,
+        83,
+        241,
+        106
+      ]
+    }
+  ]
+}

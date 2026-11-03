@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "alerts": 1,
+  "opened": [
+    "https://example.com/qa"
+  ],
+  "screenshot": "/tmp/twirchat-emote-resources-after/chat-input/twirchat-gui-qa-uyscUp/chat-behavior.png"
+}

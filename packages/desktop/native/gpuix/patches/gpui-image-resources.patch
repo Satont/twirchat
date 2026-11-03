@@ -1,0 +1,38 @@
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -1181,6 +1181,7 @@
+     pub(crate) tooltip_bounds: Option<TooltipBounds>,
+     pub(crate) next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>>,
+     after_paint_observers: Vec<Box<dyn Fn(&Window)>>,
++    draw_id: u64,
+     pub(crate) dirty_views: FxHashSet<EntityId>,
+     focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
+     pub(crate) focus_lost_listeners: SubscriberSet<(), AnyObserver>,
+@@ -1882,6 +1883,7 @@
+             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+             next_frame_callbacks,
+             after_paint_observers: Vec::new(),
++            draw_id: 0,
+             next_hitbox_id: HitboxId(0),
+             next_tooltip_id: TooltipId::default(),
+             tooltip_bounds: None,
+@@ -2422,6 +2424,11 @@
+         AsyncWindowContext::new_context(cx.to_async(), self.handle)
+     }
+ 
++    /// Identifies the current native draw, including cached-view and scroll layouts.
++    pub fn draw_id(&self) -> u64 {
++        self.draw_id
++    }
++
+     /// Observe completed paints, including deferred layers, for this window's lifetime.
+     /// Registration creates no frame demand; callbacks run only after an actual draw.
+     pub fn on_after_paint(&mut self, observer: impl Fn(&Window) + 'static) {
+@@ -3021,6 +3028,7 @@
+     /// the contents of the new [`Scene`], use [`Self::present`].
+     #[profiling::function]
+     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
++        self.draw_id += 1;
+         self.animation_time = Instant::now();
+         self.image_animation_deadline = None;
+         self.image_animation_suspended = false;

@@ -1,0 +1,5199 @@
+{
+  "ok": true,
+  "config": {
+    "case": "churn",
+    "durationSeconds": 20,
+    "warmupSeconds": 3,
+    "delayMs": 100,
+    "rate": 20,
+    "backgroundAnimation": false
+  },
+  "reactMode": "production",
+  "bunVersion": "1.4.4",
+  "compositor": "weston",
+  "provenance": {
+    "gitHead": "1455a1dd59690e5e17aed753825f1b1c120c25f1",
+    "dirtyHash": "045a985c933ef63f54c880e37081526f03cdb1d40127a4781c6cfadc99db8381",
+    "sourceHash": "be50e6db29621cb85002b22e177392a9ee4768a8bfe8af9c277cb6a054e875e3",
+    "sourceFiles": 355
+  },
+  "scriptSha256": "33bd308d6874b887252c257f4b217fc63271ebf0b9b80110f37c6597da69ef04",
+  "nativeManifest": {
+    "apiVersion": 3,
+    "version": "0.11.0-twirchat.3",
+    "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+    "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+    "patchDigest": "ad7fc24cef2eaf2f",
+    "rustToolchain": "1.97.1",
+    "target": "linux-x64",
+    "size": 56166296,
+    "sha256": "cd10c5ab9042a0ef0c485c3b320f7862128b78e6809fba8aa4181ad1a379d248"
+  },
+  "nativeWindow": {
+    "x": 0,
+    "y": 0,
+    "width": 1200,
+    "height": 800,
+    "mode": "fullscreen"
+  },
+  "channels": 10,
+  "initialRetainedMessages": 2000,
+  "sourceWidth": 96,
+  "sourceHeight": 96,
+  "framesPerImage": 32,
+  "uniqueFixtureUrls": 408,
+  "fixtures": [
+    {
+      "url": "https://emote-qa.invalid/emote/0/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/1/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/2/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/3/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/4/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/5/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/6/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/7/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/8/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/9/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/10/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/11/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/12/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/13/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/14/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/15/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/16/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/17/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/18/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/19/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/20/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/21/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/22/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/23/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/24/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/25/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/26/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/27/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/28/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/29/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/30/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/31/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/32/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/33/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/34/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/35/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/36/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/37/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/38/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/39/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/40/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/41/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/42/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/43/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/44/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/45/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/46/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/47/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/48/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/49/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/50/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/51/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/52/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/53/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/54/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/55/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/56/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/57/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/58/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/59/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/60/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/61/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/62/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/63/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/64/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/65/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/66/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/67/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/68/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/69/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/70/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/71/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/72/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/73/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/74/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/75/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/76/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/77/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/78/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/79/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/80/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/81/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/82/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/83/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/84/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/85/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/86/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/87/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/88/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/89/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/90/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/91/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/92/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/93/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/94/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/95/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/96/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/97/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/98/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/99/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/100/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/101/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/102/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/103/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/104/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/105/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/106/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/107/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/108/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/109/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/110/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/111/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/112/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/113/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/114/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/115/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/116/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/117/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/118/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/119/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/120/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/121/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/122/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/123/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/124/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/125/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/126/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/127/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/128/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/129/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/130/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/131/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/132/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/133/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/134/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/135/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/136/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/137/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/138/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/139/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/140/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/141/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/142/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/143/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/144/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/145/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/146/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/147/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/148/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/149/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/150/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/151/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/152/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/153/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/154/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/155/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/156/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/157/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/158/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/159/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/160/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/161/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/162/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/163/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/164/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/165/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/166/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/167/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/168/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/169/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/170/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/171/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/172/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/173/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/174/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/175/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/176/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/177/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/178/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/179/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/180/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/181/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/182/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/183/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/184/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/185/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/186/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/187/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/188/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/189/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/190/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/191/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/192/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/193/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/194/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/195/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/196/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/197/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/198/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/199/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/200/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/201/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/202/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/203/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/204/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/205/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/206/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/207/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/208/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/209/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/210/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/211/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/212/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/213/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/214/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/215/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/216/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/217/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/218/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/219/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/220/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/221/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/222/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/223/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/224/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/225/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/226/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/227/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/228/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/229/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/230/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/231/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/232/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/233/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/234/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/235/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/236/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/237/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/238/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/239/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/240/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/241/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/242/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/243/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/244/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/245/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/246/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/247/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/248/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/249/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/250/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/251/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/252/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/253/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/254/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/255/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/256/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/257/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/258/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/259/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/260/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/261/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/262/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/263/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/264/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/265/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/266/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/267/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/268/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/269/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/270/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/271/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/272/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/273/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/274/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/275/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/276/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/277/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/278/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/279/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/280/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/281/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/282/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/283/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/284/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/285/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/286/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/287/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/288/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/289/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/290/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/291/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/292/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/293/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/294/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/295/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/296/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/297/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/298/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/299/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/300/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/301/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/302/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/303/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/304/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/305/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/306/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/307/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/308/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/309/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/310/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/311/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/312/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/313/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/314/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/315/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/316/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/317/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/318/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/319/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/320/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/321/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/322/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/323/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/324/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/325/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/326/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/327/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/328/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/329/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/330/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/331/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/332/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/333/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/334/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/335/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/336/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/337/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/338/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/339/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/340/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/341/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/342/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/343/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/344/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/345/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/346/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/347/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/348/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/349/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/350/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/351/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/352/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/353/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/354/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/355/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/356/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/357/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/358/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/359/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/360/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/361/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/362/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/363/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/364/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/365/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/366/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/367/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/368/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/369/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/370/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/371/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/372/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/373/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/374/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/375/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/376/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/377/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/378/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/379/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/380/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/381/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/382/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/383/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/384/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/385/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/386/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/387/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/388/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/389/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/390/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/391/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/392/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/393/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/394/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/395/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/396/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/397/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/398/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/399/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/400/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/401/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/402/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/403/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/404/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/405/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/406/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/407/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    }
+  ],
+  "measurement": {
+    "wallMs": 20000.075934,
+    "cpuPercent": 42.53736849837303,
+    "nativeFrames": 1200,
+    "nativeFramesPerSecond": 59.99977219886489,
+    "initialRssBytes": 301244416,
+    "rssMedianBytes": 587288576,
+    "rssPeakBytes": 870338560,
+    "heapPeakBytes": 146739441,
+    "eventLoopLagP50Ms": 0.05459199999950215,
+    "eventLoopLagP95Ms": 0.10591199999998935,
+    "eventLoopLagMaxMs": 2.227180000001681,
+    "offeredMessages": 399,
+    "generatedMessages": 399,
+    "processedMessages": 399,
+    "actualRate": 19.949924256122575,
+    "retainedMessages": 2000,
+    "imageStatsBefore": null,
+    "imageStatsAfter": null,
+    "gpu": [
+      {
+        "device": "0000:03:00.0",
+        "driver": "amdgpu",
+        "engines": {
+          "gfx": 1.1161291342902013
+        },
+        "residentBytes": {
+          "gtt": 6299648,
+          "vram": 252227584
+        }
+      },
+      {
+        "device": "0000:47:00.0",
+        "driver": "amdgpu",
+        "engines": {},
+        "residentBytes": {
+          "gtt": 2097152,
+          "vram": 12288
+        }
+      }
+    ],
+    "samples": [
+      {
+        "elapsedMs": 250.55395,
+        "rssBytes": 307146752,
+        "heapBytes": 70264396,
+        "processed": 4,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0720749731263186
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 500.4774629999997,
+        "rssBytes": 315322368,
+        "heapBytes": 70264396,
+        "processed": 9,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1772693799162626
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 750.5617649999999,
+        "rssBytes": 324145152,
+        "heapBytes": 73315221,
+        "processed": 14,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1208615549822107
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1000.614697,
+        "rssBytes": 332771328,
+        "heapBytes": 73315221,
+        "processed": 19,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1661466196928034
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1250.6627389999994,
+        "rssBytes": 346238976,
+        "heapBytes": 73315221,
+        "processed": 24,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.3401939217272156
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1500.6233919999995,
+        "rssBytes": 354881536,
+        "heapBytes": 73315221,
+        "processed": 29,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1980674550067096
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1750.7372340000002,
+        "rssBytes": 360275968,
+        "heapBytes": 77633065,
+        "processed": 34,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2130042063218265
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2000.8223859999998,
+        "rssBytes": 362807296,
+        "heapBytes": 77633065,
+        "processed": 39,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1039823845929295
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2250.8219289999997,
+        "rssBytes": 372854784,
+        "heapBytes": 77633065,
+        "processed": 44,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2129114867381618
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2500.8654420000003,
+        "rssBytes": 378839040,
+        "heapBytes": 77633065,
+        "processed": 49,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2415544528221714
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2750.950624,
+        "rssBytes": 387727360,
+        "heapBytes": 81478235,
+        "processed": 54,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2031411407109909
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3001.0269659999994,
+        "rssBytes": 393981952,
+        "heapBytes": 81478235,
+        "processed": 59,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.148870079924403
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3251.023059,
+        "rssBytes": 401043456,
+        "heapBytes": 81478235,
+        "processed": 64,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1695608850225696
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3501.038222,
+        "rssBytes": 404443136,
+        "heapBytes": 81478235,
+        "processed": 69,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.143766099772009
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3751.1508349999995,
+        "rssBytes": 415932416,
+        "heapBytes": 85841348,
+        "processed": 74,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1575300422798056
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4001.2049769999994,
+        "rssBytes": 419074048,
+        "heapBytes": 85841348,
+        "processed": 79,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1711161465092628
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4251.22555,
+        "rssBytes": 427462656,
+        "heapBytes": 85841348,
+        "processed": 84,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1686361789073316
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4503.377811,
+        "rssBytes": 434749440,
+        "heapBytes": 85841348,
+        "processed": 89,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0903845884041965
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4752.161941,
+        "rssBytes": 439271424,
+        "heapBytes": 89949470,
+        "processed": 94,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.192427460134261
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 118009856
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5002.170094,
+        "rssBytes": 446349312,
+        "heapBytes": 89949470,
+        "processed": 99,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.120912031787896
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5252.208196999999,
+        "rssBytes": 454082560,
+        "heapBytes": 89949470,
+        "processed": 104,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2195362932037532
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5502.244390000001,
+        "rssBytes": 462950400,
+        "heapBytes": 89949470,
+        "processed": 109,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1240050576420249
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5752.347752999999,
+        "rssBytes": 471736320,
+        "heapBytes": 93730266,
+        "processed": 114,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.143575309542078
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6002.357396,
+        "rssBytes": 476246016,
+        "heapBytes": 93730266,
+        "processed": 119,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.058822100520175
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6252.407639,
+        "rssBytes": 483569664,
+        "heapBytes": 93730266,
+        "processed": 124,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0883080994497087
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6502.459972,
+        "rssBytes": 491958272,
+        "heapBytes": 93730266,
+        "processed": 129,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1320000116932525
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6752.569805,
+        "rssBytes": 500871168,
+        "heapBytes": 97542618,
+        "processed": 134,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1588050588538743
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7002.5726779999995,
+        "rssBytes": 503431168,
+        "heapBytes": 97542618,
+        "processed": 139,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.111302176596529
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7252.637701999999,
+        "rssBytes": 510943232,
+        "heapBytes": 97542618,
+        "processed": 144,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2022286213844762
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7502.698545,
+        "rssBytes": 518885376,
+        "heapBytes": 97542618,
+        "processed": 149,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1192642592468045
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7752.796218,
+        "rssBytes": 529670144,
+        "heapBytes": 101356488,
+        "processed": 154,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1391936692341504
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8002.808661,
+        "rssBytes": 532393984,
+        "heapBytes": 101356488,
+        "processed": 159,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0450710869459576
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8252.874515,
+        "rssBytes": 538624000,
+        "heapBytes": 101356488,
+        "processed": 164,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.9936463603199889
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8502.896538,
+        "rssBytes": 547012608,
+        "heapBytes": 101356488,
+        "processed": 169,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1366133961879217
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8753.005680999999,
+        "rssBytes": 555048960,
+        "heapBytes": 105107515,
+        "processed": 174,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1310726104719802
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9002.996514999999,
+        "rssBytes": 560947200,
+        "heapBytes": 105107515,
+        "processed": 179,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0548347422624011
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9253.045759,
+        "rssBytes": 566804480,
+        "heapBytes": 105107515,
+        "processed": 184,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0703382718280976
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9503.080001999999,
+        "rssBytes": 575176704,
+        "heapBytes": 105107515,
+        "processed": 189,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1273484379576364
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9753.183686,
+        "rssBytes": 582144000,
+        "heapBytes": 108812742,
+        "processed": 194,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0778471628858228
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10003.229468999998,
+        "rssBytes": 587288576,
+        "heapBytes": 108812742,
+        "processed": 199,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0795666062657048
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10253.232773,
+        "rssBytes": 594366464,
+        "heapBytes": 108812742,
+        "processed": 204,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.125343226996469
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10503.309786000002,
+        "rssBytes": 602492928,
+        "heapBytes": 108812742,
+        "processed": 209,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.067170994262736
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10753.391339999998,
+        "rssBytes": 611868672,
+        "heapBytes": 112555752,
+        "processed": 214,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0264034407105125
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11003.410174,
+        "rssBytes": 615849984,
+        "heapBytes": 112555752,
+        "processed": 219,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.11547487711901
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11253.450708,
+        "rssBytes": 622665728,
+        "heapBytes": 112555752,
+        "processed": 224,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0118675385968872
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11503.511972,
+        "rssBytes": 631709696,
+        "heapBytes": 112555752,
+        "processed": 229,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0653911589119531
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11753.631044999998,
+        "rssBytes": 640294912,
+        "heapBytes": 116366270,
+        "processed": 234,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0933560238080755
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 12003.651978999998,
+        "rssBytes": 644411392,
+        "heapBytes": 116366270,
+        "processed": 239,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.9944980269902968
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 12253.712743,
+        "rssBytes": 651358208,
+        "heapBytes": 116366270,
+        "processed": 244,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0716316519744944
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 12503.730767000001,
+        "rssBytes": 659746816,
+        "heapBytes": 116366270,
+        "processed": 249,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.9869667807583672
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 12753.844690999998,
+        "rssBytes": 668725248,
+        "heapBytes": 120112485,
+        "processed": 254,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.065004379203645
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 185118720
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 13003.885445,
+        "rssBytes": 672624640,
+        "heapBytes": 120112485,
+        "processed": 259,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0493551665123284
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 13254.029419000002,
+        "rssBytes": 679309312,
+        "heapBytes": 120112485,
+        "processed": 264,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.180280462378505
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 13503.929504,
+        "rssBytes": 687828992,
+        "heapBytes": 120112485,
+        "processed": 269,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2560590867581962
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 13754.233766000001,
+        "rssBytes": 696348672,
+        "heapBytes": 123825851,
+        "processed": 274,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.058641721630442
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 14004.050842,
+        "rssBytes": 700612608,
+        "heapBytes": 123825851,
+        "processed": 279,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0751249303952726
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 14254.100866,
+        "rssBytes": 707936256,
+        "heapBytes": 123825851,
+        "processed": 284,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0116922450965633
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 14504.127790999999,
+        "rssBytes": 716550144,
+        "heapBytes": 123825851,
+        "processed": 289,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.9936567487224266
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 14754.250724000001,
+        "rssBytes": 724643840,
+        "heapBytes": 127677955,
+        "processed": 294,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0620471591784881
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 15004.292499,
+        "rssBytes": 730013696,
+        "heapBytes": 127677955,
+        "processed": 299,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0708759747982115
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 15254.318383000002,
+        "rssBytes": 736808960,
+        "heapBytes": 127677955,
+        "processed": 304,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0726706323800463
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 15504.361748,
+        "rssBytes": 744640512,
+        "heapBytes": 127677955,
+        "processed": 309,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0859594330589888
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 15754.548642000002,
+        "rssBytes": 753291264,
+        "heapBytes": 131387255,
+        "processed": 314,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0013802132526368
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 16004.494177,
+        "rssBytes": 757616640,
+        "heapBytes": 131387255,
+        "processed": 319,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.060001885685279
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 16254.582011000002,
+        "rssBytes": 764825600,
+        "heapBytes": 131387255,
+        "processed": 324,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1157270900138225
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 16504.597466,
+        "rssBytes": 772808704,
+        "heapBytes": 131387255,
+        "processed": 329,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1681103521798901
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 16754.70522,
+        "rssBytes": 781402112,
+        "heapBytes": 135108309,
+        "processed": 334,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1508471121843904
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 17004.761975,
+        "rssBytes": 785506304,
+        "heapBytes": 135108309,
+        "processed": 339,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2598211605041436
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 17254.76526,
+        "rssBytes": 792584192,
+        "heapBytes": 135108309,
+        "processed": 344,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2643409076088656
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 17504.810524,
+        "rssBytes": 800710656,
+        "heapBytes": 135108309,
+        "processed": 349,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1932352052106754
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 17754.892959,
+        "rssBytes": 809062400,
+        "heapBytes": 138955579,
+        "processed": 354,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0695677578584524
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 18004.939684,
+        "rssBytes": 813957120,
+        "heapBytes": 138955579,
+        "processed": 359,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.103559433811031
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 18254.971669000002,
+        "rssBytes": 820772864,
+        "heapBytes": 138955579,
+        "processed": 364,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.2409617376882824
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 18504.969614,
+        "rssBytes": 829161472,
+        "heapBytes": 138955579,
+        "processed": 369,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0661115267224681
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 18755.247297,
+        "rssBytes": 837681152,
+        "heapBytes": 142870460,
+        "processed": 374,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.238538177035616
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 19005.095023,
+        "rssBytes": 842084352,
+        "heapBytes": 142870460,
+        "processed": 379,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1197118020355563
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 19255.172058,
+        "rssBytes": 849276928,
+        "heapBytes": 142870460,
+        "processed": 384,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0272378650625236
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 19505.193973,
+        "rssBytes": 857010176,
+        "heapBytes": 142870460,
+        "processed": 389,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0188403134079256
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 19755.426337,
+        "rssBytes": 865923072,
+        "heapBytes": 146739441,
+        "processed": 394,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.0631636560395488
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 20000.424562,
+        "rssBytes": 870338560,
+        "heapBytes": 146739441,
+        "processed": 399,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.1710058299976303
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 252227584
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "afterRemoval": {
+    "memory": {
+      "rss": 872673280,
+      "heapTotal": 117266432,
+      "heapUsed": 148326189,
+      "external": 44104663,
+      "arrayBuffers": 17140385
+    },
+    "imageStats": null,
+    "retainedMessages": 0
+  },
+  "timestamp": "2026-11-03T09:07:03.905Z"
+}
