@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "backend": "wayland",
+  "genuineCompositorClose": true,
+  "closeRestoreCycles": 5,
+  "hiddenUpdates": 50,
+  "programmaticClose": true
+}

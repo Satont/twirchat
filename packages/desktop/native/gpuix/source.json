@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.3",
+  "version": "0.11.0-twirchat.4",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -15,6 +15,16 @@
       "path": "patches/gpuix-window-lifecycle.patch",
       "root": "gpuix",
       "sha256": "6f071ee9632bf5b27d2b3250d96ffa338b60af7953cd457806a36e84d2d908fe"
+    },
+    {
+      "path": "patches/gpui-close-to-tray.patch",
+      "root": "gpui",
+      "sha256": "450d2028e0f5703fc9249d2348586adae9550eab49c4af29975c0668468cd972"
+    },
+    {
+      "path": "patches/gpuix-close-to-tray.patch",
+      "root": "gpuix",
+      "sha256": "bed73a8641011538ec0398e59ac3da978c775b9e136de334a13f199c9521b2df"
     }
   ]
 }

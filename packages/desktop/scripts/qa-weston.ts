@@ -48,3 +48,48 @@ export async function prepareQaWeston(): Promise<string> {
   }
   return root
 }
+
+export async function prepareQaWestonControls(root: string, session: string): Promise<string> {
+  const flags = Bun.spawn(
+    ['/usr/bin/pkg-config', '--cflags', 'pixman-1', 'wayland-server', 'xkbcommon'],
+    {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  )
+  const [output, error, code] = await Promise.all([
+    new Response(flags.stdout).text(),
+    new Response(flags.stderr).text(),
+    flags.exited,
+  ])
+  if (code !== 0) throw new Error(`Weston QA control dependencies are missing: ${error}`)
+  const module = join(session, 'qa-weston-controls.so')
+  const compiler = Bun.spawn(
+    [
+      '/usr/bin/cc',
+      '-shared',
+      '-fPIC',
+      '-Wall',
+      '-Wextra',
+      '-Werror',
+      '-isystem',
+      join(root, 'usr/include/libweston-15'),
+      ...output.trim().split(/\s+/u).filter(Boolean),
+      join(import.meta.dir, 'qa-weston-controls.c'),
+      `-L${join(root, 'usr/lib')}`,
+      '-lweston-15',
+      '-lwayland-server',
+      '-o',
+      module,
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  )
+  const [compileOutput, compileError, compileCode] = await Promise.all([
+    new Response(compiler.stdout).text(),
+    new Response(compiler.stderr).text(),
+    compiler.exited,
+  ])
+  if (compileCode !== 0)
+    throw new Error(`Weston QA control module failed: ${compileOutput}${compileError}`)
+  return module
+}

@@ -9,6 +9,9 @@
     "qa-tab-counts.tsx",
     "qa-deferred-chat-rows.tsx",
     "qa-announcements.tsx",
-    "qa-badge-tooltips.tsx"
+    "qa-badge-tooltips.tsx",
+    "qa-tray.tsx",
+    "qa-built-app.ts",
+    "qa-wayland-tray.tsx"
   ]
 }

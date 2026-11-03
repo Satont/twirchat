@@ -35,7 +35,13 @@ test('native source pins and patch checksums match the reviewed checkout contrac
   expect(manifest.revision).toBe('2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf')
   expect(manifest.gpuiRevision).toBe('f77e5cfe9dad04288566f00c66ecf3c58d6f84b3')
   expect(manifest.rustToolchain).toBe('1.97.1')
-  expect(manifest.patches.map((patch: { root: string }) => patch.root)).toEqual(['gpui', 'gpuix'])
+  expect(manifest.patches.slice(0, 2).map((patch) => patch.root)).toEqual(['gpui', 'gpuix'])
+  expect(manifest.patches).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ path: 'patches/gpui-close-to-tray.patch', root: 'gpui' }),
+      expect.objectContaining({ path: 'patches/gpuix-close-to-tray.patch', root: 'gpuix' }),
+    ]),
+  )
   for (const patch of manifest.patches) {
     const bytes = new Uint8Array(await Bun.file(resolve(root, patch.path)).arrayBuffer())
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(patch.sha256)

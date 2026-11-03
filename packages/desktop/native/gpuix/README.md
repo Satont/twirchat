@@ -124,6 +124,13 @@ extra frames.
   `cursorToStart`, `cursorToEnd`, `selectToStart`, and `selectToEnd`. Start/end refer
   to the whole editor document. Unknown names are rejected before dispatch.
 
+On Linux, an OS close request for the window that currently owns a successfully created
+tray hides that window while keeping its React tree, backend connections, and tray alive.
+Activating the tray maps the same window again; explicit `closeWindow()` and tray Quit still
+remove windows. Windows without a tray retain ordinary close behavior. X11 uses native
+unmap/map requests. Wayland unmaps the xdg surface and repeats its configure handshake before
+presenting again, retaining the title, app ID, size limits, and maximized/fullscreen request.
+
 Initial `WindowOptions` additionally accepts finite `x`/`y` coordinates and
 `kind: 'normal' | 'floating' | 'popup'`. Window-manager policy still governs actual
 placement and stacking. `floating` maps to GPUI's floating window kind, and does not
