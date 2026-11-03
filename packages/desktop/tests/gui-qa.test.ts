@@ -4,7 +4,12 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { westonArguments, parseGuiQaArguments, sandboxArguments } from '../scripts/qa-gui'
+import {
+  westonArguments,
+  xvfbScreenSize,
+  parseGuiQaArguments,
+  sandboxArguments,
+} from '../scripts/qa-gui'
 import { assertGuiQaEnvironment, assertGuiQaPrivateBus } from '../src/services/gui-qa'
 import { decodeQaFramebuffer } from '../src/services/gui-qa-screenshot'
 import { required } from './fixture-values'
@@ -54,6 +59,42 @@ test('GUI QA React mode defaults never inherit the host NODE_ENV', () => {
     if (previous === undefined) delete process.env.NODE_ENV
     else process.env.NODE_ENV = previous
   }
+})
+
+test('private display dimensions support tall fixtures and preserve existing defaults', () => {
+  const options = parseGuiQaArguments([
+    '--display-width',
+    '1280',
+    '--display-height',
+    '1500',
+    '--',
+    'bun',
+    'fixture.tsx',
+  ])
+  expect(options.displayWidth).toBe(1280)
+  expect(options.displayHeight).toBe(1500)
+  expect(options.command).toEqual(['bun', 'fixture.tsx'])
+  expect(xvfbScreenSize()).toBe('1280x900x24')
+  expect(xvfbScreenSize(options.displayWidth, options.displayHeight)).toBe('1280x1500x24')
+  expect(westonArguments()).toContain('--width=1200')
+  expect(westonArguments()).toContain('--height=800')
+  expect(westonArguments(1280, 1500)).toContain('--height=1500')
+  for (const value of ['0', '-1', '4097', 'Infinity', 'NaN', '770.5', '1280x1500']) {
+    expect(() => parseGuiQaArguments(['--display-width', value])).toThrow('integer between')
+    expect(() => parseGuiQaArguments(['--display-height', value])).toThrow('integer between')
+  }
+  expect(() => parseGuiQaArguments(['--display-width'])).toThrow('integer between')
+  expect(() => parseGuiQaArguments(['--display-height'])).toThrow('integer between')
+  expect(() => xvfbScreenSize(1280, 4097)).toThrow()
+  expect(() => westonArguments(1280, 4097)).toThrow()
+  expect(
+    parseGuiQaArguments(['--compositor', 'weston', '--weston-shell', 'desktop']).westonShell,
+  ).toBe('desktop')
+  expect(westonArguments(1280, 1500, 'desktop')).toContain('--shell=desktop-shell.so')
+  expect(() => parseGuiQaArguments(['--weston-shell', 'desktop'])).toThrow('--compositor weston')
+  expect(() =>
+    parseGuiQaArguments(['--compositor', 'weston', '--weston-shell', 'unknown']),
+  ).toThrow('kiosk or desktop')
 })
 
 test('Weston controls require the private Weston backend and preserve the child command', () => {

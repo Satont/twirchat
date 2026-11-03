@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.6",
+  "version": "0.11.0-twirchat.7",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -60,6 +60,36 @@
       "path": "patches/gpuix-image-resources.patch",
       "root": "gpuix",
       "sha256": "4b17c079fddb21c878f3793e4fa4137947176f6b533f0106dcb93f1dac25ef24"
+    },
+    {
+      "path": "patches/gpui-image-scene-animation.patch",
+      "root": "gpui",
+      "sha256": "86a194661a86ab0c588e514461718a209f5b68714b1f18db8ff2f5c85c45bef3"
+    },
+    {
+      "path": "patches/gpuix-image-animation-stats.patch",
+      "root": "gpuix",
+      "sha256": "0edf1bf41223d5f1857337dd16f217eb0f1f2b3ee4c4a6ed9ab8058377f5c7db"
+    },
+    {
+      "path": "patches/gpui-wgpu-atlas-bindings.patch",
+      "root": "gpui",
+      "sha256": "399b728a823914077a853e795bbf213e1829826b51f3e5281477c254e40a45c5"
+    },
+    {
+      "path": "patches/gpui-list-visible-range.patch",
+      "root": "gpui",
+      "sha256": "2265543698503f0243d022e21c34bd90bf73334d6879c384bf7720b034d23e6a"
+    },
+    {
+      "path": "patches/gpuix-list-visible-range.patch",
+      "root": "gpuix",
+      "sha256": "2b4defeb1908305defe89ddefe9658ad08b2f7dfcf333c1ac23ffe0d1e4c850f"
+    },
+    {
+      "path": "patches/gpui-wgpu-cached-scene-instances.patch",
+      "root": "gpui",
+      "sha256": "775df363755739b1e598102200d44cfcc13585398294bafe1c7c211b7da03e0a"
     }
   ]
 }

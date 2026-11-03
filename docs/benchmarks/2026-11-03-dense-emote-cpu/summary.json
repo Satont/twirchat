@@ -1,0 +1,472 @@
+{
+  "groups": {
+    "before-focused": {
+      "cpu": {
+        "median": 56.31812866555506,
+        "min": 54.17423108893219,
+        "max": 57.283456590098524
+      },
+      "rssMiB": {
+        "median": 347.43359375,
+        "min": 346.3671875,
+        "max": 347.97265625
+      },
+      "peakMiB": {
+        "median": 350.40625,
+        "min": 348.56640625,
+        "max": 351.7265625
+      },
+      "heapMiB": {
+        "median": 91.91251850128174,
+        "min": 91.77268409729004,
+        "max": 91.91630935668945
+      },
+      "lagP95Ms": {
+        "median": 0.05916799999977229,
+        "min": 0.05884200000036799,
+        "max": 0.07555900000079419
+      },
+      "presents": {
+        "median": 55.24976324371456,
+        "min": 54.64972962046271,
+        "max": 55.29975612531051
+      },
+      "fullDraws": {
+        "median": 1105,
+        "min": 1093,
+        "max": 1106
+      }
+    },
+    "before-unfocused": {
+      "cpu": {
+        "median": 29.7985406650037,
+        "min": 29.47604298916387,
+        "max": 30.351985856314723
+      },
+      "rssMiB": {
+        "median": 348.91796875,
+        "min": 348.16015625,
+        "max": 349.90625
+      },
+      "peakMiB": {
+        "median": 351.125,
+        "min": 350.4609375,
+        "max": 351.99609375
+      },
+      "heapMiB": {
+        "median": 91.86044883728027,
+        "min": 91.85683059692383,
+        "max": 91.87081050872803
+      },
+      "lagP95Ms": {
+        "median": 0.06133099999715341,
+        "min": 0.057827000000543194,
+        "max": 0.06935000000157743
+      },
+      "presents": {
+        "median": 25.49988076510753,
+        "min": 25.349900491500613,
+        "max": 25.59994180109231
+      },
+      "fullDraws": {
+        "median": 510,
+        "min": 507,
+        "max": 512
+      }
+    },
+    "final-focused": {
+      "cpu": {
+        "median": 3.3150464157685495,
+        "min": 3.179756385396073,
+        "max": 3.315785019946437
+      },
+      "rssMiB": {
+        "median": 346.28125,
+        "min": 344.58203125,
+        "max": 346.66796875
+      },
+      "peakMiB": {
+        "median": 348.11328125,
+        "min": 347.5625,
+        "max": 349
+      },
+      "heapMiB": {
+        "median": 93.01348209381104,
+        "min": 92.98624515533447,
+        "max": 93.06314086914062
+      },
+      "lagP95Ms": {
+        "median": 0.05978799999866169,
+        "min": 0.05900900000051479,
+        "max": 0.07059100000060425
+      },
+      "presents": {
+        "median": 57.84976294613388,
+        "min": 57.849752307608036,
+        "max": 57.89973842056176
+      },
+      "fullDraws": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    },
+    "final-unfocused": {
+      "cpu": {
+        "median": 2.3024746921661743,
+        "min": 2.2892806138350195,
+        "max": 2.347820245511226
+      },
+      "rssMiB": {
+        "median": 345.95703125,
+        "min": 345.80078125,
+        "max": 348.42578125
+      },
+      "peakMiB": {
+        "median": 349.40625,
+        "min": 348.24609375,
+        "max": 350.3359375
+      },
+      "heapMiB": {
+        "median": 93.03175354003906,
+        "min": 92.99615955352783,
+        "max": 93.10532760620117
+      },
+      "lagP95Ms": {
+        "median": 0.058966000000509666,
+        "min": 0.05773600000065926,
+        "max": 0.06455600000117556
+      },
+      "presents": {
+        "median": 21.699909843384575,
+        "min": 21.69990285278991,
+        "max": 21.699911029279786
+      },
+      "fullDraws": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      }
+    }
+  },
+  "targets": {
+    "initial": {
+      "cpu": {
+        "median": 109.01182579443393,
+        "min": 108.1541621752426,
+        "max": 109.48852579447251
+      },
+      "rssMiB": {
+        "median": 509.234375,
+        "min": 505.3828125,
+        "max": 516.36328125
+      },
+      "peakMiB": {
+        "median": 649.33984375,
+        "min": 610.4296875,
+        "max": 665.7265625
+      },
+      "heapMiB": {
+        "median": 256.61664390563965,
+        "min": 220.1956434249878,
+        "max": 269.63465785980225
+      },
+      "lagP95Ms": {
+        "median": 3.94676900000195,
+        "min": 3.687272000000121,
+        "max": 5.342249999999694
+      },
+      "rate": {
+        "median": 4995.770704843899,
+        "min": 4988.465944574407,
+        "max": 4996.281728833432
+      }
+    },
+    "control": {
+      "cpu": {
+        "median": 115.95983163374824,
+        "min": 115.22086759452172,
+        "max": 117.30947484458429
+      },
+      "rssMiB": {
+        "median": 513.32421875,
+        "min": 500.328125,
+        "max": 517.42578125
+      },
+      "peakMiB": {
+        "median": 626.1796875,
+        "min": 612.30078125,
+        "max": 626.47265625
+      },
+      "heapMiB": {
+        "median": 229.44129085540771,
+        "min": 226.71193885803223,
+        "max": 234.25000858306885
+      },
+      "lagP95Ms": {
+        "median": 2.673856999999771,
+        "min": 2.5733800000016345,
+        "max": 2.7210979999981646
+      },
+      "rate": {
+        "median": 4995.57910465824,
+        "min": 4995.144305070661,
+        "max": 4996.376505022179
+      }
+    },
+    "after16": {
+      "cpu": {
+        "median": 114.62329094767875,
+        "min": 114.46400156613541,
+        "max": 115.78038463433198
+      },
+      "rssMiB": {
+        "median": 513.0625,
+        "min": 505.40625,
+        "max": 524.38671875
+      },
+      "peakMiB": {
+        "median": 619.23828125,
+        "min": 610.51171875,
+        "max": 635.3359375
+      },
+      "heapMiB": {
+        "median": 242.85009765625,
+        "min": 234.69861507415771,
+        "max": 247.5080442428589
+      },
+      "lagP95Ms": {
+        "median": 2.8207300000030955,
+        "min": 2.3758410000009462,
+        "max": 2.9832580000002054
+      },
+      "rate": {
+        "median": 4994.512748282557,
+        "min": 4994.079207983565,
+        "max": 4995.878393991651
+      }
+    }
+  },
+  "guard": {
+    "cpu": 116.17957429621733,
+    "rssMiB": 504.09375,
+    "peakMiB": 605.51171875,
+    "heapMiB": 237.12028217315674,
+    "rate": 4995.146930341629,
+    "lagP95Ms": 3.1213889999999083
+  },
+  "provider": {
+    "before": {
+      "cpu": {
+        "median": 0.6534155202990732,
+        "min": 0.6171863621160284,
+        "max": 0.6619753820733391
+      },
+      "rssMiB": {
+        "median": 79.0390625,
+        "min": 78.7421875,
+        "max": 79.078125
+      }
+    },
+    "after": {
+      "cpu": {
+        "median": 0.3413181773272146,
+        "min": 0.2712900027599308,
+        "max": 0.38888476731884997
+      },
+      "rssMiB": {
+        "median": 68.1015625,
+        "min": 68.03125,
+        "max": 70.859375
+      }
+    }
+  },
+  "observers": {
+    "focused": {
+      "cpu": 2.8792968046146385,
+      "presents": 57.849734883342485
+    },
+    "unfocused": {
+      "cpu": 2.018416941773123,
+      "presents": 21.69991336635087
+    }
+  },
+  "matrix": [
+    {
+      "scenario": "c1-r0-p1",
+      "beforeCpu": 1.1986778082530762,
+      "afterCpu": 1.1287037018115957,
+      "cpuChangePercent": -5.837607567246039,
+      "beforeRssMiB": 284.87109375,
+      "afterRssMiB": 285.953125,
+      "rssChangePercent": 0.3798318866812034,
+      "processedRate": 0
+    },
+    {
+      "scenario": "c1-r100-p1",
+      "beforeCpu": 61.1056735825295,
+      "afterCpu": 61.76500544572923,
+      "cpuChangePercent": 1.0790026924574203,
+      "beforeRssMiB": 490.953125,
+      "afterRssMiB": 508.28515625,
+      "rssChangePercent": 3.5302822952802293,
+      "processedRate": 99.7489859767458
+    },
+    {
+      "scenario": "c1-r1000-p1",
+      "beforeCpu": 94.51677375982325,
+      "afterCpu": 82.6015253947031,
+      "cpuChangePercent": -12.606490775275514,
+      "beforeRssMiB": 591.30859375,
+      "afterRssMiB": 508.22265625,
+      "rssChangePercent": -14.051197357555733,
+      "processedRate": 997.0681489824926
+    },
+    {
+      "scenario": "c1-r5000-p1",
+      "beforeCpu": 167.6898355310534,
+      "afterCpu": 131.47732893088033,
+      "cpuChangePercent": -21.594932385431974,
+      "beforeRssMiB": 669.37109375,
+      "afterRssMiB": 583.41015625,
+      "rssChangePercent": -12.842045063288188,
+      "processedRate": 4923.077839452872
+    },
+    {
+      "scenario": "c10-r0-p1",
+      "beforeCpu": 1.1712647025137373,
+      "afterCpu": 1.158108154351805,
+      "cpuChangePercent": -1.1232770981398188,
+      "beforeRssMiB": 286.62109375,
+      "afterRssMiB": 288.76953125,
+      "rssChangePercent": 0.7495741056217975,
+      "processedRate": 0
+    },
+    {
+      "scenario": "c10-r100-p1",
+      "beforeCpu": 22.64626388431126,
+      "afterCpu": 23.077897111824814,
+      "cpuChangePercent": 1.905979854860651,
+      "beforeRssMiB": 346.41015625,
+      "afterRssMiB": 347.8671875,
+      "rssChangePercent": 0.4206086985938384,
+      "processedRate": 99.74897898607593
+    },
+    {
+      "scenario": "c10-r1000-p1",
+      "beforeCpu": 66.86565915335632,
+      "afterCpu": 61.23261674248308,
+      "cpuChangePercent": -8.42441767896711,
+      "beforeRssMiB": 476.125,
+      "afterRssMiB": 481.2109375,
+      "rssChangePercent": 1.0681937516408446,
+      "processedRate": 997.5730165994578
+    },
+    {
+      "scenario": "c10-r5000-p1",
+      "beforeCpu": 74.24819364605496,
+      "afterCpu": 72.56149928267443,
+      "cpuChangePercent": -2.27169750609838,
+      "beforeRssMiB": 522.44140625,
+      "afterRssMiB": 486.4140625,
+      "rssChangePercent": -6.895958727429063,
+      "processedRate": 4987.508821198422
+    },
+    {
+      "scenario": "c50-r0-p1",
+      "beforeCpu": 1.2694686611319153,
+      "afterCpu": 1.208401561042953,
+      "cpuChangePercent": -4.81044565798986,
+      "beforeRssMiB": 297.98046875,
+      "afterRssMiB": 299.44921875,
+      "rssChangePercent": 0.4929014328225234,
+      "processedRate": 0
+    },
+    {
+      "scenario": "c50-r100-p1",
+      "beforeCpu": 7.568024370517623,
+      "afterCpu": 7.862567059090522,
+      "cpuChangePercent": 3.891936311943378,
+      "beforeRssMiB": 309.55078125,
+      "afterRssMiB": 312.828125,
+      "rssChangePercent": 1.0587418764590906,
+      "processedRate": 99.74894776497486
+    },
+    {
+      "scenario": "c50-r1000-p1",
+      "beforeCpu": 38.89058733965039,
+      "afterCpu": 39.720276325127564,
+      "cpuChangePercent": 2.133392787902899,
+      "beforeRssMiB": 420.7578125,
+      "afterRssMiB": 419.37890625,
+      "rssChangePercent": -0.32771970217427837,
+      "processedRate": 998.2112538398245
+    },
+    {
+      "scenario": "c50-r5000-p1",
+      "beforeCpu": 65.80322481381913,
+      "afterCpu": 60.4189166407478,
+      "cpuChangePercent": -8.18243815300156,
+      "beforeRssMiB": 492.12890625,
+      "afterRssMiB": 493.5234375,
+      "rssChangePercent": 0.28336706750804463,
+      "processedRate": 4991.446391529649
+    },
+    {
+      "scenario": "c50-r1000-p4",
+      "beforeCpu": 95.03203873728077,
+      "afterCpu": 95.77126953071533,
+      "cpuChangePercent": 0.7778753389456217,
+      "beforeRssMiB": 674.1796875,
+      "afterRssMiB": 676.88671875,
+      "rssChangePercent": 0.40152963671127306,
+      "processedRate": 997.5734066858591
+    },
+    {
+      "scenario": "c50-r5000-p4",
+      "beforeCpu": 142.2819529527035,
+      "afterCpu": 143.13263834898135,
+      "cpuChangePercent": 0.5978870676315529,
+      "beforeRssMiB": 831.7265625,
+      "afterRssMiB": 838.34765625,
+      "rssChangePercent": 0.7960661650745271,
+      "processedRate": 4981.767958007567
+    },
+    {
+      "scenario": "c100-r5000-p4",
+      "beforeCpu": 137.82455491139402,
+      "afterCpu": 138.67828703430982,
+      "cpuChangePercent": 0.6194339778311964,
+      "beforeRssMiB": 869.375,
+      "afterRssMiB": 846.3828125,
+      "rssChangePercent": -2.644680086268869,
+      "processedRate": 4987.64690181342
+    }
+  ],
+  "provenance": {
+    "initial": {
+      "gitHead": "1a1ebfc92edf8f464366bc23daae839146486c33",
+      "dirtyHash": "e89dbebb6e4b8058e291e288c0f95f5a64c7f955e69eb03a599579e7ae0539ba",
+      "sourceHash": "523e987ff05b1a2350b4cb2382cdd7ee6218924a8746dd387755bb6a3c0dc07e",
+      "sourceFiles": 371
+    },
+    "control": {
+      "gitHead": "1a1ebfc92edf8f464366bc23daae839146486c33",
+      "dirtyHash": "7c73f9233f70f3753345daff46666d4276a1481509f784b8c1e336579cbb7aa7",
+      "sourceHash": "eb11437dfc21a374580bc256e8fb1daa7ebf6a29f48ecf0448740f2d11f7a7c7",
+      "sourceFiles": 376
+    },
+    "after16": {
+      "gitHead": "1a1ebfc92edf8f464366bc23daae839146486c33",
+      "dirtyHash": "7c73f9233f70f3753345daff46666d4276a1481509f784b8c1e336579cbb7aa7",
+      "sourceHash": "dd0bee57b5d474731254fb2c4b95ec76ec2feed782d8febc6910e2bc78feb76f",
+      "sourceFiles": 376
+    },
+    "final": {
+      "gitHead": "1a1ebfc92edf8f464366bc23daae839146486c33",
+      "dirtyHash": "541d86ceb1359dc0efa6eb61f65b4d2a0d268bee6f81d38d2cc50ba3c17d6ae5",
+      "sourceHash": "623fd1fb738aaad65ec61e8513a6977b52d5f9a2685e15930b10bfcc6c56fe13",
+      "sourceFiles": 377
+    }
+  }
+}

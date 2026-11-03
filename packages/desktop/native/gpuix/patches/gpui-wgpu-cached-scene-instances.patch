@@ -1,0 +1,157 @@
+--- a/crates/gpui/src/scene.rs
++++ b/crates/gpui/src/scene.rs
+@@ -39,6 +39,7 @@
+ #[derive(Default)]
+ #[expect(missing_docs)]
+ pub struct Scene {
++    cached_frame_id: Option<u64>,
+     pub(crate) paint_operations: Vec<PaintOperation>,
+     primitive_bounds: BoundsTree<ScaledPixels>,
+     layer_stack: Vec<DrawOrder>,
+@@ -54,7 +55,18 @@
+ 
+ #[expect(missing_docs)]
+ impl Scene {
++    /// Identifies an explicitly repeated immutable window scene for this presentation.
++    /// Ordinary presentations have no cache hint, since scene primitives are mutable.
++    pub fn cached_frame_id(&self) -> Option<u64> {
++        self.cached_frame_id
++    }
++
++    pub(crate) fn set_cached_frame_id(&mut self, frame_id: Option<u64>) {
++        self.cached_frame_id = frame_id;
++    }
++
+     pub fn clear(&mut self) {
++        self.cached_frame_id = None;
+         self.paint_operations.clear();
+         self.primitive_bounds.clear();
+         self.layer_stack.clear();
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -3312,7 +3312,11 @@
+     /// This is intended for stable scenes whose external GPU resources changed,
+     /// such as an atlas image updated in place.
+     pub fn present_cached_frame(&mut self) {
++        self.rendered_frame
++            .scene
++            .set_cached_frame_id(Some(self.draw_id));
+         self.present();
++        self.rendered_frame.scene.set_cached_frame_id(None);
+     }
+ 
+     /// Presents the most recently drawn frame if it hasn't been presented yet.
+--- a/crates/gpui_wgpu/src/wgpu_renderer.rs
++++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
+@@ -136,6 +136,7 @@
+ }
+ 
+ /// One frame allocation of instance data, ready to bind.
++#[derive(Clone)]
+ struct InstanceBinding {
+     bind_group: wgpu::BindGroup,
+     /// Index of the allocation's first instance within the bound data. Always
+@@ -146,6 +147,7 @@
+     first_instance: u32,
+ }
+ 
++#[derive(Clone)]
+ struct InstanceBindings {
+     quads: InstanceBinding,
+     shadows: InstanceBinding,
+@@ -153,6 +155,13 @@
+     monochrome_sprites: InstanceBinding,
+     subpixel_sprites: InstanceBinding,
+     polychrome_sprites: InstanceBinding,
++}
++
++#[derive(Clone)]
++struct CachedInstanceBindings {
++    frame_id: u64,
++    bindings: InstanceBindings,
++    instance_offset: u64,
+ }
+ 
+ struct WgpuBindGroupLayouts {
+@@ -195,6 +204,7 @@
+     globals_bind_group: wgpu::BindGroup,
+     path_globals_bind_group: wgpu::BindGroup,
+     instance_data: InstanceData,
++    cached_instance_bindings: Option<CachedInstanceBindings>,
+     path_intermediate_texture: Option<wgpu::Texture>,
+     path_intermediate_view: Option<wgpu::TextureView>,
+     path_msaa_texture: Option<wgpu::Texture>,
+@@ -637,6 +647,7 @@
+             globals_bind_group,
+             path_globals_bind_group,
+             instance_data,
++            cached_instance_bindings: None,
+             // Defer intermediate texture creation to first draw call via ensure_intermediate_textures().
+             // This avoids panics when the device/surface is in an invalid state during initialization.
+             path_intermediate_texture: None,
+@@ -1608,20 +1619,42 @@
+     fn record_frame(&mut self, scene: &Scene, frame_view: &wgpu::TextureView) -> Result<()> {
+         let mut instance_offset = 0;
+         let mut atlas_bindings = HashMap::new();
+-        let instance_bindings = self
+-            .write_instances(scene, &mut instance_offset)
+-            .with_context(|| {
+-                format!(
+-                    "scene too large: {} paths, {} shadows, {} quads, {} underlines, {} monochrome sprites, {} subpixel sprites, {} polychrome sprites",
+-                    scene.paths.len(),
+-                    scene.shadows.len(),
+-                    scene.quads.len(),
+-                    scene.underlines.len(),
+-                    scene.monochrome_sprites.len(),
+-                    scene.subpixel_sprites.len(),
+-                    scene.polychrome_sprites.len(),
+-                )
+-            })?;
++        let frame_id = scene.cached_frame_id();
++        let cached = frame_id.and_then(|frame_id| {
++            self.resources()
++                .cached_instance_bindings
++                .as_ref()
++                .filter(|cached| cached.frame_id == frame_id)
++                .cloned()
++        });
++        let instance_bindings = if let Some(cached) = cached {
++            instance_offset = cached.instance_offset;
++            cached.bindings
++        } else {
++            self.resources_mut().cached_instance_bindings = None;
++            let bindings = self
++                .write_instances(scene, &mut instance_offset)
++                .with_context(|| {
++                    format!(
++                        "scene too large: {} paths, {} shadows, {} quads, {} underlines, {} monochrome sprites, {} subpixel sprites, {} polychrome sprites",
++                        scene.paths.len(),
++                        scene.shadows.len(),
++                        scene.quads.len(),
++                        scene.underlines.len(),
++                        scene.monochrome_sprites.len(),
++                        scene.subpixel_sprites.len(),
++                        scene.polychrome_sprites.len(),
++                    )
++                })?;
++            if let Some(frame_id) = frame_id {
++                self.resources_mut().cached_instance_bindings = Some(CachedInstanceBindings {
++                    frame_id,
++                    bindings: bindings.clone(),
++                    instance_offset,
++                });
++            }
++            bindings
++        };
+ 
+         let mut encoder =
+             self.resources()
+@@ -2212,6 +2245,8 @@
+         // only subsequent writes land in the new allocation.
+         let uses_webgl_instance_data = self.uses_webgl_instance_data;
+         let resources = self.resources_mut();
++        // Cached bindings must never outlive a replacement of their instance storage.
++        resources.cached_instance_bindings = None;
+         if uses_webgl_instance_data {
+             let max_texture_dimension = resources.device.limits().max_texture_dimension_2d;
+             let (instance_data, actual_capacity) =

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rename, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import type { GpuixRenderer } from '@gpuix/native'
@@ -34,21 +34,26 @@ const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { nativeWindow } = await import('../src/gpuix/native-window')
+const { initializeManagedRenderer } = await import('../src/gpuix/managed-renderer')
 const app = await import('../src/gpuix/state/app')
 const { layoutStore } = await import('../src/gpuix/state/layout')
 const { getDbPath, getBackendUrl } = await import('../src/runtime-config')
 const { imageSnapshot } = await import('../src/gpuix/state/image-cache')
+const { composerStore } = await import('../src/gpuix/state/composer')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const sharp = (await import('sharp')).default
 
 const configurationSchema = z.object({
   case: z.enum(['idle', 'churn', 'functional']).default('idle'),
   source: z.enum(['synthetic', 'seventv']).default('synthetic'),
+  preset: z.enum(['standard', 'dense']).default('standard'),
+  activation: z.enum(['focused', 'unfocused']).default('focused'),
   durationSeconds: z.number().min(4).max(30).default(12),
   warmupSeconds: z.number().min(2).max(10).default(3),
   delayMs: z.number().int().min(20).max(1000).default(100),
   rate: z.number().int().min(1).max(20).default(20),
   backgroundAnimation: z.boolean().default(false),
+  sampleGpuDuringMeasurement: z.boolean().default(true),
 })
 const imageResourceStatsSchema = z.object({
   entries: z.number().int().nonnegative(),
@@ -65,14 +70,37 @@ const provenance = benchmarkProvenanceSchema.parse(JSON.parse(process.argv[3] ??
 const session = z.string().min(1).parse(process.env.TWIRCHAT_QA_SESSION_DIR)
 if (config.case === 'functional' && process.env.TWIRCHAT_QA_COMPOSITOR !== 'xvfb')
   throw new Error('Functional focus/pixel checks require the isolated Xvfb compositor.')
-if (config.source === 'seventv' && config.case !== 'functional')
+if (config.source === 'seventv' && config.case !== 'functional' && config.preset !== 'dense')
   throw new Error(
     '7TV sizing checks are a separate functional case; resource comparisons use synthetic sources.',
   )
+if (config.preset === 'dense' && config.case === 'churn')
+  throw new Error(
+    'The dense preset measures idle rendering; use the standard preset for image churn.',
+  )
+const dense = config.preset === 'dense'
+const usesSevenTvSources = config.source === 'seventv' || dense
+const initialWindow = dense ? { width: 770, height: 1300 } : { width: 1200, height: 800 }
+const denseDelays = [40, 50, 70, 90, 110, 130, 60, 80, 100, 120, 140, 150]
+const imageAnimationStatsSchema = z.object({
+  fullDraws: z.number().int().nonnegative(),
+  animationOnlyPresents: z.number().int().nonnegative(),
+  slotUploads: z.number().int().nonnegative(),
+  liveSlots: z.number().int().nonnegative(),
+  fallbacks: z.number().int().nonnegative(),
+})
+type ImageAnimationStats = z.infer<typeof imageAnimationStatsSchema>
+const animationCounterKeys: Array<keyof ImageAnimationStats> = [
+  'fullDraws',
+  'animationOnlyPresents',
+  'slotUploads',
+  'liveSlots',
+  'fallbacks',
+]
 
 const backend = getDesktopBackend()
 const renderers = new Map<string, GpuixRenderer>()
-const channels: WatchedChannel[] = Array.from({ length: 10 }, (_, index) => ({
+const channels: WatchedChannel[] = Array.from({ length: dense ? 23 : 10 }, (_, index) => ({
   id: `emote-${index}`,
   platform: 'kick',
   channelSlug: `emote-${index}`,
@@ -96,7 +124,17 @@ const layout: WatchedChannelsLayout = {
     content: { type: 'watched', channelId: visibleChannel.id },
   },
 }
-app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact' })
+app.settingsStore.set({
+  ...DEFAULT_SETTINGS,
+  chatTheme: 'compact',
+  ...(dense
+    ? {
+        showTimestamp: true,
+        showBadges: true,
+        showAvatars: true,
+      }
+    : {}),
+})
 app.accountsStore.set([])
 app.watchedChannelsStore.set(channels)
 app.watchedStatusesStore.set(
@@ -129,6 +167,8 @@ interface FixtureVariant {
 interface AutomationNode {
   id: number
   type: string
+  testId?: string
+  text?: string
   bounds?: { x: number; y: number; width: number; height: number }
   children: AutomationNode[]
 }
@@ -136,6 +176,8 @@ const automationSchema: z.ZodType<AutomationNode> = z.lazy(() =>
   z.object({
     id: z.number(),
     type: z.string(),
+    testId: z.string().optional(),
+    text: z.string().optional(),
     bounds: z
       .object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
       .optional(),
@@ -152,8 +194,12 @@ const animationMetadataSchema = z.object({
 })
 const cache = join(dirname(getDbPath()), 'image-cache')
 await mkdir(cache, { recursive: true })
-const fixtureCount =
-  config.case === 'churn' ? Math.ceil(config.durationSeconds * config.rate) + 8 : 8
+const fixtureCount = dense
+  ? denseDelays.length
+  : config.case === 'churn'
+    ? Math.ceil(config.durationSeconds * config.rate) + 8
+    : 8
+const initialFixtureCount = dense ? denseDelays.length : 8
 const fixtures: Fixture[] = []
 const frameWidth = 96
 const frameHeight = 96
@@ -197,17 +243,21 @@ async function animation(
   assert(metadata.delay?.every((delay) => delay === delayMs))
   return bytes
 }
-if (config.source === 'seventv') {
+if (usesSevenTvSources) {
   const encodedVariants = new Map<string, Buffer>()
   for (const variant of [1, 2, 3, 4]) {
-    for (const delayMs of new Set([config.delayMs, 20]))
+    for (const delayMs of new Set(dense ? denseDelays : [config.delayMs, 20]))
       encodedVariants.set(
         `${variant}:${delayMs}`,
         await animation(delayMs, variant * 32, variant * 32),
       )
   }
   for (let index = 0; index < fixtureCount; index++) {
-    const delayMs = index % 2 === 1 ? 20 : config.delayMs
+    const delayMs = dense
+      ? (denseDelays[index % denseDelays.length] ?? config.delayMs)
+      : index % 2 === 1
+        ? 20
+        : config.delayMs
     const variants: FixtureVariant[] = []
     for (const variant of [1, 2, 3, 4]) {
       const url = `https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/${variant}x.webp?qa-fixture=${index}`
@@ -257,24 +307,81 @@ if (config.source === 'seventv') {
     })
   }
 }
+const denseAvatarUrls: string[] = []
+const denseBadgeUrls: string[] = []
+if (dense) {
+  for (let index = 0; index < 16; index++) {
+    const url = `https://emote-qa.invalid/avatar/dense-${index}.png`
+    const path = join(cache, `${createHash('sha256').update(url).digest('hex').slice(0, 32)}.png`)
+    await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: {
+          r: ((index * 37) % 210) + 30,
+          g: ((index * 53) % 210) + 30,
+          b: 170,
+          alpha: 1,
+        },
+      },
+    })
+      .png()
+      .toFile(path)
+    denseAvatarUrls.push(url)
+  }
+  for (let index = 0; index < 3; index++) {
+    const url = `https://emote-qa.invalid/badge/dense-${index}.png`
+    const path = join(cache, `${createHash('sha256').update(url).digest('hex').slice(0, 32)}.png`)
+    await sharp({
+      create: {
+        width: 32,
+        height: 32,
+        channels: 4,
+        background: { r: 100 + index * 60, g: 210 - index * 45, b: 80 + index * 55, alpha: 1 },
+      },
+    })
+      .png()
+      .toFile(path)
+    denseBadgeUrls.push(url)
+  }
+}
 const firstFixture = fixtures[0]
 assert(firstFixture)
 let sequence = 0
 function inject(channel: WatchedChannel, fixture: Fixture): void {
   const id = sequence++
+  const secondary = fixtures[(id + 5) % initialFixtureCount] ?? fixture
+  const denseText = `EmoteQA dense_${id} EmoteQB EmoteQA — This message includes several words and punctuation to wrap naturally in a busy chat pane. Продолжаем обсуждать стрим, интерфейс и анимированные смайлы! ${id % 7 === 0 ? 'One more sentence makes this particular row taller than its neighbors.' : ''}`
   const message: NormalizedChatMessage = {
     id: `emote-message-${id}`,
     platform: 'kick',
     channelId: channel.channelSlug,
     type: 'message',
     timestamp: new Date(),
-    text: `EmoteQA ${id}: repeated image EmoteQA`,
+    text: dense ? denseText : `EmoteQA ${id}: repeated image EmoteQA`,
     author: {
-      id: 'viewer',
-      username: 'viewer',
-      displayName: 'Viewer',
+      id: dense ? `viewer-${id % 16}` : 'viewer',
+      username: dense ? `viewer${id % 16}` : 'viewer',
+      displayName: dense ? `Viewer ${id % 16} streaming enthusiast` : 'Viewer',
       color: '#c084fc',
-      badges: [],
+      ...(dense ? { avatarUrl: denseAvatarUrls[id % denseAvatarUrls.length] } : {}),
+      badges: dense
+        ? [
+            {
+              id: 'subscriber',
+              type: 'subscriber',
+              text: 'Subscriber',
+              imageUrl: denseBadgeUrls[id % denseBadgeUrls.length],
+            },
+            {
+              id: 'moderator',
+              type: 'moderator',
+              text: 'Moderator',
+              imageUrl: denseBadgeUrls[(id + 1) % denseBadgeUrls.length],
+            },
+          ]
+        : [],
     },
     emotes: [
       {
@@ -285,15 +392,53 @@ function inject(channel: WatchedChannel, fixture: Fixture): void {
         source: 'seventv',
         animated: true,
         aspectRatio: 1,
-        positions: [
-          { start: 0, end: 6 },
-          {
-            start: `EmoteQA ${id}: repeated image `.length,
-            end: `EmoteQA ${id}: repeated image `.length + 6,
-          },
-        ],
+        positions: dense
+          ? [
+              { start: 0, end: 6 },
+              {
+                start: denseText.lastIndexOf('EmoteQA'),
+                end: denseText.lastIndexOf('EmoteQA') + 6,
+              },
+            ]
+          : [
+              { start: 0, end: 6 },
+              {
+                start: `EmoteQA ${id}: repeated image `.length,
+                end: `EmoteQA ${id}: repeated image `.length + 6,
+              },
+            ],
       },
+      ...(dense
+        ? [
+            {
+              id: secondary.url,
+              name: 'EmoteQB',
+              imageUrl: secondary.url,
+              provider: 'seventv',
+              source: 'seventv',
+              animated: true,
+              aspectRatio: 1,
+              positions: [
+                { start: denseText.indexOf('EmoteQB'), end: denseText.indexOf('EmoteQB') + 6 },
+              ],
+            } satisfies NormalizedChatMessage['emotes'][number],
+          ]
+        : []),
     ],
+    ...(dense && id % 3 === 0
+      ? {
+          reply: {
+            parentMessageId: `emote-message-${Math.max(0, id - 2)}`,
+            parentMessageText:
+              'A previous viewer asked about the new animation and native chat renderer.',
+            parentAuthor: {
+              id: `viewer-${(id + 2) % 16}`,
+              username: `viewer${(id + 2) % 16}`,
+              displayName: 'Previous Viewer',
+            },
+          },
+        }
+      : {}),
   }
   backend.events.emit('watched_channel_message', { channelId: channel.id, message })
 }
@@ -379,7 +524,7 @@ function Content({ windowId, layoutId }: { windowId: string; layoutId: string })
   React.useEffect(() => {
     assert(renderer instanceof NativeRenderer)
     renderers.set(windowId, renderer)
-    const stopSources = config.source === 'seventv' ? recordNativeSources(renderer) : undefined
+    const stopSources = usesSevenTvSources ? recordNativeSources(renderer) : undefined
     return () => {
       stopSources?.()
       renderers.delete(windowId)
@@ -412,18 +557,139 @@ const manager = new DesktopWindowManager(
   () => {},
 )
 const stopMessages = app.wireBackendToStores(backend)
+let focusSink: GpuixRenderer | undefined
+async function getFocusSink(): Promise<GpuixRenderer> {
+  if (focusSink) return focusSink
+  const renderer = new NativeRenderer()
+  initializeManagedRenderer(renderer, {
+    title: 'Emote resource focus sink',
+    appName: 'TwirChat',
+    appId: process.env.TWIRCHAT_QA_APP_ID,
+    width: 320,
+    height: 240,
+    x: 900,
+    y: 20,
+    focus: false,
+  })
+  renderer.applyBatch(
+    JSON.stringify([
+      ['createElement', 1, 'div'],
+      ['setStyle', 1, { width: '100%', height: '100%', backgroundColor: '#22222a' }],
+      ['createElement', 2, 'text'],
+      ['setText', 2, 'Private focus sink'],
+      ['appendChild', 1, 2],
+      ['setRoot', 1],
+    ]),
+  )
+  focusSink = renderer
+  await until(() => nativeWindow(renderer).isWindowOpen(), 'private focus sink opened')
+  await until(
+    () => renderer.getPaintedText().includes('Private focus sink'),
+    'private focus sink first mapped paint',
+  )
+  return renderer
+}
 async function activateMain(): Promise<void> {
   if (process.env.TWIRCHAT_QA_COMPOSITOR === 'xvfb') await focusNativeQaWindow('TwirChat')
+  else if (process.env.TWIRCHAT_QA_WESTON_CONTROLS) await focusPrivateWestonWindow('TwirChat')
   else current().activateWindow()
   await until(() => nativeWindow(current()).isWindowActive(), 'active animation window')
 }
+async function deactivateMain(): Promise<void> {
+  const sink = await getFocusSink()
+  if (process.env.TWIRCHAT_QA_COMPOSITOR === 'xvfb')
+    await focusNativeQaWindow('Emote resource focus sink')
+  else if (process.env.TWIRCHAT_QA_WESTON_CONTROLS)
+    await focusPrivateWestonWindow('Emote resource focus sink')
+  else sink.activateWindow()
+  await until(() => !nativeWindow(current()).isWindowActive(), 'visible main window is unfocused')
+  assert.notEqual(
+    nativeWindow(current()).getWindowVisibility(),
+    'hidden',
+    'Unfocused measurement must retain the visible chat window.',
+  )
+}
+async function focusPrivateWestonWindow(title: string): Promise<void> {
+  assertGuiQaEnvironment()
+  assert.equal(process.env.TWIRCHAT_QA_COMPOSITOR, 'weston')
+  assert(
+    process.env.TWIRCHAT_QA_WESTON_CONTROLS,
+    'Use --weston-controls for deterministic Wayland focus.',
+  )
+  const runtime = z.string().min(1).parse(process.env.TWIRCHAT_QA_RUNTIME)
+  const command = join(runtime, 'weston-command')
+  const reply = join(runtime, 'weston-reply')
+  await rm(reply, { force: true })
+  await Bun.write(`${command}.pending`, `focus\n${title}\n`)
+  await rename(`${command}.pending`, command)
+  const deadline = performance.now() + 5000
+  while (!(await Bun.file(reply).exists())) {
+    assert(performance.now() < deadline, 'Private Weston focus command timed out.')
+    await Bun.sleep(20)
+  }
+  assert.equal(
+    (await Bun.file(reply).text()).trim(),
+    '1',
+    'The private compositor must find the requested mapped surface.',
+  )
+}
+function nativeRenderCounters(renderer: GpuixRenderer): ImageAnimationStats | null {
+  const getter: unknown = Reflect.get(renderer, 'getImageAnimationStats')
+  if (typeof getter !== 'function') return null
+  const raw: unknown = Reflect.apply(getter, renderer, [])
+  const value: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw
+  return value === null ? null : imageAnimationStatsSchema.parse(value)
+}
+function counterDeltas(before: ImageAnimationStats, after: ImageAnimationStats) {
+  return Object.fromEntries(animationCounterKeys.map((key) => [key, after[key] - before[key]]))
+}
+async function frameSnapshot(renderer: GpuixRenderer) {
+  let stats = nativeRenderCounters(renderer)
+  if (typeof Reflect.get(renderer, 'getImageAnimationStats') === 'function') {
+    const deadline = performance.now() + 2000
+    while (stats === null) {
+      assert(performance.now() < deadline, 'Native animation counters must eventually be readable.')
+      await Bun.sleep(10)
+      stats = nativeRenderCounters(renderer)
+    }
+  }
+  const fullDraws = stats?.fullDraws ?? renderer.getDebugFrameOverlayStats().frames
+  const animationOnlyPresents = stats?.animationOnlyPresents ?? 0
+  return {
+    statsAvailable: stats !== null,
+    fullDraws,
+    animationOnlyPresents,
+    slotUploads: stats?.slotUploads ?? 0,
+    liveSlots: stats?.liveSlots ?? 0,
+    totalPresents: fullDraws + animationOnlyPresents,
+  }
+}
+type FrameSnapshot = Awaited<ReturnType<typeof frameSnapshot>>
 async function measure() {
   const renderer = current()
+  const measuredBounds = nativeWindow(renderer).getWindowBounds()
+  assert.equal(
+    measuredBounds?.width,
+    initialWindow.width,
+    'The compositor must preserve the measured client width after warmup.',
+  )
+  assert.equal(
+    measuredBounds?.height,
+    initialWindow.height,
+    'The compositor must preserve the measured client height after warmup.',
+  )
+  assert.equal(
+    nativeWindow(renderer).isWindowActive(),
+    config.activation === 'focused',
+    'Resource case must start in its declared activation state.',
+  )
   const initialProcessed = processed()
   const initialMemory = process.memoryUsage()
   const initialGpu = readDrmSnapshot()
   const initialFrames = renderer.getDebugFrameOverlayStats().frames
   const initialStats = imageStats(renderer)
+  const countersBefore = nativeRenderCounters(renderer)
+  const initiallyActive = nativeWindow(renderer).isWindowActive()
   const samples: ResourceSample[] = []
   const lags: number[] = []
   let lastGpu = initialGpu
@@ -442,15 +708,15 @@ async function measure() {
   }, 50)
   const sample = () => {
     const memory = process.memoryUsage()
-    const nextGpu = readDrmSnapshot()
+    const nextGpu = config.sampleGpuDuringMeasurement ? readDrmSnapshot() : undefined
     samples.push({
       elapsedMs: performance.now() - start,
       rssBytes: memory.rss,
       heapBytes: memory.heapUsed,
       processed: processed() - initialProcessed,
-      gpu: gpuMeasurements(lastGpu, nextGpu),
+      gpu: nextGpu ? gpuMeasurements(lastGpu, nextGpu) : [],
     })
-    lastGpu = nextGpu
+    if (nextGpu) lastGpu = nextGpu
   }
   const sampleTimer = setInterval(sample, 250)
   const generator =
@@ -479,8 +745,46 @@ async function measure() {
   sample()
   const frames = renderer.getDebugFrameOverlayStats().frames - initialFrames
   const stats = imageStats(renderer)
+  const countersAfter = nativeRenderCounters(renderer)
+  const purePresents =
+    countersBefore && countersAfter
+      ? (countersAfter.animationOnlyPresents ?? 0) - (countersBefore.animationOnlyPresents ?? 0)
+      : typeof Reflect.get(renderer, 'getImageAnimationStats') === 'function'
+        ? null
+        : 0
   await Bun.sleep(500)
   const count = processed() - initialProcessed
+  assert.equal(
+    nativeWindow(renderer).isWindowActive(),
+    initiallyActive,
+    'Window activation must not change during a resource sample.',
+  )
+  const gpu = gpuMeasurements(initialGpu, readDrmSnapshot())
+  if (dense && !gpu.some((device) => (device.engines.gfx ?? 0) > 0))
+    await Bun.write(
+      join(session, 'emote-resources-invalid-gpu.json'),
+      JSON.stringify(
+        {
+          config,
+          wallMs,
+          cpuPercent: ((cpu.user + cpu.system) / (wallMs * 1000)) * 100,
+          nativeFrames: frames,
+          imageStats: stats,
+          gpu,
+          samples,
+          nativeWindow: nativeWindow(renderer).getWindowBounds(),
+          initiallyActive,
+          finallyActive: nativeWindow(renderer).isWindowActive(),
+        },
+        null,
+        2,
+      ),
+    )
+  if (dense)
+    assert(
+      gpu.some((device) => (device.engines.gfx ?? 0) > 0),
+      'Dense resource measurements require active hardware GPU counters; a software Vulkan run is not a valid comparison.',
+    )
   assert.equal(
     retained(),
     channels.length * 200,
@@ -494,10 +798,23 @@ async function measure() {
     )
   }
   return {
+    label: config.sampleGpuDuringMeasurement
+      ? 'primary resource measurement'
+      : 'observer-overhead experiment',
     wallMs,
     cpuPercent: ((cpu.user + cpu.system) / (wallMs * 1000)) * 100,
     nativeFrames: frames,
     nativeFramesPerSecond: frames / (wallMs / 1000),
+    animationOnlyPresents: purePresents,
+    totalPresents: purePresents === null ? null : frames + purePresents,
+    totalPresentsPerSecond:
+      purePresents === null ? null : (frames + purePresents) / (wallMs / 1000),
+    initiallyActive,
+    finallyActive: nativeWindow(renderer).isWindowActive(),
+    nativeRenderCountersBefore: countersBefore,
+    nativeRenderCountersAfter: countersAfter,
+    nativeRenderCounterDeltas:
+      countersBefore && countersAfter ? counterDeltas(countersBefore, countersAfter) : null,
     initialRssBytes: initialMemory.rss,
     rssMedianBytes: percentile(
       samples.map((entry) => entry.rssBytes),
@@ -515,7 +832,7 @@ async function measure() {
     retainedMessages: retained(),
     imageStatsBefore: initialStats,
     imageStatsAfter: stats,
-    gpu: gpuMeasurements(initialGpu, readDrmSnapshot()),
+    gpu,
     samples,
   }
 }
@@ -525,9 +842,24 @@ async function crop(): Promise<Buffer> {
     Buffer.from(await Bun.file(join(session, 'framebuffer', 'Xvfb_screen0')).arrayBuffer()),
   )
   return sharp(frame.pixels, { raw: { width: frame.width, height: frame.height, channels: 4 } })
-    .extract({ left: geometry.x + 20, top: geometry.y + 100, width: 280, height: 100 })
+    .extract(motionCrop(geometry))
     .raw()
     .toBuffer()
+}
+let denseMotionBounds: AutomationNode['bounds']
+function prepareMotionCrop(): void {
+  if (dense) denseMotionBounds = denseImageSlots()[0]?.bounds
+}
+function motionCrop(geometry: { x: number; y: number }) {
+  if (!dense) return { left: geometry.x + 20, top: geometry.y + 100, width: 280, height: 100 }
+  const bounds = denseMotionBounds
+  assert(bounds, 'A fully visible painted animated image is required for motion checks.')
+  return {
+    left: Math.ceil(geometry.x + bounds.x),
+    top: Math.ceil(geometry.y + bounds.y),
+    width: Math.floor(bounds.width) - 1,
+    height: Math.floor(bounds.height) - 1,
+  }
 }
 function changedPixels(a: Buffer, b: Buffer): number {
   assert.equal(a.length, b.length)
@@ -550,13 +882,389 @@ async function verifyMotion(label: string): Promise<number> {
     difference = Math.max(difference, changedPixels(before, await crop()))
     if (difference > 100) return difference
   }
+  await captureGuiQaDisplay(`motion-failure-${label.replaceAll(/[^a-z0-9]/gi, '-')}`)
+  await Bun.write(
+    join(session, 'motion-failure.json'),
+    JSON.stringify(
+      {
+        label,
+        difference,
+        slots: dense ? denseImageSlots() : [],
+        counters: await frameSnapshot(current()),
+      },
+      null,
+      2,
+    ),
+  )
   throw new Error(`Animated emotes did not change pixels: ${label} (${difference}).`)
 }
 function allNodes(node: AutomationNode): AutomationNode[] {
   return [node, ...node.children.flatMap(allNodes)]
 }
+function denseImageSlots() {
+  const paths = new Set(
+    fixtures.flatMap((fixture) => fixture.variants?.map((variant) => variant.path) ?? []),
+  )
+  const sources = nativeSources.get(current())
+  assert(sources)
+  return allNodes(automationSchema.parse(JSON.parse(current().getAutomationTree()))).flatMap(
+    (node) => {
+      const source = sources.get(node.id)
+      const bounds = node.bounds
+      return node.type === 'img' &&
+        source &&
+        paths.has(source) &&
+        bounds &&
+        bounds.y > 80 &&
+        bounds.y + bounds.height < 1200
+        ? [{ source, bounds, id: node.id }]
+        : []
+    },
+  )
+}
+async function stableFramebuffer() {
+  const path = join(session, 'framebuffer', 'Xvfb_screen0')
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const first = Buffer.from(await Bun.file(path).arrayBuffer())
+    const second = Buffer.from(await Bun.file(path).arrayBuffer())
+    if (first.equals(second)) return decodeQaFramebuffer(second)
+  }
+  throw new Error('Could not capture a stable private framebuffer for shared-source pixel checks.')
+}
+async function verifyDenseSync() {
+  const groups = new Map<string, ReturnType<typeof denseImageSlots>>()
+  for (const slot of denseImageSlots()) {
+    const group = groups.get(slot.source) ?? []
+    group.push(slot)
+    groups.set(slot.source, group)
+  }
+  assert(groups.size >= 12, 'Dense chat must paint all twelve distinct animated sources.')
+  const geometry = getNativeQaWindowGeometry('TwirChat')
+  let worstColorDifference = 0
+  for (let sample = 0; sample < 6; sample++) {
+    const frame = await stableFramebuffer()
+    const color = (bounds: { x: number; y: number; width: number; height: number }) => {
+      const x = Math.round(geometry.x + bounds.x + bounds.width / 2)
+      const y = Math.round(geometry.y + bounds.y + bounds.height / 2)
+      const rgb = [0, 0, 0]
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const offset = ((y + dy) * frame.width + x + dx) * 4
+          for (let channel = 0; channel < 3; channel++)
+            rgb[channel] = (rgb[channel] ?? 0) + (frame.pixels[offset + channel] ?? 0) / 25
+        }
+      return rgb
+    }
+    for (const group of groups.values()) {
+      const first = group[0]
+      assert(first)
+      const reference = color(first.bounds)
+      for (const slot of group.slice(1)) {
+        const actual = color(slot.bounds)
+        worstColorDifference = Math.max(
+          worstColorDifference,
+          reference.reduce(
+            (total, value, channel) => total + Math.abs(value - (actual[channel] ?? 0)),
+            0,
+          ) / 3,
+        )
+      }
+    }
+    await Bun.sleep(37)
+  }
+  if (worstColorDifference > 30) {
+    await captureGuiQaDisplay('dense-sync-failure')
+    await Bun.write(
+      join(session, 'dense-sync-failure.json'),
+      JSON.stringify(
+        { worstColorDifference, groups: [...groups], counters: await frameSnapshot(current()) },
+        null,
+        2,
+      ),
+    )
+  }
+  assert(
+    worstColorDifference <= 30,
+    'Copies of a shared emote source must display synchronized frames.',
+  )
+  return {
+    distinctVisibleAnimatedSources: groups.size,
+    slots: [...groups.values()].reduce((total, group) => total + group.length, 0),
+    samples: 6,
+    worstColorDifference,
+  }
+}
+async function denseFunctional() {
+  await getFocusSink()
+  await activateMain()
+  const sourceSelection = await verifySevenTvSources()
+  await Bun.sleep(250)
+  prepareMotionCrop()
+  await Bun.sleep(150)
+  const foregroundStart = await frameSnapshot(current())
+  const foregroundAt = performance.now()
+  const foregroundPixels = await verifyMotion('dense foreground')
+  const foregroundEnd = await frameSnapshot(current())
+  const foregroundRendering = animationRenderingEvidence(
+    foregroundStart,
+    foregroundEnd,
+    performance.now() - foregroundAt,
+  )
+  const foregroundSync = await verifyDenseSync()
+  await deactivateMain()
+  await Bun.sleep(350)
+  prepareMotionCrop()
+  await Bun.sleep(150)
+  const backgroundStart = await frameSnapshot(current())
+  const backgroundAt = performance.now()
+  const backgroundPixels = await verifyMotion('dense unfocused background')
+  const backgroundEnd = await frameSnapshot(current())
+  const backgroundRendering = animationRenderingEvidence(
+    backgroundStart,
+    backgroundEnd,
+    performance.now() - backgroundAt,
+  )
+  const backgroundSync = await verifyDenseSync()
+  await activateMain()
+  const interactions: Array<{
+    width: number
+    height: number
+    draftLatencyMs: number
+    scrollChanged: boolean
+    hoverActionVisible: boolean
+    motionPixels: number
+  }> = []
+  for (const size of [{ width: 420, height: 300 }, initialWindow]) {
+    await nativeWindow(current()).setWindowBounds(size)
+    await until(
+      () =>
+        nativeWindow(current()).getWindowBounds()?.width === size.width &&
+        nativeWindow(current()).getWindowBounds()?.height === size.height,
+      'dense window resize observed',
+    )
+    await Bun.sleep(150)
+    const nodes = () => allNodes(automationSchema.parse(JSON.parse(current().getAutomationTree())))
+    const input = nodes().find((node) => node.testId === 'chat-input')
+    assert(input)
+    current().focusElement(input.id)
+    const inputBefore = await frameSnapshot(current())
+    const start = performance.now()
+    current().simulateKeystrokes('d e n s e space q a')
+    await until(
+      () => [...composerStore.get().values()].some((composer) => composer.text === 'dense qa'),
+      'native dense composer input',
+    )
+    const draftLatencyMs = performance.now() - start
+    const inputAfter = await frameSnapshot(current())
+    assert(
+      inputAfter.fullDraws > inputBefore.fullDraws,
+      'Native input must resume a complete draw.',
+    )
+    current().simulateKeystrokes('ctrl-a backspace')
+    await until(
+      () => [...composerStore.get().values()].every((composer) => composer.text !== 'dense qa'),
+      'native dense composer clear',
+    )
+    const list = nodes().find((node) => node.type === 'virtual-list')
+    const viewport = nodes().find((node) => node.testId === 'chat-messages')?.bounds
+    assert(list && viewport)
+    current().scrollToItem(list.id, 100, 0)
+    await Bun.sleep(150)
+    const beforeScroll = JSON.stringify(current().getListScrollTop(list.id))
+    current().simulateScrollWheel(
+      viewport.x + viewport.width / 2,
+      viewport.y + viewport.height / 2,
+      0,
+      -180,
+    )
+    await until(
+      () => JSON.stringify(current().getListScrollTop(list.id)) !== beforeScroll,
+      'native dense scroll input',
+    )
+    const timestamp = nodes().find(
+      (node) =>
+        node.testId?.startsWith('chat-timestamp-') &&
+        node.bounds &&
+        node.bounds.y > viewport.y + 5 &&
+        node.bounds.y + node.bounds.height < viewport.y + viewport.height - 10,
+    )
+    assert(timestamp?.bounds)
+    current().simulateMouseMove(
+      viewport.x + viewport.width - 20,
+      timestamp.bounds.y + timestamp.bounds.height / 2,
+    )
+    await until(
+      () =>
+        nodes().some((node) => node.testId === 'msg-reply' && node.bounds && node.bounds.width > 0),
+      'dense row hover actions',
+    )
+    current().simulateMouseMove(0, 0)
+    current().scrollToItem(list.id, 199, 0)
+    await Bun.sleep(150)
+    prepareMotionCrop()
+    interactions.push({
+      ...size,
+      draftLatencyMs,
+      scrollChanged: true,
+      hoverActionVisible: true,
+      motionPixels: await verifyMotion(`dense after input ${size.width}`),
+    })
+    await captureGuiQaDisplay(`dense-emotes-${size.width}`)
+  }
+  return {
+    sourceSelection,
+    foregroundPixels,
+    foregroundRendering,
+    backgroundPixels,
+    backgroundRendering,
+    foregroundSync,
+    backgroundSync,
+    interactions,
+    visibility: await verifyDenseVisibility(),
+  }
+}
+async function verifyDenseVisibility() {
+  const original = app.watchedMessagesStore.get().get(visibleChannel.id)
+  assert(original && original.length === 200)
+  const history = original.map((message, index) =>
+    index < 50
+      ? message
+      : {
+          ...message,
+          text: `Static retained history ${index}: visible ordinary chat text.`,
+          emotes: [],
+          reply: undefined,
+        },
+  )
+  app.watchedMessagesStore.set(
+    new Map(app.watchedMessagesStore.get()).set(visibleChannel.id, history),
+  )
+  await Bun.sleep(250)
+  const pauseButton = allNodes(
+    automationSchema.parse(JSON.parse(current().getAutomationTree())),
+  ).find((node) => node.testId === 'chat-pause-button')
+  assert(pauseButton?.bounds)
+  current().simulateClick(
+    pauseButton.bounds.x + pauseButton.bounds.width / 2,
+    pauseButton.bounds.y + pauseButton.bounds.height / 2,
+  )
+  current().simulateMouseMove(0, 0)
+  await Bun.sleep(150)
+  const list = allNodes(automationSchema.parse(JSON.parse(current().getAutomationTree()))).find(
+    (node) => node.type === 'virtual-list',
+  )
+  assert(list)
+  const staticEvidence = async (label: string) => {
+    await until(() => denseImageSlots().length === 0, `${label}: no visible animated image`)
+    await Bun.sleep(400)
+    const before = await frameSnapshot(current())
+    if (before.statsAvailable)
+      assert.equal(before.liveSlots, 0, `${label}: no live animation slots`)
+    await Bun.sleep(650)
+    const after = await frameSnapshot(current())
+    if (after.statsAvailable) {
+      assert.equal(after.liveSlots, 0, `${label}: animation slots remain released`)
+      assert.equal(
+        after.animationOnlyPresents,
+        before.animationOnlyPresents,
+        `${label}: presentations stop`,
+      )
+      assert.equal(after.slotUploads, before.slotUploads, `${label}: frame uploads stop`)
+    }
+    return { before, after }
+  }
+  current().scrollToItem(list.id, 199, 0)
+  const firstStatic = await staticEvidence('scrolled past animated history')
+  current().scrollToItem(list.id, 15, 0)
+  const viewport = allNodes(automationSchema.parse(JSON.parse(current().getAutomationTree()))).find(
+    (node) => node.testId === 'chat-messages',
+  )?.bounds
+  assert(viewport)
+  current().simulateScrollWheel(
+    viewport.x + viewport.width / 2,
+    viewport.y + viewport.height / 2,
+    0,
+    -40,
+  )
+  await Bun.sleep(600)
+  await captureGuiQaDisplay('visibility-scroll-in')
+  await Bun.write(
+    join(session, 'visibility-scroll-in.json'),
+    JSON.stringify(
+      {
+        tree: JSON.parse(current().getAutomationTree()),
+        scrollTop: current().getListScrollTop(list.id),
+        painted: current().getPaintedText(),
+        slots: denseImageSlots(),
+        nativeSources: [...(nativeSources.get(current()) ?? new Map())],
+      },
+      null,
+      2,
+    ),
+  )
+  await until(() => denseImageSlots().length > 0, 'animated retained history becomes visible')
+  await Bun.sleep(250)
+  prepareMotionCrop()
+  await Bun.sleep(150)
+  const resumedBefore = await frameSnapshot(current())
+  const resumedPixels = await verifyMotion('retained animation scrolled into view')
+  const resumedAfter = await frameSnapshot(current())
+  if (resumedAfter.statsAvailable) {
+    assert(resumedAfter.liveSlots > 0)
+    assert(resumedAfter.animationOnlyPresents > resumedBefore.animationOnlyPresents)
+  }
+  current().scrollToItem(list.id, 199, 0)
+  const secondStatic = await staticEvidence('scrolled away again')
+  assert.equal(app.watchedMessagesStore.get().get(visibleChannel.id)?.length, 200)
+  current().simulateClick(
+    pauseButton.bounds.x + pauseButton.bounds.width / 2,
+    pauseButton.bounds.y + pauseButton.bounds.height / 2,
+  )
+  current().simulateMouseMove(0, 0)
+  await Bun.sleep(150)
+  return {
+    retained: 200,
+    animatedHistoryRows: 50,
+    firstStatic,
+    resumedBefore,
+    resumedAfter,
+    resumedPixels,
+    secondStatic,
+  }
+}
+function animationRenderingEvidence(
+  before: FrameSnapshot,
+  after: FrameSnapshot,
+  durationMs: number,
+) {
+  const result = {
+    durationMs,
+    countersAvailable: before.statsAvailable && after.statsAvailable,
+    fullDraws: after.fullDraws - before.fullDraws,
+    animationOnlyPresents: after.animationOnlyPresents - before.animationOnlyPresents,
+    slotUploads: after.slotUploads - before.slotUploads,
+    expectedUniqueFrameUploadsUpperBound:
+      Math.ceil(
+        (denseDelays.reduce((total, delay) => total + 1000 / delay, 0) * durationMs) / 1000,
+      ) +
+      denseDelays.length * 2,
+  }
+  if (result.countersAvailable) {
+    assert.equal(
+      result.fullDraws,
+      0,
+      'Idle animation must present new pixels without a full native draw.',
+    )
+    assert(result.animationOnlyPresents > 0, 'Idle animation-only presentations must advance.')
+    assert(
+      result.slotUploads <= result.expectedUniqueFrameUploadsUpperBound,
+      'Copies of the same animated source must share frame uploads.',
+    )
+  }
+  return result
+}
 async function verifySevenTvSources() {
-  if (config.source !== 'seventv') return null
+  if (!usesSevenTvSources) return null
   const renderer = current()
   const scale = readWindowScale(renderer)
   const logicalHeight = Math.round(DEFAULT_SETTINGS.fontSize * 2)
@@ -631,11 +1339,16 @@ async function verifySevenTvSources() {
       }),
   )
   assert(paintedSources.size > 0, 'Actual painted native images must use a selected local source.')
-  for (const path of paintedSources)
-    assert(
-      expectedPaths.has(path),
-      'Inline native images must not load the original oversized preview.',
-    )
+  const allVariantPaths = new Set(
+    fixtures.flatMap((fixture) => fixture.variants?.map((variant) => variant.path) ?? []),
+  )
+  for (const path of paintedSources) {
+    if (allVariantPaths.has(path))
+      assert(
+        expectedPaths.has(path),
+        'Inline native images must not load the original oversized preview.',
+      )
+  }
   for (const selected of selection) {
     const fixture = fixtures.find((entry) => entry.url === selected.originalUrl)
     const variant = fixture?.variants?.find((entry) => entry.url === selected.selectedUrl)
@@ -669,6 +1382,10 @@ async function functional() {
     focusedFrames: number
     blurredFrames: number
     sourceSelection: Awaited<ReturnType<typeof verifySevenTvSources>>
+    focusedFullDraws: number
+    focusedAnimationOnlyPresents: number
+    blurredFullDraws: number
+    blurredAnimationOnlyPresents: number
   }> = []
   const secondId = await manager.openChat(tabId)
   await until(() => renderers.has(secondId), 'second image window mounted')
@@ -686,17 +1403,19 @@ async function functional() {
     await Bun.sleep(200)
     const sourceSelection = await verifySevenTvSources()
     const motionPixels = await verifyMotion(`${width}px focused`)
-    const startFrames = current().getDebugFrameOverlayStats().frames
+    const startFrames = await frameSnapshot(current())
     await Bun.sleep(500)
-    const focusedFrames = current().getDebugFrameOverlayStats().frames - startFrames
+    const focusedEnd = await frameSnapshot(current())
+    const focusedFrames = focusedEnd.totalPresents - startFrames.totalPresents
     await focusNativeQaWindow('TwirChat chat')
     await until(() => !nativeWindow(current()).isWindowActive(), 'main window deactivated')
     await Bun.sleep(200)
     const before = await crop()
-    const blurredStart = current().getDebugFrameOverlayStats().frames
+    const blurredStart = await frameSnapshot(current())
     await Bun.sleep(600)
     const frozenPixels = changedPixels(before, await crop())
-    const blurredFrames = current().getDebugFrameOverlayStats().frames - blurredStart
+    const blurredEnd = await frameSnapshot(current())
+    const blurredFrames = blurredEnd.totalPresents - blurredStart.totalPresents
     if (config.backgroundAnimation) {
       assert(frozenPixels > 100, 'Unfocused animations must continue changing pixels.')
       assert(blurredFrames > 0, 'Unfocused animations must continue requesting their due frames.')
@@ -714,6 +1433,12 @@ async function functional() {
       focusedFrames,
       blurredFrames,
       sourceSelection,
+      focusedFullDraws: focusedEnd.fullDraws - startFrames.fullDraws,
+      focusedAnimationOnlyPresents:
+        focusedEnd.animationOnlyPresents - startFrames.animationOnlyPresents,
+      blurredFullDraws: blurredEnd.fullDraws - blurredStart.fullDraws,
+      blurredAnimationOnlyPresents:
+        blurredEnd.animationOnlyPresents - blurredStart.animationOnlyPresents,
     })
     await captureGuiQaDisplay(`emote-resources-${width}`)
   }
@@ -740,16 +1465,26 @@ let report: unknown
 try {
   await manager.start()
   await until(() => renderers.has('main'), 'native chat mounted')
-  await nativeWindow(current()).setWindowBounds({ width: 1200, height: 800 })
+  await nativeWindow(current()).setWindowBounds({
+    ...initialWindow,
+    ...(nativeWindow(current()).getWindowCapabilities().position ? { x: 20, y: 20 } : {}),
+  })
+  await until(
+    () =>
+      nativeWindow(current()).getWindowBounds()?.width === initialWindow.width &&
+      nativeWindow(current()).getWindowBounds()?.height === initialWindow.height,
+    'initial native window dimensions',
+  )
   assert.equal(
     (await backend.api.getAccounts()).length,
     0,
     'Only the isolated empty profile may be used.',
   )
   for (const channel of channels) {
-    for (let index = 0; index < 200; index++) inject(channel, fixtures[index % 8] ?? firstFixture)
+    for (let index = 0; index < 200; index++)
+      inject(channel, fixtures[index % initialFixtureCount] ?? firstFixture)
   }
-  await until(() => retained() === channels.length * 200, 'all ten retained histories filled')
+  await until(() => retained() === channels.length * 200, 'all retained channel histories filled')
   await until(
     () =>
       current()
@@ -760,7 +1495,7 @@ try {
   await until(
     () =>
       typeof imageSnapshot(
-        config.source === 'seventv'
+        usesSevenTvSources
           ? inlineEmoteImageSource(firstFixture.url, {
               height: Math.round(DEFAULT_SETTINGS.fontSize * 2),
               scale: readWindowScale(current()),
@@ -770,7 +1505,9 @@ try {
       ) === 'string',
     'local animated image ready',
   )
+  if (dense) await getFocusSink()
   await activateMain()
+  if (config.activation === 'unfocused') await deactivateMain()
   await Bun.sleep(config.warmupSeconds * 1000)
   const reactMode = verifyBenchmarkReactMode({
     requested: 'production',
@@ -778,13 +1515,20 @@ try {
     hasCaptureOwnerStack: typeof React.captureOwnerStack === 'function',
     loadedModules: Object.keys(require.cache),
   })
-  const measurement = config.case === 'functional' ? await functional() : await measure()
+  const measurement =
+    config.case === 'functional'
+      ? dense
+        ? await denseFunctional()
+        : await functional()
+      : await measure()
+  if (config.case === 'functional')
+    await Bun.write(join(session, 'functional-evidence.json'), JSON.stringify(measurement, null, 2))
   const settledStats = await waitForImageStats(
     current(),
     (stats) => stats.loading === 0,
     'all image decodes settle',
   )
-  if (settledStats && config.case === 'idle' && config.source === 'synthetic') {
+  if (settledStats && !dense && config.case === 'idle' && config.source === 'synthetic') {
     assert.equal(
       settledStats.entries,
       8,
@@ -840,6 +1584,7 @@ try {
   report = {
     ok: true,
     config,
+    configSha256: createHash('sha256').update(JSON.stringify(config)).digest('hex'),
     reactMode,
     bunVersion: Bun.version,
     compositor: process.env.TWIRCHAT_QA_COMPOSITOR,
@@ -851,8 +1596,26 @@ try {
     nativeWindow: nativeWindow(current()).getWindowBounds(),
     channels: channels.length,
     initialRetainedMessages: channels.length * 200,
-    sourceWidth: config.source === 'seventv' ? 128 : frameWidth,
-    sourceHeight: config.source === 'seventv' ? 128 : frameHeight,
+    sourceWidth: usesSevenTvSources ? 128 : frameWidth,
+    sourceHeight: usesSevenTvSources ? 128 : frameHeight,
+    effectiveSource: usesSevenTvSources ? 'seventv' : 'synthetic',
+    encodedDelaysMs: [...new Set(fixtures.map((fixture) => fixture.delayMs))],
+    focusSinkIncluded: focusSink !== undefined,
+    display: {
+      width: process.env.TWIRCHAT_QA_DISPLAY_WIDTH ?? null,
+      height: process.env.TWIRCHAT_QA_DISPLAY_HEIGHT ?? null,
+    },
+    denseContent: dense
+      ? {
+          avatars: denseAvatarUrls.length,
+          badgeImages: denseBadgeUrls.length,
+          showTimestamp: true,
+          showBadges: true,
+          showAvatars: true,
+          repliesEvery: 3,
+          wrappingText: true,
+        }
+      : null,
     framesPerImage: frameCount,
     uniqueFixtureUrls: fixtures.length,
     fixtures: fixtures.map(({ path: _path, ...fixture }) => fixture),
@@ -882,6 +1645,11 @@ try {
   throw error
 } finally {
   stopMessages()
+  const sink = focusSink
+  if (sink) {
+    nativeWindow(sink).closeWindow()
+    await until(() => !nativeWindow(sink).isWindowOpen(), 'private focus sink closed')
+  }
   await manager.quit()
   backend.dispose?.()
 }

@@ -1,0 +1,267 @@
+{
+  "sourceSelection": {
+    "scale": 1,
+    "logicalHeight": 28,
+    "physicalHeight": 28,
+    "selection": [
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=0",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=0",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 40,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=1",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=1",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 50,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=2",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=2",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 70,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=3",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=3",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 90,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=4",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=4",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 110,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=5",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=5",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 130,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=6",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=6",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 60,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=7",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=7",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 80,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=8",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=8",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 100,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=9",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=9",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 120,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=10",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=10",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 140,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      },
+      {
+        "originalUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.webp?qa-fixture=11",
+        "selectedUrl": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.webp?qa-fixture=11",
+        "expectedVariant": 1,
+        "width": 32,
+        "height": 32,
+        "pages": 32,
+        "delayMs": 150,
+        "previewWidth": 128,
+        "nativeSourceObserved": true
+      }
+    ],
+    "nativePaintedSources": [
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/f39b60a346827f6295b53a3ca78b299f.png",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/f8e11e19d1993d0d8d583bd6da7a7aee.png",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/0653beb87310d960214ae4f56b9a9fdc.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/f449e216d2ecfb7fbabb7ee8ca52196a.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/f0cd0be3606ef8b6814156604b32576e.png",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/43f31ea60785ba923af84cde62f72c31.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/741e2d04269c92305cc3d9d0465291e2.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/ef8b4b5eb037970fe5e0fea8dc5117db.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/4b3ba7018ef593e21309251e14073293.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/4fb64c9be47a06e7d09c6d36e1d2d8a7.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/b9b8dfd30459e2434ba281f203317e86.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/5e5b23a4d97f60e13e90f4ddaaa0c5ca.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/e7f999aa6e6fbd3e6926e22c6b09eba3.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/806b356a93f1756f40eef2087b5b650d.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/4c66a8c130f8504e3d5484a68d6fff74.webp",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/avatars/626fd690f7723837d4d6c44370f3053e.png",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/avatars/1c200c352462076eae61829cb3a7bfda.png",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/avatars/f157bbceed83d074c1ef59f9522d2084.png",
+      "/tmp/twirchat-dense-functional-final17/twirchat-gui-qa-WDDZop/profile/image-cache/avatars/d2fcd036792a2141cffb47f751df8323.png"
+    ]
+  },
+  "foregroundPixels": 729,
+  "foregroundRendering": {
+    "durationMs": 178.57081300000027,
+    "countersAvailable": true,
+    "fullDraws": 0,
+    "animationOnlyPresents": 9,
+    "slotUploads": 28,
+    "expectedUniqueFrameUploadsUpperBound": 51
+  },
+  "backgroundPixels": 405,
+  "backgroundRendering": {
+    "durationMs": 145.10224500000004,
+    "countersAvailable": true,
+    "fullDraws": 0,
+    "animationOnlyPresents": 3,
+    "slotUploads": 19,
+    "expectedUniqueFrameUploadsUpperBound": 46
+  },
+  "foregroundSync": {
+    "distinctVisibleAnimatedSources": 12,
+    "slots": 36,
+    "samples": 6,
+    "worstColorDifference": 0
+  },
+  "backgroundSync": {
+    "distinctVisibleAnimatedSources": 12,
+    "slots": 36,
+    "samples": 6,
+    "worstColorDifference": 0
+  },
+  "interactions": [
+    {
+      "width": 420,
+      "height": 300,
+      "draftLatencyMs": 38.05083899999954,
+      "scrollChanged": true,
+      "hoverActionVisible": true,
+      "motionPixels": 486
+    },
+    {
+      "width": 770,
+      "height": 1300,
+      "draftLatencyMs": 105.59769400000005,
+      "scrollChanged": true,
+      "hoverActionVisible": true,
+      "motionPixels": 729
+    }
+  ],
+  "visibility": {
+    "retained": 200,
+    "animatedHistoryRows": 50,
+    "firstStatic": {
+      "before": {
+        "statsAvailable": true,
+        "fullDraws": 75,
+        "animationOnlyPresents": 269,
+        "slotUploads": 983,
+        "liveSlots": 0,
+        "totalPresents": 344
+      },
+      "after": {
+        "statsAvailable": true,
+        "fullDraws": 75,
+        "animationOnlyPresents": 269,
+        "slotUploads": 983,
+        "liveSlots": 0,
+        "totalPresents": 344
+      }
+    },
+    "resumedBefore": {
+      "statsAvailable": true,
+      "fullDraws": 83,
+      "animationOnlyPresents": 315,
+      "slotUploads": 1159,
+      "liveSlots": 12,
+      "totalPresents": 398
+    },
+    "resumedAfter": {
+      "statsAvailable": true,
+      "fullDraws": 83,
+      "animationOnlyPresents": 322,
+      "slotUploads": 1178,
+      "liveSlots": 12,
+      "totalPresents": 405
+    },
+    "resumedPixels": 509,
+    "secondStatic": {
+      "before": {
+        "statsAvailable": true,
+        "fullDraws": 86,
+        "animationOnlyPresents": 323,
+        "slotUploads": 1179,
+        "liveSlots": 0,
+        "totalPresents": 409
+      },
+      "after": {
+        "statsAvailable": true,
+        "fullDraws": 86,
+        "animationOnlyPresents": 323,
+        "slotUploads": 1179,
+        "liveSlots": 0,
+        "totalPresents": 409
+      }
+    }
+  }
+}
