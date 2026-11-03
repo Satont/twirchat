@@ -127,6 +127,32 @@ dirty diff `9003df1380584b95f00b84ccee5acca844f6365785fde504e19a42e63f526fd7`, s
 [Run 1](artwork-production-1/results.json), [run 2](artwork-production-2/results.json).
 These two repetitions are not presented as a new three-run gate.
 
+## Twitch announcement presentation (#79)
+
+Twitch announcement rows now add a tinted frame, Twitch icon and `Announcement` header around
+the existing compact or modern content. The frame uses the received blue, green, orange or
+purple color independently of the sender's name color. `primary` and unknown color names fall
+back to Twitch purple because the current message contract has no channel profile accent.
+An ignored row stays hidden until it is revealed, then receives its announcement frame.
+
+This narrow change reuses the complete interaction gate and its exact source/native provenance
+recorded above; it does not introduce new performance measurements. The benchmark generates
+Kick messages without announcement metadata. Those rows retain their existing React/native
+tree and only encounter a platform comparison; the new component runs only for announcements.
+Ingestion, stores, retention, tokens, native layout code and benchmark settings are unchanged
+by this fix. Focused native checks cover the added presentation separately.
+
+All eight production native cases passed: compact/modern, dark/light and 420/900px. The fixture
+checks background pixels for every color and the primary/unknown fallback, retained sender,
+badge/link/emote content, wrapping bounds, an ordinary neighbor and pointer-driven reveal of an
+ignored announcement. [Results and exact UI/native provenance](qa/announcements/result.json),
+[compact at 420px](qa/announcements/announcements-420-dark-compact.png),
+[modern in the light theme](qa/announcements/announcements-900-light-modern.png).
+The isolated branch passed `bun run fix`, lint, typecheck and all **1150 tests**; 15 PostgreSQL
+integration tests were skipped. This focused QA used the matching API 3 native artifact
+`ad7fc24cef2eaf2f`, SHA-256 `cd10c5ab9042a0ef0c485c3b320f7862128b78e6809fba8aa4181ad1a379d248`,
+separately from the older performance gate's artifact above.
+
 ## Validation
 
 - Workspace `bun run fix` and `bun run check` passed, including strict GPUIX fixture types.
