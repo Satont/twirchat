@@ -39,6 +39,7 @@ on:
         required: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -138,10 +139,74 @@ jobs:
             .native-cache
             packages/desktop/dist/native
           key: native-v1-macos13-${{ matrix.os }}-${{ matrix.native-target }}-${{ steps.native.outputs.toolchain }}-${{ hashFiles('packages/desktop/native/gpuix/source.json', 'packages/desktop/native/gpuix/patches/*.patch', 'packages/desktop/scripts/build-gpuix-native.ts') }}
+      - name: Find a trusted native artifact for this exact source revision
+        id: promoted-native
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha="$(git rev-parse HEAD)"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/quality.yml/runs?head_sha=$sha&event=push&status=success&per_page=100" \
+            --jq '.workflow_runs[] | [.id, .head_sha, .event, .head_repository.full_name, .repository.full_name, .head_branch, .path, .conclusion] | @tsv' > "$RUNNER_TEMP/native-source-runs.txt"
+          while IFS=$'\t' read -r run_id head_sha event head_repository repository branch path conclusion; do
+            test "$run_id" != "$GITHUB_RUN_ID" || continue
+            test "$head_sha" = "$sha" && test "$event" = push && test "$conclusion" = success || continue
+            test "$head_repository" = "$GITHUB_REPOSITORY" && test "$repository" = "$GITHUB_REPOSITORY" || continue
+            test "$branch" = main || test "$branch" = gpuix || continue
+            test "$path" = .github/workflows/quality.yml || continue
+            if ! gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$RUNNER_TEMP/native-artifacts.json" 2> "$RUNNER_TEMP/native-artifacts-error.txt"; then
+              if grep -Fq '(HTTP 404)' "$RUNNER_TEMP/native-artifacts-error.txt"; then continue; fi
+              cat "$RUNNER_TEMP/native-artifacts-error.txt" >&2
+              exit 1
+            fi
+            artifact_id="$(jq -r --arg name "native-$RUNTIME" '.artifacts[] | select(.name == $name and .expired == false) | .id' "$RUNNER_TEMP/native-artifacts.json")"
+            if test -n "$artifact_id"; then
+              echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "artifact-id=$artifact_id" >> "$GITHUB_OUTPUT"
+              echo "Reusing native-$RUNTIME from successful trusted push run $run_id at $sha."
+              break
+            fi
+          done < "$RUNNER_TEMP/native-source-runs.txt"
+      - name: Download trusted native artifact
+        id: promoted-download
+        if: steps.promoted-native.outputs.run-id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native-${{ matrix.runtime }}
+          path: packages/desktop/dist/native
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.promoted-native.outputs.run-id }}
+      - name: Fall back only when a promoted artifact expired or was removed
+        if: steps.promoted-download.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.promoted-native.outputs.artifact-id }}
+          NATIVE_TARGET: ${{ matrix.native-target }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" > "$RUNNER_TEMP/native-artifact.json" 2> "$RUNNER_TEMP/native-artifact-error.txt"; then
+            jq -e '.expired == true' "$RUNNER_TEMP/native-artifact.json" > /dev/null || { echo 'A live native artifact failed to download; refusing to hide an authentication, network or integrity failure'; exit 1; }
+          elif ! grep -Fq '(HTTP 404)' "$RUNNER_TEMP/native-artifact-error.txt"; then
+            cat "$RUNNER_TEMP/native-artifact-error.txt" >&2
+            exit 1
+          fi
+          rm -f "packages/desktop/dist/native/gpuix.$NATIVE_TARGET.node" "packages/desktop/dist/native/gpuix.$NATIVE_TARGET.node.json"
+          echo 'Promoted artifact is no longer available; building the pinned native source.'
       - name: Build pinned native runtime
         run: bun run --cwd packages/desktop build:native
+      - name: Preserve verified native runtime for main and tagged releases
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.runtime }}
+          path: |
+            packages/desktop/dist/native/*.node
+            packages/desktop/dist/native/*.node.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
       - name: Save Cargo dependencies before packaging
-        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        if: steps.cargo-cache.outputs.cache-hit != 'true' && steps.promoted-download.outcome != 'success'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |

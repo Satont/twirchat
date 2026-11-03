@@ -46,7 +46,13 @@ jobs:
       - name: Verify release asset integrity checks
         run: bash .github/scripts/test-release-assets.sh
       - name: Validate production Compose configuration
-        run: docker compose --env-file .env.production.example config --no-env-resolution --quiet
+        run: |
+          directory="$(mktemp -d)"
+          trap 'rm -rf "$directory"' EXIT
+          cp docker-compose.yml "$directory/docker-compose.yml"
+          cp .env.production.example "$directory/.env"
+          docker compose --project-directory "$directory" --env-file "$directory/.env" \
+            -f "$directory/docker-compose.yml" config --quiet
       - name: Load isolated PostgreSQL test image
         run: docker pull postgres:17-alpine
       - name: Test real PostgreSQL account transactions
