@@ -1,0 +1,67 @@
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -1145,6 +1145,7 @@
+     capabilities: NativeWindowCapabilities,
+     painted_bounds: Arc<crate::automation::PaintedBoundsSnapshot>,
+     image_resource_stats: SharedImageResourceStats,
++    image_animation_stats: Arc<parking_lot::Mutex<NativeImageAnimationStats>>,
+     scale_factor: f64,
+ }
+ 
+@@ -1303,6 +1304,10 @@
+                     resources.set_stats(view.image_resource_stats.clone());
+                 });
+             }
++            let animation_stats = observer_state.lock().image_animation_stats.clone();
++            window.on_image_animation_stats(move |stats| {
++                *animation_stats.lock() = stats.into();
++            });
+             capture_native_window(window, &observer_state);
+             #[cfg(target_os = "linux")]
+             {
+@@ -2479,6 +2484,13 @@
+     #[napi]
+     pub fn get_image_resource_stats(&self) -> Option<ImageResourceStats> {
+         let stats = self.window_state.lock().image_resource_stats.clone();
++        let snapshot = stats.try_lock()?;
++        Some(snapshot.clone())
++    }
++
++    #[napi]
++    pub fn get_image_animation_stats(&self) -> Option<NativeImageAnimationStats> {
++        let stats = self.window_state.lock().image_animation_stats.clone();
+         let snapshot = stats.try_lock()?;
+         Some(snapshot.clone())
+     }
+@@ -8874,6 +8886,31 @@
+     Ok(object.into())
+ }
+ 
++/// Native image animation work, read from the last published snapshot.
++#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++#[derive(Debug, Clone, Default)]
++#[napi(object)]
++pub struct NativeImageAnimationStats {
++    pub full_draws: f64,
++    pub animation_only_presents: f64,
++    pub slot_uploads: f64,
++    pub live_slots: f64,
++    pub fallbacks: f64,
++}
++
++#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++impl From<gpui::ImageAnimationStats> for NativeImageAnimationStats {
++    fn from(stats: gpui::ImageAnimationStats) -> Self {
++        Self {
++            full_draws: stats.full_draws as f64,
++            animation_only_presents: stats.animation_only_presents as f64,
++            slot_uploads: stats.slot_uploads as f64,
++            live_slots: stats.live_slots as f64,
++            fallbacks: stats.fallbacks as f64,
++        }
++    }
++}
++
+ /// Recorded draw times from the debug frame overlay.
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ #[derive(Debug, Clone)]

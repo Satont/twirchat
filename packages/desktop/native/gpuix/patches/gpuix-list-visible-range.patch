@@ -1,0 +1,213 @@
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -22,7 +22,7 @@
+ use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ use napi_derive::napi;
+-use std::cell::RefCell;
++use std::cell::{Cell, RefCell};
+ use std::collections::{HashMap, HashSet};
+ use std::rc::Rc;
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+@@ -5679,6 +5679,7 @@
+     child_revisions: Vec<u64>,
+     row_focus_handles: Vec<Option<gpui::FocusHandle>>,
+     seen_rows: HashSet<u64>,
++    last_visible_range: Rc<Cell<Option<(usize, usize)>>>,
+ }
+ 
+ fn retain_current_seen_rows(seen_rows: &mut HashSet<u64>, child_ids: &[u64]) {
+@@ -5884,6 +5885,7 @@
+             child_revisions,
+             row_focus_handles,
+             seen_rows: HashSet::new(),
++            last_visible_range: Rc::new(Cell::new(None)),
+         }
+     }
+ 
+@@ -6739,7 +6741,7 @@
+     } else {
+         0
+     };
+-    let list_state = match ctx.virtual_lists.entry(element.id) {
++    let (list_state, last_visible_range) = match ctx.virtual_lists.entry(element.id) {
+         std::collections::hash_map::Entry::Occupied(mut entry) => {
+             entry.get_mut().sync(
+                 config,
+@@ -6758,7 +6760,7 @@
+                     });
+                 }
+             }
+-            entry.state.clone()
++            (entry.state.clone(), entry.last_visible_range.clone())
+         }
+         std::collections::hash_map::Entry::Vacant(entry) => {
+             let row_focus_handles = child_ids
+@@ -6780,7 +6782,7 @@
+                     });
+                 }
+             }
+-            entry.state.clone()
++            (entry.state.clone(), entry.last_visible_range.clone())
+         }
+     };
+ 
+@@ -6793,16 +6795,14 @@
+         list_state.scroll_to(offset);
+     }
+ 
+-    if element.events().contains("visibleRange") {
+-        let callback = ctx.event_callback.clone();
+-        let list_id = element.id;
+-        list_state.set_scroll_handler(move |event, _window, _cx| {
+-            emit_event_full(&callback, list_id, "visibleRange", |payload| {
+-                payload.start_index = Some(event.visible_range.start as f64);
+-                payload.end_index = Some(event.visible_range.end as f64);
+-            });
++    let visible_range = element
++        .events()
++        .contains("visibleRange")
++        .then(|| ListVisibleRange {
++            callback: ctx.event_callback.clone(),
++            list_id: element.id,
++            last_range: last_visible_range,
+         });
+-    }
+ 
+     let list_id = element.id;
+     // Cloned, not copied: gpui runs this processor once per requested row, so
+@@ -6829,19 +6829,17 @@
+         list = apply_styles(list, style);
+     }
+     let list = apply_accessibility(list, element.custom_props(), None).into_any_element();
+-    match element
++    let thumbs = element
+         .style
+         .as_deref()
+-        .and_then(|style| ThumbStyle::of(style, false, true))
+-    {
+-        Some(thumbs) => ListWithScrollbar {
+-            list,
+-            state: scroll_state,
+-            thumbs,
+-        }
+-        .into_any_element(),
+-        None => list,
+-    }
++        .and_then(|style| ThumbStyle::of(style, false, true));
++    ListWithScrollbar {
++        list,
++        state: scroll_state,
++        thumbs,
++        visible_range,
++    }
++    .into_any_element()
+ }
+ 
+ fn virtual_child_is_mounted(tree: &RetainedTree, list_id: u64, child_id: u64) -> bool {
+@@ -7530,7 +7528,26 @@
+     }
+ }
+ 
+-/// A virtual list with its thumb painted over it.
++struct ListVisibleRange {
++    callback: Option<EventCallback>,
++    list_id: u64,
++    last_range: Rc<Cell<Option<(usize, usize)>>>,
++}
++
++impl ListVisibleRange {
++    fn update(&self, range: std::ops::Range<usize>) {
++        let current = (range.start, range.end);
++        if self.last_range.replace(Some(current)) == Some(current) {
++            return;
++        }
++        emit_event_full(&self.callback, self.list_id, "visibleRange", |payload| {
++            payload.start_index = Some(range.start as f64);
++            payload.end_index = Some(range.end as f64);
++        });
++    }
++}
++
++/// A virtual list reporting its laid-out range, optionally with an overlaid thumb.
+ ///
+ /// A list element takes no children, and wrapping it in a box would change the
+ /// layout its style asks for. This lays out, prepaints and paints as the list
+@@ -7540,7 +7557,8 @@
+ struct ListWithScrollbar {
+     list: gpui::AnyElement,
+     state: gpui::ListState,
+-    thumbs: ThumbStyle,
++    thumbs: Option<ThumbStyle>,
++    visible_range: Option<ListVisibleRange>,
+ }
+ 
+ impl gpui::IntoElement for ListWithScrollbar {
+@@ -7583,6 +7601,11 @@
+         cx: &mut gpui::App,
+     ) {
+         self.list.prepaint(window, cx);
++        if let Some(observer) = &self.visible_range {
++            if let Some(range) = self.state.visible_range() {
++                observer.update(range);
++            }
++        }
+     }
+ 
+     fn paint(
+@@ -7596,8 +7619,53 @@
+         cx: &mut gpui::App,
+     ) {
+         self.list.paint(window, cx);
+-        let (max, offset) = list_scroll_extent(&self.state);
+-        paint_scrollbars(window, bounds.origin, bounds.size, max, offset, self.thumbs);
++        if let Some(thumbs) = self.thumbs {
++            let (max, offset) = list_scroll_extent(&self.state);
++            paint_scrollbars(window, bounds.origin, bounds.size, max, offset, thumbs);
++        }
++    }
++}
++
++#[cfg(all(test, not(all(target_arch = "wasm32", target_os = "unknown"))))]
++mod list_visible_range_tests {
++    use super::ListVisibleRange;
++    use std::cell::Cell;
++    use std::rc::Rc;
++    use std::sync::{Arc, Mutex};
++
++    #[test]
++    fn emits_initial_and_changed_ranges_once_across_rebuilt_wrappers() {
++        let events = Arc::new(Mutex::new(Vec::new()));
++        let recorded = events.clone();
++        let observer = ListVisibleRange {
++            callback: Some(Arc::new(move |event| {
++                recorded.lock().unwrap().push((
++                    event.element_id,
++                    event.start_index,
++                    event.end_index,
++                ));
++            })),
++            list_id: 7,
++            last_range: Rc::new(Cell::new(None)),
++        };
++        observer.update(0..3);
++        observer.update(0..3);
++        let rebuilt = ListVisibleRange {
++            last_range: observer.last_range.clone(),
++            ..observer
++        };
++        rebuilt.update(0..3);
++        rebuilt.update(40..43);
++        rebuilt.update(40..45);
++        rebuilt.update(40..45);
++        assert_eq!(
++            *events.lock().unwrap(),
++            vec![
++                (7.0, Some(0.0), Some(3.0)),
++                (7.0, Some(40.0), Some(43.0)),
++                (7.0, Some(40.0), Some(45.0)),
++            ]
++        );
+     }
+ }
+ 

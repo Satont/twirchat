@@ -37,6 +37,18 @@ static int poll_command(void *data)
                 found = 1;
                 if (!strcmp(action, "close"))
                     weston_desktop_surface_close(surface);
+                else if (!strcmp(action, "focus")) {
+                    struct weston_view *other;
+                    wl_list_for_each(other, &controls->compositor->view_list, link) {
+                        if (weston_surface_is_desktop_surface(other->surface))
+                            weston_desktop_surface_set_activated(
+                                weston_surface_get_desktop_surface(other->surface),
+                                other->surface == view->surface);
+                    }
+                    struct weston_seat *seat;
+                    wl_list_for_each(seat, &controls->compositor->seat_list, link)
+                        weston_view_activate_input(view, seat, WESTON_ACTIVATE_FLAG_CONFIGURE);
+                }
                 break;
             }
         }

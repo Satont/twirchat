@@ -1,0 +1,30 @@
+{
+  "workspaceTests": {
+    "passed": 1161,
+    "skippedPostgres": 15
+  },
+  "qualityTests": {
+    "passed": 31
+  },
+  "nativeUnitSuite": "passed",
+  "gpui": {
+    "imageSceneTests": 10,
+    "listLayoutTests": 1
+  },
+  "check": "typecheck, lint, format passed",
+  "release": {
+    "version": "0.0.1-dense-emote-cpu",
+    "bun": "1.4.4",
+    "nativeApi": 3,
+    "react": "production",
+    "jsx": "production"
+  },
+  "isolatedGui": [
+    "dense pixels/sync/input/hover/resize/retained-history culling",
+    "packaged adjacent native runtime",
+    "compiled application close/tray restore",
+    "chat behavior and interactions",
+    "real RAGEY 1x GIF/notices",
+    "two image windows / close while renderer retained"
+  ]
+}

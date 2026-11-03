@@ -1,0 +1,69 @@
+--- a/crates/gpui_wgpu/src/wgpu_renderer.rs
++++ b/crates/gpui_wgpu/src/wgpu_renderer.rs
+@@ -9,6 +9,7 @@
+ #[cfg(not(target_family = "wasm"))]
+ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+ use std::cell::RefCell;
++use std::collections::HashMap;
+ use std::num::NonZeroU64;
+ use std::ops::Range;
+ use std::rc::Rc;
+@@ -1606,6 +1607,7 @@
+ 
+     fn record_frame(&mut self, scene: &Scene, frame_view: &wgpu::TextureView) -> Result<()> {
+         let mut instance_offset = 0;
++        let mut atlas_bindings = HashMap::new();
+         let instance_bindings = self
+             .write_instances(scene, &mut instance_offset)
+             .with_context(|| {
+@@ -1703,6 +1705,7 @@
+                     PrimitiveBatch::MonochromeSprites { texture_id, range } => self.draw_sprites(
+                         &instance_bindings.monochrome_sprites,
+                         texture_id,
++                        &mut atlas_bindings,
+                         &self.resources().pipelines.mono_sprites,
+                         instance_range(range),
+                         &mut pass,
+@@ -1712,6 +1715,7 @@
+                         self.draw_sprites(
+                             &instance_bindings.subpixel_sprites,
+                             texture_id,
++                            &mut atlas_bindings,
+                             resources
+                                 .pipelines
+                                 .subpixel_sprites
+@@ -1724,6 +1728,7 @@
+                     PrimitiveBatch::PolychromeSprites { texture_id, range } => self.draw_sprites(
+                         &instance_bindings.polychrome_sprites,
+                         texture_id,
++                        &mut atlas_bindings,
+                         &self.resources().pipelines.poly_sprites,
+                         instance_range(range),
+                         &mut pass,
+@@ -1880,6 +1885,7 @@
+         &self,
+         sprite_instances: &InstanceBinding,
+         texture_id: AtlasTextureId,
++        atlas_bindings: &mut HashMap<AtlasTextureId, wgpu::BindGroup>,
+         pipeline: &wgpu::RenderPipeline,
+         range: Range<u32>,
+         pass: &mut wgpu::RenderPass<'_>,
+@@ -1887,13 +1893,14 @@
+         if range.is_empty() {
+             return;
+         }
+-        let texture_info = self.atlas.get_texture_info(texture_id);
+-        let texture =
+-            self.create_texture_bind_group("atlas_texture_bind_group", &texture_info.view);
++        let texture = atlas_bindings.entry(texture_id).or_insert_with(|| {
++            let texture_info = self.atlas.get_texture_info(texture_id);
++            self.create_texture_bind_group("atlas_texture_bind_group", &texture_info.view)
++        });
+         pass.set_pipeline(pipeline);
+         pass.set_bind_group(0, &self.resources().globals_bind_group, &[]);
+         pass.set_bind_group(1, &sprite_instances.bind_group, &[]);
+-        pass.set_bind_group(2, &texture, &[]);
++        pass.set_bind_group(2, &*texture, &[]);
+         pass.draw(
+             0..4,
+             sprite_instances.first_instance + range.start

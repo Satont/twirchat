@@ -1,0 +1,1016 @@
+--- a/crates/gpui/src/assets.rs
++++ b/crates/gpui/src/assets.rs
+@@ -35,6 +35,13 @@
+ #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+ pub struct ImageId(pub usize);
+ 
++impl ImageId {
++    pub(crate) fn new() -> Self {
++        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
++        Self(NEXT_ID.fetch_add(1, SeqCst))
++    }
++}
++
+ #[derive(PartialEq, Eq, Hash, Clone)]
+ #[expect(missing_docs)]
+ pub struct RenderImageParams {
+@@ -63,13 +70,12 @@
+ impl RenderImage {
+     /// Create a new image from the given data.
+     pub fn new(data: impl Into<SmallVec<[Frame; 1]>>) -> Self {
+-        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+         let data = data.into();
+         let animation =
+             ImageAnimationTimeline::new(data.iter().map(|frame| Duration::from(frame.delay())));
+ 
+         Self {
+-            id: ImageId(NEXT_ID.fetch_add(1, SeqCst)),
++            id: ImageId::new(),
+             scale_factor: 1.0,
+             data,
+             animation,
+--- a/crates/gpui/src/image_animation.rs
++++ b/crates/gpui/src/image_animation.rs
+@@ -1,4 +1,10 @@
+-use std::time::Duration;
++use scheduler::Instant;
++use std::{sync::OnceLock, time::Duration};
++
++pub(crate) fn synchronized_elapsed(sample: Instant) -> Duration {
++    static EPOCH: OnceLock<Instant> = OnceLock::new();
++    sample.saturating_duration_since(*EPOCH.get_or_init(Instant::now))
++}
+ 
+ #[derive(Default)]
+ pub(crate) struct ImageAnimationTimeline {
+--- /dev/null
++++ b/crates/gpui/src/image_scene_animation.rs
+@@ -0,0 +1,579 @@
++use crate::{
++    AtlasTextureId, AtlasTile, ImageId, PlatformAtlas, PolychromeSprite, RenderImage,
++    RenderImageParams,
++};
++use anyhow::{Result, anyhow};
++use std::{
++    borrow::Cow,
++    collections::{HashMap, HashSet},
++    sync::Arc,
++    time::Duration,
++};
++
++/// Counters for full layout/paint versus stable-scene image animation.
++#[derive(Clone, Copy, Debug, Default)]
++#[expect(missing_docs)]
++pub struct ImageAnimationStats {
++    pub full_draws: u64,
++    pub animation_only_presents: u64,
++    pub slot_uploads: u64,
++    pub live_slots: usize,
++    pub fallbacks: u64,
++}
++
++#[derive(Clone, Copy, PartialEq, Eq, Hash)]
++struct SourceKey {
++    image: ImageId,
++    animate_when_inactive: bool,
++}
++
++struct Slot {
++    source: Arc<RenderImage>,
++    image: ImageId,
++    frame: usize,
++    draw: u64,
++    tile: Option<AtlasTile>,
++    stable: bool,
++}
++
++impl Slot {
++    fn new(source: Arc<RenderImage>) -> Self {
++        let stable = same_frame_dimensions(&source);
++        Self {
++            source,
++            image: ImageId::new(),
++            frame: 0,
++            draw: 0,
++            tile: None,
++            stable,
++        }
++    }
++
++    fn params(&self, frame: usize) -> RenderImageParams {
++        RenderImageParams {
++            image_id: if self.stable {
++                self.image
++            } else {
++                self.source.id
++            },
++            frame_index: if self.stable { 0 } else { frame },
++        }
++    }
++
++    fn remove(&self, atlas: &dyn PlatformAtlas) {
++        if self.stable {
++            atlas.remove(
++                &RenderImageParams {
++                    image_id: self.image,
++                    frame_index: 0,
++                }
++                .into(),
++            );
++        }
++    }
++
++    fn paint_tile(
++        &mut self,
++        atlas: &dyn PlatformAtlas,
++        frame: usize,
++        draw: u64,
++        stats: &mut ImageAnimationStats,
++    ) -> Result<AtlasTile> {
++        if self.draw == draw
++            && self.frame == frame
++            && let Some(tile) = self.tile
++        {
++            return Ok(tile);
++        }
++        let key = self.params(frame).into();
++        let mut uploaded = false;
++        let mut tile = atlas
++            .get_or_insert_with(&key, &mut || {
++                uploaded = true;
++                Ok(Some((
++                    self.source.size(frame),
++                    Cow::Borrowed(
++                        self.source
++                            .as_bytes(frame)
++                            .ok_or_else(|| anyhow!("missing animation frame {frame}"))?,
++                    ),
++                )))
++            })?
++            .ok_or_else(|| anyhow!("image atlas did not allocate an animation tile"))?;
++        if self.stable && !uploaded && self.frame != frame {
++            tile = atlas
++                .update(
++                    &key,
++                    self.source.size(frame),
++                    self.source
++                        .as_bytes(frame)
++                        .ok_or_else(|| anyhow!("missing animation frame {frame}"))?,
++                )?
++                .ok_or_else(|| anyhow!("image atlas did not update an animation tile"))?;
++            uploaded = true;
++        }
++        if self.stable && uploaded {
++            stats.slot_uploads += 1;
++        }
++        self.tile = Some(tile);
++        self.frame = frame;
++        self.draw = draw;
++        Ok(tile)
++    }
++}
++
++pub(crate) struct ImageAnimationAdvance {
++    pub changed: bool,
++    pub needs_draw: bool,
++    pub remaining: Option<Duration>,
++}
++
++pub(crate) struct ImageSceneAnimations {
++    atlas: Arc<dyn PlatformAtlas>,
++    slots: HashMap<SourceKey, Slot>,
++    stats: ImageAnimationStats,
++    observers: Vec<Box<dyn Fn(ImageAnimationStats)>>,
++}
++
++impl ImageSceneAnimations {
++    pub(crate) fn new(atlas: Arc<dyn PlatformAtlas>) -> Self {
++        Self {
++            atlas,
++            slots: HashMap::new(),
++            stats: ImageAnimationStats::default(),
++            observers: Vec::new(),
++        }
++    }
++
++    pub(crate) fn observe(&mut self, observer: impl Fn(ImageAnimationStats) + 'static) {
++        observer(self.stats);
++        self.observers.push(Box::new(observer));
++    }
++
++    pub(crate) fn frame(&self, source: ImageId, animate_when_inactive: bool) -> Option<usize> {
++        self.slots
++            .get(&SourceKey {
++                image: source,
++                animate_when_inactive,
++            })
++            .map(|slot| slot.frame)
++    }
++
++    pub(crate) fn paint_tile(
++        &mut self,
++        source: Arc<RenderImage>,
++        frame: usize,
++        draw: u64,
++        animate_when_inactive: bool,
++    ) -> Result<AtlasTile> {
++        let key = SourceKey {
++            image: source.id,
++            animate_when_inactive,
++        };
++        let slot = self.slots.entry(key).or_insert_with(|| {
++            let slot = Slot::new(source.clone());
++            if !slot.stable {
++                self.stats.fallbacks += 1;
++            }
++            slot
++        });
++        if !Arc::ptr_eq(&slot.source, &source) {
++            slot.remove(self.atlas.as_ref());
++            *slot = Slot::new(source);
++            if !slot.stable {
++                self.stats.fallbacks += 1;
++            }
++        }
++        match slot.paint_tile(self.atlas.as_ref(), frame, draw, &mut self.stats) {
++            Err(_) if slot.stable => {
++                slot.remove(self.atlas.as_ref());
++                slot.stable = false;
++                slot.tile = None;
++                self.stats.fallbacks += 1;
++                slot.paint_tile(self.atlas.as_ref(), frame, draw, &mut self.stats)
++            }
++            result => result,
++        }
++    }
++
++    pub(crate) fn finish_draw(&mut self, sprites: &[PolychromeSprite]) {
++        if !self.slots.is_empty() {
++            let used: HashSet<_> = sprites
++                .iter()
++                .map(|sprite| allocation(sprite.tile))
++                .collect();
++            self.slots.retain(|_, slot| {
++                let live = slot.tile.is_some_and(|tile| {
++                    used.contains(&allocation(tile))
++                        && self
++                            .atlas
++                            .get_or_insert_with(&slot.params(slot.frame).into(), &mut || Ok(None))
++                            .is_ok_and(|current| current == Some(tile))
++                });
++                if !live {
++                    slot.remove(self.atlas.as_ref());
++                }
++                live
++            });
++        }
++        self.stats.full_draws += 1;
++        self.publish();
++    }
++
++    pub(crate) fn next_deadline(&self, elapsed: Duration, active: bool) -> Option<Duration> {
++        self.slots
++            .iter()
++            .filter(|(key, _)| active || key.animate_when_inactive)
++            .filter_map(|(_, slot)| slot.source.frame_at(elapsed).1)
++            .min()
++    }
++
++    pub(crate) fn advance(&mut self, elapsed: Duration, active: bool) -> ImageAnimationAdvance {
++        let mut advance = ImageAnimationAdvance {
++            changed: false,
++            needs_draw: false,
++            remaining: None,
++        };
++        for (key, slot) in &mut self.slots {
++            if !active && !key.animate_when_inactive {
++                continue;
++            }
++            let (frame, remaining) = slot.source.frame_at(elapsed);
++            if let Some(remaining) = remaining {
++                advance.remaining = Some(
++                    advance
++                        .remaining
++                        .map_or(remaining, |current| current.min(remaining)),
++                );
++            }
++            if frame == slot.frame {
++                continue;
++            }
++            if !slot.stable {
++                advance.needs_draw = true;
++                continue;
++            }
++            let params = slot.params(frame).into();
++            let previous = self.atlas.get_or_insert_with(&params, &mut || Ok(None));
++            let updated = previous.and_then(|previous| {
++                if previous != slot.tile || previous.is_none() {
++                    return Err(anyhow!("animation atlas tile was discarded"));
++                }
++                self.atlas.update(
++                    &params,
++                    slot.source.size(frame),
++                    slot.source
++                        .as_bytes(frame)
++                        .ok_or_else(|| anyhow!("missing animation frame {frame}"))?,
++                )
++            });
++            if matches!(&updated, Ok(Some(_))) {
++                self.stats.slot_uploads += 1;
++            }
++            match updated {
++                Ok(Some(tile)) if Some(tile) == slot.tile => {
++                    slot.frame = frame;
++                    advance.changed = true;
++                }
++                _ => {
++                    slot.remove(self.atlas.as_ref());
++                    slot.stable = false;
++                    slot.tile = None;
++                    self.stats.fallbacks += 1;
++                    advance.needs_draw = true;
++                }
++            }
++        }
++        advance
++    }
++
++    pub(crate) fn record_present(&mut self) {
++        self.stats.animation_only_presents += 1;
++        self.publish();
++    }
++
++    fn publish(&mut self) {
++        self.stats.live_slots = self.slots.len();
++        for observer in &self.observers {
++            observer(self.stats);
++        }
++    }
++}
++
++impl Drop for ImageSceneAnimations {
++    fn drop(&mut self) {
++        for (_, slot) in self.slots.drain() {
++            slot.remove(self.atlas.as_ref());
++        }
++        self.publish();
++    }
++}
++
++fn allocation(tile: AtlasTile) -> (AtlasTextureId, u32) {
++    (tile.texture_id, tile.tile_id.0)
++}
++
++fn same_frame_dimensions(source: &RenderImage) -> bool {
++    source.frame_count() > 1
++        && (1..source.frame_count()).all(|frame| source.size(frame) == source.size(0))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{AtlasKey, AtlasTextureKind, Bounds, DevicePixels, TileId, point, size};
++    use image::{Delay, Frame, Rgba, RgbaImage};
++    use parking_lot::Mutex;
++    use smallvec::SmallVec;
++    use std::{cell::Cell, rc::Rc};
++
++    #[derive(Default)]
++    struct AtlasState {
++        tiles: HashMap<AtlasKey, AtlasTile>,
++        serial: u32,
++        uploads: usize,
++        relocate: bool,
++    }
++
++    #[derive(Default)]
++    struct TestAtlas(Mutex<AtlasState>);
++
++    fn tile(serial: u32, dimensions: crate::Size<DevicePixels>) -> AtlasTile {
++        AtlasTile {
++            texture_id: AtlasTextureId {
++                index: 0,
++                kind: AtlasTextureKind::Polychrome,
++            },
++            tile_id: TileId(serial),
++            padding: 0,
++            bounds: Bounds {
++                origin: point(DevicePixels(0), DevicePixels(0)),
++                size: dimensions,
++            },
++        }
++    }
++
++    impl PlatformAtlas for TestAtlas {
++        fn get_or_insert_with<'a>(
++            &self,
++            key: &AtlasKey,
++            build: &mut dyn FnMut() -> Result<Option<(crate::Size<DevicePixels>, Cow<'a, [u8]>)>>,
++        ) -> Result<Option<AtlasTile>> {
++            let mut state = self.0.lock();
++            if let Some(tile) = state.tiles.get(key) {
++                return Ok(Some(*tile));
++            }
++            let Some((dimensions, _)) = build()? else {
++                return Ok(None);
++            };
++            state.serial += 1;
++            let tile = tile(state.serial, dimensions);
++            state.tiles.insert(key.clone(), tile);
++            state.uploads += 1;
++            Ok(Some(tile))
++        }
++
++        fn update(
++            &self,
++            key: &AtlasKey,
++            dimensions: crate::Size<DevicePixels>,
++            _bytes: &[u8],
++        ) -> Result<Option<AtlasTile>> {
++            let mut state = self.0.lock();
++            let updated = if state.relocate {
++                state.serial += 1;
++                tile(state.serial, dimensions)
++            } else {
++                *state.tiles.get(key).expect("tile already uploaded")
++            };
++            state.tiles.insert(key.clone(), updated);
++            state.uploads += 1;
++            Ok(Some(updated))
++        }
++
++        fn remove(&self, key: &AtlasKey) {
++            self.0.lock().tiles.remove(key);
++        }
++    }
++
++    fn image(delays: &[u32]) -> Arc<RenderImage> {
++        Arc::new(RenderImage::new(SmallVec::from_iter(
++            delays.iter().enumerate().map(|(frame, delay)| {
++                Frame::from_parts(
++                    RgbaImage::from_pixel(2, 2, Rgba([frame as u8, 0, 0, 255])),
++                    0,
++                    0,
++                    Delay::from_numer_denom_ms(*delay, 1),
++                )
++            }),
++        )))
++    }
++
++    fn sprite(tile: AtlasTile) -> PolychromeSprite {
++        PolychromeSprite {
++            order: 0,
++            nearest_neighbor: false.into(),
++            grayscale: false.into(),
++            opacity: 1.0,
++            bounds: Bounds::default(),
++            content_mask: crate::ContentMask::default(),
++            corner_radii: crate::Corners::default(),
++            tile,
++        }
++    }
++
++    #[test]
++    fn duplicate_visible_instances_share_one_slot_and_upload() {
++        let atlas = Arc::new(TestAtlas::default());
++        let mut animations = ImageSceneAnimations::new(atlas.clone());
++        let image = image(&[100, 100]);
++        let original = animations.paint_tile(image.clone(), 0, 1, true).unwrap();
++        for _ in 0..100 {
++            assert_eq!(
++                animations.paint_tile(image.clone(), 0, 1, true).unwrap(),
++                original
++            );
++        }
++        assert_eq!((animations.slots.len(), atlas.0.lock().uploads), (1, 1));
++    }
++
++    #[test]
++    fn windows_get_distinct_keys_without_overwriting_source_frame_zero() {
++        let atlas = Arc::new(TestAtlas::default());
++        let source = image(&[100, 100]);
++        let mut first = ImageSceneAnimations::new(atlas.clone());
++        let mut second = ImageSceneAnimations::new(atlas.clone());
++        let a = first.paint_tile(source.clone(), 0, 1, true).unwrap();
++        let b = second.paint_tile(source.clone(), 0, 1, true).unwrap();
++        assert_ne!(allocation(a), allocation(b));
++        assert!(atlas.0.lock().tiles.keys().all(|key| matches!(key,
++            AtlasKey::Image(params) if params.image_id != source.id && params.frame_index == 0)));
++    }
++
++    #[test]
++    fn uploads_happen_only_when_encoded_frame_changes_and_retain_allocation() {
++        let atlas = Arc::new(TestAtlas::default());
++        let mut animations = ImageSceneAnimations::new(atlas.clone());
++        let source = image(&[100, 100]);
++        let tile = animations.paint_tile(source.clone(), 0, 1, true).unwrap();
++        let early = animations.advance(Duration::from_millis(99), true);
++        assert!(!early.changed && !early.needs_draw);
++        assert_eq!(early.remaining, Some(Duration::from_millis(1)));
++        let due = animations.advance(Duration::from_millis(100), true);
++        assert!(due.changed && !due.needs_draw);
++        assert_eq!(animations.frame(source.id, true), Some(1));
++        assert_eq!(animations.slots.values().next().unwrap().tile, Some(tile));
++        assert_eq!(atlas.0.lock().uploads, 2);
++    }
++
++    #[test]
++    fn irregular_delays_and_wrap_preserve_exact_boundaries() {
++        let mut animations = ImageSceneAnimations::new(Arc::new(TestAtlas::default()));
++        let source = image(&[100, 250, 50]);
++        animations.paint_tile(source.clone(), 0, 1, true).unwrap();
++        for (elapsed, expected, remaining) in
++            [(100, 1, 250), (349, 1, 1), (350, 2, 50), (400, 0, 100)]
++        {
++            let update = animations.advance(Duration::from_millis(elapsed), true);
++            assert!(!update.needs_draw);
++            assert_eq!(animations.frame(source.id, true), Some(expected));
++            assert_eq!(update.remaining, Some(Duration::from_millis(remaining)));
++        }
++    }
++
++    #[test]
++    fn cropped_cached_scene_tiles_keep_the_slot_until_scene_replacement() {
++        let atlas = Arc::new(TestAtlas::default());
++        let mut animations = ImageSceneAnimations::new(atlas.clone());
++        let source = image(&[100, 100]);
++        let mut tile = animations.paint_tile(source.clone(), 0, 1, true).unwrap();
++        tile.bounds.size = size(DevicePixels(1), DevicePixels(1));
++        animations.finish_draw(&[sprite(tile)]);
++        assert_eq!(animations.stats.live_slots, 1);
++        animations.finish_draw(&[]);
++        assert_eq!(
++            (animations.stats.live_slots, atlas.0.lock().tiles.len()),
++            (0, 0)
++        );
++        assert_eq!(Arc::strong_count(&source), 1);
++    }
++
++    #[test]
++    fn close_releases_tiles_sources_and_publishes_zero_even_if_stats_survive() {
++        let atlas = Arc::new(TestAtlas::default());
++        let source = image(&[100, 100]);
++        let stats = Rc::new(Cell::new(ImageAnimationStats::default()));
++        {
++            let mut animations = ImageSceneAnimations::new(atlas.clone());
++            let capture = stats.clone();
++            animations.observe(move |value| capture.set(value));
++            let tile = animations.paint_tile(source.clone(), 0, 1, true).unwrap();
++            animations.finish_draw(&[sprite(tile)]);
++            assert_eq!(stats.get().live_slots, 1);
++        }
++        assert_eq!(stats.get().live_slots, 0);
++        assert_eq!(
++            (atlas.0.lock().tiles.len(), Arc::strong_count(&source)),
++            (0, 1)
++        );
++    }
++
++    #[test]
++    fn varying_frame_sizes_keep_regular_layout_instead_of_stale_geometry() {
++        let source = Arc::new(RenderImage::new(SmallVec::from_iter([1, 2].map(|width| {
++            Frame::from_parts(
++                RgbaImage::from_pixel(width, 1, Rgba([0, 0, 0, 255])),
++                0,
++                0,
++                Delay::from_numer_denom_ms(100, 1),
++            )
++        }))));
++        let mut animations = ImageSceneAnimations::new(Arc::new(TestAtlas::default()));
++        animations.paint_tile(source, 0, 1, true).unwrap();
++        assert!(
++            animations
++                .advance(Duration::from_millis(100), true)
++                .needs_draw
++        );
++    }
++
++    #[test]
++    fn atlas_relocation_forces_regular_draw_before_presenting() {
++        let atlas = Arc::new(TestAtlas::default());
++        let mut animations = ImageSceneAnimations::new(atlas.clone());
++        animations
++            .paint_tile(image(&[100, 100]), 0, 1, true)
++            .unwrap();
++        atlas.0.lock().relocate = true;
++        let update = animations.advance(Duration::from_millis(100), true);
++        assert!(update.needs_draw);
++        assert_eq!(animations.stats.fallbacks, 1);
++    }
++
++    #[test]
++    fn atlas_reset_forces_regular_draw_before_presenting() {
++        let atlas = Arc::new(TestAtlas::default());
++        let mut animations = ImageSceneAnimations::new(atlas.clone());
++        animations
++            .paint_tile(image(&[100, 100]), 0, 1, true)
++            .unwrap();
++        atlas.0.lock().tiles.clear();
++        assert!(
++            animations
++                .advance(Duration::from_millis(100), true)
++                .needs_draw
++        );
++    }
++
++    #[test]
++    fn mixed_focus_policies_do_not_share_a_mutating_slot() {
++        let mut animations = ImageSceneAnimations::new(Arc::new(TestAtlas::default()));
++        let source = image(&[100, 100]);
++        animations.paint_tile(source.clone(), 0, 1, false).unwrap();
++        animations.paint_tile(source.clone(), 0, 1, true).unwrap();
++        let update = animations.advance(Duration::from_millis(100), false);
++        assert!(update.changed && !update.needs_draw);
++        assert_eq!(animations.frame(source.id, false), Some(0));
++        assert_eq!(animations.frame(source.id, true), Some(1));
++    }
++}
+--- a/crates/gpui/src/elements/img.rs
++++ b/crates/gpui/src/elements/img.rs
+@@ -21,7 +21,7 @@
+     ops::{Deref, DerefMut},
+     path::{Path, PathBuf},
+     str::FromStr,
+-    sync::{Arc, OnceLock},
++    sync::Arc,
+     time::Duration,
+ };
+ use thiserror::Error;
+@@ -30,8 +30,6 @@
+ 
+ /// The delay before showing the loading state.
+ pub const LOADING_DELAY: Duration = Duration::from_millis(200);
+-
+-static ANIMATION_EPOCH: OnceLock<Instant> = OnceLock::new();
+ 
+ /// A type alias to the resource loader that the `img()` element uses.
+ ///
+@@ -360,16 +358,19 @@
+ 
+                             if let Some(state) = &mut state {
+                                 state.frame_index = state.frame_index.min(max_frame_index);
++                                if self.style.synchronize_animation
++                                    && let Some(frame) = window.image_animation_frame(
++                                        data.id,
++                                        self.style.animate_when_inactive,
++                                    )
++                                {
++                                    state.frame_index = frame.min(max_frame_index);
++                                }
+                                 if animate && self.style.synchronize_animation {
+-                                    let epoch = ANIMATION_EPOCH.get_or_init(Instant::now);
+-                                    let sample_time = window.animation_time().max(*epoch);
+-                                    let elapsed = sample_time.saturating_duration_since(*epoch);
+-                                    let (frame_index, remaining) = data.frame_at(elapsed);
+-                                    state.frame_index = frame_index;
+-                                    if let Some(remaining) = remaining {
+-                                        window
+-                                            .request_image_animation_frame(sample_time + remaining);
+-                                    }
++                                    let elapsed = crate::image_animation::synchronized_elapsed(
++                                        window.animation_time(),
++                                    );
++                                    state.frame_index = data.frame_at(elapsed).0;
+                                     state.last_frame_time = None;
+                                 } else if animate {
+                                     let current_time = Instant::now();
+@@ -550,8 +551,24 @@
+                         .object_fit
+                         .get_bounds(bounds, data.size(layout_state.frame_index));
+                     let corner_radii = style.corner_radii.to_pixels(window.rem_size());
+-                    window
+-                        .paint_image(
++                    let synchronized = global_id.is_some()
++                        && self.style.synchronize_animation
++                        && data.frame_count() > 1
++                        && !cx.reduce_motion()
++                        && !window.image_animation_hidden()
++                        && (self.style.animate_when_inactive || window.is_window_active());
++                    let result = if synchronized {
++                        window.paint_synchronized_image(
++                            bounds,
++                            new_bounds,
++                            corner_radii,
++                            data,
++                            layout_state.frame_index,
++                            self.style.grayscale,
++                            self.style.animate_when_inactive,
++                        )
++                    } else {
++                        window.paint_image(
+                             bounds,
+                             new_bounds,
+                             corner_radii,
+@@ -559,7 +576,8 @@
+                             layout_state.frame_index,
+                             self.style.grayscale,
+                         )
+-                        .log_err();
++                    };
++                    result.log_err();
+                 } else if let Some(replacement) = &mut layout_state.replacement {
+                     replacement.paint(window, cx);
+                 }
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -2,6 +2,7 @@
+ use crate::DebugFrameOverlayMode;
+ #[cfg(any(feature = "inspector", debug_assertions))]
+ use crate::Inspector;
++use crate::image_scene_animation::ImageSceneAnimations;
+ #[cfg(feature = "profiler")]
+ use crate::profiler;
+ use crate::{
+@@ -75,6 +76,12 @@
+ };
+ pub use prompts::*;
+ 
++enum ImageAnimationFrame {
++    Idle,
++    Presented,
++    NeedsDraw,
++}
++
+ /// Default window size used when no explicit size is provided.
+ pub const DEFAULT_WINDOW_SIZE: Size<Pixels> = size(px(1536.), px(1095.));
+ 
+@@ -1151,6 +1158,7 @@
+     is_resizable: bool,
+     is_minimizable: bool,
+     sprite_atlas: Arc<dyn PlatformAtlas>,
++    image_scene_animations: ImageSceneAnimations,
+     text_system: Arc<WindowTextSystem>,
+     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
+     rem_size: Pixels,
+@@ -1175,6 +1183,7 @@
+     image_animation_deadline: Option<Instant>,
+     image_animation_timer: Option<(Instant, Task<()>)>,
+     image_animation_suspended: bool,
++    image_animation_ready: bool,
+     pub(crate) next_frame: Frame,
+     next_hitbox_id: HitboxId,
+     pub(crate) next_tooltip_id: TooltipId,
+@@ -1601,6 +1610,7 @@
+                             && !window.image_animation_hidden();
+                         if resume_animation {
+                             window.image_animation_suspended = false;
++                            window.image_animation_timer = None;
+                         }
+                         (cx.thermal_state(), resume_animation)
+                     })
+@@ -1681,9 +1691,20 @@
+                             })
+                             .log_err();
+                     })
+-                } else if needs_present {
++                } else {
+                     handle
+-                        .update(&mut cx, |_, window, _| window.present())
++                        .update(&mut cx, |_, window, cx| {
++                            match window.present_image_animation(cx) {
++                                ImageAnimationFrame::NeedsDraw => {
++                                    window.refresh();
++                                    let arena = window.draw(cx);
++                                    window.present();
++                                    arena.clear(cx);
++                                }
++                                ImageAnimationFrame::Idle if needs_present => window.present(),
++                                ImageAnimationFrame::Idle | ImageAnimationFrame::Presented => {}
++                            }
++                        })
+                         .log_err();
+                 }
+ 
+@@ -1860,7 +1881,8 @@
+             display_id,
+             is_resizable,
+             is_minimizable,
+-            sprite_atlas,
++            sprite_atlas: sprite_atlas.clone(),
++            image_scene_animations: ImageSceneAnimations::new(sprite_atlas),
+             text_system,
+             text_rendering_mode: cx.text_rendering_mode.clone(),
+             rem_size: px(16.),
+@@ -1880,6 +1902,7 @@
+             image_animation_deadline: None,
+             image_animation_timer: None,
+             image_animation_suspended: false,
++            image_animation_ready: false,
+             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+             next_frame_callbacks,
+             after_paint_observers: Vec::new(),
+@@ -2459,7 +2482,7 @@
+         self.image_animation_suspended = true;
+     }
+ 
+-    fn image_animation_hidden(&self) -> bool {
++    pub(crate) fn image_animation_hidden(&self) -> bool {
+         self.native_window_visibility_state()
+             .is_some_and(|visibility| visibility.load(std::sync::atomic::Ordering::Relaxed) == 2)
+     }
+@@ -2488,12 +2511,62 @@
+                     window.image_animation_suspended = true;
+                     return;
+                 }
+-                // Refresh the whole uncached image tree through the native frame throttle.
+-                window.on_next_frame(|window, _| window.refresh());
++                window.on_next_frame(|window, _| {
++                    window.image_animation_timer = None;
++                    window.image_animation_ready = true;
++                });
+             })
+             .ok();
+         });
+         self.image_animation_timer = Some((deadline, task));
++    }
++
++    /// Observe native layout draws and stable-scene animation presentations.
++    pub fn on_image_animation_stats(
++        &mut self,
++        observer: impl Fn(crate::ImageAnimationStats) + 'static,
++    ) {
++        self.image_scene_animations.observe(observer);
++    }
++
++    pub(crate) fn image_animation_frame(
++        &self,
++        source: crate::ImageId,
++        inactive: bool,
++    ) -> Option<usize> {
++        self.image_scene_animations.frame(source, inactive)
++    }
++
++    fn present_image_animation(&mut self, cx: &App) -> ImageAnimationFrame {
++        if !mem::take(&mut self.image_animation_ready) {
++            return ImageAnimationFrame::Idle;
++        }
++        if cx.reduce_motion() {
++            return ImageAnimationFrame::Idle;
++        }
++        if self.image_animation_hidden() {
++            self.image_animation_suspended = true;
++            return ImageAnimationFrame::Idle;
++        }
++        let sample = Instant::now();
++        let elapsed = crate::image_animation::synchronized_elapsed(sample);
++        let advance = self
++            .image_scene_animations
++            .advance(elapsed, self.is_window_active());
++        if advance.needs_draw {
++            return ImageAnimationFrame::NeedsDraw;
++        }
++        self.image_animation_deadline = advance.remaining.map(|remaining| sample + remaining);
++        if advance.changed {
++            self.present_cached_frame();
++            self.image_scene_animations.record_present();
++        }
++        self.finish_image_animation(cx);
++        if advance.changed {
++            ImageAnimationFrame::Presented
++        } else {
++            ImageAnimationFrame::Idle
++        }
+     }
+ 
+     /// Schedule a frame to be drawn on the next animation frame.
+@@ -3029,6 +3102,7 @@
+     #[profiling::function]
+     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+         self.draw_id += 1;
++        self.image_animation_ready = false;
+         self.animation_time = Instant::now();
+         self.image_animation_deadline = None;
+         self.image_animation_suspended = false;
+@@ -3175,6 +3249,17 @@
+             }
+         }
+ 
++        self.image_scene_animations
++            .finish_draw(&self.rendered_frame.scene.polychrome_sprites);
++        if !cx.reduce_motion() && !self.image_animation_hidden() {
++            let elapsed = crate::image_animation::synchronized_elapsed(self.animation_time);
++            if let Some(remaining) = self
++                .image_scene_animations
++                .next_deadline(elapsed, self.is_window_active())
++            {
++                self.request_image_animation_frame(self.animation_time + remaining);
++            }
++        }
+         self.finish_image_animation(cx);
+ 
+         // Exit the scope to obtain the arena-clear token this draw owes; the
+@@ -4724,6 +4809,29 @@
+             frame_index,
+             grayscale,
+             false,
++            None,
++        )
++    }
++
++    pub(crate) fn paint_synchronized_image(
++        &mut self,
++        bounds: Bounds<Pixels>,
++        image_bounds: Bounds<Pixels>,
++        corner_radii: Corners<Pixels>,
++        data: Arc<RenderImage>,
++        frame_index: usize,
++        grayscale: bool,
++        animate_when_inactive: bool,
++    ) -> Result<()> {
++        self.paint_image_with_sampling(
++            bounds,
++            image_bounds,
++            corner_radii,
++            data,
++            frame_index,
++            grayscale,
++            false,
++            Some(animate_when_inactive),
+         )
+     }
+ 
+@@ -4745,6 +4853,7 @@
+             frame_index,
+             grayscale,
+             true,
++            None,
+         )
+     }
+ 
+@@ -4757,6 +4866,7 @@
+         frame_index: usize,
+         grayscale: bool,
+         nearest_neighbor: bool,
++        synchronized: Option<bool>,
+     ) -> Result<()> {
+         self.invalidator.debug_assert_paint();
+ 
+@@ -4768,23 +4878,34 @@
+             return Ok(());
+         }
+ 
+-        let params = RenderImageParams {
+-            image_id: data.id,
+-            frame_index,
++        if visible_bounds
++            .intersect(&self.content_mask().bounds)
++            .is_empty()
++            || self.element_opacity() == 0.0
++        {
++            return Ok(());
++        }
++        let tile = if let Some(inactive) = synchronized {
++            self.image_scene_animations
++                .paint_tile(data, frame_index, self.draw_id, inactive)?
++        } else {
++            let params = RenderImageParams {
++                image_id: data.id,
++                frame_index,
++            };
++
++            self.sprite_atlas
++                .get_or_insert_with(&params.into(), &mut || {
++                    Ok(Some((
++                        data.size(frame_index),
++                        Cow::Borrowed(
++                            data.as_bytes(frame_index)
++                                .expect("It's the caller's job to pass a valid frame index"),
++                        ),
++                    )))
++                })?
++                .expect("Callback above only returns Some")
+         };
+-
+-        let tile = self
+-            .sprite_atlas
+-            .get_or_insert_with(&params.into(), &mut || {
+-                Ok(Some((
+-                    data.size(frame_index),
+-                    Cow::Borrowed(
+-                        data.as_bytes(frame_index)
+-                            .expect("It's the caller's job to pass a valid frame index"),
+-                    ),
+-                )))
+-            })?
+-            .expect("Callback above only returns Some");
+ 
+         let visible_bounds_snapped = self.snap_bounds(visible_bounds);
+ 
+--- a/crates/gpui/src/gpui.rs
++++ b/crates/gpui/src/gpui.rs
+@@ -29,6 +29,7 @@
+ mod gestures;
+ mod global;
+ mod image_animation;
++mod image_scene_animation;
+ mod input;
+ mod inspector;
+ mod interactive;
+@@ -131,6 +132,7 @@
+ pub use gpui_shared_string::*;
+ pub use gpui_util::arc_cow::ArcCow;
+ pub use http_client;
++pub use image_scene_animation::ImageAnimationStats;
+ pub use input::*;
+ pub use inspector::*;
+ pub use interactive::*;

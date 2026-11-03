@@ -553,11 +553,15 @@ export class ProviderRuntime {
     this.stopped = false
     this.timer = setInterval(() => {
       this.refreshPreferences()
-      for (const joined of this.joined.values())
+      const now = this.now()
+      for (const joined of this.joined.values()) {
+        const entry = this.aliases.get(key(joined.platform, joined.channelId))
+        if (entry && (entry.pending || entry.expires > now)) continue
         runInBackground(
           this.warm(joined.platform, joined.channelId),
           'provider-runtime background operation failed',
         )
+      }
       runInBackground(this.pulsePresence(), 'provider-runtime background operation failed')
     }, 1000)
     this.timer.unref?.()

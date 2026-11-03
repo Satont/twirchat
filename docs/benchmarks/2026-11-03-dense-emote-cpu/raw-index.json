@@ -1,0 +1,247 @@
+[
+  {
+    "file": "raw/before-dense-focused-1.json.gz",
+    "sha256": "86b4cc89a5bcd6cd869cac413f6856304cc8b6e65ddddf93ae5896b1f0ba20e3",
+    "uncompressedBytes": 81896
+  },
+  {
+    "file": "raw/before-dense-focused-2.json.gz",
+    "sha256": "686e1daa3d3d47bdd9b6983cb96f898333100bd4b343d014aa75f32af08e74e0",
+    "uncompressedBytes": 81915
+  },
+  {
+    "file": "raw/before-dense-focused-3.json.gz",
+    "sha256": "077bb40bf36f6235b8603c1868e1aaea5ec430baef6a06e4b7c02470f3cd38f7",
+    "uncompressedBytes": 81997
+  },
+  {
+    "file": "raw/before-dense-unfocused-1.json.gz",
+    "sha256": "b837e0de2b60d5b03ce825731efe159a9207f2488eb28a11cbd197c8dd5dfad2",
+    "uncompressedBytes": 82064
+  },
+  {
+    "file": "raw/before-dense-unfocused-2.json.gz",
+    "sha256": "27c6bde4711304694a90b99ab67d4fa7bc5538c0d3c8590564a0f05421e88abf",
+    "uncompressedBytes": 82028
+  },
+  {
+    "file": "raw/before-dense-unfocused-3.json.gz",
+    "sha256": "44e4611fbdc62a91e35411373236389ab7620d3239104cedf358243b9e22fe62",
+    "uncompressedBytes": 82110
+  },
+  {
+    "file": "raw/final-dense-focused-1.json.gz",
+    "sha256": "92901200dc35c275ae781a53741217c73bd1fda7d045dcadba5373b4887b7f4f",
+    "uncompressedBytes": 82463
+  },
+  {
+    "file": "raw/final-dense-focused-2.json.gz",
+    "sha256": "7583e49c860d2c7785e7d173fa9d3adfaaf50f27bb7d3b56f0b4e4d84d1d5ad8",
+    "uncompressedBytes": 82424
+  },
+  {
+    "file": "raw/final-dense-focused-3.json.gz",
+    "sha256": "bf4ee22c86232a7c525f3bbbf9c5805fb274c1a8f4bb11aa4190169b9f52eb2d",
+    "uncompressedBytes": 82528
+  },
+  {
+    "file": "raw/final-dense-unfocused-1.json.gz",
+    "sha256": "85b0df5c34cde744b1bd5d9152e9545320cdb9dfeeac2945649fc8d066b1059e",
+    "uncompressedBytes": 82622
+  },
+  {
+    "file": "raw/final-dense-unfocused-2.json.gz",
+    "sha256": "6b0801a6da9dbab259cc7c18a2eccc3aa6dbc449f74e0ec9a194bfe4774dfca7",
+    "uncompressedBytes": 82695
+  },
+  {
+    "file": "raw/final-dense-unfocused-3.json.gz",
+    "sha256": "2d619afe4edc21e886845d08f2690b2e9d06acc4b8f5f3d902aa117329b41b9b",
+    "uncompressedBytes": 82585
+  },
+  {
+    "file": "raw/initial-target-1.json.gz",
+    "sha256": "c8729534baba6caf25476417f60c7d1dbf111a2fb46007c0ab383322c385a2b8",
+    "uncompressedBytes": 90381
+  },
+  {
+    "file": "raw/initial-target-2.json.gz",
+    "sha256": "bfd2f80cad6423313dfab8267c872cdc5f03a2a7e52f440caacb6e1ed05d3a87",
+    "uncompressedBytes": 90500
+  },
+  {
+    "file": "raw/initial-target-3.json.gz",
+    "sha256": "244853a8e4be6ae79c4a8b401ba4d8f6d1967929d54f0f7ebf913b980ce6e7ac",
+    "uncompressedBytes": 90437
+  },
+  {
+    "file": "raw/control-target-1.json.gz",
+    "sha256": "eeee982ff8c7e3ac9367c80899e22d25ccaf652a8df077be88e8bf9ccae2f092",
+    "uncompressedBytes": 90333
+  },
+  {
+    "file": "raw/control-target-2.json.gz",
+    "sha256": "f3d9f5b49f01fb3550721522afde585225328c36e94c5ca1664e38dcca0cbf91",
+    "uncompressedBytes": 90418
+  },
+  {
+    "file": "raw/control-target-3.json.gz",
+    "sha256": "0d9a9e5c4bc333f878a509c2da86bcbdf34d6213d61a73155f37d0c529292192",
+    "uncompressedBytes": 90412
+  },
+  {
+    "file": "raw/after16-target-1.json.gz",
+    "sha256": "3d1b70d9e9c90bf3aaf91a4c6eb9d8897b3122ca418106d9e70904ba926902fa",
+    "uncompressedBytes": 90373
+  },
+  {
+    "file": "raw/after16-target-2.json.gz",
+    "sha256": "e180511b02b01c2fbc25acafc5a85992c69b9230aecb3f318f38ca57d35cd934",
+    "uncompressedBytes": 90464
+  },
+  {
+    "file": "raw/after16-target-3.json.gz",
+    "sha256": "49dd84ca02bacfbb63b02861297c358c4669b60feed952e3d1b4d3c8e7242306",
+    "uncompressedBytes": 90511
+  },
+  {
+    "file": "raw/final-target-guard.json.gz",
+    "sha256": "5465043c4a0383d5dfb9f7f52bab7068313911f28845365a5b0bbaadddd2bbe6",
+    "uncompressedBytes": 90472
+  },
+  {
+    "file": "raw/initial-matrix.json.gz",
+    "sha256": "4d0d1a2abf85cfa88f22cd3c0cb8500ac9b080a90933c915d4338e77770f5456",
+    "uncompressedBytes": 552030
+  },
+  {
+    "file": "raw/control-matrix.json.gz",
+    "sha256": "af50078dfafe992ff1245a5ac864babdb8d4887b30a1fe714b2ef27f8e894324",
+    "uncompressedBytes": 552045
+  },
+  {
+    "file": "raw/after16-matrix.json.gz",
+    "sha256": "6358aaa1ca5e5088708af1ef630d01a5cd8098e833ff6ca17464c31e40e0a85a",
+    "uncompressedBytes": 552870
+  },
+  {
+    "file": "raw/provider-before-1.json.gz",
+    "sha256": "a805d054a4d1b33b5833861302b0d23d5718c224831e4c4a644d5300119ad40b",
+    "uncompressedBytes": 648
+  },
+  {
+    "file": "raw/provider-before-2.json.gz",
+    "sha256": "0eaffcd14fcebaa8ea98d1fc78001e28812226e637054420a1ce450b0e24943d",
+    "uncompressedBytes": 642
+  },
+  {
+    "file": "raw/provider-before-3.json.gz",
+    "sha256": "a49d8afb51b05133e337dd786200f798b235a0c2a829fbcc8c88ccd21e6c1717",
+    "uncompressedBytes": 642
+  },
+  {
+    "file": "raw/provider-after-1.json.gz",
+    "sha256": "a28dbe8d4aaab01e5797a6900db9a62c4f97436b5035924a72f9db2de47846d8",
+    "uncompressedBytes": 648
+  },
+  {
+    "file": "raw/provider-after-2.json.gz",
+    "sha256": "4f90d8f205dc3d655f53f361072b883763861c4e692fc45236bc8d52fd02de0a",
+    "uncompressedBytes": 642
+  },
+  {
+    "file": "raw/provider-after-3.json.gz",
+    "sha256": "714d6948fdaf2e9ce7d00a3f4326a02c5937b5e976ca29c73ddaaa45cf62ae8d",
+    "uncompressedBytes": 643
+  },
+  {
+    "file": "raw/final-observer-focused.json.gz",
+    "sha256": "52ff52d0efa8bc10a86a37bbf7ee4957fc42d9c400b1c0a74c935103a6f97811",
+    "uncompressedBytes": 41433
+  },
+  {
+    "file": "raw/final-observer-unfocused.json.gz",
+    "sha256": "9b7ff4063be6558bbf9fed8be7bbbc9f0b953182ce544c4ce0c33e081d1d5e4c",
+    "uncompressedBytes": 41479
+  },
+  {
+    "file": "raw/final-functional.json.gz",
+    "sha256": "88f2ab787b3994314d42fe495cc6d55a094f638cba1fceabd5bc9ee55e5bda7b",
+    "uncompressedBytes": 36469
+  },
+  {
+    "file": "drivers/qa-emote-resources-before.tsx.gz",
+    "sha256": "f8890ec4836997db0df3324b9b7a2195b8ba184bc2799820252fa8f3ee08829c",
+    "uncompressedBytes": 52749
+  },
+  {
+    "file": "drivers/qa-emote-resources-final.tsx.gz",
+    "sha256": "b8e47c7187b412bf5d7f0b85172666a92f94219daa2274e580c5cab2683b5edd",
+    "uncompressedBytes": 58844
+  },
+  {
+    "file": "drivers/provider-idle.ts.gz",
+    "sha256": "43c74cc18d0117997a8f5c3fe7b90c454db2f84318d5fd69f1432179efda8568",
+    "uncompressedBytes": 2982
+  },
+  {
+    "file": "drivers/dense-cases.ts.gz",
+    "sha256": "4540c3aba43b2b2accb96d7058507c3a54f822da4bf2e4637936b26ad617f393",
+    "uncompressedBytes": 3134
+  },
+  {
+    "file": "drivers/native-control.ts.gz",
+    "sha256": "aeda386df5092904cad4b6a0a863c7f9d9ca10f860106db9087a80173604ba65",
+    "uncompressedBytes": 1248
+  },
+  {
+    "file": "raw/gui-packaged-command-result.json.gz",
+    "sha256": "7a97b9b4d758a3929b8a2be53fbe189c9ba9378d6fbb8190d37f7cc14f5cf5d3",
+    "uncompressedBytes": 10
+  },
+  {
+    "file": "raw/gui-packaged-packaged-runtime-result.json.gz",
+    "sha256": "0e70028fd3023cf829dfed3422d7a6f30e277fad49f6d776bf4e10fdbb19997a",
+    "uncompressedBytes": 477
+  },
+  {
+    "file": "raw/gui-built-app-command-result.json.gz",
+    "sha256": "7a97b9b4d758a3929b8a2be53fbe189c9ba9378d6fbb8190d37f7cc14f5cf5d3",
+    "uncompressedBytes": 10
+  },
+  {
+    "file": "raw/gui-built-app-built-app-result.json.gz",
+    "sha256": "70c0f2db9b71196f384cec190da1088d7806e8277957e0c6c6ff127ee7c65380",
+    "uncompressedBytes": 355
+  },
+  {
+    "file": "raw/gui-chat-command-result.json.gz",
+    "sha256": "7a97b9b4d758a3929b8a2be53fbe189c9ba9378d6fbb8190d37f7cc14f5cf5d3",
+    "uncompressedBytes": 10
+  },
+  {
+    "file": "raw/gui-chat-chat-behavior-result.json.gz",
+    "sha256": "f6e669a0fea3c8bf6c94d76ce9e829c1a63ea27a1105fd27bd7d996c8039254c",
+    "uncompressedBytes": 168
+  },
+  {
+    "file": "raw/gui-ragey-command-result.json.gz",
+    "sha256": "7a97b9b4d758a3929b8a2be53fbe189c9ba9378d6fbb8190d37f7cc14f5cf5d3",
+    "uncompressedBytes": 10
+  },
+  {
+    "file": "raw/gui-ragey-seventv-notices-result.json.gz",
+    "sha256": "e416d73dfce9864322a72f6019a266de8917d464524832f5c9ad3210351e46e8",
+    "uncompressedBytes": 904
+  },
+  {
+    "file": "raw/gui-two-windows-command-result.json.gz",
+    "sha256": "7a97b9b4d758a3929b8a2be53fbe189c9ba9378d6fbb8190d37f7cc14f5cf5d3",
+    "uncompressedBytes": 10
+  },
+  {
+    "file": "raw/gui-two-windows-emote-resources-result.json.gz",
+    "sha256": "9a0e3299b2c4e5a86e338e7d5b496e74af3064270507314cf1139452d04a5c0d",
+    "uncompressedBytes": 28637
+  }
+]

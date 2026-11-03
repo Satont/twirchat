@@ -5,7 +5,7 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
-Native version `0.11.0-twirchat.6` keeps GIF/WebP images animating in visible,
+Native version `0.11.0-twirchat.7` keeps GIF/WebP images animating in visible,
 unfocused windows. [GPUIX issue #67](https://github.com/remorses/gpuix/issues/67)
 remains open, and the pinned GPUI source still stops both image frame advancement
 and scheduling on focus loss. The background-image patches add an opt-in GPUI
@@ -27,8 +27,28 @@ per window, armed for the earliest encoded frame boundary. Unrelated chat redraw
 retain the existing timer when that absolute boundary is unchanged. Static images,
 removed images, reduced motion, and hidden windows stop requesting image frames.
 A visible native frame request resumes a hidden animation at the shared phase.
-The native GPUIX image tree is uncached; synchronized images must be traversed on
-every draw so each paint can rebuild the window's animation demand.
+The native GPUIX image tree remains uncached for ordinary UI draws. The scene-animation
+patch registers synchronized animations only when their image actually paints inside the
+content mask. Layout of clipped or offscreen images creates no animation demand.
+
+Each window/source owns one stable atlas slot, using an image ID distinct from the source
+and every other window. A pure animation tick uploads only sources whose encoded frame has
+changed, verifies that each atlas allocation stayed in place, and presents the existing scene.
+It does not rebuild native layout/text, rerender React, advance resource-cache draw epochs,
+or change the encoded frame rate. Clipping, object fit, grayscale, corner radii and opacity
+remain in the existing painted scene. Visible unfocused windows retain the native 30 fps
+throttle; hidden windows and reduced motion stop animation demand.
+
+Input, caret, hover, selection, scrolling and other dirty UI updates take the regular draw
+path before animation-only presentation. Varying image dimensions, missing atlas entries,
+upload failures or relocated allocations also fall back to a regular draw. Completed draws
+reconcile slots against actual scene allocations, including cropped tiles and cached replay;
+retired slots and window close release both atlas pixels and decoded-image references.
+WGPU reuses atlas bindings per texture within each frame and drops them at the frame end.
+Explicit immutable cached-scene presents also reuse GPU instance bindings and data;
+ordinary draws, instance-storage growth and device recovery invalidate that cache.
+Virtual lists report changed visible ranges after layout, including initial layout,
+programmatic scrolling and resize, with duplicate ranges suppressed.
 
 Run from `packages/desktop`:
 
@@ -83,7 +103,7 @@ bun run qa:gui --timeout 45 --keep -- bun scripts/qa-packaged-runtime.ts dist/tw
 ```
 
 This invokes the compiled executable as Bun, clears the development binding
-override, and asserts that its adjacent addon exports native API version 2 both
+override, and asserts that its adjacent addon exports native API version 3 both
 at module level and on a real renderer instance. It also checks the embedded Bun
 version against `.bun-version`, initializes the complete blank desktop database,
 and exercises the Unicode SQLite function used by chat search. It does not start
@@ -118,6 +138,11 @@ extra frames.
 - `getWindowBounds(): { x, y, width, height, mode } | null`: last observed geometry,
   null before initialization. Width/height are client content pixels. Mode is
   `windowed`, `maximized`, or `fullscreen`. Reads never round-trip to the UI thread.
+- `getImageAnimationStats(): { fullDraws, animationOnlyPresents, slotUploads, liveSlots,
+  fallbacks } | null`: cached counters for completed full draws, actual animation-only
+  presentations, stable-slot uploads, live animated sources and draw fallbacks. The getter
+  uses a try-lock and never requests layout or waits for a native command. Window close
+  releases live slots and publishes zero even while the JS renderer remains referenced.
 - `getWindowCapabilities(): { position: boolean, clickThrough: boolean }`: cached
   platform support. Position is false on Wayland, where global moves are unavailable.
 - `setWindowBounds({ x?, y?, width?, height?, mode? }): Promise<void>`: validates

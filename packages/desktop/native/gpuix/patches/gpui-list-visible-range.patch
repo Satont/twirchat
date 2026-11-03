@@ -1,0 +1,60 @@
+--- a/crates/gpui/src/elements/list.rs
++++ b/crates/gpui/src/elements/list.rs
+@@ -492,6 +492,23 @@
+     /// The number of items in this list.
+     pub fn item_count(&self) -> usize {
+         self.0.borrow().items.summary().count
++    }
++
++    /// The visible item range using the current logical scroll offset and last
++    /// laid-out viewport geometry. Returns `None` before layout.
++    ///
++    /// This never requests layout. Query after prepaint to observe the range
++    /// actually laid out after programmatic scrolling or viewport changes.
++    pub fn visible_range(&self) -> Option<Range<usize>> {
++        let state = self.0.borrow();
++        let bounds = state.last_layout_bounds?;
++        let range = StateInner::visible_range(
++            &state.items,
++            bounds.size.height,
++            &state.logical_scroll_top(),
++        );
++        let count = state.items.summary().count;
++        Some(range.start.min(count)..range.end.min(count))
+     }
+ 
+     /// Whether the list is scrolled to the end, or `None` if the list is
+@@ -2108,6 +2125,33 @@
+     }
+ 
+     #[gpui::test]
++    fn test_visible_range_after_initial_layout_programmatic_scroll_and_resize(
++        cx: &mut TestAppContext,
++    ) {
++        let cx = cx.add_empty_window();
++        let state = ListState::new(100, crate::ListAlignment::Top, px(20.))
++            .with_uniform_item_height(px(20.));
++        assert_eq!(state.visible_range(), None);
++        cx.draw(point(px(0.), px(0.)), size(px(100.), px(45.)), |_, cx| {
++            cx.new(|_| TestListView(state.clone())).into_any_element()
++        });
++        assert_eq!(state.visible_range(), Some(0..3));
++
++        state.scroll_to(gpui::ListOffset {
++            item_ix: 40,
++            offset_in_item: px(0.),
++        });
++        cx.draw(point(px(0.), px(0.)), size(px(100.), px(45.)), |_, cx| {
++            cx.new(|_| TestListView(state.clone())).into_any_element()
++        });
++        assert_eq!(state.visible_range(), Some(40..43));
++        cx.draw(point(px(0.), px(0.)), size(px(100.), px(85.)), |_, cx| {
++            cx.new(|_| TestListView(state.clone())).into_any_element()
++        });
++        assert_eq!(state.visible_range(), Some(40..45));
++    }
++
++    #[gpui::test]
+     fn test_item_viewport_queries_return_none_before_layout(_cx: &mut TestAppContext) {
+         let state = ListState::new(5, crate::ListAlignment::Top, px(10.)).measure_all();
+ 

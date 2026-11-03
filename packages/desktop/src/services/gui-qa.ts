@@ -14,6 +14,22 @@ import { z } from 'zod'
 type QaEnvironment = Record<string, string | undefined>
 type BusSocket = Pick<Stats, 'uid' | 'isSocket'>
 
+export function privateWestonDesktopConfig(root: string): string {
+  return [
+    '[shell]',
+    `client=${join(root, 'usr/lib/weston/weston-desktop-shell')}`,
+    'panel-position=none',
+    'locking=false',
+    'animation=none',
+    'close-animation=none',
+    'startup-animation=none',
+    'focus-animation=none',
+    '[input-method]',
+    `path=${join(root, 'usr/lib/weston/weston-keyboard')}`,
+    '',
+  ].join('\n')
+}
+
 export function assertGuiQaPrivateBus(
   env: QaEnvironment,
   runtime: string,
@@ -141,12 +157,26 @@ export function assertGuiQaEnvironment(env: QaEnvironment = process.env): void {
       .parse(JSON.parse(readFileSync(markerPath, 'utf8')))
     const binary = join(root, 'usr/bin/weston')
     const command = readFileSync(`/proc/${server.pid}/cmdline`, 'utf8').split('\0')
+    let configurationIsPrivate =
+      command.includes('--no-config') && command.includes('--shell=kiosk-shell.so')
+    if (env.TWIRCHAT_QA_WESTON_SHELL === 'desktop') {
+      const config = join(runtime, 'weston-desktop.ini')
+      const stat = lstatSync(config)
+      configurationIsPrivate =
+        stat.isFile() &&
+        stat.uid === process.getuid?.() &&
+        (stat.mode & 0o077) === 0 &&
+        command.includes('--shell=desktop-shell.so') &&
+        command.includes(`--config=${config}`) &&
+        !command.includes('--no-config') &&
+        readFileSync(config, 'utf8') === privateWestonDesktopConfig(root)
+    }
     if (
       server.binary !== binary ||
       command[0] !== binary ||
       !command.includes('--backend=headless') ||
       !command.includes('--renderer=gl') ||
-      !command.includes('--no-config') ||
+      !configurationIsPrivate ||
       !command.includes('--socket=twirchat-qa') ||
       readlinkSync(`/proc/${server.pid}/ns/mnt`) !== readlinkSync('/proc/self/ns/mnt')
     )

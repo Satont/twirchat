@@ -141,6 +141,81 @@ test('catalog warmup coalesces, resolves numeric aliases and enriches memory wit
   expect(requests).toBe(1)
 })
 
+test('idle joined channels leave fresh catalogs untouched and refresh them after expiry', async () => {
+  let metadataReads = 0
+  let requests = 0
+  let onTick: (() => void) | undefined
+  const catalogEntry: EmoteCatalogEntry = {
+    ...emote('Wave'),
+    get provider(): EmoteCatalogEntry['provider'] {
+      metadataReads++
+      return 'bttv'
+    },
+  }
+  const state = fixture({
+    readPreferences: () => {
+      const notify = onTick
+      onTick = undefined
+      notify?.()
+      return JSON.stringify(DEFAULT_EMOTE_PREFERENCES)
+    },
+    catalog: async () => {
+      requests++
+      return [catalogEntry]
+    },
+  })
+  await state.runtime.warm('twitch', 'viewer')
+  state.runtime.setJoined('pane', 'twitch', '42')
+  metadataReads = 0
+  const freshTick = Promise.withResolvers<void>()
+  onTick = freshTick.resolve
+  state.runtime.start()
+  await freshTick.promise
+  expect(requests).toBe(1)
+  expect(metadataReads).toBe(0)
+
+  const expiredTick = Promise.withResolvers<void>()
+  onTick = expiredTick.resolve
+  state.time(301001)
+  await expiredTick.promise
+  await until(() => requests === 2)
+  expect((await state.runtime.warm('twitch', '42')).map((entry) => entry.alias)).toEqual(['Wave'])
+  expect(metadataReads).toBeGreaterThan(0)
+  expect(state.published.at(-1)?.catalog.map((entry) => entry.alias)).toEqual(['Wave'])
+})
+
+test('an idle preference change still refreshes a fresh joined catalog', async () => {
+  let rawPreferences = JSON.stringify(DEFAULT_EMOTE_PREFERENCES)
+  let requests = 0
+  let onTick: (() => void) | undefined
+  const state = fixture({
+    readPreferences: () => {
+      const notify = onTick
+      onTick = undefined
+      notify?.()
+      return rawPreferences
+    },
+    catalog: async () => {
+      requests++
+      return [emote('Wave')]
+    },
+  })
+  await state.runtime.warm('twitch', 'viewer')
+  state.runtime.setJoined('pane', 'twitch', '42')
+  const changedTick = Promise.withResolvers<void>()
+  onTick = changedTick.resolve
+  rawPreferences = JSON.stringify({
+    ...DEFAULT_EMOTE_PREFERENCES,
+    enabled: { ...DEFAULT_EMOTE_PREFERENCES.enabled, bttv: false },
+  })
+  state.runtime.start()
+  await changedTick.promise
+  await until(() => requests === 2)
+  expect(await state.runtime.warm('twitch', '42')).toEqual([])
+  expect(state.runtime.enrich(message())).toMatchObject({ emotes: [] })
+  expect(state.published.at(-1)?.catalog).toEqual([])
+})
+
 test('a slow catalog cannot overwrite live 7TV additions, renames, or an empty set', async () => {
   let live: EmoteCatalogEntry[] | undefined = [emote('Old', 'seventv')]
 

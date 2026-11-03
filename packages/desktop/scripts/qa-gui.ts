@@ -15,7 +15,11 @@ import { dirname, join, resolve } from 'node:path'
 
 import { z } from 'zod'
 
-import { assertGuiQaEnvironment, assertGuiQaSandbox } from '../src/services/gui-qa'
+import {
+  assertGuiQaEnvironment,
+  assertGuiQaSandbox,
+  privateWestonDesktopConfig,
+} from '../src/services/gui-qa'
 import { prepareQaWeston, prepareQaWestonControls } from './qa-weston'
 
 interface Options {
@@ -26,6 +30,9 @@ interface Options {
   compositor?: 'xvfb' | 'weston'
   dbus?: boolean
   westonControls?: boolean
+  westonShell?: 'kiosk' | 'desktop'
+  displayWidth?: number
+  displayHeight?: number
   nodeEnv: 'development' | 'production'
 }
 
@@ -51,6 +58,13 @@ export function parseGuiQaArguments(args: string[]): Options {
       options.westonControls = true
       continue
     }
+    if (argument === '--weston-shell') {
+      const shell = args[++index]
+      if (shell !== 'kiosk' && shell !== 'desktop')
+        throw new Error('--weston-shell must be kiosk or desktop.')
+      options.westonShell = shell
+      continue
+    }
     if (argument === '--node-env') {
       const nodeEnv = args[++index]
       if (nodeEnv !== 'development' && nodeEnv !== 'production')
@@ -72,6 +86,15 @@ export function parseGuiQaArguments(args: string[]): Options {
       options.seconds = seconds
       continue
     }
+    if (argument === '--display-width' || argument === '--display-height') {
+      const dimension = Number(args[++index])
+      const minimum = argument === '--display-width' ? 320 : 240
+      if (!Number.isInteger(dimension) || dimension < minimum || dimension > 4096)
+        throw new Error(`${argument} must be an integer between ${minimum} and 4096.`)
+      if (argument === '--display-width') options.displayWidth = dimension
+      else options.displayHeight = dimension
+      continue
+    }
     if (argument === '--artifacts') {
       const path = args[++index]
       if (!path) throw new Error('--artifacts requires a directory.')
@@ -83,6 +106,8 @@ export function parseGuiQaArguments(args: string[]): Options {
   }
   if (options.westonControls && options.compositor !== 'weston')
     throw new Error('--weston-controls requires --compositor weston.')
+  if (options.westonShell && options.compositor !== 'weston')
+    throw new Error('--weston-shell requires --compositor weston.')
   return options
 }
 
@@ -224,14 +249,33 @@ async function privateBusSession(command: string[]): Promise<number> {
   }
 }
 
-export function westonArguments(): string[] {
+const displayDimensionsSchema = z.object({
+  width: z.coerce.number().int().min(320).max(4096),
+  height: z.coerce.number().int().min(240).max(4096),
+})
+function childDisplayDimensions(compositor: 'xvfb' | 'weston') {
+  return displayDimensionsSchema.parse({
+    width: process.env.TWIRCHAT_QA_DISPLAY_WIDTH ?? (compositor === 'xvfb' ? 1280 : 1200),
+    height: process.env.TWIRCHAT_QA_DISPLAY_HEIGHT ?? (compositor === 'xvfb' ? 900 : 800),
+  })
+}
+export function xvfbScreenSize(width = 1280, height = 900): string {
+  const dimensions = displayDimensionsSchema.parse({ width, height })
+  return `${dimensions.width}x${dimensions.height}x24`
+}
+export function westonArguments(
+  width = 1200,
+  height = 800,
+  shell: 'kiosk' | 'desktop' = 'kiosk',
+): string[] {
+  const dimensions = displayDimensionsSchema.parse({ width, height })
   return [
     '--backend=headless',
     '--renderer=gl',
-    '--shell=kiosk-shell.so',
+    `--shell=${shell}-shell.so`,
     '--socket=twirchat-qa',
-    '--width=1200',
-    '--height=800',
+    `--width=${dimensions.width}`,
+    `--height=${dimensions.height}`,
     '--fake-seat',
     '--idle-time=0',
     '--no-config',
@@ -251,8 +295,18 @@ async function westonSession(command: string[]): Promise<number> {
   if (!runtime || !root) throw new Error('Private Weston runtime or tool directory is missing.')
   const binary = join(root, 'usr/bin/weston')
   const module = process.env.TWIRCHAT_QA_WESTON_CONTROLS
+  const dimensions = childDisplayDimensions('weston')
+  const shell = z.enum(['kiosk', 'desktop']).parse(process.env.TWIRCHAT_QA_WESTON_SHELL ?? 'kiosk')
+  const compositorArguments = westonArguments(dimensions.width, dimensions.height, shell)
+  if (shell === 'desktop') {
+    const config = join(runtime, 'weston-desktop.ini')
+    await Bun.write(config, privateWestonDesktopConfig(root))
+    chmodSync(config, 0o600)
+    const noConfig = compositorArguments.indexOf('--no-config')
+    compositorArguments.splice(noConfig, 1, `--config=${config}`)
+  }
   const server = Bun.spawn(
-    [binary, ...westonArguments(), ...(module ? [`--modules=${module}`] : [])],
+    [binary, ...compositorArguments, ...(module ? [`--modules=${module}`] : [])],
     {
       stdout: 'inherit',
       stderr: 'inherit',
@@ -264,6 +318,7 @@ async function westonSession(command: string[]): Promise<number> {
           `headless-backend.so=${root}/usr/lib/libweston-15/headless-backend.so`,
           `gl-renderer.so=${root}/usr/lib/libweston-15/gl-renderer.so`,
           `kiosk-shell.so=${root}/usr/lib/weston/kiosk-shell.so`,
+          `desktop-shell.so=${root}/usr/lib/weston/desktop-shell.so`,
         ].join(';'),
       },
     },
@@ -301,6 +356,7 @@ async function xvfbSession(command: string[]): Promise<number> {
   await Bun.write(auth, '')
   chmodSync(auth, 0o600)
   const cookie = randomBytes(16).toString('hex')
+  const dimensions = childDisplayDimensions('xvfb')
   const authorization = Bun.spawn(['/usr/bin/xauth', '-f', auth, 'add', ':99', '.', cookie], {
     stdout: 'inherit',
     stderr: 'inherit',
@@ -313,7 +369,7 @@ async function xvfbSession(command: string[]): Promise<number> {
       ':99',
       '-screen',
       '0',
-      '1280x900x24',
+      xvfbScreenSize(dimensions.width, dimensions.height),
       '-nolisten',
       'tcp',
       '-auth',
@@ -344,6 +400,10 @@ async function run(options: Options): Promise<number> {
   if (process.platform !== 'linux')
     throw new Error('Isolated GUI QA requires Linux with bwrap and Xvfb.')
   const compositor = options.compositor ?? 'xvfb'
+  const dimensions = displayDimensionsSchema.parse({
+    width: options.displayWidth ?? (compositor === 'xvfb' ? 1280 : 1200),
+    height: options.displayHeight ?? (compositor === 'xvfb' ? 900 : 800),
+  })
   const tools =
     compositor === 'weston'
       ? ['/usr/bin/bwrap', '/usr/bin/bsdtar']
@@ -381,6 +441,9 @@ async function run(options: Options): Promise<number> {
     TWIRCHAT_QA_RUNTIME: join(session, 'runtime'),
     TWIRCHAT_QA_NONCE: nonce,
     TWIRCHAT_QA_COMPOSITOR: compositor,
+    TWIRCHAT_QA_WESTON_SHELL: options.westonShell ?? 'kiosk',
+    TWIRCHAT_QA_DISPLAY_WIDTH: String(dimensions.width),
+    TWIRCHAT_QA_DISPLAY_HEIGHT: String(dimensions.height),
     TWIRCHAT_QA_HOST_MOUNT_NS: readlinkSync('/proc/self/ns/mnt'),
     TWIRCHAT_QA_CWD: process.cwd(),
     DB_PATH: join(session, 'profile', 'db.sqlite'),
