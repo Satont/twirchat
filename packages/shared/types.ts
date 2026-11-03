@@ -1,3 +1,5 @@
+import { OVERLAY_SERVER_PORT } from './constants'
+
 // ============================================================
 // Общие типы платформ
 // ============================================================
@@ -232,7 +234,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     fontSize: 14,
     maxMessages: 20,
     messageTimeout: 0,
-    port: 45823,
+    port: OVERLAY_SERVER_PORT,
     position: 'bottom',
     showAvatar: true,
     showBadges: true,

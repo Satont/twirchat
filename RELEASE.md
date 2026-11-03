@@ -80,9 +80,21 @@ Required variables for production:
 
 Optional variables:
 
-- `AUTH_SERVER_PORT` - Local auth callback port (default: 45821)
-- `OVERLAY_SERVER_PORT` - Overlay server port (default: 45823)
+- `AUTH_SERVER_PORT` - Local auth callback port (production: 45821, development: 55821)
+- `OVERLAY_SERVER_PORT` - Overlay server port (production: 45823, development: 55823)
 - `DB_PATH` - SQLite database path
+
+Desktop `dev` explicitly uses development mode; `start` and release builds use
+production. Default desktop ports are 10000 higher outside production, so both
+instances can run together. Explicit port overrides are used unchanged.
+The development-only injection server defaults to 55824 (`DEV_SERVER_PORT`).
+
+Register development OAuth callbacks separately from production:
+`http://localhost:55821/auth/twitch/callback`,
+`http://localhost:55821/auth/youtube/callback`, and
+`http://localhost:55821/auth/kick/callback`.
+Production callbacks keep port 45821. OBS URLs copied from settings use the active
+overlay listener port, including when an older settings file contains port 45823.
 
 ## Docker Deployment
 

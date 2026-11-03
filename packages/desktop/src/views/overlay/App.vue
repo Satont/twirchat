@@ -29,7 +29,7 @@ const cfg = {
   animation: parseOverlayAnimation(qp('animation', 'slide')),
   position: parseOverlayPosition(qp('position', 'bottom')),
   platforms: qp('platforms', ''),
-  port: Number(qp('port', '45823')),
+  port: qp('port', window.location.port),
 }
 
 const allowedPlatforms = cfg.platforms
@@ -87,7 +87,13 @@ let expireTimer: ReturnType<typeof setInterval> | null = null
 
 function connect() {
   if (stopped) return
-  const socket = new WebSocket(`ws://localhost:${cfg.port}`)
+  const url = new URL(window.location.href)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.port = cfg.port
+  url.pathname = '/'
+  url.search = ''
+  url.hash = ''
+  const socket = new WebSocket(url)
   ws = socket
 
   socket.addEventListener('open', () => {

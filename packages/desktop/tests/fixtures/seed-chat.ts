@@ -1,6 +1,7 @@
+import { DEV_SERVER_PORT } from '@twirchat/shared/constants'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
-const ENDPOINT = 'http://localhost:45824/dev/inject-chat'
+const ENDPOINT = `http://localhost:${DEV_SERVER_PORT}/dev/inject-chat`
 const COUNT = 150
 
 for (let i = 0; i < COUNT; i++) {

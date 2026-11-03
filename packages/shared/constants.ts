@@ -1,7 +1,17 @@
 // Ports - can be overridden via env vars
-export const AUTH_SERVER_PORT = parseInt(process.env['AUTH_SERVER_PORT'] ?? '45821')
-export const OVERLAY_SERVER_PORT = parseInt(process.env['OVERLAY_SERVER_PORT'] ?? '45823')
-export const KICK_WEBHOOK_PORT = parseInt(process.env['KICK_WEBHOOK_PORT'] ?? '45822')
+const PORT_OFFSET = process.env.NODE_ENV === 'production' ? 0 : 10_000
+export const AUTH_SERVER_PORT = parseInt(
+  process.env['AUTH_SERVER_PORT'] ?? String(45821 + PORT_OFFSET),
+)
+export const OVERLAY_SERVER_PORT = parseInt(
+  process.env['OVERLAY_SERVER_PORT'] ?? String(45823 + PORT_OFFSET),
+)
+export const KICK_WEBHOOK_PORT = parseInt(
+  process.env['KICK_WEBHOOK_PORT'] ?? String(45822 + PORT_OFFSET),
+)
+export const DEV_SERVER_PORT = parseInt(
+  process.env['DEV_SERVER_PORT'] ?? String(45824 + PORT_OFFSET),
+)
 
 // Auth callbacks
 export const AUTH_CALLBACK_BASE = `http://localhost:${AUTH_SERVER_PORT}`

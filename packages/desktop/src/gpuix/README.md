@@ -26,7 +26,7 @@ bun run typecheck        # desktop, GPUIX and test configurations
 │    │    ├─ src/watched-channels/* watched-channel manager             │
 │    │    ├─ src/seventv/*          7TV emote service                   │
 │    │    ├─ src/backend-connection.ts  WS to the backend service       │
-│    │    ├─ src/overlay-server.ts  OBS overlay HTTP+WS (port 45823)    │
+│    │    ├─ src/overlay-server.ts  OBS HTTP+WS (prod 45823/dev 55823)  │
 │    │    └─ src/auth/*             PKCE OAuth + local callback server  │
 │    │                                                                  │
 │    ├─ { api, events }   ← "the backend" (see below)                   │
@@ -209,7 +209,7 @@ served by `src/overlay-server.ts` (started by the GPUIX backend too).
   does not provide compositor isolation. Use the QA launcher for agent tests.
 - `TWIRCHAT_GPUIX_START_MAIN_TAB=events|platforms|settings` — boot onto a tab.
 - `TWIRCHAT_GPUIX_START_TAB=<watchedChannelId>` — boot onto a watched tab.
-- `POST http://localhost:45824/dev/inject-chat` with a `NormalizedChatMessage`
+- `POST http://localhost:55824/dev/inject-chat` with a `NormalizedChatMessage`
   JSON body injects a fake chat message (dev only).
 - GPUIX automation tree queries, bounds, clicks, wheel events, text input and
   key simulation run inside the QA command. Never point an automated launch
