@@ -200,6 +200,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ matrix.runtime }}
+          overwrite: true
           path: |
             packages/desktop/dist/native/*.node
             packages/desktop/dist/native/*.node.json
@@ -342,6 +343,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: distribution-qa-${{ matrix.runtime }}
+          overwrite: true
           path: ${{ runner.temp }}/distribution-qa
           if-no-files-found: ignore
           retention-days: 7
@@ -349,6 +351,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-${{ matrix.runtime }}
+          overwrite: true
           path: packages/desktop/releases/*
           if-no-files-found: error
           compression-level: 0

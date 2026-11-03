@@ -18,6 +18,9 @@ read-only repository access and do not publish packages or use signing credentia
 Desktop checks run the compiled executable's headless release probe from a separate working
 directory, including updater loading and packaged runtime assets. They do not demonstrate an
 interactive installation or upgrade on a user's desktop.
+Linux additionally launches the actual AppImage with software Mesa OpenGL inside the isolated
+virtual display and requires a painted frame; a missing window, runtime error or blank frame fails
+the build. Screenshots and logs are retained as the separate `distribution-qa-linux-x64` artifact.
 
 | Desktop target      | Native build runner | Installer/update channel |
 | ------------------- | ------------------- | ------------------------ |
