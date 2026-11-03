@@ -41,6 +41,13 @@ packaging, and release builds do not replace measured performance evidence.
 
 ## Create a release
 
+For a local source build, run `bun run build` with the pinned Bun version. The desktop uses the
+same production compiler as CI and writes its executable and runtime assets to
+`packages/desktop/bin/` (`TwirChat.app` on macOS). Local metadata defaults to `0.0.1-local` and
+`http://127.0.0.1:3000`; `RELEASE_VERSION`, `BACKEND_URL` or `CHATRIX_BACKEND_URL` override these
+defaults. The backend executable is written to `packages/backend/.out/backend`. Published desktop
+versions always come from the release tag, rather than these local defaults.
+
 1. Merge a pull request after its required checks pass.
 2. Check that the repository `BACKEND_URL` variable identifies the intended public HTTPS backend.
    The current endpoint is `https://chat.twir.app`. The WebSocket URL is derived from this URL.

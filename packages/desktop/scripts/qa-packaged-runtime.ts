@@ -5,7 +5,9 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
-const executable = resolve(process.argv[2] ?? join(import.meta.dir, '../dist/twirchat'))
+import { releaseBuildPaths } from './build-release'
+
+const executable = resolve(process.argv[2] ?? releaseBuildPaths().executable)
 const expectedBun = (
   await Bun.file(resolve(import.meta.dir, '../../../.bun-version')).text()
 ).trim()

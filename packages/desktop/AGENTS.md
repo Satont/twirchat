@@ -67,7 +67,7 @@ src/
 ```bash
 bun run dev           # bun --hot src/gpuix/main.tsx (remounts React on save)
 bun run start         # plain run
-bun run build         # overlay vite build + bun build --compile
+bun run build         # production compiler + packaged runtime assets → bin/
 bun run build:overlay # overlay only (dist/overlay, port 45823)
 bun run typecheck     # tsc -p tsconfig.json && tsc -p tsconfig.gpuix.json
 bun test tests/

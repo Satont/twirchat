@@ -80,7 +80,7 @@ export async function sameFileSystemPath(actual: string, expected: string): Prom
 async function run(args: string[]): Promise<void> {
   const child = Bun.spawn(args, {
     cwd: desktop,
-    env: process.env,
+    env: { ...process.env, NODE_ENV: 'production' },
     stdin: 'ignore',
     stdout: 'inherit',
     stderr: 'inherit',

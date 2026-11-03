@@ -12,7 +12,7 @@
     "qa:windows": "bun scripts/qa-gui.ts --dbus --timeout 60 -- bun scripts/qa-windows.tsx",
     "qa:app": "bun scripts/qa-gui.ts --dbus --timeout 45 -- bun scripts/qa-app.tsx",
     "qa:chat": "bun scripts/qa-gui.ts --dbus --timeout 45 -- bun scripts/qa-chat-behavior.tsx",
-    "build": "bun run build:native && bun run build:overlay && bun build --compile src/gpuix/main.tsx --outfile dist/twirchat && bun run package:runtime dist",
+    "build": "bun scripts/build-desktop.ts",
     "build:release": "bun scripts/build-release.ts",
     "package:runtime": "bun scripts/package-runtime-assets.ts",
     "build:overlay": "vite build --config vite.overlay.config.ts",
