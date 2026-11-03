@@ -216,7 +216,7 @@ export function UpdateToast() {
       ) : null}
       {update.status === 'update-available' ? (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
-          <div style={buttonStyle} onClick={() => void backend.api.downloadUpdate()}>
+          <div style={buttonStyle} onClick={() => runUiTask(backend.api.downloadUpdate())}>
             <Text style={{ fontSize: 13, color: '#ffffff' }}>Download</Text>
           </div>
           <div
@@ -232,7 +232,7 @@ export function UpdateToast() {
       ) : null}
       {update.status === 'download-complete' ? (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
-          <div style={buttonStyle} onClick={() => void backend.api.applyUpdate()}>
+          <div style={buttonStyle} onClick={() => runUiTask(backend.api.applyUpdate())}>
             <Text style={{ fontSize: 13, color: '#ffffff' }}>Restart to apply</Text>
           </div>
         </div>

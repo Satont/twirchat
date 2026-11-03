@@ -37,6 +37,7 @@
     "scripts/qa-deferred-chat-rows.tsx",
     "scripts/qa-badge-tooltips.tsx",
     "scripts/qa-distribution.ts",
+    "scripts/qa-linux-update.ts",
     "scripts/qa-tray.tsx",
     "scripts/qa-built-app.ts",
     "scripts/qa-wayland-tray.tsx",
