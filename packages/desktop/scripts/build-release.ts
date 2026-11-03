@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -69,6 +69,11 @@ export function releaseBuildPaths(platform = process.platform) {
     default:
       throw new Error(`Unsupported desktop release platform: ${platform}`)
   }
+}
+
+export async function sameFileSystemPath(actual: string, expected: string): Promise<boolean> {
+  const [actualPath, expectedPath] = await Promise.all([realpath(actual), realpath(expected)])
+  return actualPath === expectedPath
 }
 
 async function run(args: string[], env?: Record<string, string>): Promise<void> {
@@ -235,16 +240,31 @@ export async function buildRelease(args = process.argv.slice(2)): Promise<void> 
     ])
     if (code !== 0) throw new Error(`Compiled release smoke failed (${code}): ${stderr}`)
     const report = smokeReportSchema.parse(JSON.parse(stdout.trim()))
+    const expected = {
+      version,
+      backendUrl,
+      backendWsUrl: backendWebSocketUrl(backendUrl),
+      bunVersion: Bun.version,
+      target: `${process.platform}-${process.arch}`,
+      executable: paths.executable,
+      cwd,
+    }
+    const [sameExecutable, sameCwd] = await Promise.all([
+      sameFileSystemPath(report.executable, expected.executable),
+      sameFileSystemPath(report.cwd, expected.cwd),
+    ])
     if (
-      report.version !== version ||
-      report.backendUrl !== backendUrl ||
-      report.backendWsUrl !== backendWebSocketUrl(backendUrl) ||
-      report.bunVersion !== Bun.version ||
-      report.target !== `${process.platform}-${process.arch}` ||
-      report.executable !== paths.executable ||
-      report.cwd !== cwd
+      report.version !== expected.version ||
+      report.backendUrl !== expected.backendUrl ||
+      report.backendWsUrl !== expected.backendWsUrl ||
+      report.bunVersion !== expected.bunVersion ||
+      report.target !== expected.target ||
+      !sameExecutable ||
+      !sameCwd
     )
-      throw new Error('Compiled release smoke does not match the requested build.')
+      throw new Error(
+        `Compiled release smoke does not match the requested build: ${JSON.stringify({ expected, actual: report })}`,
+      )
     await Bun.write(
       join(paths.output, 'release-smoke.json'),
       JSON.stringify(report, null, 2) + '\n',

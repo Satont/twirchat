@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,6 +9,7 @@ import {
   parseReleaseBuildArguments,
   refreshSignedNativeManifest,
   releaseBuildPaths,
+  sameFileSystemPath,
 } from '../scripts/build-release'
 import { backendWebSocketUrl } from '../src/build-info'
 import { GPUI_SOURCE_REVISION, GPUIX_SOURCE_REVISION } from '../src/services/native-runtime'
@@ -89,4 +90,23 @@ test('Mac signing identifies thin and universal Mach-O rather than data files', 
   expect(isMachO(Uint8Array.from([0xbf, 0xba, 0xfe, 0xca]))).toBe(true)
   expect(isMachO(Uint8Array.from([0x7f, 0x45, 0x4c, 0x46]))).toBe(false)
   expect(isMachO(new Uint8Array())).toBe(false)
+})
+
+test('release smoke accepts canonical filesystem aliases but rejects different paths', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'twirchat-release-paths-'))
+  try {
+    const actual = join(directory, 'actual')
+    const alias = join(directory, 'alias')
+    const other = join(directory, 'other')
+    await Promise.all([mkdir(actual), mkdir(other)])
+    await symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir')
+    await Bun.write(join(actual, 'twirchat'), 'executable-fixture')
+    await Bun.write(join(other, 'twirchat'), 'different-executable-fixture')
+    expect(await sameFileSystemPath(alias, actual)).toBe(true)
+    expect(await sameFileSystemPath(join(alias, 'twirchat'), join(actual, 'twirchat'))).toBe(true)
+    expect(await sameFileSystemPath(other, actual)).toBe(false)
+    expect(await sameFileSystemPath(join(other, 'twirchat'), join(actual, 'twirchat'))).toBe(false)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
