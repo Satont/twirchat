@@ -1,0 +1,669 @@
+--- a/packages/native/src/lib.rs
++++ b/packages/native/src/lib.rs
+@@ -21,6 +21,7 @@
+ mod element_tree;
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ mod hotkey_capture;
++mod image_resources;
+ mod markdown;
+ mod motion;
+ mod renderer;
+@@ -44,6 +45,7 @@
+ mod test_renderer;
+ 
+ pub use element_tree::*;
++pub use image_resources::ImageResourceStats;
+ pub use renderer::*;
+ pub use style::*;
+ 
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -37,6 +37,7 @@
+ use crate::accessibility::{apply_a11y_click, apply_accessibility};
+ use crate::custom_elements::{CustomElementRegistry, CustomRenderContext};
+ use crate::element_tree::EventPayload;
++use crate::image_resources::{ImageResourceStats, ImageResources, SharedImageResourceStats};
+ use crate::retained_tree::{RetainedTree, StyleTable};
+ use crate::style::StyleDesc;
+ use crate::text::{SharedSelection, selectable_text, selection_frame_reset};
+@@ -1143,6 +1144,8 @@
+     bounds: Option<NativeWindowBounds>,
+     capabilities: NativeWindowCapabilities,
+     painted_bounds: Arc<crate::automation::PaintedBoundsSnapshot>,
++    image_resource_stats: SharedImageResourceStats,
++    scale_factor: f64,
+ }
+ 
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+@@ -1253,6 +1256,7 @@
+     state.open = true;
+     state.active = window.is_window_active();
+     state.visibility = window.native_window_visibility_state();
++    state.scale_factor = f64::from(window.scale_factor());
+     state.bounds = Some(NativeWindowBounds {
+         x: f32::from(origin.x) as f64,
+         y: f32::from(origin.y) as f64,
+@@ -1293,6 +1297,12 @@
+     let root = handle
+         .update(cx, |view, window, cx| {
+             view.window_id = Some(window_id);
++            view.image_resource_stats = observer_state.lock().image_resource_stats.clone();
++            if let Some(resources) = &view.image_resources {
++                resources.update(cx, |resources, _| {
++                    resources.set_stats(view.image_resource_stats.clone());
++                });
++            }
+             capture_native_window(window, &observer_state);
+             #[cfg(target_os = "linux")]
+             {
+@@ -1320,8 +1330,13 @@
+                 }
+             })
+             .detach();
+-            cx.observe_window_bounds(window, move |_, window, _| {
+-                capture_native_window(window, &observer_state)
++            cx.observe_window_bounds(window, move |view, window, _| {
++                let previous_scale = observer_state.lock().scale_factor;
++                capture_native_window(window, &observer_state);
++                let scale = observer_state.lock().scale_factor;
++                if scale != previous_scale {
++                    emit_event_full(&view.event_callback, 0, "windowScaleChange", |_| {});
++                }
+             })
+             .detach();
+             cx.weak_entity()
+@@ -2452,6 +2467,23 @@
+     }
+ 
+     #[napi]
++    pub fn get_window_scale_factor(&self) -> f64 {
++        let state = self.window_state.lock();
++        if state.open && state.scale_factor.is_finite() && state.scale_factor > 0.0 {
++            state.scale_factor
++        } else {
++            1.0
++        }
++    }
++
++    #[napi]
++    pub fn get_image_resource_stats(&self) -> Option<ImageResourceStats> {
++        let stats = self.window_state.lock().image_resource_stats.clone();
++        let snapshot = stats.try_lock()?;
++        Some(snapshot.clone())
++    }
++
++    #[napi]
+     pub fn get_window_capabilities(&self) -> NativeWindowCapabilities {
+         self.window_state.lock().capabilities.clone()
+     }
+@@ -4759,6 +4791,8 @@
+     /// What `onLayout` and `onScrollChange` last reported, for the elements that
+     /// have the listener. Shared with the paint closures that compare against it.
+     paint_reports: SharedPaintReports,
++    image_resources: Option<gpui::Entity<ImageResources>>,
++    image_resource_stats: SharedImageResourceStats,
+ }
+ 
+ #[derive(Default)]
+@@ -5082,7 +5116,15 @@
+             clock: crate::automation::AutomationClock::new(),
+             highlights: HashMap::new(),
+             paint_reports: SharedPaintReports::default(),
+-        }
++            image_resources: None,
++            image_resource_stats: SharedImageResourceStats::default(),
++        }
++    }
++
++    fn image_resources(&mut self, cx: &mut gpui::App) -> gpui::Entity<ImageResources> {
++        self.image_resources
++            .get_or_insert_with(|| ImageResources::new(self.image_resource_stats.clone(), cx))
++            .clone()
+     }
+ 
+     pub(crate) fn set_live_image(
+@@ -5295,12 +5337,14 @@
+         }
+ 
+         let keyboard_focus = self.keyboard_focus_path(&tree, window, cx);
++        let image_resources = self.image_resources(cx);
+         let mut build_ctx = BuildCtx {
+             tree: &tree,
+             event_callback: &callback,
+             focus_handles: &self.focus_handles,
+             scroll_handles: &mut self.scroll_handles,
+             custom_registry: &mut self.custom_registry,
++            image_resources: &image_resources,
+             virtual_lists: &mut self.virtual_lists,
+             motion_states: &mut self.motion_states,
+             now,
+@@ -5428,6 +5472,7 @@
+     pub focus_handles: &'a HashMap<u64, gpui::FocusHandle>,
+     pub scroll_handles: &'a mut HashMap<u64, gpui::ScrollHandle>,
+     pub custom_registry: &'a mut CustomElementRegistry,
++    pub image_resources: &'a gpui::Entity<ImageResources>,
+     virtual_lists: &'a mut HashMap<u64, VirtualListEntry>,
+     pub motion_states: &'a mut HashMap<u64, crate::motion::MotionState>,
+     pub now: web_time::Instant,
+@@ -6359,6 +6404,8 @@
+ 
+         let window_id = window.window_handle().window_id();
+         self.window_id = Some(window_id);
++        let image_resources = self.image_resources(cx);
++        image_resources.update(cx, |resources, cx| resources.begin_frame(window, cx));
+         window.set_window_title(&self.window_title);
+ 
+         #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+@@ -6428,6 +6475,7 @@
+                     focus_handles: &self.focus_handles,
+                     scroll_handles: &mut self.scroll_handles,
+                     custom_registry: &mut self.custom_registry,
++                    image_resources: &image_resources,
+                     virtual_lists: &mut self.virtual_lists,
+                     motion_states: &mut self.motion_states,
+                     now,
+@@ -6603,6 +6651,7 @@
+             let inherited = ctx.inherited.clone();
+             let render_ctx = CustomRenderContext {
+                 id,
++                image_resources: ctx.image_resources,
+                 events: element.events(),
+                 event_callback: ctx.event_callback,
+                 focus_handle: ctx.focus_handles.get(&id),
+--- a/packages/native/src/custom_elements/mod.rs
++++ b/packages/native/src/custom_elements/mod.rs
+@@ -27,6 +27,7 @@
+ pub struct CustomRenderContext<'a> {
+     /// Numeric element ID (matches React's instance ID).
+     pub id: u64,
++    pub(crate) image_resources: &'a gpui::Entity<crate::image_resources::ImageResources>,
+     /// Event types registered by React (e.g. "keyDown", "click").
+     pub events: &'a HashSet<String>,
+     /// Callback for emitting events back to JS.
+--- a/packages/native/src/custom_elements/img.rs
++++ b/packages/native/src/custom_elements/img.rs
+@@ -200,6 +200,7 @@
+         // loading state are rebuilt from scratch on every frame and an animation
+         // never advances past frame zero.
+         let mut el = el
++            .image_cache(ctx.image_resources)
+             .animate_when_inactive(true)
+             .synchronize_animation(true)
+             .object_fit(self.object_fit.as_gpui())
+--- /dev/null
++++ b/packages/native/src/image_resources.rs
+@@ -0,0 +1,474 @@
++//! Per-view decoded images, shared by resource and retired with their atlas tiles.
++//! The cache targets 64 MiB/256 entries; current visible images may exceed that
++//! budget and stay pinned so painting never causes a decode/eviction loop.
++
++use futures::FutureExt as _;
++use gpui::{
++    App, AppContext as _, Asset as _, AssetLogger, Entity, ImageAssetLoader, ImageCache,
++    ImageCacheError, ImageLoadingTask, RenderImage, Resource, Task, WeakEntity, Window,
++};
++use std::cell::Cell;
++use std::collections::{BTreeMap, HashMap};
++use std::rc::Rc;
++use std::sync::Arc;
++
++const MAX_ENTRIES: usize = 256;
++const MAX_DECODED_BYTES: usize = 64 * 1024 * 1024;
++
++#[derive(Clone, Debug)]
++#[cfg_attr(
++    not(all(target_arch = "wasm32", target_os = "unknown")),
++    napi_derive::napi(object)
++)]
++pub struct ImageResourceStats {
++    pub entries: f64,
++    pub loading: f64,
++    pub decoded_bytes: f64,
++    pub evictions: f64,
++    pub decodes: f64,
++    pub max_entries: f64,
++    pub max_decoded_bytes: f64,
++}
++
++impl Default for ImageResourceStats {
++    fn default() -> Self {
++        Self {
++            entries: 0.0,
++            loading: 0.0,
++            decoded_bytes: 0.0,
++            evictions: 0.0,
++            decodes: 0.0,
++            max_entries: MAX_ENTRIES as f64,
++            max_decoded_bytes: MAX_DECODED_BYTES as f64,
++        }
++    }
++}
++
++pub(crate) type SharedImageResourceStats = Arc<parking_lot::Mutex<ImageResourceStats>>;
++
++struct Access {
++    stamp: u64,
++    epoch: u64,
++    bytes: usize,
++}
++
++struct ResourceBudget {
++    entries: HashMap<Resource, Access>,
++    order: BTreeMap<u64, Resource>,
++    epoch: u64,
++    stamp: u64,
++    bytes: usize,
++    max_entries: usize,
++    max_bytes: usize,
++    draw_id: Option<u64>,
++}
++
++impl ResourceBudget {
++    fn new(max_entries: usize, max_bytes: usize) -> Self {
++        Self {
++            entries: HashMap::new(),
++            order: BTreeMap::new(),
++            epoch: 0,
++            stamp: 0,
++            bytes: 0,
++            max_entries,
++            max_bytes,
++            draw_id: None,
++        }
++    }
++
++    fn begin_draw(&mut self, draw_id: u64) -> bool {
++        if self.draw_id == Some(draw_id) {
++            return false;
++        }
++        self.draw_id = Some(draw_id);
++        self.begin_frame();
++        true
++    }
++
++    fn begin_frame(&mut self) {
++        self.epoch += 1;
++    }
++
++    fn touch(&mut self, resource: &Resource) {
++        self.stamp += 1;
++        let access = self.entries.entry(resource.clone()).or_insert(Access {
++            stamp: self.stamp,
++            epoch: self.epoch,
++            bytes: 0,
++        });
++        self.order.remove(&access.stamp);
++        access.stamp = self.stamp;
++        access.epoch = self.epoch;
++        self.order.insert(self.stamp, resource.clone());
++    }
++
++    fn set_bytes(&mut self, resource: &Resource, bytes: usize) {
++        if let Some(access) = self.entries.get_mut(resource) {
++            self.bytes -= access.bytes;
++            self.bytes += bytes;
++            access.bytes = bytes;
++        }
++    }
++
++    fn is_over_budget(&self) -> bool {
++        self.entries.len() > self.max_entries || self.bytes > self.max_bytes
++    }
++
++    fn oldest_evictable(&self, protect_previous: bool) -> Option<&Resource> {
++        if !self.is_over_budget() {
++            return None;
++        }
++        let (_, resource) = self.order.first_key_value()?;
++        let access = self.entries.get(resource)?;
++        let protected_epoch = self.epoch.saturating_sub(u64::from(protect_previous));
++        if access.epoch >= protected_epoch {
++            return None;
++        }
++        Some(resource)
++    }
++
++    fn evict_oldest(&mut self, protect_previous: bool) -> Option<Resource> {
++        self.oldest_evictable(protect_previous)?;
++        let (_, resource) = self.order.pop_first()?;
++        if let Some(access) = self.entries.remove(&resource) {
++            self.bytes -= access.bytes;
++        }
++        Some(resource)
++    }
++}
++
++enum ImageState {
++    Loading(ImageLoadingTask),
++    Loaded(Result<Arc<RenderImage>, ImageCacheError>),
++}
++
++struct Entry {
++    load: u64,
++    state: ImageState,
++    _completion: Task<()>,
++    completing: Rc<Cell<bool>>,
++}
++
++pub(crate) struct ImageResources {
++    entries: HashMap<Resource, Entry>,
++    budget: ResourceBudget,
++    weak: WeakEntity<Self>,
++    stats: SharedImageResourceStats,
++    loading: usize,
++    decodes: u64,
++    evictions: u64,
++    settle_pending: bool,
++}
++
++impl ImageResources {
++    pub(crate) fn new(stats: SharedImageResourceStats, cx: &mut App) -> Entity<Self> {
++        let cache = cx.new(|cx| Self {
++            entries: HashMap::new(),
++            budget: ResourceBudget::new(MAX_ENTRIES, MAX_DECODED_BYTES),
++            weak: cx.weak_entity(),
++            stats,
++            loading: 0,
++            decodes: 0,
++            evictions: 0,
++            settle_pending: false,
++        });
++        cx.observe_release(&cache, |cache, cx| {
++            for (_, entry) in cache.entries.drain() {
++                match entry.state {
++                    ImageState::Loaded(Ok(image)) => cx.drop_image(image, None),
++                    ImageState::Loading(task) => {
++                        if let Some(Ok(image)) = task.now_or_never() {
++                            cx.drop_image(image, None);
++                        }
++                    }
++                    ImageState::Loaded(Err(_)) => {}
++                }
++            }
++            cache.budget.entries.clear();
++            cache.budget.order.clear();
++            cache.budget.bytes = 0;
++            cache.loading = 0;
++            cache.publish();
++        })
++        .detach();
++        cache.update(cx, |cache, _| cache.publish());
++        cache
++    }
++
++    pub(crate) fn set_stats(&mut self, stats: SharedImageResourceStats) {
++        self.stats = stats;
++        self.publish();
++    }
++
++    pub(crate) fn begin_frame(&mut self, window: &mut Window, cx: &mut App) {
++        if self.budget.begin_draw(window.draw_id()) {
++            self.trim(true, window, cx);
++        }
++    }
++
++    fn publish(&self) {
++        *self.stats.lock() = ImageResourceStats {
++            entries: self.entries.len() as f64,
++            loading: self.loading as f64,
++            decoded_bytes: self.budget.bytes as f64,
++            evictions: self.evictions as f64,
++            decodes: self.decodes as f64,
++            max_entries: MAX_ENTRIES as f64,
++            max_decoded_bytes: MAX_DECODED_BYTES as f64,
++        };
++    }
++
++    fn trim(&mut self, protect_previous: bool, window: &mut Window, cx: &mut App) {
++        let mut changed = false;
++        loop {
++            if self
++                .budget
++                .oldest_evictable(protect_previous)
++                .and_then(|resource| self.entries.get(resource))
++                .is_some_and(|entry| entry.completing.get())
++            {
++                break;
++            }
++            let Some(resource) = self.budget.evict_oldest(protect_previous) else {
++                break;
++            };
++            if let Some(entry) = self.entries.remove(&resource) {
++                match entry.state {
++                    ImageState::Loaded(Ok(image)) => cx.drop_image(image, Some(window)),
++                    ImageState::Loading(task) => {
++                        self.loading -= 1;
++                        if let Some(Ok(image)) = task.now_or_never() {
++                            cx.drop_image(image, Some(window));
++                        }
++                    }
++                    ImageState::Loaded(Err(_)) => {}
++                }
++                self.evictions += 1;
++                changed = true;
++            }
++        }
++        if changed {
++            self.publish();
++        }
++        if protect_previous {
++            self.schedule_settle(window, cx);
++        }
++    }
++
++    fn schedule_settle(&mut self, window: &mut Window, _cx: &mut App) {
++        if self.budget.is_over_budget() && !self.settle_pending {
++            self.settle_pending = true;
++            let weak = self.weak.clone();
++            // A previous frame may still reference its atlas tiles. Once it has
++            // painted, retire cold images even if the chat becomes completely idle.
++            window.on_next_frame(move |window, cx| {
++                weak.update(cx, |cache, cx| {
++                    cache.settle_pending = false;
++                    cache.trim(false, window, cx);
++                })
++                .ok();
++            });
++        }
++    }
++
++    fn complete(
++        &mut self,
++        resource: Resource,
++        load: u64,
++        result: Result<Arc<RenderImage>, ImageCacheError>,
++        window: &mut Window,
++        cx: &mut App,
++    ) {
++        let Some(entry) = self.entries.get_mut(&resource) else {
++            return;
++        };
++        if entry.load != load || !matches!(entry.state, ImageState::Loading(_)) {
++            return;
++        }
++        let bytes = result.as_ref().map_or(0, |image| decoded_bytes(image));
++        entry.state = ImageState::Loaded(result);
++        self.loading -= 1;
++        self.budget.set_bytes(&resource, bytes);
++        self.publish();
++        self.schedule_settle(window, cx);
++    }
++}
++
++impl ImageCache for ImageResources {
++    fn load(
++        &mut self,
++        resource: &Resource,
++        window: &mut Window,
++        cx: &mut App,
++    ) -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
++        self.begin_frame(window, cx);
++        self.budget.touch(resource);
++        if let Some(entry) = self.entries.get(resource) {
++            return match &entry.state {
++                ImageState::Loaded(result) => Some(result.clone()),
++                ImageState::Loading(_) => None,
++            };
++        }
++
++        self.decodes += 1;
++        self.loading += 1;
++        let load = self.decodes;
++        let future = AssetLogger::<ImageAssetLoader>::load(resource.clone(), cx);
++        let task = cx.background_executor().spawn(future).shared();
++        let completion_task = task.clone();
++        let completion_resource = resource.clone();
++        let weak = self.weak.clone();
++        let view = window.current_view();
++        let completing = Rc::new(Cell::new(false));
++        let is_completing = completing.clone();
++        let completion = window.spawn(cx, async move |cx| {
++            let result = completion_task.await;
++            is_completing.set(true);
++            cx.update(move |window, cx| {
++                if weak
++                    .update(cx, |cache, cx| {
++                        cache.complete(completion_resource, load, result, window, cx)
++                    })
++                    .is_ok()
++                {
++                    cx.notify(view);
++                }
++            })
++            .ok();
++            is_completing.set(false);
++        });
++        self.entries.insert(
++            resource.clone(),
++            Entry {
++                load,
++                state: ImageState::Loading(task),
++                _completion: completion,
++                completing,
++            },
++        );
++        self.publish();
++        self.trim(true, window, cx);
++        None
++    }
++}
++
++fn decoded_bytes(image: &RenderImage) -> usize {
++    (0..image.frame_count())
++        .filter_map(|frame| image.as_bytes(frame))
++        .map(<[u8]>::len)
++        .sum()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn resource(name: &str) -> Resource {
++        Resource::Embedded(name.to_string().into())
++    }
++
++    #[test]
++    fn revisiting_a_source_deduplicates_entries_and_lru_links() {
++        let mut budget = ResourceBudget::new(2, 100);
++        budget.begin_frame();
++        for _ in 0..10_000 {
++            budget.touch(&resource("same"));
++        }
++        assert_eq!((budget.entries.len(), budget.order.len()), (1, 1));
++    }
++
++    #[test]
++    fn decoded_byte_budget_evicts_cold_images_before_entry_limit() {
++        let mut budget = ResourceBudget::new(256, 100);
++        budget.begin_frame();
++        budget.touch(&resource("old"));
++        budget.set_bytes(&resource("old"), 80);
++        budget.begin_frame();
++        budget.touch(&resource("visible"));
++        budget.set_bytes(&resource("visible"), 80);
++        assert_eq!(budget.evict_oldest(false), Some(resource("old")));
++        assert_eq!(budget.bytes, 80);
++    }
++
++    #[test]
++    fn previous_frame_is_protected_until_settling_after_paint() {
++        let mut budget = ResourceBudget::new(256, 100);
++        budget.begin_frame();
++        budget.touch(&resource("old"));
++        budget.set_bytes(&resource("old"), 200);
++        budget.begin_frame();
++        assert_eq!(budget.evict_oldest(true), None);
++        assert_eq!(budget.evict_oldest(false), Some(resource("old")));
++    }
++
++    #[test]
++    fn visible_images_can_exceed_budget_without_redecode_thrashing() {
++        let mut budget = ResourceBudget::new(1, 100);
++        budget.begin_frame();
++        for name in ["left", "right"] {
++            budget.touch(&resource(name));
++            budget.set_bytes(&resource(name), 200);
++        }
++        assert_eq!(budget.evict_oldest(false), None);
++        budget.begin_frame();
++        budget.touch(&resource("right"));
++        assert_eq!(budget.evict_oldest(false), Some(resource("left")));
++        assert_eq!(budget.evict_oldest(false), None);
++    }
++
++    #[test]
++    fn completed_load_updates_bytes_without_reordering_recent_use() {
++        let mut budget = ResourceBudget::new(1, 1000);
++        budget.begin_frame();
++        budget.touch(&resource("old"));
++        budget.touch(&resource("recent"));
++        budget.set_bytes(&resource("old"), 50);
++        budget.begin_frame();
++        assert_eq!(budget.evict_oldest(false), Some(resource("old")));
++    }
++
++    #[test]
++    fn entry_limit_also_bounds_cold_loads_without_decoded_bytes() {
++        let mut budget = ResourceBudget::new(2, usize::MAX);
++        budget.begin_frame();
++        for name in ["old-a", "old-b", "old-c"] {
++            budget.touch(&resource(name));
++        }
++        budget.begin_frame();
++        assert_eq!(budget.evict_oldest(false), Some(resource("old-a")));
++        assert_eq!(budget.evict_oldest(false), None);
++    }
++
++    #[test]
++    fn repeated_layouts_in_one_native_draw_do_not_retire_visible_images() {
++        let mut budget = ResourceBudget::new(1, 100);
++        assert!(budget.begin_draw(42));
++        budget.touch(&resource("visible"));
++        budget.set_bytes(&resource("visible"), 200);
++        for _ in 0..100 {
++            assert!(!budget.begin_draw(42));
++        }
++        assert_eq!(budget.epoch, 1);
++        assert_eq!(budget.evict_oldest(false), None);
++    }
++
++    #[test]
++    fn new_draw_identity_retires_old_sources_without_root_frame_start() {
++        let mut budget = ResourceBudget::new(1, 100);
++        budget.begin_draw(42);
++        budget.touch(&resource("old"));
++        budget.set_bytes(&resource("old"), 80);
++        // The first deferred image load, not a root Render call, supplies this ID.
++        budget.begin_draw(43);
++        budget.touch(&resource("new"));
++        budget.set_bytes(&resource("new"), 80);
++        assert_eq!(budget.evict_oldest(false), Some(resource("old")));
++    }
++
++    #[test]
++    fn all_decoded_pixel_bytes_are_counted() {
++        let image = RenderImage::from_bgra(12, 8, vec![0; 12 * 8 * 4]).unwrap();
++        assert_eq!(decoded_bytes(&image), 12 * 8 * 4);
++    }
++}

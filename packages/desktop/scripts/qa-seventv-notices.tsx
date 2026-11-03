@@ -29,7 +29,7 @@ assert(asset, 'Pass a downloaded public RAGEY GIF as an absolute path for the sa
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
 const backend = getDesktopBackend()
-const imageUrl = 'https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/4x.gif'
+const imageUrl = 'https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/1x.gif'
 const cache = join(dirname(getDbPath()), 'image-cache')
 await mkdir(cache, { recursive: true })
 await Bun.write(

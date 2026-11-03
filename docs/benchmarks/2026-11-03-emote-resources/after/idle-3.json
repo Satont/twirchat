@@ -1,0 +1,1538 @@
+{
+  "ok": true,
+  "config": {
+    "case": "idle",
+    "source": "synthetic",
+    "durationSeconds": 12,
+    "warmupSeconds": 3,
+    "delayMs": 100,
+    "rate": 20,
+    "backgroundAnimation": false
+  },
+  "reactMode": "production",
+  "bunVersion": "1.4.4",
+  "compositor": "weston",
+  "provenance": {
+    "gitHead": "5c4f706ba2fe21bdad9bc065bf690ba3e2389c74",
+    "dirtyHash": "5e4f2448b1ca8810a42a91b5e68c5eaa66364788342fee9844073c554cd1a0ca",
+    "sourceHash": "3a70a065cd949a806304a6b536803336309ef2ffd8121b5bec649b929ef93738",
+    "sourceFiles": 370
+  },
+  "scriptSha256": "213407f98a9ee73a922e1918286f359cac9487d02f01d74834553a5aa01ebe21",
+  "nativeManifest": {
+    "apiVersion": 3,
+    "version": "0.11.0-twirchat.6",
+    "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+    "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+    "patchDigest": "cb782c083032b0ed",
+    "rustToolchain": "1.97.1",
+    "target": "linux-x64",
+    "size": 56576904,
+    "sha256": "459aa1d3165395c0fbb97f7bb10abf2daf03a1996a7e59659114f29bc2ff6c26"
+  },
+  "nativeWindow": {
+    "x": 0,
+    "y": 0,
+    "width": 1200,
+    "height": 800,
+    "mode": "fullscreen"
+  },
+  "channels": 10,
+  "initialRetainedMessages": 2000,
+  "sourceWidth": 96,
+  "sourceHeight": 96,
+  "framesPerImage": 32,
+  "uniqueFixtureUrls": 8,
+  "fixtures": [
+    {
+      "url": "https://emote-qa.invalid/emote/0/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/1/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/2/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/3/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/4/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/5/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/6/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    },
+    {
+      "url": "https://emote-qa.invalid/emote/7/2x.webp",
+      "sha256": "3b41b3ad988742b8247b02ac9a74e86a9e1e1a781057707ee5cf01ed638699bf",
+      "encodedBytes": 80582,
+      "delayMs": 100,
+      "frames": 32
+    }
+  ],
+  "measurement": {
+    "wallMs": 12000.09046,
+    "cpuPercent": 7.6744588140379735,
+    "nativeFrames": 121,
+    "nativeFramesPerSecond": 10.083257322378552,
+    "initialRssBytes": 298442752,
+    "rssMedianBytes": 298250240,
+    "rssPeakBytes": 299155456,
+    "heapPeakBytes": 71101476,
+    "eventLoopLagP50Ms": 0.05494500000077096,
+    "eventLoopLagP95Ms": 0.06864500000119733,
+    "eventLoopLagMaxMs": 1.020991000000322,
+    "offeredMessages": 0,
+    "generatedMessages": 0,
+    "processedMessages": 0,
+    "actualRate": 0,
+    "retainedMessages": 2000,
+    "imageStatsBefore": {
+      "entries": 8,
+      "loading": 0,
+      "decodedBytes": 9437184,
+      "evictions": 0,
+      "decodes": 8,
+      "maxEntries": 256,
+      "maxDecodedBytes": 67108864
+    },
+    "imageStatsAfter": {
+      "entries": 8,
+      "loading": 0,
+      "decodedBytes": 9437184,
+      "evictions": 0,
+      "decodes": 8,
+      "maxEntries": 256,
+      "maxDecodedBytes": 67108864
+    },
+    "gpu": [
+      {
+        "device": "0000:03:00.0",
+        "driver": "amdgpu",
+        "engines": {
+          "gfx": 0.19693584009999243
+        },
+        "residentBytes": {
+          "gtt": 6299648,
+          "vram": 84455424
+        }
+      },
+      {
+        "device": "0000:47:00.0",
+        "driver": "amdgpu",
+        "engines": {},
+        "residentBytes": {
+          "gtt": 2097152,
+          "vram": 12288
+        }
+      }
+    ],
+    "samples": [
+      {
+        "elapsedMs": 250.66681000000017,
+        "rssBytes": 298561536,
+        "heapBytes": 70268033,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2687243017552422
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 500.56681400000025,
+        "rssBytes": 298561536,
+        "heapBytes": 70268033,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.16509748010737174
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 750.8109159999999,
+        "rssBytes": 298954752,
+        "heapBytes": 70411085,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2764311164571295
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1000.6741499999998,
+        "rssBytes": 298250240,
+        "heapBytes": 70411085,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.17050895900813276
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1250.749933,
+        "rssBytes": 298250240,
+        "heapBytes": 70411085,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.23671959832221642
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1500.782945,
+        "rssBytes": 298250240,
+        "heapBytes": 70411085,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.16252116930935406
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 1750.9273480000002,
+        "rssBytes": 298250240,
+        "heapBytes": 70421968,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22356390158972594
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2001.06045,
+        "rssBytes": 298250240,
+        "heapBytes": 70421968,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.1251890745670856
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2250.9278329999997,
+        "rssBytes": 298250240,
+        "heapBytes": 70421968,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22604503001105988
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2500.9896850000005,
+        "rssBytes": 298250240,
+        "heapBytes": 70421968,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.15898042658172182
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 2751.097387,
+        "rssBytes": 298512384,
+        "heapBytes": 70430337,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2661428272997035
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3001.088769,
+        "rssBytes": 298377216,
+        "heapBytes": 70430337,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.16364091896145896
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3251.140982,
+        "rssBytes": 298475520,
+        "heapBytes": 70430337,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.18163625826972413
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3501.205183,
+        "rssBytes": 298475520,
+        "heapBytes": 70430337,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.16118205726308837
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 3751.277636,
+        "rssBytes": 298475520,
+        "heapBytes": 70442700,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2760529044640187
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4001.4328269999996,
+        "rssBytes": 298340352,
+        "heapBytes": 70442700,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.12001530643208076
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4251.634508,
+        "rssBytes": 298471424,
+        "heapBytes": 70442700,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22898909074479945
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4501.389551,
+        "rssBytes": 298471424,
+        "heapBytes": 70442700,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.15048032523847968
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 4751.519483,
+        "rssBytes": 298864640,
+        "heapBytes": 70449133,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2621359357617196
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5001.623984000001,
+        "rssBytes": 298893312,
+        "heapBytes": 70449133,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.12088553880704359
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5251.510085999999,
+        "rssBytes": 298893312,
+        "heapBytes": 70449133,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.24081054962833748
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5501.547828,
+        "rssBytes": 298893312,
+        "heapBytes": 70449133,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.12459773297862874
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 5751.855698,
+        "rssBytes": 298893312,
+        "heapBytes": 70472936,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.25758946930124665
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6001.681890000001,
+        "rssBytes": 299155456,
+        "heapBytes": 70472936,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.1710942485135955
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6251.7239309999995,
+        "rssBytes": 298876928,
+        "heapBytes": 70472936,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.18984946470226205
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6501.784252,
+        "rssBytes": 298876928,
+        "heapBytes": 70472936,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.16518670545456837
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 6751.870753,
+        "rssBytes": 298876928,
+        "heapBytes": 70484244,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22424033826087905
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7001.868374000001,
+        "rssBytes": 294899712,
+        "heapBytes": 70484244,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2714552082807238
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7251.930025000001,
+        "rssBytes": 295030784,
+        "heapBytes": 70484244,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.1809913181055128
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7502.000996,
+        "rssBytes": 295030784,
+        "heapBytes": 70484244,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.198340367872338
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 7752.099437,
+        "rssBytes": 295030784,
+        "heapBytes": 71063556,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22575304317827755
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8002.077077000001,
+        "rssBytes": 294236160,
+        "heapBytes": 71063556,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.15546250974645673
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8252.110568,
+        "rssBytes": 293834752,
+        "heapBytes": 71063556,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.26430388283907524
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8502.183638999999,
+        "rssBytes": 293834752,
+        "heapBytes": 71063556,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.12521539271704193
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 8752.348629,
+        "rssBytes": 294096896,
+        "heapBytes": 71070260,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22458456216937717
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9002.283379,
+        "rssBytes": 294096896,
+        "heapBytes": 71070260,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.12408450732956104
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9252.283169999999,
+        "rssBytes": 293912576,
+        "heapBytes": 71070260,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2563854585131181
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9502.35473,
+        "rssBytes": 293912576,
+        "heapBytes": 71070260,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.12616079665349866
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 9752.634589000001,
+        "rssBytes": 293912576,
+        "heapBytes": 71077128,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2217470445592178
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10002.512620000001,
+        "rssBytes": 293773312,
+        "heapBytes": 71077128,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.16569432251755833
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10252.51006,
+        "rssBytes": 293773312,
+        "heapBytes": 71077128,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2183734099478358
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10502.56938,
+        "rssBytes": 293625856,
+        "heapBytes": 71077128,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.20162640266961906
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 10752.6506,
+        "rssBytes": 294019072,
+        "heapBytes": 71084152,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22528275854032487
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11002.636610000001,
+        "rssBytes": 294019072,
+        "heapBytes": 71084152,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.15862254555391458
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11252.685238999999,
+        "rssBytes": 294019072,
+        "heapBytes": 71084152,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.2256026203044078
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11502.780609000001,
+        "rssBytes": 294019072,
+        "heapBytes": 71084152,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.19801729187386855
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 11752.821089000001,
+        "rssBytes": 294019072,
+        "heapBytes": 71101476,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.22039124125993204
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      },
+      {
+        "elapsedMs": 12000.728507,
+        "rssBytes": 294019072,
+        "heapBytes": 71101476,
+        "processed": 0,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.15509037751028912
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "settledImageStats": {
+    "entries": 8,
+    "loading": 0,
+    "decodedBytes": 9437184,
+    "evictions": 0,
+    "decodes": 8,
+    "maxEntries": 256,
+    "maxDecodedBytes": 67108864
+  },
+  "churnCacheBounds": null,
+  "afterRemoval": {
+    "memory": {
+      "rss": 294850560,
+      "heapTotal": 37592064,
+      "heapUsed": 71926704,
+      "external": 42997647,
+      "arrayBuffers": 17151654
+    },
+    "imageStats": {
+      "entries": 8,
+      "loading": 0,
+      "decodedBytes": 9437184,
+      "evictions": 0,
+      "decodes": 8,
+      "maxEntries": 256,
+      "maxDecodedBytes": 67108864
+    },
+    "retainedMessages": 0
+  },
+  "timestamp": "2026-11-03T09:44:50.762Z"
+}

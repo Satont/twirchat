@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.5",
+  "version": "0.11.0-twirchat.6",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -50,6 +50,16 @@
       "path": "patches/gpui-image-frame-deadlines.patch",
       "root": "gpui",
       "sha256": "43f61513ef058dd48f0bd6b7d98b29bf3090769adcbac2a97d3fd942be19bdec"
+    },
+    {
+      "path": "patches/gpui-image-resources.patch",
+      "root": "gpui",
+      "sha256": "4ec31d90e617b68212f8b528e290680354d10ff04076aa5cb22487ec7bb8a745"
+    },
+    {
+      "path": "patches/gpuix-image-resources.patch",
+      "root": "gpuix",
+      "sha256": "4b17c079fddb21c878f3793e4fa4137947176f6b533f0106dcb93f1dac25ef24"
     }
   ]
 }

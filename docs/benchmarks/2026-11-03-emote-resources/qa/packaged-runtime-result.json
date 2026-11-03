@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "apiVersion": 3,
+  "bunVersion": "1.4.4",
+  "databaseInitialized": true,
+  "unicodeSql": true,
+  "emptyAccounts": true,
+  "binding": "/home/satont/.codex/worktrees/animated-emote-resources/chat/packages/desktop/bin/native/gpuix.linux-x64.node",
+  "executable": "/home/satont/.codex/worktrees/animated-emote-resources/chat/packages/desktop/bin/twirchat",
+  "cwd": "/tmp/twirchat-emote-resources-after/packaged-runtime/twirchat-gui-qa-TTMMuL/packaged-runtime-check/clean-cwd"
+}

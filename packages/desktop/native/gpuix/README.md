@@ -5,7 +5,7 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
-Native version `0.11.0-twirchat.5` keeps GIF/WebP images animating in visible,
+Native version `0.11.0-twirchat.6` keeps GIF/WebP images animating in visible,
 unfocused windows. [GPUIX issue #67](https://github.com/remorses/gpuix/issues/67)
 remains open, and the pinned GPUI source still stops both image frame advancement
 and scheduling on focus loss. The background-image patches add an opt-in GPUI
@@ -244,3 +244,24 @@ recording, native held-key metadata, and independent plans in two native windows
 GPUI's keystroke observer payload now carries the original held-key flag; capture
 uses its existing pre-action interceptor rather than a JS cancellation round trip
 or a mutation of the application's global native keymap.
+
+## Decoded image resources
+
+Each native view owns a cache for decoded Path/URI images, including deferred virtual-list
+rows. Loading bypasses GPUI's retain-all asset cache. Cold resources are bounded by 256 entries
+and 64 MiB of decoded frame pixels; images used by the current or preceding paint are protected
+from eviction. A visible working set can exceed these limits. A coalesced settling callback
+retires the previous paint after removal without keeping an idle redraw loop alive.
+
+Eviction and view release cancel owned loading tasks and remove image atlas allocations.
+Cache epochs follow actual native draws, including layouts reached without a root render.
+`getImageResourceStats()` returns a cached snapshot of entries, loading, decodedBytes, evictions,
+decodes and configured limits, or null during a contended publication. It does not request layout.
+
+`getWindowScaleFactor()` reads cached native scale and `windowScaleChange` reports actual changes
+at element ID 0. The desktop subscribes once per window and selects inline 7TV 1x–4x images for
+the logical emote height multiplied by display scale. Catalog and tooltip preview URLs keep
+their original resolution.
+
+The finite bundled Kick badge SVG set continues using GPUI's content-keyed data-image cache.
+Sharp paint/emote data URLs are intermediate layers; their final local WebP files use this cache.

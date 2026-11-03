@@ -39,6 +39,7 @@ import {
 } from './state/layout'
 import { createSystemTray } from './state/system-tray'
 import { updateWindowActivity, clearWindowActivity } from './state/window-activity'
+import { WindowScaleProvider } from './state/window-scale'
 import { WindowScopeContext } from './state/window-scope'
 import { registerWindowVisibility, updateWindowVisibility } from './state/window-visibility'
 
@@ -83,7 +84,9 @@ const currentUiRuntime: WindowUiRuntime = {
         <BackendContext.Provider value={backend}>
           <WindowScopeContext.Provider value={context.descriptor.id}>
             <DesktopWindowsContext.Provider value={context}>
-              <TooltipProvider delayDuration={300}>{content}</TooltipProvider>
+              <WindowScaleProvider>
+                <TooltipProvider delayDuration={300}>{content}</TooltipProvider>
+              </WindowScaleProvider>
             </DesktopWindowsContext.Provider>
           </WindowScopeContext.Provider>
         </BackendContext.Provider>,
