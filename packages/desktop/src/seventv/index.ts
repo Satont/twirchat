@@ -153,7 +153,7 @@ export class DesktopSevenTVService {
     const emoteMap = new Map<string, SevenTVEmote>()
 
     for (const emote of emotes) {
-      emoteMap.set(emote.alias.toLowerCase(), emote)
+      emoteMap.set(emote.alias, emote)
     }
 
     this.emoteSets.set(channelKey, {
@@ -169,7 +169,7 @@ export class DesktopSevenTVService {
     const emoteSet = this.emoteSets.get(channelKey)
 
     if (emoteSet) {
-      emoteSet.emotes.set(emote.alias.toLowerCase(), emote)
+      emoteSet.emotes.set(emote.alias, emote)
     }
   }
 
@@ -204,7 +204,7 @@ export class DesktopSevenTVService {
       for (const [alias, emote] of emoteSet.emotes) {
         if (emote.id === emoteId) {
           emoteSet.emotes.delete(alias)
-          emote.alias = newAlias.toLowerCase()
+          emote.alias = newAlias
           emoteSet.emotes.set(emote.alias, emote)
           break
         }
@@ -226,7 +226,7 @@ export class DesktopSevenTVService {
       return undefined
     }
 
-    return emoteSet.emotes.get(alias.toLowerCase())
+    return emoteSet.emotes.get(alias)
   }
 
   // Get all emotes for a channel
