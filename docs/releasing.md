@@ -192,5 +192,10 @@ Never use `docker compose down --volumes` as an upgrade or rollback step.
 If the existing PostgreSQL 18 installation used the old `/var/lib/postgresql/data` mount, back up
 and migrate its data before starting this composition; changing the mount path is not a database
 upgrade. Keep database backups outside the container volume and test restoration separately.
+
+The root composition uses the fixed project name `twirchat`. An older deployment may have used
+the directory-derived name `docker`, which gives its volumes a different prefix. Check the existing
+project and volume names before upgrading; use `docker compose -p <existing-project> ...` to retain
+that project name. A newly created empty volume is not a migration of the existing database.
 An older Compose project may also have a differently named volume. Preserve and migrate that
 volume explicitly before switching to the stable `twirchat` project name.
