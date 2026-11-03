@@ -31,7 +31,8 @@ import {
   formatTabUnread,
   formatTabViewers,
   TAB_UNREAD_WIDTH,
-  TAB_VIEWER_WIDTH,
+  TAB_VIEWER_MIN_WIDTH,
+  TAB_MENTION_WIDTH,
 } from '../tab-counts'
 import { accent, platformColor } from '../theme'
 import { useTheme } from '../theme-context'
@@ -203,9 +204,7 @@ export function ChannelTabBar({
           active={activeTabId === 'home'}
           activeColor={theme.text}
           viewers={homeViewerCount}
-          showViewers={homeViewerCount !== undefined}
           unread={unread?.get('home')}
-          showUnread={unread !== undefined}
           onClick={() => onSelectTab('home')}
         />
         {watchedChannels.map((channel, index) => {
@@ -359,9 +358,7 @@ export function ChannelTabBar({
                 active={active}
                 activeColor={color}
                 viewers={live?.isLive ? live.viewerCount : undefined}
-                showViewers
                 unread={unread?.get(channel.id)}
-                showUnread={unread !== undefined}
                 onClick={() => {
                   if (!suppressClick.current) onSelectTab(channel.id)
                 }}
@@ -558,9 +555,7 @@ function Tab({
   active,
   activeColor,
   viewers,
-  showViewers,
   unread,
-  showUnread,
   onClick,
   testId,
   interaction,
@@ -570,9 +565,7 @@ function Tab({
   active: boolean
   activeColor: string
   viewers?: number
-  showViewers: boolean
   unread?: TabUnread
-  showUnread: boolean
   onClick: () => void
   testId?: string
   interaction?: Pick<Props, 'onKeyDown' | 'onMouseDown' | 'onMouseMove' | 'onMouseUp'>
@@ -635,9 +628,7 @@ function Tab({
       </Text>
       <TabCounts
         viewers={viewers}
-        showViewers={showViewers}
         unread={unread}
-        showUnread={showUnread}
         color={active ? activeColor : theme.text2}
         testId={testId}
       />
@@ -647,23 +638,19 @@ function Tab({
 
 function TabCounts({
   viewers,
-  showViewers,
   unread,
-  showUnread,
   color,
   testId,
 }: {
   viewers?: number
-  showViewers: boolean
   unread?: TabUnread
-  showUnread: boolean
   color: string
   testId?: string
 }) {
   const theme = useTheme()
   const label = formatTabUnread(unread)
   const description = describeTabCounts(viewers, unread)
-  if (!showViewers && !showUnread) return null
+  if (viewers === undefined && !label) return null
   return (
     <Tooltip delayDuration={250}>
       <TooltipTrigger asChild>
@@ -679,30 +666,27 @@ function TabCounts({
             height: 17,
           }}
         >
-          {showViewers ? (
+          {viewers !== undefined ? (
             <Text
               testId={`${testId}-viewers`}
               style={{
-                fontFamily: 'monospace',
-                fontSize: 10,
-                width: TAB_VIEWER_WIDTH,
-                minWidth: TAB_VIEWER_WIDTH,
+                fontFamily: 'Arial',
+                fontSize: 10.5,
+                minWidth: TAB_VIEWER_MIN_WIDTH,
                 flexShrink: 0,
-                textAlign: 'right',
+                textAlign: 'left',
                 whiteSpace: 'nowrap',
                 color,
-                opacity: 0.7,
               }}
             >
-              {viewers === undefined ? '' : formatTabViewers(viewers)}
+              {formatTabViewers(viewers)}
             </Text>
           ) : null}
-          {showUnread ? (
+          {label ? (
             <div
               testId={`${testId}-unread`}
               style={{
-                width: TAB_UNREAD_WIDTH,
-                minWidth: TAB_UNREAD_WIDTH,
+                width: unread && unread.mentions > 0 ? TAB_MENTION_WIDTH : TAB_UNREAD_WIDTH,
                 height: 17,
                 flexShrink: 0,
                 paddingLeft: 2,
@@ -710,17 +694,13 @@ function TabCounts({
                 borderRadius: 9,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'flex-end',
-                backgroundColor: label
-                  ? unread && unread.mentions > 0
-                    ? accent.tint20
-                    : theme.fillHover
-                  : 'transparent',
+                justifyContent: 'center',
+                backgroundColor: unread && unread.mentions > 0 ? accent.tint20 : theme.fillHover,
               }}
             >
               <Text
                 style={{
-                  fontFamily: 'monospace',
+                  fontFamily: 'Arial',
                   fontSize: 10,
                   fontWeight: 600,
                   textAlign: 'right',

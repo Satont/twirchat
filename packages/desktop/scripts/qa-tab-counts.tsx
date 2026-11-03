@@ -37,9 +37,16 @@ interface CounterState {
   unread: number
   mentions: number
   active: string
+  mode: 'uniform' | 'mixed'
 }
 type Renderer = GpuixRenderer & NativeWindowControls
-const state = createStore<CounterState>({ viewers: 9, unread: 9, mentions: 0, active: 'a' })
+const state = createStore<CounterState>({
+  viewers: 9,
+  unread: 9,
+  mentions: 0,
+  active: 'a',
+  mode: 'uniform',
+})
 const backend = getDesktopBackend()
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
@@ -50,12 +57,19 @@ const channels: Parameters<typeof ChannelTabBar>[0]['watchedChannels'] = [
   {
     id: 'b',
     platform: 'twitch',
-    displayName: 'justovich221337',
-    channelSlug: 'justovich221337',
+    displayName: 'xqc',
+    channelSlug: 'xqc',
     createdAt: 0,
   },
   {
     id: 'c',
+    platform: 'twitch',
+    displayName: 'caseoh_',
+    channelSlug: 'caseoh_',
+    createdAt: 0,
+  },
+  {
+    id: 'd',
     platform: 'twitch',
     displayName: 'A deliberately long channel title that must remain truncated',
     channelSlug: 'long_channel_title',
@@ -74,8 +88,14 @@ function Content() {
     commits++
   })
   const unread = new Map(
-    channels.map((channel) => [channel.id, { unread: value.unread, mentions: value.mentions }]),
+    channels.map((channel) => [
+      channel.id,
+      value.mode === 'mixed'
+        ? { unread: channel.id === 'c' ? 100 : 0, mentions: 0 }
+        : { unread: value.unread, mentions: value.mentions },
+    ]),
   )
+  if (value.mode === 'mixed') unread.set('home', { unread: 22, mentions: 0 })
   return (
     <div
       style={{
@@ -89,12 +109,18 @@ function Content() {
       <ChannelTabBar
         watchedChannels={channels}
         activeTabId={value.active}
+        homeViewerCount={value.mode === 'mixed' ? 11 : undefined}
         watchedStatuses={new Map()}
         watchedLiveStatuses={
           new Map(
             channels.map((channel) => [
               channel.id,
-              { isLive: value.viewers !== undefined, viewerCount: value.viewers },
+              value.mode === 'mixed'
+                ? {
+                    isLive: channel.id === 'a' || channel.id === 'c',
+                    viewerCount: channel.id === 'a' ? 1 : channel.id === 'c' ? 62200 : undefined,
+                  }
+                : { isLive: value.viewers !== undefined, viewerCount: value.viewers },
             ]),
           )
         }
@@ -122,10 +148,13 @@ function current(): Renderer {
 function flatten(node: AutomationNode): AutomationNode[] {
   return [node, ...node.children.flatMap(flatten)]
 }
-function idFor(testId: string): number {
-  const node = flatten(automationSchema.parse(JSON.parse(current().getAutomationTree()))).find(
+function nodeFor(testId: string) {
+  return flatten(automationSchema.parse(JSON.parse(current().getAutomationTree()))).find(
     (node) => node.testId === testId,
   )
+}
+function idFor(testId: string): number {
+  const node = nodeFor(testId)
   assert(node, `Missing ${testId}`)
   return node.id
 }
@@ -144,81 +173,119 @@ async function until(check: () => boolean, label: string) {
 const screenshots: string[] = []
 const geometry: Array<{
   width: number
+  mode: string
   checked: number
   baseline: Record<string, { x: number; width: number }>
 }> = []
-const values: Array<number | undefined> = [
-  9,
-  10,
-  99,
-  100,
-  999,
-  1000,
-  61500,
-  999949,
-  999950,
-  1000000,
-  0,
-  undefined,
+const compactWidths: Array<{ width: number; empty: number; oneViewer: number; both: number }> = []
+const groups = [
+  { name: 'plain', values: [9, 10, 99, 999], mentions: false },
+  { name: 'compact', values: [60000, 61500, 68800, 99900], mentions: false },
+  { name: 'mentions', values: [9, 10, 99, 999], mentions: true },
 ]
+async function setState(next: CounterState) {
+  const previous = commits
+  state.set(next)
+  await until(() => commits > previous, 'counter commit')
+  await Bun.sleep(70)
+}
 try {
   await manager.start()
   await until(() => !!renderer, 'renderer')
   for (const width of [900, 420]) {
     await current().setWindowBounds({ width, height: 220 })
-    const commit = commits
-    state.set({ viewers: 9, unread: 9, mentions: 0, active: 'a' })
-    await until(() => commits > commit, 'counter initial commit')
-    await Bun.sleep(60)
+    current().scrollTo(idFor('channel-tab-bar'), 0, 0)
     current().simulateMouseMove(20, 120)
-    const testIds =
-      width === 900
-        ? ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-add']
-        : ['tab-home', 'tab-a', 'tab-b']
-    const baseline = Object.fromEntries(
-      testIds.map((testId) => [testId, { x: bounds(testId).x, width: bounds(testId).width }]),
-    )
-    for (const [index, viewers] of values.entries()) {
-      const previousCommit = commits
-      state.set({
-        viewers,
-        unread: viewers ?? 0,
-        mentions: index % 2 ? (viewers ?? 0) : 0,
-        active: index % 2 ? 'b' : 'a',
+    for (const group of groups) {
+      await setState({ viewers: 9, unread: 9, mentions: 0, active: 'a', mode: 'uniform' })
+      const first = group.values[0]
+      assert(first !== undefined)
+      await setState({
+        viewers: first,
+        unread: first,
+        mentions: group.mentions ? first : 0,
+        active: 'a',
+        mode: 'uniform',
       })
-      await until(() => commits > previousCommit, 'counter commit')
+      const testIds =
+        width === 900
+          ? ['tab-home', 'tab-a', 'tab-b', 'tab-c', 'tab-add']
+          : ['tab-home', 'tab-a', 'tab-b']
+      const baseline = Object.fromEntries(
+        testIds.map((testId) => [testId, { x: bounds(testId).x, width: bounds(testId).width }]),
+      )
+      for (const [index, viewers] of group.values.entries()) {
+        await setState({
+          viewers,
+          unread: viewers,
+          mentions: group.mentions ? viewers : 0,
+          active: index % 2 ? 'b' : 'a',
+          mode: 'uniform',
+        })
+        await until(
+          () => current().getPaintedText().join(' ').includes(formatTabViewers(viewers)),
+          'painted viewer count',
+        )
+        for (const testId of testIds) {
+          const actual = bounds(testId)
+          const expected = baseline[testId]
+          assert(expected)
+          assert(
+            Math.abs(actual.x - expected.x) < 0.01,
+            testId + ' moved in ' + group.name + ' at ' + viewers,
+          )
+          assert(
+            Math.abs(actual.width - expected.width) < 0.01,
+            testId + ' resized in ' + group.name + ' at ' + viewers,
+          )
+        }
+      }
+      geometry.push({ width, mode: group.name, checked: group.values.length, baseline })
+    }
+    await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'mixed' })
+    assert(!nodeFor('tab-b-counts'), 'An empty tab must not contain invisible counter cells')
+    assert(!nodeFor('tab-a-unread'), 'A read tab must not reserve an unread pill')
+    assert(
+      nodeFor('tab-c-viewers') && nodeFor('tab-c-unread'),
+      'Both viewer and unread counts remain visible together',
+    )
+    const empty = bounds('tab-b').width
+    const oneViewer = bounds('tab-a').width
+    assert(empty < 90, 'The empty xqc tab should stay compact')
+    assert(oneViewer < 120, 'The single-viewer Satont tab should stay compact')
+    if (width === 900) {
       await until(
         () =>
-          viewers === undefined ||
-          current().getPaintedText().join(' ').includes(formatTabViewers(viewers)),
-        'painted counter',
+          current().getPaintedText().join(' ').includes('62.2K') &&
+          current().getPaintedText().join(' ').includes('99+'),
+        'both visible count labels',
       )
-      await Bun.sleep(35)
-      for (const testId of testIds) {
-        const actual = bounds(testId)
-        const expected = baseline[testId]
-        assert(expected)
-        assert(Math.abs(actual.x - expected.x) < 0.01, `${testId} moved at ${viewers}`)
-        assert(Math.abs(actual.width - expected.width) < 0.01, `${testId} resized at ${viewers}`)
-      }
     }
-    geometry.push({ width, checked: values.length, baseline })
-    state.set({ viewers: 61500, unread: 1000, mentions: 999, active: 'a' })
-    await Bun.sleep(80)
-    screenshots.push(await captureGuiQaDisplay(`tab-counts-${width}`))
+    compactWidths.push({ width, empty, oneViewer, both: width === 900 ? bounds('tab-c').width : 0 })
+    screenshots.push(await captureGuiQaDisplay('tab-counts-' + width))
     if (width === 420) {
-      current().scrollTo(idFor('channel-tab-bar'), -1000, 0)
-      await Bun.sleep(80)
-      assert(
-        bounds('tab-c').width > 150,
-        'Long channel label keeps its bounded title beside counters',
+      current().scrollTo(idFor('channel-tab-bar'), -160, 0)
+      await Bun.sleep(100)
+      await until(
+        () => current().getPaintedText().join(' ').includes('62.2K'),
+        'compact counts after scrolling',
       )
       screenshots.push(await captureGuiQaDisplay('tab-counts-420-scrolled'))
     }
+    await setState({ viewers: undefined, unread: 0, mentions: 0, active: 'b', mode: 'uniform' })
+    assert(
+      !nodeFor('tab-a-counts'),
+      'Unavailable viewers and zero unread must leave no counter group',
+    )
+    assert(!nodeFor('tab-home-counts'), 'The home tab must not reserve absent statistics')
   }
   await Bun.write(
     join(session, 'tab-counts-result.json'),
-    JSON.stringify({ ok: true, geometry, screenshots, lowRateControlledCheck: true }, null, 2),
+    JSON.stringify(
+      { ok: true, geometry, compactWidths, screenshots, lowRateControlledCheck: true },
+      null,
+      2,
+    ),
   )
 } catch (error) {
   await captureGuiQaDisplay('tab-counts-failure')

@@ -1,7 +1,8 @@
 import type { TabUnread } from './state/tab-unread'
 
-export const TAB_VIEWER_WIDTH = 36
-export const TAB_UNREAD_WIDTH = 28
+export const TAB_VIEWER_MIN_WIDTH = 20
+export const TAB_UNREAD_WIDTH = 24
+export const TAB_MENTION_WIDTH = 32
 
 const viewerUnits = ['K', 'M', 'B', 'T']
 const fullCount = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
@@ -10,8 +11,9 @@ export function formatTabViewers(count: number): string {
   if (count < 1000) return String(count)
   let scale = 1000
   for (const unit of viewerUnits) {
-    const compact = Math.round((count / scale) * 10) / 10
-    if (compact < 1000) return `${compact.toFixed(1)}${unit}`
+    const value = count / scale
+    const compact = value < 100 ? Math.round(value * 10) / 10 : Math.round(value)
+    if (compact < 1000) return `${compact.toFixed(compact < 100 ? 1 : 0)}${unit}`
     scale *= 1000
   }
   return '999T+'

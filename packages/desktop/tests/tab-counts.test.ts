@@ -11,6 +11,11 @@ test('tab viewer totals retain compact labels through rounding and large-count b
     999,
     1000,
     61500,
+    99949,
+    99950,
+    99999,
+    999499,
+    999500,
     999949,
     999950,
     1000000,
@@ -26,17 +31,22 @@ test('tab viewer totals retain compact labels through rounding and large-count b
     '999',
     '1.0K',
     '61.5K',
-    '999.9K',
+    '99.9K',
+    '100K',
+    '100K',
+    '999K',
+    '1.0M',
+    '1.0M',
     '1.0M',
     '1.0M',
     '1.0B',
     '1.0T',
     '999T+',
   ])
-  expect(counts.every((count) => formatTabViewers(count).length <= 6)).toBe(true)
+  expect(counts.every((count) => formatTabViewers(count).length <= 5)).toBe(true)
 })
 
-test('unread/mention caps fit their reserved slot and full values stay available', () => {
+test('visible unread/mention badges retain capped labels and full count descriptions', () => {
   expect(formatTabUnread(undefined)).toBe('')
   expect(formatTabUnread({ unread: 0, mentions: 0 })).toBe('')
   expect(formatTabUnread({ unread: 9, mentions: 0 })).toBe('9')

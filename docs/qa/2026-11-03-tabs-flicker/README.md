@@ -1,12 +1,23 @@
-# Stable tab counters and retained-row paint regression
+# Compact tab counters and retained-row paint regression
 
-Viewer/unread counts have fixed, right-aligned rails. Watched tabs keep their viewer rail during
-offline/unknown states; the live dot keeps its footprint. Exact counts remain available in a
-tooltip, while compact counts retain the existing K/M format and bounded larger units.
+Viewer/unread counts remain visible together, with compact sans-serif numerals and a small
+unread pill. Missing viewers and zero unread reserve no empty cells. Exact counts remain in
+the tooltip. Compact viewer labels preserve `61.5K` and stay within five characters, including
+rounding boundaries such as `99.95K`.
 
-[Native geometry verification](tab-counts-result.json) passed all 24 states: 12 counter/active/
-offline combinations at 900 and 420 px, with invariant sibling positions and widths. Long labels
-and horizontal scrolling are covered. This final run uses the four-pixel gap between count rails.
+[Compact native verification](compact-tab-counts-result.json) passed 24 within-mode numeric
+checks at 900/420 px and a representative mixed state: home 11 viewers/22 unread, Satont one
+viewer, empty xqc, and caseoh 62.2K viewers/99+ unread. Both numbers stay visible. Empty xqc is
+66 px wide; Satont with one viewer is 107 px. Long labels and horizontal scrolling are covered.
+The parent visually reviewed the narrow and normal screenshots.
+
+Plain count changes (9/10/99/999), decimal K labels and mention counts are stable within their
+representations. A counter appearing/disappearing or changing representation may resize its tab;
+the design deliberately avoids permanent empty rails to reserve every possible state.
+
+The [original fixed-rail verification](tab-counts-result.json) belongs to `e8aabfb` and remains
+historical. Its permanent 36/28 px slots were rejected visually and replaced by this compact
+layout; passing geometry checks alone did not establish acceptable design quality.
 
 The native virtual list previously compared a captured row ID to the current child at its old
 index. One eviction/append between root rendering and deferred row painting shifts all surviving

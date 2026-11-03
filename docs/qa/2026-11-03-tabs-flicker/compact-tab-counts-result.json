@@ -1,0 +1,163 @@
+{
+  "ok": true,
+  "geometry": [
+    {
+      "width": 900,
+      "mode": "plain",
+      "checked": 4,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 109
+        },
+        "tab-a": {
+          "x": 119,
+          "width": 135
+        },
+        "tab-b": {
+          "x": 256,
+          "width": 119
+        },
+        "tab-c": {
+          "x": 377,
+          "width": 145
+        },
+        "tab-add": {
+          "x": 774,
+          "width": 26
+        }
+      }
+    },
+    {
+      "width": 900,
+      "mode": "compact",
+      "checked": 4,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 109
+        },
+        "tab-a": {
+          "x": 119,
+          "width": 143
+        },
+        "tab-b": {
+          "x": 264,
+          "width": 127
+        },
+        "tab-c": {
+          "x": 393,
+          "width": 153
+        },
+        "tab-add": {
+          "x": 806,
+          "width": 26
+        }
+      }
+    },
+    {
+      "width": 900,
+      "mode": "mentions",
+      "checked": 4,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 109
+        },
+        "tab-a": {
+          "x": 119,
+          "width": 143
+        },
+        "tab-b": {
+          "x": 264,
+          "width": 127
+        },
+        "tab-c": {
+          "x": 393,
+          "width": 153
+        },
+        "tab-add": {
+          "x": 806,
+          "width": 26
+        }
+      }
+    },
+    {
+      "width": 420,
+      "mode": "plain",
+      "checked": 4,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 109
+        },
+        "tab-a": {
+          "x": 119,
+          "width": 135
+        },
+        "tab-b": {
+          "x": 256,
+          "width": 119
+        }
+      }
+    },
+    {
+      "width": 420,
+      "mode": "compact",
+      "checked": 4,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 109
+        },
+        "tab-a": {
+          "x": 119,
+          "width": 143
+        },
+        "tab-b": {
+          "x": 264,
+          "width": 127
+        }
+      }
+    },
+    {
+      "width": 420,
+      "mode": "mentions",
+      "checked": 4,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 109
+        },
+        "tab-a": {
+          "x": 119,
+          "width": 143
+        },
+        "tab-b": {
+          "x": 264,
+          "width": 127
+        }
+      }
+    }
+  ],
+  "compactWidths": [
+    {
+      "width": 900,
+      "empty": 66,
+      "oneViewer": 107,
+      "both": 153
+    },
+    {
+      "width": 420,
+      "empty": 66,
+      "oneViewer": 107,
+      "both": 0
+    }
+  ],
+  "screenshots": [
+    "/tmp/twirchat-gui-qa-pTxLhS/tab-counts-900.png",
+    "/tmp/twirchat-gui-qa-pTxLhS/tab-counts-420.png",
+    "/tmp/twirchat-gui-qa-pTxLhS/tab-counts-420-scrolled.png"
+  ],
+  "lowRateControlledCheck": true
+}
