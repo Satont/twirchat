@@ -1,8 +1,9 @@
 import { isAbsolute, join } from 'node:path'
 
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
-import { captureGuiQaDisplay } from '../src/services/gui-qa-screenshot'
-import { closeNativeQaWindow, getNativeQaWindowGeometry } from './qa-x11'
+import { captureGuiQaDisplay, decodeQaFramebuffer } from '../src/services/gui-qa-screenshot'
+import { distributionFrameHasPaint } from './qa-distribution-frame'
+import { closeNativeQaWindow, focusNativeQaWindow, getNativeQaWindowGeometry } from './qa-x11'
 
 assertGuiQaEnvironment()
 const executable = process.argv[2]
@@ -44,14 +45,44 @@ try {
   }
   if (!visible)
     throw new Error('Distribution did not show a private test window within 20 seconds.')
+  await focusNativeQaWindow('TwirChat')
+  const paintDeadline = performance.now() + 10_000
+  let painted = false
+  while (performance.now() < paintDeadline) {
+    if (child.exitCode !== null)
+      throw new Error(`Distribution exited before painting its window (${child.exitCode}).`)
+    const frame = decodeQaFramebuffer(
+      Buffer.from(await Bun.file(join(session, 'framebuffer', 'Xvfb_screen0')).arrayBuffer()),
+    )
+    painted = distributionFrameHasPaint(frame)
+    if (painted) break
+    await Bun.sleep(150)
+  }
+  if (!painted) {
+    screenshot = await captureGuiQaDisplay('distribution-app')
+    throw new Error(
+      'Distribution window stayed blank: no meaningful painted frame within 10 seconds.',
+    )
+  }
   await Bun.sleep(1500)
   if (child.exitCode !== null)
     throw new Error(`Distribution exited immediately after opening its window (${child.exitCode}).`)
   screenshot = await captureGuiQaDisplay('distribution-app')
+  const settledFrame = decodeQaFramebuffer(
+    Buffer.from(await Bun.file(join(session, 'framebuffer', 'Xvfb_screen0')).arrayBuffer()),
+  )
+  if (!distributionFrameHasPaint(settledFrame))
+    throw new Error('Distribution became blank after its initial painted frame.')
   closeNativeQaWindow('TwirChat')
   await Promise.race([child.exited, Bun.sleep(2000)])
 } catch (error) {
   failure = error instanceof Error ? error : new Error(String(error))
+  if (!screenshot)
+    try {
+      screenshot = await captureGuiQaDisplay('distribution-app')
+    } catch (captureError) {
+      failure = new AggregateError([failure, captureError], failure.message)
+    }
 } finally {
   if (child.exitCode === null) child.kill('SIGTERM')
   const forceKill = setTimeout(() => {
