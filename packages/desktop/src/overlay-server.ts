@@ -26,10 +26,12 @@ import { existsSync } from 'node:fs'
 import { dirname, extname, join } from 'path'
 
 import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
+import { proxiedProviderImage } from '@twirchat/shared/emote-proxy'
 import { logger } from '@twirchat/shared/logger'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
 import type { ServerWebSocket } from 'bun'
 
+import { getBackendUrl } from './runtime-config'
 import { buildMessageParts, type MessagePart } from './views/shared/utils/messageParts'
 
 const log = logger('overlay-server')
@@ -63,12 +65,30 @@ interface OverlayRuntimePaths {
 // Public API — called from src/bun/index.ts
 // ============================================================
 
+export function buildOverlayChatMessage(msg: NormalizedChatMessage): OverlayChatMessage {
+  const backendUrl = getBackendUrl()
+  const image = (url: string) => proxiedProviderImage(url, backendUrl)
+  const message: NormalizedChatMessage = {
+    ...msg,
+    author: {
+      ...msg.author,
+      avatarUrl: msg.author.avatarUrl ? image(msg.author.avatarUrl) : undefined,
+      badges: msg.author.badges.map((badge) => ({
+        ...badge,
+        imageUrl: badge.imageUrl ? image(badge.imageUrl) : undefined,
+      })),
+    },
+    emotes: msg.emotes.map((emote) => ({ ...emote, imageUrl: image(emote.imageUrl) })),
+  }
+  return { message, parts: buildMessageParts(message) }
+}
 /**
  * Push a chat message to all connected overlay clients.
  */
 export function pushOverlayMessage(msg: NormalizedChatMessage): void {
+  if (!clients.size) return
   const payload: OverlayMessage = {
-    data: { message: msg, parts: buildMessageParts(msg) },
+    data: buildOverlayChatMessage(msg),
     type: 'chat_message',
   }
   const json = JSON.stringify(payload, replacer)
@@ -86,7 +106,17 @@ export function pushOverlayMessage(msg: NormalizedChatMessage): void {
  * Push a chat event (follow, sub, raid…) to all connected overlay clients.
  */
 export function pushOverlayEvent(event: NormalizedEvent): void {
-  const payload: OverlayMessage = { data: event, type: 'chat_event' }
+  if (!clients.size) return
+  const data = event.user.avatarUrl
+    ? {
+        ...event,
+        user: {
+          ...event.user,
+          avatarUrl: proxiedProviderImage(event.user.avatarUrl, getBackendUrl()),
+        },
+      }
+    : event
+  const payload: OverlayMessage = { data, type: 'chat_event' }
   const json = JSON.stringify(payload, replacer)
   for (const ws of clients) {
     try {

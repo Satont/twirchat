@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { getDbPath } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
 import { deleteOldestEntry } from '../../services/bounded-cache'
+import { fetchProviderImage } from '../../services/provider-relay'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 
@@ -158,7 +159,7 @@ export function createImageCache(options: {
         return savedPath
       diskFiles?.delete(hash)
     }
-    const response = await fetch(url, {
+    const response = await fetchProviderImage(url, {
       headers: { 'User-Agent': 'TwirChat/0.1 (image cache)' },
       signal: AbortSignal.timeout(15_000),
     })

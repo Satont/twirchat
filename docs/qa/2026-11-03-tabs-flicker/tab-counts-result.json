@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "geometry": [
+    {
+      "width": 900,
+      "checked": 12,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 142
+        },
+        "tab-a": {
+          "x": 152,
+          "width": 155
+        },
+        "tab-b": {
+          "x": 309,
+          "width": 210
+        },
+        "tab-c": {
+          "x": 521,
+          "width": 268
+        },
+        "tab-add": {
+          "x": 791,
+          "width": 26
+        }
+      }
+    },
+    {
+      "width": 420,
+      "checked": 12,
+      "baseline": {
+        "tab-home": {
+          "x": 8,
+          "width": 142
+        },
+        "tab-a": {
+          "x": 152,
+          "width": 155
+        },
+        "tab-b": {
+          "x": 309,
+          "width": 210
+        }
+      }
+    }
+  ],
+  "screenshots": [
+    "/tmp/twirchat-gui-qa-znNzEm/tab-counts-900.png",
+    "/tmp/twirchat-gui-qa-znNzEm/tab-counts-420.png",
+    "/tmp/twirchat-gui-qa-znNzEm/tab-counts-420-scrolled.png"
+  ],
+  "lowRateControlledCheck": true
+}

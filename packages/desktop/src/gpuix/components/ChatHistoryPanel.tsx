@@ -1,11 +1,19 @@
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { UserChatHistoryCursor } from '../../shared/rpc'
-import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
+import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
+import {
+  HISTORY_DISPLAY_LIMIT,
+  formatHistoryTimestamp,
+  historyRowVisible,
+  historySourceNotice,
+  mergeHistoryMessages,
+  type HistoryVisibleRange,
+} from '../../views/main/utils/history-display'
+import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import type { ChatHistoryQuery } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
-import { formatChatTranscript } from '../chat-tools'
+import { chatMessageKey, formatChatTranscript } from '../chat-tools'
 import { useTheme } from '../theme-context'
 import {
   HistoryButton as Button,
@@ -13,6 +21,7 @@ import {
   HistoryField as Field,
   HistoryInput as Input,
 } from './ChatHistoryFields'
+import { ChatMessage } from './ChatMessage'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
 
@@ -49,7 +58,11 @@ export function ChatHistoryPanel({
   const [exportPath, setExportPath] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  const [exportHistoryNotice, setExportHistoryNotice] = useState<string | null>(null)
+  const [history, setHistory] = useState<UserChatHistoryPage['history']>()
+  const [visibleRange, setVisibleRange] = useState<HistoryVisibleRange | null>(null)
   const generation = useRef(0)
+  const requestSequence = useRef(0)
   const query = useMemo(() => {
     const result: ChatHistoryQuery = {
       platform: platform === 'all' ? undefined : platform,
@@ -79,6 +92,7 @@ export function ChatHistoryPanel({
       requestedCursor?: UserChatHistoryCursor,
     ) => {
       if (queryError) return
+      const request = ++requestSequence.current
       setLoading(true)
       setError(null)
       setNotice('')
@@ -87,17 +101,20 @@ export function ChatHistoryPanel({
           ...query,
           cursor: append ? requestedCursor : undefined,
         })
-        if (generation.current !== token) return
+        if (generation.current !== token || requestSequence.current !== request) return
         setMessages((current) =>
-          append ? [...page.messages, ...current].slice(0, 2000) : page.messages,
+          append
+            ? mergeHistoryMessages(current, page.messages)
+            : mergeHistoryMessages(page.messages, current),
         )
+        setHistory(page.history)
         setCursor(page.nextCursor)
         setHasMore(page.hasMore)
       } catch (failure) {
-        if (generation.current === token)
+        if (generation.current === token && requestSequence.current === request)
           setError(failure instanceof Error ? failure.message : String(failure))
       } finally {
-        if (generation.current === token) setLoading(false)
+        if (generation.current === token && requestSequence.current === request) setLoading(false)
       }
     },
     [backend, query, queryError],
@@ -107,6 +124,10 @@ export function ChatHistoryPanel({
     setMessages([])
     setCursor(null)
     setHasMore(false)
+    setExporting(false)
+    setExportHistoryNotice(null)
+    setHistory(undefined)
+    setVisibleRange(null)
     if (queryError) {
       setLoading(false)
       return
@@ -118,26 +139,35 @@ export function ChatHistoryPanel({
     }
   }, [load, queryError])
   const copy = async () => {
+    const token = generation.current
     try {
       await backend.api.copyText({ text: formatChatTranscript(messages) })
-      setNotice('Loaded messages copied.')
+      if (generation.current === token) setNotice('Loaded messages copied.')
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure))
+      if (generation.current === token)
+        setError(failure instanceof Error ? failure.message : String(failure))
     }
   }
   const exportTranscript = async () => {
+    const token = generation.current
     setExporting(true)
     setError(null)
     setNotice('')
+    setExportHistoryNotice(null)
     try {
       const result = await backend.api.exportChatHistory({ query, path: exportPath.trim() })
-      setNotice(`Exported ${result.count} messages to ${result.path}`)
+      if (generation.current === token) {
+        setNotice(`Exported ${result.count} messages to ${result.path}`)
+        setExportHistoryNotice(historySourceNotice(result.history))
+      }
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure))
+      if (generation.current === token)
+        setError(failure instanceof Error ? failure.message : String(failure))
     } finally {
-      setExporting(false)
+      if (generation.current === token) setExporting(false)
     }
   }
+  const sourceNotice = historySourceNotice(history)
   return (
     <Modal width={820} onClose={onClose}>
       <div
@@ -208,7 +238,7 @@ export function ChatHistoryPanel({
             testId="history-search"
             value={text}
             onChange={setText}
-            placeholder="Search local message history"
+            placeholder="Search message history"
           />
         </Field>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
@@ -235,7 +265,7 @@ export function ChatHistoryPanel({
           />
           <Button
             label="Load older"
-            disabled={loading || !hasMore}
+            disabled={loading || !hasMore || messages.length >= HISTORY_DISPLAY_LIMIT}
             onClick={() => void load(true, generation.current, cursor ?? undefined)}
           />
           <Button
@@ -248,9 +278,14 @@ export function ChatHistoryPanel({
           >{`${messages.length} messages loaded`}</Text>
         </div>
         <Text style={{ fontSize: 10, color: theme.text2 }}>
-          The list keeps up to 2,000 messages visible. Export includes every match. Date-only
-          filters include the whole local day.
+          The list keeps up to 2,000 messages visible. Export includes matching history available to
+          this app. Date-only filters include the whole local day.
         </Text>
+        {sourceNotice ? (
+          <Text testId="history-source-status" style={{ fontSize: 11, color: theme.text2 }}>
+            {sourceNotice}
+          </Text>
+        ) : null}
         <div
           style={{
             height: 240,
@@ -265,33 +300,26 @@ export function ChatHistoryPanel({
             <virtual-list
               alignment="bottom"
               estimatedItemHeight={44}
+              onVisibleRange={(event) => {
+                const start = event.startIndex ?? 0
+                const end = event.endIndex ?? 0
+                setVisibleRange((current) =>
+                  current?.start === start && current.end === end ? current : { start, end },
+                )
+              }}
               style={{ height: '100%', scrollbarWidth: 4, scrollbarColor: theme.scrollbar }}
             >
-              {messages.map((message) => (
-                <div
-                  key={`${message.platform}:${message.channelId}:${message.id}`}
-                  style={{
-                    width: '100%',
-                    padding: 8,
-                    borderBottomWidth: 1,
-                    borderColor: theme.border,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 3,
-                  }}
-                >
-                  <Text
-                    style={{ fontSize: 10, color: theme.text2 }}
-                  >{`${new Date(message.timestamp).toLocaleString()} · ${message.platform}/${message.channelId} · ${sanitizeDisplayText(message.author.displayName)}`}</Text>
-                  <Text style={{ fontSize: 12, color: theme.text }}>
-                    {truncateGraphemes(sanitizeDisplayText(message.text), 2000)}
-                  </Text>
-                </div>
+              {messages.map((message, index) => (
+                <HistorySearchMessageRow
+                  key={chatMessageKey(message)}
+                  message={message}
+                  visible={historyRowVisible(index, messages.length, visibleRange)}
+                />
               ))}
             </virtual-list>
           ) : (
             <Text style={{ padding: 12, fontSize: 12, color: theme.text2 }}>
-              {loading ? 'Loading local history…' : 'No messages match these filters.'}
+              {loading ? 'Loading history…' : 'No messages match these filters.'}
             </Text>
           )}
         </div>
@@ -315,7 +343,49 @@ export function ChatHistoryPanel({
           </Text>
         ) : null}
         {notice ? <Text style={{ fontSize: 12, color: theme.successText }}>{notice}</Text> : null}
+        {exportHistoryNotice ? (
+          <Text testId="history-export-source-status" style={{ fontSize: 11, color: theme.text2 }}>
+            {exportHistoryNotice}
+          </Text>
+        ) : null}
       </div>
     </Modal>
   )
 }
+
+const HistorySearchMessageRow = memo(function HistorySearchMessageRow({
+  message,
+  visible,
+}: {
+  message: NormalizedChatMessage
+  visible: boolean
+}) {
+  const theme = useTheme()
+  return (
+    <div
+      testId={`history-search-message-${chatMessageKey(message)}`}
+      style={{
+        width: '100%',
+        padding: 8,
+        borderBottomWidth: 1,
+        borderColor: theme.border,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+      }}
+    >
+      <Text style={{ fontSize: 10, color: theme.text2 }}>
+        {`${formatHistoryTimestamp(message.timestamp)} · ${message.platform}/${sanitizeDisplayText(message.channelId)}`}
+      </Text>
+      <ChatMessage
+        message={message}
+        channelSlug={message.channelId}
+        chatTheme="compact"
+        fontSize={12}
+        showTimestamp={false}
+        showAvatar={false}
+        visible={visible}
+      />
+    </div>
+  )
+})

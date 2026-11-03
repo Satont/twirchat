@@ -32,6 +32,11 @@ export type DesktopEventMap = {
   author_emote_catalog: { platform: Platform; authorId: string; emotes: EmoteCatalogEntry[] }
   channel_emote_catalog: { platform: Platform; channelId: string; emotes: EmoteCatalogEntry[] }
   chat_message: NormalizedChatMessage
+  chat_history_snapshot: {
+    channelId: string
+    messages: NormalizedChatMessage[]
+    watchedChannelId?: string
+  }
   chat_event: NormalizedEvent
   chat_moderation: ModerationOutcome
   channel_room_state: RoomState
@@ -83,6 +88,7 @@ export function createDesktopEvents(): DesktopEvents {
     author_emote_catalog: new Set(),
     channel_emote_catalog: new Set(),
     chat_message: new Set(),
+    chat_history_snapshot: new Set(),
     chat_event: new Set(),
     chat_moderation: new Set(),
     channel_room_state: new Set(),

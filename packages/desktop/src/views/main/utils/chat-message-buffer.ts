@@ -1,3 +1,4 @@
+import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 const identityIndexes = new WeakMap<NormalizedChatMessage[], Set<string>>()
@@ -11,7 +12,7 @@ function messageTimestamp(message: NormalizedChatMessage): number {
 }
 
 function messageKey(message: NormalizedChatMessage): string {
-  return `${message.platform}:${message.id}`
+  return chatMessageIdentity(message)
 }
 
 function compareMessages(left: NormalizedChatMessage, right: NormalizedChatMessage): number {
@@ -47,7 +48,13 @@ export function appendLiveChatMessagesWithCount(
     if (
       keys
         ? keys.has(key)
-        : current.some((entry) => entry.platform === message.platform && entry.id === message.id)
+        : current.some(
+            (entry) =>
+              entry.platform === message.platform &&
+              entry.id === message.id &&
+              normalizeMessageChannel(entry.platform, entry.channelId) ===
+                normalizeMessageChannel(message.platform, message.channelId),
+          )
     )
       continue
     keys?.add(key)

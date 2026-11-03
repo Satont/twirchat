@@ -18,6 +18,12 @@ export function getDb(): Database {
 }
 
 export function initDb(path: string = getDbPath()): Database {
+  const db = openDatabase(path)
+  _db = db
+  return db
+}
+
+export function openDatabase(path: string): Database {
   mkdirSync(dirname(path), { recursive: true })
 
   const db = new Database(path, { create: true })
@@ -40,7 +46,6 @@ export function initDb(path: string = getDbPath()): Database {
     throw error
   }
 
-  _db = db
   return db
 }
 
@@ -132,6 +137,9 @@ function runMigrations(db: Database): void {
     )
     db.run(
       `CREATE INDEX IF NOT EXISTS idx_chat_messages_channel_history ON chat_messages(platform, channel_id, created_at DESC, id DESC)`,
+    )
+    db.run(
+      `CREATE INDEX IF NOT EXISTS idx_chat_messages_channel_identity ON chat_messages(platform, lower(ltrim(channel_id, '#@')), id)`,
     )
     db.run(
       `CREATE INDEX IF NOT EXISTS idx_chat_messages_chronology ON chat_messages(created_at DESC, id DESC, platform DESC, channel_id DESC)`,

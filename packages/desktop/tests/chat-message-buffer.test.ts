@@ -198,3 +198,17 @@ test('cached single arrivals, no-op batches and uncapped branches retain exact m
     newMessageCount: 1,
   })
 })
+
+test('history and live buffers deduplicate aliases within a channel while preserving another channel with the same ID', () => {
+  const original = { ...indexedMessage(1), channelId: 'channel' }
+  const alias = { ...original, channelId: '#ChAnNeL', text: 'stale' }
+  const other = { ...original, channelId: 'other' }
+  expect(appendLiveChatMessagesWithCount([original], [alias], 0)).toEqual({
+    messages: [original],
+    newMessageCount: 0,
+  })
+  const joined = appendLiveChatMessagesWithCount([original], [alias, other], 0)
+  expect(joined.newMessageCount).toBe(1)
+  expect(joined.messages).toHaveLength(2)
+  expect(mergeChatMessageSnapshot([original], [alias, other, alias], 0)).toEqual(joined.messages)
+})

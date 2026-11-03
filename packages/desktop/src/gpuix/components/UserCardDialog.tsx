@@ -654,6 +654,12 @@ export function UserCardDialog({
               }}
               platform={target.platform}
               platformUserId={target.platformUserId}
+              channelId={
+                target.platform === 'youtube'
+                  ? target.channelId
+                  : (target.channelSlug ?? target.channelId)
+              }
+              username={target.username}
             />
           ) : null}
         </div>

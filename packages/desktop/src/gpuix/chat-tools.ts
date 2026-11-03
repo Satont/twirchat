@@ -1,9 +1,10 @@
+import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { compileRuleRegex } from './rule-regex'
 
 export function chatMessageKey(message: NormalizedChatMessage): string {
-  return `${message.platform}:${message.channelId}:${message.id}`
+  return `${message.platform}:${normalizeMessageChannel(message.platform, message.channelId)}:${message.id}`
 }
 
 /** Compile once per account change, rather than once per rendered row. */

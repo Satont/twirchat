@@ -108,6 +108,16 @@ export function ChatLoggingSettings() {
       </Text>
       {settings ? (
         <>
+          <Toggle
+            label="Load Twitch history through backend"
+            checked={settings.twitchHistoryEnabled}
+            onChange={(twitchHistoryEnabled) => change({ twitchHistoryEnabled })}
+          />
+          <Text style={{ fontSize: 11, color: theme.text2 }}>
+            Fetch available messages from third-party history services through the backend. Coverage
+            depends on the channels and dates they retain. Disable this to use only locally stored
+            history; providers are configured on the backend.
+          </Text>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
             <Field label="Keep at most this many history messages">
               <Input testId="chat-history-retention" value={retention} onChange={setRetention} />

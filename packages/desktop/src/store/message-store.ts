@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite'
 
+import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
 import { normalizedChatMessageSchema } from '../services/persisted-schemas'
@@ -57,7 +58,7 @@ function parseMessage(row: HistoryRow): NormalizedChatMessage | null {
       return {
         id: row.id,
         platform: row.platform,
-        channelId: row.channel_id,
+        channelId: normalizeMessageChannel(row.platform, row.channel_id),
         author: { id: row.author_id, displayName: row.author_name, badges: [] },
         text: row.text,
         type: row.type,
@@ -68,7 +69,7 @@ function parseMessage(row: HistoryRow): NormalizedChatMessage | null {
       ...JSON.parse(row.data),
       id: row.id,
       platform: row.platform,
-      channelId: row.channel_id,
+      channelId: normalizeMessageChannel(row.platform, row.channel_id),
       timestamp: row.created_at,
     })
     if (
@@ -99,8 +100,13 @@ function search(
     values.push(query.platform)
   }
   if (query.channelId?.trim()) {
-    where.push('channel_id = ?')
-    values.push(query.channelId.trim())
+    if (query.platform === 'twitch' || query.platform === 'kick') {
+      where.push("lower(ltrim(channel_id, '#@')) = ?")
+      values.push(normalizeMessageChannel(query.platform, query.channelId))
+    } else {
+      where.push("(channel_id = ? OR (platform = 'twitch' AND lower(ltrim(channel_id, '#@')) = ?))")
+      values.push(query.channelId.trim(), normalizeMessageChannel('twitch', query.channelId))
+    }
   }
   if (query.author?.trim()) {
     where.push(
@@ -126,6 +132,7 @@ function search(
   if (query.since !== undefined && query.until !== undefined && query.since > query.until)
     throw new Error('The start date must be before the end date.')
   const entries: { row: HistoryRow; message: NormalizedChatMessage }[] = []
+  const seen = new Set<string>()
   let cursor = query.cursor
   let exhausted = false
   // Continue past malformed rows so one damaged entry cannot hide later pages.
@@ -153,7 +160,10 @@ function search(
       .all(...bindings, count)
     for (const row of rows) {
       const message = parseMessage(row)
-      if (message) entries.push({ row, message })
+      if (message && !seen.has(chatMessageIdentity(message))) {
+        seen.add(chatMessageIdentity(message))
+        entries.push({ row, message })
+      }
       if (entries.length > limit) break
     }
     exhausted = rows.length < count
@@ -190,6 +200,74 @@ function prune(retention: Partial<HistoryRetention> = DEFAULT_RETENTION, databas
 export const MessageStore = {
   search,
   prune,
+  resolveHistory(
+    messages: readonly NormalizedChatMessage[],
+    database: Database = getDb(),
+  ): NormalizedChatMessage[] {
+    const channels = new Map<string, string[]>()
+    for (const message of messages) {
+      if (message.platform !== 'twitch') continue
+      const channel = normalizeMessageChannel('twitch', message.channelId)
+      const ids = channels.get(channel)
+      if (ids) ids.push(message.id)
+      else channels.set(channel, [message.id])
+    }
+    const stored = new Map<string, NormalizedChatMessage>()
+    for (const [channel, ids] of channels) {
+      const rows = database
+        .query<
+          HistoryRow,
+          [string, string]
+        >(`SELECT id, platform, channel_id, created_at, data, author_id, author_name, text, type
+        FROM chat_messages WHERE platform = 'twitch' AND lower(ltrim(channel_id, '#@')) = ?
+        AND id IN (SELECT value FROM json_each(?)) ORDER BY ${ORDER}`)
+        .all(channel, JSON.stringify(ids))
+      for (const row of rows) {
+        const message = parseMessage(row)
+        if (message && !stored.has(chatMessageIdentity(message)))
+          stored.set(chatMessageIdentity(message), message)
+      }
+    }
+    return messages.map((message) => stored.get(chatMessageIdentity(message)) ?? message)
+  },
+  importHistory(
+    messages: readonly NormalizedChatMessage[],
+    retention: Partial<HistoryRetention> | null = DEFAULT_RETENTION,
+    database: Database = getDb(),
+  ): void {
+    if (!messages.length) return
+    database.transaction(() => {
+      const insert = database.query(`INSERT INTO chat_messages
+        (id, platform, channel_id, author_id, author_name, text, type, created_at, data)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
+          SELECT 1 FROM chat_messages WHERE platform = ? AND lower(ltrim(channel_id, '#@')) = ? AND id = ?
+        ) ON CONFLICT(platform, channel_id, id) DO NOTHING`)
+      const insertExact = database.query(`INSERT INTO chat_messages
+        (id, platform, channel_id, author_id, author_name, text, type, created_at, data)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
+          SELECT 1 FROM chat_messages WHERE platform = ? AND channel_id = ? AND id = ?
+        ) ON CONFLICT(platform, channel_id, id) DO NOTHING`)
+      for (const message of messages) {
+        const channel = normalizeMessageChannel(message.platform, message.channelId)
+        const statement = message.platform === 'youtube' ? insertExact : insert
+        statement.run(
+          message.id,
+          message.platform,
+          channel,
+          message.author.id,
+          message.author.displayName,
+          message.text,
+          message.type,
+          message.timestamp.getTime(),
+          JSON.stringify({ ...message, channelId: channel }),
+          message.platform,
+          message.platform === 'youtube' ? channel : channel.toLowerCase(),
+          message.id,
+        )
+      }
+      if (retention) prune(retention, database)
+    })()
+  },
   getRecent(limit = 100): NormalizedChatMessage[] {
     return search({ limit: pageLimit(limit, 100, 500) }).messages
   },

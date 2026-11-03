@@ -1,4 +1,11 @@
-import { DismissableLayer, useGpuixRequired, type Props } from '@gpuix/react'
+import {
+  DismissableLayer,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useGpuixRequired,
+  type Props,
+} from '@gpuix/react'
 import type { PlatformStatusInfo } from '@twirchat/shared/types'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -19,6 +26,13 @@ import {
 import { useStore } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'
 import type { TabUnread } from '../state/tab-unread'
+import {
+  describeTabCounts,
+  formatTabUnread,
+  formatTabViewers,
+  TAB_UNREAD_WIDTH,
+  TAB_VIEWER_WIDTH,
+} from '../tab-counts'
 import { accent, platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
@@ -30,12 +44,6 @@ export interface WatchedLiveStatus {
   isLive: boolean
   viewerCount?: number
 }
-function formatViewers(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
-  return String(n)
-}
-
 interface TabMenuItemOptions {
   disabled?: boolean
   autoFocus?: boolean
@@ -195,7 +203,9 @@ export function ChannelTabBar({
           active={activeTabId === 'home'}
           activeColor={theme.text}
           viewers={homeViewerCount}
+          showViewers={homeViewerCount !== undefined}
           unread={unread?.get('home')}
+          showUnread={unread !== undefined}
           onClick={() => onSelectTab('home')}
         />
         {watchedChannels.map((channel, index) => {
@@ -349,7 +359,9 @@ export function ChannelTabBar({
                 active={active}
                 activeColor={color}
                 viewers={live?.isLive ? live.viewerCount : undefined}
+                showViewers
                 unread={unread?.get(channel.id)}
+                showUnread={unread !== undefined}
                 onClick={() => {
                   if (!suppressClick.current) onSelectTab(channel.id)
                 }}
@@ -364,11 +376,15 @@ export function ChannelTabBar({
                     ) : (
                       <Icon name="chat" size={12} color={active ? color : theme.text2} />
                     )}
-                    {live?.isLive ? (
-                      <div
-                        style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: color }}
-                      />
-                    ) : null}
+                    <div
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: 3,
+                        flexShrink: 0,
+                        backgroundColor: live?.isLive ? color : 'transparent',
+                      }}
+                    />
                     {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
                   </>
                 }
@@ -542,7 +558,9 @@ function Tab({
   active,
   activeColor,
   viewers,
+  showViewers,
   unread,
+  showUnread,
   onClick,
   testId,
   interaction,
@@ -552,7 +570,9 @@ function Tab({
   active: boolean
   activeColor: string
   viewers?: number
+  showViewers: boolean
   unread?: TabUnread
+  showUnread: boolean
   onClick: () => void
   testId?: string
   interaction?: Pick<Props, 'onKeyDown' | 'onMouseDown' | 'onMouseMove' | 'onMouseUp'>
@@ -613,41 +633,126 @@ function Tab({
       >
         {label}
       </Text>
-      {viewers !== undefined ? (
-        <Text style={{ fontSize: 10, color: active ? activeColor : theme.text2, opacity: 0.7 }}>
-          {formatViewers(viewers)}
-        </Text>
-      ) : null}
-      {unread && unread.unread > 0 ? (
+      <TabCounts
+        viewers={viewers}
+        showViewers={showViewers}
+        unread={unread}
+        showUnread={showUnread}
+        color={active ? activeColor : theme.text2}
+        testId={testId}
+      />
+    </div>
+  )
+}
+
+function TabCounts({
+  viewers,
+  showViewers,
+  unread,
+  showUnread,
+  color,
+  testId,
+}: {
+  viewers?: number
+  showViewers: boolean
+  unread?: TabUnread
+  showUnread: boolean
+  color: string
+  testId?: string
+}) {
+  const theme = useTheme()
+  const label = formatTabUnread(unread)
+  const description = describeTabCounts(viewers, unread)
+  if (!showViewers && !showUnread) return null
+  return (
+    <Tooltip delayDuration={250}>
+      <TooltipTrigger asChild>
         <div
-          testId={`${testId}-unread`}
+          testId={`${testId}-counts`}
+          aria-label={description || undefined}
           style={{
-            minWidth: 17,
-            height: 17,
-            paddingLeft: 4,
-            paddingRight: 4,
-            borderRadius: 9,
             display: 'flex',
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: unread.mentions > 0 ? accent.tint20 : theme.fillHover,
+            gap: 4,
+            flexShrink: 0,
+            height: 17,
           }}
         >
-          <Text
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: unread.mentions > 0 ? (unread.color?.slice(0, 7) ?? theme.link) : theme.text2,
-            }}
-          >
-            {unread.mentions > 0
-              ? `@${unread.mentions > 99 ? '99+' : unread.mentions}`
-              : unread.unread > 99
-                ? '99+'
-                : unread.unread}
-          </Text>
+          {showViewers ? (
+            <Text
+              testId={`${testId}-viewers`}
+              style={{
+                fontFamily: 'monospace',
+                fontSize: 10,
+                width: TAB_VIEWER_WIDTH,
+                minWidth: TAB_VIEWER_WIDTH,
+                flexShrink: 0,
+                textAlign: 'right',
+                whiteSpace: 'nowrap',
+                color,
+                opacity: 0.7,
+              }}
+            >
+              {viewers === undefined ? '' : formatTabViewers(viewers)}
+            </Text>
+          ) : null}
+          {showUnread ? (
+            <div
+              testId={`${testId}-unread`}
+              style={{
+                width: TAB_UNREAD_WIDTH,
+                minWidth: TAB_UNREAD_WIDTH,
+                height: 17,
+                flexShrink: 0,
+                paddingLeft: 2,
+                paddingRight: 2,
+                borderRadius: 9,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                backgroundColor: label
+                  ? unread && unread.mentions > 0
+                    ? accent.tint20
+                    : theme.fillHover
+                  : 'transparent',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  textAlign: 'right',
+                  color:
+                    unread && unread.mentions > 0
+                      ? (unread.color?.slice(0, 7) ?? theme.link)
+                      : theme.text2,
+                }}
+              >
+                {label}
+              </Text>
+            </div>
+          ) : null}
         </div>
+      </TooltipTrigger>
+      {description ? (
+        <TooltipContent
+          testId={`${testId}-counts-tooltip`}
+          side="bottom"
+          sideOffset={6}
+          style={{
+            backgroundColor: theme.popover,
+            borderWidth: 1,
+            borderColor: theme.dialogBorder,
+            borderRadius: 6,
+            padding: 8,
+            maxWidth: 280,
+          }}
+        >
+          <Text style={{ fontSize: 11, color: theme.text }}>{description}</Text>
+        </TooltipContent>
       ) : null}
-    </div>
+    </Tooltip>
   )
 }

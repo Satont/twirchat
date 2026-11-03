@@ -64,6 +64,68 @@ test('keeps My channels scoped to the connected account channels', () => {
   ])
 })
 
+test('historical snapshots preserve pending live messages without publishing live events or activity', async () => {
+  const {
+    accountsStore,
+    homeMessagesStore,
+    watchedMessagesStore,
+    chatActivityStore,
+    wireBackendToStores,
+  } = await import('../src/gpuix/state/app')
+  const { createDesktopEvents } = await import('../src/gpuix/backend/events')
+  const events = createDesktopEvents()
+  const previous = {
+    accounts: accountsStore.get(),
+    home: homeMessagesStore.get(),
+    watched: watchedMessagesStore.get(),
+    activity: chatActivityStore.get(),
+  }
+  accountsStore.set(accounts)
+  homeMessagesStore.set([])
+  watchedMessagesStore.set(new Map())
+  chatActivityStore.set(new Map())
+  const stop = wireBackendToStores({
+    events,
+    api: {
+      getAccounts: async () => accounts,
+      getWatchedChannelMessages: async () => [],
+      getWatchedChannelStatuses: async () => [],
+    },
+  })
+  let liveEvents = 0
+  const unsubscribe = events.on('chat_message', () => {
+    liveEvents++
+  })
+  try {
+    const live = message('same-id', 'twitch', 'MyStreamer')
+    const historical = { ...live, text: 'stale historical copy' }
+    const older = message('older-history', 'twitch', 'mystreamer')
+    older.timestamp = new Date('2026-07-13T00:00:00Z')
+    events.emit('chat_message', live)
+    events.emit('chat_history_snapshot', {
+      channelId: 'mystreamer',
+      messages: [older, historical, older],
+    })
+    await Bun.sleep(30)
+    expect(homeMessagesStore.get()).toEqual([older, live])
+    expect(chatActivityStore.get().get('home')?.total).toBe(1)
+    expect(liveEvents).toBe(1)
+    events.emit('chat_history_snapshot', {
+      channelId: 'mystreamer',
+      messages: [older],
+      watchedChannelId: 'already-removed',
+    })
+    expect(watchedMessagesStore.get().has('already-removed')).toBe(false)
+  } finally {
+    unsubscribe()
+    stop()
+    accountsStore.set(previous.accounts)
+    homeMessagesStore.set(previous.home)
+    watchedMessagesStore.set(previous.watched)
+    chatActivityStore.set(previous.activity)
+  }
+})
+
 test('keeps real Kick broadcaster IDs while excluding watched channels, even for the same sender', () => {
   const kick = { ...required(accounts[1]), platformUserId: '3195252', username: 'satont' }
   const own = message('kick-canonical-own', 'kick', '3195252')

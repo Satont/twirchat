@@ -6,6 +6,7 @@ import {
   mergeProviderEmotes,
   type EmotePreferences,
 } from './provider-emotes'
+import { fetchProviderMetadata } from './provider-relay'
 export {
   DEFAULT_EMOTE_PREFERENCES,
   emoteProvider,
@@ -149,9 +150,7 @@ export interface ProviderEmoteOptions {
   preferences?: EmotePreferences
 }
 
-export function createEmoteProviderService(
-  fetcher: ProviderFetch = (url, init) => fetch(url, init),
-) {
+export function createEmoteProviderService(fetcher: ProviderFetch = fetchProviderMetadata) {
   const cache = new Map<string, { value: unknown; expires: number }>()
   const pending = new Map<string, Promise<unknown>>()
   const errors = new Map<string, string>()

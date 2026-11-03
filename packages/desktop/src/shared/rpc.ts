@@ -8,6 +8,7 @@
  */
 
 import type { SevenTVEmote } from '@twirchat/shared/protocol'
+import type { TwitchHistorySource } from '@twirchat/shared/twitch-history'
 import type {
   NormalizedChatMessage,
   NormalizedEvent,
@@ -34,6 +35,12 @@ export interface UserChatHistoryPage {
   messages: NormalizedChatMessage[]
   nextCursor: UserChatHistoryCursor | null
   hasMore: boolean
+  history?: {
+    sources: TwitchHistorySource[]
+    partial: boolean
+    truncated: boolean
+    error?: string
+  }
 }
 
 /** Messages the main process pushes to the UI. */

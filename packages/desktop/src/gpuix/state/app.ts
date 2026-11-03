@@ -653,6 +653,19 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   let pendingHome: NormalizedChatMessage[] = []
   let pendingWatched = new Map<string, NormalizedChatMessage[]>()
   let messageTimer: ReturnType<typeof setTimeout> | undefined
+  subscribe('chat_history_snapshot', ({ messages, watchedChannelId }) => {
+    clearTimeout(messageTimer)
+    flushMessages()
+    hydrateMessageSimilarity(messages)
+    if (watchedChannelId) {
+      if (!watchedChannelsStore.get().some((channel) => channel.id === watchedChannelId)) return
+      watchedMessagesStore.modify((current) => {
+        const existing = current.get(watchedChannelId) ?? []
+        const merged = mergeChatMessageSnapshot(existing, messages, 200)
+        return merged === existing ? current : new Map(current).set(watchedChannelId, merged)
+      })
+    } else appendHomeMessages(messages)
+  })
 
   // Coalesce platform bursts into one store publication per frame. The
   // event subscriptions (and this queue) live with the backend singleton,

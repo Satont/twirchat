@@ -1,3 +1,4 @@
+import { SEVENTV_COSMETICS_QUERY } from '@twirchat/shared/emote-proxy'
 import type { Badge, Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
@@ -5,6 +6,7 @@ import { sanitizeDisplayText, truncateGraphemes } from '../views/shared/utils/di
 import { deleteOldestEntry } from './bounded-cache'
 import { getProviderBadges, type ProviderFetch } from './emote-providers'
 import { createPaintRenderer } from './paint-renderer'
+import { fetchProviderMetadata } from './provider-relay'
 
 const rowSchema = z.record(z.string(), z.unknown())
 type Row = z.infer<typeof rowSchema>
@@ -40,24 +42,6 @@ export interface UserCosmetics {
   paint?: CosmeticPaint
   lookupStatus: 'available' | 'not-found' | 'unavailable'
 }
-
-const QUERY = `query DesktopCosmetics($platform: Platform!, $platformId: String!) {
-  users { userByConnection(platform: $platform, platformId: $platformId) {
-    id personalEmoteSet { id }
-    style {
-      activeBadge { id name images { url scale frameCount } }
-      activePaint { id name data {
-        layers { opacity ty { __typename
-          ... on PaintLayerTypeSingleColor { color { hex } }
-          ... on PaintLayerTypeLinearGradient { angle repeating stops { at color { hex } } }
-          ... on PaintLayerTypeRadialGradient { shape repeating stops { at color { hex } } }
-          ... on PaintLayerTypeImage { images { url scale frameCount } }
-        } }
-        shadows { color { hex } offsetX offsetY blur }
-      } }
-    }
-  } }
-}`
 
 export function parseCosmetics(value: unknown): UserCosmetics {
   const user = row(row(row(row(value).data).users).userByConnection)
@@ -152,7 +136,7 @@ export function parseCosmetics(value: unknown): UserCosmetics {
 }
 
 export function createCosmeticsService(
-  fetcher: ProviderFetch = (url, init) => fetch(url, init),
+  fetcher: ProviderFetch = fetchProviderMetadata,
   badges = getProviderBadges,
 ) {
   const cache = new Map<string, { value: UserCosmetics; expires: number }>()
@@ -181,7 +165,7 @@ export function createCosmeticsService(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              query: QUERY,
+              query: SEVENTV_COSMETICS_QUERY,
               variables: { platform: platform.toUpperCase(), platformId: userId },
             }),
             signal: AbortSignal.timeout(10_000),
@@ -233,12 +217,15 @@ export async function updateSevenTvPresence(
   channelId: string,
 ): Promise<void> {
   if (platform === 'youtube') return
-  const response = await fetch(`https://7tv.io/v3/users/${encodeURIComponent(userId)}/presences`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind: 1, data: { id: channelId, platform: platform.toUpperCase() } }),
-    signal: AbortSignal.timeout(10_000),
-  })
+  const response = await fetchProviderMetadata(
+    `https://7tv.io/v3/users/${encodeURIComponent(userId)}/presences`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 1, data: { id: channelId, platform: platform.toUpperCase() } }),
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
   if (!response.ok) throw new Error(`7TV presence HTTP ${response.status}`)
 }
 

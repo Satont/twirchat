@@ -20,6 +20,7 @@ try {
       fontSize: z.unknown().optional(),
       fontFamily: z.unknown().optional(),
       dbPath: z.unknown().optional(),
+      backendUrl: z.string().url().optional(),
       size: z.unknown().optional(),
       scale: z.unknown().optional(),
     })
@@ -41,7 +42,10 @@ try {
       !job.modifiers.every((value) => typeof value === 'string')
     )
       throw new Error('Invalid emote job.')
-    setRuntimeConfig({ dbPath: job.dbPath })
+    setRuntimeConfig({
+      dbPath: job.dbPath,
+      ...(job.backendUrl ? { backendUrl: job.backendUrl } : {}),
+    })
     const path = await modifiedEmoteImage(job.path, job.width, job.height, job.modifiers)
     process.stdout.write(JSON.stringify({ path }))
   } else {
@@ -52,7 +56,10 @@ try {
       typeof job.dbPath !== 'string'
     )
       throw new Error('Invalid paint job.')
-    setRuntimeConfig({ dbPath: job.dbPath })
+    setRuntimeConfig({
+      dbPath: job.dbPath,
+      ...(job.backendUrl ? { backendUrl: job.backendUrl } : {}),
+    })
     const output = await getPaintNameImage(
       job.name,
       cosmeticPaintSchema.parse(job.paint),

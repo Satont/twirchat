@@ -92,6 +92,7 @@ import {
 import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
 import { UserAliasStore } from '../../store/user-alias-store'
 import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
+import { mergeChatMessageSnapshot } from '../../views/main/utils/chat-message-buffer'
 import type { WatchedChannelManager } from '../../watched-channels/manager'
 import {
   twitchActivitiesSnapshotSchema,
@@ -133,6 +134,7 @@ import type {
   TranslationResult,
   TranslationLanguage,
 } from './translation'
+import type { TwitchHistoryRuntime } from './twitch-history'
 import { createUpdater } from './updater'
 import {
   getUserNotes,
@@ -221,7 +223,7 @@ export interface DesktopApi {
   exportChatHistory(params: {
     query: ChatHistoryQuery
     path: string
-  }): Promise<{ path: string; count: number }>
+  }): Promise<{ path: string; count: number; history?: UserChatHistoryPage['history'] }>
   getChatLoggingStatus(): Promise<{ error: string | null; queued: number }>
   flushChatLogs(): Promise<void>
   getTwitchActivities(params: {
@@ -300,6 +302,8 @@ export interface DesktopApi {
   getUserChatHistory(params: {
     platform: Platform
     platformUserId: string
+    channelId?: string
+    username?: string
     limit?: number
     cursor?: UserChatHistoryCursor
   }): Promise<UserChatHistoryPage>
@@ -378,6 +382,7 @@ export interface DesktopApi {
 }
 
 export interface DesktopApiContext {
+  twitchHistory?: TwitchHistoryRuntime
   streamerMode?: StreamerModeService
   channelActions?: ChannelActions
   accountSessions?: AccountSessions
@@ -811,10 +816,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     removeTranslationCredential: translation.removeTranslationCredential,
     translateText: translation.translateText,
     getTranslationLanguages: translation.getTranslationLanguages,
-    getChatHistory: (query) => readChatHistory(query),
+    getChatHistory: (query) => ctx.twitchHistory?.query(query) ?? readChatHistory(query),
     getChatLoggingSettings: () => readChatLoggingSettings(),
     saveChatLoggingSettings: (settings) => writeChatLoggingSettings(settings),
-    exportChatHistory: (params) => writeChatHistoryExport(params),
+    exportChatHistory: (params) =>
+      ctx.twitchHistory?.export(params) ?? writeChatHistoryExport(params),
     getChatLoggingStatus: () => readChatLoggingStatus(),
     flushChatLogs: () => flushRecordedChatLogs(),
 
@@ -1034,11 +1040,24 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     getRecentMessages: async (params) => {
+      const account = AccountStore.findByPlatform('twitch')
+      if (account)
+        void ctx.twitchHistory
+          ?.refresh(account.username)
+          .catch((error) => log.debug('Twitch history unavailable', { error: String(error) }))
       return MessageStore.getRecent(params?.limit ?? 100)
     },
 
-    getUserChatHistory: async ({ platform, platformUserId, limit, cursor }) => {
-      return MessageStore.getByUser({ platform, platformUserId, limit, cursor })
+    getUserChatHistory: async ({
+      platform,
+      platformUserId,
+      channelId,
+      username,
+      limit,
+      cursor,
+    }) => {
+      const query = { platform, channelId, authorId: platformUserId, limit: limit ?? 50, cursor }
+      return ctx.twitchHistory?.query(query, username) ?? readChatHistory(query)
     },
 
     getUserProfile: async (params) => {
@@ -1155,7 +1174,18 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     getWatchedChannelMessages: async ({ id }) => {
-      return watchedChannelManager.getMessages(id)
+      const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === id)
+      if (!channel) return []
+      if (channel.platform === 'twitch')
+        void ctx.twitchHistory
+          ?.refresh(channel.channelSlug)
+          .catch((error) => log.debug('Twitch history unavailable', { error: String(error) }))
+      const local = await readChatHistory({
+        platform: channel.platform,
+        channelId: channel.channelSlug,
+        limit: 200,
+      })
+      return mergeChatMessageSnapshot(watchedChannelManager.getMessages(id), local.messages, 200)
     },
 
     sendWatchedChannelMessage: async ({ id, text, replyToMessageId }) => {

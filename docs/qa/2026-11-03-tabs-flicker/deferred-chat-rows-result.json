@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "controlledAppends": 8,
+  "retainedRows": 200,
+  "sampledPaints": 380,
+  "blankChatSamples": 0,
+  "rowFocusPreserved": true,
+  "screenshots": [
+    "/tmp/twirchat-gui-qa-vVpvM3/deferred-rows-before.png",
+    "/tmp/twirchat-gui-qa-vVpvM3/deferred-rows-after.png"
+  ]
+}

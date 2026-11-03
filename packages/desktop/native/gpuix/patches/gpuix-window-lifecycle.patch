@@ -1143,7 +1143,7 @@ index c5f4fa1..353cdc3 100644
  #[cfg(not(target_family = "wasm"))]
  mod updater;
 diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
-index 8c104a4..aa6a378 100644
+index 8c104a4..6631d9b 100644
 --- a/packages/native/src/renderer.rs
 +++ b/packages/native/src/renderer.rs
 @@ -12,15 +12,15 @@
@@ -2961,25 +2961,30 @@ index 8c104a4..aa6a378 100644
          }
  
          #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
-@@ -2483,6 +3493,18 @@ impl GpuixRenderer {
-         Ok(self.element_bounds(id)?.map(ElementBounds::from_painted))
+@@ -2478,9 +3488,21 @@ impl GpuixRenderer {
      }
  
+     #[napi]
+-    pub fn get_element_bounds(&self, id: f64) -> Result<Option<ElementBounds>> {
++    pub fn get_element_bounds(&self, id: f64) -> Result<Option<ElementBounds>> {
++        let id = to_element_id(id)?;
++        Ok(self.element_bounds(id)?.map(ElementBounds::from_painted))
++    }
++
 +    /// Last completed paint; never waits for layout or the UI command queue.
 +    #[napi]
 +    pub fn get_painted_element_bounds(&self, id: f64) -> Result<Option<ElementBounds>> {
-+        let id = to_element_id(id)?;
+         let id = to_element_id(id)?;
+-        Ok(self.element_bounds(id)?.map(ElementBounds::from_painted))
 +        let Some(state) = self.window_state.try_lock() else {
 +            return Ok(None);
 +        };
 +        let snapshot = state.painted_bounds.clone();
 +        drop(state);
 +        Ok(snapshot.get(id).map(ElementBounds::from_painted))
-+    }
-+
+     }
+ 
      /// The elements whose last painted box holds the window point `(x, y)`,
-     /// topmost first, like the DOM's `elementsFromPoint`. An element that did
-     /// not paint is never listed, `overflow: hidden | scroll` clips what lies
 @@ -2507,27 +3529,38 @@ impl GpuixRenderer {
      }
  
@@ -3378,7 +3383,28 @@ index 8c104a4..aa6a378 100644
          self.set_live_image(id, image, window, cx)
      }
  
-@@ -4255,7 +5335,10 @@ impl GpuixView {
+@@ -4160,17 +5240,9 @@ impl GpuixView {
+ 
+         let tree_arc = self.tree.clone();
+         let tree = tree_arc.lock().unwrap();
+-        let window_start = self
+-            .virtual_lists
+-            .get(&list_id)
+-            .map(|entry| entry.window_start)
+-            .unwrap_or(0);
+-        let child_matches = tree.elements.get(&list_id).and_then(|list| {
+-            index
+-                .checked_sub(window_start)
+-                .and_then(|offset| list.children.get(offset))
+-        }) == Some(&expected_child_id);
+-        if !child_matches {
++        // The retained child order can change after gpui captured this frame's
++        // list entry. Keep surviving rows on that snapshot until the next sync.
++        if !virtual_child_is_mounted(&tree, list_id, expected_child_id) {
+             let height = self
+                 .virtual_lists
+                 .get(&list_id)
+@@ -4255,7 +5327,10 @@ impl GpuixView {
          if !self.virtual_lists.contains_key(&id) {
              return false;
          }
@@ -3390,7 +3416,7 @@ index 8c104a4..aa6a378 100644
          emit_event_full(&self.event_callback, id, "visibleRange", |payload| {
              payload.start_index = Some(index as f64);
              payload.end_index = Some((index + 1) as f64);
-@@ -4314,7 +5397,9 @@ impl GpuixView {
+@@ -4314,7 +5389,9 @@ impl GpuixView {
                  break None;
              };
              if let Some(entry) = self.virtual_lists.get(&parent_id) {
@@ -3401,7 +3427,7 @@ index 8c104a4..aa6a378 100644
              }
              current = parent_id;
          };
-@@ -4534,6 +5619,178 @@ struct VirtualListEntry {
+@@ -4534,6 +5611,178 @@ struct VirtualListEntry {
      seen_rows: HashSet<u64>,
  }
  
@@ -3580,7 +3606,7 @@ index 8c104a4..aa6a378 100644
  impl VirtualListEntry {
      fn new(
          config: VirtualListConfig,
-@@ -4605,6 +5862,10 @@ impl VirtualListEntry {
+@@ -4605,6 +5854,10 @@ impl VirtualListEntry {
              return;
          }
  
@@ -3591,7 +3617,7 @@ index 8c104a4..aa6a378 100644
          let old_rows: HashMap<u64, (u64, Option<gpui::FocusHandle>)> = self
              .child_ids
              .iter()
-@@ -4636,9 +5897,6 @@ impl VirtualListEntry {
+@@ -4636,9 +5889,6 @@ impl VirtualListEntry {
                  row_focus_handles,
              );
              replacement.seen_rows = std::mem::take(&mut self.seen_rows);
@@ -3601,7 +3627,7 @@ index 8c104a4..aa6a378 100644
              if !should_follow {
                  replacement.state.scroll_to(scroll_top);
              }
-@@ -4670,23 +5928,11 @@ impl VirtualListEntry {
+@@ -4670,23 +5920,11 @@ impl VirtualListEntry {
          // A windowed list's children are a sliding viewport. Splicing by
          // child position would treat a scroll as a rewrite of items 0..N.
          if config.item_count.is_none() && self.child_ids != child_ids {
@@ -3630,7 +3656,7 @@ index 8c104a4..aa6a378 100644
              );
              if let Some(height) = config.estimated_item_height {
                  self.state = self
-@@ -4764,7 +6010,12 @@ impl VirtualListEntry {
+@@ -4764,7 +6002,12 @@ impl VirtualListEntry {
  }
  
  impl GpuixView {
@@ -3644,7 +3670,7 @@ index 8c104a4..aa6a378 100644
          self.reveal_virtual_list_ancestor(id);
          if let Some(handle) = self.focus_handles.get(&id) {
              self.pending_focus_element = None;
-@@ -4921,7 +6172,11 @@ impl GpuixView {
+@@ -4921,7 +6164,11 @@ impl GpuixView {
          }
  
          let before = entry.state.logical_scroll_top();
@@ -3657,7 +3683,7 @@ index 8c104a4..aa6a378 100644
          entry.state.scroll_by(gpui::px(step));
          let after = entry.state.logical_scroll_top();
          let list_moved =
-@@ -4985,6 +6240,7 @@ impl GpuixView {
+@@ -4985,6 +6232,7 @@ impl GpuixView {
          // the rest of the tree is orders of magnitude larger.
          //
          // Create handles for elements that need focus but don't have one yet.
@@ -3665,7 +3691,7 @@ index 8c104a4..aa6a378 100644
          for &id in &tree.focusable_ids {
              let Some(element) = tree.elements.get(&id) else {
                  continue;
-@@ -5001,7 +6257,7 @@ impl GpuixView {
+@@ -5001,7 +6249,7 @@ impl GpuixView {
                  // Focus once, at creation. Re-focusing every frame would
                  // steal focus back from whatever the user clicked next.
                  if element.auto_focus {
@@ -3674,7 +3700,7 @@ index 8c104a4..aa6a378 100644
                  }
                  self.focus_handles.insert(id, handle);
              } else if let (Some(handle), Some(index)) =
-@@ -5014,17 +6270,6 @@ impl GpuixView {
+@@ -5014,17 +6262,6 @@ impl GpuixView {
              }
          }
  
@@ -3692,7 +3718,7 @@ index 8c104a4..aa6a378 100644
          self.focus_subscriptions.retain(|(id, event), _| {
              tree.elements
                  .get(id)
-@@ -5061,6 +6306,23 @@ impl GpuixView {
+@@ -5061,6 +6298,23 @@ impl GpuixView {
          // Clean up handles for elements that no longer exist.
          self.focus_handles
              .retain(|id, _| tree.focusable_ids.contains(id));
@@ -3716,7 +3742,7 @@ index 8c104a4..aa6a378 100644
      }
  }
  
-@@ -5090,6 +6352,8 @@ impl gpui::Render for GpuixView {
+@@ -5090,6 +6344,8 @@ impl gpui::Render for GpuixView {
      ) -> impl gpui::IntoElement {
          use gpui::IntoElement;
  
@@ -3725,7 +3751,7 @@ index 8c104a4..aa6a378 100644
          window.set_window_title(&self.window_title);
  
          #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-@@ -5223,14 +6487,14 @@ impl gpui::Render for GpuixView {
+@@ -5223,14 +6479,14 @@ impl gpui::Render for GpuixView {
  
          // Sync scroll handles to thread_local so napi methods (scrollTo,
          // getScrollOffset) can access them without an App context.
@@ -3742,7 +3768,7 @@ index 8c104a4..aa6a378 100644
              let mut states = cell.borrow_mut();
              states.clear();
              for (&id, entry) in &self.virtual_lists {
-@@ -5240,7 +6504,7 @@ impl gpui::Render for GpuixView {
+@@ -5240,7 +6496,7 @@ impl gpui::Render for GpuixView {
          // One-shot: a queued scroll for a list that did not build this frame
          // would otherwise fire on some later frame, against child indices that
          // no longer match what JS meant.
@@ -3751,7 +3777,7 @@ index 8c104a4..aa6a378 100644
  
          if motion_active {
              window.request_animation_frame();
-@@ -5361,6 +6625,7 @@ fn build_virtual_list(
+@@ -5361,6 +6617,7 @@ fn build_virtual_list(
      window: &mut gpui::Window,
      cx: &mut gpui::Context<GpuixView>,
  ) -> gpui::AnyElement {
@@ -3759,7 +3785,7 @@ index 8c104a4..aa6a378 100644
      use gpui::prelude::*;
  
      let child_ids: Vec<u64> = element
-@@ -5457,7 +6722,7 @@ fn build_virtual_list(
+@@ -5457,7 +6714,7 @@ fn build_virtual_list(
      // changes, so the indices JS computed against its committed child list are
      // the indices the splice-adjusted ListState sees.
      if let Some(offset) =
@@ -3768,7 +3794,128 @@ index 8c104a4..aa6a378 100644
      {
          list_state.scroll_to(offset);
      }
-@@ -6296,6 +7561,7 @@ pub(crate) fn apply_styles<E: gpui::Styled>(mut el: E, style: &StyleDesc) -> E {
+@@ -5513,6 +6770,120 @@ fn build_virtual_list(
+     }
+ }
+ 
++fn virtual_child_is_mounted(tree: &RetainedTree, list_id: u64, child_id: u64) -> bool {
++    tree.elements.contains_key(&list_id)
++        && tree
++            .elements
++            .get(&child_id)
++            .is_some_and(|child| child.parent == Some(list_id))
++}
++
++#[cfg(test)]
++mod virtual_list_deferred_rows_tests {
++    use super::{VirtualListConfig, VirtualListEntry, virtual_child_is_mounted};
++    use crate::retained_tree::RetainedTree;
++    use gpui::{ListOffset, px};
++
++    fn captured_list() -> (RetainedTree, VirtualListEntry) {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "virtual-list".into());
++        tree.set_custom_prop(1, "estimatedItemHeight".into(), serde_json::json!(24));
++        for id in 2..202 {
++            tree.create_element(id, "text".into());
++            tree.set_text(id, format!("chat-row-{id}"));
++            tree.append_child(1, id);
++        }
++        let ids = tree.elements[&1].children.clone();
++        let revisions = ids
++            .iter()
++            .map(|id| tree.elements[id].subtree_revision)
++            .collect();
++        let entry = VirtualListEntry::new(
++            VirtualListConfig::from_element(&tree.elements[&1]),
++            0,
++            ids,
++            revisions,
++            vec![None; 200],
++        );
++        (tree, entry)
++    }
++
++    #[test]
++    fn one_retention_splice_keeps_all_captured_visible_rows_mounted() {
++        let (mut tree, entry) = captured_list();
++        let captured: Vec<_> = (170..200)
++            .map(|index| (index, entry.child_at(index).expect("captured visible row")))
++            .collect();
++        entry.state.scroll_to(ListOffset {
++            item_ix: 170,
++            offset_in_item: px(7.),
++        });
++        tree.destroy_element(2);
++        tree.create_element(202, "text".into());
++        tree.append_child(1, 202);
++        assert!(
++            captured
++                .iter()
++                .all(|(index, id)| tree.elements[&1].children.get(*index) != Some(id))
++        );
++        assert!(
++            captured
++                .iter()
++                .all(|(_, id)| virtual_child_is_mounted(&tree, 1, *id))
++        );
++        assert_eq!(entry.child_at(170), Some(172));
++        assert_eq!(entry.state.item_count(), 200);
++        let anchor = entry.state.logical_scroll_top();
++        assert_eq!((anchor.item_ix, anchor.offset_in_item), (170, px(7.)));
++    }
++
++    #[test]
++    fn prepend_and_reorder_preserve_captured_child_identity() {
++        let (mut tree, entry) = captured_list();
++        let child = entry.child_at(170).expect("captured row");
++        tree.create_element(202, "text".into());
++        tree.insert_before(1, 202, 2);
++        tree.insert_before(1, child, 2);
++        assert!(virtual_child_is_mounted(&tree, 1, child));
++        assert_eq!(entry.child_at(170), Some(child));
++        assert_ne!(tree.elements[&1].children.get(170), Some(&child));
++    }
++
++    #[test]
++    fn deferred_rows_use_current_text_without_losing_membership() {
++        let (mut tree, entry) = captured_list();
++        let child = entry.child_at(170).expect("captured row");
++        tree.set_text(child, "updated during prepaint".into());
++        assert!(virtual_child_is_mounted(&tree, 1, child));
++        assert_eq!(
++            tree.elements[&child].content.as_deref(),
++            Some("updated during prepaint")
++        );
++    }
++
++    #[test]
++    fn destroyed_or_reparented_rows_are_not_resurrected() {
++        let (mut tree, entry) = captured_list();
++        let moved = entry.child_at(170).expect("captured row");
++        let destroyed = entry.child_at(171).expect("captured row");
++        tree.create_element(999, "virtual-list".into());
++        tree.append_child(999, moved);
++        tree.destroy_element(destroyed);
++        assert!(!virtual_child_is_mounted(&tree, 1, moved));
++        assert!(virtual_child_is_mounted(&tree, 999, moved));
++        assert!(!virtual_child_is_mounted(&tree, 1, destroyed));
++    }
++
++    #[test]
++    fn detached_children_and_missing_lists_stay_unmounted() {
++        let (mut tree, _) = captured_list();
++        tree.create_element(202, "text".into());
++        assert!(!virtual_child_is_mounted(&tree, 1, 202));
++        tree.append_child(999, 202);
++        assert!(!virtual_child_is_mounted(&tree, 999, 202));
++    }
++}
++
+ fn unmounted_virtual_row(height: f32) -> gpui::AnyElement {
+     use gpui::prelude::*;
+     gpui::div().h(gpui::px(height.max(1.0))).w_full().into_any()
+@@ -6296,6 +7667,7 @@ pub(crate) fn apply_styles<E: gpui::Styled>(mut el: E, style: &StyleDesc) -> E {
      match style.display.as_deref() {
          Some("flex") => el = el.flex(),
          Some("grid") => el = el.grid(),
@@ -3776,7 +3923,7 @@ index 8c104a4..aa6a378 100644
          _ => {}
      }
      if let Some(cols) = style.grid_template_columns {
-@@ -6731,10 +7997,7 @@ fn report_layout(
+@@ -6731,10 +8103,7 @@ fn report_layout(
      callback: &EventCallback,
      cx: &mut gpui::App,
  ) {
@@ -3788,7 +3935,7 @@ index 8c104a4..aa6a378 100644
      {
          let mut reports = reports.borrow_mut();
          let unchanged = reports.sizes.get(&id).is_some_and(|last| {
-@@ -6930,7 +8193,7 @@ impl<'de> serde::Deserialize<'de> for BatchOps<'de> {
+@@ -6930,7 +8299,7 @@ impl<'de> serde::Deserialize<'de> for BatchOps<'de> {
                          Err(error) => {
                              return Err(serde::de::Error::custom(format!(
                                  "Batch op {index}: {error}"
@@ -3797,7 +3944,7 @@ index 8c104a4..aa6a378 100644
                          }
                      }
                  }
-@@ -7067,7 +8330,7 @@ impl<'de> serde::Deserialize<'de> for BatchOp<'de> {
+@@ -7067,7 +8436,7 @@ impl<'de> serde::Deserialize<'de> for BatchOp<'de> {
                      other => {
                          return Err(serde::de::Error::custom(format!(
                              "unknown operation: {other:?}"
@@ -3806,7 +3953,7 @@ index 8c104a4..aa6a378 100644
                      }
                  };
                  // Trailing arguments are tolerated, as they were when the op was
-@@ -7498,6 +8761,9 @@ pub struct WindowOptions {
+@@ -7498,6 +8867,9 @@ pub struct WindowOptions {
      /// `title`. It does NOT set the title of the application menu itself: macOS
      /// takes that from the executable, and only a `.app` bundle changes it.
      pub app_name: Option<String>,
@@ -3816,7 +3963,7 @@ index 8c104a4..aa6a378 100644
      pub width: Option<f64>,
      pub height: Option<f64>,
      pub min_width: Option<f64>,
-@@ -7538,6 +8804,9 @@ impl Default for WindowOptions {
+@@ -7538,6 +8910,9 @@ impl Default for WindowOptions {
          Self {
              title: Some("GPUIX".to_string()),
              app_name: None,
@@ -3826,7 +3973,7 @@ index 8c104a4..aa6a378 100644
              width: Some(800.0),
              height: Some(600.0),
              min_width: None,
-@@ -7617,8 +8886,14 @@ fn to_layer_shell_options(options: &LayerShellOptions) -> gpui::layer_shell::Lay
+@@ -7617,8 +8992,14 @@ fn to_layer_shell_options(options: &LayerShellOptions) -> gpui::layer_shell::Lay
  
  fn to_gpui_window_options(
      options: &WindowOptions,
@@ -3842,7 +3989,7 @@ index 8c104a4..aa6a378 100644
      let title = options.title.clone().unwrap_or_else(|| "GPUIX".to_string());
      let titlebar_transparent = options.titlebar_transparent.unwrap_or(false);
      let traffic_light_position = match (options.traffic_light_x, options.traffic_light_y) {
-@@ -7651,6 +8926,11 @@ fn to_gpui_window_options(
+@@ -7651,6 +9032,11 @@ fn to_gpui_window_options(
              appears_transparent: titlebar_transparent,
              traffic_light_position,
          }),
@@ -3854,7 +4001,7 @@ index 8c104a4..aa6a378 100644
          is_resizable: options.resizable.unwrap_or(true),
          window_background,
          window_min_size,
-@@ -8141,10 +9421,12 @@ mod path_prompt_options_tests {
+@@ -8141,10 +9527,12 @@ mod path_prompt_options_tests {
          if cfg!(target_os = "macos") {
              assert!(result.is_ok());
          } else {
@@ -3871,7 +4018,7 @@ index 8c104a4..aa6a378 100644
          }
      }
  
-@@ -8329,3 +9611,189 @@ fn check_font(bytes: &[u8]) -> std::result::Result<(), String> {
+@@ -8329,3 +9717,189 @@ fn check_font(bytes: &[u8]) -> std::result::Result<(), String> {
      }
      Ok(())
  }

@@ -6,12 +6,13 @@ import { dirname, join } from 'node:path'
 import { z } from 'zod'
 
 import { resolveOverlayRuntimePaths } from '../overlay-server'
-import { getDbPath } from '../runtime-config'
+import { getBackendUrl, getDbPath } from '../runtime-config'
 import { sanitizeDisplayText, truncateGraphemes } from '../views/shared/utils/display-text'
 import { timelineValue } from './animation-timeline'
 import { deleteOldestEntry } from './bounded-cache'
 import type { CosmeticPaint } from './cosmetics'
 import type { ProviderFetch } from './emote-providers'
+import { fetchProviderImage } from './provider-relay'
 
 interface Mask {
   imageUrl: string
@@ -64,7 +65,7 @@ export function loadSharp(): typeof import('sharp').default {
 export function createPaintRenderer(
   options: { fetch?: ProviderFetch; directory?: () => string } = {},
 ) {
-  const fetcher = options.fetch ?? ((url, init) => fetch(url, init))
+  const fetcher = options.fetch ?? fetchProviderImage
   const images = new Map<string, Promise<ImageData>>()
   const renders = new Map<string, Promise<RenderedPaint>>()
   const waiting: Array<() => void> = []
@@ -146,7 +147,14 @@ export function createPaintRenderer(
             timeout: 30_000,
           })
           await worker.stdin.write(
-            JSON.stringify({ name, paint, fontSize, fontFamily, dbPath: getDbPath() }),
+            JSON.stringify({
+              name,
+              paint,
+              fontSize,
+              fontFamily,
+              dbPath: getDbPath(),
+              backendUrl: getBackendUrl(),
+            }),
           )
           await worker.stdin.end()
           const [stdout, stderr, code] = await Promise.all([

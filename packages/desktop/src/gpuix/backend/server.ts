@@ -1,7 +1,7 @@
 import { logger } from '@twirchat/shared/logger'
+import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
 import type { Platform, PlatformStatusInfo } from '@twirchat/shared/types'
-import { z } from 'zod'
 /**
  * GPUIX backend bridge — process bootstrap.
  *
@@ -15,6 +15,7 @@ import { z } from 'zod'
  * The result is cached on `globalThis` so `bun --hot` reloads re-mount the
  * React tree without re-booting (and re-connecting) the whole backend.
  */
+import { z } from 'zod'
 
 import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
 import { BackendConnection } from '../../backend-connection'
@@ -56,6 +57,7 @@ import {
 import { twitchEventSubscriptionSchema } from './api-schemas'
 import { recordChatMessage } from './chat-history'
 import { createDesktopEvents, type DesktopEvents } from './events'
+import { createTwitchHistoryRuntime } from './twitch-history'
 import { runVelopackStartup } from './updater'
 
 const log = logger('gpuix-backend')
@@ -327,7 +329,46 @@ function boot(): DesktopBackend {
     publish: (status) => events.emit('streamer_mode_changed', status),
   })
   streamerMode.start()
+  const twitchHistory = createTwitchHistoryRuntime({
+    channels: () => [
+      ...AccountStore.findAllActive()
+        .filter((account) => account.platform === 'twitch')
+        .map((account) => account.username),
+      ...watchedChannelManager
+        .getAll()
+        .filter((channel) => channel.platform === 'twitch')
+        .map((channel) => channel.channelSlug),
+    ],
+    warmChannel: (channel) => providerRuntime.warm('twitch', channel),
+    publish: (channelId, messages) => {
+      const own = currentStatuses.get('twitch')
+      if (
+        own?.status === 'connected' &&
+        normalizeMessageChannel('twitch', own.channelLogin ?? '') === channelId
+      ) {
+        events.emit('chat_history_snapshot', { channelId, messages })
+      }
+      for (const channel of watchedChannelManager.getAll()) {
+        if (
+          channel.platform === 'twitch' &&
+          normalizeMessageChannel('twitch', channel.channelSlug) === channelId
+        ) {
+          events.emit('chat_history_snapshot', {
+            channelId,
+            messages,
+            watchedChannelId: channel.id,
+          })
+        }
+      }
+    },
+  })
+  const refreshTwitchHistory = (channel: string) => {
+    void twitchHistory
+      .refresh(channel)
+      .catch((error) => log.debug('Twitch history unavailable', { channel, error: String(error) }))
+  }
   const api = createDesktopApi({
+    twitchHistory,
     streamerMode,
     channelActions,
     accountSessions,
@@ -393,6 +434,8 @@ function boot(): DesktopBackend {
     )
     currentStatuses.set(s.platform, s)
     events.emit('platform_status', s)
+    if (s.platform === 'twitch' && s.status === 'connected' && s.channelLogin)
+      refreshTwitchHistory(s.channelLogin)
   })
   aggregator.onModeration((outcome) => events.emit('chat_moderation', outcome))
   aggregator.onRoomState((state) => events.emit('channel_room_state', state))
@@ -416,6 +459,8 @@ function boot(): DesktopBackend {
         status.status === 'connected' ? channel.channelSlug : null,
       )
     events.emit('watched_channel_status', { channelId, status })
+    if (channel?.platform === 'twitch' && status.status === 'connected')
+      refreshTwitchHistory(channel.channelSlug)
   })
 
   // ── Backend WS → UI / services ────────────────────────────────────────────
@@ -563,6 +608,7 @@ function boot(): DesktopBackend {
     api,
     events,
     dispose: () => {
+      twitchHistory.dispose()
       streamerMode.stop()
       providerRuntime.stop()
       twitchEventSub.stop()

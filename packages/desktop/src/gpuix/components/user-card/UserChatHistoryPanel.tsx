@@ -1,84 +1,50 @@
 import type { PublicInstance } from '@gpuix/react'
-/**
- * Chat logs panel — port of UserChatHistoryPanel.vue + UserChatHistoryMessage.vue.
- *
- * Paged local history (50 per page, {createdAt,id} cursor) with live appends
- * from the backend `chat_message` event.
- *
- * GPUIX deviations:
- * - Older pages load via a clickable "Load older" trigger row at the top of
- *   the list instead of the Vue scroll-offset (<160px) detection.
- * - Message text renders as plain <text> (no emote substitution).
- */
-import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
-import type { UserChatHistoryCursor } from '../../../shared/rpc'
+import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../../shared/rpc'
+import {
+  HISTORY_DISPLAY_LIMIT,
+  appendLiveHistoryMessage,
+  formatHistoryTimestamp,
+  historyRowVisible,
+  historySourceNotice,
+  matchesHistoryUser,
+  mergeHistoryMessages,
+  type HistoryUserTarget,
+  type HistoryVisibleRange,
+} from '../../../views/main/utils/history-display'
 import { useBackend, useBackendEvent } from '../../backend/context'
 import { chatMessageKey } from '../../chat-tools'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { platformColor } from '../../theme'
 import { useTheme } from '../../theme-context'
+import { ChatMessage } from '../ChatMessage'
 import { Text } from '../ui/Text'
 import { errorText } from './format'
 
 const PAGE_SIZE = 50
-
-function compareMessages(a: NormalizedChatMessage, b: NormalizedChatMessage): number {
-  const timestampDiff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  if (timestampDiff !== 0) return timestampDiff
-  return chatMessageKey(a).localeCompare(chatMessageKey(b))
+type UserChatHistoryProps = HistoryUserTarget & {
+  username?: string
+  onViewport?: (viewport: PublicInstance | null) => void
 }
 
-function mergeUniqueMessages(
-  olderMessages: NormalizedChatMessage[],
-  existingMessages: NormalizedChatMessage[],
-): NormalizedChatMessage[] {
-  const existingIds = new Set(existingMessages.map(chatMessageKey))
-  const uniqueOlderMessages = olderMessages.filter(
-    (message) => !existingIds.has(chatMessageKey(message)),
+export function UserChatHistoryPanel(props: UserChatHistoryProps) {
+  return (
+    <UserChatHistoryContent
+      key={JSON.stringify([props.platform, props.platformUserId, props.channelId, props.username])}
+      {...props}
+    />
   )
-  return [...uniqueOlderMessages, ...existingMessages]
 }
 
-function insertMessageInOrder(
-  existingMessages: NormalizedChatMessage[],
-  incomingMessage: NormalizedChatMessage,
-): NormalizedChatMessage[] {
-  if (existingMessages.some((entry) => chatMessageKey(entry) === chatMessageKey(incomingMessage))) {
-    return existingMessages
-  }
-
-  const nextMessages = [...existingMessages]
-  const insertIndex = nextMessages.findIndex((entry) => compareMessages(incomingMessage, entry) < 0)
-
-  if (insertIndex === -1) {
-    nextMessages.push(incomingMessage)
-  } else {
-    nextMessages.splice(insertIndex, 0, incomingMessage)
-  }
-
-  return nextMessages
-}
-
-function formatHistoryTimestamp(timestamp: Date): string {
-  return new Date(timestamp).toLocaleString([], {
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    month: 'short',
-  })
-}
-
-export function UserChatHistoryPanel({
+function UserChatHistoryContent({
   platform,
   platformUserId,
+  channelId,
+  username,
   onViewport,
-}: {
-  platform: Platform
-  platformUserId: string
-  onViewport?: (viewport: PublicInstance | null) => void
-}) {
+}: UserChatHistoryProps) {
   const theme = useTheme()
   const backend = useBackend()
   const [messages, setMessages] = useState<NormalizedChatMessage[]>([])
@@ -86,6 +52,8 @@ export function UserChatHistoryPanel({
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
+  const [history, setHistory] = useState<UserChatHistoryPage['history']>()
+  const [visibleRange, setVisibleRange] = useState<HistoryVisibleRange | null>(null)
   const nextCursorRef = useRef<UserChatHistoryCursor | null>(null)
   const generationRef = useRef(0)
 
@@ -93,16 +61,20 @@ export function UserChatHistoryPanel({
     const generation = generationRef.current + 1
     generationRef.current = generation
     setLoadingInitial(true)
+    setLoadingOlder(false)
     setError(null)
 
     try {
       const page = await backend.api.getUserChatHistory({
         platform,
         platformUserId,
+        channelId,
+        username,
         limit: PAGE_SIZE,
       })
       if (generation !== generationRef.current) return
-      setMessages(page.messages)
+      setMessages((current) => mergeHistoryMessages(current, page.messages))
+      setHistory(page.history)
       setHasMore(page.hasMore)
       nextCursorRef.current = page.nextCursor
     } catch (loadError) {
@@ -113,11 +85,18 @@ export function UserChatHistoryPanel({
         setLoadingInitial(false)
       }
     }
-  }, [backend, platform, platformUserId])
+  }, [backend, platform, platformUserId, channelId, username])
 
   const loadOlder = useCallback(async (): Promise<void> => {
     const cursor = nextCursorRef.current
-    if (loadingInitial || loadingOlder || !hasMore || !cursor) return
+    if (
+      loadingInitial ||
+      loadingOlder ||
+      !hasMore ||
+      !cursor ||
+      messages.length >= HISTORY_DISPLAY_LIMIT
+    )
+      return
 
     setLoadingOlder(true)
     setError(null)
@@ -127,11 +106,14 @@ export function UserChatHistoryPanel({
       const page = await backend.api.getUserChatHistory({
         platform,
         platformUserId,
+        channelId,
+        username,
         limit: PAGE_SIZE,
         cursor,
       })
       if (generation !== generationRef.current) return
-      setMessages((current) => mergeUniqueMessages(page.messages, current))
+      setMessages((current) => mergeHistoryMessages(current, page.messages))
+      setHistory(page.history)
       setHasMore(page.hasMore)
       nextCursorRef.current = page.nextCursor
     } catch (loadError) {
@@ -142,27 +124,35 @@ export function UserChatHistoryPanel({
         setLoadingOlder(false)
       }
     }
-  }, [backend, platform, platformUserId, loadingInitial, loadingOlder, hasMore])
+  }, [
+    backend,
+    platform,
+    platformUserId,
+    channelId,
+    username,
+    loadingInitial,
+    loadingOlder,
+    hasMore,
+    messages.length,
+  ])
 
-  // Reset + initial load when the target user changes (and on mount).
   useEffect(() => {
-    generationRef.current += 1
-    setMessages([])
-    setLoadingInitial(false)
-    setLoadingOlder(false)
-    setError(null)
-    setHasMore(false)
-    nextCursorRef.current = null
     runUiTask(loadInitial())
+    return () => {
+      generationRef.current += 1
+    }
   }, [loadInitial])
 
-  // Live-append new messages from this user while the panel is open.
-  useBackendEvent('chat_message', (message) => {
-    if (message.platform !== platform || message.author.id !== platformUserId) return
-    setMessages((current) => insertMessageInOrder(current, message))
-  })
+  const appendLive = (message: NormalizedChatMessage) => {
+    if (!matchesHistoryUser(message, { platform, platformUserId, channelId })) return
+    setMessages((current) => appendLiveHistoryMessage(current, message))
+  }
+  useBackendEvent('chat_message', appendLive)
+  useBackendEvent('watched_channel_message', ({ message }) => appendLive(message))
 
   const isEmpty = !loadingInitial && messages.length === 0 && !error
+  const sourceNotice = historySourceNotice(history)
+  const canLoadOlder = hasMore && messages.length < HISTORY_DISPLAY_LIMIT
 
   return (
     <div
@@ -188,12 +178,19 @@ export function UserChatHistoryPanel({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>Chat logs</Text>
           <Text style={{ fontSize: 12, color: theme.text2, marginTop: 4 }}>
-            Stored local history for this user
+            {channelId ? `Messages from this user in ${channelId}` : 'Messages from this user'}
           </Text>
         </div>
 
         <div
+          tabIndex={loadingInitial ? -1 : 0}
           onClick={loadingInitial ? undefined : () => void loadInitial()}
+          onKeyDown={(event) => {
+            if (!loadingInitial && (event.key === 'enter' || event.key === 'space')) {
+              event.preventDefault()
+              runUiTask(loadInitial())
+            }
+          }}
           style={{
             borderRadius: 6,
             backgroundColor: theme.fill,
@@ -211,11 +208,28 @@ export function UserChatHistoryPanel({
         </div>
       </div>
 
-      {loadingInitial ? (
+      {sourceNotice ? (
+        <Text
+          testId="user-card-history-source-status"
+          style={{ fontSize: 11, color: theme.text2, marginBottom: 8 }}
+        >
+          {sourceNotice}
+        </Text>
+      ) : null}
+      {error && messages.length ? (
+        <Text style={{ fontSize: 12, color: theme.dangerText, marginBottom: 8 }}>{error}</Text>
+      ) : null}
+      {messages.length >= HISTORY_DISPLAY_LIMIT ? (
+        <Text style={{ fontSize: 11, color: theme.text2, marginBottom: 8 }}>
+          Showing the newest 2,000 loaded messages. Use channel history to filter or export older
+          logs.
+        </Text>
+      ) : null}
+      {loadingInitial && !messages.length ? (
         <HistoryState minHeight={160}>
           <Text style={{ fontSize: 13, color: theme.text2 }}>Loading messages…</Text>
         </HistoryState>
-      ) : error ? (
+      ) : error && !messages.length ? (
         <HistoryState minHeight={160} error>
           <Text style={{ fontSize: 13, color: theme.dangerText }}>{error}</Text>
           <HistoryRetryButton onClick={() => void loadInitial()} />
@@ -223,7 +237,7 @@ export function UserChatHistoryPanel({
       ) : isEmpty ? (
         <HistoryState minHeight={160}>
           <Text style={{ fontSize: 13, color: theme.text2 }}>
-            No stored messages for this user yet.
+            No messages are available for this user in the selected history.
           </Text>
         </HistoryState>
       ) : (
@@ -240,13 +254,32 @@ export function UserChatHistoryPanel({
           <virtual-list
             ref={onViewport}
             testId="user-card-history-viewport"
+            alignment="bottom"
             estimatedItemHeight={44}
+            onVisibleRange={(event) => {
+              const start = event.startIndex ?? 0
+              const end = event.endIndex ?? 0
+              setVisibleRange((current) =>
+                current?.start === start && current.end === end ? current : { start, end },
+              )
+            }}
             style={{ height: 260, scrollbarColor: theme.scrollbar, scrollbarWidth: 4 }}
           >
-            {hasMore || loadingOlder ? (
+            {canLoadOlder || loadingOlder ? (
               <div
                 key="load-older"
-                onClick={hasMore && !loadingOlder ? () => void loadOlder() : undefined}
+                tabIndex={canLoadOlder && !loadingOlder ? 0 : -1}
+                onClick={canLoadOlder && !loadingOlder ? () => void loadOlder() : undefined}
+                onKeyDown={(event) => {
+                  if (
+                    canLoadOlder &&
+                    !loadingOlder &&
+                    (event.key === 'enter' || event.key === 'space')
+                  ) {
+                    event.preventDefault()
+                    runUiTask(loadOlder())
+                  }
+                }}
                 style={{
                   minHeight: 32,
                   display: 'flex',
@@ -257,8 +290,8 @@ export function UserChatHistoryPanel({
                   paddingRight: 12,
                   borderBottomWidth: 1,
                   borderColor: theme.divider,
-                  cursor: hasMore && !loadingOlder ? 'pointer' : 'default',
-                  hover: hasMore && !loadingOlder ? { backgroundColor: theme.rowHover } : {},
+                  cursor: canLoadOlder && !loadingOlder ? 'pointer' : 'default',
+                  hover: canLoadOlder && !loadingOlder ? { backgroundColor: theme.rowHover } : {},
                 }}
               >
                 <Text style={{ fontSize: 11, color: theme.text2 }}>
@@ -266,8 +299,17 @@ export function UserChatHistoryPanel({
                 </Text>
               </div>
             ) : null}
-            {messages.map((message) => (
-              <HistoryMessageRow key={chatMessageKey(message)} message={message} />
+            {messages.map((message, index) => (
+              <HistoryMessageRow
+                key={chatMessageKey(message)}
+                message={message}
+                visible={historyRowVisible(
+                  index,
+                  messages.length,
+                  visibleRange,
+                  canLoadOlder || loadingOlder ? 1 : 0,
+                )}
+              />
             ))}
           </virtual-list>
         </div>
@@ -311,7 +353,14 @@ function HistoryRetryButton({ onClick }: { onClick: () => void }) {
   const theme = useTheme()
   return (
     <div
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'enter' || event.key === 'space') {
+          event.preventDefault()
+          onClick()
+        }
+      }}
       style={{
         borderRadius: 6,
         backgroundColor: theme.fill,
@@ -328,7 +377,13 @@ function HistoryRetryButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-function HistoryMessageRow({ message }: { message: NormalizedChatMessage }) {
+const HistoryMessageRow = memo(function HistoryMessageRow({
+  message,
+  visible,
+}: {
+  message: NormalizedChatMessage
+  visible: boolean
+}) {
   const theme = useTheme()
   const typeColor =
     message.type === 'action'
@@ -339,6 +394,7 @@ function HistoryMessageRow({ message }: { message: NormalizedChatMessage }) {
 
   return (
     <div
+      testId={`user-history-message-${chatMessageKey(message)}`}
       style={{
         display: 'flex',
         flexDirection: 'row',
@@ -400,31 +456,17 @@ function HistoryMessageRow({ message }: { message: NormalizedChatMessage }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'row', gap: 6, minWidth: 0 }}>
-          <Text
-            style={{
-              flexShrink: 0,
-              fontWeight: 700,
-              fontSize: 13,
-              lineHeight: 18,
-              color: message.author.color ?? theme.text,
-            }}
-          >
-            {message.author.displayName}
-          </Text>
-          <Text
-            style={{
-              fontSize: 13,
-              lineHeight: 18,
-              color: theme.text,
-              whiteSpace: 'normal',
-              minWidth: 0,
-            }}
-          >
-            {message.text}
-          </Text>
-        </div>
+        <ChatMessage
+          message={message}
+          channelSlug={message.channelId}
+          chatTheme="compact"
+          fontSize={13}
+          showTimestamp={false}
+          showAvatar={false}
+          showPlatformColorStripe={false}
+          visible={visible}
+        />
       </div>
     </div>
   )
-}
+})

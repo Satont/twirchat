@@ -1,6 +1,7 @@
 import { logger } from '@twirchat/shared/logger'
 
 import { handleTwitchBadges } from './api/twitch-badges.ts'
+import { createTwitchHistoryService } from './api/twitch-history.ts'
 import { config } from './config.ts'
 import { ClientStore } from './db/index.ts'
 import { runMigrations } from './db/migrations.ts'
@@ -9,8 +10,10 @@ import { authRoutes } from './routes/auth.ts'
 import { chatToolsRoutes } from './routes/chat-tools.ts'
 import { emoteCatalogRoutes } from './routes/emote-catalog.ts'
 import { moderationRoutes } from './routes/moderation.ts'
+import { providerProxyRoutes } from './routes/provider-proxy.ts'
 import { streamRoutes } from './routes/stream.ts'
 import { twitchActivitiesRoutes } from './routes/twitch-activities.ts'
+import { createTwitchHistoryRoutes } from './routes/twitch-history.ts'
 import { userCardRoutes } from './routes/user-card.ts'
 import { userProfileRoutes } from './routes/user-profile.ts'
 import { json } from './routes/utils.ts'
@@ -21,6 +24,9 @@ import type { WsData } from './ws/connection-manager.ts'
 import { handleWsClose, handleWsMessage, handleWsOpen, youtubeChatRelay } from './ws/handlers.ts'
 
 const log = logger('backend')
+const twitchHistoryRoutes = createTwitchHistoryRoutes(
+  createTwitchHistoryService({ providers: config.TWITCH_HISTORY_PROVIDERS }),
+)
 
 await runMigrations()
 
@@ -74,6 +80,8 @@ const server = Bun.serve<WsData>({
     ...chatToolsRoutes,
     ...twitchActivitiesRoutes,
     ...emoteCatalogRoutes,
+    ...providerProxyRoutes,
+    ...twitchHistoryRoutes,
     ...webhookRoutes,
     ...youtubeRoutes,
     '/health': () => json({ ok: true }),

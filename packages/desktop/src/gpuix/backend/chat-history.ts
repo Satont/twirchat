@@ -15,6 +15,7 @@ import { createChatFileLogger } from './chat-logging'
 
 export type { ChatHistoryQuery }
 export interface ChatLoggingSettings {
+  twitchHistoryEnabled: boolean
   enabled: boolean
   directory: string
   channels: { platform: Platform; channelId: string }[]
@@ -27,6 +28,7 @@ export interface ChatLoggingSettings {
 const SETTINGS_KEY = 'chat_logging_v1'
 export function defaultChatLoggingSettings(): ChatLoggingSettings {
   return {
+    twitchHistoryEnabled: true,
     enabled: false,
     directory: join(dirname(getDbPath()), 'chat-logs'),
     channels: [],
@@ -43,6 +45,7 @@ export function validateChatLoggingSettings(value: unknown): ChatLoggingSettings
   const settings = z
     .toZod<ChatLoggingSettings>()(
       z.object({
+        twitchHistoryEnabled: z.boolean().default(true),
         enabled: z.boolean(),
         directory: z.string(),
         channels: z.array(z.object({ platform: platformSchema, channelId: z.string() })),
@@ -214,14 +217,15 @@ export async function flushChatLogs(): Promise<void> {
 export async function exportChatHistory({
   query,
   path,
+  database = getDb(),
 }: {
   query: ChatHistoryQuery
   path: string
+  database?: Database
 }): Promise<{ path: string; count: number }> {
   if (!isAbsolute(path) || path.includes('\0'))
     throw new Error('Choose an absolute path for the transcript file.')
-  const database = getDb()
-  flushDatabase(database, recorder(database))
+  if (database === getDb()) flushDatabase(database, recorder(database))
   let cursor: ChatHistoryQuery['cursor']
   let count = 0
   await mkdir(dirname(path), { recursive: true })

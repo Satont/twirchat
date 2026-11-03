@@ -1,7 +1,23 @@
 import { z } from 'zod'
 
+import { parseTwitchHistoryProviders } from './api/twitch-history'
+
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
+  TWITCH_HISTORY_PROVIDERS: z
+    .string()
+    .optional()
+    .transform((value, context) => {
+      try {
+        return parseTwitchHistoryProviders(value)
+      } catch (error) {
+        context.addIssue({
+          code: 'custom',
+          message: error instanceof Error ? error.message : String(error),
+        })
+        return z.NEVER
+      }
+    }),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   KICK_CLIENT_ID: z.string().min(1, 'KICK_CLIENT_ID is required'),
   KICK_CLIENT_SECRET: z.string().min(1, 'KICK_CLIENT_SECRET is required'),

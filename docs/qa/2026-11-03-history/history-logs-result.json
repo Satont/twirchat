@@ -1,0 +1,111 @@
+{
+  "ok": true,
+  "userRequests": [
+    {
+      "platform": "twitch",
+      "platformUserId": "42",
+      "channelId": "#Satont",
+      "username": "viewer",
+      "limit": 50
+    },
+    {
+      "platform": "twitch",
+      "platformUserId": "42",
+      "channelId": "#Satont",
+      "username": "viewer",
+      "limit": 50,
+      "cursor": {
+        "id": "one",
+        "createdAt": 1000,
+        "platform": "twitch",
+        "channelId": "satont"
+      }
+    },
+    {
+      "platform": "twitch",
+      "platformUserId": "42",
+      "channelId": "#Satont",
+      "username": "viewer",
+      "limit": 50
+    },
+    {
+      "platform": "twitch",
+      "platformUserId": "43",
+      "channelId": "#Satont",
+      "username": "other",
+      "limit": 50
+    },
+    {
+      "platform": "twitch",
+      "platformUserId": "42",
+      "channelId": "#Satont",
+      "username": "viewer",
+      "limit": 50
+    },
+    {
+      "platform": "twitch",
+      "platformUserId": "42",
+      "channelId": "#Satont",
+      "username": "viewer",
+      "limit": 50
+    },
+    {
+      "platform": "twitch",
+      "platformUserId": "42",
+      "channelId": "#Satont",
+      "username": "viewer",
+      "limit": 50
+    },
+    {
+      "platform": "twitch",
+      "platformUserId": "42",
+      "channelId": "#Satont",
+      "username": "viewer",
+      "limit": 50
+    }
+  ],
+  "channelRequests": [
+    {
+      "platform": "twitch",
+      "channelId": "satont",
+      "limit": 100
+    },
+    {
+      "platform": "twitch",
+      "channelId": "satont",
+      "limit": 100,
+      "cursor": {
+        "id": "one",
+        "createdAt": 1000,
+        "platform": "twitch",
+        "channelId": "satont"
+      }
+    },
+    {
+      "platform": "twitch",
+      "channelId": "satont",
+      "limit": 100
+    },
+    {
+      "platform": "twitch",
+      "channelId": "satont",
+      "limit": 100,
+      "cursor": {
+        "id": "one",
+        "createdAt": 1000,
+        "platform": "twitch",
+        "channelId": "satont"
+      }
+    }
+  ],
+  "artworkPixels": 934,
+  "savedChoices": [false],
+  "screenshots": [
+    "/tmp/twirchat-gui-qa-w7kMuC/history-artwork-loaded.png",
+    "/tmp/twirchat-gui-qa-w7kMuC/history-artwork-pending.png",
+    "/tmp/twirchat-gui-qa-w7kMuC/history-user-900.png",
+    "/tmp/twirchat-gui-qa-w7kMuC/history-channel-900.png",
+    "/tmp/twirchat-gui-qa-w7kMuC/history-user-420.png",
+    "/tmp/twirchat-gui-qa-w7kMuC/history-channel-420.png"
+  ]
+}
