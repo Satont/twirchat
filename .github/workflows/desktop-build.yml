@@ -338,13 +338,31 @@ jobs:
           test -x "$image"
           bun run qa:gui --node-env production --artifacts "$RUNNER_TEMP/distribution-qa" \
             --timeout 45 -- "$bun_executable" "$PWD/scripts/qa-distribution.ts" "$image"
-      - name: Preserve isolated distribution diagnostics
+      - name: Test Linux update and restart outside the original AppImage mount
+        if: runner.os == 'Linux'
+        working-directory: packages/desktop
+        run: |
+          bun_executable="$(bun -e 'console.log(process.execPath)')"
+          image="$PWD/releases/dev.twirchat.app-linux-x64.AppImage"
+          extraction="$(mktemp -d "$RUNNER_TEMP/twirchat-update-qa.XXXXXX")"
+          trap 'rm -rf "$extraction"' EXIT
+          (
+            cd "$extraction"
+            APPIMAGELAUNCHER_DISABLE=1 "$image" --appimage-extract usr/bin/UpdateNix > /dev/null
+          )
+          updater="$extraction/squashfs-root/usr/bin/UpdateNix"
+          test -x "$updater"
+          bun run qa:gui --node-env production --artifacts "$RUNNER_TEMP/linux-update-qa" \
+            --timeout 30 -- "$bun_executable" "$PWD/scripts/qa-linux-update.ts" "$updater"
+      - name: Preserve isolated distribution and update diagnostics
         if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: distribution-qa-${{ matrix.runtime }}
           overwrite: true
-          path: ${{ runner.temp }}/distribution-qa
+          path: |
+            ${{ runner.temp }}/distribution-qa
+            ${{ runner.temp }}/linux-update-qa
           if-no-files-found: ignore
           retention-days: 7
       - name: Preserve installers and feeds
