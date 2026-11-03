@@ -1,0 +1,11 @@
+diff --git a/packages/native/src/custom_elements/img.rs b/packages/native/src/custom_elements/img.rs
+--- a/packages/native/src/custom_elements/img.rs
++++ b/packages/native/src/custom_elements/img.rs
+@@ -201,6 +201,7 @@
+         // never advances past frame zero.
+         let mut el = el
+             .animate_when_inactive(true)
++            .synchronize_animation(true)
+             .object_fit(self.object_fit.as_gpui())
+             .with_fallback(|| {
+                 gpui::div()

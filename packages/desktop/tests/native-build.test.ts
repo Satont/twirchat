@@ -40,6 +40,11 @@ test('native source pins and patch checksums match the reviewed checkout contrac
     expect.arrayContaining([
       expect.objectContaining({ path: 'patches/gpui-close-to-tray.patch', root: 'gpui' }),
       expect.objectContaining({ path: 'patches/gpuix-close-to-tray.patch', root: 'gpuix' }),
+      expect.objectContaining({ path: 'patches/gpui-background-images.patch', root: 'gpui' }),
+      expect.objectContaining({ path: 'patches/gpuix-background-images.patch', root: 'gpuix' }),
+      expect.objectContaining({ path: 'patches/gpui-synchronized-images.patch', root: 'gpui' }),
+      expect.objectContaining({ path: 'patches/gpuix-synchronized-images.patch', root: 'gpuix' }),
+      expect.objectContaining({ path: 'patches/gpui-image-frame-deadlines.patch', root: 'gpui' }),
     ]),
   )
   for (const patch of manifest.patches) {

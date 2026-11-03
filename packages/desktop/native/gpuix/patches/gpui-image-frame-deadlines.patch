@@ -1,0 +1,308 @@
+diff --git a/crates/gpui/src/image_animation.rs b/crates/gpui/src/image_animation.rs
+--- a/crates/gpui/src/image_animation.rs
++++ b/crates/gpui/src/image_animation.rs
+@@ -24,13 +24,25 @@
+         Self { frame_end_nanos }
+     }
+ 
+-    pub(crate) fn frame_index_at(&self, elapsed: Duration) -> usize {
++    pub(crate) fn frame_at(&self, elapsed: Duration) -> (usize, Option<Duration>) {
+         let Some(&cycle_nanos) = self.frame_end_nanos.last() else {
+-            return 0;
++            return (0, None);
+         };
+         let phase_nanos = elapsed.as_nanos() % cycle_nanos;
+-        self.frame_end_nanos
+-            .partition_point(|&end| end <= phase_nanos)
++        let frame_index = self
++            .frame_end_nanos
++            .partition_point(|&end| end <= phase_nanos);
++        let remaining_nanos = self.frame_end_nanos[frame_index] - phase_nanos;
++        let remaining = Duration::new(
++            (remaining_nanos / 1_000_000_000) as u64,
++            (remaining_nanos % 1_000_000_000) as u32,
++        );
++        (frame_index, Some(remaining))
++    }
++
++    #[cfg(test)]
++    pub(crate) fn frame_index_at(&self, elapsed: Duration) -> usize {
++        self.frame_at(elapsed).0
+     }
+ }
+ 
+@@ -98,4 +110,78 @@
+             original.frame_index_at(elapsed) == later_copy.frame_index_at(elapsed)
+         }));
+     }
++
++    #[test]
++    fn next_boundaries_follow_irregular_delays_and_wrap_exactly() {
++        let timeline = timeline(&[100, 250, 50]);
++        let observed: Vec<_> = [0, 99, 100, 349, 350, 399, 400]
++            .into_iter()
++            .map(|time| timeline.frame_at(Duration::from_millis(time)))
++            .collect();
++        let expected: Vec<_> = [
++            (0, 100),
++            (0, 1),
++            (1, 250),
++            (1, 1),
++            (2, 50),
++            (2, 1),
++            (0, 100),
++        ]
++        .into_iter()
++        .map(|(index, millis)| (index, Some(Duration::from_millis(millis))))
++        .collect();
++        assert_eq!(observed, expected);
++    }
++
++    #[test]
++    fn zero_delay_boundaries_use_the_same_fallback_as_frame_selection() {
++        let timeline = timeline(&[0, 25]);
++        assert_eq!(
++            [0, 10, 35].map(|time| timeline.frame_at(Duration::from_millis(time))),
++            [
++                (0, Some(Duration::from_millis(10))),
++                (1, Some(Duration::from_millis(25))),
++                (0, Some(Duration::from_millis(10))),
++            ],
++        );
++    }
++
++    #[test]
++    fn submillisecond_boundaries_preserve_the_remaining_nanoseconds() {
++        let timeline = ImageAnimationTimeline::new(
++            [Duration::from_micros(500), Duration::from_millis(2)].into_iter(),
++        );
++        assert_eq!(
++            [499_999, 500_000, 2_500_000].map(|time| timeline.frame_at(Duration::from_nanos(time))),
++            [
++                (0, Some(Duration::from_nanos(1))),
++                (1, Some(Duration::from_millis(2))),
++                (0, Some(Duration::from_micros(500))),
++            ],
++        );
++    }
++
++    #[test]
++    fn empty_and_static_images_have_no_next_boundary() {
++        assert!(
++            [timeline(&[]), timeline(&[125])]
++                .iter()
++                .all(|timeline| timeline.frame_at(Duration::MAX) == (0, None))
++        );
++    }
++
++    #[test]
++    fn next_boundary_handles_the_largest_elapsed_duration() {
++        assert_eq!(
++            timeline(&[100, 250, 50]).frame_at(Duration::MAX),
++            (2, Some(Duration::from_nanos(1))),
++        );
++    }
++
++    #[test]
++    fn long_frame_durations_do_not_truncate_remaining_nanoseconds() {
++        let timeline =
++            ImageAnimationTimeline::new([Duration::MAX, Duration::from_nanos(1)].into_iter());
++        assert_eq!(timeline.frame_at(Duration::ZERO), (0, Some(Duration::MAX)));
++    }
+ }
+diff --git a/crates/gpui/src/assets.rs b/crates/gpui/src/assets.rs
+--- a/crates/gpui/src/assets.rs
++++ b/crates/gpui/src/assets.rs
+@@ -114,8 +114,13 @@
+             .unwrap_or(Delay::from_numer_denom_ms(100, 1))
+     }
+ 
+-    /// Select a frame on the repeating animation timeline at the given elapsed time.
+-    pub(crate) fn frame_index_at(&self, elapsed: Duration) -> usize {
++    /// Select a frame and the remaining time until its next encoded boundary.
++    pub(crate) fn frame_at(&self, elapsed: Duration) -> (usize, Option<Duration>) {
++        self.animation.frame_at(elapsed)
++    }
++
++    #[cfg(test)]
++    fn frame_index_at(&self, elapsed: Duration) -> usize {
+         self.animation.frame_index_at(elapsed)
+     }
+ 
+diff --git a/crates/gpui/src/elements/img.rs b/crates/gpui/src/elements/img.rs
+--- a/crates/gpui/src/elements/img.rs
++++ b/crates/gpui/src/elements/img.rs
+@@ -169,6 +169,7 @@
+     }
+ 
+     /// Use a process-wide animation phase instead of starting at mount time.
++    /// Synchronized images must participate in every draw, outside cached subtrees.
+     fn synchronize_animation(mut self, synchronize: bool) -> Self {
+         self.image_style().synchronize_animation = synchronize;
+         self
+@@ -361,9 +362,14 @@
+                                 state.frame_index = state.frame_index.min(max_frame_index);
+                                 if animate && self.style.synchronize_animation {
+                                     let epoch = ANIMATION_EPOCH.get_or_init(Instant::now);
+-                                    state.frame_index = data.frame_index_at(
+-                                        window.animation_time().saturating_duration_since(*epoch),
+-                                    );
++                                    let sample_time = window.animation_time().max(*epoch);
++                                    let elapsed = sample_time.saturating_duration_since(*epoch);
++                                    let (frame_index, remaining) = data.frame_at(elapsed);
++                                    state.frame_index = frame_index;
++                                    if let Some(remaining) = remaining {
++                                        window
++                                            .request_image_animation_frame(sample_time + remaining);
++                                    }
+                                     state.last_frame_time = None;
+                                 } else if animate {
+                                     let current_time = Instant::now();
+@@ -383,6 +389,19 @@
+                                     }
+                                 } else {
+                                     state.last_frame_time = None;
++                                    if self.style.synchronize_animation
++                                        && frame_count > 1
++                                        && !cx.reduce_motion()
++                                        && window.native_window_visibility_state().is_some_and(
++                                            |visibility| {
++                                                visibility
++                                                    .load(std::sync::atomic::Ordering::Relaxed)
++                                                    == 2
++                                            },
++                                        )
++                                    {
++                                        window.suspend_image_animation();
++                                    }
+                                 }
+                                 state.started_loading = None;
+                                 frame_index = state.frame_index;
+@@ -422,7 +441,7 @@
+                                 };
+                             }
+ 
+-                            if global_id.is_some() && animate {
++                            if global_id.is_some() && animate && !self.style.synchronize_animation {
+                                 window.request_animation_frame();
+                             }
+                         }
+diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -1172,6 +1172,9 @@
+     pub(crate) image_cache_stack: Vec<AnyImageCache>,
+     pub(crate) rendered_frame: Frame,
+     animation_time: Instant,
++    image_animation_deadline: Option<Instant>,
++    image_animation_timer: Option<(Instant, Task<()>)>,
++    image_animation_suspended: bool,
+     pub(crate) next_frame: Frame,
+     next_hitbox_id: HitboxId,
+     pub(crate) next_tooltip_id: TooltipId,
+@@ -1590,9 +1593,20 @@
+                 let force_render =
+                     mem::take(&mut deferred_force_render) || request_frame_options.force_render;
+ 
+-                let thermal_state = handle
+-                    .update(&mut cx, |_, _, cx| cx.thermal_state())
++                let frame_state = handle
++                    .update(&mut cx, |_, window, cx| {
++                        let resume_animation = window.image_animation_suspended
++                            && !cx.reduce_motion()
++                            && !window.image_animation_hidden();
++                        if resume_animation {
++                            window.image_animation_suspended = false;
++                        }
++                        (cx.thermal_state(), resume_animation)
++                    })
+                     .log_err();
++                let resume_animation = frame_state.as_ref().is_some_and(|(_, resume)| *resume);
++                let thermal_state = frame_state.map(|(thermal_state, _)| thermal_state);
++                let force_render = force_render || resume_animation;
+ 
+                 // Throttle frame rate based on conditions:
+                 // - Thermal pressure (Serious/Critical): cap to ~60fps
+@@ -1862,6 +1876,9 @@
+             requested_autoscroll: None,
+             rendered_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+             animation_time: Instant::now(),
++            image_animation_deadline: None,
++            image_animation_timer: None,
++            image_animation_suspended: false,
+             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+             next_frame_callbacks,
+             after_paint_observers: Vec::new(),
+@@ -2424,6 +2441,54 @@
+         self.animation_time
+     }
+ 
++    pub(crate) fn request_image_animation_frame(&mut self, deadline: Instant) {
++        self.image_animation_deadline = Some(
++            self.image_animation_deadline
++                .map_or(deadline, |current| current.min(deadline)),
++        );
++    }
++
++    pub(crate) fn suspend_image_animation(&mut self) {
++        self.image_animation_suspended = true;
++    }
++
++    fn image_animation_hidden(&self) -> bool {
++        self.native_window_visibility_state()
++            .is_some_and(|visibility| visibility.load(std::sync::atomic::Ordering::Relaxed) == 2)
++    }
++
++    fn finish_image_animation(&mut self, cx: &App) {
++        let Some(deadline) = self.image_animation_deadline else {
++            self.image_animation_timer = None;
++            return;
++        };
++        if self
++            .image_animation_timer
++            .as_ref()
++            .is_some_and(|(current, _)| *current == deadline)
++        {
++            return;
++        }
++        let task = self.spawn(cx, async move |cx| {
++            cx.background_executor()
++                .timer(deadline.saturating_duration_since(Instant::now()))
++                .await;
++            cx.update(|window, cx| {
++                if cx.reduce_motion() {
++                    return;
++                }
++                if window.image_animation_hidden() {
++                    window.image_animation_suspended = true;
++                    return;
++                }
++                // Refresh the whole uncached image tree through the native frame throttle.
++                window.on_next_frame(|window, _| window.refresh());
++            })
++            .ok();
++        });
++        self.image_animation_timer = Some((deadline, task));
++    }
++
+     /// Schedule a frame to be drawn on the next animation frame.
+     ///
+     /// This is useful for elements that need to animate continuously, such as a video player or an animated GIF.
+@@ -2957,6 +3022,8 @@
+     #[profiling::function]
+     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+         self.animation_time = Instant::now();
++        self.image_animation_deadline = None;
++        self.image_animation_suspended = false;
+         // Drain every draw in profiler builds so a previous frame's
+         // first-invalidation timestamp can't be attributed to this one.
+         #[cfg(feature = "profiler")]
+@@ -3100,6 +3167,8 @@
+             }
+         }
+ 
++        self.finish_image_animation(cx);
++
+         // Exit the scope to obtain the arena-clear token this draw owes; the
+         // scope's teardown itself happens in `ElementArenaScope::drop`.
+         arena_scope.exit(&cx.element_arena)

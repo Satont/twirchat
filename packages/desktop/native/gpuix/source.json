@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.4",
+  "version": "0.11.0-twirchat.5",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -25,6 +25,31 @@
       "path": "patches/gpuix-close-to-tray.patch",
       "root": "gpuix",
       "sha256": "bed73a8641011538ec0398e59ac3da978c775b9e136de334a13f199c9521b2df"
+    },
+    {
+      "path": "patches/gpui-background-images.patch",
+      "root": "gpui",
+      "sha256": "8a45fb63b3f71f29ca7aeb2ba290e65a1df6cf3b2e3b62dfae2d8a7076505c63"
+    },
+    {
+      "path": "patches/gpuix-background-images.patch",
+      "root": "gpuix",
+      "sha256": "dca9a2b2160c516fe11a06705f3cdbdafe6841ac4891c59ab2d02a924d35cbd4"
+    },
+    {
+      "path": "patches/gpui-synchronized-images.patch",
+      "root": "gpui",
+      "sha256": "58ed79fe44c63ab4637005c7f469cb843017d3387f741025945eda872c1ed9bd"
+    },
+    {
+      "path": "patches/gpuix-synchronized-images.patch",
+      "root": "gpuix",
+      "sha256": "012a33dd18123897b20cab4d640924d2da2ff79403b83baeba24d63e3a335c2a"
+    },
+    {
+      "path": "patches/gpui-image-frame-deadlines.patch",
+      "root": "gpui",
+      "sha256": "43f61513ef058dd48f0bd6b7d98b29bf3090769adcbac2a97d3fd942be19bdec"
     }
   ]
 }

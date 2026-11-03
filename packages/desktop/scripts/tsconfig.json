@@ -5,6 +5,7 @@
     "qa-painted-geometry.tsx",
     "qa-drag-interactions.tsx",
     "qa-seventv-notices.tsx",
+    "qa-background-images.tsx",
     "qa-history-logs.tsx",
     "qa-tab-counts.tsx",
     "qa-deferred-chat-rows.tsx",

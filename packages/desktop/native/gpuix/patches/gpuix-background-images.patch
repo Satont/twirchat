@@ -1,0 +1,11 @@
+diff --git a/packages/native/src/custom_elements/img.rs b/packages/native/src/custom_elements/img.rs
+--- a/packages/native/src/custom_elements/img.rs
++++ b/packages/native/src/custom_elements/img.rs
+@@ -200,6 +200,7 @@
+         // loading state are rebuilt from scratch on every frame and an animation
+         // never advances past frame zero.
+         let mut el = el
++            .animate_when_inactive(true)
+             .object_fit(self.object_fit.as_gpui())
+             .with_fallback(|| {
+                 gpui::div()

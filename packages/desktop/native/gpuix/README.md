@@ -5,6 +5,31 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
+Native version `0.11.0-twirchat.5` keeps GIF/WebP images animating in visible,
+unfocused windows. [GPUIX issue #67](https://github.com/remorses/gpuix/issues/67)
+remains open, and the pinned GPUI source still stops both image frame advancement
+and scheduling on focus loss. The background-image patches add an opt-in GPUI
+image policy and enable it for GPUIX images, including cached and transformed
+emotes. Explicitly hidden windows pause; unknown visibility allows animation.
+System reduced-motion preferences still stop animation. No JavaScript redraw
+timer is added, and GPUI images without the opt-in keep their existing policy.
+
+The synchronized-image patches also give repeated GIF/WebP images a shared
+process-wide phase, independent of mount time or separate decoding. Each native
+paint uses one timestamp for every image in that window. Decoded images retain
+their original frame delays in a cumulative timeline; frame lookup uses binary
+search rather than scanning frames. Zero delays use 10 ms. Hidden windows and
+reduced motion freeze the last frame; animation rejoins the shared phase on resume.
+The timeline belongs to the decoded image, with no global image registry or timer.
+
+The image-frame-deadline patch coalesces those timelines into one cancelable timer
+per window, armed for the earliest encoded frame boundary. Unrelated chat redraws
+retain the existing timer when that absolute boundary is unchanged. Static images,
+removed images, reduced motion, and hidden windows stop requesting image frames.
+A visible native frame request resumes a hidden animation at the shared phase.
+The native GPUIX image tree is uncached; synchronized images must be traversed on
+every draw so each paint can rebuild the window's animation demand.
+
 Run from `packages/desktop`:
 
 ```sh

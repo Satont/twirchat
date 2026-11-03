@@ -1,0 +1,73 @@
+GUI QA isolated session: /tmp/anim-b3/c50-r5000-p4/twirchat-gui-qa-EqbVXj
+
+{"level":"info","module":"gpuix-backend","msg":"Starting GPUIX backend...","ts":"2026-11-03T08:47:02.835Z"}
+{"level":"info","module":"db","msg":"Migrations applied","ts":"2026-11-03T08:47:02.837Z"}
+{"level":"info","module":"gpuix-backend","msg":"Database ready","ts":"2026-11-03T08:47:02.837Z"}
+{"level":"info","module":"client-secret","msg":"Generated new client secret: 0920721f...","ts":"2026-11-03T08:47:02.837Z"}
+{"level":"info","module":"overlay-server","msg":"Resolved overlay runtime paths","ts":"2026-11-03T08:47:02.837Z","fontsDir":"/home/satont/.codex/worktrees/background-emote-animation/chat/packages/desktop/public/fonts","overlayDir":null}
+{"level":"info","module":"overlay-server","msg":"Server running on http://localhost:45823","ts":"2026-11-03T08:47:02.838Z"}
+{"level":"info","module":"overlay-server","msg":"OBS URL: http://localhost:45823/?bg=transparent","ts":"2026-11-03T08:47:02.838Z"}
+{"level":"info","module":"auth-server","msg":"OAuth server listening on port 45821","ts":"2026-11-03T08:47:02.839Z"}
+{"level":"info","module":"backend-connection","msg":"Connecting to ws://127.0.0.1:3000/ws...","ts":"2026-11-03T08:47:02.841Z"}
+{"level":"info","module":"gpuix-backend","msg":"GPUIX backend ready","ts":"2026-11-03T08:47:02.841Z"}
+{"level":"info","module":"backend-connection","msg":"Disconnected. Reconnecting in 3000ms...","ts":"2026-11-03T08:47:02.934Z"}
+{"level":"info","module":"backend-connection","msg":"Connecting to ws://127.0.0.1:3000/ws...","ts":"2026-11-03T08:47:05.934Z"}
+{"level":"info","module":"backend-connection","msg":"Disconnected. Reconnecting in 6000ms...","ts":"2026-11-03T08:47:05.934Z"}
+{"level":"info","module":"backend-connection","msg":"Connecting to ws://127.0.0.1:3000/ws...","ts":"2026-11-03T08:47:11.934Z"}
+{"level":"info","module":"backend-connection","msg":"Disconnected. Reconnecting in 12000ms...","ts":"2026-11-03T08:47:11.934Z"}
+        wl_shm 10 bpc formats: yes
+               wl_shm 16 bpc formats: yes
+               wl_shm half-float formats: yes
+               internal R and RG formats: yes
+               OES_EGL_image_external: yes
+               GPU timeline: yes
+               Texture immutability: yes
+               Required precision: yes
+[11:47:02.702] Using GL renderer
+[11:47:02.702] Registered plugin API 'weston_windowed_output_api_headless_v2' of size 16
+[11:47:02.702] Color manager: no-op
+                 protocol support: no
+[11:47:02.702] Output 'headless' attempts EOTF mode SDR and colorimetry mode default.
+[11:47:02.702] Output 'headless' using color profile: stock sRGB color profile
+[11:47:02.703] Output 'headless' enabled with head(s) headless
+[11:47:02.703] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: yes
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: yes
+               color operations: yes
+               color representation: yes
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[11:47:02.703] Loading module '/tmp/twirchat-weston-15.0.1-3/usr/lib/weston/kiosk-shell.so'
+{"level":"error","module":"backend-connection","msg":"WebSocket error","ts":"2026-11-03T08:47:02.933Z","event":"{\"isTrusted\":true}"}
+{"level":"error","module":"backend-connection","msg":"WebSocket error","ts":"2026-11-03T08:47:05.934Z","event":"{\"isTrusted\":true}"}
+{"level":"error","module":"backend-connection","msg":"WebSocket error","ts":"2026-11-03T08:47:11.934Z","event":"{\"isTrusted\":true}"}
+[2026-11-03T08:47:16Z ERROR wgpu_hal::vulkan::swapchain::native] get_physical_device_surface_present_modes: ERROR_SURFACE_LOST_KHR
+Io error: Broken pipe (os error 32)
+Error trying to flush the wayland display: Broken pipe (os error 32)
+[2026-11-03T08:47:16Z ERROR gpui_linux::linux::wayland::client] other error during loop operation: underlying IO error: Broken pipe (os error 32)
+[windows] unmount: 60 |         flushMutations() {
+61 |             flushScheduled = false;
+62 |             if (queue.length === 0)
+63 |                 return;
+64 |             appliedBatches++;
+65 |             const destroyed = renderer.applyBatch(JSON.stringify(queue));
+                                            ^
+error: GPUI application is not initialized
+ code: "GenericFailure"
+
+      at flushMutations (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/@gpuix+native@0.11.0/node_modules/@gpuix/native/dist/mutations.js:65:40)
+      at resetAfterCommit (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/@gpuix+react@0.11.0+0441d6f8f57aca1e/node_modules/@gpuix/react/dist/reconciler/host-config.js:289:32)
+      at flushMutationEffects (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js:9677:13)
+      at commitRoot (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js:9657:7)
+      at commitRootWhenReady (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js:9048:5)
+      at performWorkOnRoot (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js:8963:11)
+      at performSyncWorkOnRoot (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js:1292:5)
+      at flushSyncWorkAcrossRoots_impl (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js:1159:19)
+      at <anonymous> (/home/satont/.codex/worktrees/background-emote-animation/chat/node_modules/.bun/react-reconciler@0.33.0+0441d6f8f57aca1e/node_modules/react-reconciler/cjs/react-reconciler.production.js:11404:41)
+
+
+GUI QA command failed; artifacts: /tmp/anim-b3/c50-r5000-p4/twirchat-gui-qa-EqbVXj
