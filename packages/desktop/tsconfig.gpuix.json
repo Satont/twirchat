@@ -35,7 +35,8 @@
     "scripts/qa-tab-counts.tsx",
     "scripts/qa-deferred-chat-rows.tsx",
     "scripts/qa-badge-tooltips.tsx",
-    "scripts/qa-distribution.ts"
+    "scripts/qa-distribution.ts",
+    "scripts/qa-mention-user-card.tsx"
   ],
   "exclude": ["node_modules"]
 }

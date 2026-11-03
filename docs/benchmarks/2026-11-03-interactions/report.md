@@ -178,3 +178,32 @@ generates `emotes: []`, and emits `watched_channel_message` directly through Des
 It bypasses the changed service and message parser, so repeating that workload would not
 exercise this fix. Focused service and real message-parser regressions cover exact aliases
 and token positions; no CPU/RSS improvement is claimed.
+
+## Mention user cards
+
+Chat mentions now open the mentioned user's existing card on primary click, Enter or Space.
+The full handle survives word wrapping. Lookup uses same-platform account/reply/retained author
+identities, then the Twitch login, Kick slug or existing YouTube handle endpoint. The target
+preserves the source channel context without borrowing the sender's ID or message ID. Older
+remote lookups cannot replace a newer mention selection; unmounted mentions ignore completion.
+
+This interaction-only addition reuses the complete performance gate and exact original
+source/native provenance above. The benchmark phrases contain no mentions: ordinary text keeps
+its existing token/native tree and gains no hooks, subscriptions, retained-message scans or
+network work. The new component runs only for mention tokens, and identity lookup runs on
+activation. No new CPU/RSS/throughput improvement or regression measurement is claimed.
+
+[Production native QA](qa/mention-user-card-result.json) covers compact/modern at 420×300 and
+900×600, native X11 pointer input, right-click exclusion, Enter/Space, Escape dismissal, repeated
+reopening, delayed/unmounted lookup cancellation, native user-window fallback, and 200 history
+rows at normal size. Incoming chat kept painting: 222 messages and 222 heartbeat ticks during
+the run. The 165.7 ms maximum timer delay includes synchronous test-driver subprocesses,
+screenshots and existing history rendering; it does not isolate input callback latency.
+Remote network responses are stubbed inside the private, offline launcher. Development QA
+also passed. [Small card](qa/mention-modern-420.png), [normal card](qa/mention-compact-900.png).
+
+QA base: `1455a1dd59690e5e17aed753825f1b1c120c25f1` plus this change. Runtime SHA-256
+`2f5b60ed4a11ecad4b2b0bd05af05c148af152d90d7d7080a281e4d91c7bc580` (358 files).
+Native `0.11.0-twirchat.4`, API 3, digest `9fb2fa0507af39a4`, 56,224,840 bytes, SHA-256
+`32df77db2384eb22f77a2eb5442b9c67356d857720ee7248d80b35c4ed63bcf7`; Bun 1.4.4.
+Workspace formatting, lint, typecheck and tests passed: 1175 tests, 15 PostgreSQL tests skipped.

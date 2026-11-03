@@ -9,6 +9,7 @@
     "qa-tab-counts.tsx",
     "qa-deferred-chat-rows.tsx",
     "qa-announcements.tsx",
-    "qa-badge-tooltips.tsx"
+    "qa-badge-tooltips.tsx",
+    "qa-mention-user-card.tsx"
   ]
 }
