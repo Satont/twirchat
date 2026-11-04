@@ -1,0 +1,200 @@
+--- a/crates/gpui/src/text_system/line.rs
++++ b/crates/gpui/src/text_system/line.rs
+@@ -598,6 +598,13 @@
+     window: &mut Window,
+     cx: &mut App,
+ ) -> Result<()> {
++    if !decoration_runs
++        .iter()
++        .any(|run| run.background_color.is_some())
++    {
++        return Ok(());
++    }
++
+     let line_bounds = Bounds::new(
+         origin,
+         size(
+@@ -762,7 +769,10 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+-    use crate::{FontId, GlyphId, ShapedGlyph, ShapedRun};
++    use crate::{
++        FontId, GlyphId, ShapedGlyph, ShapedRun, Styled as _, TestAppContext, TextRun, canvas,
++        scene::PaintOperation,
++    };
+ 
+     /// Helper: build a ShapedLine from glyph descriptors without the platform text system.
+     /// Each glyph is described as (byte_index, x_position).
+@@ -797,6 +807,171 @@
+             text: SharedString::new(text),
+             decoration_runs: SmallVec::from(decorations.to_vec()),
+         }
++    }
++
++    fn background_test_line(window: &mut Window) -> ShapedLine {
++        let font_id = window
++            .text_system()
++            .shape_line(
++                "abcd".into(),
++                px(16.),
++                &[TextRun {
++                    len: 4,
++                    ..Default::default()
++                }],
++                None,
++            )
++            .runs[0]
++            .font_id;
++        let mut line = make_shaped_line("abcd", &[(0, 0.), (1, 10.), (2, 20.), (3, 30.)], 40., &[]);
++        Arc::get_mut(&mut line.layout).unwrap().runs[0].font_id = font_id;
++        line
++    }
++
++    fn background_run(len: u32, color: Option<Hsla>) -> DecorationRun {
++        DecorationRun {
++            len,
++            color: black(),
++            background_color: color,
++            underline: None,
++            strikethrough: None,
++        }
++    }
++
++    #[gpui::test]
++    fn absent_background_adds_no_operations_or_ordering_barrier(cx: &mut TestAppContext) {
++        cx.add_empty_window()
++            .draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, _| {
++                canvas(
++                    |_, _, _| (),
++                    |_, _, window, cx| {
++                        let line = make_shaped_line(
++                            "abcd",
++                            &[(0, 0.), (1, 10.), (2, 20.), (3, 30.)],
++                            40.,
++                            &[],
++                        );
++                        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(40.), px(20.)));
++                        window.paint_quad(fill(bounds, black()));
++                        let first_order = window.next_frame.scene.quads.last().unwrap().order;
++                        let operations = window.next_frame.scene.len();
++                        for runs in [
++                            vec![],
++                            vec![background_run(1, None), background_run(3, None)],
++                        ] {
++                            paint_line_background(
++                                bounds.origin,
++                                &line.layout,
++                                px(20.),
++                                TextAlign::Left,
++                                None,
++                                &runs,
++                                &[],
++                                window,
++                                cx,
++                            )
++                            .unwrap();
++                            assert_eq!(window.next_frame.scene.len(), operations);
++                        }
++                        window.paint_quad(fill(bounds, black()));
++                        assert_eq!(
++                            window.next_frame.scene.quads.last().unwrap().order,
++                            first_order + 1
++                        );
++                    },
++                )
++                .size(px(100.))
++            });
++    }
++
++    #[gpui::test]
++    fn mixed_wrapped_backgrounds_keep_their_quads_in_one_layer(cx: &mut TestAppContext) {
++        cx.add_empty_window()
++            .draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, _| {
++                canvas(
++                    |_, _, _| (),
++                    |_, _, window, cx| {
++                        let line = background_test_line(window);
++                        let operations = window.next_frame.scene.len();
++                        let quads = window.next_frame.scene.quads.len();
++                        paint_line_background(
++                            point(px(0.), px(0.)),
++                            &line.layout,
++                            px(20.),
++                            TextAlign::Left,
++                            None,
++                            &[background_run(1, None), background_run(3, Some(black()))],
++                            &[WrapBoundary {
++                                run_ix: 0,
++                                glyph_ix: 2,
++                            }],
++                            window,
++                            cx,
++                        )
++                        .unwrap();
++                        let scene = &window.next_frame.scene;
++                        let painted = &scene.quads[quads..];
++                        assert_eq!(painted.len(), 2);
++                        assert_eq!(painted[0].order, painted[1].order);
++                        assert_eq!(
++                            painted[0].bounds,
++                            Bounds::new(point(px(10.), px(0.)), size(px(10.), px(20.)),)
++                                .scale(window.scale_factor())
++                        );
++                        assert_eq!(
++                            painted[1].bounds,
++                            Bounds::new(point(px(0.), px(20.)), size(px(20.), px(20.)),)
++                                .scale(window.scale_factor())
++                        );
++                        let operations = &scene.paint_operations[operations..];
++                        assert_eq!(operations.len(), 4);
++                        assert!(matches!(
++                            operations.first(),
++                            Some(PaintOperation::StartLayer(_))
++                        ));
++                        assert!(matches!(operations.last(), Some(PaintOperation::EndLayer)));
++                    },
++                )
++                .size(px(100.))
++            });
++    }
++
++    #[gpui::test]
++    fn explicit_transparent_background_keeps_its_layer(cx: &mut TestAppContext) {
++        cx.add_empty_window()
++            .draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, _| {
++                canvas(
++                    |_, _, _| (),
++                    |_, _, window, cx| {
++                        let line = background_test_line(window);
++                        let operations = window.next_frame.scene.len();
++                        let transparent = Hsla { a: 0., ..black() };
++                        paint_line_background(
++                            point(px(0.), px(0.)),
++                            &line.layout,
++                            px(20.),
++                            TextAlign::Left,
++                            None,
++                            &[background_run(4, Some(transparent))],
++                            &[],
++                            window,
++                            cx,
++                        )
++                        .unwrap();
++                        let operations = &window.next_frame.scene.paint_operations[operations..];
++                        assert!(operations.len() >= 2);
++                        assert!(operations[1..operations.len() - 1].iter().all(|operation| {
++                            matches!(operation, PaintOperation::Primitive(_))
++                        }));
++                        assert!(matches!(
++                            operations.first(),
++                            Some(PaintOperation::StartLayer(_))
++                        ));
++                        assert!(matches!(operations.last(), Some(PaintOperation::EndLayer)));
++                    },
++                )
++                .size(px(100.))
++            });
+     }
+ 
+     #[test]
