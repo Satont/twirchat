@@ -1,0 +1,2038 @@
+--- a/packages/native/src/automation.rs
++++ b/packages/native/src/automation.rs
+@@ -128,6 +128,13 @@
+     });
+ }
+ 
++pub(crate) fn replay_bounds(window_id: gpui::WindowId, saved: &[(u64, ElementBounds)]) {
++    BOUNDS.with(|cell| {
++        Arc::make_mut(cell.borrow_mut().entry(window_id).or_default())
++            .extend(saved.iter().copied());
++    });
++}
++
+ pub fn get_bounds(window_id: gpui::WindowId, id: u64) -> Option<ElementBounds> {
+     BOUNDS.with(|cell| {
+         cell.borrow()
+@@ -613,3 +620,33 @@
+         assert!(snapshot.get(1).is_none());
+     }
+ }
++
++#[cfg(test)]
++mod cached_bounds_tests {
++    use super::*;
++    #[test]
++    fn replay_keeps_other_rows_and_restores_exact_descendant_rectangles() {
++        let window = gpui::WindowId::default();
++        remove_window_bounds(window);
++        record_bounds(
++            window,
++            1,
++            Bounds::new(point(px(1.), px(2.)), gpui::size(px(3.), px(4.))),
++        );
++        let saved = ElementBounds {
++            x: 12.5,
++            y: 34.25,
++            width: 90.75,
++            height: 16.5,
++        };
++        replay_bounds(window, &[(2, saved)]);
++        let restored = get_bounds(window, 2).unwrap();
++        assert_eq!(
++            (restored.x, restored.y, restored.width, restored.height),
++            (saved.x, saved.y, saved.width, saved.height)
++        );
++        assert!(get_bounds(window, 1).is_some());
++        assert!(get_bounds(window, 3).is_none());
++        remove_window_bounds(window);
++    }
++}
+--- /dev/null
++++ b/packages/native/src/cached_flow.rs
+@@ -0,0 +1,1222 @@
++use crate::{
++    automation::{self, ElementBounds},
++    image_resources::{ImageResources, ImageUseCapture, ImageUses},
++    renderer::{GpuixView, Inherited},
++    retained_tree::{Invalidation, RetainedElement, RetainedTree},
++    style::{DimensionValue, StyleDesc},
++    text::paint::{TextPaintEffects, text_paint_effects, text_paint_marker},
++};
++use gpui::{
++    AnyElement, App, AppContext as _, AvailableSpace, Bounds, Element, ElementId, Entity,
++    GlobalElementId, InspectorElementId, IntoElement, LayoutId, Pixels, Render, Size,
++    StyleRefinement, ViewElement, WeakEntity, Window, canvas, px,
++};
++use rustc_hash::{FxHashMap, FxHashSet};
++use std::{
++    cell::RefCell,
++    rc::Rc,
++    sync::{Arc, Mutex},
++};
++
++const MAX_FLOWS: usize = 256;
++const MAX_NODES: usize = 2048;
++pub(crate) type SharedFlows = Rc<RefCell<Flows>>;
++
++#[derive(PartialEq)]
++struct Frame {
++    generation: u64,
++    selection: u64,
++    focus: Option<gpui::FocusId>,
++    keyboard: bool,
++    viewport: Size<Pixels>,
++    scale: f32,
++    rem: Pixels,
++}
++
++#[derive(Default)]
++pub(crate) struct Flows {
++    entries: FxHashMap<u64, Rc<RefCell<FlowEntry>>>,
++    token: u64,
++    epoch: u64,
++    enabled: bool,
++    frame: Option<Frame>,
++}
++
++impl Flows {
++    pub(crate) fn clear(&mut self) {
++        self.entries.clear();
++        self.enabled = false;
++    }
++    fn version(&mut self) -> Option<u64> {
++        match self.token.checked_add(1) {
++            Some(token) => {
++                self.token = token;
++                Some(token)
++            }
++            None => {
++                self.clear();
++                None
++            }
++        }
++    }
++    pub(crate) fn begin(
++        &mut self,
++        kind: Invalidation,
++        tree: &RetainedTree,
++        selection: u64,
++        safe: bool,
++        window: &Window,
++        cx: &App,
++    ) {
++        self.epoch = self.epoch.wrapping_add(1);
++        let frame = tree.cache_revision().map(|generation| Frame {
++            generation,
++            selection,
++            focus: window.focused(cx).map(|f| f.id()),
++            keyboard: window.last_input_was_keyboard(),
++            viewport: window.viewport_size(),
++            scale: window.scale_factor(),
++            rem: window.rem_size(),
++        });
++        self.enabled = safe && kind != Invalidation::Full && frame.is_some() && frame == self.frame;
++        if !self.enabled {
++            self.entries.clear();
++        }
++        self.frame = frame;
++    }
++    pub(crate) fn finish(cache: SharedFlows) -> AnyElement {
++        use gpui::prelude::*;
++        let epoch = cache.borrow().epoch;
++        canvas(
++            |_, _, _| (),
++            move |_, _, _, _| {
++                let mut cache = cache.borrow_mut();
++                if cache.epoch == epoch {
++                    cache
++                        .entries
++                        .retain(|_, entry| entry.borrow().painted.saturating_add(1) >= epoch);
++                }
++            },
++        )
++        .absolute()
++        .w(px(0.))
++        .h(px(0.))
++        .into_any_element()
++    }
++}
++
++#[derive(Clone)]
++pub(crate) struct FlowScope {
++    pub(crate) cache: SharedFlows,
++    pub(crate) root: WeakEntity<GpuixView>,
++    pub(crate) tree: Arc<Mutex<RetainedTree>>,
++    pub(crate) images: Entity<ImageResources>,
++    pub(crate) words: crate::plain_text_cache::SharedPlainTextCache,
++    pub(crate) list: u64,
++    pub(crate) row: u64,
++    pub(crate) available: Size<AvailableSpace>,
++}
++
++#[derive(PartialEq)]
++struct Source {
++    generation: u64,
++    body: u64,
++    row: u64,
++    list: u64,
++    // A split body excludes toolbar-only revisions; its live stamp stays in FlowEntry.
++    revision: u64,
++    style: Option<Arc<StyleDesc>>,
++    overlay: Option<Overlay>,
++    available: Size<AvailableSpace>,
++    selectable: bool,
++    wash: gpui::Hsla,
++}
++
++impl Source {
++    fn current(&self, tree: &RetainedTree, available: Size<AvailableSpace>, observed: u64) -> bool {
++        self.available == available
++            && tree.cache_revision() == Some(self.generation)
++            && tree
++                .elements
++                .get(&self.row)
++                .is_some_and(|row| row.parent == Some(self.list))
++            && tree
++                .elements
++                .get(&self.body)
++                .is_some_and(|node| node.subtree_revision == observed)
++    }
++}
++
++fn cacheable_space(available: Size<AvailableSpace>) -> bool {
++    matches!(available.width, AvailableSpace::Definite(w) if w > px(0.))
++        && available.height == AvailableSpace::MinContent
++}
++
++struct FlowEntry {
++    source: Source,
++    ids: Arc<[u64]>,
++    observed: u64,
++    entity: Entity<FlowView>,
++    version: u64,
++    painted: u64,
++    snapshot: Option<Snapshot>,
++}
++
++struct Snapshot {
++    bounds: Bounds<Pixels>,
++    text: TextPaintEffects,
++    nodes: Vec<(u64, ElementBounds)>,
++    images: ImageUses,
++}
++
++#[derive(Clone)]
++pub(crate) struct FlowBuild {
++    pub(crate) body: u64,
++    pub(crate) list: u64,
++    pub(crate) row: u64,
++    pub(crate) inherited: Inherited,
++    pub(crate) part: FlowPart,
++}
++
++#[derive(Clone, Copy)]
++pub(crate) enum FlowPart {
++    Body {
++        overlay: Option<u64>,
++        width: Option<Pixels>,
++    },
++    Overlay {
++        id: u64,
++        height: Pixels,
++    },
++}
++
++pub(crate) struct FlowView {
++    root: WeakEntity<GpuixView>,
++    build: FlowBuild,
++}
++
++impl Render for FlowView {
++    fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
++        self.root
++            .update(cx, |root, cx| root.build_flow_body(&self.build, window, cx))
++            .unwrap_or_else(|_| gpui::Empty.into_any_element())
++    }
++}
++
++#[derive(Clone, Copy, PartialEq)]
++struct Overlay {
++    id: u64,
++    right: f64,
++}
++
++fn split_overlay(tree: &RetainedTree, body: &RetainedElement) -> Option<Overlay> {
++    if !body.events().is_empty()
++        || !body.custom_props().is_empty()
++        || body.needs_focus()
++        || body.content.is_some()
++    {
++        return None;
++    }
++    let mut overlay = None;
++    for id in &body.children {
++        let node = tree.elements.get(id)?;
++        let Some(style) = node
++            .style
++            .as_deref()
++            .filter(|s| s.position.as_deref() == Some("absolute"))
++        else {
++            continue;
++        };
++        if overlay.is_some()
++            || node.element_type != "div"
++            || style.top != Some(0.)
++            || style.bottom != Some(0.)
++            || !style
++                .right
++                .is_some_and(|right| right.is_finite() && right >= 0.)
++            || style.display.as_deref() != Some("flex")
++            || style.flex_direction.as_deref() != Some("row")
++            || style.align_items.as_deref() != Some("center")
++        {
++            return None;
++        }
++        let mut remaining = style.clone();
++        remaining.position = None;
++        remaining.top = None;
++        remaining.bottom = None;
++        remaining.right = None;
++        remaining.display = None;
++        remaining.flex_direction = None;
++        remaining.align_items = None;
++        if !remaining.gap.is_none_or(|gap| gap.is_finite() && gap >= 0.) {
++            return None;
++        }
++        remaining.gap = None;
++        if remaining.user_select.as_deref() == Some("none") {
++            remaining.user_select = None;
++        }
++        if remaining.width == Some(DimensionValue::Auto) {
++            remaining.width = None;
++        }
++        if remaining.height == Some(DimensionValue::Auto) {
++            remaining.height = None;
++        }
++        if remaining != StyleDesc::default() {
++            return None;
++        }
++        overlay = Some(Overlay {
++            id: *id,
++            right: style.right?,
++        });
++    }
++    overlay
++}
++
++fn content_revision(tree: &RetainedTree, body: &RetainedElement, overlay: Option<Overlay>) -> u64 {
++    match overlay {
++        None => body.subtree_revision,
++        Some(overlay) => body
++            .children
++            .iter()
++            .filter(|id| **id != overlay.id)
++            .filter_map(|id| tree.elements.get(id).map(|child| child.subtree_revision))
++            .max()
++            .unwrap_or(0),
++    }
++}
++
++fn inline_ids(tree: &RetainedTree, ids: Arc<[u64]>, overlay: Option<Overlay>) -> Arc<[u64]> {
++    let Some(overlay) = overlay else { return ids };
++    let mut excluded = FxHashSet::default();
++    let mut pending = vec![overlay.id];
++    while let Some(id) = pending.pop() {
++        excluded.insert(id);
++        if let Some(node) = tree.elements.get(&id) {
++            pending.extend(node.children.iter().copied());
++        }
++    }
++    ids.iter()
++        .copied()
++        .filter(|id| !excluded.contains(id))
++        .collect()
++}
++
++pub(crate) fn candidate(element: &RetainedElement) -> bool {
++    if element.element_type != "div" {
++        return false;
++    }
++    let Some(style) = element.style.as_deref() else {
++        return false;
++    };
++    if style.display.as_deref() != Some("flex")
++        || style.flex_direction.as_deref() != Some("row")
++        || style.flex_wrap.as_deref() != Some("wrap")
++        || style.align_items.as_deref() != Some("center")
++    {
++        return false;
++    }
++    true
++}
++
++fn compact_geometry(tree: &RetainedTree, element: &RetainedElement, row: u64) -> bool {
++    let Some(style) = element.style.as_deref() else {
++        return false;
++    };
++    let mut rest = style.clone();
++    rest.display = None;
++    rest.flex_direction = None;
++    rest.flex_wrap = None;
++    rest.align_items = None;
++    rest.gap = None;
++    rest.row_gap = None;
++    rest.column_gap = None;
++    if matches!(rest.min_width, Some(DimensionValue::Pixels(0.))) {
++        rest.min_width = None;
++    }
++    if rest != StyleDesc::default() {
++        return false;
++    }
++    let Some(parent) = element.parent.and_then(|id| tree.elements.get(&id)) else {
++        return false;
++    };
++    if parent
++        .style
++        .as_deref()
++        .and_then(|s| s.flex_direction.as_deref())
++        != Some("column")
++    {
++        return false;
++    }
++    let mut node = Some(parent);
++    while let Some(ancestor) = node {
++        if let Some(style) = ancestor.style.as_deref() {
++            if style.height.is_some()
++                || style.max_height.is_some()
++                || style.align_items.as_deref().is_some_and(|a| a != "stretch")
++                || (style.flex_direction.as_deref() != Some("column")
++                    && ancestor.children.len() > 1)
++            {
++                return false;
++            }
++        }
++        if ancestor.id == row {
++            return true;
++        }
++        node = ancestor.parent.and_then(|id| tree.elements.get(&id));
++    }
++    false
++}
++
++fn eligible_ids(tree: &RetainedTree, body: u64, row: u64) -> Option<Arc<[u64]>> {
++    if !compact_geometry(tree, tree.elements.get(&body)?, row) {
++        return None;
++    }
++    let mut outside = vec![row];
++    let mut visited = 0;
++    while let Some(id) = outside.pop() {
++        if id == body {
++            continue;
++        }
++        if visited >= MAX_NODES {
++            return None;
++        }
++        visited += 1;
++        let node = tree.elements.get(&id)?;
++        if !matches!(node.element_type.as_str(), "div" | "text" | "img" | "svg")
++            || node.custom_props().contains_key("motion")
++        {
++            return None;
++        }
++        if matches!(node.element_type.as_str(), "img" | "svg")
++            && !node.style.as_deref().is_some_and(|s| {
++                matches!(s.width, Some(DimensionValue::Pixels(w)) if w > 0.)
++                    && matches!(s.height, Some(DimensionValue::Pixels(h)) if h > 0.)
++            })
++        {
++            return None;
++        }
++        if visited + outside.len() + node.children.len() > MAX_NODES {
++            return None;
++        }
++        outside.extend(node.children.iter().copied());
++    }
++    let mut ids = Vec::new();
++    let mut pending = vec![body];
++    while let Some(id) = pending.pop() {
++        let node = tree.elements.get(&id)?;
++        if visited + ids.len() >= MAX_NODES
++            || !matches!(node.element_type.as_str(), "div" | "text" | "img" | "svg")
++            || node.events().contains("scrollChange")
++            || node.events().contains("highlight")
++            || node.style.as_deref().is_some_and(|s| {
++                s.has_dynamic_opacity()
++                    || [
++                        s.overflow.as_deref(),
++                        s.overflow_x.as_deref(),
++                        s.overflow_y.as_deref(),
++                    ]
++                    .contains(&Some("scroll"))
++            })
++            || node.custom_props().keys().any(|key| {
++                !(key == "tabIndex"
++                    || key == "role"
++                    || key.starts_with("aria")
++                    || (node.element_type == "img"
++                        && matches!(key.as_str(), "src" | "objectFit" | "alt"))
++                    || (node.element_type == "svg" && matches!(key.as_str(), "src" | "source")))
++            })
++        {
++            return None;
++        }
++        ids.push(id);
++        if visited + ids.len() + pending.len() + node.children.len() > MAX_NODES {
++            return None;
++        }
++        pending.extend(node.children.iter().copied());
++    }
++    Some(ids.into())
++}
++
++impl FlowScope {
++    pub(crate) fn prepare(
++        &self,
++        tree: &RetainedTree,
++        body: u64,
++        inherited: &Inherited,
++        window: &Window,
++        cx: &mut gpui::Context<GpuixView>,
++    ) -> Option<FlowElement> {
++        if !inherited.text_cache_safe
++            || inherited.highlight.is_some()
++            || !cacheable_space(self.available)
++        {
++            return None;
++        }
++        let mut cache = self.cache.borrow_mut();
++        if !cache.enabled {
++            return None;
++        }
++        let generation = cache.frame.as_ref()?.generation;
++        if tree.cache_revision() != Some(generation) {
++            cache.clear();
++            return None;
++        }
++        let node = tree.elements.get(&body)?;
++        let existing = cache.entries.get(&body).cloned();
++        let unchanged = existing.as_ref().filter(|entry| {
++            let previous = entry.borrow();
++            previous.observed == node.subtree_revision
++                && previous.source.row == self.row
++                && previous.source.list == self.list
++        });
++        let (ids, overlay, revision) = if let Some(entry) = unchanged {
++            let previous = entry.borrow();
++            (
++                previous.ids.clone(),
++                previous.source.overlay,
++                previous.source.revision,
++            )
++        } else {
++            let ids = eligible_ids(tree, body, self.row)?;
++            let overlay = split_overlay(tree, node);
++            (
++                inline_ids(tree, ids, overlay),
++                overlay,
++                content_revision(tree, node, overlay),
++            )
++        };
++        let source = Source {
++            generation,
++            body,
++            row: self.row,
++            list: self.list,
++            revision,
++            style: node.style.clone(),
++            overlay,
++            available: self.available,
++            selectable: inherited.selectable,
++            wash: inherited.selection_wash,
++        };
++        let epoch = cache.epoch;
++        let entry = if let Some(entry) = existing {
++            if entry.borrow().source != source {
++                let version = cache.version()?;
++                let mut state = entry.borrow_mut();
++                state.source = source;
++                state.version = version;
++                state.snapshot = None;
++                state.ids = ids;
++            }
++            entry.borrow_mut().observed = node.subtree_revision;
++            entry.borrow().entity.update(cx, |view, _| {
++                view.build = FlowBuild {
++                    body,
++                    list: self.list,
++                    row: self.row,
++                    inherited: inherited.clone(),
++                    part: FlowPart::Body {
++                        overlay: overlay.map(|overlay| overlay.id),
++                        width: None,
++                    },
++                };
++            });
++            entry
++        } else {
++            if cache.entries.len() >= MAX_FLOWS
++                || automation::get_bounds(window.window_handle().window_id(), body).is_none()
++            {
++                return None;
++            }
++            let version = cache.version()?;
++            let entity = cx.new(|_| FlowView {
++                root: self.root.clone(),
++                build: FlowBuild {
++                    body,
++                    list: self.list,
++                    row: self.row,
++                    inherited: inherited.clone(),
++                    part: FlowPart::Body {
++                        overlay: overlay.map(|overlay| overlay.id),
++                        width: None,
++                    },
++                },
++            });
++            let entry = Rc::new(RefCell::new(FlowEntry {
++                source,
++                ids,
++                observed: node.subtree_revision,
++                entity,
++                version,
++                painted: 0,
++                snapshot: None,
++            }));
++            cache.entries.insert(body, entry.clone());
++            entry
++        };
++        Some(FlowElement {
++            body,
++            scope: self.clone(),
++            entry,
++            epoch,
++            direct: None,
++            view: None,
++            capture: None,
++            valid: false,
++            cache_id: None,
++            overlay: None,
++        })
++    }
++}
++
++pub(crate) struct FlowElement {
++    body: u64,
++    scope: FlowScope,
++    entry: Rc<RefCell<FlowEntry>>,
++    epoch: u64,
++    direct: Option<AnyElement>,
++    view: Option<ViewElement<Entity<FlowView>>>,
++    capture: Option<ImageUseCapture>,
++    valid: bool,
++    cache_id: Option<GlobalElementId>,
++    overlay: Option<AnyElement>,
++}
++
++impl IntoElement for FlowElement {
++    type Element = Self;
++    fn into_element(self) -> Self {
++        self
++    }
++}
++
++impl Element for FlowElement {
++    type RequestLayoutState = Option<AnyElement>;
++    type PrepaintState = Option<AnyElement>;
++    fn id(&self) -> Option<ElementId> {
++        None
++    }
++    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
++        None
++    }
++    fn request_layout(
++        &mut self,
++        _id: Option<&GlobalElementId>,
++        inspector: Option<&InspectorElementId>,
++        window: &mut Window,
++        cx: &mut App,
++    ) -> (LayoutId, Self::RequestLayoutState) {
++        let (scope, entry) = (&self.scope, &self.entry);
++        let tree = scope.tree.lock().unwrap();
++        let state = entry.borrow();
++        self.valid = scope.cache.borrow().enabled
++            && scope.cache.borrow().epoch == self.epoch
++            && state.source.current(&tree, scope.available, state.observed)
++            && !window.is_a11y_active()
++            && !window.is_inspector_picking(cx);
++        if !self.valid {
++            let mut build = state.entity.read(cx).build.clone();
++            build.part = FlowPart::Body {
++                overlay: None,
++                width: None,
++            };
++            drop(state);
++            drop(tree);
++            entry.borrow_mut().snapshot = None;
++            let mut direct = scope
++                .root
++                .update(cx, |root, cx| root.build_flow_body(&build, window, cx))
++                .unwrap_or_else(|_| gpui::Empty.into_any_element());
++            let layout = direct.request_layout(window, cx);
++            self.direct = Some(direct);
++            return (layout, None);
++        }
++        // Own the cache state key without pushing it onto descendant element paths.
++        self.cache_id = Some(
++            window.global_element_id_for(ElementId::NamedInteger("cached-flow".into(), self.body)),
++        );
++        // Exact row space plus static column ancestry preserve the last actual body size.
++        // Dirty views/assets instead measure their intrinsic contents before parent layout.
++        let can_reuse = self.valid
++            && !window.is_view_cache_invalidated(state.entity.entity_id())
++            && state.painted.saturating_add(1) == self.epoch
++            && state.snapshot.as_ref().is_some_and(|snapshot| {
++                // Protect existing resources before another row can trim the cache.
++                snapshot.images.data_ready(cx)
++                    && scope
++                        .images
++                        .update(cx, |images, _| images.touch_uses(&snapshot.images))
++            });
++        let measured = can_reuse
++            .then(|| state.snapshot.as_ref().map(|snapshot| snapshot.bounds.size))
++            .flatten();
++        let entity = state.entity.clone();
++        drop(state);
++        drop(tree);
++        entity.update(cx, |view, _| {
++            if let FlowPart::Body { width, .. } = &mut view.build.part {
++                *width = measured.map(|size| size.width);
++            }
++        });
++        if measured.is_none() {
++            if let Some(version) = scope.cache.borrow_mut().version() {
++                let mut state = entry.borrow_mut();
++                state.version = version;
++                state.snapshot = None;
++            } else {
++                self.valid = false;
++            }
++        }
++        let version = entry.borrow().version;
++        let mut view = if let Some(measured) = measured {
++            entity
++                .cached(StyleRefinement {
++                    size: gpui::SizeRefinement {
++                        width: Some(measured.width.into()),
++                        height: Some(measured.height.into()),
++                    },
++                    min_size: gpui::SizeRefinement {
++                        width: Some(measured.width.into()),
++                        height: Some(measured.height.into()),
++                    },
++                    ..Default::default()
++                })
++                .cache_version(version)
++        } else {
++            entity.into_element()
++        };
++        let capture =
++            ImageUseCapture::new(scope.images.entity_id(), window.window_handle().window_id());
++        // Delegate manually: Drawable<ViewElement> would push the changing Entity ID.
++        let layout = capture.run(|| {
++            Element::request_layout(&mut view, self.cache_id.as_ref(), inspector, window, cx)
++        });
++        self.view = Some(view);
++        self.capture = Some(capture);
++        layout
++    }
++    fn prepaint(
++        &mut self,
++        _id: Option<&GlobalElementId>,
++        inspector: Option<&InspectorElementId>,
++        bounds: Bounds<Pixels>,
++        state: &mut Self::RequestLayoutState,
++        window: &mut Window,
++        cx: &mut App,
++    ) -> Self::PrepaintState {
++        if let Some(mut direct) = self.direct.take() {
++            direct.prepaint(window, cx);
++            return Some(direct);
++        }
++        let painted = match (&mut self.view, &self.capture) {
++            (Some(view), Some(capture)) => capture.run(|| {
++                Element::prepaint(
++                    view,
++                    self.cache_id.as_ref(),
++                    inspector,
++                    bounds,
++                    state,
++                    window,
++                    cx,
++                )
++            }),
++            _ => None,
++        };
++        {
++            let (scope, entry) = (&self.scope, &self.entry);
++            let state = entry.borrow();
++            if let Some(overlay) = state.source.overlay {
++                let mut build = state.entity.read(cx).build.clone();
++                build.part = FlowPart::Overlay {
++                    id: overlay.id,
++                    height: bounds.size.height,
++                };
++                drop(state);
++                let mut element = scope
++                    .root
++                    .update(cx, |root, cx| root.build_flow_body(&build, window, cx))
++                    .unwrap_or_else(|_| gpui::Empty.into_any_element());
++                // Re-enter only the original body div's namespace; no cache ID reaches children.
++                window.with_id(crate::renderer::host_element_id(self.body), |window| {
++                    let size = element.layout_as_root(
++                        Size {
++                            width: AvailableSpace::MaxContent,
++                            height: AvailableSpace::Definite(bounds.size.height),
++                        },
++                        window,
++                        cx,
++                    );
++                    element.prepaint_at(
++                        gpui::point(
++                            bounds.right() - px(overlay.right as f32) - size.width,
++                            bounds.top(),
++                        ),
++                        window,
++                        cx,
++                    );
++                });
++                self.overlay = Some(element);
++            }
++        }
++        painted
++    }
++    fn paint(
++        &mut self,
++        _id: Option<&GlobalElementId>,
++        inspector: Option<&InspectorElementId>,
++        bounds: Bounds<Pixels>,
++        state: &mut Self::RequestLayoutState,
++        painted: &mut Self::PrepaintState,
++        window: &mut Window,
++        cx: &mut App,
++    ) {
++        let Some(view) = self.view.as_mut() else {
++            if let Some(direct) = painted {
++                direct.paint(window, cx);
++            }
++            return;
++        };
++        let Some(capture) = &self.capture else {
++            return;
++        };
++        let window_id = window.window_handle().window_id();
++        let marker = text_paint_marker(window_id);
++        capture.run(|| {
++            Element::paint(
++                view,
++                self.cache_id.as_ref(),
++                inspector,
++                bounds,
++                state,
++                painted,
++                window,
++                cx,
++            )
++        });
++        // Only inline paint contributes to the reusable native effects and resource lease.
++        self.finish_snapshot(bounds, painted.is_some(), marker, window, cx);
++        if let Some(overlay) = self.overlay.as_mut() {
++            window.with_id(crate::renderer::host_element_id(self.body), |window| {
++                overlay.paint(window, cx)
++            });
++        }
++    }
++}
++
++impl FlowElement {
++    fn finish_snapshot(
++        &self,
++        bounds: Bounds<Pixels>,
++        fresh: bool,
++        marker: crate::text::paint::TextPaintMarker,
++        window: &mut Window,
++        cx: &mut App,
++    ) {
++        let (scope, entry) = (&self.scope, &self.entry);
++        let Some(capture) = &self.capture else {
++            return;
++        };
++        let window_id = window.window_handle().window_id();
++        let cache = scope.cache.borrow();
++        if !self.valid || !cache.enabled || cache.epoch != self.epoch {
++            return;
++        }
++        if fresh {
++            let Some(images) = capture.finish(cx) else {
++                entry.borrow_mut().snapshot = None;
++                return;
++            };
++            if !scope.images.read(cx).uses_current(&images) {
++                return;
++            }
++            let nodes = entry
++                .borrow()
++                .ids
++                .iter()
++                .filter_map(|id| automation::get_bounds(window_id, *id).map(|bounds| (*id, bounds)))
++                .collect();
++            let snapshot = Snapshot {
++                bounds,
++                text: text_paint_effects(window_id, marker),
++                nodes,
++                images,
++            };
++            let mut entry = entry.borrow_mut();
++            entry.snapshot = Some(snapshot);
++            entry.painted = self.epoch;
++        } else {
++            let mut entry = entry.borrow_mut();
++            if let Some(snapshot) = &entry.snapshot {
++                // Scene replay alone does not restore native selection/locator registries.
++                snapshot.text.replay(window_id);
++                automation::replay_bounds(window_id, &snapshot.nodes);
++                scope.images.update(cx, |images, _| {
++                    images.touch_uses(&snapshot.images);
++                });
++                scope.words.borrow_mut().touch_existing(&entry.ids);
++                entry.painted = self.epoch;
++            }
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use gpui::size;
++    fn fixture() -> RetainedTree {
++        let mut tree = RetainedTree::new();
++        for (id, kind) in [
++            (1, "virtual-list"),
++            (2, "div"),
++            (3, "div"),
++            (4, "div"),
++            (5, "text"),
++            (6, "text"),
++            (7, "img"),
++            (8, "svg"),
++        ] {
++            tree.create_element(id, kind.into());
++        }
++        for (a, b) in [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (4, 7), (4, 8)] {
++            tree.append_child(a, b);
++        }
++        tree.set_text(6, "abcdefghijklmnopqrstuvwxyzAB ".into());
++        tree.set_style(
++            2,
++            Arc::new(StyleDesc {
++                width: Some(DimensionValue::Percentage(1.)),
++                ..Default::default()
++            }),
++        );
++        tree.set_style(
++            3,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("column".into()),
++                padding: Some(12.),
++                ..Default::default()
++            }),
++        );
++        tree.set_style(
++            4,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                flex_wrap: Some("wrap".into()),
++                align_items: Some("center".into()),
++                row_gap: Some(2.),
++                ..Default::default()
++            }),
++        );
++        tree.set_custom_prop(7, "src".into(), serde_json::json!("/emote.webp"));
++        tree.set_custom_prop(8, "source".into(), serde_json::json!("<svg/>"));
++        tree.take_invalidation();
++        tree
++    }
++    fn source(tree: &RetainedTree) -> Source {
++        Source {
++            generation: tree.cache_revision().unwrap(),
++            body: 4,
++            row: 2,
++            list: 1,
++            revision: tree.elements[&4].subtree_revision,
++            style: tree.elements[&4].style.clone(),
++            overlay: None,
++            available: size(
++                AvailableSpace::Definite(px(180.)),
++                AvailableSpace::MinContent,
++            ),
++            selectable: true,
++            wash: gpui::hsla(0., 0., 0., 0.3),
++        }
++    }
++    #[test]
++    fn actual_compact_shape_includes_images_svg_and_layout_reporters() {
++        let mut tree = fixture();
++        tree.set_event_listener(7, "layout".into(), true);
++        tree.create_element(9, "div".into());
++        tree.append_child(4, 9);
++        tree.set_style(
++            9,
++            Arc::new(StyleDesc {
++                position: Some("absolute".into()),
++                left: Some(0.),
++                ..Default::default()
++            }),
++        );
++        assert!(candidate(&tree.elements[&4]));
++        let ids = eligible_ids(&tree, 4, 2).unwrap();
++        for id in 4..=9 {
++            assert!(ids.contains(&id));
++        }
++    }
++    #[test]
++    fn unsafe_geometry_keeps_the_candidate_for_raw_direct_fallback() {
++        let mut tree = fixture();
++        let mut style = tree.elements[&4].style.as_deref().unwrap().clone();
++        style.padding = Some(1.);
++        tree.set_style(4, Arc::new(style));
++        assert!(candidate(&tree.elements[&4]));
++        assert!(eligible_ids(&tree, 4, 2).is_none());
++    }
++    #[test]
++    fn horizontal_parent_branches_and_unstable_outside_images_fall_back() {
++        let mut tree = fixture();
++        tree.create_element(9, "img".into());
++        tree.append_child(3, 9);
++        assert!(eligible_ids(&tree, 4, 2).is_none());
++        tree.set_style(
++            9,
++            Arc::new(StyleDesc {
++                width: Some(DimensionValue::Pixels(16.)),
++                height: Some(DimensionValue::Pixels(16.)),
++                ..Default::default()
++            }),
++        );
++        assert!(eligible_ids(&tree, 4, 2).is_some());
++        tree.set_style(
++            3,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                ..Default::default()
++            }),
++        );
++        assert!(eligible_ids(&tree, 4, 2).is_none());
++    }
++    #[test]
++    fn custom_state_scroll_highlights_and_motion_are_never_cached() {
++        for variant in 0..4 {
++            let mut tree = fixture();
++            match variant {
++                0 => {
++                    tree.create_element(9, "input".into());
++                    tree.append_child(4, 9);
++                }
++                1 => tree.set_event_listener(7, "scrollChange".into(), true),
++                2 => tree.set_custom_prop(5, "highlight".into(), serde_json::json!({"query":"a"})),
++                _ => tree.set_custom_prop(7, "motion".into(), serde_json::json!({})),
++            }
++            assert!(eligible_ids(&tree, 4, 2).is_none());
++        }
++    }
++    #[test]
++    fn row_and_ancestor_background_changes_preserve_body_source() {
++        for id in [2, 3] {
++            let mut tree = fixture();
++            let saved = source(&tree);
++            let row_revision = tree.elements[&2].subtree_revision;
++            let mut style = tree.elements[&id].style.as_deref().unwrap().clone();
++            style.background_color = Some("#333333".into());
++            tree.set_style(id, Arc::new(style));
++            assert_ne!(tree.elements[&2].subtree_revision, row_revision);
++            assert!(saved.current(&tree, saved.available, saved.revision));
++            assert_eq!(
++                tree.take_invalidation(),
++                crate::retained_tree::Invalidation::PaintOnly
++            );
++            assert!(saved.current(&tree, saved.available, saved.revision));
++        }
++    }
++    #[test]
++    fn compact_sibling_action_hover_preserves_body_source() {
++        let mut tree = fixture();
++        tree.create_element(9, "div".into());
++        tree.append_child(3, 9);
++        tree.append_child(9, 4);
++        tree.set_style(
++            9,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("column".into()),
++                position: Some("relative".into()),
++                ..Default::default()
++            }),
++        );
++        tree.create_element(10, "div".into());
++        tree.append_child(9, 10);
++        tree.set_style(
++            10,
++            Arc::new(StyleDesc {
++                position: Some("absolute".into()),
++                ..Default::default()
++            }),
++        );
++        tree.take_invalidation();
++        let saved = source(&tree);
++        assert!(eligible_ids(&tree, 4, 2).is_some());
++        let mut style = tree.elements[&10].style.as_deref().unwrap().clone();
++        style.background_color = Some("#333333".into());
++        tree.set_style(10, Arc::new(style));
++        assert!(saved.current(&tree, saved.available, saved.revision));
++        assert_eq!(
++            tree.take_invalidation(),
++            crate::retained_tree::Invalidation::PaintOnly
++        );
++        assert!(saved.current(&tree, saved.available, saved.revision));
++    }
++    #[test]
++    fn full_ancestor_commits_are_detected_before_their_ui_commands() {
++        for variant in 0..3 {
++            let mut tree = fixture();
++            let saved = source(&tree);
++            match variant {
++                0 => tree.set_style(
++                    1,
++                    Arc::new(StyleDesc {
++                        opacity: Some(0.5),
++                        ..Default::default()
++                    }),
++                ),
++                1 => tree.set_style(
++                    1,
++                    Arc::new(StyleDesc {
++                        font_size: Some(18.),
++                        ..Default::default()
++                    }),
++                ),
++                _ => {
++                    tree.create_element(9, "div".into());
++                    tree.append_child(1, 9);
++                }
++            }
++            assert_eq!(tree.elements[&4].subtree_revision, saved.revision);
++            assert!(!saved.current(&tree, saved.available, saved.revision));
++            tree.take_invalidation();
++            assert!(!saved.current(&tree, saved.available, saved.revision));
++        }
++    }
++    fn overlay_fixture() -> RetainedTree {
++        let mut tree = fixture();
++        for (id, kind) in [(9, "div"), (10, "div"), (11, "svg")] {
++            tree.create_element(id, kind.into());
++        }
++        for (parent, child) in [(4, 9), (9, 10), (10, 11)] {
++            tree.append_child(parent, child);
++        }
++        tree.set_style(
++            9,
++            Arc::new(StyleDesc {
++                position: Some("absolute".into()),
++                top: Some(0.),
++                bottom: Some(0.),
++                right: Some(8.),
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                align_items: Some("center".into()),
++                gap: Some(2.),
++                user_select: Some("none".into()),
++                ..Default::default()
++            }),
++        );
++        tree.take_invalidation();
++        tree
++    }
++    fn split_source(tree: &RetainedTree) -> Source {
++        let mut source = source(tree);
++        let body = &tree.elements[&source.body];
++        source.overlay = split_overlay(tree, body);
++        source.revision = content_revision(tree, body, source.overlay);
++        source
++    }
++    #[test]
++    fn overlay_color_changes_preserve_inline_key_but_reject_saved_observation() {
++        let mut tree = overlay_fixture();
++        let before = split_source(&tree);
++        let observed = tree.elements[&4].subtree_revision;
++        assert_eq!(before.overlay.map(|overlay| overlay.id), Some(9));
++        let ids = inline_ids(&tree, eligible_ids(&tree, 4, 2).unwrap(), before.overlay);
++        assert!(ids.contains(&4) && ids.contains(&8));
++        assert!(!ids.contains(&9) && !ids.contains(&10) && !ids.contains(&11));
++        tree.set_style(
++            10,
++            Arc::new(StyleDesc {
++                background_color: Some("#333333".into()),
++                ..Default::default()
++            }),
++        );
++        assert!(before == split_source(&tree));
++        assert!(!before.current(&tree, before.available, observed));
++        assert!(before.current(&tree, before.available, tree.elements[&4].subtree_revision));
++    }
++    #[test]
++    fn inline_color_and_root_style_changes_invalidate_split_content() {
++        for root in [false, true] {
++            let mut tree = overlay_fixture();
++            let before = split_source(&tree);
++            let id = if root { 4 } else { 5 };
++            let mut style = tree.elements[&id]
++                .style
++                .as_deref()
++                .cloned()
++                .unwrap_or_default();
++            style.color = Some("#ff0000".into());
++            tree.set_style(id, Arc::new(style));
++            assert!(before != split_source(&tree));
++        }
++    }
++    #[test]
++    fn unknown_absolute_or_eventful_root_keeps_whole_body_policy() {
++        for variant in 0..4 {
++            let mut tree = overlay_fixture();
++            match variant {
++                0 => {
++                    let mut style = tree.elements[&9].style.as_deref().unwrap().clone();
++                    style.padding = Some(1.);
++                    tree.set_style(9, Arc::new(style));
++                }
++                1 => tree.set_event_listener(4, "mouseDown".into(), true),
++                2 => tree.set_custom_prop(4, "role".into(), serde_json::json!("group")),
++                _ => tree.set_text(4, "own text".into()),
++            }
++            tree.take_invalidation();
++            assert!(split_overlay(&tree, &tree.elements[&4]).is_none());
++            assert!(eligible_ids(&tree, 4, 2).is_some());
++            assert_eq!(
++                split_source(&tree).revision,
++                tree.elements[&4].subtree_revision
++            );
++        }
++    }
++    #[test]
++    fn changed_or_unknown_available_space_cannot_impose_old_height() {
++        let tree = fixture();
++        let saved = source(&tree);
++        assert!(saved.current(&tree, saved.available, saved.revision));
++        assert!(!saved.current(
++            &tree,
++            size(
++                AvailableSpace::Definite(px(100.)),
++                AvailableSpace::MinContent
++            ),
++            saved.revision
++        ));
++        for width in [
++            AvailableSpace::MinContent,
++            AvailableSpace::MaxContent,
++            AvailableSpace::Definite(px(0.)),
++        ] {
++            assert!(!cacheable_space(size(width, AvailableSpace::MinContent)));
++        }
++    }
++    #[test]
++    fn eviction_never_recycles_versions_and_exhaustion_disables_reuse() {
++        let mut cache = Flows::default();
++        let old = cache.version().unwrap();
++        cache.clear();
++        assert!(cache.version().unwrap() > old);
++        cache.token = u64::MAX;
++        cache.enabled = true;
++        assert!(cache.version().is_none());
++        assert!(!cache.enabled);
++    }
++    #[test]
++    fn oversized_outside_subtrees_fall_back_before_expanding_the_work_queue() {
++        let mut tree = fixture();
++        for (_, id) in (0..MAX_NODES).zip(100u64..) {
++            tree.create_element(id, "div".into());
++            tree.append_child(3, id);
++        }
++        assert!(candidate(&tree.elements[&4]));
++        assert!(eligible_ids(&tree, 4, 2).is_none());
++    }
++}
+--- a/packages/native/src/custom_elements/img.rs
++++ b/packages/native/src/custom_elements/img.rs
+@@ -179,7 +179,7 @@
+         &mut self,
+         ctx: CustomRenderContext,
+         window: &mut gpui::Window,
+-        _cx: &mut gpui::Context<crate::renderer::GpuixView>,
++        cx: &mut gpui::Context<crate::renderer::GpuixView>,
+     ) -> gpui::AnyElement {
+         use gpui::prelude::*;
+ 
+@@ -190,7 +190,15 @@
+         let el = match &self.source {
+             ImgSource::Path(path) => gpui::img(path.clone()),
+             ImgSource::Uri(uri) => gpui::img(uri.clone()),
+-            ImgSource::Data(image) => gpui::img(image.clone()),
++            ImgSource::Data(image) => {
++                crate::image_resources::capture_image_data(
++                    ctx.image_resources.entity_id(),
++                    image,
++                    window,
++                    cx,
++                );
++                gpui::img(image.clone())
++            }
+             ImgSource::Render(image) => gpui::img(image.clone()),
+             ImgSource::Empty => return img_fallback(&ctx, &self.alt, "img: no src"),
+             ImgSource::Invalid => return img_fallback(&ctx, &self.alt, "img: load failed"),
+@@ -353,8 +361,8 @@
+     bytes: Vec<u8>,
+     svg_renderer: gpui::SvgRenderer,
+ ) -> std::result::Result<std::sync::Arc<gpui::RenderImage>, String> {
+-    let format = sniff_image_format(&bytes)
+-        .ok_or_else(|| "unrecognized image format".to_string())?;
++    let format =
++        sniff_image_format(&bytes).ok_or_else(|| "unrecognized image format".to_string())?;
+     gpui::Image::from_bytes(format, bytes)
+         .to_image_data(svg_renderer)
+         .map_err(|error| error.to_string())
+--- a/packages/native/src/image_resources.rs
++++ b/packages/native/src/image_resources.rs
+@@ -7,11 +7,161 @@
+     App, AppContext as _, Asset as _, AssetLogger, Entity, ImageAssetLoader, ImageCache,
+     ImageCacheError, ImageLoadingTask, RenderImage, Resource, Task, WeakEntity, Window,
+ };
+-use std::cell::Cell;
++use std::cell::{Cell, RefCell};
+ use std::collections::{BTreeMap, HashMap};
+ use std::rc::Rc;
+ use std::sync::Arc;
+ 
++type CapturedDataImage = (Arc<gpui::Image>, Option<Arc<RenderImage>>);
++
++#[derive(Clone)]
++pub(crate) struct ImageUseCapture {
++    owner: gpui::EntityId,
++    window: gpui::WindowId,
++    managed: Rc<RefCell<ManagedCapture>>,
++    data: Rc<RefCell<Vec<CapturedDataImage>>>,
++}
++
++#[derive(Default)]
++struct ManagedCapture {
++    stamp: u64,
++    uses: HashMap<Resource, (Option<u64>, u64)>,
++}
++
++impl ManagedCapture {
++    fn record(&mut self, resource: &Resource, load: Option<u64>) {
++        self.stamp += 1;
++        // Later completion cannot upgrade a capture that saw a placeholder.
++        let load = match self.uses.get(resource) {
++            Some((previous, _)) if previous.is_none() || *previous != load => None,
++            _ => load,
++        };
++        self.uses.insert(resource.clone(), (load, self.stamp));
++    }
++    fn snapshot(&self) -> Option<Vec<(Resource, u64)>> {
++        let mut ordered = self
++            .uses
++            .iter()
++            .map(|(resource, (load, stamp))| Some((*stamp, resource.clone(), (*load)?)))
++            .collect::<Option<Vec<_>>>()?;
++        ordered.sort_by_key(|(stamp, _, _)| *stamp);
++        Some(
++            ordered
++                .into_iter()
++                .map(|(_, resource, load)| (resource, load))
++                .collect(),
++        )
++    }
++}
++
++pub(crate) struct ImageUses {
++    owner: gpui::EntityId,
++    managed: Vec<(Resource, u64)>,
++    data: Vec<(Arc<gpui::Image>, Arc<RenderImage>)>,
++}
++
++thread_local! {
++    static IMAGE_USE_CAPTURE: RefCell<Option<ImageUseCapture>> = const { RefCell::new(None) };
++}
++
++struct RestoreCapture(Option<ImageUseCapture>);
++impl Drop for RestoreCapture {
++    fn drop(&mut self) {
++        IMAGE_USE_CAPTURE.with(|active| *active.borrow_mut() = self.0.take());
++    }
++}
++
++impl ImageUseCapture {
++    pub(crate) fn new(owner: gpui::EntityId, window: gpui::WindowId) -> Self {
++        Self {
++            owner,
++            window,
++            managed: Default::default(),
++            data: Default::default(),
++        }
++    }
++
++    pub(crate) fn run<R>(&self, action: impl FnOnce() -> R) -> R {
++        let previous = IMAGE_USE_CAPTURE.with(|active| active.replace(Some(self.clone())));
++        let _restore = RestoreCapture(previous);
++        action()
++    }
++
++    pub(crate) fn finish(&self, cx: &App) -> Option<ImageUses> {
++        let managed = self.managed.borrow().snapshot()?;
++        let data = self
++            .data
++            .borrow()
++            .iter()
++            .map(|(data, rendered)| {
++                let rendered = rendered.as_ref()?;
++                match gpui::image_data_if_ready(data, cx) {
++                    Some(Ok(current)) if Arc::ptr_eq(rendered, &current) => {
++                        Some((data.clone(), current))
++                    }
++                    _ => None,
++                }
++            })
++            .collect::<Option<Vec<_>>>()?;
++        Some(ImageUses {
++            owner: self.owner,
++            managed,
++            data,
++        })
++    }
++}
++
++impl ImageUses {
++    pub(crate) fn data_ready(&self, cx: &App) -> bool {
++        self.data.iter().all(|(data, decoded)| {
++            matches!(gpui::image_data_if_ready(data, cx), Some(Ok(current)) if Arc::ptr_eq(decoded, &current))
++        })
++    }
++}
++
++pub(crate) fn capture_image_data(
++    owner: gpui::EntityId,
++    data: &Arc<gpui::Image>,
++    window: &Window,
++    cx: &App,
++) {
++    IMAGE_USE_CAPTURE.with(|active| {
++        if let Some(capture) = active.borrow().as_ref().filter(|capture| {
++            capture.owner == owner && capture.window == window.window_handle().window_id()
++        }) {
++            let ready = gpui::image_data_if_ready(data, cx).and_then(Result::ok);
++            let mut images = capture.data.borrow_mut();
++            if let Some((_, previous)) = images
++                .iter_mut()
++                .find(|(image, _)| Arc::ptr_eq(image, data))
++            {
++                if !matches!((&*previous, &ready), (Some(a), Some(b)) if Arc::ptr_eq(a, b)) {
++                    *previous = None;
++                }
++            } else {
++                images.push((data.clone(), ready));
++            }
++        }
++    });
++}
++
++fn capture_managed(
++    owner: gpui::EntityId,
++    window: gpui::WindowId,
++    resource: &Resource,
++    load: Option<u64>,
++) {
++    IMAGE_USE_CAPTURE.with(|active| {
++        if let Some(capture) = active
++            .borrow()
++            .as_ref()
++            .filter(|capture| capture.owner == owner && capture.window == window)
++        {
++            capture.managed.borrow_mut().record(resource, load);
++        }
++    });
++}
++
+ const MAX_ENTRIES: usize = 256;
+ const MAX_DECODED_BYTES: usize = 64 * 1024 * 1024;
+ 
+@@ -103,6 +253,12 @@
+         self.order.insert(self.stamp, resource.clone());
+     }
+ 
++    fn touch_captured(&mut self, uses: &[(Resource, u64)]) {
++        for (resource, _) in uses {
++            self.touch(resource);
++        }
++    }
++
+     fn set_bytes(&mut self, resource: &Resource, bytes: usize) {
+         if let Some(access) = self.entries.get_mut(resource) {
+             self.bytes -= access.bytes;
+@@ -207,6 +363,23 @@
+         }
+     }
+ 
++    pub(crate) fn uses_current(&self, uses: &ImageUses) -> bool {
++        self.weak.entity_id() == uses.owner
++            && uses.managed.iter().all(|(resource, load)| {
++                self.entries.get(resource).is_some_and(|entry| {
++                    entry.load == *load && matches!(entry.state, ImageState::Loaded(Ok(_)))
++                })
++            })
++    }
++
++    pub(crate) fn touch_uses(&mut self, uses: &ImageUses) -> bool {
++        if !self.uses_current(uses) {
++            return false;
++        }
++        self.budget.touch_captured(&uses.managed);
++        true
++    }
++
+     fn publish(&self) {
+         *self.stats.lock() = ImageResourceStats {
+             entries: self.entries.len() as f64,
+@@ -305,12 +478,25 @@
+         self.begin_frame(window, cx);
+         self.budget.touch(resource);
+         if let Some(entry) = self.entries.get(resource) {
++            let load = matches!(entry.state, ImageState::Loaded(Ok(_))).then_some(entry.load);
++            capture_managed(
++                self.weak.entity_id(),
++                window.window_handle().window_id(),
++                resource,
++                load,
++            );
+             return match &entry.state {
+                 ImageState::Loaded(result) => Some(result.clone()),
+                 ImageState::Loading(_) => None,
+             };
+         }
+ 
++        capture_managed(
++            self.weak.entity_id(),
++            window.window_handle().window_id(),
++            resource,
++            None,
++        );
+         self.decodes += 1;
+         self.loading += 1;
+         let load = self.decodes;
+@@ -471,4 +657,62 @@
+         let image = RenderImage::from_bgra(12, 8, vec![0; 12 * 8 * 4]).unwrap();
+         assert_eq!(decoded_bytes(&image), 12 * 8 * 4);
+     }
++    #[test]
++    fn pending_capture_prevents_replay_and_last_touch_order_is_preserved() {
++        let mut capture = ManagedCapture::default();
++        capture.record(&resource("a"), Some(1));
++        capture.record(&resource("b"), None);
++        assert!(capture.snapshot().is_none());
++        capture.record(&resource("b"), Some(2));
++        assert!(capture.snapshot().is_none());
++        let mut ready = ManagedCapture::default();
++        ready.record(&resource("a"), Some(1));
++        ready.record(&resource("b"), Some(2));
++        ready.record(&resource("a"), Some(1));
++        assert_eq!(
++            ready.snapshot().unwrap(),
++            [(resource("b"), 2), (resource("a"), 1)]
++        );
++        ready.record(&resource("a"), Some(3));
++        assert!(ready.snapshot().is_none());
++    }
++    #[test]
++    fn scoped_capture_restores_owner_after_a_nested_body() {
++        let window = gpui::WindowId::default();
++        let first = ImageUseCapture::new(1.into(), window);
++        let second = ImageUseCapture::new(2.into(), window);
++        first.run(|| {
++            capture_managed(1.into(), window, &resource("first"), Some(1));
++            second.run(|| {
++                capture_managed(1.into(), window, &resource("wrong-owner"), Some(9));
++                capture_managed(2.into(), window, &resource("second"), Some(2));
++            });
++            capture_managed(1.into(), window, &resource("last"), Some(3));
++        });
++        assert_eq!(
++            first.managed.borrow().snapshot().unwrap(),
++            [(resource("first"), 1), (resource("last"), 3)]
++        );
++        assert_eq!(
++            second.managed.borrow().snapshot().unwrap(),
++            [(resource("second"), 2)]
++        );
++    }
++    #[test]
++    fn cached_layout_touch_protects_existing_images_before_other_rows_trim() {
++        let mut budget = ResourceBudget::new(1, 100);
++        budget.begin_frame();
++        budget.touch(&resource("cached"));
++        budget.set_bytes(&resource("cached"), 10);
++        budget.begin_frame();
++        budget.touch(&resource("other"));
++        budget.set_bytes(&resource("other"), 10);
++        budget.begin_frame();
++        budget.touch_captured(&[(resource("cached"), 1)]);
++        assert_eq!(budget.evict_oldest(true), None);
++        budget.begin_frame();
++        assert_eq!(budget.evict_oldest(true), Some(resource("other")));
++        assert_eq!(budget.bytes, 10);
++        assert!(budget.entries.contains_key(&resource("cached")));
++    }
+ }
+--- a/packages/native/src/lib.rs
++++ b/packages/native/src/lib.rs
+@@ -15,6 +15,7 @@
+ #[cfg(target_os = "macos")]
+ mod app_menu;
+ mod automation;
++mod cached_flow;
+ mod color;
+ mod custom_elements;
+ mod diff;
+--- a/packages/native/src/plain_text_cache.rs
++++ b/packages/native/src/plain_text_cache.rs
+@@ -90,6 +90,16 @@
+         })
+     }
+ 
++    pub(crate) fn touch_existing(&mut self, ids: &[u64]) {
++        if self.enabled {
++            for id in ids {
++                if let Some(entry) = self.entries.get(id) {
++                    entry.borrow_mut().painted_epoch = self.epoch;
++                }
++            }
++        }
++    }
++
+     fn finish_frame(&mut self, epoch: u64) {
+         if self.epoch == epoch {
+             self.entries
+@@ -726,4 +736,18 @@
+         assert_eq!(cache.entries.len(), 1);
+         assert!(Rc::ptr_eq(&current_word, &cache.entries[&3]));
+     }
++    #[test]
++    fn flow_replay_only_marks_existing_words_in_the_current_epoch() {
++        let (tree, inherited, context) = fixture();
++        let word = cache_word(&tree, &inherited, &context);
++        let mut cache = context.cache.borrow_mut();
++        let token = cache.next_token;
++        cache.epoch += 1;
++        let epoch = cache.epoch;
++        cache.touch_existing(&[3, 999]);
++        cache.finish_frame(epoch);
++        assert_eq!(cache.entries.len(), 1);
++        assert_eq!(word.borrow().painted_epoch, epoch);
++        assert_eq!(cache.next_token, token);
++    }
+ }
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -35,6 +35,7 @@
+ use wasm_bindgen::JsCast as _;
+ 
+ use crate::accessibility::{apply_a11y_click, apply_accessibility};
++use crate::cached_flow::{FlowScope, Flows, SharedFlows};
+ use crate::custom_elements::{CustomElementRegistry, CustomRenderContext};
+ use crate::element_tree::EventPayload;
+ use crate::image_resources::{ImageResourceStats, ImageResources, SharedImageResourceStats};
+@@ -1406,6 +1407,9 @@
+     let word_cache = handle
+         .update(cx, |view, _, _| Rc::downgrade(&view.plain_text_cache))
+         .ok();
++    let flow_cache = handle
++        .update(cx, |view, _, _| Rc::downgrade(&view.flow_cache))
++        .ok();
+     let state = Arc::downgrade(&state);
+     let subscription = cx.on_window_closed(move |cx, closed| {
+         if closed != window_id {
+@@ -1414,6 +1418,9 @@
+         if let Some(cache) = word_cache.as_ref().and_then(std::rc::Weak::upgrade) {
+             cache.borrow_mut().clear();
+         }
++        if let Some(cache) = flow_cache.as_ref().and_then(std::rc::Weak::upgrade) {
++            cache.borrow_mut().clear();
++        }
+         if let Some(state) = state.upgrade() {
+             let mut state = state.lock();
+             state.open = false;
+@@ -4780,6 +4787,7 @@
+ pub(crate) struct GpuixView {
+     pending_invalidation: Invalidation,
+     plain_text_cache: SharedPlainTextCache,
++    flow_cache: SharedFlows,
+     window_id: Option<gpui::WindowId>,
+     pub(crate) tree: Arc<Mutex<RetainedTree>>,
+     pub(crate) event_callback: Option<EventCallback>,
+@@ -5107,6 +5115,7 @@
+         self.pending_invalidation.merge(kind);
+         if self.pending_invalidation == Invalidation::Full {
+             self.plain_text_cache.borrow_mut().clear();
++            self.flow_cache.borrow_mut().clear();
+         }
+     }
+ 
+@@ -5135,6 +5144,7 @@
+         Self {
+             pending_invalidation: Invalidation::None,
+             plain_text_cache: SharedPlainTextCache::default(),
++            flow_cache: SharedFlows::default(),
+             window_id: None,
+             tree,
+             event_callback,
+@@ -5316,15 +5326,19 @@
+ 
+     fn build_virtual_child(
+         &mut self,
+-        list_id: u64,
+-        index: usize,
+-        expected_child_id: u64,
++        row: VirtualRow,
+         inherited: Inherited,
+         window: &mut gpui::Window,
+         cx: &mut gpui::Context<Self>,
+     ) -> gpui::AnyElement {
+         use gpui::prelude::*;
+ 
++        let VirtualRow {
++            list_id,
++            index,
++            child_id: expected_child_id,
++            available,
++        } = row;
+         let row_focus_handle = self.virtual_lists.get_mut(&list_id).and_then(|entry| {
+             entry.seen_rows.insert(expected_child_id);
+             (entry.child_at(index) == Some(expected_child_id))
+@@ -5356,6 +5370,7 @@
+             sync_motion_states(&tree, &mut self.motion_states, now);
+         if motion_active {
+             self.plain_text_cache.borrow_mut().clear();
++            self.flow_cache.borrow_mut().clear();
+         }
+         let mut highlight_events = Vec::new();
+ 
+@@ -5403,6 +5418,18 @@
+                 expected_child_id,
+             ),
+             skip_cached_text: None,
++            skip_flow_overlay: None,
++            flow_root_style: None,
++            flow_scope: Some(FlowScope {
++                cache: self.flow_cache.clone(),
++                root: cx.weak_entity(),
++                tree: tree_arc.clone(),
++                images: image_resources.clone(),
++                words: self.plain_text_cache.clone(),
++                list: list_id,
++                row: expected_child_id,
++                available,
++            }),
+             highlights: &mut self.highlights,
+             paint_reports: &self.paint_reports,
+             highlight_events: &mut highlight_events,
+@@ -5455,6 +5482,68 @@
+             inherited,
+             plain_text_cache: None,
+             skip_cached_text: Some(id),
++            skip_flow_overlay: None,
++            flow_root_style: None,
++            flow_scope: None,
++            highlights: &mut self.highlights,
++            paint_reports: &self.paint_reports,
++            highlight_events: &mut highlight_events,
++            keyboard_focus,
++        };
++        let word = build_element(id, &mut ctx, window, cx);
++        emit_highlight_events(&callback, &highlight_events);
++        word
++    }
++
++    pub(crate) fn build_flow_body(
++        &mut self,
++        request: &crate::cached_flow::FlowBuild,
++        window: &mut gpui::Window,
++        cx: &mut gpui::Context<Self>,
++    ) -> gpui::AnyElement {
++        use gpui::IntoElement;
++        let (id, skip_overlay, root_style) = match request.part {
++            crate::cached_flow::FlowPart::Body { overlay, width } => (
++                request.body,
++                overlay,
++                width.map(|width| (request.body, FlowRootStyle::Body { width })),
++            ),
++            crate::cached_flow::FlowPart::Overlay { id, height } => {
++                (id, None, Some((id, FlowRootStyle::Overlay { height })))
++            }
++        };
++        let tree_arc = self.tree.clone();
++        let tree = tree_arc.lock().unwrap();
++        if !virtual_child_is_mounted(&tree, request.list, request.row)
++            || !tree.elements.contains_key(&id)
++        {
++            return gpui::Empty.into_any_element();
++        }
++        let callback = self.event_callback.clone();
++        let image_resources = self.image_resources(cx);
++        let mut highlight_events = Vec::new();
++        let keyboard_focus = self.keyboard_focus_path(&tree, window, cx);
++        let mut ctx = BuildCtx {
++            tree: &tree,
++            event_callback: &callback,
++            focus_handles: &self.focus_handles,
++            scroll_handles: &mut self.scroll_handles,
++            custom_registry: &mut self.custom_registry,
++            image_resources: &image_resources,
++            virtual_lists: &mut self.virtual_lists,
++            motion_states: &mut self.motion_states,
++            now: self.clock.now(),
++            selection: self.selection.clone(),
++            inherited: request.inherited.clone(),
++            plain_text_cache: PlainTextCache::context(
++                &self.plain_text_cache,
++                request.list,
++                request.row,
++            ),
++            skip_cached_text: None,
++            skip_flow_overlay: skip_overlay,
++            flow_root_style: root_style,
++            flow_scope: None,
+             highlights: &mut self.highlights,
+             paint_reports: &self.paint_reports,
+             highlight_events: &mut highlight_events,
+@@ -5551,6 +5640,12 @@
+     }
+ }
+ 
++#[derive(Clone, Copy)]
++enum FlowRootStyle {
++    Body { width: gpui::Pixels },
++    Overlay { height: gpui::Pixels },
++}
++
+ /// Everything `build_element` threads through the tree.
+ ///
+ /// Split into a struct because the recursion needs eight-plus shared references
+@@ -5573,6 +5668,9 @@
+     pub inherited: Inherited,
+     plain_text_cache: Option<PlainTextCacheContext>,
+     skip_cached_text: Option<u64>,
++    skip_flow_overlay: Option<u64>,
++    flow_root_style: Option<(u64, FlowRootStyle)>,
++    flow_scope: Option<FlowScope>,
+     /// Persistent `highlight` caches, keyed by the declaring element.
+     highlights: &'a mut HashMap<u64, HighlightCacheEntry>,
+     paint_reports: &'a SharedPaintReports,
+@@ -5694,6 +5792,13 @@
+         .unwrap_or(0)
+ }
+ 
++struct VirtualRow {
++    list_id: u64,
++    index: usize,
++    child_id: u64,
++    available: gpui::Size<gpui::AvailableSpace>,
++}
++
+ #[derive(Clone, Copy, PartialEq)]
+ struct VirtualListConfig {
+     alignment: gpui::ListAlignment,
+@@ -6558,6 +6663,17 @@
+         let now = self.clock.now();
+         let (motion_active, motion_settled) =
+             sync_motion_states(&tree, &mut self.motion_states, now);
++        self.flow_cache.borrow_mut().begin(
++            self.pending_invalidation,
++            &tree,
++            self.selection.lock().identity(),
++            !motion_active
++                && tree.geometry_refinement_ids.is_empty()
++                && !window.is_a11y_active()
++                && !window.is_inspector_picking(cx),
++            window,
++            cx,
++        );
+         let cache_enabled = self.plain_text_cache.borrow_mut().begin_frame(
+             std::mem::take(&mut self.pending_invalidation),
+             tree.cache_revision(),
+@@ -6592,6 +6708,9 @@
+                     inherited: Inherited::root(&theme),
+                     plain_text_cache: None,
+                     skip_cached_text: None,
++                    skip_flow_overlay: None,
++                    flow_root_style: None,
++                    flow_scope: None,
+                     highlights: &mut self.highlights,
+                     paint_reports: &self.paint_reports,
+                     highlight_events: &mut highlight_events,
+@@ -6646,6 +6765,7 @@
+                 ))
+                 .child(crate::automation::bounds_frame_reset())
+                 .child(result)
++                .child(Flows::finish(self.flow_cache.clone()))
+                 .when(cache_enabled, |root| {
+                     root.child(PlainTextCache::finish(self.plain_text_cache.clone()))
+                 })
+@@ -6698,6 +6818,20 @@
+         return gpui::Empty.into_any_element();
+     };
+ 
++    if let Some(scope) = ctx
++        .flow_scope
++        .as_ref()
++        .filter(|_| crate::cached_flow::candidate(element))
++    {
++        if let Some(flow) = scope.prepare(tree, id, &ctx.inherited, window, cx) {
++            return flow.into_any_element();
++        }
++        let previous = ctx.flow_scope.take();
++        let child = build_element(id, ctx, window, cx);
++        ctx.flow_scope = previous;
++        return child;
++    }
++
+     if ctx.skip_cached_text != Some(id)
+         && element.element_type == "text"
+         && element.content.is_none()
+@@ -6737,7 +6871,32 @@
+     } else {
+         None
+     };
+-    let style = animated_style.as_ref().or(element.style.as_deref());
++    let flow_style = ctx
++        .flow_root_style
++        .filter(|(root, _)| *root == id)
++        .map(|(_, root_style)| {
++            let mut style = element.style.as_deref().cloned().unwrap_or_default();
++            match root_style {
++                FlowRootStyle::Body { width } => {
++                    // Cached misses are laid out as roots, so preserve the original child stretch.
++                    style.width = Some(crate::style::DimensionValue::Pixels(f64::from(width)));
++                    style.min_width = Some(crate::style::DimensionValue::Pixels(0.));
++                }
++                FlowRootStyle::Overlay { height } => {
++                    style.position = Some("relative".into());
++                    style.top = None;
++                    style.bottom = None;
++                    style.left = None;
++                    style.right = None;
++                    style.height = Some(crate::style::DimensionValue::Pixels(f64::from(height)));
++                }
++            }
++            style
++        });
++    let style = flow_style
++        .as_ref()
++        .or(animated_style.as_ref())
++        .or(element.style.as_deref());
+ 
+     // Inheritable style resolves once here so both built-ins and custom
+     // elements see the same cascade.
+@@ -6932,23 +7091,37 @@
+     // Cloned, not copied: gpui runs this processor once per requested row, so
+     // the captured value must survive every call.
+     let inherited = ctx.inherited.clone();
+-    let render_item = cx.processor(move |view, index: usize, window, cx| {
+-        let Some(entry) = view.virtual_lists.get(&list_id) else {
+-            return unmounted_virtual_row(1.0);
+-        };
+-        let Some(child_id) = entry.child_at(index) else {
+-            // Empty measures as 0 and poisons ListState. Keep the estimate.
+-            return unmounted_virtual_row(entry.config.estimated_item_height.unwrap_or(1.0));
+-        };
+-        view.build_virtual_child(list_id, index, child_id, inherited.clone(), window, cx)
+-    });
++    let render_item = cx.processor(
++        move |view, (index, space): (usize, gpui::Size<gpui::AvailableSpace>), window, cx| {
++            let Some(entry) = view.virtual_lists.get(&list_id) else {
++                return unmounted_virtual_row(1.0);
++            };
++            let Some(child_id) = entry.child_at(index) else {
++                // Empty measures as 0 and poisons ListState. Keep the estimate.
++                return unmounted_virtual_row(entry.config.estimated_item_height.unwrap_or(1.0));
++            };
++            view.build_virtual_child(
++                VirtualRow {
++                    list_id,
++                    index,
++                    child_id,
++                    available: space,
++                },
++                inherited.clone(),
++                window,
++                cx,
++            )
++        },
++    );
+     let scroll_state = list_state.clone();
+-    let mut list = gpui::list(list_state, render_item)
+-        .with_sizing_behavior(gpui::ListSizingBehavior::Auto)
+-        .id(gpui::ElementId::Name(gpui::SharedString::from(format!(
+-            "__gpuix_virtual_list_{}",
+-            element.id
+-        ))));
++    let mut list = gpui::list_with_available_space(list_state, move |index, space, window, cx| {
++        render_item((index, space), window, cx)
++    })
++    .with_sizing_behavior(gpui::ListSizingBehavior::Auto)
++    .id(gpui::ElementId::Name(gpui::SharedString::from(format!(
++        "__gpuix_virtual_list_{}",
++        element.id
++    ))));
+     if let Some(style) = element.style.as_deref() {
+         list = apply_styles(list, style);
+     }
+@@ -7117,6 +7290,10 @@
+     (!joined.is_empty()).then_some(joined)
+ }
+ 
++pub(crate) fn host_element_id(id: u64) -> gpui::ElementId {
++    gpui::ElementId::Integer(id)
++}
++
+ /// The one builder for `<div>` and `<text>`.
+ ///
+ /// Both get the same stable GPUI id, so gpui keeps their interactive element
+@@ -7142,7 +7319,7 @@
+     // unique per renderer, and every `<div>` and `<text>` builds one of these on
+     // every frame, so the string allocation was pure overhead. Custom elements
+     // use `ElementId::Name`, which is a different variant and cannot collide.
+-    let mut el = gpui::div().id(gpui::ElementId::Integer(element.id));
++    let mut el = gpui::div().id(host_element_id(element.id));
+ 
+     if let Some(style) = style {
+         el = apply_interactive_styles(el, style);
+@@ -7490,6 +7667,9 @@
+ 
+     // Children
+     for &child_id in &element.children {
++        if ctx.skip_flow_overlay == Some(child_id) {
++            continue;
++        }
+         let child = build_element(child_id, ctx, window, cx);
+         el = if overflow_x_only {
+             el.child(gpui::div().flex_none().child(child))

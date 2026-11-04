@@ -1,0 +1,199 @@
+--- a/crates/gpui/src/elements/list.rs
++++ b/crates/gpui/src/elements/list.rs
+@@ -18,12 +18,25 @@
+ use std::{cell::RefCell, ops::Range, rc::Rc};
+ use sum_tree::{Bias, Dimensions, SumTree};
+ 
+-type RenderItemFn = dyn FnMut(usize, &mut Window, &mut App) -> AnyElement + 'static;
++type RenderItemFn =
++    dyn FnMut(usize, Size<AvailableSpace>, &mut Window, &mut App) -> AnyElement + 'static;
+ 
+ /// Construct a new list element
+ pub fn list(
+     state: ListState,
+-    render_item: impl FnMut(usize, &mut Window, &mut App) -> AnyElement + 'static,
++    mut render_item: impl FnMut(usize, &mut Window, &mut App) -> AnyElement + 'static,
++) -> List {
++    list_with_available_space(state, move |index, _, window, cx| {
++        render_item(index, window, cx)
++    })
++}
++
++/// Construct a list whose item callback receives the space used to measure that item.
++/// Width is definite after layout, or max-content during inferred sizing;
++/// height is min-content. The space belongs to this measurement, not the previous frame.
++pub fn list_with_available_space(
++    state: ListState,
++    render_item: impl FnMut(usize, Size<AvailableSpace>, &mut Window, &mut App) -> AnyElement + 'static,
+ ) -> List {
+     List {
+         state,
+@@ -1078,7 +1091,7 @@
+ 
+         for (ix, item) in cursor.enumerate() {
+             let size = item.size().unwrap_or_else(|| {
+-                let mut element = render_item(ix, window, cx);
++                let mut element = render_item(ix, available_item_space, window, cx);
+                 element.layout_as_root(available_item_space, window, cx)
+             });
+ 
+@@ -1137,7 +1150,8 @@
+                     break;
+                 };
+                 let size = item.size().unwrap_or_else(|| {
+-                    let mut element = render_item(cursor.start().0, window, cx);
++                    let mut element =
++                        render_item(cursor.start().0, available_item_space, window, cx);
+                     element.layout_as_root(available_item_space, window, cx)
+                 });
+                 scroll_top.item_ix = cursor.start().0;
+@@ -1163,7 +1177,7 @@
+             // If we're within the visible area or the height wasn't cached, render and measure the item's element
+             if visible_height < available_height || size.is_none() {
+                 let item_index = scroll_top.item_ix + ix;
+-                let mut element = render_item(item_index, window, cx);
++                let mut element = render_item(item_index, available_item_space, window, cx);
+                 let element_size = element.layout_as_root(available_item_space, window, cx);
+                 size = Some(element_size);
+ 
+@@ -1224,7 +1238,7 @@
+                 cursor.prev();
+                 if let Some(item) = cursor.item() {
+                     let item_index = cursor.start().0;
+-                    let mut element = render_item(item_index, window, cx);
++                    let mut element = render_item(item_index, available_item_space, window, cx);
+                     let element_size = element.layout_as_root(available_item_space, window, cx);
+                     let focus_handle = item.focus_handle();
+                     rendered_height += element_size.height;
+@@ -1273,7 +1287,8 @@
+                 let size = if let ListItem::Measured { size, .. } = item {
+                     *size
+                 } else {
+-                    let mut element = render_item(cursor.start().0, window, cx);
++                    let mut element =
++                        render_item(cursor.start().0, available_item_space, window, cx);
+                     element.layout_as_root(available_item_space, window, cx)
+                 };
+ 
+@@ -1318,7 +1333,8 @@
+             while let Some(item) = cursor.item() {
+                 if item.contains_focused(window, cx) {
+                     let item_index = cursor.start().0;
+-                    let mut element = render_item(cursor.start().0, window, cx);
++                    let mut element =
++                        render_item(cursor.start().0, available_item_space, window, cx);
+                     let size = element.layout_as_root(available_item_space, window, cx);
+                     item_layouts.push_back(ItemLayout {
+                         index: item_index,
+@@ -1399,9 +1415,14 @@
+                                         break;
+                                     };
+                                     let size = prev_item.size().unwrap_or_else(|| {
+-                                        let mut element = render_item(cursor.start().0, window, cx);
+                                         let item_available_size =
+                                             size(content_width.into(), AvailableSpace::MinContent);
++                                        let mut element = render_item(
++                                            cursor.start().0,
++                                            item_available_size,
++                                            window,
++                                            cx,
++                                        );
+                                         element.layout_as_root(item_available_size, window, cx)
+                                     });
+                                     item_ix = cursor.start().0;
+@@ -1427,9 +1448,14 @@
+                                 let Some(item) = cursor.item() else { break };
+ 
+                                 let size = item.size().unwrap_or_else(|| {
+-                                    let mut item = render_item(cursor.start().0, window, cx);
+                                     let item_available_size =
+                                         size(content_width.into(), AvailableSpace::MinContent);
++                                    let mut item = render_item(
++                                        cursor.start().0,
++                                        item_available_size,
++                                        window,
++                                        cx,
++                                    );
+                                     item.layout_as_root(item_available_size, window, cx)
+                                 });
+                                 height -= size.height;
+@@ -3215,3 +3241,79 @@
+         assert_eq!(state.scroll_px_offset_for_scrollbar().y, px(-3200.));
+     }
+ }
++
++#[cfg(test)]
++mod available_space_tests {
++    use super::*;
++    use crate::{self as gpui, AppContext as _, Context, Render, TestAppContext, div};
++
++    struct AvailableSpaceView {
++        state: ListState,
++        sizing_behavior: ListSizingBehavior,
++        observed: Rc<RefCell<Vec<Size<AvailableSpace>>>>,
++    }
++
++    impl Render for AvailableSpaceView {
++        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
++            let observed = self.observed.clone();
++            list_with_available_space(self.state.clone(), move |_, available_space, _, _| {
++                observed.borrow_mut().push(available_space);
++                div().w(px(40.)).h(px(20.)).into_any_element()
++            })
++            .with_sizing_behavior(self.sizing_behavior)
++            .w_full()
++            .h_full()
++            .px(px(7.))
++        }
++    }
++
++    #[gpui::test]
++    fn item_callback_receives_current_measurement_space(cx: &mut TestAppContext) {
++        let cx = cx.add_empty_window();
++        let state = ListState::new(5, ListAlignment::Top, px(20.));
++        let observed = Rc::new(RefCell::new(Vec::new()));
++
++        for width in [px(100.), px(180.)] {
++            observed.borrow_mut().clear();
++            cx.draw(point(px(0.), px(0.)), size(width, px(60.)), |_, cx| {
++                cx.new(|_| AvailableSpaceView {
++                    state: state.clone(),
++                    sizing_behavior: ListSizingBehavior::Auto,
++                    observed: observed.clone(),
++                })
++                .into_any_element()
++            });
++            let observed = observed.borrow();
++            assert!(!observed.is_empty());
++            assert!(observed.iter().all(|space| {
++                *space
++                    == size(
++                        AvailableSpace::Definite(width - px(14.)),
++                        AvailableSpace::MinContent,
++                    )
++            }));
++        }
++
++        observed.borrow_mut().clear();
++        cx.draw(point(px(0.), px(0.)), size(px(100.), px(60.)), |_, cx| {
++            cx.new(|_| AvailableSpaceView {
++                state: ListState::new(5, ListAlignment::Top, px(20.)),
++                sizing_behavior: ListSizingBehavior::Infer,
++                observed: observed.clone(),
++            })
++            .into_any_element()
++        });
++        let observed = observed.borrow();
++        assert_eq!(
++            observed.first(),
++            Some(&size(
++                AvailableSpace::MaxContent,
++                AvailableSpace::MinContent
++            )),
++        );
++        assert!(observed.contains(&size(
++            AvailableSpace::Definite(px(86.)),
++            AvailableSpace::MinContent,
++        )));
++    }
++}

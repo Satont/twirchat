@@ -1,0 +1,141 @@
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -2906,6 +2906,19 @@
+         self.rem_size = rem_size.into();
+     }
+ 
++    /// Derive an owned identifier for a child in the current element scope.
++    /// This does not enter that scope or change descendant identifiers. Reuse
++    /// the key for persistent state only where the same ancestor scope applies.
++    pub fn global_element_id_for(&self, element_id: ElementId) -> GlobalElementId {
++        GlobalElementId(
++            self.element_id_stack
++                .iter()
++                .cloned()
++                .chain(std::iter::once(element_id))
++                .collect(),
++        )
++    }
++
+     /// Acquire a globally unique identifier for the given ElementId.
+     /// Only valid for the duration of the provided closure.
+     pub fn with_global_id<R>(
+@@ -7489,6 +7502,118 @@
+         WindowOptions, canvas, div, point, px, size,
+     };
+ 
++    #[gpui::test]
++    fn owned_global_element_ids_preserve_ancestor_scopes(cx: &mut TestAppContext) {
++        cx.add_empty_window().update(|window, _| {
++            let initial_stack = window.element_id_stack.clone();
++            let parent = window.global_element_id_for("identity-parent".into());
++            assert_eq!(
++                parent,
++                window.with_global_id("identity-parent".into(), |id, _| id.clone())
++            );
++            let (child, grandchild) = window.with_id("identity-parent", |window| {
++                let child = window.global_element_id_for("identity-child".into());
++                assert_eq!(child, window.global_element_id_for("identity-child".into()));
++                assert_eq!(
++                    child,
++                    window.with_global_id("identity-child".into(), |id, _| id.clone())
++                );
++                let grandchild = window.with_id("identity-child", |window| {
++                    let key = window.global_element_id_for("identity-grandchild".into());
++                    assert_eq!(
++                        key,
++                        window.with_global_id("identity-grandchild".into(), |id, _| id.clone())
++                    );
++                    key
++                });
++                (child, grandchild)
++            });
++            assert_ne!(parent, child);
++            assert_ne!(child, grandchild);
++            assert_ne!(parent, grandchild);
++            assert_ne!(
++                child,
++                window.with_id("another-parent", |window| {
++                    window.global_element_id_for("identity-child".into())
++                })
++            );
++            assert_eq!(window.element_id_stack, initial_stack);
++            assert_eq!(
++                parent,
++                window.global_element_id_for("identity-parent".into())
++            );
++        });
++    }
++
++    #[gpui::test]
++    fn owned_cache_key_keeps_painted_descendant_state_ids(cx: &mut TestAppContext) {
++        let window = cx.add_empty_window();
++        window.draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, _| {
++            div()
++                .id("identity-parent")
++                .size_full()
++                .child(
++                    canvas(
++                        |_, _, _| (),
++                        |_, _, window, _| {
++                            let current_stack = window.element_id_stack.clone();
++                            let key = window.global_element_id_for("owned-cache".into());
++                            window.with_element_state(&key, |previous: Option<usize>, _| {
++                                ((), previous.unwrap_or_default() + 1)
++                            });
++                            assert_eq!(window.element_id_stack, current_stack);
++                        },
++                    )
++                    .size(px(1.)),
++                )
++                .child(
++                    div().id("identity-child").size(px(20.)).child(
++                        div().id("identity-grandchild").size(px(10.)).child(
++                            canvas(
++                                |_, _, _| (),
++                                |_, _, window, _| {
++                                    assert_eq!(
++                                        window.element_id_stack.as_slice(),
++                                        &[
++                                            super::ElementId::from("identity-parent"),
++                                            super::ElementId::from("identity-child"),
++                                            super::ElementId::from("identity-grandchild"),
++                                        ]
++                                    );
++                                },
++                            )
++                            .size(px(1.)),
++                        ),
++                    ),
++                )
++        });
++        window.update(|window, _| {
++            let (cache, child, grandchild) =
++                window.with_global_id("identity-parent".into(), |_, window| {
++                    let cache = window.with_global_id("owned-cache".into(), |id, _| id.clone());
++                    let (child, grandchild) =
++                        window.with_global_id("identity-child".into(), |id, window| {
++                            (
++                                id.clone(),
++                                window.with_global_id("identity-grandchild".into(), |id, _| {
++                                    id.clone()
++                                }),
++                            )
++                        });
++                    (cache, child, grandchild)
++                });
++            for expected in [&cache, &child, &grandchild] {
++                assert!(
++                    window
++                        .rendered_frame
++                        .element_states
++                        .keys()
++                        .any(|(id, _)| id == expected)
++                );
++            }
++        });
++    }
++
+     struct EmptyView;
+ 
+     impl Render for EmptyView {

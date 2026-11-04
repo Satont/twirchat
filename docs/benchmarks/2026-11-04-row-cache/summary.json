@@ -1,0 +1,1583 @@
+{
+  "status": "Resource14 complete, registered original/balanced/pooled evidence retained; final15 one-test-line reuse proven;373native/1206project/fivefocusedGUI passed. No claim of spike elimination or≤2%CPU.",
+  "production": {
+    "baseline": {
+      "cpuPercent": [
+        81.10160187643574,
+        80.9063199831631,
+        81.8099994883593
+      ],
+      "rssMedianMiB": [
+        489.21484375,
+        487.12109375,
+        492.98046875
+      ],
+      "rssPeakMiB": [
+        621.7734375,
+        586.48046875,
+        641.3046875
+      ],
+      "jsHeapPeakMiB": [
+        217.70982933044434,
+        217.0283145904541,
+        246.571626663208
+      ],
+      "lagP95Ms": [
+        1.2874769999980344,
+        1.1223589999999604,
+        1.2914789999995264
+      ],
+      "lagMaxMs": [
+        10.198958000000857,
+        8.487981999999647,
+        10.217961999998806
+      ],
+      "achievedRate": [
+        4996.447521279055,
+        4995.147503948802,
+        4996.713117464845
+      ],
+      "offeredRateFraction": [
+        0.999289504255811,
+        0.9990295007897605,
+        0.999342623492969
+      ],
+      "processedMessages": [
+        149894,
+        149855,
+        149902
+      ],
+      "processedAfterDrain": [
+        149955,
+        149902,
+        149995
+      ],
+      "timingEntries": [
+        0,
+        0,
+        0
+      ]
+    },
+    "final14": {
+      "cpuPercent": [
+        80.24328862500496,
+        79.65055235376633,
+        80.52813484037212
+      ],
+      "rssMedianMiB": [
+        492.44140625,
+        491.2265625,
+        501.74609375
+      ],
+      "rssPeakMiB": [
+        592.8203125,
+        592.7109375,
+        599.45703125
+      ],
+      "jsHeapPeakMiB": [
+        226.7269582748413,
+        225.1586627960205,
+        233.7138900756836
+      ],
+      "lagP95Ms": [
+        1.2592269999986456,
+        1.1184370000009949,
+        1.2881170000000566
+      ],
+      "lagMaxMs": [
+        8.62225000000035,
+        7.4323309999999765,
+        9.296484000002238
+      ],
+      "achievedRate": [
+        4996.611078310605,
+        4995.347581441696,
+        4996.70405173975
+      ],
+      "offeredRateFraction": [
+        0.999322215662121,
+        0.9990695162883392,
+        0.99934081034795
+      ],
+      "processedMessages": [
+        149901,
+        149861,
+        149908
+      ],
+      "processedAfterDrain": [
+        149908,
+        149901,
+        149961
+      ],
+      "timingEntries": [
+        0,
+        0,
+        0
+      ]
+    },
+    "rejected13": {
+      "cpuPercent": [
+        87.86139761493304,
+        87.054994281993,
+        88.52229051681161
+      ],
+      "rssMedianMiB": [
+        497.91796875,
+        492.37109375,
+        498.30859375
+      ],
+      "rssPeakMiB": [
+        595.09765625,
+        572.9296875,
+        628.42578125
+      ],
+      "jsHeapPeakMiB": [
+        239.7608985900879,
+        222.52707195281982,
+        240.0725498199463
+      ],
+      "lagP95Ms": [
+        1.3632629999992787,
+        1.2022369999976945,
+        1.3816059999990102
+      ],
+      "lagMaxMs": [
+        9.669074999999793,
+        9.081052000001364,
+        9.87414600000011
+      ],
+      "achievedRate": [
+        4995.880910739041,
+        4993.980932481402,
+        4996.245812836269
+      ],
+      "offeredRateFraction": [
+        0.9991761821478081,
+        0.9987961864962804,
+        0.9992491625672537
+      ],
+      "processedMessages": [
+        149877,
+        149820,
+        149888
+      ],
+      "processedAfterDrain": [
+        149978,
+        149920,
+        149988
+      ],
+      "timingEntries": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "productionDeltaPercent": {
+    "cpuPercent": -1.0583184938054324,
+    "rssMedianMiB": 0.6595389615055902,
+    "rssPeakMiB": -4.656539384572856,
+    "jsHeapPeakMiB": 4.14181067163053,
+    "lagP95Ms": -2.194213954845947,
+    "lagMaxMs": -15.459500862738873,
+    "achievedRate": 0.00327346641495474,
+    "offeredRateFraction": 0.00327346641495474,
+    "processedMessages": 0.00466996677652709,
+    "processedAfterDrain": -0.031342736154182926,
+    "timingEntries": null
+  },
+  "rejected13DeltaPercent": {
+    "cpuPercent": 8.33497191436039,
+    "rssMedianMiB": 1.7789985547632892,
+    "rssPeakMiB": -4.290273537135459,
+    "jsHeapPeakMiB": 10.12865120856532,
+    "lagP95Ms": 5.886396417284345,
+    "lagMaxMs": -5.195462124670181,
+    "achievedRate": -0.011340268012438592,
+    "offeredRateFraction": -0.011340268012449695,
+    "processedMessages": -0.011341347885840403,
+    "processedAfterDrain": 0.015337934713754997,
+    "timingEntries": null
+  },
+  "motion": {
+    "baseline": {
+      "cpuPercent": [
+        28.63209701177865,
+        27.569971849521714,
+        28.734920005971464
+      ],
+      "rssMedianMiB": [
+        368.453125,
+        368.12890625,
+        369.203125
+      ],
+      "rssPeakMiB": [
+        384.046875,
+        383.6796875,
+        384.2578125
+      ],
+      "jsHeapPeakMiB": [
+        103.21264839172363,
+        101.69334316253662,
+        103.4118185043335
+      ],
+      "lagP95Ms": [
+        0.05710099999942031,
+        0.057033000000956235,
+        0.057355000000825385
+      ],
+      "lagMaxMs": [
+        4.733939999998256,
+        4.530617000000348,
+        6.16280000000188
+      ],
+      "fullDraws": [
+        938,
+        929,
+        939
+      ],
+      "presentsPerSecond": [
+        59.99978418377628,
+        59.99973900713529,
+        59.99978639776043
+      ],
+      "pointerCalls": [
+        2399,
+        2399,
+        2399
+      ],
+      "pointerCallsPerSecond": [
+        119.94956854739941,
+        119.94947823176464,
+        119.94957297352273
+      ],
+      "mutationBatches": [
+        961,
+        961,
+        961
+      ],
+      "mutationOperations": [
+        13441,
+        13441,
+        13441
+      ]
+    },
+    "final14": {
+      "cpuPercent": [
+        18.808751581919072,
+        18.720020677773906,
+        18.852936602689862
+      ],
+      "rssMedianMiB": [
+        366.55859375,
+        365.84375,
+        366.56640625
+      ],
+      "rssPeakMiB": [
+        381.96875,
+        374.81640625,
+        382.0234375
+      ],
+      "jsHeapPeakMiB": [
+        101.57956218719482,
+        101.52870559692383,
+        103.24595832824707
+      ],
+      "lagP95Ms": [
+        0.057901999998648535,
+        0.05783900000005815,
+        0.05809599999975035
+      ],
+      "lagMaxMs": [
+        1.6289209999995364,
+        1.6199030000007042,
+        1.800878999998531
+      ],
+      "fullDraws": [
+        938,
+        936,
+        945
+      ],
+      "presentsPerSecond": [
+        59.999765796914176,
+        59.99976178894574,
+        59.99976641190939
+      ],
+      "pointerCalls": [
+        2399,
+        2399,
+        2399
+      ],
+      "pointerCallsPerSecond": [
+        119.94953178899759,
+        119.9495237764007,
+        119.94953301847552
+      ],
+      "mutationBatches": [
+        961,
+        961,
+        961
+      ],
+      "mutationOperations": [
+        13441,
+        13441,
+        13441
+      ]
+    }
+  },
+  "motionDeltaPercent": {
+    "cpuPercent": -34.308857733397794,
+    "rssMedianMiB": -0.5141851490606864,
+    "rssPeakMiB": -0.5411123316652389,
+    "jsHeapPeakMiB": -1.582253948499357,
+    "lagP95Ms": 1.4027775332067005,
+    "lagMaxMs": -65.59058627696726,
+    "fullDraws": 0,
+    "presentsPerSecond": -3.064488039994373e-05,
+    "pointerCalls": 0,
+    "pointerCallsPerSecond": -3.064488039994373e-05,
+    "mutationBatches": 0,
+    "mutationOperations": 0
+  },
+  "controls": [
+    {
+      "mode": "none",
+      "metrics": {
+        "cpuPercent": 2.289566506395131,
+        "rssMedianMiB": 341.671875,
+        "rssPeakMiB": 343.3125,
+        "jsHeapPeakMiB": 93.08308410644531,
+        "lagP95Ms": 0.05923099999927217,
+        "lagMaxMs": 1.3862329999992653,
+        "fullDraws": 1,
+        "presentsPerSecond": 58.899781499480575,
+        "pointerCalls": 0,
+        "pointerCallsPerSecond": 0,
+        "mutationBatches": 1,
+        "mutationOperations": 1
+      },
+      "note": "Absolute final14-only n1; no paired baseline control exists."
+    },
+    {
+      "mode": "same-row",
+      "metrics": {
+        "cpuPercent": 2.709640044646994,
+        "rssMedianMiB": 358.85546875,
+        "rssPeakMiB": 361.2421875,
+        "jsHeapPeakMiB": 94.48704719543457,
+        "lagP95Ms": 0.05764199999975972,
+        "lagMaxMs": 1.0270259999997506,
+        "fullDraws": 1,
+        "presentsPerSecond": 58.89978359925005,
+        "pointerCalls": 2399,
+        "pointerCallsPerSecond": 119.94955929932163,
+        "mutationBatches": 1,
+        "mutationOperations": 1
+      },
+      "note": "Absolute final14-only n1; no paired baseline control exists."
+    }
+  ],
+  "matrixFlags": {
+    "matrix": [
+      {
+        "case": "c1-r0-p1",
+        "metrics": [
+          "cpuPercent"
+        ]
+      },
+      {
+        "case": "c10-r0-p1",
+        "metrics": [
+          "cpuPercent"
+        ]
+      },
+      {
+        "case": "c10-r100-p1",
+        "metrics": [
+          "cpuPercent"
+        ]
+      },
+      {
+        "case": "c10-r1000-p1",
+        "metrics": [
+          "rssPeakMiB"
+        ]
+      },
+      {
+        "case": "c10-r5000-p1",
+        "metrics": [
+          "cpuPercent"
+        ]
+      }
+    ],
+    "production": [],
+    "targetBelow99Percent": []
+  },
+  "provenance": {
+    "baselineMotion": {
+      "gitHead": "56cfd4893f243b1513f8e53e8e90329b555c6f2f",
+      "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceHash": "7726a43b8af0351d1025e8b283f923a3250731e90ee8b8ae0e86f5c4c5fab7f5",
+      "sourceFiles": 382
+    },
+    "final14Motion": {
+      "gitHead": "56cfd4893f243b1513f8e53e8e90329b555c6f2f",
+      "dirtyHash": "b47603341abc575cfed0efcf2b99b2565500cb10e57359c7059956fe3c1a7592",
+      "sourceHash": "3918efb311f05dab85d18f4295a6c52fcfe92c77b041a6b5ab867dcce9007f11",
+      "sourceFiles": 388
+    },
+    "baselineNative": {
+      "version": "0.11.0-twirchat.10",
+      "sha256": "9167fe97d8be98517296d008f9c5bbaeb3f056e5e26159523db3e6147d47682f",
+      "patchDigest": "80b5577cbe92ab0f"
+    },
+    "final14Native": {
+      "version": "0.11.0-twirchat.14",
+      "sha256": "f50c0f2627b407e74bfaa124d8a7f03bb84ccb315e01e0e07f653712942735cd",
+      "patchDigest": "9cc345a6d4236c7e"
+    },
+    "baselineTargets": [
+      {
+        "gitHead": "56cfd4893f243b1513f8e53e8e90329b555c6f2f",
+        "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceHash": "7726a43b8af0351d1025e8b283f923a3250731e90ee8b8ae0e86f5c4c5fab7f5",
+        "sourceFiles": 382
+      }
+    ],
+    "final14Targets": [
+      {
+        "gitHead": "56cfd4893f243b1513f8e53e8e90329b555c6f2f",
+        "dirtyHash": "b47603341abc575cfed0efcf2b99b2565500cb10e57359c7059956fe3c1a7592",
+        "sourceHash": "3918efb311f05dab85d18f4295a6c52fcfe92c77b041a6b5ab867dcce9007f11",
+        "sourceFiles": 388
+      }
+    ],
+    "motionDriver": "0f33d76ff9c32f5579ef6a9c45065effe7f977f122cc471f48d06f2e97a80143"
+  },
+  "pointerPath": {
+    "viewport": {
+      "x": 0,
+      "y": 44,
+      "width": 770,
+      "height": 1205
+    },
+    "from": {
+      "x": 550,
+      "y": 114
+    },
+    "to": {
+      "x": 550,
+      "y": 1186
+    },
+    "visibleRows": 13
+  },
+  "rangeColumns": [
+    "median",
+    "min",
+    "max"
+  ],
+  "originalFiveCaseRepeats": [
+    {
+      "case": "c1-r0-p1",
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            0.96815717049706,
+            0.9461323605876123,
+            1.0256059723313244
+          ],
+          "final": [
+            0.9752406561380036,
+            0.9553989799773193,
+            1.0402062122474982
+          ],
+          "medianDeltaPercent": 0.7316462509188382
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            281.5234375,
+            280.79296875,
+            282.75390625
+          ],
+          "final": [
+            282.16796875,
+            280.43359375,
+            282.4296875
+          ],
+          "medianDeltaPercent": 0.22894408214235717
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            282.5625,
+            281.8125,
+            283.62890625
+          ],
+          "final": [
+            282.8046875,
+            280.953125,
+            283.02734375
+          ],
+          "medianDeltaPercent": 0.08571112585711305
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            62.61256408691406,
+            62.60728740692139,
+            62.619028091430664
+          ],
+          "final": [
+            62.636600494384766,
+            62.61203956604004,
+            62.64486503601074
+          ],
+          "medianDeltaPercent": 0.03838911218734253
+        },
+        "lagP95Ms": {
+          "baseline": [
+            0.05945500000007087,
+            0.05800400000043737,
+            0.060430000001360895
+          ],
+          "final": [
+            0.05802800000037678,
+            0.05773199999930512,
+            0.059610999999677006
+          ],
+          "medianDeltaPercent": -2.400134555028821
+        },
+        "lagMaxMs": {
+          "baseline": [
+            0.4792739999998048,
+            0.37223800000037954,
+            1.223367000000053
+          ],
+          "final": [
+            1.242225999999846,
+            1.2155579999998736,
+            1.4767420000002858
+          ],
+          "medianDeltaPercent": 159.18910685752869
+        },
+        "achievedRate": {
+          "baseline": [
+            0,
+            0,
+            0
+          ],
+          "final": [
+            0,
+            0,
+            0
+          ],
+          "medianDeltaPercent": null
+        },
+        "offeredRateFraction": null
+      },
+      "flags": []
+    },
+    {
+      "case": "c10-r0-p1",
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            0.9985733528423151,
+            0.9604325186269627,
+            1.0290726241175585
+          ],
+          "final": [
+            1.0142057459527458,
+            1.0040727866364552,
+            1.0224733171847182
+          ],
+          "medianDeltaPercent": 1.565472688204128
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            284.2109375,
+            281.62109375,
+            284.89453125
+          ],
+          "final": [
+            282.796875,
+            282.01953125,
+            284.359375
+          ],
+          "medianDeltaPercent": -0.49753978943896104
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            285.23828125,
+            282.1171875,
+            285.67578125
+          ],
+          "final": [
+            283.44140625,
+            282.68359375,
+            284.8515625
+          ],
+          "medianDeltaPercent": -0.6299557661494593
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            63.36771869659424,
+            63.337679862976074,
+            63.368967056274414
+          ],
+          "final": [
+            63.335808753967285,
+            63.33281898498535,
+            63.36602306365967
+          ],
+          "medianDeltaPercent": -0.05035677989251308
+        },
+        "lagP95Ms": {
+          "baseline": [
+            0.058259999999791034,
+            0.058167999999568565,
+            0.05903700000089884
+          ],
+          "final": [
+            0.058836000000155764,
+            0.0585159999991447,
+            0.05913700000019162
+          ],
+          "medianDeltaPercent": 0.9886714733381208
+        },
+        "lagMaxMs": {
+          "baseline": [
+            1.0619249999999738,
+            0.495679000000564,
+            1.062239000000318
+          ],
+          "final": [
+            1.0645330000002104,
+            0.4354580000003807,
+            1.141497999999956
+          ],
+          "medianDeltaPercent": 0.24559173201843532
+        },
+        "achievedRate": {
+          "baseline": [
+            0,
+            0,
+            0
+          ],
+          "final": [
+            0,
+            0,
+            0
+          ],
+          "medianDeltaPercent": null
+        },
+        "offeredRateFraction": null
+      },
+      "flags": []
+    },
+    {
+      "case": "c10-r100-p1",
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            17.395952804039567,
+            17.23044481354031,
+            17.55879734988953
+          ],
+          "final": [
+            17.326313482038408,
+            17.320865167940227,
+            17.609487389947645
+          ],
+          "medianDeltaPercent": -0.4003191017222574
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            344.33203125,
+            342.7734375,
+            344.91015625
+          ],
+          "final": [
+            343.62109375,
+            339.24609375,
+            346.07421875
+          ],
+          "medianDeltaPercent": -0.20646859295057052
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            369.65234375,
+            369.19921875,
+            371.54296875
+          ],
+          "final": [
+            369.94140625,
+            369.6484375,
+            370.7890625
+          ],
+          "medianDeltaPercent": 0.07819847618644182
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            91.89373302459717,
+            91.22823333740234,
+            92.13140201568604
+          ],
+          "final": [
+            92.18291187286377,
+            91.24357795715332,
+            92.2350549697876
+          ],
+          "medianDeltaPercent": 0.3146883239460996
+        },
+        "lagP95Ms": {
+          "baseline": [
+            0.3836039999996501,
+            0.37960199999906763,
+            0.4549640000004729
+          ],
+          "final": [
+            0.2621599999993123,
+            0.0985089999999218,
+            0.6037580000011076
+          ],
+          "medianDeltaPercent": -31.658689690526842
+        },
+        "lagMaxMs": {
+          "baseline": [
+            2.379338999999163,
+            1.8634110000002693,
+            2.719955000000482
+          ],
+          "final": [
+            2.8590219999996407,
+            2.2644469999995636,
+            2.8882360000006884
+          ],
+          "medianDeltaPercent": 20.16034705439813
+        },
+        "achievedRate": {
+          "baseline": [
+            99.83238590735233,
+            99.7490854754471,
+            99.83239295378854
+          ],
+          "final": [
+            99.66569902900575,
+            99.6656896356057,
+            99.74912609790627
+          ],
+          "medianDeltaPercent": -0.16696673812972573
+        },
+        "offeredRateFraction": {
+          "baseline": [
+            0.9983238590735233,
+            0.9974908547544711,
+            0.9983239295378854
+          ],
+          "final": [
+            0.9966569902900575,
+            0.996656896356057,
+            0.9974912609790627
+          ],
+          "medianDeltaPercent": -0.16696673812971463
+        }
+      },
+      "flags": []
+    },
+    {
+      "case": "c10-r1000-p1",
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            42.204801272254905,
+            42.12035643493235,
+            42.33785767859173
+          ],
+          "final": [
+            41.93727922598955,
+            41.897746583044345,
+            42.15029541310179
+          ],
+          "medianDeltaPercent": -0.6338663806035316
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            482.32421875,
+            474.78515625,
+            488.95703125
+          ],
+          "final": [
+            491.36328125,
+            474.7734375,
+            493.2890625
+          ],
+          "medianDeltaPercent": 1.8740635756225865
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            553.34765625,
+            552.87109375,
+            594.03515625
+          ],
+          "final": [
+            586.25390625,
+            556.94140625,
+            609.5859375
+          ],
+          "medianDeltaPercent": 5.946758720006784
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            163.70392894744873,
+            157.53263473510742,
+            176.06332874298096
+          ],
+          "final": [
+            168.61709690093994,
+            155.72940635681152,
+            169.3860321044922
+          ],
+          "medianDeltaPercent": 3.001252312684821
+        },
+        "lagP95Ms": {
+          "baseline": [
+            0.7831640000003972,
+            0.7591959999999744,
+            1.2270260000004782
+          ],
+          "final": [
+            0.7740470000007917,
+            0.6841920000006212,
+            0.78661799999918
+          ],
+          "medianDeltaPercent": -1.1641239893050326
+        },
+        "lagMaxMs": {
+          "baseline": [
+            7.002075000000332,
+            2.450393000000986,
+            8.092443999999887
+          ],
+          "final": [
+            4.815273999998681,
+            2.146918000000369,
+            9.536744999999428
+          ],
+          "medianDeltaPercent": -31.23075659717366
+        },
+        "achievedRate": {
+          "baseline": [
+            997.4904822783149,
+            996.9893877957089,
+            998.4907639604335
+          ],
+          "final": [
+            997.9891935235152,
+            997.4909907444959,
+            998.156691005517
+          ],
+          "medianDeltaPercent": 0.049996591853318506
+        },
+        "offeredRateFraction": {
+          "baseline": [
+            0.9974904822783148,
+            0.9969893877957089,
+            0.9984907639604335
+          ],
+          "final": [
+            0.9979891935235151,
+            0.9974909907444959,
+            0.9981566910055171
+          ],
+          "medianDeltaPercent": 0.049996591853318506
+        }
+      },
+      "flags": [
+        "rssPeakMiB"
+      ]
+    },
+    {
+      "case": "c10-r5000-p1",
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            51.044875038005124,
+            50.692666617731,
+            51.300515818456184
+          ],
+          "final": [
+            50.82015640310554,
+            50.548196155632155,
+            51.041440838887
+          ],
+          "medianDeltaPercent": -0.44023740822612956
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            486.61328125,
+            474.75390625,
+            487.6640625
+          ],
+          "final": [
+            479.609375,
+            470.5859375,
+            490.54296875
+          ],
+          "medianDeltaPercent": -1.439316705867244
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            588.06640625,
+            570.83984375,
+            617.7890625
+          ],
+          "final": [
+            592.51171875,
+            540.05859375,
+            621.80859375
+          ],
+          "medianDeltaPercent": 0.7559201567637563
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            166.0686731338501,
+            161.6513032913208,
+            172.87465286254883
+          ],
+          "final": [
+            172.1641502380371,
+            147.89923191070557,
+            176.29042434692383
+          ],
+          "medianDeltaPercent": 3.670455715193266
+        },
+        "lagP95Ms": {
+          "baseline": [
+            2.5882569999994303,
+            2.353492999998707,
+            2.611181000000215
+          ],
+          "final": [
+            2.632127999999284,
+            2.219798999998602,
+            2.6371149999995396
+          ],
+          "medianDeltaPercent": 1.695001694185061
+        },
+        "lagMaxMs": {
+          "baseline": [
+            7.978628000000754,
+            6.62075299999924,
+            9.148412999998982
+          ],
+          "final": [
+            5.240676999999778,
+            4.407450000000608,
+            8.635226999999759
+          ],
+          "medianDeltaPercent": -34.31606286194465
+        },
+        "achievedRate": {
+          "baseline": [
+            4991.5082173712835,
+            4987.280414132072,
+            4992.535402081162
+          ],
+          "final": [
+            4984.870266663413,
+            4984.786552773131,
+            4985.789295933894
+          ],
+          "medianDeltaPercent": -0.13298486987900482
+        },
+        "offeredRateFraction": {
+          "baseline": [
+            0.9983016434742568,
+            0.9974560828264144,
+            0.9985070804162324
+          ],
+          "final": [
+            0.9969740533326825,
+            0.9969573105546262,
+            0.9971578591867788
+          ],
+          "medianDeltaPercent": -0.13298486987900482
+        }
+      },
+      "flags": []
+    }
+  ],
+  "rssFollowup": {
+    "original": {
+      "nPerVersion": 3,
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            42.204801272254905,
+            42.12035643493235,
+            42.33785767859173
+          ],
+          "final": [
+            41.93727922598955,
+            41.897746583044345,
+            42.15029541310179
+          ],
+          "deltaPercent": -0.6338663806035316
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            482.32421875,
+            474.78515625,
+            488.95703125
+          ],
+          "final": [
+            491.36328125,
+            474.7734375,
+            493.2890625
+          ],
+          "deltaPercent": 1.8740635756225865
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            553.34765625,
+            552.87109375,
+            594.03515625
+          ],
+          "final": [
+            586.25390625,
+            556.94140625,
+            609.5859375
+          ],
+          "deltaPercent": 5.946758720006784
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            163.70392894744873,
+            157.53263473510742,
+            176.06332874298096
+          ],
+          "final": [
+            168.61709690093994,
+            155.72940635681152,
+            169.3860321044922
+          ],
+          "deltaPercent": 3.001252312684821
+        },
+        "lagP95Ms": {
+          "baseline": [
+            0.7831640000003972,
+            0.7591959999999744,
+            1.2270260000004782
+          ],
+          "final": [
+            0.7740470000007917,
+            0.6841920000006212,
+            0.78661799999918
+          ],
+          "deltaPercent": -1.1641239893050326
+        },
+        "lagMaxMs": {
+          "baseline": [
+            7.002075000000332,
+            2.450393000000986,
+            8.092443999999887
+          ],
+          "final": [
+            4.815273999998681,
+            2.146918000000369,
+            9.536744999999428
+          ],
+          "deltaPercent": -31.23075659717366
+        },
+        "achievedRate": {
+          "baseline": [
+            997.4904822783149,
+            996.9893877957089,
+            998.4907639604335
+          ],
+          "final": [
+            997.9891935235152,
+            997.4909907444959,
+            998.156691005517
+          ],
+          "deltaPercent": 0.049996591853318506
+        },
+        "offeredRateFraction": {
+          "baseline": [
+            0.9974904822783148,
+            0.9969893877957089,
+            0.9984907639604335
+          ],
+          "final": [
+            0.9979891935235151,
+            0.9974909907444959,
+            0.9981566910055171
+          ],
+          "deltaPercent": 0.049996591853318506
+        }
+      },
+      "flags": [
+        "rssPeakMiB"
+      ]
+    },
+    "balanced": {
+      "nPerVersion": 3,
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            44.467998087116285,
+            43.22878661817142,
+            45.12323726150903
+          ],
+          "final": [
+            43.3079950052847,
+            43.19332329489447,
+            44.02971678948822
+          ],
+          "deltaPercent": -2.608624475423982
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            482.55078125,
+            466.57421875,
+            492.07421875
+          ],
+          "final": [
+            471.171875,
+            459.21875,
+            484.92578125
+          ],
+          "deltaPercent": -2.3580743606971377
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            568.578125,
+            561.63671875,
+            593.2578125
+          ],
+          "final": [
+            558.5234375,
+            548.046875,
+            590.6171875
+          ],
+          "deltaPercent": -1.768391546896042
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            164.9661693572998,
+            160.229905128479,
+            180.95680236816406
+          ],
+          "final": [
+            169.55458545684814,
+            160.46456718444824,
+            172.98408794403076
+          ],
+          "deltaPercent": 2.781428530118979
+        },
+        "lagP95Ms": {
+          "baseline": [
+            0.5576920000003156,
+            0.4664090000005672,
+            0.6516470000005938
+          ],
+          "final": [
+            0.7321449999999459,
+            0.5418079999999463,
+            0.933350999999675
+          ],
+          "deltaPercent": 31.28124484474075
+        },
+        "lagMaxMs": {
+          "baseline": [
+            3.3073249999997643,
+            3.1872020000000703,
+            7.776794999999765
+          ],
+          "final": [
+            3.872983999999633,
+            3.167359999999462,
+            5.428375999999844
+          ],
+          "deltaPercent": 17.10321785732909
+        },
+        "achievedRate": {
+          "baseline": [
+            997.5742086051783,
+            997.0743752847877,
+            997.9909799080257
+          ],
+          "final": [
+            997.3240068578832,
+            997.0740892101837,
+            997.8240534033328
+          ],
+          "deltaPercent": -0.025081016042405313
+        },
+        "offeredRateFraction": {
+          "baseline": [
+            0.9975742086051783,
+            0.9970743752847877,
+            0.9979909799080257
+          ],
+          "final": [
+            0.9973240068578832,
+            0.9970740892101837,
+            0.9978240534033328
+          ],
+          "deltaPercent": -0.02508101604239421
+        }
+      },
+      "flags": []
+    },
+    "pooled": {
+      "nPerVersion": 6,
+      "comparisons": {
+        "cpuPercent": {
+          "baseline": [
+            42.78332214838157,
+            42.12035643493235,
+            45.12323726150903
+          ],
+          "final": [
+            42.67180935399813,
+            41.897746583044345,
+            44.02971678948822
+          ],
+          "deltaPercent": -0.2606454776856615
+        },
+        "rssMedianMiB": {
+          "baseline": [
+            482.4375,
+            466.57421875,
+            492.07421875
+          ],
+          "final": [
+            479.849609375,
+            459.21875,
+            493.2890625
+          ],
+          "deltaPercent": -0.53641987304055
+        },
+        "rssPeakMiB": {
+          "baseline": [
+            565.107421875,
+            552.87109375,
+            594.03515625
+          ],
+          "final": [
+            572.388671875,
+            548.046875,
+            609.5859375
+          ],
+          "deltaPercent": 1.2884718405999918
+        },
+        "jsHeapPeakMiB": {
+          "baseline": [
+            164.33504915237427,
+            157.53263473510742,
+            180.95680236816406
+          ],
+          "final": [
+            169.00156450271606,
+            155.72940635681152,
+            172.98408794403076
+          ],
+          "deltaPercent": 2.8396348645108205
+        },
+        "lagP95Ms": {
+          "baseline": [
+            0.7054215000002841,
+            0.4664090000005672,
+            1.2270260000004782
+          ],
+          "final": [
+            0.7530960000003688,
+            0.5418079999999463,
+            0.933350999999675
+          ],
+          "deltaPercent": 6.75829982500753
+        },
+        "lagMaxMs": {
+          "baseline": [
+            5.154700000000048,
+            2.450393000000986,
+            8.092443999999887
+          ],
+          "final": [
+            4.344128999999157,
+            2.146918000000369,
+            9.536744999999428
+          ],
+          "deltaPercent": -15.724891846293353
+        },
+        "achievedRate": {
+          "baseline": [
+            997.5323454417467,
+            996.9893877957089,
+            998.4907639604335
+          ],
+          "final": [
+            997.6575220739144,
+            997.0740892101837,
+            998.156691005517
+          ],
+          "deltaPercent": 0.012548628898079173
+        },
+        "offeredRateFraction": {
+          "baseline": [
+            0.9975323454417466,
+            0.9969893877957089,
+            0.9984907639604335
+          ],
+          "final": [
+            0.9976575220739143,
+            0.9970740892101837,
+            0.9981566910055171
+          ],
+          "deltaPercent": 0.012548628898079173
+        }
+      },
+      "flags": []
+    },
+    "decisionFlags": {
+      "balanced": [],
+      "pooled": []
+    },
+    "all12PeakRows": [
+      {
+        "cohort": "original",
+        "version": "b",
+        "rep": 1,
+        "rssPeakMiB": 594.03515625,
+        "rssMedianMiB": 488.95703125,
+        "heapPeakMiB": 176.06332874298096,
+        "lagP95Ms": 0.7591959999999744,
+        "lagMaxMs": 8.092443999999887,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "original",
+        "version": "b",
+        "rep": 2,
+        "rssPeakMiB": 553.34765625,
+        "rssMedianMiB": 482.32421875,
+        "heapPeakMiB": 163.70392894744873,
+        "lagP95Ms": 0.7831640000003972,
+        "lagMaxMs": 7.002075000000332,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "original",
+        "version": "b",
+        "rep": 3,
+        "rssPeakMiB": 552.87109375,
+        "rssMedianMiB": 474.78515625,
+        "heapPeakMiB": 157.53263473510742,
+        "lagP95Ms": 1.2270260000004782,
+        "lagMaxMs": 2.450393000000986,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "original",
+        "version": "f",
+        "rep": 1,
+        "rssPeakMiB": 609.5859375,
+        "rssMedianMiB": 493.2890625,
+        "heapPeakMiB": 169.3860321044922,
+        "lagP95Ms": 0.78661799999918,
+        "lagMaxMs": 9.536744999999428,
+        "samplesAbove600MiB": 1
+      },
+      {
+        "cohort": "original",
+        "version": "f",
+        "rep": 2,
+        "rssPeakMiB": 556.94140625,
+        "rssMedianMiB": 474.7734375,
+        "heapPeakMiB": 168.61709690093994,
+        "lagP95Ms": 0.7740470000007917,
+        "lagMaxMs": 2.146918000000369,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "original",
+        "version": "f",
+        "rep": 3,
+        "rssPeakMiB": 586.25390625,
+        "rssMedianMiB": 491.36328125,
+        "heapPeakMiB": 155.72940635681152,
+        "lagP95Ms": 0.6841920000006212,
+        "lagMaxMs": 4.815273999998681,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "balanced",
+        "version": "b",
+        "rep": 1,
+        "rssPeakMiB": 568.578125,
+        "rssMedianMiB": 466.57421875,
+        "heapPeakMiB": 160.229905128479,
+        "lagP95Ms": 0.5576920000003156,
+        "lagMaxMs": 3.3073249999997643,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "balanced",
+        "version": "b",
+        "rep": 2,
+        "rssPeakMiB": 593.2578125,
+        "rssMedianMiB": 482.55078125,
+        "heapPeakMiB": 180.95680236816406,
+        "lagP95Ms": 0.4664090000005672,
+        "lagMaxMs": 3.1872020000000703,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "balanced",
+        "version": "b",
+        "rep": 3,
+        "rssPeakMiB": 561.63671875,
+        "rssMedianMiB": 492.07421875,
+        "heapPeakMiB": 164.9661693572998,
+        "lagP95Ms": 0.6516470000005938,
+        "lagMaxMs": 7.776794999999765,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "balanced",
+        "version": "f",
+        "rep": 1,
+        "rssPeakMiB": 548.046875,
+        "rssMedianMiB": 459.21875,
+        "heapPeakMiB": 169.55458545684814,
+        "lagP95Ms": 0.5418079999999463,
+        "lagMaxMs": 3.167359999999462,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "balanced",
+        "version": "f",
+        "rep": 2,
+        "rssPeakMiB": 558.5234375,
+        "rssMedianMiB": 471.171875,
+        "heapPeakMiB": 172.98408794403076,
+        "lagP95Ms": 0.7321449999999459,
+        "lagMaxMs": 3.872983999999633,
+        "samplesAbove600MiB": 0
+      },
+      {
+        "cohort": "balanced",
+        "version": "f",
+        "rep": 3,
+        "rssPeakMiB": 590.6171875,
+        "rssMedianMiB": 484.92578125,
+        "heapPeakMiB": 160.46456718444824,
+        "lagP95Ms": 0.933350999999675,
+        "lagMaxMs": 5.428375999999844,
+        "samplesAbove600MiB": 0
+      }
+    ],
+    "preregistration": {
+      "createdAt": "2026-11-04T06:44:49.397Z",
+      "case": "c10-r1000-p1",
+      "order": [
+        {
+          "version": "final14",
+          "rep": 1
+        },
+        {
+          "version": "baseline10",
+          "rep": 1
+        },
+        {
+          "version": "baseline10",
+          "rep": 2
+        },
+        {
+          "version": "final14",
+          "rep": 2
+        },
+        {
+          "version": "final14",
+          "rep": 3
+        },
+        {
+          "version": "baseline10",
+          "rep": 3
+        }
+      ],
+      "duration": 12,
+      "warmup": 3,
+      "mode": "development",
+      "reason": "Original paired3v3 peakRSS+5.95% with overlapping ranges; assess run-order/host variation without removing original flag",
+      "analysis": "Report original3v3, balanced3v3 and pooled6v6 separately; retain all peaks; no subsequent sample selection; no forced GC/allocator tricks"
+    },
+    "note": "Original3v3, preregistered counterbalanced3v3 and pooled6v6 remain separate. Initial single matrix is not pooled. All peaks and original>5% flag remain visible. No GC causality, spike elimination, leak freedom or automatic acceptance claim; decision flags require root review."
+  },
+  "finalArtifact": {
+    "provenance": {
+      "gitHead": "56cfd4893f243b1513f8e53e8e90329b555c6f2f",
+      "dirtyHash": "3b130c79d61cf95aa9d8a7f7e5873536834baad931baa2b17262d91c587cdd6a",
+      "sourceHash": "95b51427f343298b5ce21840822790a3197e0af670b94d5b7c241ea36ff69974",
+      "sourceFiles": 388
+    },
+    "nativeManifest": {
+      "apiVersion": 3,
+      "version": "0.11.0-twirchat.15",
+      "patchDigest": "279b40c830eed623",
+      "sha256": "c29461a214f44b8f4b5696883b81db9613b611b0f07d8a7dfeb680b6cc7fb9c5",
+      "size": 56977600,
+      "rustToolchain": "1.97.1",
+      "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+      "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+      "target": "linux-x64"
+    },
+    "reuseProof": "validation/final15-resource14-reuse-scope.json.gz",
+    "measuredResourceVersion": ".14",
+    "measuredSourceHash": "3918efb311f05dab85d18f4295a6c52fcfe92c77b041a6b5ab867dcce9007f11",
+    "measuredNativeSha256": "f50c0f2627b407e74bfaa124d8a7f03bb84ccb315e01e0e07f653712942735cd"
+  },
+  "validation": {
+    "finalNativeTests": {
+      "passed": 373,
+      "failed": 0
+    },
+    "measured14NativeTests": {
+      "passed": 372,
+      "failed": 1,
+      "note": "Only test fixture setup changed in .15; the failed .14 run is preserved."
+    },
+    "project": {
+      "passed": 1206,
+      "skipped": 15,
+      "skips": "existingPostgres"
+    },
+    "rootCheck": "passed",
+    "sourceParity": {
+      "nativeFiles": 37,
+      "gpuiFiles": 93,
+      "productionSourcesIdentical": true,
+      "singleTestLineOnly": true
+    },
+    "gpui": {
+      "passed": 58,
+      "reused": true,
+      "same93SourceFiles": true,
+      "exactProof": "validation/gpui58-provenance.json.gz",
+      "testLog": "validation/gpui58-test.log.gz"
+    },
+    "clippy": {
+      "sameDiagnostics": true,
+      "errors": 38,
+      "nativeWarnings": 13,
+      "cleanPass": false
+    },
+    "finalGui": {
+      "passed": 5,
+      "allAppsClosed": true,
+      "proof": "validation/final15-functional-proof.json.gz",
+      "strictOverlayWholeStageObjectsEqualDirect10": true,
+      "densePure14ReusedForTestOnly15": true
+    }
+  }
+}

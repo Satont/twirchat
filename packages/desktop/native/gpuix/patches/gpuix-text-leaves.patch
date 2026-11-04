@@ -1,0 +1,355 @@
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -7007,6 +7007,13 @@
+ ) -> gpui::AnyElement {
+     use gpui::prelude::*;
+ 
++    if let Some(content) = raw_text_leaf_content(element) {
++        ctx.scroll_handles.remove(&element.id);
++        return crate::text::paint::selectable_text_leaf(text_content_options(
++            element, content, ctx,
++        ));
++    }
++
+     // `ElementId::Integer` rather than a formatted name: host ids are already
+     // unique per renderer, and every `<div>` and `<text>` builds one of these on
+     // every frame, so the string allocation was pure overhead. Custom elements
+@@ -7733,7 +7740,79 @@
+     content: &str,
+     ctx: &BuildCtx,
+ ) -> gpui::AnyElement {
+-    selectable_text(crate::text::SelectableText {
++    selectable_text(text_content_options(element, content, ctx))
++}
++
++fn raw_text_leaf_content(element: &crate::retained_tree::RetainedElement) -> Option<&str> {
++    let content = element
++        .content
++        .as_deref()
++        .filter(|content| !content.is_empty())?;
++    (element.element_type == "text"
++        && element.style.is_none()
++        && element.children.is_empty()
++        && element.events().is_empty()
++        && element.custom_props().is_empty()
++        && !element.auto_focus
++        && element.test_id.is_none())
++    .then_some(content)
++}
++
++#[cfg(test)]
++mod raw_text_leaf_tests {
++    use super::raw_text_leaf_content;
++    use crate::retained_tree::{RetainedElement, RetainedTree};
++    use crate::style::StyleDesc;
++    use std::sync::Arc;
++
++    fn raw_leaf() -> RetainedElement {
++        let mut element = RetainedElement::new(2, "text".into(), 0);
++        element.content = Some("word ".into());
++        element
++    }
++
++    #[test]
++    fn empty_placeholders_keep_zero_height_container_layout() {
++        let mut element = raw_leaf();
++        assert_eq!(raw_text_leaf_content(&element), Some("word "));
++        element.content = Some(String::new());
++        assert_eq!(raw_text_leaf_content(&element), None);
++    }
++
++    #[test]
++    fn authored_styles_and_children_keep_container_layout() {
++        let mut element = raw_leaf();
++        element.style = Some(Arc::new(StyleDesc::default()));
++        assert_eq!(raw_text_leaf_content(&element), None);
++        element.style = None;
++        element.children.push(3);
++        assert_eq!(raw_text_leaf_content(&element), None);
++    }
++
++    #[test]
++    fn interactive_and_accessible_text_keeps_the_full_host() {
++        let mut tree = RetainedTree::new();
++        for id in 1..=5 {
++            tree.create_element(id, "text".into());
++            tree.set_text(id, "word".into());
++        }
++        tree.set_event_listener(1, "click".into(), true);
++        tree.set_custom_prop(2, "aria-label".into(), serde_json::json!("word label"));
++        tree.set_custom_prop(3, "autoFocus".into(), serde_json::json!(true));
++        tree.set_custom_prop(4, "testId".into(), serde_json::json!("word"));
++        tree.elements.get_mut(&5).unwrap().element_type = "div".into();
++        for element in tree.elements.values() {
++            assert_eq!(raw_text_leaf_content(element), None);
++        }
++    }
++}
++
++fn text_content_options(
++    element: &crate::retained_tree::RetainedElement,
++    content: &str,
++    ctx: &BuildCtx,
++) -> crate::text::SelectableText {
++    crate::text::SelectableText {
+         group: crate::text::search::group_id(ctx.tree, element.id),
+         selectable: ctx.inherited.selectable,
+         highlight: ctx
+@@ -7749,7 +7828,7 @@
+             ctx.selection.clone(),
+             ctx.inherited.selection_wash,
+         )
+-    })
++    }
+ }
+ 
+ /// Explicit `userSelect` on this node. `None` means inherit; the ancestor
+--- a/packages/native/src/text/paint.rs
++++ b/packages/native/src/text/paint.rs
+@@ -20,8 +20,8 @@
+ use parking_lot::Mutex;
+ 
+ use gpui::{
+-    canvas, div, point, prelude::*, px, quad, size, BorderStyle, Bounds, Hsla, SharedString,
+-    StyledText, TextLayout, TextRun, Window, WindowId,
++    BorderStyle, Bounds, Hsla, SharedString, StyledText, TextLayout, TextRun, Window, WindowId,
++    canvas, div, point, prelude::*, px, quad, size,
+ };
+ 
+ use super::selection::{self, SelectionState};
+@@ -276,89 +276,153 @@
+     }
+ }
+ 
+-/// A selectable text element: `StyledText` with a canvas underlay that paints
+-/// the selection wash and registers into the frame registry.
++/// Selectable text with washes painted before its glyphs, without layout wrappers.
+ pub fn selectable_text(opts: SelectableText) -> gpui::AnyElement {
+-    let SelectableText {
+-        element_id,
+-        sub,
+-        text,
+-        runs,
+-        selection,
+-        wash_color,
+-        extra_wash,
+-        links,
+-        on_link,
+-        selectable,
+-        group,
+-        highlight,
+-    } = opts;
+-    let key = selection_key(element_id, sub);
+-
+-    let styled = match runs {
+-        Some(runs) => StyledText::new(text.clone()).with_runs(runs),
+-        None => StyledText::new(text.clone()),
+-    };
+-    let layout = styled.layout().clone();
+-
+-    let underlay = canvas(
+-        |_, _, _| (),
+-        move |_, _, window, _| {
+-            let window_id = window.window_handle().window_id();
+-            if let Some(paint) = &extra_wash {
+-                paint(&layout, window);
+-            }
+-            // Search washes sit UNDER the selection wash, so a selection over a
+-            // match still reads as a selection.
+-            let washes = match &highlight {
+-                Some(HighlightSource::Resolved(ctx)) => {
+-                    super::search::washes_for_retained_run(window_id, ctx, &key)
+-                }
+-                Some(HighlightSource::Native(ctx)) => {
+-                    super::search::washes_for_native_run(window_id, ctx, &key, &text)
+-                }
+-                None => Vec::new(),
+-            };
+-            paint_highlight_washes(window_id, &layout, element_id, sub, &text, &washes, window);
+-            if let Some(range) = selectable
+-                .then(|| selection.lock().wash_range(&key))
+-                .flatten()
+-            {
+-                for rect in range_rects(&layout, &range, 0.0, 0.0) {
+-                    window.paint_quad(quad(
+-                        rect,
+-                        px(0.0),
+-                        wash_color,
+-                        px(0.0),
+-                        gpui::transparent_black(),
+-                        BorderStyle::default(),
+-                    ));
+-                }
+-            }
+-            if selectable {
+-                update_state(window_id, |state| {
+-                    state.registry.push(RegEntry {
+-                        key: key.clone(),
+-                        text: text.clone(),
+-                        layout: layout.clone(),
+-                        group,
+-                    })
+-                });
+-            }
+-            log_painted_text(window_id, text.clone());
+-            if let Some(on_link) = &on_link {
+-                register_link_listener(window, &layout, &links, on_link, &selection);
+-            }
+-        },
+-    )
+-    .absolute()
+-    .size_full();
+-
+-    div()
+-        .relative()
+-        .child(underlay)
+-        .child(styled)
+-        .into_any_element()
++    SelectableTextElement::new(opts, None).into_any_element()
++}
++
++/// A raw retained text leaf still publishes its own automation box.
++pub(crate) fn selectable_text_leaf(opts: SelectableText) -> gpui::AnyElement {
++    let id = opts.element_id;
++    SelectableTextElement::new(opts, Some(id)).into_any_element()
++}
++
++struct SelectableTextElement {
++    opts: SelectableText,
++    key: Arc<str>,
++    styled: StyledText,
++    bounds_id: Option<u64>,
++}
++
++impl SelectableTextElement {
++    fn new(mut opts: SelectableText, bounds_id: Option<u64>) -> Self {
++        let styled = match opts.runs.take() {
++            Some(runs) => StyledText::new(opts.text.clone()).with_runs(runs),
++            None => StyledText::new(opts.text.clone()),
++        };
++        Self {
++            key: selection_key(opts.element_id, opts.sub),
++            opts,
++            styled,
++            bounds_id,
++        }
++    }
++}
++
++impl gpui::IntoElement for SelectableTextElement {
++    type Element = Self;
++
++    fn into_element(self) -> Self::Element {
++        self
++    }
++}
++
++impl gpui::Element for SelectableTextElement {
++    type RequestLayoutState = ();
++    type PrepaintState = ();
++
++    fn id(&self) -> Option<gpui::ElementId> {
++        None
++    }
++
++    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
++        None
++    }
++
++    fn request_layout(
++        &mut self,
++        id: Option<&gpui::GlobalElementId>,
++        inspector_id: Option<&gpui::InspectorElementId>,
++        window: &mut Window,
++        cx: &mut gpui::App,
++    ) -> (gpui::LayoutId, Self::RequestLayoutState) {
++        self.styled.request_layout(id, inspector_id, window, cx)
++    }
++
++    fn prepaint(
++        &mut self,
++        id: Option<&gpui::GlobalElementId>,
++        inspector_id: Option<&gpui::InspectorElementId>,
++        bounds: Bounds<gpui::Pixels>,
++        state: &mut Self::RequestLayoutState,
++        window: &mut Window,
++        cx: &mut gpui::App,
++    ) {
++        self.styled
++            .prepaint(id, inspector_id, bounds, state, window, cx);
++    }
++
++    fn paint(
++        &mut self,
++        id: Option<&gpui::GlobalElementId>,
++        inspector_id: Option<&gpui::InspectorElementId>,
++        bounds: Bounds<gpui::Pixels>,
++        state: &mut Self::RequestLayoutState,
++        prepaint: &mut Self::PrepaintState,
++        window: &mut Window,
++        cx: &mut gpui::App,
++    ) {
++        let window_id = window.window_handle().window_id();
++        if let Some(id) = self.bounds_id {
++            crate::automation::record_bounds(window_id, id, bounds);
++        }
++        let opts = &self.opts;
++        let layout = self.styled.layout();
++        if let Some(paint) = &opts.extra_wash {
++            paint(layout, window);
++        }
++        // Search stays under the selection wash, and both stay under glyphs.
++        let washes = match &opts.highlight {
++            Some(HighlightSource::Resolved(ctx)) => {
++                super::search::washes_for_retained_run(window_id, ctx, &self.key)
++            }
++            Some(HighlightSource::Native(ctx)) => {
++                super::search::washes_for_native_run(window_id, ctx, &self.key, &opts.text)
++            }
++            None => Vec::new(),
++        };
++        paint_highlight_washes(
++            window_id,
++            layout,
++            opts.element_id,
++            opts.sub,
++            &opts.text,
++            &washes,
++            window,
++        );
++        if let Some(range) = opts
++            .selectable
++            .then(|| opts.selection.lock().wash_range(&self.key))
++            .flatten()
++        {
++            for rect in range_rects(layout, &range, 0.0, 0.0) {
++                window.paint_quad(quad(
++                    rect,
++                    px(0.0),
++                    opts.wash_color,
++                    px(0.0),
++                    gpui::transparent_black(),
++                    BorderStyle::default(),
++                ));
++            }
++        }
++        if opts.selectable {
++            update_state(window_id, |state| {
++                state.registry.push(RegEntry {
++                    key: self.key.clone(),
++                    text: opts.text.clone(),
++                    layout: layout.clone(),
++                    group: opts.group,
++                })
++            });
++        }
++        log_painted_text(window_id, opts.text.clone());
++        if let Some(on_link) = &opts.on_link {
++            register_link_listener(window, layout, &opts.links, on_link, &opts.selection);
++        }
++        self.styled
++            .paint(id, inspector_id, bounds, state, prepaint, window, cx);
++    }
+ }
+ 
+ /// Paint one run's highlight washes and log their geometry.

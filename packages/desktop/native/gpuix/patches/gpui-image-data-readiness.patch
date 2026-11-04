@@ -1,0 +1,83 @@
+--- a/crates/gpui/src/elements/img.rs
++++ b/crates/gpui/src/elements/img.rs
+@@ -7,7 +7,7 @@
+ };
+ use anyhow::Result;
+ 
+-use futures::Future;
++use futures::{Future, future::Shared};
+ use gpui_util::ResultExt;
+ use image::{
+     AnimationDecoder, ImageError, ImageFormat, Rgba,
+@@ -16,6 +16,7 @@
+ use scheduler::Instant;
+ use smallvec::SmallVec;
+ use std::{
++    any::TypeId,
+     fs,
+     io::{self, Cursor},
+     ops::{Deref, DerefMut},
+@@ -672,6 +673,21 @@
+     }
+ }
+ 
++/// Read the completed built-in decode result for inline image data.
++/// Returns `None` when absent or not yet completed by an existing consumer.
++/// This does not start or poll a decode, load a resource, or schedule a redraw.
++pub fn image_data_if_ready(
++    data: &Arc<Image>,
++    cx: &App,
++) -> Option<Result<Arc<RenderImage>, ImageCacheError>> {
++    let asset_id = (TypeId::of::<AssetLogger<ImageDecoder>>(), crate::hash(data));
++    cx.loading_assets
++        .get(&asset_id)?
++        .downcast_ref::<Shared<Task<Result<Arc<RenderImage>, ImageCacheError>>>>()?
++        .peek()
++        .cloned()
++}
++
+ #[derive(Clone)]
+ enum ImageDecoder {}
+ 
+@@ -912,6 +928,41 @@
+     }
+ 
+     #[gpui::test]
++    async fn inline_image_readiness_observes_existing_decode_without_loading(
++        cx: &mut TestAppContext,
++    ) {
++        let mut bytes = Cursor::new(Vec::new());
++        image::DynamicImage::ImageRgba8(ImageBuffer::from_pixel(1, 1, Rgba([0, 0, 0, 255])))
++            .write_to(&mut bytes, ImageFormat::Png)
++            .unwrap();
++        let image = Arc::new(Image::from_bytes(
++            crate::ImageFormat::Png,
++            bytes.into_inner(),
++        ));
++        let source = ImageSource::Image(image.clone());
++        let task = cx.update(|cx| {
++            assert!(image_data_if_ready(&image, cx).is_none());
++            assert!(!source.is_asset_cached(cx));
++            let (task, is_first) = cx.fetch_asset::<AssetLogger<ImageDecoder>>(&image);
++            assert!(is_first);
++            assert!(image_data_if_ready(&image, cx).is_none());
++            assert!(source.is_asset_cached(cx));
++            task
++        });
++
++        let decoded = task.await.expect("inline PNG should decode");
++        cx.update(|cx| {
++            let ready = image_data_if_ready(&image, cx)
++                .expect("completed decode should be present")
++                .expect("completed decode should succeed");
++            assert!(Arc::ptr_eq(&ready, &decoded));
++            source.remove_asset(cx);
++            assert!(image_data_if_ready(&image, cx).is_none());
++            assert!(!source.is_asset_cached(cx));
++        });
++    }
++
++    #[gpui::test]
+     fn zero_frame_image_does_not_panic_on_paint(cx: &mut TestAppContext) {
+         cx.add_empty_window()
+             .draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, _| {

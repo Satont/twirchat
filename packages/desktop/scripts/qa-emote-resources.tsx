@@ -48,6 +48,8 @@ const configurationSchema = z.object({
   source: z.enum(['synthetic', 'seventv']).default('synthetic'),
   preset: z.enum(['standard', 'dense']).default('standard'),
   activation: z.enum(['focused', 'unfocused']).default('focused'),
+  pointerMotion: z.enum(['none', 'same-row', 'cross-rows']).default('none'),
+  pointerSweepSeconds: z.number().min(0.25).max(4).default(2),
   durationSeconds: z.number().min(4).max(30).default(12),
   warmupSeconds: z.number().min(2).max(10).default(3),
   delayMs: z.number().int().min(20).max(1000).default(100),
@@ -77,6 +79,11 @@ if (config.source === 'seventv' && config.case !== 'functional' && config.preset
 if (config.preset === 'dense' && config.case === 'churn')
   throw new Error(
     'The dense preset measures idle rendering; use the standard preset for image churn.',
+  )
+if (config.pointerMotion !== 'none')
+  assert(
+    config.preset === 'dense' && config.case === 'idle' && config.activation === 'focused',
+    'Pointer measurements require the focused dense idle fixture.',
   )
 const dense = config.preset === 'dense'
 const usesSevenTvSources = config.source === 'seventv' || dense
@@ -185,6 +192,7 @@ const automationSchema: z.ZodType<AutomationNode> = z.lazy(() =>
   }),
 )
 const nativeSources = new Map<GpuixRenderer, Map<number, string>>()
+const nativeMutationCounts = new Map<GpuixRenderer, { batches: number; operations: number }>()
 const mutationsSchema = z.array(z.array(z.unknown()))
 const animationMetadataSchema = z.object({
   width: z.number().int().positive(),
@@ -358,7 +366,7 @@ function inject(channel: WatchedChannel, fixture: Fixture): void {
     platform: 'kick',
     channelId: channel.channelSlug,
     type: 'message',
-    timestamp: new Date(),
+    timestamp: new Date(Date.UTC(2026, 10, 4, 0, 0, 0)),
     text: dense ? denseText : `EmoteQA ${id}: repeated image EmoteQA`,
     author: {
       id: dense ? `viewer-${id % 16}` : 'viewer',
@@ -493,10 +501,15 @@ async function waitForImageStats(
 }
 function recordNativeSources(renderer: GpuixRenderer): () => void {
   const sources = new Map<number, string>()
+  const counts = { batches: 0, operations: 0 }
+  nativeMutationCounts.set(renderer, counts)
   const previous = renderer.applyBatch
   const descriptor = Object.getOwnPropertyDescriptor(renderer, 'applyBatch')
   const capture: typeof previous = (json) => {
-    for (const [operation, id, property, value] of mutationsSchema.parse(JSON.parse(json))) {
+    const mutations = mutationsSchema.parse(JSON.parse(json))
+    counts.batches++
+    counts.operations += mutations.length
+    for (const [operation, id, property, value] of mutations) {
       if (
         operation === 'setCustomProp' &&
         typeof id === 'number' &&
@@ -517,6 +530,7 @@ function recordNativeSources(renderer: GpuixRenderer): () => void {
       else Reflect.deleteProperty(renderer, 'applyBatch')
     }
     nativeSources.delete(renderer)
+    nativeMutationCounts.delete(renderer)
   }
 }
 function Content({ windowId, layoutId }: { windowId: string; layoutId: string }) {
@@ -665,8 +679,60 @@ async function frameSnapshot(renderer: GpuixRenderer) {
   }
 }
 type FrameSnapshot = Awaited<ReturnType<typeof frameSnapshot>>
+interface PointerPath {
+  viewport: NonNullable<AutomationNode['bounds']>
+  from: { x: number; y: number }
+  to: { x: number; y: number }
+  visibleRows: number
+}
+async function preparePointerPath(renderer: GpuixRenderer): Promise<PointerPath | null> {
+  if (config.pointerMotion === 'none') return null
+  const nodes = allNodes(automationSchema.parse(JSON.parse(renderer.getAutomationTree())))
+  const viewport = nodes.find((node) => node.testId === 'chat-messages')?.bounds
+  assert(viewport && viewport.width > 300 && viewport.height > 200)
+  const rows = nodes
+    .filter((node) => node.testId?.startsWith('chat-timestamp-'))
+    .flatMap((node) => (node.bounds ? [node.bounds] : []))
+    .filter(
+      (bounds) =>
+        bounds.y > viewport.y + 10 && bounds.y + bounds.height < viewport.y + viewport.height - 10,
+    )
+    .sort((left, right) => left.y - right.y)
+  const first = rows[0]
+  const second = rows[1]
+  const last = rows.at(-1)
+  assert(first && second && last, 'Motion must traverse laid-out chat rows.')
+  const from = {
+    x: viewport.x + viewport.width - 220,
+    y: first.y + first.height / 2,
+  }
+  const to =
+    config.pointerMotion === 'same-row'
+      ? { x: viewport.x + viewport.width - 140, y: from.y }
+      : { x: from.x, y: last.y + last.height / 2 }
+  renderer.simulateMouseMove(0, 0)
+  await Bun.sleep(100)
+  const before = nativeMutationCounts.get(renderer)?.batches ?? 0
+  renderer.simulateMouseMove(from.x, from.y)
+  await until(
+    () => (nativeMutationCounts.get(renderer)?.batches ?? 0) > before,
+    'pointer enter updates row hover',
+  )
+  const actions = allNodes(automationSchema.parse(JSON.parse(renderer.getAutomationTree())))
+    .filter((node) => node.testId === 'msg-reply' || node.testId === 'msg-copy')
+    .flatMap((node) => (node.bounds ? [node.bounds] : []))
+    .filter((bounds) => bounds.y >= first.y - 10 && bounds.y < second.y - 10)
+  assert(actions.length >= 2, 'Hovered row must retain its reply/copy controls.')
+  assert(
+    actions.every((bounds) => Math.max(from.x, to.x) < bounds.x),
+    'Motion must stay to the left of row action controls.',
+  )
+  await Bun.sleep(300)
+  return { viewport, from, to, visibleRows: rows.length }
+}
 async function measure() {
   const renderer = current()
+  const pointerPath = await preparePointerPath(renderer)
   const measuredBounds = nativeWindow(renderer).getWindowBounds()
   assert.equal(
     measuredBounds?.width,
@@ -690,6 +756,7 @@ async function measure() {
   const initialStats = imageStats(renderer)
   const countersBefore = nativeRenderCounters(renderer)
   const initiallyActive = nativeWindow(renderer).isWindowActive()
+  const mutationsBefore = { ...nativeMutationCounts.get(renderer) }
   const samples: ResourceSample[] = []
   const lags: number[] = []
   let lastGpu = initialGpu
@@ -699,6 +766,7 @@ async function measure() {
   let fractional = 0
   let nextFixture = 8
   const start = performance.now()
+  const measurementStartedAtNs = process.hrtime.bigint()
   const cpuStart = process.cpuUsage()
   let expected = start + 50
   const lagTimer = setInterval(() => {
@@ -719,6 +787,22 @@ async function measure() {
     if (nextGpu) lastGpu = nextGpu
   }
   const sampleTimer = setInterval(sample, 250)
+  let pointerCalls = 0
+  const pointerRate = 120
+  const pointerTimer = pointerPath
+    ? setInterval(() => {
+        const due = Math.floor(((performance.now() - start) * pointerRate) / 1000)
+        while (pointerCalls < due) {
+          const phase = ((performance.now() - start) / (config.pointerSweepSeconds * 1000)) % 2
+          const position = phase <= 1 ? phase : 2 - phase
+          renderer.simulateMouseMove(
+            pointerPath.from.x + (pointerPath.to.x - pointerPath.from.x) * position,
+            pointerPath.from.y + (pointerPath.to.y - pointerPath.from.y) * position,
+          )
+          pointerCalls++
+        }
+      }, 8)
+    : undefined
   const generator =
     config.case === 'churn'
       ? setInterval(() => {
@@ -738,20 +822,37 @@ async function measure() {
       : undefined
   await Bun.sleep(config.durationSeconds * 1000)
   if (generator) clearInterval(generator)
+  if (pointerTimer) clearInterval(pointerTimer)
   clearInterval(sampleTimer)
   clearInterval(lagTimer)
   const wallMs = performance.now() - start
   const cpu = process.cpuUsage(cpuStart)
+  const measurementEndedAtNs = process.hrtime.bigint()
   sample()
   const frames = renderer.getDebugFrameOverlayStats().frames - initialFrames
   const stats = imageStats(renderer)
   const countersAfter = nativeRenderCounters(renderer)
+  const mutationsAfter = { ...nativeMutationCounts.get(renderer) }
   const purePresents =
     countersBefore && countersAfter
       ? (countersAfter.animationOnlyPresents ?? 0) - (countersBefore.animationOnlyPresents ?? 0)
       : typeof Reflect.get(renderer, 'getImageAnimationStats') === 'function'
         ? null
         : 0
+  let pointerLeaveBatches = 0
+  if (pointerPath) {
+    assert(
+      pointerCalls >= Math.floor((wallMs * pointerRate) / 1000) * 0.99,
+      'Pointer generator must preserve at least 99% of the offered native calls.',
+    )
+    const before = nativeMutationCounts.get(renderer)?.batches ?? 0
+    renderer.simulateMouseMove(0, 0)
+    await until(
+      () => (nativeMutationCounts.get(renderer)?.batches ?? 0) > before,
+      'pointer leave clears row hover',
+    )
+    pointerLeaveBatches = (nativeMutationCounts.get(renderer)?.batches ?? 0) - before
+  }
   await Bun.sleep(500)
   const count = processed() - initialProcessed
   assert.equal(
@@ -801,6 +902,21 @@ async function measure() {
     label: config.sampleGpuDuringMeasurement
       ? 'primary resource measurement'
       : 'observer-overhead experiment',
+    pointer: pointerPath
+      ? {
+          kind: config.pointerMotion,
+          sweepSeconds: config.pointerSweepSeconds,
+          path: pointerPath,
+          offeredCalls: Math.floor((wallMs * pointerRate) / 1000),
+          dispatchedNativeCalls: pointerCalls,
+          actualCallsPerSecond: pointerCalls / (wallMs / 1000),
+          hoverLeaveBatches: pointerLeaveBatches,
+        }
+      : null,
+    measurementStartedAtNs: measurementStartedAtNs.toString(),
+    measurementEndedAtNs: measurementEndedAtNs.toString(),
+    nativeMutationBatches: (mutationsAfter.batches ?? 0) - (mutationsBefore.batches ?? 0),
+    nativeMutationOperations: (mutationsAfter.operations ?? 0) - (mutationsBefore.operations ?? 0),
     wallMs,
     cpuPercent: ((cpu.user + cpu.system) / (wallMs * 1000)) * 100,
     nativeFrames: frames,
@@ -994,6 +1110,204 @@ async function verifyDenseSync() {
     worstColorDifference,
   }
 }
+async function verifyDenseHoverText() {
+  const renderer = current()
+  await until(
+    () => renderer.getPaintedText().includes('0.0 msg/s'),
+    'the initial injected message rate ages out before hover text comparison',
+  )
+  renderer.blur()
+  renderer.clearSelection()
+  const nodes = allNodes(automationSchema.parse(JSON.parse(renderer.getAutomationTree())))
+  const viewport = nodes.find((node) => node.testId === 'chat-messages')?.bounds
+  assert(viewport)
+  const target = nodes.find((node) => {
+    const box = node.bounds
+    return (
+      node.children.length === 0 &&
+      node.text &&
+      /^\p{L}[\p{L} ]{3,24}$/u.test(node.text) &&
+      box &&
+      box.width > 12 &&
+      box.height > 8 &&
+      box.x > viewport.x + 8 &&
+      box.x + box.width < viewport.x + viewport.width - 90 &&
+      box.y > viewport.y + 8 &&
+      box.y + box.height < viewport.y + viewport.height - 8
+    )
+  })
+  assert(target?.bounds, 'A fully visible ordinary text run must be available for selection.')
+  const box = target.bounds
+  const windowGeometry = getNativeQaWindowGeometry('TwirChat')
+  const windowScale = readWindowScale(renderer)
+  const start = { x: box.x + 0.1, y: box.y + box.height / 2 }
+  const end = { x: box.x + box.width + 1, y: start.y }
+  const select = async () => {
+    renderer.simulateMouseDown(start.x, start.y, 0)
+    for (let step = 1; step <= 8; step++) {
+      renderer.simulateMouseMove(start.x + ((end.x - start.x) * step) / 8, start.y, 0)
+      await Bun.sleep(12)
+    }
+    renderer.simulateMouseUp(end.x, end.y, 0)
+    await Bun.sleep(80)
+    return renderer.getSelectedText()
+  }
+  const baselineSelection = await select()
+  assert(baselineSelection?.trim(), 'The baseline native drag must select visible text.')
+  renderer.clearSelection()
+  renderer.simulateMouseMove(start.x, start.y)
+  await Bun.sleep(250)
+  const paintedBefore = renderer.getPaintedText()
+  const window = nativeWindow(renderer)
+  const paintedBoundsBefore = window.getPaintedElementBounds(target.id)
+  assert(paintedBoundsBefore)
+  const glyphCrop = {
+    left: Math.ceil(windowGeometry.x + paintedBoundsBefore.x * windowScale),
+    top: Math.ceil(windowGeometry.y + paintedBoundsBefore.y * windowScale),
+    width:
+      Math.floor(
+        windowGeometry.x + (paintedBoundsBefore.x + paintedBoundsBefore.width) * windowScale,
+      ) - Math.ceil(windowGeometry.x + paintedBoundsBefore.x * windowScale),
+    height:
+      Math.floor(
+        windowGeometry.y + (paintedBoundsBefore.y + paintedBoundsBefore.height) * windowScale,
+      ) - Math.ceil(windowGeometry.y + paintedBoundsBefore.y * windowScale),
+  }
+  const glyphPixels = async () => {
+    const frame = await stableFramebuffer()
+    assert(
+      glyphCrop.left >= 0 &&
+        glyphCrop.top >= 0 &&
+        glyphCrop.width > 0 &&
+        glyphCrop.height > 0 &&
+        glyphCrop.left + glyphCrop.width <= frame.width &&
+        glyphCrop.top + glyphCrop.height <= frame.height,
+      'The fully visible text crop must fit inside the private framebuffer.',
+    )
+    return sharp(frame.pixels, {
+      raw: { width: frame.width, height: frame.height, channels: 4 },
+    })
+      .extract(glyphCrop)
+      .raw()
+      .toBuffer()
+  }
+  const glyphPixelsBefore = await glyphPixels()
+  const glyphPatchBefore = join(session, `hover-text-${windowGeometry.width}-before.png`)
+  await sharp(glyphPixelsBefore, {
+    raw: { width: glyphCrop.width, height: glyphCrop.height, channels: 4 },
+  })
+    .png()
+    .toFile(glyphPatchBefore)
+  const glyphColorsBefore = new Set<number>()
+  for (let offset = 0; offset < glyphPixelsBefore.length; offset += 4)
+    glyphColorsBefore.add(glyphPixelsBefore.readUIntBE(offset, 3))
+  assert(
+    glyphColorsBefore.size > 2,
+    'The baseline text crop must contain visible antialiased glyphs.',
+  )
+  const visibleTextBoundsBefore = nodes.flatMap((node) => {
+    const hasText =
+      node.text?.trim() ||
+      (node.type === 'text' && node.children.some((child) => child.text?.trim()))
+    if (!hasText) return []
+    const bounds = window.getPaintedElementBounds(node.id)
+    return bounds &&
+      bounds.width > 0 &&
+      bounds.height > 0 &&
+      bounds.x >= viewport.x &&
+      bounds.x + bounds.width <= viewport.x + viewport.width &&
+      bounds.y >= viewport.y &&
+      bounds.y + bounds.height <= viewport.y + viewport.height
+      ? [{ id: node.id, bounds }]
+      : []
+  })
+  assert(visibleTextBoundsBefore.length > 0, 'Visible text must have painted bounds snapshots.')
+  const framesBefore = await frameSnapshot(renderer)
+  const hoverStarted = performance.now()
+  const hoverCalls = 240
+  for (let index = 0; index < hoverCalls; index++) {
+    const phase = (index % 60) / 30
+    const position = phase <= 1 ? phase : 2 - phase
+    renderer.simulateMouseMove(
+      viewport.x + viewport.width - 140,
+      viewport.y + 8 + (viewport.height - 16) * position,
+    )
+    await Bun.sleep(Math.max(0, hoverStarted + ((index + 1) * 1000) / 120 - performance.now()))
+  }
+  renderer.simulateMouseMove(start.x, start.y)
+  await Bun.sleep(200)
+  const paintedAfter = renderer.getPaintedText()
+  const paintedBoundsAfter = window.getPaintedElementBounds(target.id)
+  const visibleTextBoundsAfter = visibleTextBoundsBefore.map(({ id }) => ({
+    id,
+    bounds: window.getPaintedElementBounds(id),
+  }))
+  const framesAfter = await frameSnapshot(renderer)
+  const hoverWallMs = performance.now() - hoverStarted
+  const glyphPixelsAfter = await glyphPixels()
+  const glyphPatchAfter = join(session, `hover-text-${windowGeometry.width}-after.png`)
+  await sharp(glyphPixelsAfter, {
+    raw: { width: glyphCrop.width, height: glyphCrop.height, channels: 4 },
+  })
+    .png()
+    .toFile(glyphPatchAfter)
+  assert.deepEqual(
+    glyphPixelsAfter,
+    glyphPixelsBefore,
+    'Hover reuse must preserve the actual visible glyph pixels before any selection or full repaint.',
+  )
+  assert.deepEqual(
+    paintedAfter,
+    paintedBefore,
+    'Hover reuse must preserve painted text order and multiplicity without a fresh geometry query.',
+  )
+  assert.deepEqual(
+    paintedBoundsAfter,
+    paintedBoundsBefore,
+    'Hover reuse must replay the painted text bounds snapshot.',
+  )
+  assert.deepEqual(
+    visibleTextBoundsAfter,
+    visibleTextBoundsBefore,
+    'Hover reuse must preserve every fully visible text host and raw text bounds snapshot.',
+  )
+  // No invalidate or geometry query may precede this mouse-down: it must use the replayed registry.
+  const selectionAfterHover = await select()
+  assert.equal(
+    selectionAfterHover,
+    baselineSelection,
+    'Replayed text must retain native hit testing.',
+  )
+  renderer.clearSelection()
+  await Bun.sleep(150)
+  return {
+    target: { id: target.id, text: target.text, bounds: box },
+    baselineSelection,
+    selectionAfterHover,
+    paintedTextBefore: paintedBefore.length,
+    paintedTextAfter: paintedAfter.length,
+    paintedTextSha256: createHash('sha256').update(JSON.stringify(paintedAfter)).digest('hex'),
+    paintedBoundsBefore,
+    paintedBoundsAfter,
+    visibleTextBoundsCount: visibleTextBoundsAfter.length,
+    visibleTextBoundsSha256: createHash('sha256')
+      .update(JSON.stringify(visibleTextBoundsAfter))
+      .digest('hex'),
+    glyphPixels: {
+      crop: glyphCrop,
+      pixelCount: glyphCrop.width * glyphCrop.height,
+      baselineDistinctRgbColors: glyphColorsBefore.size,
+      beforeSha256: createHash('sha256').update(glyphPixelsBefore).digest('hex'),
+      afterSha256: createHash('sha256').update(glyphPixelsAfter).digest('hex'),
+      changedPixels: 0,
+      beforePatch: glyphPatchBefore,
+      afterPatch: glyphPatchAfter,
+    },
+    hoverCalls,
+    hoverWallMs,
+    hoverFullDraws: framesAfter.fullDraws - framesBefore.fullDraws,
+  }
+}
 async function denseFunctional() {
   await getFocusSink()
   await activateMain()
@@ -1033,6 +1347,7 @@ async function denseFunctional() {
     scrollChanged: boolean
     hoverActionVisible: boolean
     motionPixels: number
+    hoverText: Awaited<ReturnType<typeof verifyDenseHoverText>>
   }> = []
   for (const size of [{ width: 420, height: 300 }, initialWindow]) {
     await nativeWindow(current()).setWindowBounds(size)
@@ -1108,6 +1423,7 @@ async function denseFunctional() {
       scrollChanged: true,
       hoverActionVisible: true,
       motionPixels: await verifyMotion(`dense after input ${size.width}`),
+      hoverText: await verifyDenseHoverText(),
     })
     await captureGuiQaDisplay(`dense-emotes-${size.width}`)
   }

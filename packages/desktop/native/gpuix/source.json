@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.7",
+  "version": "0.11.0-twirchat.15",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -90,6 +90,56 @@
       "path": "patches/gpui-wgpu-cached-scene-instances.patch",
       "root": "gpui",
       "sha256": "775df363755739b1e598102200d44cfcc13585398294bafe1c7c211b7da03e0a"
+    },
+    {
+      "path": "patches/gpuix-text-leaves.patch",
+      "root": "gpuix",
+      "sha256": "ec45ce07bb1e185a388694cb0dd5e8b4709cef4b012e47f77af7f45f6c808a6e"
+    },
+    {
+      "path": "patches/gpui-intrinsic-text-cache.patch",
+      "root": "gpui",
+      "sha256": "8fd96a9ff956dbf26a80b0a043202fbb13e5e7619c270f8d64eb70ec927f0ec0"
+    },
+    {
+      "path": "patches/gpuix-plain-text-cache.patch",
+      "root": "gpuix",
+      "sha256": "a82ef48bc2f4394a2462a36580830d0065995f0219d24f5c1955fb988d6ca2cf"
+    },
+    {
+      "path": "patches/gpuix-focus-sync.patch",
+      "root": "gpuix",
+      "sha256": "7b35451e2389dfffcdd999972cf984838f2b6a427d2c476e86bf5ef90a481a72"
+    },
+    {
+      "path": "patches/gpui-versioned-views.patch",
+      "root": "gpui",
+      "sha256": "653e523de1b806b20b1e8220e5f6ebfcd59e9c88da32101b079f8f2659f6edd9"
+    },
+    {
+      "path": "patches/gpui-list-layout-space.patch",
+      "root": "gpui",
+      "sha256": "05ed46fa0439caa1c54c1d1180f5c5133075674f650130d8010c8019f8e43dac"
+    },
+    {
+      "path": "patches/gpui-image-data-readiness.patch",
+      "root": "gpui",
+      "sha256": "b4951b4fd3c77caf1b6a9b7c3db42c8737fbd6f5462a9d6ecb6ce1167e2067df"
+    },
+    {
+      "path": "patches/gpuix-cached-flow.patch",
+      "root": "gpuix",
+      "sha256": "a5e74ad824fb7e8f9f851c9540f351a87e7b29f29d0bb433578083fcb4701024"
+    },
+    {
+      "path": "patches/gpui-empty-text-background.patch",
+      "root": "gpui",
+      "sha256": "d6664801cbf9ef62caa42c483e89322019d8822232f2add8cc839a9c9d2f75da"
+    },
+    {
+      "path": "patches/gpui-element-state-identity.patch",
+      "root": "gpui",
+      "sha256": "57c0591252f6c92d74cd408c020761e91ab5d57552f1a3c674fdccc62c936665"
     }
   ]
 }

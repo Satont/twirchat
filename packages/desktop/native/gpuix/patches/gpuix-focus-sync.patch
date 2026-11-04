@@ -1,0 +1,477 @@
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -4796,6 +4796,7 @@
+     /// Created lazily for elements with keyboard or focus/blur listeners.
+     /// Handles persist across renders so GPUI maintains focus state.
+     pub(crate) focus_handles: HashMap<u64, gpui::FocusHandle>,
++    synced_focus_revision: Option<u64>,
+     pending_focus_element: Option<PendingFocus>,
+     /// Active focus/blur subscriptions keyed by element and event type.
+     pub(crate) focus_subscriptions: HashMap<(u64, String), gpui::Subscription>,
+@@ -5145,6 +5146,7 @@
+             window_selection_event_id: 0,
+             reported_selection: None,
+             focus_handles: HashMap::new(),
++            synced_focus_revision: None,
+             pending_focus_element: None,
+             focus_subscriptions: HashMap::new(),
+             custom_registry: CustomElementRegistry::with_defaults(),
+@@ -6383,76 +6385,78 @@
+         }) {
+             self.pending_focus_element = None;
+         }
+-        // Only the focusable elements are visited. This runs every frame, and
+-        // the rest of the tree is orders of magnitude larger.
+-        //
+-        // Create handles for elements that need focus but don't have one yet.
+         let mut focus_after_subscriptions = None;
+-        for &id in &tree.focusable_ids {
+-            let Some(element) = tree.elements.get(&id) else {
+-                continue;
+-            };
+-            let tab_index = element.tab_index().or_else(|| {
+-                matches!(element.element_type.as_str(), "input" | "textarea").then_some(0)
++        // Tree metadata owns this revision; painted visibility and tab order stay frame-local.
++        let focus_revision = tree.focus_revision();
++        if focus_revision.is_none() || self.synced_focus_revision != focus_revision {
++            for &id in &tree.focusable_ids {
++                let Some(element) = tree.elements.get(&id) else {
++                    continue;
++                };
++                let tab_index = element.tab_index().or_else(|| {
++                    matches!(element.element_type.as_str(), "input" | "textarea").then_some(0)
++                });
++
++                if !self.focus_handles.contains_key(&id) {
++                    let handle = match tab_index {
++                        Some(index) => cx.focus_handle().tab_index(index).tab_stop(index >= 0),
++                        None => cx.focus_handle(),
++                    };
++                    // Focus once, at creation. Re-focusing every frame would
++                    // steal focus back from whatever the user clicked next.
++                    if element.auto_focus {
++                        focus_after_subscriptions = Some(handle.clone());
++                    }
++                    self.focus_handles.insert(id, handle);
++                } else if let (Some(handle), Some(index)) =
++                    (self.focus_handles.get(&id).cloned(), tab_index)
++                {
++                    self.focus_handles
++                        .insert(id, handle.tab_index(index).tab_stop(index >= 0));
++                } else if let Some(handle) = self.focus_handles.get(&id).cloned() {
++                    self.focus_handles.insert(id, handle.tab_stop(false));
++                }
++            }
++
++            self.focus_subscriptions.retain(|(id, event), _| {
++                tree.elements
++                    .get(id)
++                    .is_some_and(|element| element.events().contains(event))
+             });
+-
+-            if !self.focus_handles.contains_key(&id) {
+-                let handle = match tab_index {
+-                    Some(index) => cx.focus_handle().tab_index(index).tab_stop(index >= 0),
+-                    None => cx.focus_handle(),
++            for &id in &tree.focusable_ids {
++                let (Some(element), Some(handle)) =
++                    (tree.elements.get(&id), self.focus_handles.get(&id).cloned())
++                else {
++                    continue;
+                 };
+-                // Focus once, at creation. Re-focusing every frame would
+-                // steal focus back from whatever the user clicked next.
+-                if element.auto_focus {
+-                    focus_after_subscriptions = Some(handle.clone());
++                let focus_key = (id, "focus".to_string());
++                if element.events().contains("focus")
++                    && !self.focus_subscriptions.contains_key(&focus_key)
++                {
++                    let callback = callback.clone();
++                    let subscription = cx.on_focus(&handle, window, move |_this, _window, _cx| {
++                        emit_event_full(&callback, id, "focus", |_| {});
++                    });
++                    self.focus_subscriptions.insert(focus_key, subscription);
+                 }
+-                self.focus_handles.insert(id, handle);
+-            } else if let (Some(handle), Some(index)) =
+-                (self.focus_handles.get(&id).cloned(), tab_index)
+-            {
+-                self.focus_handles
+-                    .insert(id, handle.tab_index(index).tab_stop(index >= 0));
+-            } else if let Some(handle) = self.focus_handles.get(&id).cloned() {
+-                self.focus_handles.insert(id, handle.tab_stop(false));
+-            }
+-        }
+-
+-        self.focus_subscriptions.retain(|(id, event), _| {
+-            tree.elements
+-                .get(id)
+-                .is_some_and(|element| element.events().contains(event))
+-        });
+-        for &id in &tree.focusable_ids {
+-            let (Some(element), Some(handle)) =
+-                (tree.elements.get(&id), self.focus_handles.get(&id).cloned())
+-            else {
+-                continue;
+-            };
+-            let focus_key = (id, "focus".to_string());
+-            if element.events().contains("focus")
+-                && !self.focus_subscriptions.contains_key(&focus_key)
+-            {
+-                let callback = callback.clone();
+-                let subscription = cx.on_focus(&handle, window, move |_this, _window, _cx| {
+-                    emit_event_full(&callback, id, "focus", |_| {});
+-                });
+-                self.focus_subscriptions.insert(focus_key, subscription);
+-            }
+-            let blur_key = (id, "blur".to_string());
+-            if element.events().contains("blur")
+-                && !self.focus_subscriptions.contains_key(&blur_key)
+-            {
+-                let callback = callback.clone();
+-                let subscription = cx.on_blur(&handle, window, move |_this, _window, _cx| {
+-                    emit_event_full(&callback, id, "blur", |_| {});
+-                });
+-                self.focus_subscriptions.insert(blur_key, subscription);
+-            }
+-        }
+-
+-        // Clean up handles for elements that no longer exist.
+-        self.focus_handles
+-            .retain(|id, _| tree.focusable_ids.contains(id));
++                let blur_key = (id, "blur".to_string());
++                if element.events().contains("blur")
++                    && !self.focus_subscriptions.contains_key(&blur_key)
++                {
++                    let callback = callback.clone();
++                    let subscription = cx.on_blur(&handle, window, move |_this, _window, _cx| {
++                        emit_event_full(&callback, id, "blur", |_| {});
++                    });
++                    self.focus_subscriptions.insert(blur_key, subscription);
++                }
++            }
++
++            // Clean up handles for elements that no longer exist.
++            self.focus_handles
++                .retain(|id, _| tree.focusable_ids.contains(id));
++
++            self.synced_focus_revision = focus_revision;
++        }
+ 
+         // Keep the request until the handle exists. A frame can render before
+         // the batch that creates the element arrives (Solid flushes in a
+--- a/packages/native/src/retained_tree.rs
++++ b/packages/native/src/retained_tree.rs
+@@ -256,9 +256,10 @@
+     pub motion_ids: HashSet<u64>,
+     pub(crate) geometry_refinement_ids: HashSet<u64>,
+     /// Elements that `needs_focus`, in id order. Kept as mutations arrive so the
+-    /// per-frame focus sync visits these few instead of every retained element:
++    /// metadata sync visits these few instead of every retained element:
+     /// a large tree retains thousands, and nearly none are focusable.
+     pub focusable_ids: std::collections::BTreeSet<u64>,
++    focus_revision: Option<u64>,
+     /// How many `anchored` elements exist. Without any, an `elements_at` walk
+     /// can drop a clipped subtree whole.
+     anchored_count: usize,
+@@ -284,6 +285,7 @@
+             motion_ids: HashSet::new(),
+             geometry_refinement_ids: HashSet::new(),
+             focusable_ids: Default::default(),
++            focus_revision: Some(0),
+             anchored_count: 0,
+             styles: StyleTable::default(),
+             root_id: None,
+@@ -316,6 +318,14 @@
+         }
+     }
+ 
++    pub(crate) fn focus_revision(&self) -> Option<u64> {
++        self.focus_revision
++    }
++
++    fn bump_focus_revision(&mut self) {
++        self.focus_revision = self.focus_revision.and_then(|revision| revision.checked_add(1));
++    }
++
+     pub fn keyboard_focus_dim(&self) -> bool {
+         self.keyboard_focus_dim
+     }
+@@ -339,23 +349,29 @@
+         self.geometry_refinement_ids.remove(&id);
+         self.invalidation = Invalidation::Full;
+         let revision = self.take_revision();
+-        self.elements
++        let previous = self
++            .elements
+             .insert(id, RetainedElement::new(id, element_type, revision));
+-        self.track_focusable(id);
++        let was_focusable = previous.as_ref().is_some_and(RetainedElement::needs_focus);
++        let is_focusable = self.track_focusable(id);
++        if was_focusable || is_focusable {
++            self.bump_focus_revision();
++        }
+     }
+ 
+     /// Bring `focusable_ids` in line with `id` after anything `needs_focus`
+     /// reads has changed.
+-    fn track_focusable(&mut self, id: u64) {
+-        if self
++    fn track_focusable(&mut self, id: u64) -> bool {
++        let focusable = self
+             .elements
+             .get(&id)
+-            .is_some_and(RetainedElement::needs_focus)
+-        {
++            .is_some_and(RetainedElement::needs_focus);
++        if focusable {
+             self.focusable_ids.insert(id);
+         } else {
+             self.focusable_ids.remove(&id);
+         }
++        focusable
+     }
+ 
+     fn take_revision(&mut self) -> u64 {
+@@ -408,6 +424,7 @@
+     /// Unlinks from the parent before removing, then marks the parent chain
+     /// changed so caches cannot serve text that is no longer in the tree.
+     pub fn destroy_element(&mut self, id: u64) -> Vec<u64> {
++        let focusable_count = self.focusable_ids.len();
+         let parent_id = self.elements.get(&id).and_then(|element| element.parent);
+         if let Some(parent_id) = parent_id {
+             if let Some(parent) = self.elements.get_mut(&parent_id) {
+@@ -416,6 +433,9 @@
+         }
+         let mut destroyed = Vec::new();
+         self.destroy_element_recursive(id, &mut destroyed);
++        if self.focusable_ids.len() != focusable_count {
++            self.bump_focus_revision();
++        }
+         if !destroyed.is_empty() {
+             self.invalidation = Invalidation::Full;
+         }
+@@ -539,6 +559,7 @@
+     }
+ 
+     pub fn set_event_listener(&mut self, id: u64, event_type: String, has_handler: bool) {
++        let affects_focus = matches!(event_type.as_str(), "keyDown" | "keyUp" | "focus" | "blur");
+         if let Some(element) = self.elements.get_mut(&id) {
+             let changed = if has_handler {
+                 element.extras_mut().events.insert(event_type)
+@@ -555,6 +576,9 @@
+                 self.invalidation = Invalidation::Full;
+             }
+             if changed {
++                if affects_focus {
++                    self.bump_focus_revision();
++                }
+                 self.track_focusable(id);
+             }
+         }
+@@ -581,9 +605,10 @@
+             if key == "autoFocus" {
+                 let auto_focus = value.as_bool().unwrap_or(false);
+                 if element.auto_focus != auto_focus {
++                    element.auto_focus = auto_focus;
+                     self.invalidation = Invalidation::Full;
++                    self.bump_focus_revision();
+                 }
+-                element.auto_focus = auto_focus;
+                 return;
+             }
+             if key == "testId" {
+@@ -609,6 +634,7 @@
+             return;
+         }
+         if is_tab_index {
++            self.bump_focus_revision();
+             self.track_focusable(id);
+         }
+         if is_motion {
+@@ -1553,3 +1579,184 @@
+     }
+ 
+ }
++
++#[cfg(test)]
++mod focus_revision_tests {
++    use super::RetainedTree;
++    use crate::style::StyleDesc;
++    use std::sync::Arc;
++
++    fn revision(tree: &RetainedTree) -> u64 {
++        tree.focus_revision().unwrap()
++    }
++
++    #[test]
++    fn ordinary_node_churn_does_not_require_focus_reconciliation() {
++        let mut tree = RetainedTree::new();
++        let before = revision(&tree);
++        tree.create_element(1, "div".into());
++        tree.create_element(2, "text".into());
++        tree.append_child(1, 2);
++        tree.create_element(2, "div".into());
++        tree.destroy_element(2);
++        tree.destroy_element(1);
++        assert_eq!(revision(&tree), before);
++    }
++
++    #[test]
++    fn creating_and_replacing_focusable_nodes_advances_the_revision() {
++        let mut tree = RetainedTree::new();
++        let mut before = revision(&tree);
++        for kind in ["input", "input", "textarea", "div"] {
++            tree.create_element(1, kind.into());
++            assert_eq!(revision(&tree), before + 1);
++            before = revision(&tree);
++        }
++        assert!(tree.focusable_ids.is_empty());
++    }
++
++    #[test]
++    fn subtree_removal_retires_focusable_ids_but_missing_removals_do_not() {
++        let mut tree = RetainedTree::new();
++        for (id, kind) in [(1, "div"), (2, "input"), (3, "div"), (4, "textarea")] {
++            tree.create_element(id, kind.into());
++        }
++        for (parent, child) in [(1, 2), (1, 3), (3, 4)] {
++            tree.append_child(parent, child);
++        }
++        let before = revision(&tree);
++        tree.destroy_element(3);
++        assert_eq!(revision(&tree), before + 1);
++        assert_eq!(tree.focusable_ids.iter().copied().collect::<Vec<_>>(), [2]);
++        tree.destroy_element(1);
++        assert_eq!(revision(&tree), before + 2);
++        assert!(tree.focusable_ids.is_empty());
++        tree.destroy_element(1);
++        assert_eq!(revision(&tree), before + 2);
++    }
++
++    #[test]
++    fn focus_listeners_invalidate_even_when_the_focusable_set_stays_the_same() {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "input".into());
++        for event in ["keyDown", "keyUp", "focus", "blur"] {
++            let before = revision(&tree);
++            tree.set_event_listener(1, event.into(), true);
++            assert_eq!(revision(&tree), before + 1);
++            tree.set_event_listener(1, event.into(), true);
++            assert_eq!(revision(&tree), before + 1);
++            tree.set_event_listener(1, event.into(), false);
++            assert_eq!(revision(&tree), before + 2);
++            tree.set_event_listener(1, event.into(), false);
++            assert_eq!(revision(&tree), before + 2);
++            assert_eq!(tree.focusable_ids.iter().copied().collect::<Vec<_>>(), [1]);
++        }
++    }
++
++    #[test]
++    fn changing_tab_index_invalidates_metadata_without_changing_focusable_ids() {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "input".into());
++        for index in [Some(0), Some(5), Some(-1), None] {
++            let before = revision(&tree);
++            let value = serde_json::json!(index);
++            tree.set_custom_prop(1, "tabIndex".into(), value.clone());
++            assert_eq!(revision(&tree), before + 1);
++            assert_eq!(tree.elements[&1].tab_index(), index);
++            assert_eq!(tree.focusable_ids.iter().copied().collect::<Vec<_>>(), [1]);
++            tree.set_custom_prop(1, "tabIndex".into(), value);
++            assert_eq!(revision(&tree), before + 1);
++        }
++    }
++
++    #[test]
++    fn autofocus_changes_invalidate_metadata_only_when_the_flag_changes() {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "input".into());
++        let before = revision(&tree);
++        tree.set_custom_prop(1, "autoFocus".into(), serde_json::json!(false));
++        assert_eq!(revision(&tree), before);
++        tree.set_custom_prop(1, "autoFocus".into(), serde_json::json!(true));
++        assert_eq!(revision(&tree), before + 1);
++        assert!(tree.elements[&1].auto_focus);
++        tree.set_custom_prop(1, "autoFocus".into(), serde_json::json!(true));
++        assert_eq!(revision(&tree), before + 1);
++        tree.set_custom_prop(1, "autoFocus".into(), serde_json::Value::Null);
++        assert_eq!(revision(&tree), before + 2);
++        assert!(!tree.elements[&1].auto_focus);
++        tree.set_custom_prop(1, "autoFocus".into(), serde_json::json!(false));
++        assert_eq!(revision(&tree), before + 2);
++    }
++
++    #[test]
++    fn reparenting_and_reordering_do_not_cache_or_invalidate_painted_tab_order() {
++        let mut tree = RetainedTree::new();
++        for (id, kind) in [(1, "div"), (2, "div"), (3, "input"), (4, "textarea")] {
++            tree.create_element(id, kind.into());
++        }
++        let before = revision(&tree);
++        tree.append_child(1, 3);
++        tree.append_child(1, 4);
++        tree.insert_before(1, 4, 3);
++        tree.append_child(2, 3);
++        assert_eq!(revision(&tree), before);
++        assert_eq!(tree.focusable_ids.iter().copied().collect::<Vec<_>>(), [3, 4]);
++    }
++
++    #[test]
++    fn text_color_mouse_events_and_unrelated_props_leave_focus_metadata_unchanged() {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "input".into());
++        let before = revision(&tree);
++        tree.set_style(
++            1,
++            Arc::new(StyleDesc {
++                color: Some("red".into()),
++                ..Default::default()
++            }),
++        );
++        tree.set_text(1, "new text".into());
++        for event in ["click", "mouseMove", "mouseEnter", "mouseLeave"] {
++            tree.set_event_listener(1, event.into(), true);
++        }
++        tree.set_custom_prop(1, "testId".into(), serde_json::json!("input"));
++        tree.set_custom_prop(1, "placeholder".into(), serde_json::json!("type here"));
++        tree.set_root(1);
++        tree.set_keyboard_focus_dim(false);
++        assert_eq!(revision(&tree), before);
++    }
++
++    #[test]
++    fn missing_node_mutations_do_not_invalidate_focus_metadata() {
++        let mut tree = RetainedTree::new();
++        let before = revision(&tree);
++        tree.set_event_listener(99, "focus".into(), true);
++        tree.set_custom_prop(99, "tabIndex".into(), serde_json::json!(0));
++        tree.set_custom_prop(99, "autoFocus".into(), serde_json::json!(true));
++        tree.destroy_element(99);
++        assert_eq!(revision(&tree), before);
++    }
++
++    #[test]
++    fn metadata_revision_changes_before_the_queued_invalidation_can_run() {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "input".into());
++        tree.take_invalidation();
++        let before = revision(&tree);
++        tree.set_custom_prop(1, "tabIndex".into(), serde_json::json!(4));
++        assert_eq!(revision(&tree), before + 1);
++        tree.take_invalidation();
++        assert_eq!(revision(&tree), before + 1);
++    }
++
++    #[test]
++    fn exhausted_focus_revisions_remain_uncacheable() {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "input".into());
++        tree.focus_revision = Some(u64::MAX);
++        tree.set_custom_prop(1, "tabIndex".into(), serde_json::json!(0));
++        assert_eq!(tree.focus_revision(), None);
++        tree.set_event_listener(1, "blur".into(), true);
++        assert_eq!(tree.focus_revision(), None);
++    }
++}

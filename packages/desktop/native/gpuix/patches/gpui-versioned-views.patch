@@ -1,0 +1,272 @@
+--- a/crates/gpui/src/view.rs
++++ b/crates/gpui/src/view.rs
+@@ -241,6 +241,7 @@
+     view: Option<V>,
+     entity_id: Option<EntityId>,
+     cached_style: Option<StyleRefinement>,
++    cache_version: Option<u64>,
+     #[cfg(debug_assertions)]
+     source: &'static core::panic::Location<'static>,
+ }
+@@ -253,10 +254,20 @@
+         ViewElement {
+             entity_id,
+             cached_style: None,
++            cache_version: None,
+             view: Some(view),
+             #[cfg(debug_assertions)]
+             source: core::panic::Location::caller(),
+         }
++    }
++
++    /// Include a caller-supplied version in the rendered subtree's cache key.
++    /// A changed version prevents reuse in the current frame without requiring
++    /// an entity notification. It does not schedule a frame or change element identity,
++    /// and has no effect unless caching is enabled.
++    pub fn cache_version(mut self, version: u64) -> Self {
++        self.cache_version = Some(version);
++        self
+     }
+ 
+     /// Enable caching of this view's rendered subtree, laid out at `style`.
+@@ -290,6 +301,7 @@
+ }
+ 
+ struct ViewElementCacheKey {
++    version: Option<u64>,
+     bounds: Bounds<Pixels>,
+     content_mask: ContentMask<Pixels>,
+     text_style: TextStyle,
+@@ -321,7 +333,7 @@
+         if let Some(entity_id) = self.entity_id {
+             // Stateful path: create a reactive boundary.
+             window.with_rendered_view(entity_id, |window| {
+-                let caching_disabled = window.is_inspector_picking(cx);
++                let caching_disabled = window.is_inspector_picking(cx) || window.is_a11y_active();
+                 match self.cached_style.as_ref() {
+                     Some(style) if !caching_disabled => {
+                         let mut root_style = Style::default();
+@@ -384,11 +396,11 @@
+                         let text_style = window.text_style();
+ 
+                         if let Some(mut element_state) = element_state
++                            && element_state.cache_key.version == self.cache_version
+                             && element_state.cache_key.bounds == bounds
+                             && element_state.cache_key.content_mask == content_mask
+                             && element_state.cache_key.text_style == text_style
+-                            && !window.dirty_views.contains(&entity_id)
+-                            && !window.refreshing
++                            && !window.is_view_cache_invalidated(entity_id)
+                         {
+                             let prepaint_start = window.prepaint_index();
+                             window.reuse_prepaint(element_state.prepaint_range.clone());
+@@ -424,6 +436,7 @@
+                                 prepaint_range: prepaint_start..prepaint_end,
+                                 paint_range: PaintIndex::default()..PaintIndex::default(),
+                                 cache_key: ViewElementCacheKey {
++                                    version: self.cache_version,
+                                     bounds,
+                                     content_mask,
+                                     text_style,
+@@ -458,7 +471,7 @@
+         if let Some(entity_id) = self.entity_id {
+             // Stateful path.
+             window.with_rendered_view(entity_id, |window| {
+-                let caching_disabled = window.is_inspector_picking(cx);
++                let caching_disabled = window.is_inspector_picking(cx) || window.is_a11y_active();
+                 if self.cached_style.is_some() && !caching_disabled {
+                     window.with_element_state::<ViewElementState, _>(
+                         global_id.unwrap(),
+@@ -505,3 +518,175 @@
+         Empty
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{AppContext as _, Styled, TestAppContext, WindowHandle, div, px};
++    use std::{cell::Cell, rc::Rc};
++
++    struct CacheChild {
++        version: u64,
++        rendered_version: Rc<Cell<u64>>,
++        render_count: Rc<Cell<usize>>,
++    }
++
++    impl Render for CacheChild {
++        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
++            self.render_count.set(self.render_count.get() + 1);
++            self.rendered_version.set(self.version);
++            div().size(px(40.))
++        }
++    }
++
++    struct CacheParent {
++        child: Entity<CacheChild>,
++        version: Rc<Cell<Option<u64>>>,
++    }
++
++    impl Render for CacheParent {
++        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
++            let version = self.version.get();
++            // Mutate the child during parent rendering without notifying it.
++            self.child.update(cx, |child, _| {
++                child.version = version.unwrap_or_default();
++            });
++            let child = self
++                .child
++                .clone()
++                .cached(StyleRefinement::default().size(px(40.)));
++            match version {
++                Some(version) => child.cache_version(version),
++                None => child,
++            }
++        }
++    }
++
++    struct CacheFixture {
++        cx: TestAppContext,
++        window: WindowHandle<CacheParent>,
++        version: Rc<Cell<Option<u64>>>,
++        rendered_version: Rc<Cell<u64>>,
++        render_count: Rc<Cell<usize>>,
++    }
++
++    impl CacheFixture {
++        fn new(version: Option<u64>) -> Self {
++            let mut cx = TestAppContext::single();
++            let version = Rc::new(Cell::new(version));
++            let rendered_version = Rc::new(Cell::new(0));
++            let render_count = Rc::new(Cell::new(0));
++            let window = cx.add_window({
++                let version = version.clone();
++                let rendered_version = rendered_version.clone();
++                let render_count = render_count.clone();
++                move |_, cx| CacheParent {
++                    child: cx.new(|_| CacheChild {
++                        version: 0,
++                        rendered_version,
++                        render_count,
++                    }),
++                    version,
++                }
++            });
++            let mut fixture = Self {
++                cx,
++                window,
++                version,
++                rendered_version,
++                render_count,
++            };
++            fixture.draw();
++            fixture
++        }
++
++        fn draw(&mut self) {
++            self.cx
++                .update_window(self.window.into(), |_, window, cx| {
++                    window.draw(cx).clear(cx);
++                })
++                .unwrap();
++        }
++    }
++
++    #[test]
++    fn cached_view_version_changes_render_in_the_current_frame() {
++        let mut fixture = CacheFixture::new(None);
++        let initial_count = fixture.render_count.get();
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count);
++
++        // An explicit zero differs from the unversioned default.
++        fixture.version.set(Some(0));
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count + 1);
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count + 1);
++
++        fixture.version.set(Some(1));
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count + 2);
++        assert_eq!(fixture.rendered_version.get(), 1);
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count + 2);
++    }
++
++    #[test]
++    fn cached_views_render_when_dirty_or_refreshing() {
++        let mut fixture = CacheFixture::new(Some(0));
++        let initial_count = fixture.render_count.get();
++        fixture
++            .window
++            .update(&mut fixture.cx, |parent, window, _| {
++                let child_id = parent.child.entity_id();
++                assert!(!window.is_view_cache_invalidated(child_id));
++                window.dirty_views.insert(child_id);
++                assert!(window.is_view_cache_invalidated(child_id));
++            })
++            .unwrap();
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count + 1);
++
++        fixture
++            .window
++            .update(&mut fixture.cx, |parent, window, _| {
++                let child_id = parent.child.entity_id();
++                assert!(!window.is_view_cache_invalidated(child_id));
++                window.refresh();
++                assert!(window.is_view_cache_invalidated(child_id));
++            })
++            .unwrap();
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count + 2);
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), initial_count + 2);
++    }
++
++    #[test]
++    fn cached_views_render_every_accessibility_frame() {
++        let mut fixture = CacheFixture::new(Some(0));
++        let initial_count = fixture.render_count.get();
++        fixture
++            .window
++            .update(&mut fixture.cx, |_, window, _| {
++                window.set_a11y_active_for_tests(true);
++            })
++            .unwrap();
++        fixture.draw();
++        let active_count = fixture.render_count.get();
++        assert!(active_count > initial_count);
++        fixture.draw();
++        assert!(fixture.render_count.get() > active_count);
++
++        fixture
++            .window
++            .update(&mut fixture.cx, |_, window, _| {
++                window.set_a11y_active_for_tests(false);
++            })
++            .unwrap();
++        fixture.draw();
++        let cached_count = fixture.render_count.get();
++        fixture.draw();
++        assert_eq!(fixture.render_count.get(), cached_count);
++    }
++}
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -1999,6 +1999,14 @@
+ }
+ 
+ impl Window {
++    /// Whether a view's rendered subtree cache is invalidated for the current frame.
++    /// This reflects a window refresh or an already processed view invalidation;
++    /// queued entity notifications are processed at the start of drawing.
++    /// Reading this does not schedule a frame or invalidate any view.
++    pub fn is_view_cache_invalidated(&self, view_id: EntityId) -> bool {
++        self.refreshing || self.dirty_views.contains(&view_id)
++    }
++
+     fn mark_view_dirty(&mut self, view_id: EntityId) {
+         // Mark ancestor views as dirty. If already in the `dirty_views` set, then all its ancestors
+         // should already be dirty.

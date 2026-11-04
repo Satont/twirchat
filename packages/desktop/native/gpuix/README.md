@@ -5,7 +5,7 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
-Native version `0.11.0-twirchat.7` keeps GIF/WebP images animating in visible,
+Native version `0.11.0-twirchat.15` keeps GIF/WebP images animating in visible,
 unfocused windows. [GPUIX issue #67](https://github.com/remorses/gpuix/issues/67)
 remains open, and the pinned GPUI source still stops both image frame advancement
 and scheduling on focus loss. The background-image patches add an opt-in GPUI
@@ -27,7 +27,7 @@ per window, armed for the earliest encoded frame boundary. Unrelated chat redraw
 retain the existing timer when that absolute boundary is unchanged. Static images,
 removed images, reduced motion, and hidden windows stop requesting image frames.
 A visible native frame request resumes a hidden animation at the shared phase.
-The native GPUIX image tree remains uncached for ordinary UI draws. The scene-animation
+Ordinary UI draws rebuild changed image subtrees. The scene-animation
 patch registers synchronized animations only when their image actually paints inside the
 content mask. Layout of clipped or offscreen images creates no animation demand.
 
@@ -49,6 +49,42 @@ Explicit immutable cached-scene presents also reuse GPU instance bindings and da
 ordinary draws, instance-storage growth and device recovery invalidate that cache.
 Virtual lists report changed visible ranges after layout, including initial layout,
 programmatic scrolling and resize, with duplicate ranges suppressed.
+
+Selectable text paints search/selection washes and registers its text directly before glyphs,
+without extra layout containers or an underlay canvas. Unstyled raw text leaves also skip
+the generic interactive host while publishing their painted automation bounds. Authored
+styles, events, accessibility metadata and empty placeholders keep the full host path.
+
+Color-only retained batches notify the view without forcing a global refresh. During these
+draws, eventless intrinsic text hosts inside virtual-list rows can reuse measured layout,
+prepaint and scene ranges. Text context, geometry, clipping, selection and focus are checked;
+native selection registries and painted text/bounds snapshots are replayed in paint order.
+Active motion, geometric hover styles, dynamic ancestor opacity, search highlights, inspector
+picking and active accessibility keep ordinary painting. Full invalidations, including message
+ingestion, clear the cache and use the normal path. Deferred rows also check the tree's committed
+generation under its mutex, so a queued UI command cannot leave cached ancestor opacity stale.
+macOS currently keeps full invalidation.
+Each window admits at most 4096 words, prunes entries against actual painted identities and
+clears them on close. Images continue through their existing resource and animation paths.
+
+Compact message bodies can also reuse GPUI's entity-backed view cache while their mounted row,
+committed subtree, available width, inherited text, selection and focus remain unchanged.
+The row background and other surrounding elements keep ordinary layout. Cached bodies replay
+their selectable-text and painted-bounds records and touch only existing image resources;
+pending or replaced decodes require a fresh body. Animation slots continue through the final
+scene, including cached replay. A changed width, dirty child view, full invalidation, active
+motion, search highlight, inspector or accessibility uses fresh intrinsic measurement.
+Only static column ancestry is eligible, so the previous body height is never imposed on an
+unknown or changed row constraint. Each window retains at most 256 bodies, removes retired
+entries after their painted lifetime, and clears them on close. View cache versions are not
+recycled when an entry is removed.
+The native cache paints a compatible absolute hover toolbar separately, using its original
+body anchor and descendant IDs. Full or unsupported draws retain the original element tree.
+Toolbar colors leave the inline revision intact; only changed rows recompute this policy.
+Cached misses constrain the body root to its measured width while preserving the intrinsic
+width of long words. Cache-state identities add no descendant scope or layout container. Ancestor geometry is guarded by the committed Full generation;
+row background changes do not invalidate otherwise unchanged content. Text with no background
+decorations skips the empty background layer, avoiding its glyph walk and overlap bookkeeping.
 
 Run from `packages/desktop`:
 
@@ -228,6 +264,11 @@ well as its display; they never connect to the user's tray or notification servi
 
 GUI probes must run through the repository's `qa:gui` isolated launcher. Never
 launch this addon against the user's display/compositor directly.
+
+Focus handles, tab metadata and focus/blur subscriptions reconcile only when the
+committed tree's focus metadata changes. Color, text and unrelated node updates
+reuse the existing handles. Pending focus requests still settle or cancel on each
+render; GPUI still derives tab order from the elements actually painted in that frame.
 
 ## Verification
 
