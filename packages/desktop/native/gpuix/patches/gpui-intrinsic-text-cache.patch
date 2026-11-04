@@ -1,0 +1,762 @@
+--- a/crates/gpui/src/elements/mod.rs
++++ b/crates/gpui/src/elements/mod.rs
+@@ -1,5 +1,6 @@
+ mod anchored;
+ mod animation;
++mod cached;
+ mod canvas;
+ mod container_query;
+ mod deferred;
+@@ -14,6 +15,7 @@
+ 
+ pub use anchored::*;
+ pub use animation::*;
++pub use cached::*;
+ pub use canvas::*;
+ pub use container_query::*;
+ pub use deferred::*;
+--- /dev/null
++++ b/crates/gpui/src/elements/cached.rs
+@@ -0,0 +1,742 @@
++use std::{cell::RefCell, ops::Range, rc::Rc};
++
++use collections::FxHashSet;
++
++use crate::{
++    AnyElement, App, Bounds, ContentMask, Element, ElementId, Empty, EntityId, GlobalElementId,
++    InspectorElementId, IntoElement, LayoutId, PaintIndex, Pixels, PrepaintStateIndex, Size, Style,
++    TextStyle, Window,
++};
++
++/// Reuse an intrinsic, default-box element while its retained data revision is unchanged.
++///
++/// The caller must advance `revision` for every change affecting the built subtree, including
++/// external state. This is for retained leaves with constraint-independent intrinsic sizing
++/// and a default layout box, not arbitrary responsive containers. The child keeps its original element ID path. On a cache hit,
++/// `on_reuse` must replay any application-owned paint effects not recorded by GPUI.
++///
++/// A cold draw learns the size. The next matching draw records layout and prepaint together;
++/// later draws can reuse those ranges. Refreshes, inspector picking and active accessibility
++/// always use ordinary child painting.
++pub fn cached_element<F, R>(
++    id: ElementId,
++    revision: u64,
++    build: F,
++    on_reuse: R,
++) -> CachedElement<F, R>
++where
++    F: FnOnce(&mut Window, &mut App) -> AnyElement + 'static,
++    R: FnOnce(&mut Window, &mut App) + 'static,
++{
++    CachedElement {
++        id,
++        revision,
++        build: Some(build),
++        on_reuse: Some(on_reuse),
++        state: None,
++        measure_context: None,
++    }
++}
++
++/// An explicitly versioned, ID-transparent retained leaf cache.
++pub struct CachedElement<F, R> {
++    id: ElementId,
++    revision: u64,
++    build: Option<F>,
++    on_reuse: Option<R>,
++    state: Option<Rc<RefCell<CacheState>>>,
++    measure_context: Option<MeasureContext>,
++}
++
++#[derive(Clone, PartialEq)]
++struct MeasureContext {
++    revision: u64,
++    viewport: Size<Pixels>,
++    scale: f32,
++    rem: Pixels,
++    text_style: TextStyle,
++}
++
++impl MeasureContext {
++    fn new(revision: u64, window: &Window) -> Self {
++        Self {
++            revision,
++            viewport: window.viewport_size(),
++            scale: window.scale_factor(),
++            rem: window.rem_size(),
++            text_style: window.text_style(),
++        }
++    }
++}
++
++#[derive(Default)]
++struct CacheState {
++    measurement: Option<(MeasureContext, Size<Pixels>)>,
++    recorded: Option<RecordedElement>,
++}
++
++struct RecordedElement {
++    bounds: Bounds<Pixels>,
++    content_mask: ContentMask<Pixels>,
++    text_style: TextStyle,
++    prepaint_range: Range<PrepaintStateIndex>,
++    paint_range: Option<Range<PaintIndex>>,
++    accessed_entities: FxHashSet<EntityId>,
++}
++
++impl<F, R> CachedElement<F, R>
++where
++    F: FnOnce(&mut Window, &mut App) -> AnyElement + 'static,
++    R: FnOnce(&mut Window, &mut App) + 'static,
++{
++    fn build(&mut self, window: &mut Window, cx: &mut App) -> AnyElement {
++        match self.build.take() {
++            Some(build) => build(window, cx),
++            None => Empty.into_any_element(),
++        }
++    }
++
++    fn can_reuse(window: &Window, cx: &App) -> bool {
++        !window.refreshing && !window.is_a11y_active() && !window.is_inspector_picking(cx)
++    }
++}
++
++impl<F, R> IntoElement for CachedElement<F, R>
++where
++    F: FnOnce(&mut Window, &mut App) -> AnyElement + 'static,
++    R: FnOnce(&mut Window, &mut App) + 'static,
++{
++    type Element = Self;
++
++    fn into_element(self) -> Self::Element {
++        self
++    }
++}
++
++impl<F, R> Element for CachedElement<F, R>
++where
++    F: FnOnce(&mut Window, &mut App) -> AnyElement + 'static,
++    R: FnOnce(&mut Window, &mut App) + 'static,
++{
++    type RequestLayoutState = Option<AnyElement>;
++    type PrepaintState = Option<AnyElement>;
++
++    fn id(&self) -> Option<ElementId> {
++        None
++    }
++
++    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
++        None
++    }
++
++    fn request_layout(
++        &mut self,
++        _id: Option<&GlobalElementId>,
++        _inspector_id: Option<&InspectorElementId>,
++        window: &mut Window,
++        cx: &mut App,
++    ) -> (LayoutId, Self::RequestLayoutState) {
++        let state = window.with_global_id(self.id.clone(), |id, window| {
++            window.with_element_state(id, |state: Option<Rc<RefCell<CacheState>>>, _| {
++                let state = state.unwrap_or_default();
++                (state.clone(), state)
++            })
++        });
++        let context = MeasureContext::new(self.revision, window);
++        let measured = state
++            .borrow()
++            .measurement
++            .as_ref()
++            .filter(|(previous, size)| {
++                *previous == context && size.width > Pixels::ZERO && size.height > Pixels::ZERO
++            })
++            .map(|(_, size)| *size);
++        self.measure_context = Some(context);
++        self.state = Some(state);
++
++        if let Some(size) = measured.filter(|_| Self::can_reuse(window, cx)) {
++            return (
++                window.request_measured_layout(Style::default(), move |_, _, _, _| size),
++                None,
++            );
++        }
++
++        let mut element = self.build(window, cx);
++        let layout = element.request_layout(window, cx);
++        (layout, Some(element))
++    }
++
++    fn prepaint(
++        &mut self,
++        _id: Option<&GlobalElementId>,
++        _inspector_id: Option<&InspectorElementId>,
++        bounds: Bounds<Pixels>,
++        element: &mut Self::RequestLayoutState,
++        window: &mut Window,
++        cx: &mut App,
++    ) -> Self::PrepaintState {
++        let Some(state) = self.state.clone() else {
++            if let Some(element) = element {
++                element.prepaint(window, cx);
++            }
++            return element.take();
++        };
++        let context = self
++            .measure_context
++            .clone()
++            .unwrap_or_else(|| MeasureContext::new(self.revision, window));
++
++        if let Some(mut element) = element.take() {
++            element.prepaint(window, cx);
++            let mut state = state.borrow_mut();
++            state.measurement = Some((context, bounds.size));
++            state.recorded = None;
++            return Some(element);
++        }
++
++        if Self::can_reuse(window, cx) {
++            let mut state = state.borrow_mut();
++            if let Some(recorded) = state.recorded.as_mut()
++                && recorded.bounds == bounds
++                && recorded.content_mask == window.content_mask()
++                && recorded.text_style == window.text_style()
++                && recorded.paint_range.is_some()
++            {
++                let start = window.prepaint_index();
++                window.reuse_prepaint(recorded.prepaint_range.clone());
++                cx.entities.extend_accessed(&recorded.accessed_entities);
++                recorded.prepaint_range = start..window.prepaint_index();
++                return None;
++            }
++        }
++
++        let content_mask = window.content_mask();
++        let text_style = window.text_style();
++        let start = window.prepaint_index();
++        let refreshing = std::mem::replace(&mut window.refreshing, true);
++        let (element, accessed_entities) = cx.detect_accessed_entities(|cx| {
++            let mut element = self.build(window, cx);
++            element.layout_as_root(bounds.size.into(), window, cx);
++            element.prepaint_at(bounds.origin, window, cx);
++            element
++        });
++        window.refreshing = refreshing;
++        let mut state = state.borrow_mut();
++        state.measurement = Some((context, bounds.size));
++        state.recorded = Some(RecordedElement {
++            bounds,
++            content_mask,
++            text_style,
++            prepaint_range: start..window.prepaint_index(),
++            paint_range: None,
++            accessed_entities,
++        });
++        Some(element)
++    }
++
++    fn paint(
++        &mut self,
++        _id: Option<&GlobalElementId>,
++        _inspector_id: Option<&InspectorElementId>,
++        _bounds: Bounds<Pixels>,
++        _request_layout: &mut Self::RequestLayoutState,
++        element: &mut Self::PrepaintState,
++        window: &mut Window,
++        cx: &mut App,
++    ) {
++        let start = window.paint_index();
++        if let Some(element) = element {
++            element.paint(window, cx);
++        } else if let Some(state) = &self.state {
++            let range = state
++                .borrow()
++                .recorded
++                .as_ref()
++                .and_then(|recorded| recorded.paint_range.clone());
++            if let Some(range) = range {
++                window.reuse_paint(range);
++                if let Some(on_reuse) = self.on_reuse.take() {
++                    on_reuse(window, cx);
++                }
++            }
++        }
++        if let Some(state) = &self.state
++            && let Some(recorded) = state.borrow_mut().recorded.as_mut()
++        {
++            recorded.paint_range = Some(start..window.paint_index());
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::cell::Cell;
++
++    use crate::{
++        AnyWindowHandle, AppContext as _, Context, DispatchPhase, InteractiveElement,
++        MouseMoveEvent, ParentElement, Render, Role, Styled, TestAppContext, WindowHandle, div,
++        fill, point, px, rgb, size,
++    };
++
++    #[derive(Default)]
++    struct Counts {
++        builds: Cell<usize>,
++        paints: Cell<usize>,
++        reuses: Cell<usize>,
++        mouse_moves: Cell<usize>,
++        child_ids: RefCell<Vec<GlobalElementId>>,
++    }
++
++    struct Probe {
++        counts: Rc<Counts>,
++        width: Pixels,
++    }
++
++    impl IntoElement for Probe {
++        type Element = Self;
++
++        fn into_element(self) -> Self::Element {
++            self
++        }
++    }
++
++    impl Element for Probe {
++        type RequestLayoutState = ();
++        type PrepaintState = ();
++
++        fn id(&self) -> Option<ElementId> {
++            Some("source-child".into())
++        }
++
++        fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
++            None
++        }
++
++        fn request_layout(
++            &mut self,
++            id: Option<&GlobalElementId>,
++            _: Option<&InspectorElementId>,
++            window: &mut Window,
++            cx: &mut App,
++        ) -> (LayoutId, ()) {
++            self.counts.child_ids.borrow_mut().push(id.unwrap().clone());
++            let style = Style {
++                size: size(self.width.into(), px(20.).into()),
++                ..Default::default()
++            };
++            (window.request_layout(style, [], cx), ())
++        }
++
++        fn prepaint(
++            &mut self,
++            _: Option<&GlobalElementId>,
++            _: Option<&InspectorElementId>,
++            _: Bounds<Pixels>,
++            _: &mut (),
++            _: &mut Window,
++            _: &mut App,
++        ) {
++        }
++
++        fn paint(
++            &mut self,
++            _: Option<&GlobalElementId>,
++            _: Option<&InspectorElementId>,
++            bounds: Bounds<Pixels>,
++            _: &mut (),
++            _: &mut (),
++            window: &mut Window,
++            _: &mut App,
++        ) {
++            self.counts.paints.set(self.counts.paints.get() + 1);
++            window.paint_quad(fill(bounds, rgb(0x3377aa)));
++            let counts = self.counts.clone();
++            window.on_mouse_event(move |_: &MouseMoveEvent, phase, _, _| {
++                if phase == DispatchPhase::Bubble {
++                    counts.mouse_moves.set(counts.mouse_moves.get() + 1);
++                }
++            });
++        }
++
++        fn a11y_role(&self) -> Option<Role> {
++            Some(Role::Label)
++        }
++
++        fn write_a11y_info(&self, node: &mut accesskit::Node) {
++            node.set_label("cached leaf");
++        }
++    }
++
++    struct TestView {
++        counts: Rc<Counts>,
++        revision: u64,
++        left: Pixels,
++        width: Pixels,
++        clip_width: Pixels,
++        font_size: Pixels,
++    }
++
++    impl Render for TestView {
++        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
++            let counts = self.counts.clone();
++            let reused = self.counts.clone();
++            let width = self.width;
++            div()
++                .id("parent")
++                .size_full()
++                .pl(self.left)
++                .text_size(self.font_size)
++                .child(
++                    div()
++                        .w(self.clip_width)
++                        .h(px(20.))
++                        .overflow_hidden()
++                        .child(cached_element(
++                            "paint-cache".into(),
++                            self.revision,
++                            move |_, _| {
++                                counts.builds.set(counts.builds.get() + 1);
++                                Probe { counts, width }.into_any_element()
++                            },
++                            move |_, _| reused.reuses.set(reused.reuses.get() + 1),
++                        )),
++                )
++        }
++    }
++
++    fn setup(cx: &mut TestAppContext) -> (WindowHandle<TestView>, Rc<Counts>) {
++        let counts = Rc::new(Counts::default());
++        let window = cx.add_window({
++            let counts = counts.clone();
++            move |_, _| TestView {
++                counts,
++                revision: 1,
++                left: px(0.),
++                width: px(40.),
++                clip_width: px(40.),
++                font_size: px(16.),
++            }
++        });
++        (window, counts)
++    }
++
++    fn draw(cx: &mut TestAppContext, window: WindowHandle<TestView>) {
++        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
++            .unwrap();
++    }
++
++    #[gpui::test]
++    fn cached_element_primes_then_reuses_scene_listeners_and_child_ids(cx: &mut TestAppContext) {
++        let (window, counts) = setup(cx);
++        assert_eq!(counts.builds.get(), 1);
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 2);
++        let quads = cx
++            .update_window(window.into(), |_, window, _| {
++                window.rendered_frame.scene.quads.len()
++            })
++            .unwrap();
++
++        draw(cx, window);
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 2);
++        assert_eq!(counts.paints.get(), 2);
++        assert_eq!(counts.reuses.get(), 2);
++        cx.update_window(window.into(), |_, window, cx| {
++            assert_eq!(window.rendered_frame.scene.quads.len(), quads);
++            window.simulate_mouse_move(point(px(10.), px(10.)), cx);
++        })
++        .unwrap();
++        assert_eq!(counts.mouse_moves.get(), 1);
++        let ids = counts.child_ids.borrow();
++        assert!(ids.windows(2).all(|pair| pair[0] == pair[1]));
++        assert!(ids.iter().all(|id| !id.to_string().contains("paint-cache")));
++    }
++
++    #[gpui::test]
++    fn cached_element_revision_changes_rebuild_before_reusing(cx: &mut TestAppContext) {
++        let (window, counts) = setup(cx);
++        draw(cx, window);
++        draw(cx, window);
++        window.update(cx, |view, _, _| view.revision += 1).unwrap();
++        draw(cx, window);
++        draw(cx, window);
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 4);
++        assert_eq!(counts.reuses.get(), 2);
++    }
++
++    #[gpui::test]
++    fn cached_element_bounds_and_content_mask_changes_rebuild(cx: &mut TestAppContext) {
++        let (window, counts) = setup(cx);
++        draw(cx, window);
++        draw(cx, window);
++        window.update(cx, |view, _, _| view.left = px(10.)).unwrap();
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 3);
++        draw(cx, window);
++        assert_eq!(counts.reuses.get(), 2);
++
++        window
++            .update(cx, |view, _, _| view.clip_width = px(25.))
++            .unwrap();
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 4);
++        draw(cx, window);
++        assert_eq!(counts.reuses.get(), 3);
++    }
++
++    #[gpui::test]
++    fn cached_element_text_scale_and_viewport_changes_reprime(cx: &mut TestAppContext) {
++        let (window, counts) = setup(cx);
++        draw(cx, window);
++        draw(cx, window);
++        window
++            .update(cx, |view, _, _| view.font_size = px(18.))
++            .unwrap();
++        draw(cx, window);
++        draw(cx, window);
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 4);
++
++        window
++            .update(cx, |_, window, _| window.set_scale_factor(1.5))
++            .unwrap();
++        draw(cx, window);
++        draw(cx, window);
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 6);
++
++        cx.test_window(AnyWindowHandle::from(window))
++            .simulate_resize(size(px(600.), px(400.)));
++        let before = counts.builds.get();
++        draw(cx, window);
++        assert!(counts.builds.get() > before);
++    }
++
++    #[gpui::test]
++    fn cached_element_accessibility_and_refresh_keep_normal_painting(cx: &mut TestAppContext) {
++        let (window, counts) = setup(cx);
++        draw(cx, window);
++        draw(cx, window);
++        let builds_before_refresh = counts.builds.get();
++        let reuses_before_refresh = counts.reuses.get();
++        window.update(cx, |_, window, _| window.refresh()).unwrap();
++        draw(cx, window);
++        assert!(counts.builds.get() > builds_before_refresh);
++        assert_eq!(counts.reuses.get(), reuses_before_refresh);
++
++        window
++            .update(cx, |_, window, _| window.set_a11y_active_for_tests(true))
++            .unwrap();
++        let builds_before_a11y = counts.builds.get();
++        draw(cx, window);
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), builds_before_a11y + 2);
++        assert_eq!(counts.reuses.get(), reuses_before_refresh);
++        cx.update_window(window.into(), |_, window, _| {
++            assert!(
++                window
++                    .debug_a11y_tree_json()
++                    .is_some_and(|tree| tree.contains("cached leaf"))
++            );
++        })
++        .unwrap();
++    }
++
++    #[gpui::test]
++    fn cached_element_zero_sized_measurements_do_not_reuse(cx: &mut TestAppContext) {
++        let (window, counts) = setup(cx);
++        window
++            .update(cx, |view, _, _| {
++                view.revision += 1;
++                view.width = Pixels::ZERO;
++            })
++            .unwrap();
++        draw(cx, window);
++        draw(cx, window);
++        draw(cx, window);
++        assert_eq!(counts.builds.get(), 4);
++        assert_eq!(counts.reuses.get(), 0);
++    }
++
++    struct BoundsProbe {
++        child: AnyElement,
++        bounds: Rc<RefCell<Vec<Bounds<Pixels>>>>,
++    }
++
++    impl IntoElement for BoundsProbe {
++        type Element = Self;
++
++        fn into_element(self) -> Self::Element {
++            self
++        }
++    }
++
++    impl Element for BoundsProbe {
++        type RequestLayoutState = ();
++        type PrepaintState = ();
++
++        fn id(&self) -> Option<ElementId> {
++            None
++        }
++
++        fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
++            None
++        }
++
++        fn request_layout(
++            &mut self,
++            _: Option<&GlobalElementId>,
++            _: Option<&InspectorElementId>,
++            window: &mut Window,
++            cx: &mut App,
++        ) -> (LayoutId, ()) {
++            (self.child.request_layout(window, cx), ())
++        }
++
++        fn prepaint(
++            &mut self,
++            _: Option<&GlobalElementId>,
++            _: Option<&InspectorElementId>,
++            bounds: Bounds<Pixels>,
++            _: &mut (),
++            window: &mut Window,
++            cx: &mut App,
++        ) {
++            self.bounds.borrow_mut().push(bounds);
++            self.child.prepaint(window, cx);
++        }
++
++        fn paint(
++            &mut self,
++            _: Option<&GlobalElementId>,
++            _: Option<&InspectorElementId>,
++            _: Bounds<Pixels>,
++            _: &mut (),
++            _: &mut (),
++            window: &mut Window,
++            cx: &mut App,
++        ) {
++            self.child.paint(window, cx);
++        }
++    }
++
++    struct WrappingTextView {
++        nowrap: bool,
++        bounds: Rc<RefCell<Vec<Bounds<Pixels>>>>,
++        reuses: Rc<Cell<usize>>,
++        width: Pixels,
++        cached: bool,
++    }
++
++    impl Render for WrappingTextView {
++        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
++            let cached = self.cached;
++            let nowrap = self.nowrap;
++            let bounds = self.bounds.clone();
++            let reuses = self.reuses.clone();
++            div()
++                .flex()
++                .flex_wrap()
++                .w(self.width)
++                .text_size(px(17.))
++                .children(
++                    [
++                        "Hello ",
++                        "abcdefghijklmnopqrstuvwxyzAB ",
++                        "longerword ",
++                        "several separated words for wrapping ",
++                        "βета ",
++                        "🌍 ",
++                        "tail ",
++                    ]
++                    .into_iter()
++                    .enumerate()
++                    .map(move |(index, word)| {
++                        let build = move || {
++                            let host = div().child(crate::StyledText::new(word));
++                            if nowrap {
++                                host.whitespace_nowrap()
++                            } else {
++                                host
++                            }
++                        };
++                        let child = if cached {
++                            let reuses = reuses.clone();
++                            cached_element(
++                                ("word", index).into(),
++                                1,
++                                move |_, _| build().into_any_element(),
++                                move |_, _| reuses.set(reuses.get() + 1),
++                            )
++                            .into_any_element()
++                        } else {
++                            build().into_any_element()
++                        };
++                        BoundsProbe {
++                            child,
++                            bounds: bounds.clone(),
++                        }
++                    }),
++                )
++        }
++    }
++
++    #[gpui::test]
++    fn cached_element_preserves_wrapping_text_geometry_at_fractional_scale(
++        cx: &mut TestAppContext,
++    ) {
++        let bounds = Rc::new(RefCell::new(Vec::new()));
++        let reuses = Rc::new(Cell::new(0));
++        let window = cx.add_window({
++            let bounds = bounds.clone();
++            let reuses = reuses.clone();
++            move |_, _| WrappingTextView {
++                nowrap: false,
++                bounds,
++                reuses,
++                width: px(180.),
++                cached: false,
++            }
++        });
++        for nowrap in [false, true] {
++            for scale in [1., 1.5] {
++                for width in [px(180.), px(500.)] {
++                    window
++                        .update(cx, |view, window, _| {
++                            view.cached = false;
++                            view.nowrap = nowrap;
++                            view.width = width;
++                            window.set_scale_factor(scale);
++                        })
++                        .unwrap();
++                    bounds.borrow_mut().clear();
++                    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
++                        .unwrap();
++                    let expected = bounds.borrow().clone();
++                    assert_eq!(expected.len(), 7);
++                    assert!(
++                        expected
++                            .iter()
++                            .all(|bounds| bounds.size.width > Pixels::ZERO)
++                    );
++                    window.update(cx, |view, _, _| view.cached = true).unwrap();
++                    let previous_reuses = reuses.get();
++                    for _ in 0..4 {
++                        bounds.borrow_mut().clear();
++                        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
++                            .unwrap();
++                        assert_eq!(
++                            *bounds.borrow(),
++                            expected,
++                            "cached text moved at scale {scale}, width {width:?}, nowrap {nowrap}"
++                        );
++                    }
++                    assert!(reuses.get() > previous_reuses);
++                }
++            }
++        }
++    }
++}

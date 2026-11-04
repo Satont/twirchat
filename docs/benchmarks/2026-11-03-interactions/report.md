@@ -1,5 +1,8 @@
 # Native interaction fixes and performance gate
 
+The later [hover CPU gate](../2026-11-04-hover-cpu/report.md) records text reuse, pointer measurements,
+preserved load/RSS evidence and final native glyph/selection checks.
+
 The later [wrapping-tabs gate](../2026-11-03-wrapping-tabs/report.md) adds native multi-row tab
 layout, cross-row input/drag QA, and fresh default-matrix/production target measurements.
 

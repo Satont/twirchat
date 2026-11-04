@@ -1,0 +1,1630 @@
+--- a/packages/native/src/lib.rs
++++ b/packages/native/src/lib.rs
+@@ -24,6 +24,7 @@
+ mod image_resources;
+ mod markdown;
+ mod motion;
++mod plain_text_cache;
+ mod renderer;
+ // The data model is public so `examples/bench_serde.rs` measures the real
+ // types instead of a copy that silently drifts from them.
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -38,7 +38,8 @@
+ use crate::custom_elements::{CustomElementRegistry, CustomRenderContext};
+ use crate::element_tree::EventPayload;
+ use crate::image_resources::{ImageResourceStats, ImageResources, SharedImageResourceStats};
+-use crate::retained_tree::{RetainedTree, StyleTable};
++use crate::plain_text_cache::{PlainTextCache, PlainTextCacheContext, SharedPlainTextCache};
++use crate::retained_tree::{Invalidation, RetainedTree, StyleTable};
+ use crate::style::StyleDesc;
+ use crate::text::{SharedSelection, selectable_text, selection_frame_reset};
+ use crate::theme::Theme;
+@@ -397,7 +398,8 @@
+ 
+ #[cfg(target_os = "macos")]
+ fn invalidate_window(renderer_id: u64) -> Result<()> {
+-    update_window(renderer_id, |_view, window, cx| {
++    update_window(renderer_id, |view, window, cx| {
++        view.queue_invalidation(Invalidation::Full);
+         cx.notify();
+         window.refresh();
+     })
+@@ -455,7 +457,7 @@
+ 
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+ enum UiCommand {
+-    Invalidate,
++    Invalidate(Invalidation),
+     NotifyFromTray {
+         renderer_id: u64,
+         title: String,
+@@ -595,11 +597,15 @@
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+ fn refresh_ui_window(
+     window: gpui::WindowHandle<GpuixView>,
++    kind: Invalidation,
+     cx: &mut gpui::AsyncApp,
+ ) -> anyhow::Result<()> {
+-    window.update(cx, |_view, window, cx| {
++    window.update(cx, |view, window, cx| {
++        view.queue_invalidation(kind);
+         cx.notify();
+-        window.refresh();
++        if view.pending_invalidation == Invalidation::Full {
++            window.refresh();
++        }
+     })
+ }
+ 
+@@ -702,7 +708,7 @@
+                 }
+                 result
+             }
+-            UiCommand::Invalidate => refresh_ui_window(window, cx),
++            UiCommand::Invalidate(kind) => refresh_ui_window(window, kind, cx),
+             UiCommand::ActivateWindow => window.update(cx, |_view, window, cx| {
+                 cx.activate(true);
+                 window.activate_window();
+@@ -776,7 +782,7 @@
+                         }
+                     });
+                 }
+-                refresh_ui_window(window, cx)
++                refresh_ui_window(window, Invalidation::Full, cx)
+             }
+             UiCommand::ScrollToItem { id, index, offset } => {
+                 if !with_virtual_list_states(window_id, |cell| {
+@@ -792,7 +798,7 @@
+                         }
+                     });
+                 }
+-                refresh_ui_window(window, cx)
++                refresh_ui_window(window, Invalidation::Full, cx)
+             }
+             UiCommand::ScrollIntoView { id } => window.update(cx, |view, window, cx| {
+                 if view.scroll_element_into_view(id) {
+@@ -1397,10 +1403,16 @@
+             subscriptions.borrow_mut().insert(window_id, subscription);
+         });
+     }
++    let word_cache = handle
++        .update(cx, |view, _, _| Rc::downgrade(&view.plain_text_cache))
++        .ok();
+     let state = Arc::downgrade(&state);
+     let subscription = cx.on_window_closed(move |cx, closed| {
+         if closed != window_id {
+             return;
++        }
++        if let Some(cache) = word_cache.as_ref().and_then(std::rc::Weak::upgrade) {
++            cache.borrow_mut().clear();
+         }
+         if let Some(state) = state.upgrade() {
+             let mut state = state.lock();
+@@ -1879,11 +1891,15 @@
+     }
+ 
+     fn request_invalidate(&self) -> Result<()> {
++        self.request_invalidation(Invalidation::Full)
++    }
++
++    fn request_invalidation(&self, kind: Invalidation) -> Result<()> {
+         #[cfg(target_os = "macos")]
+         return invalidate_window(self.renderer_id);
+ 
+         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+-        return self.send_ui_command(UiCommand::Invalidate);
++        return self.send_ui_command(UiCommand::Invalidate(kind));
+ 
+         #[cfg(not(any(
+             target_os = "macos",
+@@ -2319,13 +2335,13 @@
+         let mut tree = self.tree.lock().unwrap();
+         let destroyed =
+             apply_batch_to_tree(&mut tree, json.as_bytes()).map_err(Error::from_reason)?;
+-        let dirty = tree.take_dirty();
++        let kind = tree.take_invalidation();
+         drop(tree);
+         // A re-render that changed nothing sends a batch of identical resends.
+         // Waking the window for it makes it rebuild and diff the whole element
+         // tree to draw the frame it already has.
+-        if dirty {
+-            self.request_invalidate()?;
++        if kind != Invalidation::None {
++            self.request_invalidation(kind)?;
+         }
+         Ok(destroyed)
+     }
+@@ -4135,7 +4151,10 @@
+ 
+ #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+ fn notify_web() {
+-    if let Err(error) = update_web_window(|_view, _window, cx| cx.notify()) {
++    if let Err(error) = update_web_window(|view, _window, cx| {
++        view.queue_invalidation(Invalidation::Full);
++        cx.notify();
++    }) {
+         if WEB_WINDOW.with(|window| window.borrow().is_some()) {
+             log::error!("Failed to invalidate the GPUIX web window: {error:?}");
+         }
+@@ -4759,6 +4778,8 @@
+ // ── GPUI View ────────────────────────────────────────────────────────
+ 
+ pub(crate) struct GpuixView {
++    pending_invalidation: Invalidation,
++    plain_text_cache: SharedPlainTextCache,
+     window_id: Option<gpui::WindowId>,
+     pub(crate) tree: Arc<Mutex<RetainedTree>>,
+     pub(crate) event_callback: Option<EventCallback>,
+@@ -5081,6 +5102,13 @@
+ }
+ 
+ impl GpuixView {
++    fn queue_invalidation(&mut self, kind: Invalidation) {
++        self.pending_invalidation.merge(kind);
++        if self.pending_invalidation == Invalidation::Full {
++            self.plain_text_cache.borrow_mut().clear();
++        }
++    }
++
+     fn can_copy_native_selection(&self, name: &str, window: &gpui::Window, cx: &gpui::App) -> bool {
+         if !matches!(name, "copy" | "cut") {
+             return true;
+@@ -5104,6 +5132,8 @@
+         selection: SharedSelection,
+     ) -> Self {
+         Self {
++            pending_invalidation: Invalidation::None,
++            plain_text_cache: SharedPlainTextCache::default(),
+             window_id: None,
+             tree,
+             event_callback,
+@@ -5322,6 +5352,9 @@
+         let now = self.clock.now();
+         let (motion_active, motion_settled) =
+             sync_motion_states(&tree, &mut self.motion_states, now);
++        if motion_active {
++            self.plain_text_cache.borrow_mut().clear();
++        }
+         let mut highlight_events = Vec::new();
+ 
+         // Re-resolve against the tree as it is NOW. gpui calls this during
+@@ -5362,6 +5395,12 @@
+             now,
+             selection: self.selection.clone(),
+             inherited,
++            plain_text_cache: PlainTextCache::context(
++                &self.plain_text_cache,
++                list_id,
++                expected_child_id,
++            ),
++            skip_cached_text: None,
+             highlights: &mut self.highlights,
+             paint_reports: &self.paint_reports,
+             highlight_events: &mut highlight_events,
+@@ -5385,6 +5424,43 @@
+             .track_focus(&focus_handle)
+             .child(child)
+             .into_any_element()
++    }
++
++    fn build_deferred_plain_text(
++        &mut self,
++        id: u64,
++        inherited: Inherited,
++        window: &mut gpui::Window,
++        cx: &mut gpui::Context<Self>,
++    ) -> gpui::AnyElement {
++        let tree_arc = self.tree.clone();
++        let tree = tree_arc.lock().unwrap();
++        let callback = self.event_callback.clone();
++        let image_resources = self.image_resources(cx);
++        let mut highlight_events = Vec::new();
++        let keyboard_focus = self.keyboard_focus_path(&tree, window, cx);
++        let mut ctx = BuildCtx {
++            tree: &tree,
++            event_callback: &callback,
++            focus_handles: &self.focus_handles,
++            scroll_handles: &mut self.scroll_handles,
++            custom_registry: &mut self.custom_registry,
++            image_resources: &image_resources,
++            virtual_lists: &mut self.virtual_lists,
++            motion_states: &mut self.motion_states,
++            now: self.clock.now(),
++            selection: self.selection.clone(),
++            inherited,
++            plain_text_cache: None,
++            skip_cached_text: Some(id),
++            highlights: &mut self.highlights,
++            paint_reports: &self.paint_reports,
++            highlight_events: &mut highlight_events,
++            keyboard_focus,
++        };
++        let word = build_element(id, &mut ctx, window, cx);
++        emit_highlight_events(&callback, &highlight_events);
++        word
+     }
+ 
+     pub(crate) fn scroll_virtual_list_to_item(
+@@ -5493,6 +5569,8 @@
+     /// own theme only seeds the root selection wash; custom elements resolve
+     /// their own theme from their `theme` prop.
+     pub inherited: Inherited,
++    plain_text_cache: Option<PlainTextCacheContext>,
++    skip_cached_text: Option<u64>,
+     /// Persistent `highlight` caches, keyed by the declaring element.
+     highlights: &'a mut HashMap<u64, HighlightCacheEntry>,
+     paint_reports: &'a SharedPaintReports,
+@@ -5515,6 +5593,7 @@
+ pub(crate) struct Inherited {
+     /// False once an ancestor sets `userSelect: "none"`.
+     pub selectable: bool,
++    pub text_cache_safe: bool,
+     /// Selection wash colour for this subtree.
+     pub selection_wash: gpui::Hsla,
+     /// The nearest ancestor's `highlight`, resolved. `None` in every app that
+@@ -5564,14 +5643,18 @@
+         wash.a = 0.35;
+         Self {
+             selectable: true,
++            text_cache_safe: true,
+             selection_wash: wash,
+             highlight: None,
+         }
+     }
+ 
+     /// Apply the inheritable parts of `style` for the subtree below it.
+-    fn descend(mut self, style: Option<&StyleDesc>) -> Self {
++    pub(crate) fn descend(mut self, style: Option<&StyleDesc>) -> Self {
+         let Some(style) = style else { return self };
++        self.text_cache_safe &= !style.has_dynamic_opacity()
++            && style.text_overflow.is_none()
++            && style.line_clamp.is_none();
+         match style.user_select.as_deref() {
+             Some("none") => self.selectable = false,
+             Some("text") | Some("auto") => self.selectable = true,
+@@ -6471,6 +6554,14 @@
+         let now = self.clock.now();
+         let (motion_active, motion_settled) =
+             sync_motion_states(&tree, &mut self.motion_states, now);
++        let cache_enabled = self.plain_text_cache.borrow_mut().begin_frame(
++            std::mem::take(&mut self.pending_invalidation),
++            tree.cache_revision(),
++            !motion_active && tree.geometry_refinement_ids.is_empty(),
++            self.selection.lock().identity(),
++            window,
++            cx,
++        );
+         // Pruned by DECLARATION, not existence: an element that drops its
+         // `highlight` prop keeps living, and its cached group list holds a copy
+         // of every string in its subtree.
+@@ -6495,6 +6586,8 @@
+                     now,
+                     selection: self.selection.clone(),
+                     inherited: Inherited::root(&theme),
++                    plain_text_cache: None,
++                    skip_cached_text: None,
+                     highlights: &mut self.highlights,
+                     paint_reports: &self.paint_reports,
+                     highlight_events: &mut highlight_events,
+@@ -6549,6 +6642,9 @@
+                 ))
+                 .child(crate::automation::bounds_frame_reset())
+                 .child(result)
++                .when(cache_enabled, |root| {
++                    root.child(PlainTextCache::finish(self.plain_text_cache.clone()))
++                })
+                 .into_any_element()
+         };
+ 
+@@ -6597,6 +6693,30 @@
+     let Some(element) = tree.elements.get(&id) else {
+         return gpui::Empty.into_any_element();
+     };
++
++    if ctx.skip_cached_text != Some(id)
++        && element.element_type == "text"
++        && element.content.is_none()
++    {
++        if let Some(cache) = ctx.plain_text_cache.clone() {
++            let text_style = window.text_style();
++            let intrinsic_text =
++                text_style.text_overflow.is_none() && text_style.line_clamp.is_none();
++            if let Some(prepared) = cache.prepare(tree, element, &ctx.inherited, intrinsic_text) {
++                if prepared.needs_build {
++                    let previous = ctx.skip_cached_text.replace(id);
++                    let word = build_element(id, ctx, window, cx);
++                    ctx.skip_cached_text = previous;
++                    return cache.wrap(prepared, move |_, _| word);
++                }
++                let inherited = ctx.inherited.clone();
++                let build = cx.processor(move |view, _: (), window, cx| {
++                    view.build_deferred_plain_text(id, inherited.clone(), window, cx)
++                });
++                return cache.wrap(prepared, move |window, cx| build((), window, cx));
++            }
++        }
++    }
+ 
+     let animated_style = if element.custom_props().contains_key("motion") {
+         ctx.motion_states
+@@ -7743,7 +7863,9 @@
+     selectable_text(text_content_options(element, content, ctx))
+ }
+ 
+-fn raw_text_leaf_content(element: &crate::retained_tree::RetainedElement) -> Option<&str> {
++pub(crate) fn raw_text_leaf_content(
++    element: &crate::retained_tree::RetainedElement,
++) -> Option<&str> {
+     let content = element
+         .content
+         .as_deref()
+--- a/packages/native/src/retained_tree.rs
++++ b/packages/native/src/retained_tree.rs
+@@ -237,9 +237,24 @@
+     }
+ }
+ 
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
++pub(crate) enum Invalidation {
++    #[default]
++    None,
++    PaintOnly,
++    Full,
++}
++
++impl Invalidation {
++    pub(crate) fn merge(&mut self, next: Self) {
++        *self = (*self).max(next);
++    }
++}
++
+ pub struct RetainedTree {
+     pub elements: ElementMap,
+     pub motion_ids: HashSet<u64>,
++    pub(crate) geometry_refinement_ids: HashSet<u64>,
+     /// Elements that `needs_focus`, in id order. Kept as mutations arrive so the
+     /// per-frame focus sync visits these few instead of every retained element:
+     /// a large tree retains thousands, and nearly none are focusable.
+@@ -253,11 +268,13 @@
+     /// Dim other focusables while a control has keyboard focus. Set per root.
+     keyboard_focus_dim: bool,
+     next_revision: u64,
++    // Full commits invalidate deferred caches before their UI commands run.
++    full_generation: Option<u64>,
+     /// Something a frame would draw changed since the last `take_dirty`. A batch
+     /// of resends, which is what a re-render with unchanged props produces,
+     /// leaves it false, so the window is not asked to rebuild its element tree
+     /// for a frame that would come out identical.
+-    dirty: bool,
++    invalidation: Invalidation,
+ }
+ 
+ impl RetainedTree {
+@@ -265,20 +282,38 @@
+         Self {
+             elements: ElementMap::default(),
+             motion_ids: HashSet::new(),
++            geometry_refinement_ids: HashSet::new(),
+             focusable_ids: Default::default(),
+             anchored_count: 0,
+             styles: StyleTable::default(),
+             root_id: None,
+             keyboard_focus_dim: true,
+             next_revision: 1,
+-            dirty: false,
++            full_generation: Some(0),
++            invalidation: Invalidation::None,
+         }
+     }
+ 
+     /// Whether a frame drawn now would differ from the last one, clearing the
+     /// answer. Call once per applied batch.
+     pub fn take_dirty(&mut self) -> bool {
+-        std::mem::take(&mut self.dirty)
++        self.take_invalidation() != Invalidation::None
++    }
++
++    pub(crate) fn take_invalidation(&mut self) -> Invalidation {
++        let kind = std::mem::take(&mut self.invalidation);
++        if kind == Invalidation::Full {
++            self.full_generation = self.full_generation.and_then(|generation| generation.checked_add(1));
++        }
++        kind
++    }
++
++    pub(crate) fn cache_revision(&self) -> Option<u64> {
++        if self.invalidation == Invalidation::Full {
++            None
++        } else {
++            self.full_generation
++        }
+     }
+ 
+     pub fn keyboard_focus_dim(&self) -> bool {
+@@ -288,20 +323,21 @@
+     pub fn set_keyboard_focus_dim(&mut self, enabled: bool) {
+         if self.keyboard_focus_dim != enabled {
+             self.keyboard_focus_dim = enabled;
+-            self.dirty = true;
++            self.invalidation = Invalidation::Full;
+         }
+     }
+ 
+     pub fn set_root(&mut self, id: u64) {
+         if self.root_id != Some(id) {
+             self.root_id = Some(id);
+-            self.dirty = true;
++            self.invalidation = Invalidation::Full;
+         }
+     }
+ 
+     pub fn create_element(&mut self, id: u64, element_type: String) {
+         self.anchored_count += usize::from(element_type == "anchored");
+-        self.dirty = true;
++        self.geometry_refinement_ids.remove(&id);
++        self.invalidation = Invalidation::Full;
+         let revision = self.take_revision();
+         self.elements
+             .insert(id, RetainedElement::new(id, element_type, revision));
+@@ -325,7 +361,11 @@
+     fn take_revision(&mut self) -> u64 {
+         // Every content change takes a revision to invalidate caches, so this is
+         // the one place that covers style, text, structure and custom props.
+-        self.dirty = true;
++        self.take_revision_for(Invalidation::Full)
++    }
++
++    fn take_revision_for(&mut self, kind: Invalidation) -> u64 {
++        self.invalidation.merge(kind);
+         let revision = self.next_revision;
+         self.next_revision = self.next_revision.wrapping_add(1).max(1);
+         revision
+@@ -344,7 +384,11 @@
+     }
+ 
+     fn mark_changed_detail(&mut self, id: u64, search: bool) {
+-        let revision = self.take_revision();
++        self.mark_changed_for(id, search, Invalidation::Full);
++    }
++
++    fn mark_changed_for(&mut self, id: u64, search: bool, kind: Invalidation) {
++        let revision = self.take_revision_for(kind);
+         let mut current = Some(id);
+         while let Some(current_id) = current {
+             let Some(element) = self.elements.get_mut(&current_id) else {
+@@ -373,7 +417,7 @@
+         let mut destroyed = Vec::new();
+         self.destroy_element_recursive(id, &mut destroyed);
+         if !destroyed.is_empty() {
+-            self.dirty = true;
++            self.invalidation = Invalidation::Full;
+         }
+         if self.root_id == Some(id) {
+             self.root_id = None;
+@@ -387,6 +431,7 @@
+     fn destroy_element_recursive(&mut self, id: u64, destroyed: &mut Vec<u64>) {
+         if let Some(element) = self.elements.remove(&id) {
+             self.motion_ids.remove(&id);
++            self.geometry_refinement_ids.remove(&id);
+             self.focusable_ids.remove(&id);
+             self.anchored_count -= usize::from(element.element_type == "anchored");
+             destroyed.push(id);
+@@ -452,19 +497,31 @@
+     /// are two `Arc`s holding the same style. Only a pointer miss pays for the
+     /// ~80-field compare, which is what decides whether this repaints.
+     pub fn set_style(&mut self, id: u64, style: Arc<StyleDesc>) {
+-        let mut changed = false;
++        let mut changed = None;
+         if let Some(element) = self.elements.get_mut(&id) {
+             let same = element
+                 .style
+                 .as_ref()
+                 .is_some_and(|current| Arc::ptr_eq(current, &style) || **current == *style);
+             if !same {
++                let kind = if self.invalidation == Invalidation::Full {
++                    Invalidation::Full
++                } else if color_only_style_change(element.style.as_deref(), &style) {
++                    Invalidation::PaintOnly
++                } else {
++                    Invalidation::Full
++                };
++                if style.has_geometry_refinement() {
++                    self.geometry_refinement_ids.insert(id);
++                } else {
++                    self.geometry_refinement_ids.remove(&id);
++                }
+                 element.style = Some(style);
+-                changed = true;
+-            }
+-        }
+-        if changed {
+-            self.mark_render_changed(id);
++                changed = Some(kind);
++            }
++        }
++        if let Some(kind) = changed {
++            self.mark_changed_for(id, false, kind);
+         }
+     }
+ 
+@@ -494,7 +551,9 @@
+             };
+             // Which listeners exist decides how the element is built, though it
+             // does not touch any cached text.
+-            self.dirty |= changed;
++            if changed {
++                self.invalidation = Invalidation::Full;
++            }
+             if changed {
+                 self.track_focusable(id);
+             }
+@@ -521,13 +580,17 @@
+             // the custom-prop map that only custom elements read.
+             if key == "autoFocus" {
+                 let auto_focus = value.as_bool().unwrap_or(false);
+-                self.dirty |= element.auto_focus != auto_focus;
++                if element.auto_focus != auto_focus {
++                    self.invalidation = Invalidation::Full;
++                }
+                 element.auto_focus = auto_focus;
+                 return;
+             }
+             if key == "testId" {
+                 let test_id = value.as_str().map(str::to_string);
+-                self.dirty |= element.test_id != test_id;
++                if element.test_id != test_id {
++                    self.invalidation = Invalidation::Full;
++                }
+                 element.test_id = test_id;
+                 return;
+             }
+@@ -1328,3 +1391,165 @@
+         assert_eq!(tree.elements[&1].subtree_revision, after);
+     }
+ }
++
++fn color_only_style_change(previous: Option<&StyleDesc>, next: &StyleDesc) -> bool {
++    let mut previous = previous.cloned().unwrap_or_default();
++    let mut next = next.clone();
++    previous.background_color = None;
++    previous.color = None;
++    next.background_color = None;
++    next.color = None;
++    previous == next
++}
++
++#[cfg(test)]
++mod invalidation_tests {
++    use super::{Invalidation, RetainedTree};
++    use crate::style::StyleDesc;
++    use std::sync::Arc;
++
++    fn tree() -> RetainedTree {
++        let mut tree = RetainedTree::new();
++        tree.create_element(1, "div".into());
++        tree.set_style(
++            1,
++            Arc::new(StyleDesc {
++                width: Some(crate::style::DimensionValue::Pixels(100.)),
++                ..Default::default()
++            }),
++        );
++        tree.take_invalidation();
++        tree
++    }
++
++    fn color(tree: &mut RetainedTree) {
++        let mut style = tree.elements[&1].style.as_deref().unwrap().clone();
++        style.background_color = Some("#333333".into());
++        tree.set_style(1, Arc::new(style));
++    }
++
++    #[test]
++    fn color_changes_keep_the_existing_layout() {
++        let mut tree = tree();
++        color(&mut tree);
++        assert_eq!(tree.take_invalidation(), Invalidation::PaintOnly);
++    }
++
++    #[test]
++    fn text_changes_dominate_color_updates_in_either_order() {
++        for full_first in [false, true] {
++            let mut tree = tree();
++            if full_first {
++                tree.set_text(1, "new".into());
++            }
++            color(&mut tree);
++            if !full_first {
++                tree.set_text(1, "new".into());
++            }
++            assert_eq!(tree.take_invalidation(), Invalidation::Full);
++        }
++    }
++
++    #[test]
++    fn opacity_and_geometry_updates_are_full_invalidations() {
++        for style in [
++            StyleDesc {
++                opacity: Some(0.5),
++                ..Default::default()
++            },
++            StyleDesc {
++                gap: Some(3.),
++                ..Default::default()
++            },
++        ] {
++            let mut tree = tree();
++            tree.set_style(1, Arc::new(style));
++            assert_eq!(tree.take_invalidation(), Invalidation::Full);
++        }
++    }
++
++    #[test]
++    fn taking_dirty_also_resets_the_invalidation_kind() {
++        let mut tree = tree();
++        color(&mut tree);
++        assert!(tree.take_dirty());
++        assert_eq!(tree.take_invalidation(), Invalidation::None);
++    }
++
++    #[test]
++    fn listeners_and_props_require_full_invalidation() {
++        let mut tree = tree();
++        color(&mut tree);
++        tree.set_event_listener(1, "click".into(), true);
++        assert_eq!(tree.take_invalidation(), Invalidation::Full);
++        color(&mut tree);
++        tree.set_custom_prop(1, "testId".into(), serde_json::json!("changed"));
++        assert_eq!(tree.take_invalidation(), Invalidation::Full);
++    }
++
++    #[test]
++    fn geometric_hover_guards_follow_live_style_identities() {
++        let mut tree = tree();
++        tree.set_style(
++            1,
++            Arc::new(StyleDesc {
++                hover: Some(Box::new(StyleDesc {
++                    padding: Some(3.),
++                    ..Default::default()
++                })),
++                ..Default::default()
++            }),
++        );
++        assert!(tree.geometry_refinement_ids.contains(&1));
++        tree.set_style(
++            1,
++            Arc::new(StyleDesc {
++                hover: Some(Box::new(StyleDesc {
++                    background_color: Some("red".into()),
++                    opacity: Some(0.5),
++                    ..Default::default()
++                })),
++                ..Default::default()
++            }),
++        );
++        assert!(tree.geometry_refinement_ids.is_empty());
++        tree.set_style(
++            1,
++            Arc::new(StyleDesc {
++                active: Some(Box::new(StyleDesc {
++                    width: Some(crate::style::DimensionValue::Pixels(10.)),
++                    ..Default::default()
++                })),
++                ..Default::default()
++            }),
++        );
++        tree.destroy_element(1);
++        assert!(tree.geometry_refinement_ids.is_empty());
++    }
++
++    #[test]
++    fn full_commits_advance_cache_revision_but_paint_changes_do_not() {
++        let mut tree = tree();
++        let before = tree.cache_revision().unwrap();
++        color(&mut tree);
++        assert_eq!(tree.cache_revision(), Some(before));
++        assert_eq!(tree.take_invalidation(), Invalidation::PaintOnly);
++        assert_eq!(tree.cache_revision(), Some(before));
++        tree.set_text(1, "changed".into());
++        assert_eq!(tree.cache_revision(), None);
++        assert_eq!(tree.take_invalidation(), Invalidation::Full);
++        assert_eq!(tree.cache_revision(), before.checked_add(1));
++    }
++
++    #[test]
++    fn exhausted_full_generation_permanently_disables_cache_revisions() {
++        let mut tree = tree();
++        tree.full_generation = Some(u64::MAX);
++        for text in ["first", "second"] {
++            tree.set_text(1, text.into());
++            tree.take_invalidation();
++            assert_eq!(tree.cache_revision(), None);
++        }
++    }
++
++}
+--- a/packages/native/src/style.rs
++++ b/packages/native/src/style.rs
+@@ -322,6 +322,40 @@
+ }
+ 
+ impl StyleDesc {
++    pub(crate) fn has_geometry_refinement(&self) -> bool {
++        [&self.hover, &self.active]
++            .into_iter()
++            .flatten()
++            .any(|style| {
++                let mut rest = (**style).clone();
++                rest.background_color = None;
++                rest.background = None;
++                rest.color = None;
++                rest.cursor = None;
++                rest.opacity = None;
++                rest != Self::default()
++            })
++    }
++
++    pub(crate) fn has_dynamic_opacity(&self) -> bool {
++        [&self.hover, &self.active, &self.focus_visible]
++            .into_iter()
++            .flatten()
++            .any(|style| style.opacity.is_some())
++    }
++
++    pub(crate) fn is_plain_text_cache_style(&self) -> bool {
++        let mut rest = self.clone();
++        rest.font_family = None;
++        rest.font_size = None;
++        rest.font_weight = None;
++        rest.line_height = None;
++        rest.color = None;
++        rest.white_space = None;
++        rest.opacity = None;
++        rest == Self::default()
++    }
++
+     pub(crate) fn has_background(&self) -> bool {
+         self.background_color.is_some() || self.background.is_some()
+     }
+--- a/packages/native/src/text/paint.rs
++++ b/packages/native/src/text/paint.rs
+@@ -36,6 +36,7 @@
+ pub type SharedSelection = Arc<Mutex<SelectionState>>;
+ 
+ /// One painted text element, registered per frame in document order.
++#[derive(Clone)]
+ struct RegEntry {
+     key: Arc<str>,
+     text: SharedString,
+@@ -49,6 +50,7 @@
+ /// `userSelect: "none"` chrome and native inputs register `selectable: false`
+ /// so a same-row nearest-text clamp cannot steal their press. An explicit
+ /// `userSelect: "text"` island registers `true` and can override an ancestor.
++#[derive(Clone)]
+ struct StartRegion {
+     bounds: Bounds<gpui::Pixels>,
+     selectable: bool,
+@@ -79,6 +81,48 @@
+     /// Includes native text absent from the retained tree, in paint order.
+     painted: Vec<SharedString>,
+     highlights: Vec<PaintedHighlight>,
++}
++
++#[derive(Clone, Copy)]
++pub(crate) struct TextPaintMarker {
++    registry: usize,
++    start_regions: usize,
++    painted: usize,
++}
++
++#[derive(Clone)]
++pub(crate) struct TextPaintEffects {
++    registry: Vec<RegEntry>,
++    start_regions: Vec<StartRegion>,
++    painted: Vec<SharedString>,
++}
++
++pub(crate) fn text_paint_marker(window_id: WindowId) -> TextPaintMarker {
++    with_state(window_id, |state| TextPaintMarker {
++        registry: state.registry.len(),
++        start_regions: state.start_regions.len(),
++        painted: state.painted.len(),
++    })
++}
++
++pub(crate) fn text_paint_effects(window_id: WindowId, marker: TextPaintMarker) -> TextPaintEffects {
++    with_state(window_id, |state| TextPaintEffects {
++        registry: state.registry[marker.registry..].to_vec(),
++        start_regions: state.start_regions[marker.start_regions..].to_vec(),
++        painted: state.painted[marker.painted..].to_vec(),
++    })
++}
++
++impl TextPaintEffects {
++    pub(crate) fn replay(&self, window_id: WindowId) {
++        update_state(window_id, |state| {
++            state.registry.extend(self.registry.iter().cloned());
++            state
++                .start_regions
++                .extend(self.start_regions.iter().cloned());
++            state.painted.extend(self.painted.iter().cloned());
++        });
++    }
+ }
+ 
+ thread_local! {
+@@ -967,3 +1011,40 @@
+         assert_eq!(rects[1].size, size(px(40.0), px(22.0)));
+     }
+ }
++
++#[cfg(test)]
++mod text_paint_effects_tests {
++    use super::*;
++
++    #[test]
++    fn replay_restores_text_and_selection_in_document_order() {
++        let window_id = WindowId::default();
++        reset_frame(window_id);
++        let marker = text_paint_marker(window_id);
++        update_state(window_id, |state| {
++            state.registry.push(RegEntry {
++                key: "4:0".into(),
++                text: "word".into(),
++                layout: StyledText::new("word").layout().clone(),
++                group: Some(3),
++            });
++            state.start_regions.push(StartRegion {
++                bounds: Bounds::new(point(px(1.), px(2.)), size(px(40.), px(20.))),
++                selectable: true,
++            });
++            state.painted.push("word".into());
++        });
++        let effects = text_paint_effects(window_id, marker);
++        reset_frame(window_id);
++        log_painted_text(window_id, "before".into());
++        effects.replay(window_id);
++        log_painted_text(window_id, "after".into());
++        assert_eq!(painted_text(window_id), ["before", "word", "after"]);
++        with_state(window_id, |state| {
++            assert_eq!(state.registry[0].key.as_ref(), "4:0");
++            assert_eq!(state.registry[0].group, Some(3));
++            assert_eq!(state.start_regions.len(), 1);
++        });
++        clear_window_text_state(window_id);
++    }
++}
+--- /dev/null
++++ b/packages/native/src/plain_text_cache.rs
+@@ -0,0 +1,729 @@
++use rustc_hash::FxHashMap;
++use std::cell::RefCell;
++use std::rc::Rc;
++
++use gpui::{App, Bounds, Element, Hsla, IntoElement, Pixels, Window, canvas, point, px, size};
++
++use crate::automation;
++use crate::renderer::{Inherited, raw_text_leaf_content};
++use crate::retained_tree::{Invalidation, RetainedElement, RetainedTree};
++use crate::text::paint::{TextPaintEffects, text_paint_effects, text_paint_marker};
++
++const MAX_WORDS: usize = 4096;
++
++pub(crate) type SharedPlainTextCache = Rc<RefCell<PlainTextCache>>;
++
++#[derive(PartialEq)]
++struct FrameGuard {
++    full_generation: u64,
++    selection: u64,
++    focus: Option<gpui::FocusId>,
++    keyboard: bool,
++    viewport: gpui::Size<Pixels>,
++    scale: f32,
++}
++
++#[derive(Default)]
++pub(crate) struct PlainTextCache {
++    entries: FxHashMap<u64, Rc<RefCell<CachedWord>>>,
++    // GPUI may retain a range after entries clear; never recycle its version token.
++    next_token: u64,
++    epoch: u64,
++    enabled: bool,
++    guard: Option<FrameGuard>,
++}
++
++impl PlainTextCache {
++    pub(crate) fn clear(&mut self) {
++        self.entries.clear();
++        self.enabled = false;
++    }
++
++    pub(crate) fn begin_frame(
++        &mut self,
++        kind: Invalidation,
++        revision: Option<u64>,
++        safe: bool,
++        selection: u64,
++        window: &Window,
++        cx: &App,
++    ) -> bool {
++        self.epoch = self.epoch.wrapping_add(1);
++        let Some(full_generation) = revision else {
++            self.clear();
++            self.guard = None;
++            return false;
++        };
++        let guard = FrameGuard {
++            full_generation,
++            selection,
++            focus: window.focused(cx).map(|focus| focus.id()),
++            keyboard: window.last_input_was_keyboard(),
++            viewport: window.viewport_size(),
++            scale: window.scale_factor(),
++        };
++        self.enabled =
++            kind == Invalidation::PaintOnly && safe && self.guard.as_ref() == Some(&guard);
++        if !self.enabled {
++            self.entries.clear();
++        }
++        self.guard = Some(guard);
++        self.enabled
++    }
++
++    pub(crate) fn context(
++        cache: &SharedPlainTextCache,
++        list_id: u64,
++        row_id: u64,
++    ) -> Option<PlainTextCacheContext> {
++        let state = cache.borrow();
++        if !state.enabled {
++            return None;
++        }
++        let full_generation = state.guard.as_ref()?.full_generation;
++        Some(PlainTextCacheContext {
++            cache: cache.clone(),
++            epoch: state.epoch,
++            full_generation,
++            list_id,
++            row_id,
++        })
++    }
++
++    fn finish_frame(&mut self, epoch: u64) {
++        if self.epoch == epoch {
++            self.entries
++                .retain(|_, entry| entry.borrow().painted_epoch == epoch);
++        }
++    }
++
++    pub(crate) fn finish(cache: SharedPlainTextCache) -> gpui::AnyElement {
++        use gpui::prelude::*;
++        let epoch = cache.borrow().epoch;
++        canvas(
++            |_, _, _| (),
++            move |_, _, _, _| {
++                cache.borrow_mut().finish_frame(epoch);
++            },
++        )
++        .absolute()
++        .w(px(0.0))
++        .h(px(0.0))
++        .into_any_element()
++    }
++}
++
++#[derive(Clone)]
++pub(crate) struct PlainTextCacheContext {
++    cache: SharedPlainTextCache,
++    epoch: u64,
++    full_generation: u64,
++    list_id: u64,
++    row_id: u64,
++}
++
++#[derive(PartialEq)]
++struct WordSource {
++    id: u64,
++    raw_id: u64,
++    revision: u64,
++    list_id: u64,
++    row_id: u64,
++    selectable: bool,
++    wash: Hsla,
++}
++
++struct CachedWord {
++    source: WordSource,
++    token: u64,
++    painted_epoch: u64,
++    captures: u8,
++    paint: Option<WordPaint>,
++}
++
++struct WordPaint {
++    text: TextPaintEffects,
++    bounds: [(u64, Bounds<Pixels>); 2],
++}
++
++pub(crate) struct PreparedWord {
++    entry: Rc<RefCell<CachedWord>>,
++    pub(crate) needs_build: bool,
++}
++
++impl PlainTextCacheContext {
++    pub(crate) fn prepare(
++        &self,
++        tree: &RetainedTree,
++        element: &RetainedElement,
++        inherited: &Inherited,
++        intrinsic_text: bool,
++    ) -> Option<PreparedWord> {
++        let mut cache = self.cache.borrow_mut();
++        if !cache.enabled || cache.epoch != self.epoch {
++            return None;
++        }
++        if tree.cache_revision() != Some(self.full_generation) {
++            cache.clear();
++            return None;
++        }
++        if !intrinsic_text
++            || !tree.geometry_refinement_ids.is_empty()
++            || !inherited.text_cache_safe
++            || inherited.highlight.is_some()
++            || element.element_type != "text"
++            || element.content.is_some()
++            || !element.events().is_empty()
++            || !element.custom_props().is_empty()
++            || element.test_id.is_some()
++            || element.auto_focus
++        {
++            return None;
++        }
++        let parent_style = tree.elements.get(&element.parent?)?.style.as_deref()?;
++        if parent_style.display.as_deref() != Some("flex")
++            || parent_style.flex_direction.as_deref() != Some("row")
++            || parent_style.flex_wrap.as_deref() != Some("wrap")
++            || parent_style.align_items.as_deref() != Some("center")
++        {
++            return None;
++        }
++        let [raw_id] = element.children.as_slice() else {
++            return None;
++        };
++        let raw = tree.elements.get(raw_id)?;
++        raw_text_leaf_content(raw)?;
++        let source = WordSource {
++            id: element.id,
++            raw_id: *raw_id,
++            revision: element.subtree_revision,
++            list_id: self.list_id,
++            row_id: self.row_id,
++            selectable: inherited.selectable,
++            wash: inherited.selection_wash,
++        };
++        if let Some(entry) = cache.entries.get(&element.id) {
++            if entry.borrow().source == source {
++                return Some(PreparedWord {
++                    entry: entry.clone(),
++                    needs_build: entry.borrow().captures < 2,
++                });
++            }
++        }
++        if element
++            .style
++            .as_deref()
++            .is_some_and(|style| !style.is_plain_text_cache_style())
++        {
++            return None;
++        }
++        cache.entries.remove(&element.id);
++        if cache.entries.len() >= MAX_WORDS {
++            return None;
++        }
++        let token = cache.next_token.checked_add(1)?;
++        cache.next_token = token;
++        Some(PreparedWord {
++            entry: Rc::new(RefCell::new(CachedWord {
++                source,
++                token,
++                painted_epoch: 0,
++                captures: 0,
++                paint: None,
++            })),
++            needs_build: true,
++        })
++    }
++
++    pub(crate) fn wrap(
++        self,
++        prepared: PreparedWord,
++        build: impl FnOnce(&mut Window, &mut App) -> gpui::AnyElement + 'static,
++    ) -> gpui::AnyElement {
++        let id = prepared.entry.borrow().source.id;
++        let token = prepared.entry.borrow().token;
++        let capture_context = self.clone();
++        let capture_entry = prepared.entry.clone();
++        let reuse_entry = prepared.entry;
++        gpui::cached_element(
++            gpui::ElementId::Integer(id),
++            token,
++            move |window, cx| {
++                CaptureWord {
++                    child: build(window, cx),
++                    entry: capture_entry,
++                    context: capture_context,
++                }
++                .into_any_element()
++            },
++            move |window, _| {
++                let mut entry = reuse_entry.borrow_mut();
++                if let Some(paint) = &entry.paint {
++                    let window_id = window.window_handle().window_id();
++                    paint.text.replay(window_id);
++                    for &(id, bounds) in &paint.bounds {
++                        automation::record_bounds(window_id, id, bounds);
++                    }
++                    entry.painted_epoch = self.epoch;
++                }
++            },
++        )
++        .into_any_element()
++    }
++}
++
++struct CaptureWord {
++    child: gpui::AnyElement,
++    entry: Rc<RefCell<CachedWord>>,
++    context: PlainTextCacheContext,
++}
++
++impl IntoElement for CaptureWord {
++    type Element = Self;
++
++    fn into_element(self) -> Self::Element {
++        self
++    }
++}
++
++impl Element for CaptureWord {
++    type RequestLayoutState = ();
++    type PrepaintState = ();
++
++    fn id(&self) -> Option<gpui::ElementId> {
++        None
++    }
++
++    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
++        None
++    }
++
++    fn request_layout(
++        &mut self,
++        id: Option<&gpui::GlobalElementId>,
++        inspector: Option<&gpui::InspectorElementId>,
++        window: &mut Window,
++        cx: &mut App,
++    ) -> (gpui::LayoutId, ()) {
++        Element::request_layout(&mut self.child, id, inspector, window, cx)
++    }
++
++    fn prepaint(
++        &mut self,
++        id: Option<&gpui::GlobalElementId>,
++        inspector: Option<&gpui::InspectorElementId>,
++        bounds: Bounds<Pixels>,
++        state: &mut (),
++        window: &mut Window,
++        cx: &mut App,
++    ) {
++        Element::prepaint(&mut self.child, id, inspector, bounds, state, window, cx);
++    }
++
++    fn paint(
++        &mut self,
++        id: Option<&gpui::GlobalElementId>,
++        inspector: Option<&gpui::InspectorElementId>,
++        bounds: Bounds<Pixels>,
++        state: &mut (),
++        prepaint: &mut (),
++        window: &mut Window,
++        cx: &mut App,
++    ) {
++        let window_id = window.window_handle().window_id();
++        let marker = text_paint_marker(window_id);
++        Element::paint(
++            &mut self.child,
++            id,
++            inspector,
++            bounds,
++            state,
++            prepaint,
++            window,
++            cx,
++        );
++        let entry = self.entry.borrow();
++        let host_id = entry.source.id;
++        let raw_id = entry.source.raw_id;
++        drop(entry);
++        let Some(host) = automation::get_bounds(window_id, host_id) else {
++            return;
++        };
++        let Some(raw) = automation::get_bounds(window_id, raw_id) else {
++            return;
++        };
++        let to_bounds = |bounds: automation::ElementBounds| {
++            Bounds::new(
++                point(px(bounds.x as f32), px(bounds.y as f32)),
++                size(px(bounds.width as f32), px(bounds.height as f32)),
++            )
++        };
++        let paint = WordPaint {
++            text: text_paint_effects(window_id, marker),
++            bounds: [(host_id, to_bounds(host)), (raw_id, to_bounds(raw))],
++        };
++        let mut cache = self.context.cache.borrow_mut();
++        if !cache.enabled || cache.epoch != self.context.epoch {
++            return;
++        }
++        if cache.entries.len() >= MAX_WORDS && !cache.entries.contains_key(&host_id) {
++            return;
++        }
++        let mut entry = self.entry.borrow_mut();
++        entry.paint = Some(paint);
++        entry.captures = entry.captures.saturating_add(1);
++        entry.painted_epoch = self.context.epoch;
++        drop(entry);
++        cache.entries.insert(host_id, self.entry.clone());
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::style::StyleDesc;
++    use std::sync::Arc;
++
++    fn fixture() -> (RetainedTree, Inherited, PlainTextCacheContext) {
++        let mut tree = RetainedTree::new();
++        for (id, kind) in [(1, "virtual-list"), (2, "div"), (3, "text"), (4, "text")] {
++            tree.create_element(id, kind.into());
++        }
++        tree.append_child(1, 2);
++        tree.append_child(2, 3);
++        tree.append_child(3, 4);
++        tree.set_text(4, "word ".into());
++        tree.set_style(
++            2,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                flex_wrap: Some("wrap".into()),
++                align_items: Some("center".into()),
++                ..Default::default()
++            }),
++        );
++        tree.take_invalidation();
++        let cache = Rc::new(RefCell::new(PlainTextCache {
++            enabled: true,
++            epoch: 1,
++            guard: Some(FrameGuard {
++                full_generation: tree.cache_revision().unwrap(),
++                selection: 0,
++                focus: None,
++                keyboard: false,
++                viewport: size(px(800.), px(600.)),
++                scale: 1.,
++            }),
++            ..Default::default()
++        }));
++        let context = PlainTextCache::context(&cache, 1, 2).unwrap();
++        let inherited = Inherited {
++            selectable: true,
++            text_cache_safe: true,
++            selection_wash: gpui::hsla(0., 0., 0., 0.35),
++            highlight: None,
++        };
++        (tree, inherited, context)
++    }
++
++    fn begin_after_commit(tree: &mut RetainedTree, context: &mut PlainTextCacheContext) {
++        tree.take_invalidation();
++        context.full_generation = tree.cache_revision().unwrap();
++        let mut cache = context.cache.borrow_mut();
++        cache.enabled = true;
++        cache.guard.as_mut().unwrap().full_generation = context.full_generation;
++    }
++
++    #[test]
++    fn plain_typographic_hosts_are_eligible_but_layout_styles_are_not() {
++        let (mut tree, inherited, mut context) = fixture();
++        tree.set_style(
++            3,
++            Arc::new(StyleDesc {
++                font_size: Some(16.),
++                white_space: Some("nowrap".into()),
++                opacity: Some(0.8),
++                ..Default::default()
++            }),
++        );
++        begin_after_commit(&mut tree, &mut context);
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_some()
++        );
++        tree.set_style(
++            3,
++            Arc::new(StyleDesc {
++                margin_left: Some(1.),
++                ..Default::default()
++            }),
++        );
++        begin_after_commit(&mut tree, &mut context);
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++    }
++
++    #[test]
++    fn clearing_the_map_never_reuses_a_version_token() {
++        let (tree, inherited, context) = fixture();
++        let first = context
++            .prepare(&tree, &tree.elements[&3], &inherited, true)
++            .unwrap()
++            .entry
++            .borrow()
++            .token;
++        context.cache.borrow_mut().clear();
++        context.cache.borrow_mut().enabled = true;
++        let second = context
++            .prepare(&tree, &tree.elements[&3], &inherited, true)
++            .unwrap()
++            .entry
++            .borrow()
++            .token;
++        assert!(second > first);
++    }
++
++    #[test]
++    fn inherited_dynamic_opacity_disables_the_candidate() {
++        let (tree, mut inherited, context) = fixture();
++        inherited.text_cache_safe = false;
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++    }
++
++    #[test]
++    fn interactive_or_tagged_hosts_keep_normal_painting() {
++        let (mut tree, inherited, mut context) = fixture();
++        tree.set_event_listener(3, "click".into(), true);
++        begin_after_commit(&mut tree, &mut context);
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++        tree.set_event_listener(3, "click".into(), false);
++        tree.set_custom_prop(3, "testId".into(), serde_json::json!("word"));
++        begin_after_commit(&mut tree, &mut context);
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++    }
++
++    #[test]
++    fn cache_capacity_falls_back_without_adding_entries() {
++        let (tree, inherited, context) = fixture();
++        let entry = context
++            .prepare(&tree, &tree.elements[&3], &inherited, true)
++            .unwrap()
++            .entry;
++        {
++            let mut cache = context.cache.borrow_mut();
++            for id in 100..100 + MAX_WORDS as u64 {
++                cache.entries.insert(id, entry.clone());
++            }
++        }
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++        assert_eq!(context.cache.borrow().entries.len(), MAX_WORDS);
++    }
++
++    #[test]
++    fn only_painted_word_identities_survive_a_frame() {
++        let (mut tree, inherited, mut context) = fixture();
++        tree.create_element(5, "text".into());
++        tree.create_element(6, "text".into());
++        tree.append_child(2, 5);
++        tree.append_child(5, 6);
++        tree.set_text(6, "other".into());
++        begin_after_commit(&mut tree, &mut context);
++        let current = context
++            .prepare(&tree, &tree.elements[&3], &inherited, true)
++            .unwrap()
++            .entry;
++        let retired = context
++            .prepare(&tree, &tree.elements[&5], &inherited, true)
++            .unwrap()
++            .entry;
++        current.borrow_mut().painted_epoch = context.epoch;
++        let mut cache = context.cache.borrow_mut();
++        cache.entries.insert(3, current);
++        cache.entries.insert(5, retired);
++        cache.finish_frame(context.epoch);
++        assert_eq!(cache.entries.keys().copied().collect::<Vec<_>>(), [3]);
++    }
++
++    #[test]
++    fn only_wrapping_row_parents_allow_intrinsic_word_caching() {
++        let (mut tree, inherited, mut context) = fixture();
++        for style in [
++            StyleDesc::default(),
++            StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("column".into()),
++                flex_wrap: Some("wrap".into()),
++                ..Default::default()
++            },
++            StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                ..Default::default()
++            },
++            StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                flex_wrap: Some("wrap".into()),
++                ..Default::default()
++            },
++            StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                flex_wrap: Some("wrap".into()),
++                align_items: Some("stretch".into()),
++                ..Default::default()
++            },
++        ] {
++            tree.set_style(2, Arc::new(style));
++            begin_after_commit(&mut tree, &mut context);
++            assert!(
++                context
++                    .prepare(&tree, &tree.elements[&3], &inherited, true)
++                    .is_none()
++            );
++        }
++    }
++
++    #[test]
++    fn inherited_text_constraints_keep_normal_layout() {
++        let (tree, inherited, context) = fixture();
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, false)
++                .is_none()
++        );
++        for style in [
++            StyleDesc {
++                text_overflow: Some("ellipsis".into()),
++                ..Default::default()
++            },
++            StyleDesc {
++                line_clamp: Some(2.),
++                ..Default::default()
++            },
++        ] {
++            let inherited = inherited.clone().descend(Some(&style));
++            assert!(
++                context
++                    .prepare(&tree, &tree.elements[&3], &inherited, true)
++                    .is_none()
++            );
++        }
++    }
++
++    fn cache_word(
++        tree: &RetainedTree,
++        inherited: &Inherited,
++        context: &PlainTextCacheContext,
++    ) -> Rc<RefCell<CachedWord>> {
++        let prepared = context
++            .prepare(tree, &tree.elements[&3], inherited, true)
++            .unwrap();
++        prepared.entry.borrow_mut().captures = 2;
++        context
++            .cache
++            .borrow_mut()
++            .entries
++            .insert(3, prepared.entry.clone());
++        prepared.entry
++    }
++
++    #[test]
++    fn committed_ancestor_opacity_rejects_a_saved_paint_only_frame_before_ui_invalidation() {
++        let (mut tree, inherited, context) = fixture();
++        cache_word(&tree, &inherited, &context);
++        let word_revision = tree.elements[&3].subtree_revision;
++        let mut style = tree.elements[&2].style.as_deref().unwrap().clone();
++        style.opacity = Some(0.5);
++        tree.set_style(2, Arc::new(style));
++        assert_eq!(tree.take_invalidation(), Invalidation::Full);
++        assert_eq!(tree.elements[&3].subtree_revision, word_revision);
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++        assert!(!context.cache.borrow().enabled);
++        assert!(context.cache.borrow().entries.is_empty());
++    }
++
++    #[test]
++    fn pending_full_ancestor_changes_disable_a_saved_word_cache() {
++        let (mut tree, inherited, context) = fixture();
++        cache_word(&tree, &inherited, &context);
++        let mut style = tree.elements[&2].style.as_deref().unwrap().clone();
++        style.opacity = Some(0.5);
++        tree.set_style(2, Arc::new(style));
++        assert!(
++            context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++        assert!(!context.cache.borrow().enabled);
++    }
++
++    #[test]
++    fn color_only_ancestor_commits_reuse_the_saved_word_generation() {
++        let (mut tree, inherited, context) = fixture();
++        let word = cache_word(&tree, &inherited, &context);
++        let mut style = tree.elements[&2].style.as_deref().unwrap().clone();
++        style.background_color = Some("#123456".into());
++        tree.set_style(2, Arc::new(style));
++        assert_eq!(tree.take_invalidation(), Invalidation::PaintOnly);
++        let reused = context
++            .prepare(&tree, &tree.elements[&3], &inherited, true)
++            .unwrap();
++        assert!(Rc::ptr_eq(&word, &reused.entry));
++        assert!(!reused.needs_build);
++        assert!(context.cache.borrow().enabled);
++    }
++
++    #[test]
++    fn stale_frame_context_cannot_clear_a_newer_valid_cache() {
++        let (mut tree, inherited, old_context) = fixture();
++        cache_word(&tree, &inherited, &old_context);
++        let mut style = tree.elements[&2].style.as_deref().unwrap().clone();
++        style.opacity = Some(0.5);
++        tree.set_style(2, Arc::new(style));
++        tree.take_invalidation();
++        {
++            let mut cache = old_context.cache.borrow_mut();
++            cache.clear();
++            cache.epoch += 1;
++            cache.enabled = true;
++            cache.guard.as_mut().unwrap().full_generation = tree.cache_revision().unwrap();
++        }
++        let current_context = PlainTextCache::context(&old_context.cache, 1, 2).unwrap();
++        let current_word = cache_word(&tree, &inherited, &current_context);
++        assert!(
++            old_context
++                .prepare(&tree, &tree.elements[&3], &inherited, true)
++                .is_none()
++        );
++        let cache = current_context.cache.borrow();
++        assert!(cache.enabled);
++        assert_eq!(cache.entries.len(), 1);
++        assert!(Rc::ptr_eq(&current_word, &cache.entries[&3]));
++    }
++}

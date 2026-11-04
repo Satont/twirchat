@@ -42,7 +42,8 @@
     "scripts/qa-built-app.ts",
     "scripts/qa-wayland-tray.tsx",
     "scripts/qa-mention-user-card.tsx",
-    "scripts/qa-emote-resources.tsx"
+    "scripts/qa-emote-resources.tsx",
+    "scripts/qa-text-rendering.tsx"
   ],
   "exclude": ["node_modules"]
 }
