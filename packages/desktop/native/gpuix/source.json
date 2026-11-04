@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.9",
+  "version": "0.11.0-twirchat.10",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -105,6 +105,11 @@
       "path": "patches/gpuix-plain-text-cache.patch",
       "root": "gpuix",
       "sha256": "a82ef48bc2f4394a2462a36580830d0065995f0219d24f5c1955fb988d6ca2cf"
+    },
+    {
+      "path": "patches/gpuix-focus-sync.patch",
+      "root": "gpuix",
+      "sha256": "7b35451e2389dfffcdd999972cf984838f2b6a427d2c476e86bf5ef90a481a72"
     }
   ]
 }

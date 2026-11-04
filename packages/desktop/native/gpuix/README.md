@@ -5,7 +5,7 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
-Native version `0.11.0-twirchat.9` keeps GIF/WebP images animating in visible,
+Native version `0.11.0-twirchat.10` keeps GIF/WebP images animating in visible,
 unfocused windows. [GPUIX issue #67](https://github.com/remorses/gpuix/issues/67)
 remains open, and the pinned GPUI source still stops both image frame advancement
 and scheduling on focus loss. The background-image patches add an opt-in GPUI
@@ -245,6 +245,11 @@ well as its display; they never connect to the user's tray or notification servi
 
 GUI probes must run through the repository's `qa:gui` isolated launcher. Never
 launch this addon against the user's display/compositor directly.
+
+Focus handles, tab metadata and focus/blur subscriptions reconcile only when the
+committed tree's focus metadata changes. Color, text and unrelated node updates
+reuse the existing handles. Pending focus requests still settle or cancel on each
+render; GPUI still derives tab order from the elements actually painted in that frame.
 
 ## Verification
 

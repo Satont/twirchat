@@ -24,6 +24,7 @@
     }
   },
   "include": [
+    "native/gpuix/probes/window-lifecycle.ts",
     "src/gpuix/**/*",
     "src/views/shared/utils/**/*",
     "src/views/main/utils/**/*",

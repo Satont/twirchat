@@ -1,0 +1,447 @@
+{
+  "schema": 1,
+  "phase": "root-focus-sync",
+  "date": "2026-11-04",
+  "units": {
+    "cpuPercent": "one logical core=100%",
+    "memory": "bytes",
+    "lag": "ms",
+    "rates": "per second"
+  },
+  "rangeColumns": [
+    "baselineMedian",
+    "baselineMin",
+    "baselineMax",
+    "finalMedian",
+    "finalMin",
+    "finalMax",
+    "deltaPercent"
+  ],
+  "provenance": {
+    "baseline": {
+      "source": {
+        "gitHead": "8a9665e04f8964a5dc3f46e65b1578233a8eb265",
+        "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceHash": "d8ad6b1a4dfc4f6aa8ff869b2cf9ed9715a896a822bff03c54daad4776630dd2",
+        "sourceFiles": 381
+      },
+      "native": {
+        "sha256": "e12a5a588389b87d6e7849699c2cf260590379593436db2c34fe3c1d3b308914",
+        "patchDigest": "2b9ff2e5615d55e2",
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.9",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 56842448
+      }
+    },
+    "final": {
+      "source": {
+        "gitHead": "8a9665e04f8964a5dc3f46e65b1578233a8eb265",
+        "dirtyHash": "f6115644a5f80a2aa7132e4d49e6c24657fcd973bf2723a8ad8fdc66d9d0415a",
+        "sourceHash": "7726a43b8af0351d1025e8b283f923a3250731e90ee8b8ae0e86f5c4c5fab7f5",
+        "sourceFiles": 382
+      },
+      "native": {
+        "sha256": "9167fe97d8be98517296d008f9c5bbaeb3f056e5e26159523db3e6147d47682f",
+        "patchDigest": "80b5577cbe92ab0f",
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.10",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 56832960
+      }
+    },
+    "driverSha256": "0f33d76ff9c32f5579ef6a9c45065effe7f977f122cc471f48d06f2e97a80143",
+    "lifecycleProbeSha256": "a026ae523d9093568a0f73a5e57ab0c82e8cc85ad221f9c630cf27fe08d8c5fa"
+  },
+  "method": {
+    "resourceCompositor": "private hardware Weston GL",
+    "functionalCompositor": "private software Xvfb",
+    "motionContract": {
+      "config": {
+        "durationSeconds": 20,
+        "warmupSeconds": 5,
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": true,
+        "sampleGpuDuringMeasurement": true
+      },
+      "configSha256": "899d167c294e25789230e888c0213daeca99783d0f85e12354d6fdd1590d2f84",
+      "mode": "production",
+      "bun": "1.4.4",
+      "compositor": "weston",
+      "window": {
+        "width": 770,
+        "height": 1300,
+        "x": 0,
+        "y": 0,
+        "mode": "windowed"
+      },
+      "initialRetained": 4600,
+      "retained": 4600,
+      "driver": "0f33d76ff9c32f5579ef6a9c45065effe7f977f122cc471f48d06f2e97a80143",
+      "pointerPath": {
+        "viewport": {
+          "x": 0,
+          "y": 44,
+          "width": 770,
+          "height": 1205
+        },
+        "from": {
+          "x": 550,
+          "y": 114
+        },
+        "to": {
+          "x": 550,
+          "y": 1186
+        },
+        "visibleRows": 13
+      },
+      "pointerKind": "cross-rows",
+      "pointerSweepSeconds": 0.25,
+      "offeredCalls": 2400
+    },
+    "matrix": "15developmentcases,12s/3swarmup,1200x800,200retained/channel",
+    "target": "3productionruns/version,50channels/4panes/5000messages/s,30s/3swarmup",
+    "noFreshProfile": true
+  },
+  "motion": {
+    "n": [3,3],
+    "metrics": {
+      "cpuPercent": [27.830553,27.266,28.162862,25.904869,25.621661,26.04282,-6.919314],
+      "rssMedianBytes": [386805760,385179648,387117056,387387392,386289664,388190208,0.150368],
+      "rssPeakBytes": [401399808,393555968,402550784,402923520,400687104,404500480,0.3796],
+      "heapPeakBytes": [108492943,106503756,108498277,106507916,106489591,108203915,-1.829637],
+      "eventLoopLagP95Ms": [0.056945,0.056618,0.057116,0.056987,0.056741,0.058445,0.073755],
+      "actualRate": [0,0,0,0,0,0,null],
+      "nativeFrames": [950,931,958,946,936,947,-0.421053],
+      "nativeMutationBatches": [961,961,961,961,961,961,0],
+      "nativeMutationOperations": [13441,13441,13441,13441,13441,13441,0],
+      "pointerCallsPerSecond": [119.949514,119.949494,119.94956,119.949559,119.949557,119.94956,0.000037],
+      "pointerCompletedFraction": [0.999583,0.999583,0.999583,0.999583,0.999583,0.999583,0],
+      "totalPresentsPerSecond": [59.999747,59.94978,59.999757,59.99978,59.999779,60.049778,0.000055]
+    }
+  },
+  "production": {
+    "n": [3,3],
+    "metrics": {
+      "cpuPercent": [80.503672,80.446734,81.332993,81.521039,81.475494,82.273682,1.263752],
+      "rssMedianBytes": [517722112,516734976,517881856,517320704,511000576,521547776,-0.077533],
+      "rssPeakBytes": [628215808,625295360,631341056,626634752,613888000,665174016,-0.251674],
+      "heapPeakBytes": [229314252,217583907,230789234,236943056,230006514,242740038,3.32679],
+      "eventLoopLagP95Ms": [1.449587,1.056092,1.599434,1.338578,1.336078,1.4982,-7.657974],
+      "actualRate": [4996.673526,4995.347814,4996.980692,4995.348321,4994.749081,4997.081167,-0.026522],
+      "eventLoopLagMaxMs": [8.683903,8.270932,10.548978,10.010803,8.140166,11.055255,15.279996],
+      "processedFraction": [0.99934,0.999073,0.9994,0.999073,0.998953,0.99942,-0.026686],
+      "userTimingMeasureCount": [0,0,0,0,0,0,null]
+    }
+  },
+  "controls": {
+    "columns": [
+      "baseline",
+      "final",
+      "deltaPercent"
+    ],
+    "rows": [
+      {
+        "mode": "none",
+        "metrics": {
+          "cpuPercent": [2.344266,2.293491,-2.165923],
+          "rssMedianBytes": [359284736,361103360,0.506179],
+          "rssPeakBytes": [362643456,362516480,-0.035014],
+          "heapPeakBytes": [97638278,97572719,-0.067145],
+          "eventLoopLagP95Ms": [0.059409,0.058294,-1.87682],
+          "actualRate": [0,0,null],
+          "nativeFrames": [1,1,0],
+          "pointerCallsPerSecond": [0,0,null],
+          "totalPresentsPerSecond": [58.899766,58.899761,-0.000009]
+        }
+      },
+      {
+        "mode": "same-row",
+        "metrics": {
+          "cpuPercent": [2.737034,2.759289,0.813108],
+          "rssMedianBytes": [376786944,379498496,0.719651],
+          "rssPeakBytes": [380399616,382386176,0.52223],
+          "heapPeakBytes": [99072743,99182653,0.110939],
+          "eventLoopLagP95Ms": [0.057997,0.058793,1.372485],
+          "actualRate": [0,0,null],
+          "nativeFrames": [1,1,0],
+          "pointerCallsPerSecond": [119.949535,119.949541,0.000005],
+          "totalPresentsPerSecond": [58.799772,58.899775,0.170073]
+        }
+      }
+    ]
+  },
+  "matrix": {
+    "columns": [
+      "cpuPercent",
+      "rssMedianBytes",
+      "rssPeakBytes",
+      "heapPeakBytes",
+      "actualRate",
+      "eventLoopLagP95Ms",
+      "processedFraction"
+    ],
+    "rows": {
+      "c1-r0-p1": {
+        "baseline": [0.984956,293965824,294400000,65684106,0,0.062977,1],
+        "final": [0.965815,293826560,294248448,65658202,0,0.061388,1]
+      },
+      "c1-r100-p1": {
+        "baseline": [46.397334,502042624,608935936,167004033,99.748963,0.879361,0.9975],
+        "final": [43.969519,507322368,626167808,184134373,99.665746,1.193432,0.996667]
+      },
+      "c1-r1000-p1": {
+        "baseline": [60.25562,509161472,581636096,147545116,997.907606,3.703758,0.997917],
+        "final": [61.618135,536608768,633638912,154568697,997.157259,3.487651,0.997167]
+      },
+      "c1-r5000-p1": {
+        "baseline": [109.194461,595808256,719106048,217528487,4974.814245,23.966938,0.994976],
+        "final": [109.129693,605085696,710074368,220204603,4969.791639,24.249656,0.993967]
+      },
+      "c10-r0-p1": {
+        "baseline": [0.97284,298176512,298557440,66425133,0,0.059427,1],
+        "final": [0.939665,297607168,298348544,66420043,0,0.058235,1]
+      },
+      "c10-r100-p1": {
+        "baseline": [16.247837,359370752,391880704,96501141,99.749053,0.332954,0.9975],
+        "final": [14.778322,360587264,387309568,95321324,99.665748,0.096481,0.996667]
+      },
+      "c10-r1000-p1": {
+        "baseline": [42.734988,521674752,602234880,177036960,997.407637,0.472261,0.997417],
+        "final": [44.503805,501698560,575098880,172704962,998.240758,1.0208,0.99825]
+      },
+      "c10-r5000-p1": {
+        "baseline": [53.67939,505593856,591986688,172813278,4990.204886,2.378251,0.99805],
+        "final": [50.680576,495415296,563761152,183045233,4985.615071,2.354731,0.997133]
+      },
+      "c50-r0-p1": {
+        "baseline": [1.050598,308649984,309182464,73022866,0,0.060419,1],
+        "final": [1.095672,310956032,311357440,73035532,0,0.059387,1]
+      },
+      "c50-r100-p1": {
+        "baseline": [6.511639,323940352,331313152,80489160,99.665854,0.060237,0.996667],
+        "final": [6.61588,322629632,332754944,80321844,99.749196,0.068104,0.9975]
+      },
+      "c50-r1000-p1": {
+        "baseline": [26.432393,439390208,497147904,142672517,998.330144,0.057556,0.998333],
+        "final": [30.881194,432730112,507510784,145176666,997.657037,0.067406,0.997667]
+      },
+      "c50-r5000-p1": {
+        "baseline": [48.354042,502673408,554176512,180218030,4989.537757,0.798121,0.997917],
+        "final": [44.9704,499609600,556523520,176635485,4990.292673,0.941053,0.998067]
+      },
+      "c50-r1000-p4": {
+        "baseline": [66.526606,687431680,828588032,217220967,997.239104,0.511879,0.99725],
+        "final": [68.158443,699920384,793804800,208374825,997.885213,2.587471,0.997917]
+      },
+      "c50-r5000-p4": {
+        "baseline": [109.193607,920567808,1238999040,249653810,4987.610636,7.450369,0.997533],
+        "final": [111.853636,888467456,1219670016,269866406,4984.649906,9.122925,0.996934]
+      },
+      "c100-r5000-p4": {
+        "baseline": [103.003234,927805440,1081171968,242084223,4989.287369,4.135552,0.997867],
+        "final": [105.127522,872087552,1050644480,250761066,4983.037743,5.0235,0.996617]
+      }
+    },
+    "initialFlags": [
+      {
+        "scenario": "c1-r1000-p1",
+        "flags": [
+          "Single-sample; repeat required rssMedianBytes median increased 5.39%",
+          "Single-sample; repeat required rssPeakBytes median increased 8.94%"
+        ]
+      },
+      {
+        "scenario": "c50-r1000-p1",
+        "flags": [
+          "Single-sample; repeat required cpuPercent median increased 16.83%"
+        ]
+      }
+    ]
+  },
+  "originalRepeats": [
+    {
+      "scenario": "c1-r1000-p1",
+      "n": [3,3],
+      "metrics": {
+        "cpuPercent": [62.573567,58.370313,63.193313,59.562212,58.334473,60.010003,-4.812502],
+        "rssMedianBytes": [518115328,498888704,520577024,515481600,512438272,517201920,-0.508329],
+        "rssPeakBytes": [595894272,595816448,611749888,655499264,598962176,656183296,10.002612],
+        "heapPeakBytes": [147141220,142494082,154767667,144552806,142395101,153526957,-1.759136],
+        "eventLoopLagP95Ms": [3.143601,2.88202,3.811369,3.472074,3.034629,3.658288,10.448941],
+        "achievedRate": [997.324164,997.157663,998.18973,996.823917,996.740504,996.824463,-0.050159]
+      },
+      "originalFlags": [
+        "Repeated rssPeakBytes median increased 10.00%"
+      ]
+    },
+    {
+      "scenario": "c50-r1000-p1",
+      "n": [3,3],
+      "metrics": {
+        "cpuPercent": [31.591877,28.165672,32.011068,29.911755,28.410071,31.271551,-5.318209],
+        "rssMedianBytes": [439058432,434872320,439394304,430153728,427028480,436506624,-2.028136],
+        "rssPeakBytes": [492920832,491974656,509476864,502992896,493649920,504713216,2.043343],
+        "heapPeakBytes": [142899886,142182022,145442431,143170209,141390984,143357898,0.18917],
+        "eventLoopLagP95Ms": [0.060211,0.060049,0.062265,0.066745,0.060791,0.082486,10.851838],
+        "achievedRate": [998.406979,998.238664,998.407099,997.488873,997.406591,998.490421,-0.091957]
+      },
+      "originalFlags": []
+    }
+  ],
+  "counterbalanced": {
+    "preregistration": "validation/balanced-preregistration.json.gz",
+    "order": [
+      "F1",
+      "B1",
+      "B2",
+      "F2",
+      "F3",
+      "B3"
+    ],
+    "balanced": {
+      "n": [3,3],
+      "metrics": {
+        "cpuPercent": [59.89137,58.480794,60.973985,60.056447,59.22486,60.152155,0.275627],
+        "rssMedianBytes": [525422592,505982976,539123712,516915200,513519616,517844992,-1.619152],
+        "rssPeakBytes": [617672704,617246720,622936064,613007360,594341888,614621184,-0.75531],
+        "heapPeakBytes": [149261863,143286812,155918402,149359910,144474229,166133746,0.065688],
+        "eventLoopLagP95Ms": [3.456997,3.267749,3.54334,3.599549,3.517205,3.747207,4.123579],
+        "achievedRate": [997.989519,996.907988,998.063298,997.302749,997.15749,998.574374,-0.068815]
+      }
+    },
+    "pooled": {
+      "n": [6,6],
+      "metrics": {
+        "cpuPercent": [60.432677,58.370313,63.193313,59.786108,58.334473,60.152155,-1.069901],
+        "rssMedianBytes": [519346176,498888704,539123712,516198400,512438272,517844992,-0.606104],
+        "rssPeakBytes": [614498304,595816448,622936064,613814272,594341888,656183296,-0.111316],
+        "heapPeakBytes": [148201541.5,142494082,155918402,146956358,142395101,166133746,-0.840196],
+        "eventLoopLagP95Ms": [3.362373,2.88202,3.811369,3.558377,3.034629,3.747207,5.829335],
+        "achievedRate": [997.656842,996.907988,998.18973,996.990977,996.740504,998.574374,-0.066743]
+      }
+    },
+    "peakColumns": [
+      "cohort",
+      "version",
+      "repetition",
+      "rssPeakBytes"
+    ],
+    "all12Peaks": [
+      [
+        "original",
+        "baseline",
+        1,
+        611749888
+      ],
+      [
+        "original",
+        "baseline",
+        2,
+        595816448
+      ],
+      [
+        "original",
+        "baseline",
+        3,
+        595894272
+      ],
+      [
+        "original",
+        "final",
+        1,
+        655499264
+      ],
+      [
+        "original",
+        "final",
+        2,
+        656183296
+      ],
+      [
+        "original",
+        "final",
+        3,
+        598962176
+      ],
+      [
+        "balanced",
+        "baseline",
+        1,
+        617672704
+      ],
+      [
+        "balanced",
+        "baseline",
+        2,
+        617246720
+      ],
+      [
+        "balanced",
+        "baseline",
+        3,
+        622936064
+      ],
+      [
+        "balanced",
+        "final",
+        1,
+        614621184
+      ],
+      [
+        "balanced",
+        "final",
+        2,
+        613007360
+      ],
+      [
+        "balanced",
+        "final",
+        3,
+        594341888
+      ]
+    ],
+    "verdict": "no-balanced-or-pooled-cpu-rss-flag",
+    "decisionFlags": []
+  },
+  "validation": {
+    "nativeTests": 355,
+    "newNativeTestsIncluded": 11,
+    "canonicalSourceByteEquality": {
+      "nativeFiles": 36,
+      "gpuiFiles": 93
+    },
+    "projectTestsPassed": 1206,
+    "existingPostgresSkipped": 15,
+    "clippyErrorsUnchanged": 38,
+    "clippyWarningsUnchanged": 13,
+    "lifecycleBeforeAfterSameBytes": true,
+    "gui": [
+      "lifecycle",
+      "deferred rows",
+      "hotkeys",
+      "dense glyph/selection",
+      "native drags420/900/livechat/cancel"
+    ],
+    "rootFixCheckTypecheckPassed": true
+  },
+  "limits": [
+    "Original3v3 c1peakRSS+10.00% retained; two of six final peaks are625.13/625.79MiB.",
+    "Balanced and pooled CPU/RSS medians do not exceed5%; wider final tail remains.",
+    "Sampled heap drops do not prove GCcausality/leakfreedom; native frame/mutation counters absent from load repeats.",
+    "Source fixtures, not AppImage/personalprofile; sharedhost/coupledproducer; <=2%hoverCPUgoalunmet."
+  ]
+}

@@ -82,6 +82,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-04 focus synchronization](2026-11-04-focus-sync/report.md) records the next root metadata
+optimization, fresh before/after gates, and the preserved RSS counterbalance investigation.
+
 [2026-11-04 hover CPU](2026-11-04-hover-cpu/report.md) records bounded plain-text reuse,
 final-artifact pointer measurements, the preserved load gate, RSS investigations and native glyph QA.
 

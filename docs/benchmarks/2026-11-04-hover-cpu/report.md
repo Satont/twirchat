@@ -1,5 +1,8 @@
 # Chat hover CPU: bounded plain-text reuse
 
+The later [focus synchronization gate](../2026-11-04-focus-sync/report.md) records a fresh `.9`→`.10`
+comparison and its separate RSS investigation.
+
 Sustained cross-row pointer motion reduced process CPU from **57.28% to 35.56% of one logical core
 (−37.91%)** in three fresh production runs per version. RSS medians fell 1.93%; the window kept approximately 60 native
 presentations/s and visible emotes kept animating. This is an improvement, but the desired
