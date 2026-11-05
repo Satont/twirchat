@@ -1,5 +1,8 @@
-import { z } from 'zod'
-
+import {
+  HOME_PLUGIN_CHANNELS_KEY,
+  homePluginChannelIdsSchema,
+  MAX_HOME_PLUGIN_CHANNELS,
+} from '../../watched-channels/home-plugin-preference'
 import {
   isPluginWatchedChannel,
   type DesktopWatchedChannel,
@@ -14,12 +17,7 @@ import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 import { createPreferenceStore, type PreferenceApi, type PreferenceStore } from './preferences'
 
-const MAX_SOURCES = 32
 const MAX_ROWS = 500
-const idsSchema = z
-  .array(z.uuid())
-  .max(MAX_SOURCES)
-  .transform((ids) => [...new Set(ids)])
 
 interface HomePluginPreferences {
   preferences: PreferenceStore<string[]>
@@ -27,8 +25,8 @@ interface HomePluginPreferences {
 }
 
 const sourceState = persistentResource('homePluginChannels', (): HomePluginPreferences => ({
-  preferences: createPreferenceStore<string[]>('chat.homePluginChannels', [], (value) =>
-    idsSchema.parse(value),
+  preferences: createPreferenceStore<string[]>(HOME_PLUGIN_CHANNELS_KEY, [], (value) =>
+    homePluginChannelIdsSchema.parse(value),
   ),
   writes: Promise.resolve(),
 }))
@@ -49,7 +47,7 @@ export function setHomePluginChannel(
     const { value: previous, error } = homePluginChannelsStore.get()
     if (error) throw new Error(error)
     if (previous.includes(id) === included) return undefined
-    if (included && previous.length >= MAX_SOURCES)
+    if (included && previous.length >= MAX_HOME_PLUGIN_CHANNELS)
       throw new Error('Remove a plugin source from My channels before adding another.')
     const next = included ? [...previous, id] : previous.filter((source) => source !== id)
     try {

@@ -61,6 +61,7 @@ export const transportMessageSchema = z.object({
   author,
   text: text.min(1),
   timestamp: timestamp.optional(),
+  historical: z.boolean().optional(),
 }) satisfies z.ZodType<PluginTransportMessage>
 export const eventNameSchema = z.enum([
   'message',

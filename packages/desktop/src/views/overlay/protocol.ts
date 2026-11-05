@@ -1,6 +1,11 @@
 import { z } from 'zod'
 
-import { emoteSchema, normalizedChatMessageSchema } from '../../services/persisted-schemas'
+import {
+  emoteSchema,
+  normalizedChatMessageSchema,
+  platformSchema,
+} from '../../services/persisted-schemas'
+import { pluginPlatformSchema } from '../../watched-channels/plugin-channel-types'
 import type { MessagePart } from '../shared/utils/messageParts'
 
 const messagePartSchema = z.toZod<MessagePart>()(
@@ -11,7 +16,9 @@ const messagePartSchema = z.toZod<MessagePart>()(
   }),
 )
 export const overlayMessageSchema = z.object({
-  message: normalizedChatMessageSchema,
+  message: normalizedChatMessageSchema.extend({
+    platform: z.union([platformSchema, pluginPlatformSchema]),
+  }),
   parts: z.array(messagePartSchema),
 })
 export type OverlayChatMessage = z.infer<typeof overlayMessageSchema>

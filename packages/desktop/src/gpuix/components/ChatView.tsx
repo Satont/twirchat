@@ -1774,9 +1774,14 @@ export function ChatView({
                   <PluginChatRow
                     key={message.key}
                     message={message.message}
-                    source={`${message.channel.transportName} · ${message.channel.displayName}`}
+                    source={
+                      pluginFeed.channels.length > 1
+                        ? `${message.channel.transportName} · ${message.channel.displayName}`
+                        : message.channel.transportName
+                    }
                     fontSize={settings?.fontSize}
                     showTimestamp={settings?.showTimestamp}
+                    chatTheme={settings?.chatTheme}
                   />
                 )
               }

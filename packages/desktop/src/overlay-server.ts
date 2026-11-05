@@ -31,8 +31,11 @@ import { logger } from '@twirchat/shared/logger'
 import type { NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
 import type { ServerWebSocket } from 'bun'
 
+import type { PluginTransportMessage } from './plugins/api'
 import { getBackendUrl } from './runtime-config'
+import type { OverlayChatMessage as OverlayChatPayload } from './views/overlay/protocol'
 import { buildMessageParts, type MessagePart } from './views/shared/utils/messageParts'
+import type { PluginWatchedChannel } from './watched-channels/plugin-channel-types'
 
 const log = logger('overlay-server')
 
@@ -46,7 +49,7 @@ export interface OverlayChatMessage {
 }
 
 export type OverlayMessage =
-  | { type: 'chat_message'; data: OverlayChatMessage }
+  | { type: 'chat_message'; data: OverlayChatPayload }
   | { type: 'chat_event'; data: NormalizedEvent }
   | { type: 'clear' }
 
@@ -87,10 +90,37 @@ export function buildOverlayChatMessage(msg: NormalizedChatMessage): OverlayChat
  */
 export function pushOverlayMessage(msg: NormalizedChatMessage): void {
   if (!clients.size) return
-  const payload: OverlayMessage = {
-    data: buildOverlayChatMessage(msg),
-    type: 'chat_message',
-  }
+  broadcastOverlayChat(buildOverlayChatMessage(msg))
+}
+
+export function pushOverlayPluginMessage(
+  channel: PluginWatchedChannel,
+  msg: PluginTransportMessage,
+): void {
+  if (!clients.size || msg.historical) return
+  broadcastOverlayChat({
+    message: {
+      id: `${channel.id}:${msg.id}`,
+      platform: channel.platform,
+      channelId: channel.channelSlug,
+      author: {
+        id: msg.author.id,
+        username: msg.author.username,
+        displayName: msg.author.name,
+        color: msg.author.color,
+        badges: [],
+      },
+      text: msg.text,
+      emotes: [],
+      timestamp: new Date(msg.timestamp ?? Date.now()),
+      type: 'message',
+    },
+    parts: [{ type: 'text', content: msg.text }],
+  })
+}
+
+function broadcastOverlayChat(data: OverlayChatPayload): void {
+  const payload: OverlayMessage = { data, type: 'chat_message' }
   const json = JSON.stringify(payload, replacer)
   for (const ws of clients) {
     try {

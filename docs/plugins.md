@@ -18,6 +18,10 @@ In the StreamX pane, choose **Move to My channels** to put its messages in the s
 as your connected accounts. The choice is saved. Use the close button on the StreamX source
 chip in the **My channels** header to remove it from the combined feed.
 
+Live messages from StreamX sources in **My channels** also appear in the OBS chat overlay.
+To show only StreamX, add `platforms=plugin:streamx:chat` to the overlay URL. Update StreamX
+to version 0.2.1 or later to keep the recent history loaded on connection out of the overlay.
+
 The plugin loads up to 50 recent messages and receives new ones without a StreamX account.
 Chat is read-only and shows nickname colors and emote names. It uses the same internal GraphQL
 endpoint as [LeChat](https://github.com/le-xot/lechat/blob/f68e4311d7595603aac603b530b18763fffb66c0/src/providers/streamx.rs).
@@ -108,6 +112,8 @@ Set `author.color` to a `#RRGGBB` color to style the nickname. Without a `sendMe
 the transport is read-only. Add that handler and keep its connection state keyed by the channel
 identifier to send messages. Channel identifiers preserve case. TwirChat saves channels in
 tabs, splits and the combined **My channels** feed, and shares the connection across these views.
+For sources in **My channels**, set `historical: true` on any backfilled message to keep it
+out of the live OBS overlay.
 Messages in the combined feed can be read there. To send through a writable plugin transport,
 open its channel in a tab or split.
 
