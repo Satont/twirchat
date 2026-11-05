@@ -16,7 +16,7 @@ const ids = (query: string) => searchSettings(query).sections.map((section) => s
 
 describe('settings search index', () => {
   test('every existing section has a unique reachable category and an explicit save contract', () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(19)
+    expect(SETTINGS_SECTIONS).toHaveLength(20)
     expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
       SETTINGS_SECTIONS.length,
     )
@@ -57,6 +57,7 @@ describe('settings search index', () => {
       ['Morse outgoing', 'translation'],
       ['Quick reasons', 'moderation'],
       ['command template', 'commands'],
+      ['Twir autocomplete', 'twir-integration'],
       ['plugin manifest', 'plugins'],
       ['save rules', 'rules'],
       ['overlay.port', 'overlay'],

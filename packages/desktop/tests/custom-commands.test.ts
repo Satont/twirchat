@@ -159,6 +159,29 @@ describe('custom command expansion', () => {
     })
   })
 
+  test('reserves Twir reload for the composer without losing legacy aliases', () => {
+    const commands = validateCustomCommands([
+      command('twirreload', 'legacy'),
+      command('twirreload all', 'legacy multiword'),
+      command('botrefresh', '/twirreload'),
+      command('twirreloadextra', 'distinct alias'),
+    ])
+    expect(commands).toHaveLength(4)
+    expect(expandCustomCommand('/TWIRRELOAD all', commands, context)).toEqual({
+      ok: true,
+      matched: false,
+      outputs: ['/TWIRRELOAD all'],
+    })
+    expect(expandCustomCommand('/botrefresh', commands, context)).toEqual({
+      ok: true,
+      matched: true,
+      outputs: ['/twirreload'],
+    })
+    expect(expandCustomCommand('/twirreloadextra', commands, context)).toMatchObject({
+      outputs: ['distinct alias'],
+    })
+  })
+
   test('rejects direct and indirect alias cycles instead of sending a partial expansion', () => {
     const direct = expandCustomCommand('/loop', [command('loop', '/loop')], context)
     expect(direct.ok).toBe(false)

@@ -30,7 +30,7 @@ export interface CommandSuggestion {
 export type AutocompleteSuggestion = MentionSuggestion | EmoteSuggestion | CommandSuggestion
 
 export interface ParsedToken {
-  mode: 'mention' | 'emote' | 'command' | null
+  mode: 'mention' | 'emote' | 'command' | 'twir-command' | null
   query: string
 }
 
@@ -39,6 +39,9 @@ export function parseToken(text: string): ParsedToken {
 
   if (trimmedStart.startsWith('/') && !trimmedStart.includes(' ')) {
     return { mode: 'command', query: trimmedStart.slice(1) }
+  }
+  if (trimmedStart.startsWith('!') && !/\s/u.test(trimmedStart)) {
+    return { mode: 'twir-command', query: trimmedStart.slice(1).toLowerCase() }
   }
 
   const words = text.split(/\s+/)

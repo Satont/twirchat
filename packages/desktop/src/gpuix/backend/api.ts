@@ -90,6 +90,12 @@ import type {
   StreamerModeStatus,
 } from '../../services/streamer-mode'
 import { systemIntegration } from '../../services/system-integration'
+import {
+  createTwirCommandsClient,
+  type TwirCommand,
+  type TwirCommandsOptions,
+  type TwirCommandTarget,
+} from '../../services/twir-commands'
 import type { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import type { TwitchEventSubClient } from '../../services/twitch-eventsub'
 import { sevenTVService } from '../../seventv'
@@ -280,6 +286,10 @@ export interface DesktopApi {
   forgetAccount(params: { accountId: string }): Promise<void>
   getSettings(): Promise<AppSettings>
   saveSettings(params: AppSettings): Promise<void>
+  getTwirCommands(
+    target: TwirCommandTarget,
+    options?: TwirCommandsOptions,
+  ): Promise<readonly TwirCommand[]>
   getUserAliases(): Promise<UserAlias[]>
   setUserAlias(params: { platform: Platform; platformUserId: string; alias: string }): Promise<void>
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
@@ -759,6 +769,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   }
 
   return {
+    getTwirCommands: createTwirCommandsClient(),
     getTwitchActivities: async (params) => {
       const snapshot = await requestTwitchActivitiesSnapshot(params)
       ctx.twitchActivityRefresh?.observeSnapshot(snapshot)

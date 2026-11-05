@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { emojiShortcodeSuggestions } from '../../services/emoji-shortcodes'
 import { AUTO_TRANSLATION_COMMAND, isAutoTranslationCommand } from '../../services/translation'
+import type { TwirCommand, TwirCommandTarget } from '../../services/twir-commands'
 import {
   parseToken,
   replaceToken,
@@ -23,8 +24,13 @@ import {
   type ParsedToken,
 } from '../../views/main/utils/autocompleteUtils'
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
+import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
-import type { CustomCommandDefinition } from '../commands'
+import {
+  isTwirReloadCommand,
+  TWIR_RELOAD_COMMAND_NAME,
+  type CustomCommandDefinition,
+} from '../commands'
 import { emoteStore, loadEmotes } from '../state/app'
 import { mentionColor } from '../state/caches'
 import { useStore, useStoreSelector } from '../state/create-store'
@@ -40,9 +46,28 @@ export type { AutocompleteSuggestion, EmoteSuggestion, MentionSuggestion }
 
 type AliasMap = Map<Platform, Map<string, string>>
 
+interface TwirSuggestions {
+  targets: readonly TwirCommandTarget[]
+  commands: ReadonlyMap<string, TwirCommand>
+  revision: number
+}
+
 const EMPTY_MENTION_SUGGESTIONS: MentionSuggestion[] = []
 const EMPTY_EMOTE_SUGGESTIONS: EmoteSuggestion[] = []
+const EMPTY_TWIR_SUGGESTIONS: CommandSuggestion[] = []
 const EMPTY_PLUGIN_COMMANDS: readonly string[] = []
+
+const TWIR_RELOAD_SUGGESTION: CommandSuggestion = {
+  type: 'command',
+  label: `/${TWIR_RELOAD_COMMAND_NAME}`,
+  insertText: `/${TWIR_RELOAD_COMMAND_NAME}`,
+  description: 'Reload Twir commands for this chat',
+}
+
+function isComposerOnlyCommand(name: string): boolean {
+  const invocation = `/${name}`
+  return isAutoTranslationCommand(invocation) || isTwirReloadCommand(invocation)
+}
 
 const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
   {
@@ -126,6 +151,8 @@ export function useAutocomplete(params: {
   statuses: Partial<Record<Platform, PlatformStatusInfo>>
   aliasMap: AliasMap | undefined
   customCommands?: CustomCommandDefinition[]
+  twirEnabled: boolean
+  twirTargets?: readonly TwirCommandTarget[]
 }) {
   const { text, setText, messages, watchedChannel, statuses, aliasMap } = params
   const backend = useBackend()
@@ -146,8 +173,7 @@ export function useAutocomplete(params: {
     if (
       text.trimStart().startsWith('/') &&
       params.customCommands?.some(
-        (command) =>
-          command.name.startsWith(query) && !isAutoTranslationCommand(`/${command.name}`),
+        (command) => command.name.startsWith(query) && !isComposerOnlyCommand(command.name),
       )
     ) {
       return { mode: 'command', query }
@@ -155,6 +181,55 @@ export function useAutocomplete(params: {
     return parseToken(text)
   }, [text, params.customCommands])
   const mode = token.mode
+  const twirTargets = mode === 'twir-command' ? params.twirTargets : undefined
+  const [twirSuggestions, setTwirSuggestions] = useState<TwirSuggestions>()
+  const [twirRevision, setTwirRevision] = useState(0)
+  useEffect(() => {
+    if (!twirTargets) return undefined
+    let current = true
+    const load = async () => {
+      const lists = await Promise.all(
+        twirTargets.map((target) => backend.api.getTwirCommands(target)),
+      )
+      if (!current) return
+      const commands = new Map<string, TwirCommand>()
+      for (const list of lists) {
+        for (const command of list) {
+          const key = command.name.toLowerCase()
+          if (!commands.has(key)) commands.set(key, command)
+        }
+      }
+      setTwirSuggestions({ targets: twirTargets, commands, revision: twirRevision })
+      setSelectedIndex(0)
+    }
+    runUiTask(load())
+    return () => {
+      current = false
+    }
+  }, [backend, twirTargets, twirRevision])
+  const twirCommands =
+    twirTargets &&
+    twirSuggestions?.targets === twirTargets &&
+    twirSuggestions.revision === twirRevision
+      ? twirSuggestions.commands
+      : undefined
+  const twirQuery = mode === 'twir-command' ? token.query : undefined
+  const twirMatches = useMemo(() => {
+    if (!twirCommands || twirQuery === undefined) return EMPTY_TWIR_SUGGESTIONS
+    const matches: CommandSuggestion[] = []
+    for (const [name, command] of twirCommands) {
+      if (!name.startsWith(twirQuery)) continue
+      const label = `!${command.name}`
+      matches.push({
+        type: 'command',
+        label,
+        insertText: label,
+        description: sanitizeDisplayText(command.description ?? ''),
+      })
+      if (matches.length === 15) break
+    }
+    return matches
+  }, [twirCommands, twirQuery])
   const completingCommand = mode === 'command'
   const [pluginCommands, setPluginCommands] = useState(EMPTY_PLUGIN_COMMANDS)
   useEffect(() => {
@@ -166,7 +241,7 @@ export function useAutocomplete(params: {
     return unsubscribe
   }, [backend, completingCommand])
   const query = token.query
-  const queryKey = mode === 'command' ? `/${query}` : query
+  const queryKey = mode === 'command' ? `/${query}` : mode === 'twir-command' ? `!${query}` : query
   const mentionCompletionActive = mode === 'mention' && query.length > 0
   const emoteCompletionActive = mode === 'emote' && query.length > 0
   const connectedChannel = watchedChannel
@@ -229,9 +304,10 @@ export function useAutocomplete(params: {
 
   const suggestions = useMemo((): AutocompleteSuggestion[] => {
     if (!mode) return []
+    if (mode === 'twir-command') return twirMatches
     if (mode === 'command') {
       const custom: CommandSuggestion[] = (params.customCommands ?? [])
-        .filter((command) => !isAutoTranslationCommand(`/${command.name}`))
+        .filter((command) => !isComposerOnlyCommand(command.name))
         .map((command) => ({
           type: 'command',
           label: `/${command.name}`,
@@ -239,12 +315,14 @@ export function useAutocomplete(params: {
           description: command.template.replace(/\n/g, ' · '),
         }))
       const commands = [...custom, ...COMMAND_SUGGESTIONS]
+      if (params.twirEnabled) commands.push(TWIR_RELOAD_SUGGESTION)
       if (pluginCommands.length) {
         const reserved = new Set<string>([
           ...commands.map((command) => command.label.slice(1)),
           ...PLATFORM_COMMAND_NAMES,
           'w',
           'whisper',
+          TWIR_RELOAD_COMMAND_NAME,
         ])
         for (const name of pluginCommands) {
           if (reserved.has(name)) continue
@@ -274,9 +352,11 @@ export function useAutocomplete(params: {
   }, [
     mode,
     query,
+    twirMatches,
     mentionSuggestions,
     emoteSuggestions,
     params.customCommands,
+    params.twirEnabled,
     pluginCommands,
     emotePreferences.emojiCompletion,
   ])
@@ -331,5 +411,6 @@ export function useAutocomplete(params: {
     moveUp,
     moveDown,
     close,
+    invalidateTwirSuggestions: () => setTwirRevision((revision) => revision + 1),
   }
 }

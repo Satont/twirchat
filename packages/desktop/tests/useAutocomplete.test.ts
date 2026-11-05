@@ -62,6 +62,18 @@ describe('parseToken', () => {
     expect(result.mode).toBe('command')
     expect(result.query).toBe('')
   })
+
+  test('detects leading Twir command tokens with a case-insensitive query', () => {
+    expect(parseToken('!')).toEqual({ mode: 'twir-command', query: '' })
+    expect(parseToken('  !HEL')).toEqual({ mode: 'twir-command', query: 'hel' })
+  })
+
+  test('leaves arguments and later bang tokens to ordinary chat completion', () => {
+    expect(parseToken('!hello ')).toEqual({ mode: null, query: '' })
+    expect(parseToken('!hello\tworld')).toEqual({ mode: null, query: '' })
+    expect(parseToken('hello !world')).toEqual({ mode: null, query: '' })
+    expect(parseToken('!hello @sa')).toEqual({ mode: 'mention', query: 'sa' })
+  })
 })
 
 describe('replaceToken', () => {
