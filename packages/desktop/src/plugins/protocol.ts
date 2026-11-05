@@ -41,7 +41,16 @@ const commandContext = z.object({
   args: z.array(text).max(512),
   channel: pluginChannelSchema.nullable(),
 }) satisfies z.ZodType<PluginCommandContext>
-const author = z.object({ id, name, username: name.optional() })
+const author = z.object({
+  id,
+  name,
+  username: name.optional(),
+  color: z
+    .string()
+    .regex(/^#[\da-f]{6}$/iu)
+    .optional()
+    .catch(undefined),
+})
 const status = z.enum(['connecting', 'connected', 'disconnected', 'error'])
 export const transportStatusSchema = z.object({
   status,

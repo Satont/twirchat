@@ -9,9 +9,11 @@ import type {
 } from '../../watched-channels/plugin-channels'
 import { useBackend } from '../backend/context'
 import { parsePluginCommand } from '../commands'
+import { runUiTask } from '../hooks/run-ui-task'
 import { useComposerFocusRegistration } from '../state/composer-focus'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useTheme } from '../theme-context'
+import { PluginChatRow } from './PluginChatRow'
 import { ActionButton, FormError } from './ui/Form'
 import { Text } from './ui/Text'
 
@@ -29,22 +31,8 @@ interface PluginChatPaneProps {
   onChangeChannel: () => void
   onSplitRight: () => void
   onClosePanel: () => void
+  onMoveToHome: () => Promise<void>
 }
-
-const PluginChatRow = memo(function PluginChatRow({ message }: { message: PluginChannelMessage }) {
-  const theme = useTheme()
-  const text = message.kind === 'message' ? `${message.author.name}: ${message.text}` : message.text
-  return (
-    <div
-      testId={`plugin-chat-message-${message.id.toWellFormed()}`}
-      style={{ paddingLeft: 8, paddingRight: 8, paddingTop: 3, paddingBottom: 3 }}
-    >
-      <Text style={{ fontSize: 13, color: message.kind === 'system' ? theme.text2 : theme.text }}>
-        {sanitizeDisplayText(text)}
-      </Text>
-    </div>
-  )
-})
 
 const PluginChatMessages = memo(function PluginChatMessages({
   messages,
@@ -74,16 +62,19 @@ export function PluginChatPane({
   onChangeChannel,
   onSplitRight,
   onClosePanel,
+  onMoveToHome,
 }: PluginChatPaneProps) {
   const backend = useBackend()
   const theme = useTheme()
   const renderer = useGpuixRequired()
   const input = useRef<PublicInstance | null>(null)
   const sendingRef = useRef(false)
+  const movingRef = useRef(false)
   const [snapshot, setSnapshot] = useState<PluginChannelSnapshot>()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [moving, setMoving] = useState(false)
   const [focused, setFocused] = useState(false)
   const focus = useTextInputFocusTracking(setFocused)
   const lifetime = useRef(false)
@@ -137,6 +128,18 @@ export function PluginChatPane({
     }
   }
 
+  async function moveToHome() {
+    if (movingRef.current) return
+    movingRef.current = true
+    setMoving(true)
+    try {
+      await onMoveToHome()
+    } finally {
+      movingRef.current = false
+      if (lifetime.current) setMoving(false)
+    }
+  }
+
   return (
     <div
       testId="plugin-chat"
@@ -167,6 +170,13 @@ export function PluginChatPane({
           </Text>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+          <ActionButton
+            testId="plugin-chat-move-home"
+            disabled={moving}
+            onClick={() => runUiTask(moveToHome())}
+          >
+            Move to My channels
+          </ActionButton>
           <ActionButton onClick={onChangeChannel}>Channel</ActionButton>
           <ActionButton onClick={onSplitRight}>Split</ActionButton>
           <ActionButton onClick={onClosePanel}>Close</ActionButton>

@@ -17,7 +17,8 @@ const { useGpuixRequired } = await import('@gpuix/react')
 const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { App } = await import('../src/gpuix/components/App')
 const { nativeWindow } = await import('../src/gpuix/native-window')
-const { loadInitialData, wireBackendToStores } = await import('../src/gpuix/state/app')
+const { accountsStore, loadInitialData, wireBackendToStores } =
+  await import('../src/gpuix/state/app')
 const { wireActiveWatchedChannels } = await import('../src/gpuix/state/watched-subscriptions')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
@@ -69,6 +70,24 @@ await Bun.write(
       },
       sendMessage(channelId, text, { emitMessage }) {
         emitMessage({ id: session + '-' + ++messages, author: { id: 'qa', name: 'QA' }, text: 'SENT ' + text })
+      },
+    })
+    let feed
+    api.registerCommand('fixture-live', () => feed?.emitMessage({
+      id: 'feed-live', author: { id: 'qa', name: 'QA', color: '#ff9900' }, text: 'PLUGIN LIVE',
+    }))
+    api.registerTransport('feed', {
+      name: 'Fixture feed',
+      connect(channelId, context) {
+        feed = context
+        context.setStatus({ status: 'connected' })
+        context.emitMessage({
+          id: 'feed-history',
+          author: { id: 'qa', name: 'QA', color: '#ff9900' },
+          text: 'PLUGIN HISTORY',
+          timestamp: Date.now() - 20_000,
+        })
+        return () => { feed = undefined }
       },
     })
   }`,
@@ -131,8 +150,11 @@ async function fill(id: string, text: string) {
   assert.equal(await child.exited, 0, 'native text input')
   await Bun.sleep(80)
 }
+function paintedText(): string {
+  return current().getPaintedText().join(' ').replace(/\s+/gu, ' ')
+}
 function painted(text: string): boolean {
-  return current().getPaintedText().join(' ').includes(text)
+  return paintedText().includes(text)
 }
 async function settings() {
   await click('nav-settings')
@@ -194,6 +216,68 @@ try {
   await fill('plugin-chat-input', 'reconnected')
   current().simulateKeystrokes('enter')
   await until(() => painted('SENT reconnected'), 'saved transport reconnects')
+
+  await click('tab-home')
+  await click('split-right')
+  await click('add-platform-plugin:qa-plugin:feed')
+  await fill('add-channel-input', 'read-only')
+  await click('add-channel-confirm')
+  await until(() => painted('PLUGIN HISTORY'), 'read-only plugin split')
+  const feed = (await backend.api.getWatchedChannels()).find(
+    (channel) => channel.channelSlug === 'read-only',
+  )
+  assert(feed)
+  accountsStore.set([
+    {
+      id: 'qa-own',
+      platform: 'kick',
+      platformUserId: 'qa-owner',
+      username: 'qa-owner',
+      displayName: 'QA owner',
+      scopes: [],
+      createdAt: 0,
+      updatedAt: 0,
+    },
+  ])
+  backend.events.emit('chat_message', {
+    id: 'builtin-mixed',
+    platform: 'kick',
+    channelId: 'qa-owner',
+    author: { id: 'sender', displayName: 'Builtin', badges: [] },
+    text: 'BUILTIN MESSAGE',
+    emotes: [],
+    timestamp: new Date(),
+    type: 'message',
+  })
+  await until(() => painted('BUILTIN MESSAGE'), 'built-in message')
+  await current().setWindowBounds({ width: 680, height: 720 })
+  await click('plugin-chat-move-home')
+  await until(
+    () =>
+      !bounds('plugin-chat') &&
+      Boolean(bounds(`home-plugin-remove-${feed.id}`)) &&
+      painted('PLUGIN HISTORY') &&
+      painted('BUILTIN MESSAGE'),
+    'plugin history moves into the built-in list',
+  )
+  assert.equal(
+    await backend.api.getUiState({ key: 'chat.homePluginChannels' }),
+    JSON.stringify([feed.id]),
+  )
+  const beforeLive = paintedText()
+  assert(beforeLive.indexOf('PLUGIN HISTORY') < beforeLive.indexOf('BUILTIN MESSAGE'))
+  await current().setWindowBounds({ width: 1180, height: 820 })
+  await click('chat-pause-button')
+  await plugins.runCommand('fixture-live', { channel: null, text: '/fixture-live', args: [] })
+  await until(() => painted('1 new'), 'paused feed receives plugin message')
+  assert(!painted('PLUGIN LIVE'))
+  await click('chat-pause-button')
+  await until(() => painted('PLUGIN LIVE'), 'plugin live message appears on resume')
+  await captureGuiQaDisplay('plugins-combined-feed')
+  await click(`home-plugin-remove-${feed.id}`)
+  await until(() => !painted('PLUGIN HISTORY') && !painted('PLUGIN LIVE'), 'plugin source removed')
+  assert(painted('BUILTIN MESSAGE'))
+
   await settings()
   await click('plugin-remove-qa-plugin')
   await until(() => plugins.list().length === 0, 'removed')
@@ -207,6 +291,7 @@ try {
       autocomplete: true,
       transport: true,
       reconnect: true,
+      mixedFeed: true,
     }),
   )
 } finally {

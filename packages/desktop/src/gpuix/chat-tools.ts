@@ -53,7 +53,11 @@ export interface SearchDetails {
   channelName?: string
 }
 
-type Predicate = (message: NormalizedChatMessage, details: SearchDetails) => boolean
+export type SearchableChatMessage = Omit<NormalizedChatMessage, 'platform' | 'timestamp'> & {
+  platform: string
+}
+
+type Predicate = (message: SearchableChatMessage, details: SearchDetails) => boolean
 
 /** Predicates are compiled once; regular expressions use bounded PCRE2 matching. */
 export function compileChatSearch(query: string): {
@@ -229,7 +233,11 @@ export function compileChatSearch(query: string): {
   }
 }
 
-export function formatChatTranscript(messages: NormalizedChatMessage[]): string {
+type TranscriptMessage = Pick<SearchableChatMessage, 'platform' | 'author' | 'text'> & {
+  timestamp: Date | number
+}
+
+export function formatChatTranscript(messages: readonly TranscriptMessage[]): string {
   return messages
     .map((message) => {
       const date = new Date(message.timestamp)

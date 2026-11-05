@@ -589,8 +589,11 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
     channelStatusStore.set(statusMap)
     watchedChannelsStore.set(watched)
 
-    const { initializeChatTabs } = await import('./chat-tabs')
-    await initializeChatTabs(backend)
+    const [{ initializeChatTabs }, { loadHomePluginChannels }] = await Promise.all([
+      import('./chat-tabs'),
+      import('./home-plugin-channels'),
+    ])
+    await Promise.all([initializeChatTabs(backend), loadHomePluginChannels(backend.api)])
 
     try {
       const watchedStats = await backend.api.getWatchedChannelStatuses()

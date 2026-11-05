@@ -4,6 +4,21 @@ In **Settings → Plugins**, enter the full path to a local `manifest.json` and 
 
 Enable code from sources you trust. Each plugin runs in its own Bun process with the permissions of your user account. It can access local files and the network. Through the TwirChat API it can read chat events and send messages through connected accounts.
 
+## StreamX
+
+Keep the [`plugins/streamx`](../plugins/streamx) directory together and install its
+[`manifest.json`](../plugins/streamx/manifest.json). To update an older copy, remove it in
+**Settings → Plugins** and install the new manifest. Enable **StreamX**, then open **Add
+channel**, select **StreamX**, and enter the channel name, for example `le-xot`.
+
+In the StreamX pane, choose **Move to My channels** to put its messages in the same timeline
+as your connected accounts. The choice is saved. Use the close button on the StreamX source
+chip in the **My channels** header to remove it from the combined feed.
+
+The plugin loads up to 50 recent messages and receives new ones without a StreamX account.
+Chat is read-only and shows nickname colors and emote names. It uses the same internal GraphQL
+endpoint as [LeChat](https://github.com/le-xot/lechat/blob/f68e4311d7595603aac603b530b18763fffb66c0/src/providers/streamx.rs).
+
 ## A TypeScript plugin
 
 Create a directory with this `manifest.json`.
@@ -86,6 +101,11 @@ api.registerTransport('example', {
 })
 ```
 
-Without a `sendMessage` handler the transport is read-only. Add that handler and keep its connection state keyed by the channel identifier to send messages. Channel identifiers preserve case. TwirChat saves channels in ordinary tabs and splits, opens a shared connection when an open layout references a channel, and reconnects saved channels when the plugin is enabled again.
+Set `author.color` to a `#RRGGBB` color to style the nickname. Without a `sendMessage` handler
+the transport is read-only. Add that handler and keep its connection state keyed by the channel
+identifier to send messages. Channel identifiers preserve case. TwirChat saves channels in
+tabs, splits and the combined **My channels** feed, and shares the connection across these views.
+Messages in the combined feed can be read there. To send through a writable plugin transport,
+open its channel in a tab or split.
 
 The v1 contract includes the APIs above and a text chat pane for third-party transports. Lua compatibility and fork-specific APIs for custom UI, rich message mutation and completion providers are outside this contract.

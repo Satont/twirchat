@@ -2,9 +2,16 @@ import { afterEach, expect, test } from 'bun:test'
 
 import type { WatchedChannel, WatchedChannelsLayout } from '@twirchat/shared/types'
 
+import type { DesktopApi } from '../src/gpuix/backend/api'
 import { watchedChannelsStore } from '../src/gpuix/state/app'
 import { chatTabsStore } from '../src/gpuix/state/chat-tabs'
 import { chatWindowsStore } from '../src/gpuix/state/chat-windows'
+import {
+  homePluginChannelsStore,
+  homePluginFeedStore,
+  observeHomePluginFeed,
+  setHomePluginChannel,
+} from '../src/gpuix/state/home-plugin-channels'
 import { layoutStore } from '../src/gpuix/state/layout'
 import {
   createWatchedSubscriptionController,
@@ -12,11 +19,16 @@ import {
   wireActiveWatchedChannels,
   type WatchedReferenceSnapshot,
 } from '../src/gpuix/state/watched-subscriptions'
+import type { PluginWatchedChannel } from '../src/watched-channels/plugin-channel-types'
+import type { PluginChannelMessage } from '../src/watched-channels/plugin-channels'
 
 const originalTabs = chatTabsStore.get()
 const originalWindows = chatWindowsStore.get()
 const originalLayouts = layoutStore.get()
 const originalChannels = watchedChannelsStore.get()
+const originalHomeSources = homePluginChannelsStore.get()
+const originalHomeFeed = homePluginFeedStore.get()
+type Observer = Parameters<DesktopApi['observePluginChannel']>[1]
 const cleanups: Array<() => void> = []
 afterEach(() => {
   for (const stop of cleanups.splice(0)) stop()
@@ -24,10 +36,20 @@ afterEach(() => {
   chatWindowsStore.set(originalWindows)
   layoutStore.set(originalLayouts)
   watchedChannelsStore.set(originalChannels)
+  homePluginChannelsStore.set(originalHomeSources)
+  homePluginFeedStore.set(originalHomeFeed)
 })
 
 function channel(id: string): WatchedChannel {
   return { id, channelSlug: id, displayName: id, platform: 'twitch', createdAt: 0 }
+}
+function pluginChannel(id = crypto.randomUUID()): PluginWatchedChannel {
+  return {
+    ...channel(id),
+    kind: 'plugin',
+    platform: 'plugin:streamx:chat',
+    transportName: 'StreamX',
+  }
 }
 function layout(...ids: string[]): WatchedChannelsLayout {
   const first = ids[0]
@@ -144,6 +166,7 @@ test('UI wiring keeps a channel in another tab or native window and disconnects 
       setActiveWatchedChannels: async ({ ids }) => {
         published.push(ids)
       },
+      observePluginChannel: () => () => {},
     },
   })
   cleanups.push(stop)
@@ -165,4 +188,87 @@ test('UI wiring keeps a channel in another tab or native window and disconnects 
   chatTabsStore.modify((state) => ({ ...state, value: { ...state.value, openIds: ['tab'] } }))
   await settle()
   expect(published.at(-1)).toEqual(['shared'])
+})
+
+test('selected plugin sources share layout references and require an open combined pane', () => {
+  const source = pluginChannel()
+  const normal = channel('normal')
+  const snapshot: WatchedReferenceSnapshot = {
+    ready: true,
+    tabIds: ['home', 'split'],
+    channels: [source, normal],
+    layouts: new Map([
+      [
+        'home',
+        { version: 2, root: { type: 'panel', id: 'main', flex: 100, content: { type: 'main' } } },
+      ],
+      ['split', layout(source.id, normal.id)],
+    ]),
+    homePluginChannelIds: [source.id, normal.id, 'unknown'],
+  }
+  expect(referencedWatchedChannels(snapshot)).toEqual([source.id, normal.id].toSorted())
+  snapshot.tabIds = ['home']
+  expect(referencedWatchedChannels(snapshot)).toEqual([source.id])
+  snapshot.tabIds = []
+  expect(referencedWatchedChannels(snapshot)).toEqual([])
+})
+
+test('a failed source selection write restores the previous selection', async () => {
+  const id = crypto.randomUUID()
+  const api = {
+    getUiState: async () => null,
+    setUiState: async () => {
+      throw new Error('write failed')
+    },
+  }
+  await expect(setHomePluginChannel(api, id, true)).rejects.toThrow('write failed')
+  expect(homePluginChannelsStore.get().value).toEqual([])
+})
+
+function pluginMessage(id: string, timestamp: number): PluginChannelMessage {
+  return {
+    id,
+    author: { id: 'viewer', name: 'Viewer' },
+    text: id,
+    timestamp,
+    kind: 'message',
+  }
+}
+
+test('the combined plugin snapshot reuses rows and drops evicted and unselected messages', async () => {
+  const first = pluginChannel()
+  const second = pluginChannel()
+  const observers = new Map<string, Observer>()
+  const feed = observeHomePluginFeed((id, listener) => {
+    observers.set(id, listener)
+    return () => {
+      observers.delete(id)
+    }
+  })
+  cleanups.push(() => feed.stop())
+  const oldest = pluginMessage('oldest', 1)
+  const kept = pluginMessage('kept', 3)
+  function emit(id: string, messages: PluginChannelMessage[]) {
+    observers.get(id)?.({ messages, status: { status: 'connected' }, canSend: false })
+  }
+
+  feed.sync([first, second])
+  emit(first.id, [oldest, kept])
+  emit(second.id, [pluginMessage('second', 2)])
+  await settle()
+  const before = homePluginFeedStore.get()
+  expect(before.rows.map((row) => row.message.id)).toEqual(['oldest', 'second', 'kept'])
+  feed.sync([{ ...first }, { ...second }])
+  await settle()
+  expect(homePluginFeedStore.get()).toBe(before)
+  emit(first.id, [kept, pluginMessage('late', 0)])
+  await settle()
+  const next = homePluginFeedStore.get()
+  expect(next.rows.map((row) => row.message.id)).toEqual(['late', 'second', 'kept'])
+  expect(next.rows.at(-1)).toBe(before.rows.at(-1))
+  expect(next.total - before.total).toBe(1)
+  feed.sync([first])
+  await settle()
+  expect(observers.has(second.id)).toBe(false)
+  expect(homePluginFeedStore.get().rows.map((row) => row.message.id)).toEqual(['late', 'kept'])
 })

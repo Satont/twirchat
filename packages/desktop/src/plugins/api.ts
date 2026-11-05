@@ -22,11 +22,18 @@ export interface PluginCommandContext {
   channel: PluginChannel | null
 }
 
+export interface PluginMessageAuthor {
+  id: string
+  name: string
+  username?: string
+  color?: string
+}
+
 export interface PluginEventMap {
   message: {
     channel: PluginChannel
     id: string
-    author: { id: string; name: string; username?: string }
+    author: PluginMessageAuthor
     text: string
     timestamp: number
     type: 'message' | 'action' | 'system'
@@ -59,7 +66,7 @@ export interface PluginEventMap {
 
 export interface PluginTransportMessage {
   id: string
-  author: { id: string; name: string; username?: string }
+  author: PluginMessageAuthor
   text: string
   timestamp?: number
 }

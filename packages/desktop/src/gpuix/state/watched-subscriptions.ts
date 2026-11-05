@@ -7,6 +7,11 @@ import type { DesktopApi } from '../backend/api'
 import { showNotice, watchedChannelsStore } from './app'
 import { chatTabsStore } from './chat-tabs'
 import { chatWindowsStore } from './chat-windows'
+import {
+  homePluginChannelsStore,
+  observeHomePluginFeed,
+  selectedHomePluginChannels,
+} from './home-plugin-channels'
 import { layoutStore, loadLayout } from './layout'
 
 export interface WatchedReferenceSnapshot {
@@ -14,18 +19,28 @@ export interface WatchedReferenceSnapshot {
   tabIds: string[]
   layouts: ReadonlyMap<string, WatchedChannelsLayout | null>
   channels: readonly DesktopWatchedChannel[]
+  homePluginChannelIds?: readonly string[]
 }
 
 export function referencedWatchedChannels(snapshot: WatchedReferenceSnapshot): string[] {
   const known = new Set(snapshot.channels.map((channel) => channel.id))
   const active = new Set<string>()
+  let hasMain = false
   for (const id of snapshot.tabIds) {
     const layout = snapshot.layouts.get(id)
     if (!layout) continue
-    for (const panel of getAllPanels(layout.root))
+    for (const panel of getAllPanels(layout.root)) {
+      if (panel.content.type === 'main') hasMain = true
       if (panel.content.type === 'watched' && known.has(panel.content.channelId))
         active.add(panel.content.channelId)
+    }
   }
+  if (hasMain && snapshot.homePluginChannelIds?.length)
+    for (const channel of selectedHomePluginChannels(
+      snapshot.channels,
+      snapshot.homePluginChannelIds,
+    ))
+      active.add(channel.id)
   return [...active].sort()
 }
 
@@ -82,9 +97,19 @@ export function createWatchedSubscriptionController(options: {
 export function wireActiveWatchedChannels(backend: {
   api: Pick<
     DesktopApi,
-    'setActiveWatchedChannels' | 'getWatchedChannelsLayout' | 'setWatchedChannelsLayout'
+    | 'setActiveWatchedChannels'
+    | 'getWatchedChannelsLayout'
+    | 'setWatchedChannelsLayout'
+    | 'observePluginChannel'
   >
 }): () => void {
+  const homeFeed = observeHomePluginFeed((id, listener) =>
+    backend.api.observePluginChannel(id, listener),
+  )
+  const syncHomeFeed = () =>
+    homeFeed.sync(
+      selectedHomePluginChannels(watchedChannelsStore.get(), homePluginChannelsStore.get().value),
+    )
   const controller = createWatchedSubscriptionController({
     read() {
       const tabs = chatTabsStore.get()
@@ -104,6 +129,7 @@ export function wireActiveWatchedChannels(backend: {
             .map(([id, state]) => [id, state.layout]),
         ),
         channels: watchedChannelsStore.get(),
+        homePluginChannelIds: homePluginChannelsStore.get().value,
       }
     },
     load: (id) => loadLayout(backend, id),
@@ -113,12 +139,20 @@ export function wireActiveWatchedChannels(backend: {
   })
   const refresh = () =>
     runInBackground(controller.refresh(), 'Could not update watched chat connections')
-  const off = [chatTabsStore, chatWindowsStore, layoutStore, watchedChannelsStore].map((store) =>
-    store.subscribe(refresh),
-  )
+  const off = [
+    chatTabsStore.subscribe(refresh),
+    chatWindowsStore.subscribe(refresh),
+    layoutStore.subscribe(refresh),
+    watchedChannelsStore.subscribe(refresh),
+    homePluginChannelsStore.subscribe(refresh),
+    watchedChannelsStore.subscribe(syncHomeFeed),
+    homePluginChannelsStore.subscribe(syncHomeFeed),
+  ]
+  syncHomeFeed()
   refresh()
   return () => {
     for (const unsubscribe of off) unsubscribe()
     controller.stop()
+    homeFeed.stop()
   }
 }
