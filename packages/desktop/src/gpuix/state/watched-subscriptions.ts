@@ -1,7 +1,8 @@
-import type { WatchedChannel, WatchedChannelsLayout } from '@twirchat/shared/types'
+import type { WatchedChannelsLayout } from '@twirchat/shared/types'
 
 import { runInBackground } from '../../services/background-task'
 import { getAllPanels } from '../../views/main/utils/layout-tree'
+import type { DesktopWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { showNotice, watchedChannelsStore } from './app'
 import { chatTabsStore } from './chat-tabs'
@@ -12,7 +13,7 @@ export interface WatchedReferenceSnapshot {
   ready: boolean
   tabIds: string[]
   layouts: ReadonlyMap<string, WatchedChannelsLayout | null>
-  channels: readonly WatchedChannel[]
+  channels: readonly DesktopWatchedChannel[]
 }
 
 export function referencedWatchedChannels(snapshot: WatchedReferenceSnapshot): string[] {

@@ -32,6 +32,7 @@ export const benchmarkArgumentsSchema = z
     warmup: z.coerce.number().min(1).max(15).default(3),
     smoke: z.boolean().default(false),
     resume: z.boolean().default(false),
+    pluginSubscriber: z.boolean().default(false),
     output: z.string().optional(),
     compositor: z.enum(['xvfb', 'weston']).default('weston'),
     mode: benchmarkReactModeSchema.default('development'),
@@ -47,6 +48,7 @@ export function parseBenchmarkArguments(args: string[]): z.infer<typeof benchmar
     const argument = args[index]
     if (argument === '--smoke') values.smoke = true
     else if (argument === '--resume') values.resume = true
+    else if (argument === '--plugin-subscriber') values.pluginSubscriber = true
     else if (
       argument === '--duration' ||
       argument === '--warmup' ||
@@ -286,6 +288,7 @@ export const benchmarkCaseSchema = z.object({
   panes: z.number().int().min(1).max(4),
   warmupSeconds: z.number().min(1).max(15),
   durationSeconds: z.number().min(2).max(30),
+  pluginSubscriber: z.boolean().optional(),
 })
 export type BenchmarkCase = z.infer<typeof benchmarkCaseSchema>
 export const resourceSampleSchema = z.object({
@@ -303,8 +306,16 @@ export const resourceSampleSchema = z.object({
   ),
 })
 export type ResourceSample = z.infer<typeof resourceSampleSchema>
+export const pluginSubscriberResultSchema = z.object({
+  received: z.number().int().nonnegative(),
+  cpuMicroseconds: z.number().nonnegative(),
+  rssBytes: z.number().nonnegative(),
+  wallMs: z.number().positive(),
+  warning: z.string().optional(),
+})
 export const benchmarkResultSchema = z.object({
   config: benchmarkCaseSchema,
+  pluginSubscriber: pluginSubscriberResultSchema.optional(),
   reactMode: benchmarkReactModeSchema.default('development'),
   userTimingMeasureCount: z.number().int().min(0).optional(),
   wallMs: z.number(),

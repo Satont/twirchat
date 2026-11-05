@@ -6,6 +6,11 @@ import { useEffect, useMemo, useState } from 'react'
  * transient notice toast. Window chrome is the native GPUI titlebar.
  */
 
+import {
+  isPluginPlatform,
+  isPluginWatchedChannel,
+  type WatchedPlatform,
+} from '../../watched-channels/plugin-channel-types'
 import { useBackend, useBackendEvent } from '../backend/context'
 import { registerBundledFonts } from '../fonts'
 import { runUiTask } from '../hooks/run-ui-task'
@@ -308,7 +313,7 @@ export function App() {
   const watchedLiveStatuses = useMemo(() => {
     const map = new Map<string, WatchedLiveStatus>()
     for (const ch of watchedChannels) {
-      if (ch.platform === 'youtube') continue
+      if (isPluginWatchedChannel(ch) || ch.platform === 'youtube') continue
       const status = streamStatuses.get(`${ch.platform}:${ch.channelSlug.toLowerCase()}`)
       map.set(ch.id, {
         isLive: status?.isLive ?? false,
@@ -363,7 +368,7 @@ export function App() {
     activeTabStore.set('chat')
   }
 
-  const onAddChannel = async (platform: 'twitch' | 'kick' | 'youtube', channelSlug: string) => {
+  const onAddChannel = async (platform: WatchedPlatform, channelSlug: string) => {
     try {
       const channel = await backend.api.addWatchedChannel({ platform, channelSlug })
       watchedChannelsStore.set(await backend.api.getWatchedChannels())
@@ -387,7 +392,10 @@ export function App() {
   const visibleTabs =
     presentation.tabVisibility === 'liveOnly'
       ? tabWatchedChannels.filter(
-          (tab) => tab.id === activeWatchedTab || watchedLiveStatuses.get(tab.id)?.isLive,
+          (tab) =>
+            tab.id === activeWatchedTab ||
+            (tab.platform !== undefined && isPluginPlatform(tab.platform)) ||
+            watchedLiveStatuses.get(tab.id)?.isLive,
         )
       : tabWatchedChannels
   const visibleTabIds = ['home', ...visibleTabs.map((tab) => tab.id)]

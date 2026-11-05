@@ -1,13 +1,9 @@
-import type {
-  Account,
-  NormalizedChatMessage,
-  PlatformStatusInfo,
-  WatchedChannel,
-} from '@twirchat/shared/types'
+import type { Account, NormalizedChatMessage, PlatformStatusInfo } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { runInBackground } from '../../services/background-task'
 import { deleteOldestEntry } from '../../services/bounded-cache'
+import type { DesktopWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import type { DesktopBackend } from '../backend/server'
 import { chatMessageKey, createMentionMatcher } from '../chat-tools'
@@ -38,7 +34,7 @@ function normalizeChannel(value: string): string {
 
 function kickChannelAliases(
   accounts: readonly Account[],
-  watched: readonly WatchedChannel[],
+  watched: readonly DesktopWatchedChannel[],
   statuses: ReadonlyMap<string, PlatformStatusInfo>,
 ): Map<string, Set<string>> {
   const aliases = new Map<string, Set<string>>()

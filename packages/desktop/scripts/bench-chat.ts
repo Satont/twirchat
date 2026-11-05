@@ -37,6 +37,7 @@ if (
   results.some(
     (result) =>
       result.config.warmupSeconds !== options.warmup ||
+      Boolean(result.config.pluginSubscriber) !== options.pluginSubscriber ||
       result.config.durationSeconds !== options.duration ||
       result.compositor !== options.compositor ||
       result.reactMode !== options.mode ||
@@ -118,6 +119,7 @@ for (const [index, scenario] of selected.entries()) {
     ...scenario,
     warmupSeconds: options.warmup,
     durationSeconds: options.duration,
+    pluginSubscriber: options.pluginSubscriber || undefined,
   })
   if (
     results.some(
@@ -238,6 +240,11 @@ const report = [
   `GPU clients: ${[...new Set(results.flatMap((result) => result.gpu.map((device) => `${device.driver} ${device.device}`)))].join(', ') || 'No DRM hardware counters available; GPU unavailable.'}`,
   '',
   `Each scenario uses a fresh Bun process, private profile and isolated ${options.compositor} display, 1200×800 window. Channels hold 200 messages before warmup. Total message rate is distributed evenly across channels; only the specified panes are visible. Text-only compact chat; avatars and provider cosmetics disabled. No forced GC.`,
+  ...(options.pluginSubscriber
+    ? [
+        'One enabled TypeScript plugin subscribes to every chat message. The app metrics exclude the plugin process. Per-case JSON includes the plugin delivery count, CPU time and final RSS.',
+      ]
+    : []),
   '',
   `Warmup ${options.warmup}s; measurement ${options.duration}s; drain 2s. CPU 100% = one logical core. RAM is process RSS, including native allocations. GPU is per-process DRM graphics-engine time (capacity-normalized), showing the busiest device; its PCI ID is in CSV. GPU is not overall device utilization. n/a means unavailable. DRM VRAM/GTT columns sum resident process allocations across devices; GTT is GPU-mapped system memory and may overlap RSS/shared buffers, so these columns must not be added to RSS as a physical-memory total.`,
   '',

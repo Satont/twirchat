@@ -33,6 +33,9 @@ the loaded React, JSX runtime and reconciler modules and refuses mixed-mode resu
 native application source, rather than a compiled release binary. `--scenario` accepts an ID
 from the default matrix; omit it to run all 15 cases. `--smoke` and `--scenario` cannot be combined.
 
+Add `--plugin-subscriber` to run a real TypeScript plugin that receives every incoming chat
+message. This workload records plugin delivery and separate plugin process metrics in JSON.
+
 For ordinary use, `bun run --cwd packages/desktop start` now explicitly uses production React.
 `dev` keeps development checks and HMR. React's development Performance Tracks collect User
 Timing entries, which Bun retains in the process; production disables that instrumentation.
@@ -81,6 +84,9 @@ and `generatorMissedMessages` alongside the target rate; a missed target does no
 absolute application throughput limit. The machine remains shared with the user's normal work.
 
 ## Saved baseline and next session
+
+[2026-11-05 TypeScript plugins](2026-11-05-plugins/report.md) records the default matrix,
+production target repetitions, active subscriber load and isolated native plugin checks.
 
 [2026-11-04 focus synchronization](2026-11-04-focus-sync/report.md) records the next root metadata
 optimization, fresh before/after gates, and the preserved RSS counterbalance investigation.

@@ -23,6 +23,12 @@ export interface CommandContext {
 
 export const CUSTOM_COMMAND_OUTPUT_LIMIT = 5
 export const CUSTOM_COMMAND_PACING_MS = 1700
+
+export function parsePluginCommand(text: string): { name: string; args: string[] } | null {
+  const [command, ...args] = text.trim().split(/\s+/u)
+  if (!command?.startsWith('/') || command.length === 1) return null
+  return { name: command.slice(1).toLowerCase(), args }
+}
 const MAX_TEMPLATE_LENGTH = 4000
 const MAX_EXPANDED_LENGTH = 20_000
 const MAX_DEPTH = 8

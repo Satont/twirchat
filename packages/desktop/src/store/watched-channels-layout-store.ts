@@ -2,6 +2,7 @@ import type { LayoutNode, PanelNode, WatchedChannelsLayout } from '@twirchat/sha
 
 import { watchedChannelsLayoutSchema } from '../services/persisted-schemas'
 import { getDb } from './db'
+import { PluginWatchedChannelsStore } from './plugin-watched-channels-store'
 import { WatchedChannelStore } from './watched-channels-store'
 
 const MAX_PANELS = 64
@@ -15,6 +16,10 @@ function countPanels(node: LayoutNode): number {
   return node.children.reduce((sum, child) => sum + countPanels(child), 0)
 }
 
+function hasWatchedChannel(id: string): boolean {
+  return WatchedChannelStore.findById(id) !== null || PluginWatchedChannelsStore.has(id)
+}
+
 export function createDefaultTabLayout(channelId: string): WatchedChannelsLayout {
   return {
     version: 2,
@@ -24,7 +29,7 @@ export function createDefaultTabLayout(channelId: string): WatchedChannelsLayout
       content:
         channelId === 'home'
           ? { type: 'main' }
-          : WatchedChannelStore.findById(channelId)
+          : hasWatchedChannel(channelId)
             ? { type: 'watched', channelId }
             : { type: 'empty' },
       flex: 100,
@@ -35,7 +40,7 @@ export function createDefaultTabLayout(channelId: string): WatchedChannelsLayout
 
 function sanitizeTabLayout(layout: WatchedChannelsLayout, tabId: string): WatchedChannelsLayout {
   // Only legacy channel-backed tabs inherited their watched channel from the tab ID.
-  if (tabId === 'home' || !WatchedChannelStore.findById(tabId)) return layout
+  if (tabId === 'home' || !hasWatchedChannel(tabId)) return layout
   const sanitizeNode = (node: LayoutNode): void => {
     if (node.type === 'panel' && node.content.type === 'main')
       node.content = { type: 'watched', channelId: tabId }
@@ -104,6 +109,14 @@ export const WatchedChannelsLayoutStore = {
   canAddPanel(tabId: string): boolean {
     const layout = this.get(tabId)
     return countPanels(layout.root) < MAX_PANELS
+  },
+
+  cleanupRemovedChannel(channelId: string): void {
+    const prefix = getKey('')
+    const keys = getDb()
+      .query<{ key: string }, [string]>('SELECT key FROM settings WHERE key GLOB ?')
+      .all(`${prefix}*`)
+    for (const { key } of keys) this.cleanupStaleAssignments(key.slice(prefix.length), [channelId])
   },
 
   cleanupStaleAssignments(tabId: string, removedChannelIds: string[]): void {

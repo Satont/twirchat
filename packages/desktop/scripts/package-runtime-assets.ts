@@ -6,6 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 
 import { z } from 'zod'
 
+import { PACKAGED_PLUGIN_RUNNER, startPluginProcess } from '../src/plugins/process'
 import {
   GPUIX_SOURCE_REVISION,
   GPUI_SOURCE_REVISION,
@@ -193,6 +194,14 @@ export async function packageRuntimeAssets(directory = join(desktop, 'dist')): P
     naming: 'paint-worker.js',
   })
   if (!worker.success) throw new AggregateError(worker.logs, 'Could not build the paint worker.')
+  const pluginRunner = await Bun.build({
+    entrypoints: [join(desktop, 'src/plugins/runner.ts')],
+    target: 'bun',
+    outdir: output,
+    naming: PACKAGED_PLUGIN_RUNNER,
+  })
+  if (!pluginRunner.success)
+    throw new AggregateError(pluginRunner.logs, 'Could not build the plugin runner.')
   const overlay = join(desktop, 'dist/overlay')
   if (overlay !== join(output, 'overlay')) {
     await rm(join(output, 'overlay'), { recursive: true, force: true })
@@ -242,6 +251,31 @@ export async function packageRuntimeAssets(directory = join(desktop, 'dist')): P
     const result = z.object({ path: z.string() }).parse(JSON.parse(stdout))
     if (typeof result.path !== 'string' || !(await Bun.file(result.path).exists()))
       throw new Error('Packaged paint renderer did not create its output.')
+    const pluginEntry = join(temporary, 'smoke-plugin.ts')
+    await Bun.write(
+      pluginEntry,
+      `export default (api) => api.registerCommand('runtime-check', () => {})`,
+    )
+    const plugin = startPluginProcess({
+      entry: pluginEntry,
+      appVersion: 'packaging-smoke',
+      packagedExecutable: join(output, binaryName),
+      hostAction: () => Promise.resolve(null),
+      onTransportUpdates() {},
+      onFailure() {},
+    })
+    try {
+      const registration = await plugin.ready
+      if (!registration.commands.includes('runtime-check'))
+        throw new Error('Packaged plugin runner did not register its command.')
+      await plugin.request({
+        action: 'command',
+        name: 'runtime-check',
+        input: { channel: null, text: '/runtime-check', args: [] },
+      })
+    } finally {
+      await plugin.close()
+    }
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }

@@ -5,6 +5,10 @@ import { z } from 'zod'
 import { panelNodeSchema, watchedChannelsLayoutSchema } from '../../services/persisted-schemas'
 import { getAllPanels } from '../../views/main/utils/layout-tree'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
+import type {
+  DesktopWatchedChannel,
+  WatchedPlatform,
+} from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import {
   activeTabStore,
@@ -102,7 +106,7 @@ export type ChatTabApi = Pick<
   | 'setWatchedChannelsLayout'
 >
 interface TabEnvironment {
-  channels(): WatchedChannel[]
+  channels(): DesktopWatchedChannel[]
   activeId(): string
   activate(id: string): void
   publishIds(ids: string[]): void
@@ -495,7 +499,7 @@ export function createChatTabController(
         value.openIds.splice(Math.max(0, Math.min(value.openIds.length, targetIndex)), 0, id)
         await persist(value)
       }),
-    open: (channel: WatchedChannel) =>
+    open: (channel: DesktopWatchedChannel) =>
       change(async (value) => {
         const existing = value.openIds.find(
           (id) => value.metadata[id]?.channelId === channel.id || id === channel.id,
@@ -569,16 +573,16 @@ export const setChatTabLocked = (backend: { api: ChatTabApi }, id: string, locke
   controller(backend.api).lock(id, locked)
 export const reorderChatTab = (backend: { api: ChatTabApi }, id: string, index: number) =>
   controller(backend.api).reorder(id, index)
-export const openChannelChatTab = (backend: { api: ChatTabApi }, channel: WatchedChannel) =>
+export const openChannelChatTab = (backend: { api: ChatTabApi }, channel: DesktopWatchedChannel) =>
   controller(backend.api).open(channel)
 
 export interface ChatTabView extends Omit<WatchedChannel, 'platform'> {
-  platform?: WatchedChannel['platform']
+  platform?: WatchedPlatform
   empty?: boolean
   sourceChannelId: string
 }
 export function tabsForChannels(
-  channels: WatchedChannel[],
+  channels: DesktopWatchedChannel[],
   ids: string[],
   entries: Record<string, ChatTabMetadata>,
 ): ChatTabView[] {

@@ -1,3 +1,4 @@
+import type { WatchedPlatform } from '../../watched-channels/plugin-channel-types'
 import { usePopupContextId } from '../hooks/use-popup-hotkeys'
 /**
  * Add-channel modal — Modal wrapper around AddChannelForm
@@ -12,7 +13,7 @@ export function AddChannelModal({
   onConfirm,
   onCancel,
 }: {
-  onConfirm: (platform: 'twitch' | 'kick' | 'youtube', channelSlug: string) => void
+  onConfirm: (platform: WatchedPlatform, channelSlug: string) => void
   onCancel: () => void
 }) {
   const theme = useTheme()

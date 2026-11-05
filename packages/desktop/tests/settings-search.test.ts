@@ -16,8 +16,10 @@ const ids = (query: string) => searchSettings(query).sections.map((section) => s
 
 describe('settings search index', () => {
   test('every existing section has a unique reachable category and an explicit save contract', () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(17)
-    expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(17)
+    expect(SETTINGS_SECTIONS).toHaveLength(18)
+    expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
+      SETTINGS_SECTIONS.length,
+    )
     expect(searchSettings('').categories).toEqual(SETTINGS_CATEGORIES)
     for (const section of SETTINGS_SECTIONS) {
       const result = searchSettings('')
@@ -30,6 +32,9 @@ describe('settings search index', () => {
       'section',
     )
     expect(SETTINGS_SECTIONS.find((section) => section.id === 'overlay')?.saveMode).toBe('app')
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'plugins')?.saveMode).toBe(
+      'automatic',
+    )
   })
   test('field names, providers, aliases and Russian terms find editors outside the current category', () => {
     const queries: [string, SettingsSectionId][] = [
@@ -50,6 +55,7 @@ describe('settings search index', () => {
       ['Morse outgoing', 'translation'],
       ['Quick reasons', 'moderation'],
       ['command template', 'commands'],
+      ['plugin manifest', 'plugins'],
       ['save rules', 'rules'],
       ['overlay.port', 'overlay'],
       ['text colour', 'overlay'],
@@ -68,7 +74,7 @@ describe('settings search index', () => {
     expect(ids('azure reasons')).toEqual([])
     expect(ids('souND fIlE')).toEqual(['notifications'])
     expect(ids('7tv')).toEqual(['emotes'])
-    expect(ids('+++')).toHaveLength(17)
+    expect(ids('+++')).toEqual(ids(''))
   })
   test('unknown queries produce an empty result without falling back to a different editor', () => {
     const result = searchSettings('something-that-does-not-exist')
@@ -92,7 +98,7 @@ describe('lazy settings editors', () => {
     const mounted = retainMountedSettingsSections(new Set(), initial)
     expect([...mounted]).toEqual(['appearance', 'updates'])
     expect(mounted.has('translation')).toBe(false)
-    expect(searchSettings('').sections).toHaveLength(17)
+    expect(searchSettings('').sections).toEqual(SETTINGS_SECTIONS)
     expect([...mounted]).toEqual(['appearance', 'updates'])
   })
   test('visited editor identities are retained across category changes and no-result searches', () => {

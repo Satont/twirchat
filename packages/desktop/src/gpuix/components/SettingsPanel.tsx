@@ -43,6 +43,7 @@ import { EmoteProviderSettings } from './EmoteProviderSettings'
 import { HotkeySettings as ActionHotkeySettings } from './HotkeySettings'
 import { NotificationSettings } from './NotificationSettings'
 import { PlayerSettings } from './PlayerSettings'
+import { PluginSettings } from './PluginSettings'
 import { SimilaritySettings } from './SimilaritySettings'
 import { StreamerModeSettings } from './StreamerModeSettings'
 import { TranslationSettings } from './TranslationSettings'
@@ -588,6 +589,9 @@ export function SettingsPanel() {
                 desc="Open streams in a browser, external player or Streamlink"
               >
                 <RetainedSettingsEditor component={PlayerSettings} />
+              </Section>
+              <Section id="plugins" title="Plugins">
+                <RetainedSettingsEditor component={PluginSettings} />
               </Section>
               <Section
                 id="streamer-mode"

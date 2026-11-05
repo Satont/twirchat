@@ -53,6 +53,12 @@ export const SETTINGS_CATEGORIES = defineSettingsCategories([
     aliases: 'commands aliases macros actions команды алиасы макросы действия',
   },
   {
+    id: 'plugins',
+    label: 'Plugins',
+    description: 'Local extensions and channel transports',
+    aliases: 'plugins extensions transports плагины расширения транспорты',
+  },
+  {
     id: 'overlay',
     label: 'OBS overlay',
     description: 'Browser source appearance',
@@ -92,6 +98,7 @@ export type SettingsSectionId =
   | 'moderation'
   | 'commands'
   | 'players'
+  | 'plugins'
   | 'streamer-mode'
   | 'similarity'
   | 'pause'
@@ -212,6 +219,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'custom command name template variables placeholders platform scope channel message menu action add delete priority order move up down macro alias команды имя шаблон переменные платформа канал меню действия макрос',
+  },
+  {
+    id: 'plugins',
+    category: 'plugins',
+    title: 'Plugins',
+    saveMode: 'automatic',
+    keywords:
+      'install enable disable remove manifest version transport TypeScript локальные установить включить выключить удалить',
   },
   {
     id: 'overlay',
