@@ -1,0 +1,345 @@
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -5404,6 +5404,8 @@
+             tree: &tree,
+             event_callback: &callback,
+             focus_handles: &self.focus_handles,
++            focus_handles_synced: tree.focus_revision().is_some()
++                && self.synced_focus_revision == tree.focus_revision(),
+             scroll_handles: &mut self.scroll_handles,
+             custom_registry: &mut self.custom_registry,
+             image_resources: &image_resources,
+@@ -5472,6 +5474,8 @@
+             tree: &tree,
+             event_callback: &callback,
+             focus_handles: &self.focus_handles,
++            focus_handles_synced: tree.focus_revision().is_some()
++                && self.synced_focus_revision == tree.focus_revision(),
+             scroll_handles: &mut self.scroll_handles,
+             custom_registry: &mut self.custom_registry,
+             image_resources: &image_resources,
+@@ -5527,6 +5531,8 @@
+             tree: &tree,
+             event_callback: &callback,
+             focus_handles: &self.focus_handles,
++            focus_handles_synced: tree.focus_revision().is_some()
++                && self.synced_focus_revision == tree.focus_revision(),
+             scroll_handles: &mut self.scroll_handles,
+             custom_registry: &mut self.custom_registry,
+             image_resources: &image_resources,
+@@ -5655,6 +5661,7 @@
+     pub tree: &'a RetainedTree,
+     pub event_callback: &'a Option<EventCallback>,
+     pub focus_handles: &'a HashMap<u64, gpui::FocusHandle>,
++    focus_handles_synced: bool,
+     pub scroll_handles: &'a mut HashMap<u64, gpui::ScrollHandle>,
+     pub custom_registry: &'a mut CustomElementRegistry,
+     pub image_resources: &'a gpui::Entity<ImageResources>,
+@@ -5868,8 +5875,49 @@
+     child_ids: Vec<u64>,
+     child_revisions: Vec<u64>,
+     row_focus_handles: Vec<Option<gpui::FocusHandle>>,
++    row_focus_metadata: HashMap<u64, VirtualRowFocus>,
+     seen_rows: HashSet<u64>,
+     last_visible_range: Rc<Cell<Option<(usize, usize)>>>,
++}
++
++#[derive(Default)]
++struct VirtualRowFocus {
++    revision: u64,
++    focusable_ids: Vec<u64>,
++    has_auto_focus: bool,
++}
++
++fn sync_virtual_row_focus(
++    rows: &mut HashMap<u64, VirtualRowFocus>,
++    tree: &RetainedTree,
++    list_id: u64,
++    child_ids: &[u64],
++    child_revisions: &[u64],
++) {
++    rows.retain(|id, _| virtual_child_is_mounted(tree, list_id, *id));
++    for (&id, &revision) in child_ids.iter().zip(child_revisions) {
++        if rows.get(&id).is_some_and(|row| row.revision == revision) {
++            continue;
++        }
++        let mut row = VirtualRowFocus {
++            revision,
++            ..Default::default()
++        };
++        let mut pending = vec![id];
++        while let Some(descendant_id) = pending.pop() {
++            let Some(descendant) = tree.elements.get(&descendant_id) else {
++                continue;
++            };
++            // This is the same authoritative membership used by sync_focus_handles.
++            // Include nested lists: their focused descendants also keep this row mounted.
++            if tree.focusable_ids.contains(&descendant_id) {
++                row.focusable_ids.push(descendant_id);
++                row.has_auto_focus |= descendant.auto_focus;
++            }
++            pending.extend(descendant.children.iter().copied());
++        }
++        rows.insert(id, row);
++    }
+ }
+ 
+ fn retain_current_seen_rows(seen_rows: &mut HashSet<u64>, child_ids: &[u64]) {
+@@ -6074,6 +6122,7 @@
+             child_ids,
+             child_revisions,
+             row_focus_handles,
++            row_focus_metadata: HashMap::new(),
+             seen_rows: HashSet::new(),
+             last_visible_range: Rc::new(Cell::new(None)),
+         }
+@@ -6698,6 +6747,8 @@
+                     tree: &tree,
+                     event_callback: &callback,
+                     focus_handles: &self.focus_handles,
++                    focus_handles_synced: tree.focus_revision().is_some()
++                        && self.synced_focus_revision == tree.focus_revision(),
+                     scroll_handles: &mut self.scroll_handles,
+                     custom_registry: &mut self.custom_registry,
+                     image_resources: &image_resources,
+@@ -6994,30 +7045,93 @@
+                 .map(|child| child.subtree_revision)
+         })
+         .collect();
+-    let focusable_rows: HashSet<u64> = ctx
+-        .focus_handles
+-        .keys()
+-        .filter_map(|element_id| virtual_row_ancestor(ctx.tree, element.id, *element_id))
+-        .collect();
+-    let focused_row = ctx
+-        .focus_handles
+-        .iter()
+-        .find_map(|(element_id, handle)| {
+-            handle
+-                .is_focused(window)
+-                .then(|| virtual_row_ancestor(ctx.tree, element.id, *element_id))
+-                .flatten()
+-        })
+-        .or_else(|| {
+-            ctx.focus_handles.keys().find_map(|element_id| {
++    // The cache pays off when several lists would repeatedly scan the same global handles.
++    let (focusable_rows, focused_row, row_focus_metadata) = if ctx.virtual_lists.len() > 1 {
++        let mut row_focus_metadata = ctx
++            .virtual_lists
++            .get_mut(&element.id)
++            .map(|entry| std::mem::take(&mut entry.row_focus_metadata))
++            .unwrap_or_default();
++        sync_virtual_row_focus(
++            &mut row_focus_metadata,
++            ctx.tree,
++            element.id,
++            &child_ids,
++            &child_revisions,
++        );
++        let mut focusable_rows = HashSet::new();
++        let mut focused_row = None;
++        let mut has_auto_focus = false;
++        if ctx.focus_handles_synced {
++            for (&row_id, row) in &row_focus_metadata {
++                has_auto_focus |= row.has_auto_focus;
++                for id in &row.focusable_ids {
++                    let Some(handle) = ctx.focus_handles.get(id) else {
++                        continue;
++                    };
++                    focusable_rows.insert(row_id);
++                    if handle.is_focused(window) {
++                        focused_row = Some(row_id);
++                    }
++                }
++            }
++        } else {
++            // Deferred builds can see a new tree before handles are synchronized.
++            // Preserve that snapshot's existing handle semantics until the next render.
++            for (id, handle) in ctx.focus_handles {
++                if let Some(row_id) = virtual_row_ancestor(ctx.tree, element.id, *id) {
++                    focusable_rows.insert(row_id);
++                    if handle.is_focused(window) {
++                        focused_row = Some(row_id);
++                    }
++                    has_auto_focus |= ctx
++                        .tree
++                        .elements
++                        .get(id)
++                        .is_some_and(|node| node.auto_focus);
++                }
++            }
++        }
++        if focused_row.is_none() && has_auto_focus {
++            // Preserve the existing tie-break when several rows request autoFocus.
++            focused_row = ctx.focus_handles.keys().find_map(|element_id| {
+                 ctx.tree
+                     .elements
+                     .get(element_id)
+                     .is_some_and(|element| element.auto_focus)
+                     .then(|| virtual_row_ancestor(ctx.tree, element.id, *element_id))
+                     .flatten()
++            });
++        }
++        (focusable_rows, focused_row, row_focus_metadata)
++    } else {
++        let focusable_rows: HashSet<u64> = ctx
++            .focus_handles
++            .keys()
++            .filter_map(|element_id| virtual_row_ancestor(ctx.tree, element.id, *element_id))
++            .collect();
++        let focused_row = ctx
++            .focus_handles
++            .iter()
++            .find_map(|(element_id, handle)| {
++                handle
++                    .is_focused(window)
++                    .then(|| virtual_row_ancestor(ctx.tree, element.id, *element_id))
++                    .flatten()
+             })
+-        });
++            .or_else(|| {
++                ctx.focus_handles.keys().find_map(|element_id| {
++                    ctx.tree
++                        .elements
++                        .get(element_id)
++                        .is_some_and(|element| element.auto_focus)
++                        .then(|| virtual_row_ancestor(ctx.tree, element.id, *element_id))
++                        .flatten()
++                })
++            });
++        // Replacing the old metadata also releases it when a renderer returns to one list.
++        (focusable_rows, focused_row, HashMap::new())
++    };
+     let config = VirtualListConfig::from_element(element);
+     let window_start = if config.item_count.is_some() {
+         window_start_from_element(element)
+@@ -7035,6 +7149,7 @@
+                 cx,
+             );
+             let entry = entry.into_mut();
++            entry.row_focus_metadata = row_focus_metadata;
+             if let Some(row_id) = focused_row.filter(|row_id| !entry.seen_rows.contains(row_id)) {
+                 if let Some(index) = entry.logical_index_of(row_id) {
+                     entry.state.scroll_to(gpui::ListOffset {
+@@ -7057,6 +7172,7 @@
+                 child_revisions,
+                 row_focus_handles,
+             ));
++            entry.row_focus_metadata = row_focus_metadata;
+             if let Some(row_id) = focused_row {
+                 if let Some(index) = entry.logical_index_of(row_id) {
+                     entry.state.scroll_to(gpui::ListOffset {
+@@ -7145,6 +7261,92 @@
+             .elements
+             .get(&child_id)
+             .is_some_and(|child| child.parent == Some(list_id))
++}
++
++#[cfg(test)]
++mod virtual_row_focus_tests {
++    use super::{VirtualRowFocus, sync_virtual_row_focus};
++    use crate::retained_tree::RetainedTree;
++    use std::collections::HashMap;
++
++    fn sync(rows: &mut HashMap<u64, VirtualRowFocus>, tree: &RetainedTree, list_id: u64) {
++        let ids = &tree.elements[&list_id].children;
++        let revisions: Vec<_> = ids
++            .iter()
++            .map(|id| tree.elements[id].subtree_revision)
++            .collect();
++        sync_virtual_row_focus(rows, tree, list_id, ids, &revisions);
++    }
++
++    fn fixture() -> RetainedTree {
++        let mut tree = RetainedTree::new();
++        for (id, kind) in [(1, "virtual-list"), (2, "div"), (3, "div"), (4, "div")] {
++            tree.create_element(id, kind.into());
++        }
++        tree.append_child(1, 2);
++        tree.append_child(1, 3);
++        tree.append_child(2, 4);
++        tree
++    }
++
++    #[test]
++    fn focus_event_and_autofocus_changes_refresh_cached_rows() {
++        let mut tree = fixture();
++        let mut rows = HashMap::new();
++        sync(&mut rows, &tree, 1);
++        assert!(rows[&2].focusable_ids.is_empty());
++        tree.set_event_listener(4, "keyDown".into(), true);
++        sync(&mut rows, &tree, 1);
++        assert_eq!(rows[&2].focusable_ids, [4]);
++        tree.set_custom_prop(4, "autoFocus".into(), serde_json::json!(true));
++        sync(&mut rows, &tree, 1);
++        assert!(rows[&2].has_auto_focus);
++        tree.set_custom_prop(4, "autoFocus".into(), serde_json::json!(false));
++        sync(&mut rows, &tree, 1);
++        assert!(!rows[&2].has_auto_focus);
++        tree.set_event_listener(4, "keyDown".into(), false);
++        sync(&mut rows, &tree, 1);
++        assert!(rows[&2].focusable_ids.is_empty());
++    }
++
++    #[test]
++    fn reparenting_descendants_updates_both_rows_and_removal_retires_metadata() {
++        let mut tree = fixture();
++        tree.set_custom_prop(4, "tabIndex".into(), serde_json::json!(0));
++        let mut rows = HashMap::new();
++        sync(&mut rows, &tree, 1);
++        tree.append_child(3, 4);
++        sync(&mut rows, &tree, 1);
++        assert!(rows[&2].focusable_ids.is_empty());
++        assert_eq!(rows[&3].focusable_ids, [4]);
++        tree.destroy_element(3);
++        sync(&mut rows, &tree, 1);
++        assert!(!rows.contains_key(&3));
++    }
++
++    #[test]
++    fn nested_lists_and_intact_row_moves_keep_descendant_membership() {
++        let mut tree = fixture();
++        tree.create_element(5, "virtual-list".into());
++        tree.create_element(6, "input".into());
++        tree.append_child(4, 5);
++        tree.append_child(5, 6);
++        let mut rows = HashMap::new();
++        sync(&mut rows, &tree, 1);
++        assert_eq!(rows[&2].focusable_ids, [6]);
++        let revision = rows[&2].revision;
++        tree.append_child(1, 2);
++        sync(&mut rows, &tree, 1);
++        assert_eq!(rows[&2].revision, revision);
++        assert_eq!(rows[&2].focusable_ids, [6]);
++        tree.create_element(7, "virtual-list".into());
++        tree.append_child(7, 2);
++        sync(&mut rows, &tree, 1);
++        assert!(!rows.contains_key(&2));
++        let mut other_rows = HashMap::new();
++        sync(&mut other_rows, &tree, 7);
++        assert_eq!(other_rows[&2].focusable_ids, [6]);
++    }
+ }
+ 
+ #[cfg(test)]
+diff --git a/packages/native/src/retained_tree.rs b/packages/native/src/retained_tree.rs
+--- a/packages/native/src/retained_tree.rs
++++ b/packages/native/src/retained_tree.rs
+@@ -578,6 +578,7 @@
+             if changed {
+                 if affects_focus {
+                     self.bump_focus_revision();
++                    self.mark_render_changed(id);
+                 }
+                 self.track_focusable(id);
+             }
+@@ -606,7 +607,7 @@
+                 let auto_focus = value.as_bool().unwrap_or(false);
+                 if element.auto_focus != auto_focus {
+                     element.auto_focus = auto_focus;
+-                    self.invalidation = Invalidation::Full;
++                    self.mark_render_changed(id);
+                     self.bump_focus_revision();
+                 }
+                 return;

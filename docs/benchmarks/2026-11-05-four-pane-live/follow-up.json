@@ -1,0 +1,2934 @@
+{
+  "focusCache": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "4ecbf425369b20c426cf5538ee3609bbc8c87f4b1a0d56c1db60fa65747ae714",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 66.31222367360404,
+      "rssMedianBytes": 579715072,
+      "rssPeakBytes": 620396544,
+      "heapPeakBytes": 222438102,
+      "eventLoopLagP95Ms": 0.1279099999992468,
+      "eventLoopLagMaxMs": 2.3370509999995193,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944352980749695,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 38.166491637256385,
+      "totalPresentsPerSecond": 54.49975006717396,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 687,
+        "animationOnlyPresents": 294,
+        "slotUploads": 2972,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82608,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "4ecbf425369b20c426cf5538ee3609bbc8c87f4b1a0d56c1db60fa65747ae714",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 67.58496792233484,
+      "rssMedianBytes": 583225344,
+      "rssPeakBytes": 624254976,
+      "heapPeakBytes": 222847418,
+      "eventLoopLagP95Ms": 0.10786999999982072,
+      "eventLoopLagMaxMs": 2.4845010000008187,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944356284849565,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 38.16649796014388,
+      "totalPresentsPerSecond": 54.499759095925974,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 687,
+        "animationOnlyPresents": 294,
+        "slotUploads": 2978,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82405,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "4ecbf425369b20c426cf5538ee3609bbc8c87f4b1a0d56c1db60fa65747ae714",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 68.170568883856,
+      "rssMedianBytes": 581931008,
+      "rssPeakBytes": 622927872,
+      "heapPeakBytes": 222799290,
+      "eventLoopLagP95Ms": 0.0995189999998729,
+      "eventLoopLagMaxMs": 4.347891000001255,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944363824893784,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 38.49984437507352,
+      "totalPresentsPerSecond": 53.11089642506534,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 693,
+        "animationOnlyPresents": 263,
+        "slotUploads": 2981,
+        "liveSlots": 7,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82444,
+      "newImageDecodes": 350,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "discardedPaneReplayMixed": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "24533195cf0e078a1543a87ae701f7291f11edcebeb8f1be45f8208a6e09abec",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.17",
+        "patchDigest": "fea6d237b60ea156",
+        "sha256": "3932e6eb91bb434c56d0b258f92c8d8b750ea5f3e305e51dc70075227586d1c1"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 65.88488524886537,
+      "rssMedianBytes": 518172672,
+      "rssPeakBytes": 613265408,
+      "heapPeakBytes": 192896475,
+      "eventLoopLagP95Ms": 0.33165999999982887,
+      "eventLoopLagMaxMs": 2.2243100000014238,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.94434748278312,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 38.38870225794745,
+      "totalPresentsPerSecond": 53.27751876320058,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 691,
+        "animationOnlyPresents": 268,
+        "slotUploads": 2973,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82392,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "24533195cf0e078a1543a87ae701f7291f11edcebeb8f1be45f8208a6e09abec",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.17",
+        "patchDigest": "fea6d237b60ea156",
+        "sha256": "3932e6eb91bb434c56d0b258f92c8d8b750ea5f3e305e51dc70075227586d1c1"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 66.49172784117917,
+      "rssMedianBytes": 518033408,
+      "rssPeakBytes": 617242624,
+      "heapPeakBytes": 194025336,
+      "eventLoopLagP95Ms": 0.0731900000027963,
+      "eventLoopLagMaxMs": 2.6755910000001677,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944356144131675,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.99983176207818,
+      "totalPresentsPerSecond": 53.44420782912165,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 684,
+        "animationOnlyPresents": 278,
+        "slotUploads": 2973,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82414,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "24533195cf0e078a1543a87ae701f7291f11edcebeb8f1be45f8208a6e09abec",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.17",
+        "patchDigest": "fea6d237b60ea156",
+        "sha256": "3932e6eb91bb434c56d0b258f92c8d8b750ea5f3e305e51dc70075227586d1c1"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 64.19701344949745,
+      "rssMedianBytes": 581410816,
+      "rssPeakBytes": 625065984,
+      "heapPeakBytes": 227948701,
+      "eventLoopLagP95Ms": 0.07661899999948218,
+      "eventLoopLagMaxMs": 5.481992000000901,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944355420597983,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 39.8331555336177,
+      "totalPresentsPerSecond": 54.49975673428029,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 717,
+        "animationOnlyPresents": 264,
+        "slotUploads": 2969,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82536,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "discardedPaneReplayStaticFirstFrame": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "24533195cf0e078a1543a87ae701f7291f11edcebeb8f1be45f8208a6e09abec",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.17",
+        "patchDigest": "fea6d237b60ea156",
+        "sha256": "3932e6eb91bb434c56d0b258f92c8d8b750ea5f3e305e51dc70075227586d1c1"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "static-first-frame",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "static-first-frame",
+        "animatedFixtures": 0,
+        "staticFixtures": 48
+      },
+      "cpuPercent": 65.57587367019818,
+      "rssMedianBytes": 587894784,
+      "rssPeakBytes": 631025664,
+      "heapPeakBytes": 222740609,
+      "eventLoopLagP95Ms": 0.05790999999953783,
+      "eventLoopLagMaxMs": 2.8666809999995166,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944357021679497,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 40.499822475778146,
+      "totalPresentsPerSecond": 40.499822475778146,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 729,
+        "animationOnlyPresents": 0,
+        "slotUploads": 0,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82608,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "24533195cf0e078a1543a87ae701f7291f11edcebeb8f1be45f8208a6e09abec",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.17",
+        "patchDigest": "fea6d237b60ea156",
+        "sha256": "3932e6eb91bb434c56d0b258f92c8d8b750ea5f3e305e51dc70075227586d1c1"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "static-first-frame",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "static-first-frame",
+        "animatedFixtures": 0,
+        "staticFixtures": 48
+      },
+      "cpuPercent": 64.39598290219045,
+      "rssMedianBytes": 587759616,
+      "rssPeakBytes": 635973632,
+      "heapPeakBytes": 222929355,
+      "eventLoopLagP95Ms": 0.056469000002834946,
+      "eventLoopLagMaxMs": 3.8256209999999555,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944356558529247,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 40.6109321567824,
+      "totalPresentsPerSecond": 40.6109321567824,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 731,
+        "animationOnlyPresents": 0,
+        "slotUploads": 0,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82608,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "be9f2483ccf42cb668c9cc3ec00074c8a628a4f019d99a61a2d1692957bb99a3",
+        "sourceHash": "24533195cf0e078a1543a87ae701f7291f11edcebeb8f1be45f8208a6e09abec",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "4dc1672e709befe41731c7f02a2b2d2fbf8fce4b337ee4e07380d64cc6a07e17",
+      "native": {
+        "version": "0.11.0-twirchat.17",
+        "patchDigest": "fea6d237b60ea156",
+        "sha256": "3932e6eb91bb434c56d0b258f92c8d8b750ea5f3e305e51dc70075227586d1c1"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "static-first-frame",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "static-first-frame",
+        "animatedFixtures": 0,
+        "staticFixtures": 48
+      },
+      "cpuPercent": 68.72968172448631,
+      "rssMedianBytes": 589914112,
+      "rssPeakBytes": 634810368,
+      "heapPeakBytes": 223115194,
+      "eventLoopLagP95Ms": 0.06354899999860208,
+      "eventLoopLagMaxMs": 0.4493899999997666,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944355309796507,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 39.44426816143599,
+      "totalPresentsPerSecond": 39.44426816143599,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 710,
+        "animationOnlyPresents": 0,
+        "slotUploads": 0,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82606,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "singlePaneDiagnostic": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5cc47fc67d9b0b3c6ed0d96a09a55778b51ed1ea2960b386286d6807c2c58191",
+        "sourceHash": "24533195cf0e078a1543a87ae701f7291f11edcebeb8f1be45f8208a6e09abec",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "33e1dadaa5c7517e8c5bc1d8a839a4ad03380f7b5c1889ebaf9bf2fed15e3ab3",
+      "native": {
+        "version": "0.11.0-twirchat.17",
+        "patchDigest": "fea6d237b60ea156",
+        "sha256": "3932e6eb91bb434c56d0b258f92c8d8b750ea5f3e305e51dc70075227586d1c1"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          20
+        ],
+        "schedule": [
+          0
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 26.8482650240141,
+      "rssMedianBytes": 381657088,
+      "rssPeakBytes": 417587200,
+      "heapPeakBytes": 141861734,
+      "eventLoopLagP95Ms": 0.057299000000057276,
+      "eventLoopLagMaxMs": 0.6069390000011481,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944360684777692,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 43.55537263750894,
+      "totalPresentsPerSecond": 59.05530754294898,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 784,
+        "animationOnlyPresents": 279,
+        "slotUploads": 1175,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 87843,
+      "newImageDecodes": 403,
+      "paintedTailCount": 1,
+      "pointer": null
+    }
+  ],
+  "nativeProfilerDiagnostic": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8c0de4d2b8dc6166a486b997dd1585b0d51d5bb1e4611609c0d39c4796a8eca7",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "d3c6ec2914751913845b8c328e41cb5f019c4762ea7151076f2a82fe44d6e9fd",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 65.97770612555446,
+      "rssMedianBytes": 586104832,
+      "rssPeakBytes": 630312960,
+      "heapPeakBytes": 227396766,
+      "eventLoopLagP95Ms": 0.060918999999557855,
+      "eventLoopLagMaxMs": 4.09403999999995,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.941897303569885,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 38.10624387255972,
+      "totalPresentsPerSecond": 54.881878930158905,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 686,
+        "animationOnlyPresents": 302,
+        "slotUploads": 2976,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82509,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "appImageNative": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "796c70ff3814ac8ebb218ac00909a944bbf7da05dd6255cb0397cc55ddea8975",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.15",
+        "patchDigest": "279b40c830eed623",
+        "sha256": "3bbf3182fa916c69d1a090cc1b52c1420aac3dcee28910ac369f3be124264b9e"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 73.77785487432344,
+      "rssMedianBytes": 582561792,
+      "rssPeakBytes": 624332800,
+      "heapPeakBytes": 223140863,
+      "eventLoopLagP95Ms": 0.5268570000007458,
+      "eventLoopLagMaxMs": 4.079923000000235,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.94435565217308,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 35.222065413586996,
+      "totalPresentsPerSecond": 45.38868681845517,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 634,
+        "animationOnlyPresents": 183,
+        "slotUploads": 2977,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82558,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "796c70ff3814ac8ebb218ac00909a944bbf7da05dd6255cb0397cc55ddea8975",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.15",
+        "patchDigest": "279b40c830eed623",
+        "sha256": "3bbf3182fa916c69d1a090cc1b52c1420aac3dcee28910ac369f3be124264b9e"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 70.50754837434594,
+      "rssMedianBytes": 583843840,
+      "rssPeakBytes": 628006912,
+      "heapPeakBytes": 223632221,
+      "eventLoopLagP95Ms": 0.060226999999940745,
+      "eventLoopLagMaxMs": 2.363239000000249,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944351266651363,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 35.83316592476359,
+      "totalPresentsPerSecond": 47.2220016062776,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 645,
+        "animationOnlyPresents": 205,
+        "slotUploads": 2979,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82680,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "796c70ff3814ac8ebb218ac00909a944bbf7da05dd6255cb0397cc55ddea8975",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.15",
+        "patchDigest": "279b40c830eed623",
+        "sha256": "3bbf3182fa916c69d1a090cc1b52c1420aac3dcee28910ac369f3be124264b9e"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 72.81841252767921,
+      "rssMedianBytes": 582782976,
+      "rssPeakBytes": 625385472,
+      "heapPeakBytes": 222794850,
+      "eventLoopLagP95Ms": 0.08119900000019697,
+      "eventLoopLagMaxMs": 2.3083850000002712,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944383967532147,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 36.94433241896623,
+      "totalPresentsPerSecond": 44.777641999529,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 665,
+        "animationOnlyPresents": 141,
+        "slotUploads": 2973,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82426,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "matchedFocusCache": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 69.42447086117402,
+      "rssMedianBytes": 579506176,
+      "rssPeakBytes": 623599616,
+      "heapPeakBytes": 226974763,
+      "eventLoopLagP95Ms": 0.3080409999965923,
+      "eventLoopLagMaxMs": 4.911028000000442,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944297221182442,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.27750260560841,
+      "totalPresentsPerSecond": 52.61072275336984,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 671,
+        "animationOnlyPresents": 276,
+        "slotUploads": 2975,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82531,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 70.61620140372986,
+      "rssMedianBytes": 578240512,
+      "rssPeakBytes": 621998080,
+      "heapPeakBytes": 223653392,
+      "eventLoopLagP95Ms": 0.3421890000008716,
+      "eventLoopLagMaxMs": 2.4327699999994365,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944358541876163,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.22206190266582,
+      "totalPresentsPerSecond": 48.110903892102385,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 670,
+        "animationOnlyPresents": 196,
+        "slotUploads": 2976,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82642,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 70.25918542503052,
+      "rssMedianBytes": 582983680,
+      "rssPeakBytes": 626495488,
+      "heapPeakBytes": 223063442,
+      "eventLoopLagP95Ms": 0.2273800000002666,
+      "eventLoopLagMaxMs": 2.1373320000002423,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.94435672362348,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.77761162134809,
+      "totalPresentsPerSecond": 49.333116352583986,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 680,
+        "animationOnlyPresents": 208,
+        "slotUploads": 2982,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82626,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "discardedConditionalSvg": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8718cfa1bd999a7da875b93fae9cf9eef7033270937ce4766bb27f7777bb2cd9",
+        "sourceHash": "f5517bf6e7008f5ee6508ca1dd24ff3038002fdc18ec7fd135ab7bc6e5681002",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 65.53754903279776,
+      "rssMedianBytes": 554569728,
+      "rssPeakBytes": 596844544,
+      "heapPeakBytes": 212845820,
+      "eventLoopLagP95Ms": 0.22974000000249362,
+      "eventLoopLagMaxMs": 2.8660369999997783,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944351163606033,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.666490498398026,
+      "totalPresentsPerSecond": 54.83307687598651,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 678,
+        "animationOnlyPresents": 309,
+        "slotUploads": 2982,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 77033,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8718cfa1bd999a7da875b93fae9cf9eef7033270937ce4766bb27f7777bb2cd9",
+        "sourceHash": "f5517bf6e7008f5ee6508ca1dd24ff3038002fdc18ec7fd135ab7bc6e5681002",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 68.23225079462519,
+      "rssMedianBytes": 553807872,
+      "rssPeakBytes": 593489920,
+      "heapPeakBytes": 212667615,
+      "eventLoopLagP95Ms": 0.05799200000183191,
+      "eventLoopLagMaxMs": 2.1328670000002603,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944353738631662,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 38.16649308757647,
+      "totalPresentsPerSecond": 53.610867291865056,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 687,
+        "animationOnlyPresents": 278,
+        "slotUploads": 2980,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 77086,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8718cfa1bd999a7da875b93fae9cf9eef7033270937ce4766bb27f7777bb2cd9",
+        "sourceHash": "f5517bf6e7008f5ee6508ca1dd24ff3038002fdc18ec7fd135ab7bc6e5681002",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 65.63223596123969,
+      "rssMedianBytes": 565166080,
+      "rssPeakBytes": 599695360,
+      "heapPeakBytes": 216792412,
+      "eventLoopLagP95Ms": 0.05715799999961746,
+      "eventLoopLagMaxMs": 1.050187000000733,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.94435914352841,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.610950251166386,
+      "totalPresentsPerSecond": 54.94420945111308,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 677,
+        "animationOnlyPresents": 312,
+        "slotUploads": 2984,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 76850,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "svgPointerDiagnostic": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": null,
+      "cpuPercent": 17.76866585152784,
+      "rssMedianBytes": 387497984,
+      "rssPeakBytes": 437153792,
+      "heapPeakBytes": 108836384,
+      "eventLoopLagP95Ms": 0.059148000000277534,
+      "eventLoopLagMaxMs": 0.8991089999999531,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "actualRate": 0,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 46.916378471082815,
+      "totalPresentsPerSecond": 59.99963143726399,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 563,
+        "animationOnlyPresents": 157,
+        "slotUploads": 1434,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 8065,
+      "newImageDecodes": 0,
+      "paintedTailCount": 0,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.91593005308734,
+        "hoverLeaveBatches": 1
+      }
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8718cfa1bd999a7da875b93fae9cf9eef7033270937ce4766bb27f7777bb2cd9",
+        "sourceHash": "f5517bf6e7008f5ee6508ca1dd24ff3038002fdc18ec7fd135ab7bc6e5681002",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": null,
+      "cpuPercent": 36.75821625597381,
+      "rssMedianBytes": 429060096,
+      "rssPeakBytes": 455319552,
+      "heapPeakBytes": 127479070,
+      "eventLoopLagP95Ms": 0.09954900000047928,
+      "eventLoopLagMaxMs": 7.783782999998948,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "actualRate": 0,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 47.16635604476787,
+      "totalPresentsPerSecond": 59.99960486260224,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 566,
+        "animationOnlyPresents": 154,
+        "slotUploads": 1782,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 14974,
+      "newImageDecodes": 0,
+      "paintedTailCount": 0,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.9158769406731,
+        "hoverLeaveBatches": 1
+      }
+    }
+  ],
+  "docsBaseline": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 71.79504464254295,
+      "rssMedianBytes": 581074944,
+      "rssPeakBytes": 622956544,
+      "heapPeakBytes": 227111741,
+      "eventLoopLagP95Ms": 0.2835450000020501,
+      "eventLoopLagMaxMs": 2.328563000000031,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.94435653082888,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 35.610954140003656,
+      "totalPresentsPerSecond": 46.777571584841,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 641,
+        "animationOnlyPresents": 201,
+        "slotUploads": 2968,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82390,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 69.77043535012601,
+      "rssMedianBytes": 581918720,
+      "rssPeakBytes": 623439872,
+      "heapPeakBytes": 222799849,
+      "eventLoopLagP95Ms": 0.23053900000013527,
+      "eventLoopLagMaxMs": 2.501274000002013,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.94434973537567,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.99981955152356,
+      "totalPresentsPerSecond": 50.05531785953615,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 684,
+        "animationOnlyPresents": 217,
+        "slotUploads": 2972,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82338,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "825b54afdbf471f1f3fc8d9d0f834428361cf61009eef88e872a180e1098ffde",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 70.18513415519878,
+      "rssMedianBytes": 578600960,
+      "rssPeakBytes": 621490176,
+      "heapPeakBytes": 227710849,
+      "eventLoopLagP95Ms": 0.28642000000036205,
+      "eventLoopLagMaxMs": 2.040933999999652,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944354691524275,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.05538880013006,
+      "totalPresentsPerSecond": 48.55533704844628,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 667,
+        "animationOnlyPresents": 207,
+        "slotUploads": 2971,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82435,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "docsOverdraw128": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "e7c71a3a1a9e248c51ba8408b180934c3d8719c7634224046f4315b8e16a3264",
+        "sourceHash": "a8b2da3a368955ef19092ca5029f01105b518815e945c316c7e9256b7928a7a9",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 72.42774962926211,
+      "rssMedianBytes": 568082432,
+      "rssPeakBytes": 609652736,
+      "heapPeakBytes": 222801588,
+      "eventLoopLagP95Ms": 0.3362969999998313,
+      "eventLoopLagMaxMs": 2.245307999999568,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944351022888217,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.16649257468584,
+      "totalPresentsPerSecond": 46.88866925715224,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 669,
+        "animationOnlyPresents": 175,
+        "slotUploads": 2977,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 82426,
+      "newImageDecodes": 362,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "docsTail64": [
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "0c07e2b42fb7f1175df4761484ec18abaa2422ea4dab442a274968bc6b15baa8",
+        "sourceHash": "191091a3c16a0e3767bb29c9a1c57c6320f89fd1c60de1c173bbc10681ab4097",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 65.75130900383071,
+      "rssMedianBytes": 446570496,
+      "rssPeakBytes": 481984512,
+      "heapPeakBytes": 162419723,
+      "eventLoopLagP95Ms": 0.07970500000010361,
+      "eventLoopLagMaxMs": 0.8996460000007573,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944359546845952,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 37.55539569266814,
+      "totalPresentsPerSecond": 54.888655243130366,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 676,
+        "animationOnlyPresents": 312,
+        "slotUploads": 2983,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 89284,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "0c07e2b42fb7f1175df4761484ec18abaa2422ea4dab442a274968bc6b15baa8",
+        "sourceHash": "191091a3c16a0e3767bb29c9a1c57c6320f89fd1c60de1c173bbc10681ab4097",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 65.38567160199003,
+      "rssMedianBytes": 441360384,
+      "rssPeakBytes": 478310400,
+      "heapPeakBytes": 160543902,
+      "eventLoopLagP95Ms": 0.05669499999930849,
+      "eventLoopLagMaxMs": 0.547059999999874,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.944373082369534,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 39.55541402408665,
+      "totalPresentsPerSecond": 55.722022845728816,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 712,
+        "animationOnlyPresents": 291,
+        "slotUploads": 2989,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 89354,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    },
+    {
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "0c07e2b42fb7f1175df4761484ec18abaa2422ea4dab442a274968bc6b15baa8",
+        "sourceHash": "191091a3c16a0e3767bb29c9a1c57c6320f89fd1c60de1c173bbc10681ab4097",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "native": {
+        "version": "0.11.0-twirchat.16",
+        "patchDigest": "ebbd1d16979c85d3",
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "workload": {
+        "workloadVersion": "monotonic-timestamps-v2",
+        "visibleChannels": [
+          "emote-0",
+          "emote-1",
+          "emote-2",
+          "emote-3"
+        ],
+        "inactiveChannels": 19,
+        "channelRates": [
+          5,
+          1,
+          2,
+          12
+        ],
+        "schedule": [
+          0,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          1,
+          3,
+          0,
+          3,
+          2,
+          3,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "retentionPerChannel": 200,
+        "media": "mixed",
+        "animatedFixtures": 32,
+        "staticFixtures": 16
+      },
+      "cpuPercent": 73.83909911522439,
+      "rssMedianBytes": 438231040,
+      "rssPeakBytes": 477630464,
+      "heapPeakBytes": 161008179,
+      "eventLoopLagP95Ms": 0.1105400000001282,
+      "eventLoopLagMaxMs": 3.0790589999996882,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "actualRate": 19.94433616331936,
+      "retainedMessages": 4600,
+      "fullDrawsPerSecond": 36.72202285223982,
+      "totalPresentsPerSecond": 45.88863975181557,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 661,
+        "animationOnlyPresents": 165,
+        "slotUploads": 2969,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "nativeMutationOperations": 89154,
+      "newImageDecodes": 351,
+      "paintedTailCount": 4,
+      "pointer": null
+    }
+  ],
+  "liveAppImageGpu": {
+    "runtime": "AppImage 1.3.1",
+    "driver": "amdgpu",
+    "pciDevice": "0000:03:00.0",
+    "graphicsLibrary": "libvulkan_radeon.so",
+    "intervalSeconds": 3,
+    "engineBeforeNs": 27879417968,
+    "engineAfterNs": 27900891164
+  }
+}

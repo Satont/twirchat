@@ -780,6 +780,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   }
 
   // ── Modern (default) ──────────────────────────────────────────────────────
+  const avatarSize = modernAvatarSize(fontSize)
+  const platformSize = platformIconSize(fontSize)
   const content = (
     <div
       onMouseDown={(event) => {
@@ -806,20 +808,29 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       {platformStripe}
 
       {props.showPlatformIcon ? (
-        <div style={{ marginTop: 6, flexShrink: 0, opacity: 0.85, display: 'flex' }}>
-          <PlatformIcon platform={message.platform} size={platformIconSize(fontSize)} />
+        <div
+          style={{
+            width: platformSize,
+            marginTop: 6,
+            flexShrink: 0,
+            opacity: 0.85,
+            display: 'flex',
+          }}
+        >
+          <PlatformIcon platform={message.platform} size={platformSize} />
         </div>
       ) : null}
 
       {props.showAvatar !== false ? (
-        <div style={{ marginTop: 1, flexShrink: 0 }}>
-          <Avatar message={message} size={modernAvatarSize(fontSize)} visible={props.visible} />
+        <div style={{ width: avatarSize, marginTop: 1, flexShrink: 0 }}>
+          <Avatar message={message} size={avatarSize} visible={props.visible} />
         </div>
       ) : null}
 
       <div
         style={{
           flexGrow: 1,
+          flexBasis: 0,
           minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
@@ -858,6 +869,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           />
           {props.showTimestamp ? (
             <Text
+              testId={`chat-timestamp-${message.id}`}
               style={{
                 fontSize: timestampSize(fontSize),
                 color: theme.text2,

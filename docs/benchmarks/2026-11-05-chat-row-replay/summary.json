@@ -1,0 +1,3946 @@
+{
+  "mediaBaseline": [
+    {
+      "timestamp": "2026-11-05T08:26:48.788Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5ed9036bbe5dc2e8001c385b8cbba3777ef01989b4b849836e8914144b7049ed",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "ebbd1d16979c85d3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57016704,
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 70.28648809491766,
+      "rssMedianBytes": 580976640,
+      "rssPeakBytes": 622759936,
+      "heapPeakBytes": 223598895,
+      "eventLoopLagP95Ms": 0.084101999998893,
+      "eventLoopLagMaxMs": 2.5578709999999774,
+      "actualRate": 19.944354362443907,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 37.277609407241954,
+      "totalPresentsPerSecond": 47.88867259171768,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 671,
+        "animationOnlyPresents": 191,
+        "slotUploads": 2974,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    },
+    {
+      "timestamp": "2026-11-05T08:27:12.691Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5ed9036bbe5dc2e8001c385b8cbba3777ef01989b4b849836e8914144b7049ed",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "ebbd1d16979c85d3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57016704,
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 67.76682735613764,
+      "rssMedianBytes": 582909952,
+      "rssPeakBytes": 624439296,
+      "heapPeakBytes": 222902255,
+      "eventLoopLagP95Ms": 0.057049999999435386,
+      "eventLoopLagMaxMs": 2.225803999999698,
+      "actualRate": 19.944356027790118,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.88871648872725,
+      "totalPresentsPerSecond": 54.11087122860048,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 700,
+        "animationOnlyPresents": 274,
+        "slotUploads": 2976,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    },
+    {
+      "timestamp": "2026-11-05T08:27:36.588Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5ed9036bbe5dc2e8001c385b8cbba3777ef01989b4b849836e8914144b7049ed",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "ebbd1d16979c85d3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57016704,
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 66.44778893944225,
+      "rssMedianBytes": 578871296,
+      "rssPeakBytes": 623484928,
+      "heapPeakBytes": 223709609,
+      "eventLoopLagP95Ms": 0.05644499999834807,
+      "eventLoopLagMaxMs": 2.1472720000001573,
+      "actualRate": 19.94435107939694,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.22204329422033,
+      "totalPresentsPerSecond": 53.888636621211795,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 688,
+        "animationOnlyPresents": 282,
+        "slotUploads": 2976,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    }
+  ],
+  "mediaCandidateBeforePointerGuard": [
+    {
+      "timestamp": "2026-11-05T08:42:09.242Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5d535bf3e734aed07306baacb143bdc03b9f850be2f170ddc0dedd9b411cd32f",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "967933a5db1e2d4b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57023720,
+        "sha256": "d720a5e65403ffc1014493be8b0ee0bd20efa340b553825aa19c04b9d7863e98"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 49.46672893560238,
+      "rssMedianBytes": 514871296,
+      "rssPeakBytes": 608038912,
+      "heapPeakBytes": 193048539,
+      "eventLoopLagP95Ms": 0.18094099999871105,
+      "eventLoopLagMaxMs": 6.057002000001376,
+      "actualRate": 19.944359793933362,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.27761531481918,
+      "totalPresentsPerSecond": 58.49975170755384,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 689,
+        "animationOnlyPresents": 364,
+        "slotUploads": 2983,
+        "liveSlots": 7,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    },
+    {
+      "timestamp": "2026-11-05T08:42:33.114Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5d535bf3e734aed07306baacb143bdc03b9f850be2f170ddc0dedd9b411cd32f",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "967933a5db1e2d4b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57023720,
+        "sha256": "d720a5e65403ffc1014493be8b0ee0bd20efa340b553825aa19c04b9d7863e98"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 56.897871060905544,
+      "rssMedianBytes": 513019904,
+      "rssPeakBytes": 608591872,
+      "heapPeakBytes": 193015916,
+      "eventLoopLagP95Ms": 0.18548200000077486,
+      "eventLoopLagMaxMs": 2.374593999999888,
+      "actualRate": 19.944354457733173,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.27760507347676,
+      "totalPresentsPerSecond": 54.61086471295741,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 689,
+        "animationOnlyPresents": 294,
+        "slotUploads": 2983,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    },
+    {
+      "timestamp": "2026-11-05T08:42:56.990Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5d535bf3e734aed07306baacb143bdc03b9f850be2f170ddc0dedd9b411cd32f",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "967933a5db1e2d4b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57023720,
+        "sha256": "d720a5e65403ffc1014493be8b0ee0bd20efa340b553825aa19c04b9d7863e98"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 53.933130506591645,
+      "rssMedianBytes": 577486848,
+      "rssPeakBytes": 618577920,
+      "heapPeakBytes": 223493267,
+      "eventLoopLagP95Ms": 0.05686499999865191,
+      "eventLoopLagMaxMs": 2.2217579999996815,
+      "actualRate": 19.944379711636028,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.222098166032275,
+      "totalPresentsPerSecond": 54.16649086029283,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 688,
+        "animationOnlyPresents": 287,
+        "slotUploads": 2981,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    }
+  ],
+  "mediaCandidate": [
+    {
+      "timestamp": "2026-11-05T08:57:37.395Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "704aa9da510bb716bbe220bde74feca30b3e334efd93849edc53140d6f7e2e6c",
+        "sourceHash": "176a9baaf62905a56f175835f5f0da96d69f56afab3c29db0d470a1d73da2b78",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "29e1f83e43e1524b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57033008,
+        "sha256": "f991c65dfbda7454281fef06f4d4fb8c51f491b92001195e6ea398e2e250668b"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 51.46292380615461,
+      "rssMedianBytes": 578428928,
+      "rssPeakBytes": 621776896,
+      "heapPeakBytes": 223500376,
+      "eventLoopLagP95Ms": 0.056484000000637025,
+      "eventLoopLagMaxMs": 2.420274999999492,
+      "actualRate": 19.94435678345628,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.49983078254931,
+      "totalPresentsPerSecond": 56.88863884751875,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 693,
+        "animationOnlyPresents": 331,
+        "slotUploads": 2974,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    },
+    {
+      "timestamp": "2026-11-05T08:58:01.304Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "704aa9da510bb716bbe220bde74feca30b3e334efd93849edc53140d6f7e2e6c",
+        "sourceHash": "176a9baaf62905a56f175835f5f0da96d69f56afab3c29db0d470a1d73da2b78",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "29e1f83e43e1524b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57033008,
+        "sha256": "f991c65dfbda7454281fef06f4d4fb8c51f491b92001195e6ea398e2e250668b"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 50.291503480466226,
+      "rssMedianBytes": 518320128,
+      "rssPeakBytes": 614531072,
+      "heapPeakBytes": 197043742,
+      "eventLoopLagP95Ms": 0.05717300000105752,
+      "eventLoopLagMaxMs": 2.336156000000301,
+      "actualRate": 19.944355493726963,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.44427298512273,
+      "totalPresentsPerSecond": 57.110856399864396,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 692,
+        "animationOnlyPresents": 336,
+        "slotUploads": 2987,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    },
+    {
+      "timestamp": "2026-11-05T08:58:25.184Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "704aa9da510bb716bbe220bde74feca30b3e334efd93849edc53140d6f7e2e6c",
+        "sourceHash": "176a9baaf62905a56f175835f5f0da96d69f56afab3c29db0d470a1d73da2b78",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "29e1f83e43e1524b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57033008,
+        "sha256": "f991c65dfbda7454281fef06f4d4fb8c51f491b92001195e6ea398e2e250668b"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 50.47607787186452,
+      "rssMedianBytes": 579670016,
+      "rssPeakBytes": 621838336,
+      "heapPeakBytes": 222874489,
+      "eventLoopLagP95Ms": 0.39862800000082643,
+      "eventLoopLagMaxMs": 2.1730579999994006,
+      "actualRate": 19.94433911506552,
+      "offeredMessages": 359,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 38.38868615183921,
+      "totalPresentsPerSecond": 57.66636212099725,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 691,
+        "animationOnlyPresents": 347,
+        "slotUploads": 2980,
+        "liveSlots": 6,
+        "fallbacks": 0
+      },
+      "paintedTails": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "pointer": null
+    }
+  ],
+  "pointerBaseline": [
+    {
+      "timestamp": "2026-11-05T08:51:13.968Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "318902c33673a680727f311ce75c8d490fa59247f732e933b4e2827e18a92fa6",
+        "sourceHash": "90885506b7bf883562870ee8415f551121d4a4296f6e7aa65bcc842fb9491cc7",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "ebbd1d16979c85d3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57016704,
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 19.38628877855064,
+      "rssMedianBytes": 391913472,
+      "rssPeakBytes": 439345152,
+      "heapPeakBytes": 108681359,
+      "eventLoopLagP95Ms": 0.05725900000106776,
+      "eventLoopLagMaxMs": 6.247816000000057,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 47.24968830168121,
+      "totalPresentsPerSecond": 60.08293697621191,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 567,
+        "animationOnlyPresents": 154,
+        "slotUploads": 1416,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.91587560162128,
+        "hoverLeaveBatches": 1
+      }
+    },
+    {
+      "timestamp": "2026-11-05T08:53:27.243Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "318902c33673a680727f311ce75c8d490fa59247f732e933b4e2827e18a92fa6",
+        "sourceHash": "90885506b7bf883562870ee8415f551121d4a4296f6e7aa65bcc842fb9491cc7",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "ebbd1d16979c85d3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57016704,
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 19.577307239086508,
+      "rssMedianBytes": 390275072,
+      "rssPeakBytes": 438308864,
+      "heapPeakBytes": 108546203,
+      "eventLoopLagP95Ms": 0.05798099999992701,
+      "eventLoopLagMaxMs": 3.013061999999991,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 47.249675560102766,
+      "totalPresentsPerSecond": 59.99958801282891,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 567,
+        "animationOnlyPresents": 153,
+        "slotUploads": 1417,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.91584326452889,
+        "hoverLeaveBatches": 1
+      }
+    },
+    {
+      "timestamp": "2026-11-05T08:53:47.206Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "318902c33673a680727f311ce75c8d490fa59247f732e933b4e2827e18a92fa6",
+        "sourceHash": "90885506b7bf883562870ee8415f551121d4a4296f6e7aa65bcc842fb9491cc7",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "ebbd1d16979c85d3",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57016704,
+        "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 21.43835070524774,
+      "rssMedianBytes": 389607424,
+      "rssPeakBytes": 439394304,
+      "heapPeakBytes": 108652653,
+      "eventLoopLagP95Ms": 0.10432000000037078,
+      "eventLoopLagMaxMs": 7.862551000000167,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 46.99963616014993,
+      "totalPresentsPerSecond": 59.99953552359566,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 564,
+        "animationOnlyPresents": 156,
+        "slotUploads": 1415,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.9157383589641,
+        "hoverLeaveBatches": 1
+      }
+    }
+  ],
+  "pointerBeforeGuard": [
+    {
+      "timestamp": "2026-11-05T08:51:33.924Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "318902c33673a680727f311ce75c8d490fa59247f732e933b4e2827e18a92fa6",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "967933a5db1e2d4b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57023720,
+        "sha256": "d720a5e65403ffc1014493be8b0ee0bd20efa340b553825aa19c04b9d7863e98"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 23.729689945218794,
+      "rssMedianBytes": 385753088,
+      "rssPeakBytes": 433270784,
+      "heapPeakBytes": 108734925,
+      "eventLoopLagP95Ms": 0.05868899999950372,
+      "eventLoopLagMaxMs": 1.6379830000005313,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 46.666351906011926,
+      "totalPresentsPerSecond": 59.999595307729614,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 560,
+        "animationOnlyPresents": 160,
+        "slotUploads": 1778,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.9158578441985,
+        "hoverLeaveBatches": 1
+      }
+    },
+    {
+      "timestamp": "2026-11-05T08:53:07.303Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "318902c33673a680727f311ce75c8d490fa59247f732e933b4e2827e18a92fa6",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "967933a5db1e2d4b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57023720,
+        "sha256": "d720a5e65403ffc1014493be8b0ee0bd20efa340b553825aa19c04b9d7863e98"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 23.751588608565672,
+      "rssMedianBytes": 390352896,
+      "rssPeakBytes": 437657600,
+      "heapPeakBytes": 108760999,
+      "eventLoopLagP95Ms": 0.09741000000030908,
+      "eventLoopLagMaxMs": 9.051251000000775,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 46.66652967317994,
+      "totalPresentsPerSecond": 59.83315768811285,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 560,
+        "animationOnlyPresents": 158,
+        "slotUploads": 1778,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.91631464233201,
+        "hoverLeaveBatches": 1
+      }
+    },
+    {
+      "timestamp": "2026-11-05T08:54:07.149Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "318902c33673a680727f311ce75c8d490fa59247f732e933b4e2827e18a92fa6",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "967933a5db1e2d4b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57023720,
+        "sha256": "d720a5e65403ffc1014493be8b0ee0bd20efa340b553825aa19c04b9d7863e98"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 22.60001585867097,
+      "rssMedianBytes": 390455296,
+      "rssPeakBytes": 438140928,
+      "heapPeakBytes": 108517373,
+      "eventLoopLagP95Ms": 0.05652100000042992,
+      "eventLoopLagMaxMs": 3.6264119999996183,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 47.40731287198583,
+      "totalPresentsPerSecond": 60.07148080966921,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 569,
+        "animationOnlyPresents": 152,
+        "slotUploads": 1782,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.89301093635784,
+        "hoverLeaveBatches": 1
+      }
+    }
+  ],
+  "pointerWithGuard": [
+    {
+      "timestamp": "2026-11-05T08:56:33.620Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5c7760520cabd03ff4a00ae7246f6193889285fa9051e78214808d1b2226571f",
+        "sourceHash": "176a9baaf62905a56f175835f5f0da96d69f56afab3c29db0d470a1d73da2b78",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "29e1f83e43e1524b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57033008,
+        "sha256": "f991c65dfbda7454281fef06f4d4fb8c51f491b92001195e6ea398e2e250668b"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 18.147948198373154,
+      "rssMedianBytes": 388657152,
+      "rssPeakBytes": 437628928,
+      "heapPeakBytes": 108213124,
+      "eventLoopLagP95Ms": 0.056392999999843596,
+      "eventLoopLagMaxMs": 1.199854000000414,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 46.99969318991949,
+      "totalPresentsPerSecond": 59.9996083275568,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 564,
+        "animationOnlyPresents": 156,
+        "slotUploads": 1436,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.91588386576977,
+        "hoverLeaveBatches": 1
+      }
+    },
+    {
+      "timestamp": "2026-11-05T08:56:53.565Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5c7760520cabd03ff4a00ae7246f6193889285fa9051e78214808d1b2226571f",
+        "sourceHash": "176a9baaf62905a56f175835f5f0da96d69f56afab3c29db0d470a1d73da2b78",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "29e1f83e43e1524b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57033008,
+        "sha256": "f991c65dfbda7454281fef06f4d4fb8c51f491b92001195e6ea398e2e250668b"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 19.49956533385776,
+      "rssMedianBytes": 388968448,
+      "rssPeakBytes": 438599680,
+      "heapPeakBytes": 108790130,
+      "eventLoopLagP95Ms": 0.057933000000048196,
+      "eventLoopLagMaxMs": 2.532361999999921,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 47.083028294163775,
+      "totalPresentsPerSecond": 59.916278484077445,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 565,
+        "animationOnlyPresents": 154,
+        "slotUploads": 1393,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1438,
+        "actualCallsPerSecond": 119.83255696815489,
+        "hoverLeaveBatches": 1
+      }
+    },
+    {
+      "timestamp": "2026-11-05T08:57:13.483Z",
+      "reactMode": "production",
+      "bunVersion": "1.4.4",
+      "compositor": "weston",
+      "config": {
+        "case": "idle",
+        "source": "synthetic",
+        "preset": "dense",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "cross-rows",
+        "pointerSweepSeconds": 0.25,
+        "durationSeconds": 12,
+        "warmupSeconds": 5,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "5c7760520cabd03ff4a00ae7246f6193889285fa9051e78214808d1b2226571f",
+        "sourceHash": "176a9baaf62905a56f175835f5f0da96d69f56afab3c29db0d470a1d73da2b78",
+        "sourceFiles": 391
+      },
+      "scriptSha256": "e1cf589116dd2d6e24d0989853694c69d7ad9879a0e22fcef6d19a69dd1fbd4a",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "29e1f83e43e1524b",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57033008,
+        "sha256": "f991c65dfbda7454281fef06f4d4fb8c51f491b92001195e6ea398e2e250668b"
+      },
+      "nativeWindow": {
+        "x": 0,
+        "y": 0,
+        "width": 770,
+        "height": 1300,
+        "mode": "windowed"
+      },
+      "cpuPercent": 18.889361512669392,
+      "rssMedianBytes": 388734976,
+      "rssPeakBytes": 434987008,
+      "heapPeakBytes": 108612404,
+      "eventLoopLagP95Ms": 0.05781300000126066,
+      "eventLoopLagMaxMs": 1.5121590000017022,
+      "actualRate": 0,
+      "offeredMessages": 0,
+      "processedMessages": 0,
+      "retainedMessages": 4600,
+      "nativeFramesPerSecond": 46.999676156564725,
+      "totalPresentsPerSecond": 59.999586582848586,
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 564,
+        "animationOnlyPresents": 156,
+        "slotUploads": 1430,
+        "liveSlots": 0,
+        "fallbacks": 0
+      },
+      "paintedTails": null,
+      "pointer": {
+        "kind": "cross-rows",
+        "sweepSeconds": 0.25,
+        "path": {
+          "viewport": {
+            "x": 0,
+            "y": 44,
+            "width": 770,
+            "height": 1205
+          },
+          "from": {
+            "x": 550,
+            "y": 114
+          },
+          "to": {
+            "x": 550,
+            "y": 1186
+          },
+          "visibleRows": 13
+        },
+        "offeredCalls": 1440,
+        "dispatchedNativeCalls": 1439,
+        "actualCallsPerSecond": 119.91584040655434,
+        "hoverLeaveBatches": 1
+      }
+    }
+  ],
+  "stressBaseline": [
+    {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "production",
+        "timestamp": "2026-11-05T07:00:21.361Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 30
+          },
+          "reactMode": "production",
+          "userTimingMeasureCount": 0,
+          "wallMs": 30000.1172,
+          "cpuPercent": 89.96967518513561,
+          "requestedMessages": 150000,
+          "generatedMessages": 149920,
+          "processedMessages": 149820,
+          "processedAfterDrain": 149920,
+          "achievedRate": 4993.980490182885,
+          "generatorMissedMessages": 80,
+          "rssBaselineBytes": 459853824,
+          "rssMedianBytes": 521981952,
+          "rssPeakBytes": 616226816,
+          "heapPeakBytes": 225825332,
+          "eventLoopLagP50Ms": 0.05473999999958323,
+          "eventLoopLagP95Ms": 2.0542119999990973,
+          "eventLoopLagMaxMs": 11.82626800000071,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2396483392703974
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T07:00:21.264Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+            "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+            "sourceFiles": 389
+          },
+          "termination": "completed"
+        }
+      ]
+    },
+    {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "production",
+        "timestamp": "2026-11-05T07:00:57.082Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 30
+          },
+          "reactMode": "production",
+          "userTimingMeasureCount": 0,
+          "wallMs": 30000.118771,
+          "cpuPercent": 88.48967633308841,
+          "requestedMessages": 150000,
+          "generatedMessages": 149910,
+          "processedMessages": 149910,
+          "processedAfterDrain": 149910,
+          "achievedRate": 4996.980216788756,
+          "generatorMissedMessages": 90,
+          "rssBaselineBytes": 459747328,
+          "rssMedianBytes": 511098880,
+          "rssPeakBytes": 626655232,
+          "heapPeakBytes": 219090883,
+          "eventLoopLagP50Ms": 0.054337999998097075,
+          "eventLoopLagP95Ms": 2.2027949999974226,
+          "eventLoopLagMaxMs": 5.307117000000289,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2585287544043606
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T07:00:56.984Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+            "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+            "sourceFiles": 389
+          },
+          "termination": "completed"
+        }
+      ]
+    },
+    {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "production",
+        "timestamp": "2026-11-05T07:01:32.806Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+        "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+        "sourceFiles": 389
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 30
+          },
+          "reactMode": "production",
+          "userTimingMeasureCount": 0,
+          "wallMs": 30000.133079,
+          "cpuPercent": 86.40830336231323,
+          "requestedMessages": 150000,
+          "generatedMessages": 149935,
+          "processedMessages": 149835,
+          "processedAfterDrain": 149935,
+          "achievedRate": 4994.477844662764,
+          "generatorMissedMessages": 65,
+          "rssBaselineBytes": 465604608,
+          "rssMedianBytes": 524488704,
+          "rssPeakBytes": 618168320,
+          "heapPeakBytes": 229593921,
+          "eventLoopLagP50Ms": 0.05446499999925436,
+          "eventLoopLagP95Ms": 2.164128000000346,
+          "eventLoopLagMaxMs": 8.759210000000166,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2532906390325873
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T07:01:32.711Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+            "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+            "sourceFiles": 389
+          },
+          "termination": "completed"
+        }
+      ]
+    }
+  ],
+  "stressCandidate": [
+    {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "production",
+        "timestamp": "2026-11-05T08:43:32.758Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 30
+          },
+          "reactMode": "production",
+          "userTimingMeasureCount": 0,
+          "wallMs": 30001.19504,
+          "cpuPercent": 84.5850772483095,
+          "requestedMessages": 150005,
+          "generatedMessages": 149904,
+          "processedMessages": 149904,
+          "processedAfterDrain": 149904,
+          "achievedRate": 4996.60096206621,
+          "generatorMissedMessages": 101,
+          "rssBaselineBytes": 469524480,
+          "rssMedianBytes": 515780608,
+          "rssPeakBytes": 604217344,
+          "heapPeakBytes": 225875693,
+          "eventLoopLagP50Ms": 0.05474599999979546,
+          "eventLoopLagP95Ms": 1.932864000000336,
+          "eventLoopLagMaxMs": 6.3048410000010335,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2228731173671012
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T08:43:32.658Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+            "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+            "sourceFiles": 391
+          },
+          "termination": "completed"
+        }
+      ]
+    },
+    {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "production",
+        "timestamp": "2026-11-05T08:44:08.496Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 30
+          },
+          "reactMode": "production",
+          "userTimingMeasureCount": 0,
+          "wallMs": 30000.089979000004,
+          "cpuPercent": 85.15789125260342,
+          "requestedMessages": 150000,
+          "generatedMessages": 149941,
+          "processedMessages": 149841,
+          "processedAfterDrain": 149941,
+          "achievedRate": 4994.68501944122,
+          "generatorMissedMessages": 59,
+          "rssBaselineBytes": 471228416,
+          "rssMedianBytes": 514285568,
+          "rssPeakBytes": 659394560,
+          "heapPeakBytes": 241286121,
+          "eventLoopLagP50Ms": 0.05490799999824958,
+          "eventLoopLagP95Ms": 2.067064000002574,
+          "eventLoopLagMaxMs": 10.97239400000035,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2004731075210087
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T08:44:08.396Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+            "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+            "sourceFiles": 391
+          },
+          "termination": "completed"
+        }
+      ]
+    },
+    {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "production",
+        "timestamp": "2026-11-05T08:44:44.244Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 30
+          },
+          "reactMode": "production",
+          "userTimingMeasureCount": 0,
+          "wallMs": 30000.121612,
+          "cpuPercent": 81.385173419543,
+          "requestedMessages": 150000,
+          "generatedMessages": 149980,
+          "processedMessages": 149880,
+          "processedAfterDrain": 149980,
+          "achievedRate": 4995.979747630365,
+          "generatorMissedMessages": 20,
+          "rssBaselineBytes": 466640896,
+          "rssMedianBytes": 507195392,
+          "rssPeakBytes": 598163456,
+          "heapPeakBytes": 241548670,
+          "eventLoopLagP50Ms": 0.05483999999705702,
+          "eventLoopLagP95Ms": 1.9231180000006134,
+          "eventLoopLagMaxMs": 9.277333999998518,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.379685280927279
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T08:44:44.145Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+            "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+            "sourceFiles": 391
+          },
+          "termination": "completed"
+        }
+      ]
+    }
+  ],
+  "developmentMatrix": {
+    "environment": {
+      "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+      "logicalCpus": 16,
+      "kernel": "7.3.1-1-cachyos",
+      "bun": "1.4.4",
+      "reactMode": "development",
+      "timestamp": "2026-11-05T08:49:08.731Z"
+    },
+    "provenance": {
+      "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+      "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+      "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+      "sourceFiles": 391
+    },
+    "results": [
+      {
+        "config": {
+          "channels": 1,
+          "rate": 0,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 511,
+        "wallMs": 12000.110616999998,
+        "cpuPercent": 1.0132239933501275,
+        "requestedMessages": 0,
+        "generatedMessages": 0,
+        "processedMessages": 0,
+        "processedAfterDrain": 0,
+        "achievedRate": 0,
+        "generatorMissedMessages": 0,
+        "rssBaselineBytes": 286289920,
+        "rssMedianBytes": 286531584,
+        "rssPeakBytes": 287338496,
+        "heapPeakBytes": 65674717,
+        "eventLoopLagP50Ms": 0.0543800000000374,
+        "eventLoopLagP95Ms": 0.05875000000014552,
+        "eventLoopLagMaxMs": 0.5278119999998125,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.0017446486078455375
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 200,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:45:01.839Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 1,
+          "rate": 100,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 55617,
+        "wallMs": 12000.705466000001,
+        "cpuPercent": 46.76664231032632,
+        "requestedMessages": 1200,
+        "generatedMessages": 1198,
+        "processedMessages": 1198,
+        "processedAfterDrain": 1198,
+        "achievedRate": 99.82746459315527,
+        "generatorMissedMessages": 2,
+        "rssBaselineBytes": 398467072,
+        "rssMedianBytes": 506789888,
+        "rssPeakBytes": 590225408,
+        "heapPeakBytes": 171237805,
+        "eventLoopLagP50Ms": 0.05495100000007369,
+        "eventLoopLagP95Ms": 1.8819899999998597,
+        "eventLoopLagMaxMs": 7.211771000000226,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.013066229081749
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 200,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:45:19.443Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 65737,
+        "wallMs": 12000.129789,
+        "cpuPercent": 63.543662727629844,
+        "requestedMessages": 12000,
+        "generatedMessages": 11987,
+        "processedMessages": 11964,
+        "processedAfterDrain": 11987,
+        "achievedRate": 996.9892168138782,
+        "generatorMissedMessages": 13,
+        "rssBaselineBytes": 400687104,
+        "rssMedianBytes": 506966016,
+        "rssPeakBytes": 602460160,
+        "heapPeakBytes": 156670434,
+        "eventLoopLagP50Ms": 0.054990999999063206,
+        "eventLoopLagP95Ms": 4.398807999999917,
+        "eventLoopLagMaxMs": 8.245364000000336,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.9755461685138219
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 200,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:45:37.052Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 1,
+          "rate": 5000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 38823,
+        "wallMs": 12000.08509,
+        "cpuPercent": 112.38067812734151,
+        "requestedMessages": 60000,
+        "generatedMessages": 59595,
+        "processedMessages": 59348,
+        "processedAfterDrain": 59595,
+        "achievedRate": 4945.631598017277,
+        "generatorMissedMessages": 405,
+        "rssBaselineBytes": 472657920,
+        "rssMedianBytes": 599982080,
+        "rssPeakBytes": 726745088,
+        "heapPeakBytes": 256659192,
+        "eventLoopLagP50Ms": 0.05728199999975914,
+        "eventLoopLagP95Ms": 29.70500600000014,
+        "eventLoopLagMaxMs": 36.72925799999939,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.6892672498163485
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 200,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:45:54.667Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 10,
+          "rate": 0,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 511,
+        "wallMs": 12000.138014,
+        "cpuPercent": 1.0783042649095984,
+        "requestedMessages": 0,
+        "generatedMessages": 0,
+        "processedMessages": 0,
+        "processedAfterDrain": 0,
+        "achievedRate": 0,
+        "generatorMissedMessages": 0,
+        "rssBaselineBytes": 284925952,
+        "rssMedianBytes": 285224960,
+        "rssPeakBytes": 285798400,
+        "heapPeakBytes": 66451017,
+        "eventLoopLagP50Ms": 0.05484199999955308,
+        "eventLoopLagP95Ms": 0.057511999999405816,
+        "eventLoopLagMaxMs": 0.5426240000001599,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.0008173187702972448
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 2000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:46:12.246Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 10,
+          "rate": 100,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 10817,
+        "wallMs": 12000.129956,
+        "cpuPercent": 15.414408067098769,
+        "requestedMessages": 1200,
+        "generatedMessages": 1199,
+        "processedMessages": 1197,
+        "processedAfterDrain": 1199,
+        "achievedRate": 99.74891975244871,
+        "generatorMissedMessages": 1,
+        "rssBaselineBytes": 315150336,
+        "rssMedianBytes": 351076352,
+        "rssPeakBytes": 380694528,
+        "heapPeakBytes": 96151060,
+        "eventLoopLagP50Ms": 0.054473000000143657,
+        "eventLoopLagP95Ms": 0.7551210000001447,
+        "eventLoopLagMaxMs": 1.789904000000206,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.3391354895334099
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 2000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:46:29.832Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 10,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 57141,
+        "wallMs": 12000.143492,
+        "cpuPercent": 44.6145331809504,
+        "requestedMessages": 12000,
+        "generatedMessages": 11983,
+        "processedMessages": 11963,
+        "processedAfterDrain": 11983,
+        "achievedRate": 996.9047460120155,
+        "generatorMissedMessages": 17,
+        "rssBaselineBytes": 393916416,
+        "rssMedianBytes": 492371968,
+        "rssPeakBytes": 610050048,
+        "heapPeakBytes": 170943635,
+        "eventLoopLagP50Ms": 0.0549829999999929,
+        "eventLoopLagP95Ms": 0.8421899999993911,
+        "eventLoopLagMaxMs": 3.178621000000021,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.9798769755436738
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 2000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:46:47.417Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 10,
+          "rate": 5000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 65479,
+        "wallMs": 12000.125285999999,
+        "cpuPercent": 53.63313170995505,
+        "requestedMessages": 60000,
+        "generatedMessages": 59944,
+        "processedMessages": 59840,
+        "processedAfterDrain": 59944,
+        "achievedRate": 4986.614603916894,
+        "generatorMissedMessages": 56,
+        "rssBaselineBytes": 484986880,
+        "rssMedianBytes": 511082496,
+        "rssPeakBytes": 594337792,
+        "heapPeakBytes": 192248099,
+        "eventLoopLagP50Ms": 0.05481399999916903,
+        "eventLoopLagP95Ms": 2.4523429999990185,
+        "eventLoopLagMaxMs": 6.180830999999671,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.9999997934358096
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 2000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:47:05.023Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 50,
+          "rate": 0,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 511,
+        "wallMs": 12000.125155,
+        "cpuPercent": 1.1684878131589786,
+        "requestedMessages": 0,
+        "generatedMessages": 0,
+        "processedMessages": 0,
+        "processedAfterDrain": 0,
+        "achievedRate": 0,
+        "generatorMissedMessages": 0,
+        "rssBaselineBytes": 301674496,
+        "rssMedianBytes": 301789184,
+        "rssPeakBytes": 302448640,
+        "heapPeakBytes": 73044540,
+        "eventLoopLagP50Ms": 0.05475400000023001,
+        "eventLoopLagP95Ms": 0.05766399999993155,
+        "eventLoopLagMaxMs": 0.7658119999996416,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.0007023279998501307
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 10000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:47:22.620Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 50,
+          "rate": 100,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 2720,
+        "wallMs": 12000.133330999999,
+        "cpuPercent": 6.243955623929393,
+        "requestedMessages": 1200,
+        "generatedMessages": 1198,
+        "processedMessages": 1196,
+        "processedAfterDrain": 1198,
+        "achievedRate": 99.66555929094285,
+        "generatorMissedMessages": 2,
+        "rssBaselineBytes": 309673984,
+        "rssMedianBytes": 318922752,
+        "rssPeakBytes": 326545408,
+        "heapPeakBytes": 80660934,
+        "eventLoopLagP50Ms": 0.05380499999955646,
+        "eventLoopLagP95Ms": 0.0577739999998812,
+        "eventLoopLagMaxMs": 2.295447000000422,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.07214318986338156
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 10000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:47:40.203Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 50,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 20161,
+        "wallMs": 12000.114342,
+        "cpuPercent": 24.912687619456015,
+        "requestedMessages": 12000,
+        "generatedMessages": 11987,
+        "processedMessages": 11967,
+        "processedAfterDrain": 11987,
+        "achievedRate": 997.2404977939167,
+        "generatorMissedMessages": 13,
+        "rssBaselineBytes": 350330880,
+        "rssMedianBytes": 425431040,
+        "rssPeakBytes": 496218112,
+        "heapPeakBytes": 141584903,
+        "eventLoopLagP50Ms": 0.05424499999935506,
+        "eventLoopLagP95Ms": 0.3881789999995817,
+        "eventLoopLagMaxMs": 3.399138999999195,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.6669213225717672
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 10000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:47:57.808Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 56890,
+        "wallMs": 12000.116661,
+        "cpuPercent": 45.02811224794975,
+        "requestedMessages": 60000,
+        "generatedMessages": 59944,
+        "processedMessages": 59844,
+        "processedAfterDrain": 59944,
+        "achievedRate": 4986.951518104079,
+        "generatorMissedMessages": 56,
+        "rssBaselineBytes": 441044992,
+        "rssMedianBytes": 491630592,
+        "rssPeakBytes": 585625600,
+        "heapPeakBytes": 178017075,
+        "eventLoopLagP50Ms": 0.05466599999999744,
+        "eventLoopLagP95Ms": 1.3487539999987348,
+        "eventLoopLagMaxMs": 6.915021000000706,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.023953543128927
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84455424
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 10000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:48:15.399Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 50,
+          "rate": 1000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 56793,
+        "wallMs": 12000.115366,
+        "cpuPercent": 56.85347008688083,
+        "requestedMessages": 12000,
+        "generatedMessages": 11994,
+        "processedMessages": 11968,
+        "processedAfterDrain": 11994,
+        "achievedRate": 997.3237452290674,
+        "generatorMissedMessages": 6,
+        "rssBaselineBytes": 527200256,
+        "rssMedianBytes": 698085376,
+        "rssPeakBytes": 797593600,
+        "heapPeakBytes": 210596681,
+        "eventLoopLagP50Ms": 0.05407600000035018,
+        "eventLoopLagP95Ms": 0.939871000000494,
+        "eventLoopLagMaxMs": 8.37727700000005,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 0.8688433103104262
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 10000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:48:33.095Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 144451,
+        "wallMs": 12009.210408,
+        "cpuPercent": 106.18006985293216,
+        "requestedMessages": 60046,
+        "generatedMessages": 59902,
+        "processedMessages": 59902,
+        "processedAfterDrain": 59902,
+        "achievedRate": 4988.0048700034395,
+        "generatorMissedMessages": 144,
+        "rssBaselineBytes": 723673088,
+        "rssMedianBytes": 884912128,
+        "rssPeakBytes": 1137389568,
+        "heapPeakBytes": 257254979,
+        "eventLoopLagP50Ms": 4.716677000000345,
+        "eventLoopLagP95Ms": 9.83041299999968,
+        "eventLoopLagMaxMs": 19.35217499999999,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.230745774506249
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 10000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:48:50.855Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      },
+      {
+        "config": {
+          "channels": 100,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "userTimingMeasureCount": 113732,
+        "wallMs": 12004.155842,
+        "cpuPercent": 97.99003907333645,
+        "requestedMessages": 60020,
+        "generatedMessages": 60019,
+        "processedMessages": 59875,
+        "processedAfterDrain": 60019,
+        "achievedRate": 4987.855938233495,
+        "generatorMissedMessages": 1,
+        "rssBaselineBytes": 667381760,
+        "rssMedianBytes": 880771072,
+        "rssPeakBytes": 1136492544,
+        "heapPeakBytes": 239675348,
+        "eventLoopLagP50Ms": 1.7667380000002595,
+        "eventLoopLagP95Ms": 6.457430000000386,
+        "eventLoopLagMaxMs": 15.509179000000586,
+        "gpu": [
+          {
+            "device": "0000:03:00.0",
+            "driver": "amdgpu",
+            "engines": {
+              "gfx": 1.194430730781984
+            },
+            "residentBytes": {
+              "gtt": 6299648,
+              "vram": 84537344
+            }
+          },
+          {
+            "device": "0000:47:00.0",
+            "driver": "amdgpu",
+            "engines": {},
+            "residentBytes": {
+              "gtt": 2097152,
+              "vram": 12288
+            }
+          }
+        ],
+        "retainedMessages": 20000,
+        "nativeWindow": {
+          "width": 1200,
+          "height": 800
+        },
+        "bunVersion": "1.4.4",
+        "timestamp": "2026-11-05T08:49:08.601Z",
+        "compositor": "weston",
+        "hardwareGpuCountersAvailable": true,
+        "paintedTextVerified": true,
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+          "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+          "sourceFiles": 391
+        },
+        "termination": "completed"
+      }
+    ]
+  },
+  "developmentRepeats": {
+    "50-base": {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "development",
+        "timestamp": "2026-11-05T08:50:00.486Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8e174b720effbfa0f673bcc60993e5c05dc85182b992a555d47b32d802d59a34",
+        "sourceHash": "c04ccf59a49f17bc64d59fc24054af25ca8d77f30342336ec525f1a1c58b2dbd",
+        "sourceFiles": 391
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 12
+          },
+          "reactMode": "development",
+          "userTimingMeasureCount": 144441,
+          "wallMs": 12000.116152999999,
+          "cpuPercent": 113.68364960858726,
+          "requestedMessages": 60000,
+          "generatedMessages": 59971,
+          "processedMessages": 59836,
+          "processedAfterDrain": 59971,
+          "achievedRate": 4986.2850690025325,
+          "generatorMissedMessages": 29,
+          "rssBaselineBytes": 627818496,
+          "rssMedianBytes": 908001280,
+          "rssPeakBytes": 1090359296,
+          "heapPeakBytes": 268222736,
+          "eventLoopLagP50Ms": 4.703639999999723,
+          "eventLoopLagP95Ms": 9.425322000000051,
+          "eventLoopLagMaxMs": 18.797225999999682,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.347599735614077
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T08:50:00.375Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "8e174b720effbfa0f673bcc60993e5c05dc85182b992a555d47b32d802d59a34",
+            "sourceHash": "c04ccf59a49f17bc64d59fc24054af25ca8d77f30342336ec525f1a1c58b2dbd",
+            "sourceFiles": 391
+          },
+          "termination": "completed"
+        }
+      ]
+    },
+    "50-candidate": {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "development",
+        "timestamp": "2026-11-05T08:50:18.329Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 50,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 12
+          },
+          "reactMode": "development",
+          "userTimingMeasureCount": 143264,
+          "wallMs": 12000.170581,
+          "cpuPercent": 108.77427043134796,
+          "requestedMessages": 60000,
+          "generatedMessages": 59929,
+          "processedMessages": 59798,
+          "processedAfterDrain": 59929,
+          "achievedRate": 4983.095831544163,
+          "generatorMissedMessages": 71,
+          "rssBaselineBytes": 653672448,
+          "rssMedianBytes": 896040960,
+          "rssPeakBytes": 1106857984,
+          "heapPeakBytes": 263950732,
+          "eventLoopLagP50Ms": 5.638865000000806,
+          "eventLoopLagP95Ms": 11.234741999998732,
+          "eventLoopLagMaxMs": 18.647498999999698,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2060892007348933
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 10000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T08:50:18.216Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+            "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+            "sourceFiles": 391
+          },
+          "termination": "completed"
+        }
+      ]
+    },
+    "100-base": {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "development",
+        "timestamp": "2026-11-05T08:50:54.032Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8e174b720effbfa0f673bcc60993e5c05dc85182b992a555d47b32d802d59a34",
+        "sourceHash": "c04ccf59a49f17bc64d59fc24054af25ca8d77f30342336ec525f1a1c58b2dbd",
+        "sourceFiles": 391
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 100,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 12
+          },
+          "reactMode": "development",
+          "userTimingMeasureCount": 113012,
+          "wallMs": 12003.859129,
+          "cpuPercent": 110.86447997252233,
+          "requestedMessages": 60019,
+          "generatedMessages": 60015,
+          "processedMessages": 59879,
+          "processedAfterDrain": 60015,
+          "achievedRate": 4988.312454895355,
+          "generatorMissedMessages": 4,
+          "rssBaselineBytes": 675627008,
+          "rssMedianBytes": 875364352,
+          "rssPeakBytes": 1021759488,
+          "heapPeakBytes": 263517786,
+          "eventLoopLagP50Ms": 2.4039990000001126,
+          "eventLoopLagP95Ms": 7.869219000000157,
+          "eventLoopLagMaxMs": 15.432613999999376,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2174027813641024
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 20000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T08:50:53.919Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "8e174b720effbfa0f673bcc60993e5c05dc85182b992a555d47b32d802d59a34",
+            "sourceHash": "c04ccf59a49f17bc64d59fc24054af25ca8d77f30342336ec525f1a1c58b2dbd",
+            "sourceFiles": 391
+          },
+          "termination": "completed"
+        }
+      ]
+    },
+    "100-candidate": {
+      "environment": {
+        "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+        "logicalCpus": 16,
+        "kernel": "7.3.1-1-cachyos",
+        "bun": "1.4.4",
+        "reactMode": "development",
+        "timestamp": "2026-11-05T08:50:36.190Z"
+      },
+      "provenance": {
+        "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+        "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+        "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+        "sourceFiles": 391
+      },
+      "results": [
+        {
+          "config": {
+            "channels": 100,
+            "rate": 5000,
+            "panes": 4,
+            "warmupSeconds": 3,
+            "durationSeconds": 12
+          },
+          "reactMode": "development",
+          "userTimingMeasureCount": 112608,
+          "wallMs": 12003.393692999998,
+          "cpuPercent": 100.8696649436807,
+          "requestedMessages": 60016,
+          "generatedMessages": 60015,
+          "processedMessages": 59881,
+          "processedAfterDrain": 60015,
+          "achievedRate": 4988.672498088663,
+          "generatorMissedMessages": 1,
+          "rssBaselineBytes": 692346880,
+          "rssMedianBytes": 864329728,
+          "rssPeakBytes": 1100300288,
+          "heapPeakBytes": 244923734,
+          "eventLoopLagP50Ms": 2.151793999999427,
+          "eventLoopLagP95Ms": 7.81206899999961,
+          "eventLoopLagMaxMs": 16.146910999999818,
+          "gpu": [
+            {
+              "device": "0000:03:00.0",
+              "driver": "amdgpu",
+              "engines": {
+                "gfx": 1.2509087055605743
+              },
+              "residentBytes": {
+                "gtt": 6299648,
+                "vram": 84537344
+              }
+            },
+            {
+              "device": "0000:47:00.0",
+              "driver": "amdgpu",
+              "engines": {},
+              "residentBytes": {
+                "gtt": 2097152,
+                "vram": 12288
+              }
+            }
+          ],
+          "retainedMessages": 20000,
+          "nativeWindow": {
+            "width": 1200,
+            "height": 800
+          },
+          "bunVersion": "1.4.4",
+          "timestamp": "2026-11-05T08:50:36.070Z",
+          "compositor": "weston",
+          "hardwareGpuCountersAvailable": true,
+          "paintedTextVerified": true,
+          "provenance": {
+            "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+            "dirtyHash": "8ac3546ae2aa672e0488598519ae4a59dedb86dae853cef82677a235e980a9bd",
+            "sourceHash": "90a4208b849999f46d7583706ccdaa25dd1d85d81872931068bc04a3a2bde35a",
+            "sourceFiles": 391
+          },
+          "termination": "completed"
+        }
+      ]
+    }
+  },
+  "functional": {
+    "bodyId": 10222,
+    "glyphId": 10174,
+    "emoteId": 19643,
+    "scrollDeltas": [
+      -24,
+      24,
+      -24,
+      24,
+      -24,
+      24,
+      -24,
+      24
+    ],
+    "glyphColors": 242,
+    "selection": "includes ",
+    "link": "https://e.invalid/r192",
+    "motionPixels": 784
+  },
+  "liveInput": {
+    "keyboardLatencyMs": 70.79191100000025,
+    "generatedMessages": 31,
+    "processedMessages": 31,
+    "markerProof": [
+      {
+        "label": "all three sibling panes paint incoming traffic",
+        "watermark": 0,
+        "markers": {
+          "emote-1": "LIVE_PROBE_emote-1_0",
+          "emote-2": "LIVE_PROBE_emote-2_1",
+          "emote-3": "LIVE_PROBE_emote-3_2"
+        }
+      },
+      {
+        "label": "traffic remains painted in the other three panes after wheel input",
+        "watermark": 14,
+        "markers": {
+          "emote-1": "LIVE_PROBE_emote-1_15",
+          "emote-3": "LIVE_PROBE_emote-3_14",
+          "emote-2": "LIVE_PROBE_emote-2_16"
+        }
+      },
+      {
+        "label": "live traffic paints after resizing all four panes",
+        "watermark": 22,
+        "markers": {
+          "emote-2": "LIVE_PROBE_emote-2_22",
+          "emote-3": "LIVE_PROBE_emote-3_23",
+          "emote-1": "LIVE_PROBE_emote-1_24"
+        }
+      },
+      {
+        "label": "live traffic remains visible during native keyboard input",
+        "watermark": 28,
+        "markers": {
+          "emote-2": "LIVE_PROBE_emote-2_28",
+          "emote-3": "LIVE_PROBE_emote-3_29",
+          "emote-1": "LIVE_PROBE_emote-1_30"
+        }
+      }
+    ],
+    "wheelBefore": [
+      120,
+      0,
+      555
+    ],
+    "wheelAfter": [
+      124,
+      56,
+      555
+    ],
+    "resizedPanes": [
+      {
+        "x": 0,
+        "y": 73,
+        "width": 500,
+        "height": 326
+      },
+      {
+        "x": 500,
+        "y": 73,
+        "width": 500,
+        "height": 326
+      },
+      {
+        "x": 0,
+        "y": 523,
+        "width": 500,
+        "height": 326
+      },
+      {
+        "x": 500,
+        "y": 523,
+        "width": 500,
+        "height": 326
+      }
+    ]
+  },
+  "currentMainIntegration": {
+    "baseline": {
+      "timestamp": "2026-11-05T09:15:23.721Z",
+      "reactMode": "production",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "06bd0481e4ca83fb9cab24ee089c6937318e2bc6",
+        "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceHash": "3d23b88474386ffdd5063647c56b0ceee9c3e2e7ebf12ce00b8dd923f49f0a3f",
+        "sourceFiles": 415
+      },
+      "scriptSha256": "00de816a333722a0ca20769a33e19cbc8a2143c30203fd46673754447c504879",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "c5169bd136c262de",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57050168,
+        "sha256": "ad81b54afb06d85152e866da398c5b0b1b8f27042ac2f398a9ed179de82ec802"
+      },
+      "cpuPercent": 70.90367856283855,
+      "rssMedianBytes": 581623808,
+      "rssPeakBytes": 623226880,
+      "heapPeakBytes": 224714856,
+      "eventLoopLagP95Ms": 0.05795299999954295,
+      "eventLoopLagMaxMs": 2.188285000000178,
+      "actualRate": 19.944344651807963,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "tailsAfter": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 684,
+        "animationOnlyPresents": 234,
+        "slotUploads": 2983,
+        "liveSlots": 6,
+        "fallbacks": 0
+      }
+    },
+    "candidate": {
+      "timestamp": "2026-11-05T09:15:47.669Z",
+      "reactMode": "production",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "06bd0481e4ca83fb9cab24ee089c6937318e2bc6",
+        "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceHash": "c6da87f5309aa2381b33a2f852193554bd594114c9f14557f51983a910defd50",
+        "sourceFiles": 415
+      },
+      "scriptSha256": "00de816a333722a0ca20769a33e19cbc8a2143c30203fd46673754447c504879",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "89020f82d558b2bd",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57070744,
+        "sha256": "2a6558f27cb81dc1127711da313d53a1f6771a7f58a4b304b31e98c03fc452e1"
+      },
+      "cpuPercent": 51.53778393062407,
+      "rssMedianBytes": 582475776,
+      "rssPeakBytes": 627720192,
+      "heapPeakBytes": 225079357,
+      "eventLoopLagP95Ms": 0.05927299999984825,
+      "eventLoopLagMaxMs": 2.5319019999988086,
+      "actualRate": 19.944354379064126,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "tailsAfter": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 692,
+        "animationOnlyPresents": 352,
+        "slotUploads": 2985,
+        "liveSlots": 6,
+        "fallbacks": 0
+      }
+    }
+  }
+}
