@@ -142,6 +142,7 @@ export const systemIntegration = createSystemIntegration({
       stdin: input === undefined ? 'ignore' : 'pipe',
       stdout: 'pipe',
       stderr: 'ignore',
+      windowsHide: true,
     })
     if (input !== undefined && child.stdin) {
       await child.stdin.write(input)
