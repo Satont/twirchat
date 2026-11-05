@@ -29,7 +29,7 @@ describe('inline 7TV image resolution', () => {
 
   test('preserves the emote identity, static/animated format, query and fragment', () => {
     for (const host of ['cdn.7tv.app', 'cdn.7tv.io']) {
-      for (const file of ['4x.gif', '3x.webp', '2x.avif', '4x_static.png']) {
+      for (const file of ['4x.gif', '3x.webp', '4x_static.png']) {
         const url = `https://${host}/emote/wide-emote_ID/${file}?version=2#artwork`
         expect(inlineEmoteImageSource(url, { height: 28, scale: 1 })).toBe(
           url.replace(/\/[1-4]x/u, '/1x'),
@@ -39,6 +39,15 @@ describe('inline 7TV image resolution', () => {
     expect(inlineEmoteImageSource('//cdn.7tv.app/emote/id/4x.webp', { height: 28, scale: 1 })).toBe(
       '//cdn.7tv.app/emote/id/1x.webp',
     )
+  })
+
+  test('requests WebP because the native decoder cannot read animated AVIF', () => {
+    expect(
+      inlineEmoteImageSource('https://cdn.7tv.app/emote/id/4x.avif?version=2', {
+        height: 28,
+        scale: 1,
+      }),
+    ).toBe('https://cdn.7tv.app/emote/id/1x.webp?version=2')
   })
 
   test('sizes only supported backend proxy routes and keeps their other parameters', () => {

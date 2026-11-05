@@ -641,6 +641,11 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
   startStreamStatusPolling(backend)
 }
 
+/** Quiet chat still appears within one frame. */
+const MESSAGE_FLUSH_MS = 16
+/** Every publication repaints the visible rows, so a flood shares one per interval. */
+const MESSAGE_FLUSH_INTERVAL_MS = 66
+
 // ── Backend event wiring ────────────────────────────────────────────────────
 
 export interface AppStoreBackend {
@@ -658,6 +663,7 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   let pendingHome: NormalizedChatMessage[] = []
   let pendingWatched = new Map<string, NormalizedChatMessage[]>()
   let messageTimer: ReturnType<typeof setTimeout> | undefined
+  let lastMessageFlushAt = 0
   subscribe('chat_history_snapshot', ({ messages, watchedChannelId }) => {
     clearTimeout(messageTimer)
     flushMessages()
@@ -677,6 +683,7 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   // so a hot remount cannot reset or strand messages already received.
   const flushMessages = () => {
     messageTimer = undefined
+    lastMessageFlushAt = performance.now()
     const home = pendingHome
     const watched = pendingWatched
     pendingHome = []
@@ -710,7 +717,13 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
     recordChatActivity(activityCounts)
   }
   const scheduleMessages = () => {
-    messageTimer ??= setTimeout(flushMessages, 16)
+    messageTimer ??= setTimeout(
+      flushMessages,
+      Math.max(
+        MESSAGE_FLUSH_MS,
+        lastMessageFlushAt + MESSAGE_FLUSH_INTERVAL_MS - performance.now(),
+      ),
+    )
   }
 
   subscribe('chat_message', (msg) => {

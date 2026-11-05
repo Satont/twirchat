@@ -35,6 +35,8 @@ export function openDatabase(path: string): Database {
     )
   }
   db.run('PRAGMA journal_mode = WAL')
+  // WAL stays consistent with NORMAL; FULL waits for the disk on every commit.
+  db.run('PRAGMA synchronous = NORMAL')
   db.run('PRAGMA foreign_keys = ON')
   db.function('twir_casefold', (value: unknown) =>
     typeof value === 'string' ? value.toLowerCase() : '',

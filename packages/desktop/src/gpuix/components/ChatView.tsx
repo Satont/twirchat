@@ -104,6 +104,8 @@ import { Text } from './ui/Text'
 import { UserCardDialog } from './UserCardDialog'
 
 const EMPTY_MESSAGES: NormalizedChatMessage[] = []
+const MIN_TAIL_ROWS = 24
+const TAIL_OVERSCAN_ROWS = 8
 const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
 const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
 
@@ -609,6 +611,18 @@ export function ChatView({
   const listRef = useRef<import('@gpuix/react').PublicInstance | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const [visibleRange, setVisibleRange] = useState<{ start: number; end: number } | null>(null)
+  // Following a flood, rows above the viewport would mount and scroll away unseen.
+  const tailRows = Math.max(
+    MIN_TAIL_ROWS,
+    (visibleRange ? visibleRange.end - visibleRange.start + 1 : 0) + TAIL_OVERSCAN_ROWS,
+  )
+  const renderedTimeline = useMemo(
+    () =>
+      atBottom && !paused && !revealedMessageKey && displayedTimeline.length > tailRows
+        ? displayedTimeline.slice(-tailRows)
+        : displayedTimeline,
+    [atBottom, paused, revealedMessageKey, displayedTimeline, tailRows],
+  )
 
   useEffect(() => {
     if (
@@ -655,15 +669,15 @@ export function ChatView({
     const timer = setTimeout(() => {
       resumeScrollRequested.current = false
       if (listRef.current)
-        renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedTimeline.length - 1))
+        renderer.scrollToItem?.(listRef.current.id, Math.max(0, renderedTimeline.length - 1))
       setAtBottom(true)
     }, 0)
     return () => clearTimeout(timer)
-  }, [paused, displayedTimeline, renderer])
+  }, [paused, renderedTimeline, renderer])
 
   const scrollToLatest = () => {
     if (listRef.current) {
-      renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedTimeline.length - 1))
+      renderer.scrollToItem?.(listRef.current.id, Math.max(0, renderedTimeline.length - 1))
       setAtBottom(true)
     }
   }
@@ -1759,7 +1773,7 @@ export function ChatView({
               setVisibleRange((current) =>
                 current?.start === start && current.end === end ? current : { start, end },
               )
-              setAtBottom(end >= displayedTimeline.length - 1)
+              setAtBottom(end >= renderedTimeline.length - 1)
             }}
             style={{
               flexGrow: 1,
@@ -1768,7 +1782,7 @@ export function ChatView({
               scrollbarWidth: 5,
             }}
           >
-            {displayedTimeline.map((message, index) => {
+            {renderedTimeline.map((message, index) => {
               if ('message' in message) {
                 return (
                   <PluginChatRow
@@ -1802,7 +1816,7 @@ export function ChatView({
                   visible={
                     visibleRange
                       ? index >= visibleRange.start - 4 && index <= visibleRange.end + 4
-                      : index >= displayedTimeline.length - 32
+                      : index >= renderedTimeline.length - 32
                   }
                   message={revealed ? message : classification.message}
                   hiddenLabel={

@@ -29,7 +29,10 @@ function sizedSevenTvUrl(source: string, variant: number): string {
     !SEVENTV_IMAGE.test(url.pathname)
   )
     return source
-  const pathname = url.pathname.replace(/\/[1-4]x(?=_static\.|\.)/u, `/${variant}x`)
+  // The native image decoder cannot read animated AVIF; 7TV serves every emote as WebP too.
+  const pathname = url.pathname
+    .replace(/\/[1-4]x(?=_static\.|\.)/u, `/${variant}x`)
+    .replace(/\.avif$/u, '.webp')
   if (pathname === url.pathname) return source
   url.pathname = pathname
   return source.startsWith('//') ? url.href.slice('https:'.length) : url.href

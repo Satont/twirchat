@@ -222,7 +222,7 @@ test('coalesces live bursts per channel without overwriting an in-flight history
       incoming.timestamp = new Date(Date.parse('2026-07-14T00:00:02.000Z') + index)
       events.emit('watched_channel_message', { channelId: 'watched', message: incoming })
     }
-    await Bun.sleep(40)
+    await Bun.sleep(80)
     expect(watchedMessagesStore.get().get('watched')?.length).toBe(200)
     expect(chatActivityStore.get().get('watched')?.total).toBe(252)
 

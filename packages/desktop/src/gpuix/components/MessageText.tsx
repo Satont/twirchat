@@ -14,7 +14,7 @@ import { authorEmoteCatalog, enrichProviderEmotes } from '../../services/provide
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
-import { buildMessageTokens } from '../message-tokens'
+import { buildMessageTokens, mergePlainText } from '../message-tokens'
 import { accountsStore, authorEmoteStore, emoteStore } from '../state/app'
 import { ensureMentionColors, mentionColor, mentionColorRevisionStore } from '../state/caches'
 import { chatPauseStore } from '../state/chat-pause'
@@ -43,6 +43,7 @@ export const MessageTokens = memo(function MessageTokens({
   actionColor,
   channelSlug,
   onOpenUserCard,
+  standalone,
 }: {
   message: NormalizedChatMessage
   fontSize: number
@@ -53,6 +54,8 @@ export const MessageTokens = memo(function MessageTokens({
   actionColor?: string
   channelSlug?: string
   onOpenUserCard?: (target: UserCardTarget) => void
+  /** The tokens own their row, so plain text does not have to flow after an author name. */
+  standalone?: boolean
 }) {
   const theme = useTheme()
   const font = useFont()
@@ -102,7 +105,11 @@ export const MessageTokens = memo(function MessageTokens({
   const emoteSize = Math.round(fontSize * (isSystem ? SYSTEM_EMOTE_SCALE : EMOTE_SCALE))
   const lineHeight = Math.round(fontSize * 1.45)
 
-  return tokens.map((token, index) => {
+  const visibleTokens = standalone ? mergePlainText(tokens) : tokens
+  // One element no longer wraps by moving words between lines, so it must take the width.
+  const merged = standalone && visibleTokens.length === 1 && visibleTokens[0]?.kind === 'text'
+
+  return visibleTokens.map((token, index) => {
     if (token.kind === 'emote') {
       const ratio =
         token.emote.aspectRatio && token.emote.aspectRatio > 0 ? token.emote.aspectRatio : 1
@@ -223,6 +230,7 @@ export const MessageTokens = memo(function MessageTokens({
       <text
         key={index}
         style={{
+          ...(merged ? { width: '100%' } : {}),
           color: baseColor,
           fontSize,
           fontFamily: font,
@@ -258,7 +266,7 @@ export const MessageText = memo(function MessageText(props: {
         minWidth: 0,
       }}
     >
-      <MessageTokens {...props} />
+      <MessageTokens {...props} standalone />
     </div>
   )
 })

@@ -28,6 +28,7 @@
     "src/gpuix/**/*",
     "src/views/shared/utils/**/*",
     "src/views/main/utils/**/*",
+    "scripts/flood-stand.tsx",
     "scripts/qa-autocomplete.tsx",
     "scripts/qa-painted-geometry.tsx",
     "scripts/qa-drag-interactions.tsx",

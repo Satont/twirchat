@@ -313,6 +313,7 @@ export const MessageStore = {
     messages: readonly NormalizedChatMessage[],
     retention: Partial<HistoryRetention> = DEFAULT_RETENTION,
     database: Database = getDb(),
+    pruneAfterSave = true,
   ): void {
     if (!messages.length) return
     database.transaction(() => {
@@ -334,7 +335,7 @@ export const MessageStore = {
           JSON.stringify(message),
         )
       }
-      prune(retention, database)
+      if (pruneAfterSave) prune(retention, database)
     })()
   },
 }
