@@ -109,3 +109,23 @@ The 100-channel development peak was 6.4–7.7% higher across the two comparison
 Peak JS heap and React User Timing counts fell in that repeat, while the process RSS peak
 occurred earlier in the sample. The allocation behind that transient peak remains unclassified. Production medians and the 50-channel production peaks are reported
 separately above.
+
+## Integration with current main
+
+The replay patches were rebased onto `6fb1d43`, which includes the native clipboard image
+patches. The combined .17 addon has patch digest `89020f82d558b2bd`
+and SHA-256 `2a6558f27cb81dc1127711da313d53a1f6771a7f58a4b304b31e98c03fc452e1`.
+
+The native suite and 941 desktop tests passed, along with the workspace check, isolated
+X11 composer QA with real clipboard images and file lists, and shifted-row QA with verified
+replay for the tested body. A separate smoke comparison used the rebased TypeScript source
+with the main .16 addon and the combined .17 addon. It processed 359 of 359 messages in each
+run and painted the latest message in all four panes.
+
+| Metric | Main addon .16 | Combined addon .17 |
+| --- | ---: | ---: |
+| CPU % of one logical core | 70.90 | 51.54 |
+| RSS median MiB | 554.68 | 555.49 |
+| Actual messages/s | 19.94 | 19.94 |
+
+The single-run smoke results are recorded separately from the three-repeat comparison.

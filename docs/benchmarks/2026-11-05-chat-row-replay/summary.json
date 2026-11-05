@@ -3746,5 +3746,201 @@
         "height": 326
       }
     ]
+  },
+  "currentMainIntegration": {
+    "baseline": {
+      "timestamp": "2026-11-05T09:15:23.721Z",
+      "reactMode": "production",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "06bd0481e4ca83fb9cab24ee089c6937318e2bc6",
+        "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceHash": "3d23b88474386ffdd5063647c56b0ceee9c3e2e7ebf12ce00b8dd923f49f0a3f",
+        "sourceFiles": 415
+      },
+      "scriptSha256": "00de816a333722a0ca20769a33e19cbc8a2143c30203fd46673754447c504879",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.16",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "c5169bd136c262de",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57050168,
+        "sha256": "ad81b54afb06d85152e866da398c5b0b1b8f27042ac2f398a9ed179de82ec802"
+      },
+      "cpuPercent": 70.90367856283855,
+      "rssMedianBytes": 581623808,
+      "rssPeakBytes": 623226880,
+      "heapPeakBytes": 224714856,
+      "eventLoopLagP95Ms": 0.05795299999954295,
+      "eventLoopLagMaxMs": 2.188285000000178,
+      "actualRate": 19.944344651807963,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "tailsAfter": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 684,
+        "animationOnlyPresents": 234,
+        "slotUploads": 2983,
+        "liveSlots": 6,
+        "fallbacks": 0
+      }
+    },
+    "candidate": {
+      "timestamp": "2026-11-05T09:15:47.669Z",
+      "reactMode": "production",
+      "compositor": "weston",
+      "config": {
+        "case": "live",
+        "source": "synthetic",
+        "preset": "standard",
+        "media": "mixed",
+        "inactiveChannels": 19,
+        "activation": "focused",
+        "pointerMotion": "none",
+        "pointerSweepSeconds": 2,
+        "durationSeconds": 18,
+        "warmupSeconds": 3,
+        "delayMs": 100,
+        "rate": 20,
+        "backgroundAnimation": false,
+        "sampleGpuDuringMeasurement": true
+      },
+      "provenance": {
+        "gitHead": "06bd0481e4ca83fb9cab24ee089c6937318e2bc6",
+        "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceHash": "c6da87f5309aa2381b33a2f852193554bd594114c9f14557f51983a910defd50",
+        "sourceFiles": 415
+      },
+      "scriptSha256": "00de816a333722a0ca20769a33e19cbc8a2143c30203fd46673754447c504879",
+      "nativeManifest": {
+        "apiVersion": 3,
+        "version": "0.11.0-twirchat.17",
+        "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+        "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+        "patchDigest": "89020f82d558b2bd",
+        "rustToolchain": "1.97.1",
+        "target": "linux-x64",
+        "size": 57070744,
+        "sha256": "2a6558f27cb81dc1127711da313d53a1f6771a7f58a4b304b31e98c03fc452e1"
+      },
+      "cpuPercent": 51.53778393062407,
+      "rssMedianBytes": 582475776,
+      "rssPeakBytes": 627720192,
+      "heapPeakBytes": 225079357,
+      "eventLoopLagP95Ms": 0.05927299999984825,
+      "eventLoopLagMaxMs": 2.5319019999988086,
+      "actualRate": 19.944354379064126,
+      "processedMessages": 359,
+      "retainedMessages": 4600,
+      "tailsAfter": [
+        {
+          "channelId": "emote-0",
+          "messageId": "emote-message-4954",
+          "bounds": {
+            "x": 12,
+            "y": 571,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-1",
+          "messageId": "emote-message-4948",
+          "bounds": {
+            "x": 652,
+            "y": 545,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-2",
+          "messageId": "emote-message-4952",
+          "bounds": {
+            "x": 12,
+            "y": 1225,
+            "width": 51,
+            "height": 18
+          }
+        },
+        {
+          "channelId": "emote-3",
+          "messageId": "emote-message-4958",
+          "bounds": {
+            "x": 652,
+            "y": 1221,
+            "width": 51,
+            "height": 18
+          }
+        }
+      ],
+      "nativeRenderCounterDeltas": {
+        "fullDraws": 692,
+        "animationOnlyPresents": 352,
+        "slotUploads": 2985,
+        "liveSlots": 6,
+        "fallbacks": 0
+      }
+    }
   }
 }
