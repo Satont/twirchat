@@ -89,3 +89,59 @@ test('rejects malformed responses and retries after a short cooldown', async () 
   expect(await getCommands(TARGET)).toEqual(COMMANDS)
   expect(requests).toBe(5)
 })
+
+test('explicit reload bypasses an unmapped or fresh cached result and replaces it', async () => {
+  let commandList: typeof COMMANDS | undefined
+  let requests = 0
+  const getCommands = createTwirCommandsClient({
+    fetcher: async (url) => {
+      requests++
+      if (!commandList) return new Response(null, { status: 404 })
+      return url.endsWith('/commands')
+        ? Response.json(commandList)
+        : Response.json({ channel_id: UUID })
+    },
+  })
+  expect(await getCommands(TARGET)).toEqual([])
+  commandList = COMMANDS
+  expect(await getCommands(TARGET, { refresh: true })).toEqual(COMMANDS)
+  expect(await getCommands(TARGET)).toEqual(COMMANDS)
+  commandList = []
+  expect(await getCommands(TARGET, { refresh: true })).toEqual([])
+  expect(await getCommands(TARGET)).toEqual([])
+  expect(requests).toBe(5)
+})
+
+test('normal and explicit reloads share pending work and failed reloads keep prior commands', async () => {
+  let pending: Promise<Response> | undefined
+  let requests = 0
+  const getCommands = createTwirCommandsClient({
+    fetcher: async (url) => {
+      requests++
+      if (url.endsWith('/commands')) return pending ?? Response.json(COMMANDS)
+      return Response.json({ channel_id: UUID })
+    },
+  })
+  const initial = getCommands(TARGET)
+  expect(await Promise.all([initial, getCommands(TARGET, { refresh: true })])).toEqual([
+    COMMANDS,
+    COMMANDS,
+  ])
+  expect(requests).toBe(2)
+
+  const { promise, resolve } = Promise.withResolvers<Response>()
+  pending = promise
+  const refresh = getCommands(TARGET, { refresh: true })
+  expect(getCommands(TARGET, { refresh: true })).toBe(refresh)
+  const normal = getCommands(TARGET)
+  resolve(Response.json([{ name: false, description: null }]))
+  await expect(refresh).rejects.toThrow('Twir returned an invalid response.')
+  expect(await normal).toEqual(COMMANDS)
+  expect(await getCommands(TARGET)).toEqual(COMMANDS)
+  expect(requests).toBe(4)
+
+  pending = Promise.resolve(Response.json([]))
+  expect(await getCommands(TARGET, { refresh: true })).toEqual([])
+  expect(await getCommands(TARGET)).toEqual([])
+  expect(requests).toBe(6)
+})

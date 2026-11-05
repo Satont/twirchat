@@ -1,3 +1,4 @@
+import { TWIR_RELOAD_COMMAND_NAME } from '../commands'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
 import { persistentResource } from './persistent-resources'
@@ -83,7 +84,14 @@ export function updateComposer(
   return true
 }
 
-type LocalCommandName = 'clearmessages' | 'copy' | 'pause' | 'resume' | 'mentions' | 'search'
+type LocalCommandName =
+  | 'clearmessages'
+  | 'copy'
+  | 'pause'
+  | 'resume'
+  | 'mentions'
+  | 'search'
+  | typeof TWIR_RELOAD_COMMAND_NAME
 
 export interface ComposerCommand {
   name: LocalCommandName
@@ -97,6 +105,7 @@ const LOCAL_COMMANDS = new Set<LocalCommandName>([
   'resume',
   'mentions',
   'search',
+  TWIR_RELOAD_COMMAND_NAME,
 ])
 
 function isLocalCommand(value: string): value is LocalCommandName {

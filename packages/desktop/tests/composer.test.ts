@@ -98,6 +98,7 @@ describe('local composer commands', () => {
       'resume',
       'mentions',
       'search',
+      'twirreload',
     ])) {
       expect(parseComposerCommand(` /${name.toUpperCase()} `)).toEqual({ name, argument: '' })
     }
@@ -115,6 +116,7 @@ describe('local composer commands', () => {
       'search',
       'hello /pause',
       '/copycat',
+      '/twirreloadextra',
     ]) {
       expect(parseComposerCommand(text)).toBeNull()
     }

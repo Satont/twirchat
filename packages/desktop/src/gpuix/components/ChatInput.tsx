@@ -47,6 +47,7 @@ import {
   runCommandActions,
   expandCustomCommand,
   parsePluginCommand,
+  TWIR_RELOAD_COMMAND_NAME,
   type CommandContext,
 } from '../commands'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
@@ -56,7 +57,7 @@ import {
   useHotkeyContext,
   useHotkeyRoute,
 } from '../state/action-bindings'
-import { aliasesStore, streamStatusStore } from '../state/app'
+import { aliasesStore, showNotice, streamStatusStore } from '../state/app'
 import { emoteStore } from '../state/app'
 import {
   autoTranslationLanguagesStore,
@@ -115,6 +116,31 @@ interface OutgoingPreview {
 type OutgoingTranslationOverride =
   | { kind: 'command'; targetLanguage: string }
   | { kind: 'channel'; languages: ReadonlyMap<string, string> }
+
+interface TwirTargetSelection {
+  watchedPlatform?: Platform
+  watchedSlug?: string
+  watchedKickId?: string
+  homeTwitchId?: string
+  homeKickId?: string
+}
+
+function resolveTwirTargets({
+  watchedPlatform,
+  watchedSlug,
+  watchedKickId,
+  homeTwitchId,
+  homeKickId,
+}: TwirTargetSelection): TwirCommandTarget[] {
+  if (watchedPlatform === 'kick')
+    return watchedKickId ? [{ platform: 'kick', platformChannelId: watchedKickId }] : []
+  if (watchedPlatform && watchedSlug)
+    return [{ platform: watchedPlatform, channelSlug: watchedSlug }]
+  const targets: TwirCommandTarget[] = []
+  if (homeTwitchId) targets.push({ platform: 'twitch', platformChannelId: homeTwitchId })
+  if (homeKickId) targets.push({ platform: 'kick', platformChannelId: homeKickId })
+  return targets
+}
 
 export type ComposerCommandRunner = (text: string) => Promise<void>
 interface HistorySearch {
@@ -430,37 +456,39 @@ export function ChatInput(props: ChatInputProps) {
     }
   }
 
+  function twirHomeId(platform: 'twitch' | 'kick'): string | undefined {
+    if (props.watchedChannel || !commandTargets.some((target) => target.platform === platform))
+      return undefined
+    return props.accounts.find((account) => account.platform === platform)?.platformUserId
+  }
+
+  const twirEnabled = props.settings.twirIntegrationEnabled !== false
   const completingTwir =
-    editorFocused &&
-    !historySearchOpen &&
-    props.settings.twirIntegrationEnabled !== false &&
-    text.trimStart().startsWith('!')
+    editorFocused && !historySearchOpen && twirEnabled && text.trimStart().startsWith('!')
   const twirWatchedPlatform = completingTwir ? props.watchedChannel?.platform : undefined
   const twirWatchedSlug = completingTwir ? props.watchedChannel?.channelSlug : undefined
   const twirWatchedKickId =
     twirWatchedPlatform === 'kick' ? props.watchedChannelStatus?.channelId : undefined
-  const completingHomeTwir = completingTwir && !props.watchedChannel
-  const twirHomeTwitchId =
-    completingHomeTwir && commandTargets.some((target) => target.platform === 'twitch')
-      ? props.accounts.find((account) => account.platform === 'twitch')?.platformUserId
-      : undefined
-  const twirHomeKickId =
-    completingHomeTwir && commandTargets.some((target) => target.platform === 'kick')
-      ? props.accounts.find((account) => account.platform === 'kick')?.platformUserId
-      : undefined
-  const twirTargets = useMemo((): TwirCommandTarget[] | undefined => {
-    if (twirWatchedPlatform === 'kick')
-      return twirWatchedKickId
-        ? [{ platform: 'kick', platformChannelId: twirWatchedKickId }]
-        : undefined
-    if (twirWatchedPlatform && twirWatchedSlug)
-      return [{ platform: twirWatchedPlatform, channelSlug: twirWatchedSlug }]
-    if (!twirHomeTwitchId && !twirHomeKickId) return undefined
-    const targets: TwirCommandTarget[] = []
-    if (twirHomeTwitchId) targets.push({ platform: 'twitch', platformChannelId: twirHomeTwitchId })
-    if (twirHomeKickId) targets.push({ platform: 'kick', platformChannelId: twirHomeKickId })
-    return targets
-  }, [twirWatchedPlatform, twirWatchedSlug, twirWatchedKickId, twirHomeTwitchId, twirHomeKickId])
+  const twirHomeTwitchId = completingTwir ? twirHomeId('twitch') : undefined
+  const twirHomeKickId = completingTwir ? twirHomeId('kick') : undefined
+  const twirTargets = useMemo(() => {
+    if (!completingTwir) return undefined
+    const targets = resolveTwirTargets({
+      watchedPlatform: twirWatchedPlatform,
+      watchedSlug: twirWatchedSlug,
+      watchedKickId: twirWatchedKickId,
+      homeTwitchId: twirHomeTwitchId,
+      homeKickId: twirHomeKickId,
+    })
+    return targets.length ? targets : undefined
+  }, [
+    completingTwir,
+    twirWatchedPlatform,
+    twirWatchedSlug,
+    twirWatchedKickId,
+    twirHomeTwitchId,
+    twirHomeKickId,
+  ])
 
   const autocomplete = useAutocomplete({
     text,
@@ -472,6 +500,7 @@ export function ChatInput(props: ChatInputProps) {
     watchedChannel: props.watchedChannel,
     statuses: props.statuses,
     aliasMap,
+    twirEnabled,
     twirTargets,
     customCommands: customCommands.commands.filter(
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
@@ -698,6 +727,43 @@ export function ChatInput(props: ChatInputProps) {
     ],
   )
 
+  function prepareTwirReload(): PreparedAction {
+    if (!twirEnabled)
+      throw new Error('Twir integration is disabled. Enable it in Settings → Commands.')
+    const targets = resolveTwirTargets({
+      watchedPlatform: props.watchedChannel?.platform,
+      watchedSlug: props.watchedChannel?.channelSlug,
+      watchedKickId: props.watchedChannelStatus?.channelId,
+      homeTwitchId: twirHomeId('twitch'),
+      homeKickId: twirHomeId('kick'),
+    })
+    if (!targets.length)
+      throw new Error(
+        'Open a watched channel or select a connected chat target to reload Twir commands.',
+      )
+    return async () => {
+      const results = await Promise.allSettled(
+        targets.map((target) => backend.api.getTwirCommands(target, { refresh: true })),
+      )
+      if (!mounted.current) return
+      const failures = results.flatMap((result, index) => {
+        if (result.status === 'fulfilled') return []
+        const error: unknown = result.reason
+        const detail = error instanceof Error ? error.message : String(error)
+        return [`${targets[index]?.platform}: ${detail}`]
+      })
+      const succeeded = results.length > failures.length
+      if (succeeded) autocomplete.invalidateTwirSuggestions()
+      if (failures.length) {
+        if (succeeded) showNotice('info', 'Twir commands reloaded for some channels.')
+        throw new Error(
+          `Could not reload Twir commands (${failures.join(', ')}). Try /twirreload again.`,
+        )
+      }
+      showNotice('success', 'Twir commands reloaded.')
+    }
+  }
+
   async function prepareOutput(
     output: string,
     languages: ReadonlyMap<string, string>,
@@ -768,6 +834,8 @@ export function ChatInput(props: ChatInputProps) {
             return props.onToggleMentions
           case 'search':
             return onSearch ? () => onSearch(local.argument) : undefined
+          case TWIR_RELOAD_COMMAND_NAME:
+            return prepareTwirReload()
         }
       })()
       if (!action) throw new Error('This command is unavailable in this chat.')

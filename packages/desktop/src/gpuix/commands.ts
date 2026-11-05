@@ -25,6 +25,13 @@ export interface CommandContext {
 
 export const CUSTOM_COMMAND_OUTPUT_LIMIT = 5
 export const CUSTOM_COMMAND_PACING_MS = 1700
+export const TWIR_RELOAD_COMMAND_NAME = 'twirreload'
+
+const twirReloadCommandPattern = new RegExp(`^/${TWIR_RELOAD_COMMAND_NAME}(?=\\s|$)`, 'iu')
+
+export function isTwirReloadCommand(text: string): boolean {
+  return twirReloadCommandPattern.test(text)
+}
 
 export function parsePluginCommand(text: string): { name: string; args: string[] } | null {
   const [command, ...args] = text.trim().split(/\s+/u)
@@ -237,7 +244,11 @@ export function expandCustomCommand(
       throw new Error('Command expansion is too complex (more than 100 alias steps).')
     if (text.length > MAX_EXPANDED_LENGTH) throw new Error('Expanded command is too long.')
     const invocationText = text.trim()
-    const candidates = (isAutoTranslationCommand(invocationText) ? [] : definitions)
+    const candidates = (
+      isAutoTranslationCommand(invocationText) || isTwirReloadCommand(invocationText)
+        ? []
+        : definitions
+    )
       .map((command) => {
         const escaped = command.name
           .trim()

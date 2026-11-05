@@ -70,12 +70,15 @@ const layout: WatchedChannelsLayout = {
 }
 const sent: string[] = []
 let twirRequests = 0
+let twirReloads = 0
 let waitForTwirCommands: Promise<void> | undefined
 backend.api.getChannelEmotes = async () => []
-backend.api.getTwirCommands = async (target) => {
+backend.api.getTwirCommands = async (target, options) => {
   assert.deepEqual(target, { platform: 'kick', platformChannelId: '12345' })
   twirRequests++
+  if (options?.refresh) twirReloads++
   await waitForTwirCommands
+  if (twirReloads) return [{ name: 'updated', description: 'A refreshed Twir command' }]
   return Array.from({ length: 20 }, (_, index) => ({
     name: `twir${String(index).padStart(2, '0')}`,
     description: 'A public bot command',
@@ -361,6 +364,15 @@ try {
   await Bun.sleep(100)
   assert.equal(twirRequests, beforeDisable + 1)
   assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
+  await draft('/twirreload ')
+  currentRenderer().simulateKeystrokes('enter')
+  await until(
+    () => nodes().some((node) => node.text && /Twir.*disabled/iu.test(node.text)),
+    'Reload reports disabled integration',
+  )
+  assert.equal(twirRequests, beforeDisable + 1)
+  assert.equal(sent.length, 0)
+  await draft('!')
   app.settingsStore.update({ twirIntegrationEnabled: true })
   await until(() => selectedLabel('!twir') === '!twir00', 'Re-enable Twir completion')
   currentRenderer().simulateKeystrokes('escape')
@@ -368,6 +380,28 @@ try {
     () => !nodes().some((node) => node.testId === 'autocomplete-popup'),
     'Escape closes bare !',
   )
+
+  await draft('')
+  await typeNative('/twirre')
+  await until(() => selectedLabel('/twirreload') === '/twirreload', 'Reload slash suggestion')
+  currentRenderer().simulateKeystrokes('enter')
+  await until(
+    () => composerStore.get().get(composerKey)?.text === '/twirreload ',
+    'Selecting reload inserts the command',
+  )
+  await until(() => !selectedLabel('/twirreload'), 'Reload suggestion closes after insertion')
+  assert.equal(twirReloads, 0)
+  currentRenderer().simulateKeystrokes('enter')
+  await until(
+    () => app.noticeStore.get()?.text === 'Twir commands reloaded.',
+    'Reload reports success',
+  )
+  await until(() => composerStore.get().get(composerKey)?.text === '', 'Reload clears the draft')
+  assert.equal(twirReloads, 1)
+  assert.equal(sent.length, 0, 'Reload stays local')
+  await typeNative('!')
+  await until(() => selectedLabel('!updated') === '!updated', 'Autocomplete uses reloaded commands')
+
   await Bun.write(
     join(session, 'autocomplete-result.json'),
     JSON.stringify({ ok: true, incoming, screenshots }, null, 2),
