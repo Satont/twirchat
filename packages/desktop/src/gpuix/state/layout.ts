@@ -503,6 +503,27 @@ export async function assignChannel(
   }
 }
 
+export function restoreHomePanel(
+  backend: LayoutIOBackend,
+  panelId: string,
+  channelId: string,
+): Promise<void> {
+  return mutateLayout(backend, 'home', async () => {
+    const current = layoutStore.get().get('home')?.layout
+    if (!current) throw new Error('My channels layout is unavailable.')
+    const layout = structuredClone(current)
+    const panel = findNodeById(layout.root, panelId)
+    if (
+      panel?.type !== 'panel' ||
+      panel.content.type !== 'watched' ||
+      panel.content.channelId !== channelId
+    )
+      throw new Error('This pane is no longer showing the selected channel.')
+    panel.content = { type: 'main' }
+    await backend.api.setWatchedChannelsLayout({ tabId: 'home', layout })
+  })
+}
+
 /** Update the flex values of a split's children (drag resize), debounce-save. */
 export function updateSplitFlexes(
   backend: LayoutIOBackend,

@@ -1,0 +1,7 @@
+{
+  "id": "streamx",
+  "name": "StreamX",
+  "version": "0.2.0",
+  "apiVersion": 1,
+  "entry": "index.ts"
+}

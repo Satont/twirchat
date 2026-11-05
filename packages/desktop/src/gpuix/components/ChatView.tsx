@@ -35,6 +35,7 @@ import type { ModerationDragAction } from '../../views/main/utils/moderation-dra
 import { publicChannelURL } from '../../views/main/utils/public-channel-url'
 import { initialsOf } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
+import { mergeChatTimeline, pluginChatSearchMessage, timelineRowKey } from '../chat-timeline'
 import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
@@ -68,6 +69,11 @@ import { useDesktopWindows } from '../state/desktop-windows'
 import { useTextInputFocusTracking } from '../state/focus'
 import { highlightFlashStore } from '../state/highlight-notifications'
 import { notificationPreferences } from '../state/highlight-notifications'
+import {
+  homePluginFeedStore,
+  setHomePluginChannel,
+  type HomePluginRow,
+} from '../state/home-plugin-channels'
 import { invokeHotkeyUiAction } from '../state/hotkeys'
 import { allPanels, layoutStore, focusLayoutPanel } from '../state/layout'
 import { messageSimilarityStore, messageSimilarityReaderStore } from '../state/message-similarity'
@@ -88,6 +94,7 @@ import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
 import { ChatMessageRow } from './ChatMessageRow'
 import { ChattersDialog } from './ChattersDialog'
+import { PluginChatRow } from './PluginChatRow'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
 import { Icon, PlatformIcon, type IconName } from './ui/Icon'
 import { Modal } from './ui/Modal'
@@ -97,6 +104,14 @@ import { Text } from './ui/Text'
 import { UserCardDialog } from './UserCardDialog'
 
 const EMPTY_MESSAGES: NormalizedChatMessage[] = []
+const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
+const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
+
+interface PausedChat {
+  messages: NormalizedChatMessage[]
+  pluginRows: readonly HomePluginRow[]
+  total: number
+}
 
 function platformName(platform: string): string {
   switch (platform) {
@@ -284,6 +299,9 @@ export function ChatView({
   const homeMessages = useStoreSelector(homeMessagesStore, (messages) =>
     watchedChannel ? EMPTY_MESSAGES : messages,
   )
+  const pluginFeed = useStoreSelector(homePluginFeedStore, (feed) =>
+    watchedChannel ? EMPTY_PLUGIN_FEED : feed,
+  )
   const watchedMessages = useStoreSelector(watchedMessagesStore, (messages) =>
     watchedChannel ? (messages.get(watchedChannel.id) ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
   )
@@ -395,17 +413,21 @@ export function ChatView({
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [mentionsOnly, setMentionsOnly] = useState(false)
-  const [paused, setPaused] = useState<{ messages: NormalizedChatMessage[]; total: number } | null>(
-    null,
-  )
+  const [paused, setPaused] = useState<PausedChat | null>(null)
   const [clearedKeys, setClearedKeys] = useState<Set<string>>(new Set())
   const [revealedMessageKey, setRevealedMessageKey] = useState<string | null>(null)
   const searchJump = useStore(chatSearchJumpStore)
   const pendingJump = useRef<{ requestId: string; messageKey: string } | null>(null)
   const searchRef = useRef<import('@gpuix/react').PublicInstance | null>(null)
   const resumeScrollRequested = useRef(false)
-  const pauseInput = useRef({ messages: activeMessages, total: activity?.total ?? 0 })
-  pauseInput.current = { messages: activeMessages, total: activity?.total ?? 0 }
+  const activityTotal = (activity?.total ?? 0) + pluginFeed.total
+  const pauseSnapshot: PausedChat = {
+    messages: activeMessages,
+    pluginRows: pluginFeed.rows,
+    total: activityTotal,
+  }
+  const pauseInput = useRef(pauseSnapshot)
+  pauseInput.current = pauseSnapshot
   const onPauseChanged = useRef<(value: boolean) => void>(() => {})
   onPauseChanged.current = (value) => {
     if (value) setPaused((current) => current ?? pauseInput.current)
@@ -440,6 +462,7 @@ export function ChatView({
   const searchFocus = useTextInputFocusTracking()
   const search = useMemo(() => compileChatSearch(searchQuery), [searchQuery])
   const readingMessages = paused?.messages ?? activeMessages
+  const readingPluginRows = paused?.pluginRows ?? pluginFeed.rows
   const displayedMessages = useMemo(
     () =>
       readingMessages.filter((message) => {
@@ -490,11 +513,43 @@ export function ChatView({
       streamerMode,
     ],
   )
+  const pluginChannelIds = useMemo(
+    () => new Set(pluginFeed.channels.map((channel) => channel.id)),
+    [pluginFeed.channels],
+  )
+  const displayedPluginRows = useMemo(() => {
+    if (
+      readingPluginRows.length === 0 ||
+      mentionsOnly ||
+      (settings?.platformFilter !== undefined && settings.platformFilter !== 'all')
+    )
+      return EMPTY_PLUGIN_ROWS
+    const searching = searchQuery.trim().length > 0
+    return readingPluginRows.filter(
+      (row) =>
+        pluginChannelIds.has(row.channel.id) &&
+        !clearedKeys.has(row.key) &&
+        (!searching ||
+          search.matches(pluginChatSearchMessage(row), { channelName: row.channel.channelSlug })),
+    )
+  }, [
+    readingPluginRows,
+    pluginChannelIds,
+    clearedKeys,
+    mentionsOnly,
+    settings?.platformFilter,
+    searchQuery,
+    search,
+  ])
+  const displayedTimeline = useMemo(
+    () => mergeChatTimeline(displayedMessages, displayedPluginRows),
+    [displayedMessages, displayedPluginRows],
+  )
   const mentionsCount = useMemo(
     () => activeMessages.filter((message) => ruleEngine.classify(message).mention).length,
     [activeMessages, ruleEngine],
   )
-  const pendingCount = paused ? Math.max(0, (activity?.total ?? 0) - paused.total) : 0
+  const pendingCount = paused ? Math.max(0, activityTotal - paused.total) : 0
   const filtered =
     !!searchQuery.trim() ||
     mentionsOnly ||
@@ -518,7 +573,9 @@ export function ChatView({
     setSearchQuery('')
   }
   function clearMessages() {
-    setClearedKeys(new Set(activeMessages.map(chatMessageKey)))
+    const keys = new Set(activeMessages.map(chatMessageKey))
+    for (const row of pluginFeed.rows) keys.add(row.key)
+    setClearedKeys(keys)
     pauseController.clear()
   }
   function selectFilter(id: string, enabled: boolean) {
@@ -536,9 +593,14 @@ export function ChatView({
       .catch((error) => showNotice('error', String(error)))
   }
   function copyMessages() {
+    const transcript = displayedTimeline.map((row) =>
+      'message' in row
+        ? { ...pluginChatSearchMessage(row), timestamp: row.message.timestamp }
+        : row,
+    )
     void backend.api
-      .copyText({ text: formatChatTranscript(displayedMessages) })
-      .then(() => showNotice('success', `Copied ${displayedMessages.length} messages`))
+      .copyText({ text: formatChatTranscript(transcript) })
+      .then(() => showNotice('success', `Copied ${displayedTimeline.length} messages`))
       .catch(() => showNotice('error', 'Could not copy messages to the clipboard.'))
   }
 
@@ -568,42 +630,40 @@ export function ChatView({
     resumeScrollRequested.current = false
     // Keep the retained message available while the user reads its context.
     pauseController.add('search')
-    setPaused({ messages: activeMessages, total: activity?.total ?? 0 })
+    setPaused(pauseInput.current)
     setRevealedMessageKey(searchJump.messageKey)
   }, [searchJump, paneId, activeMessages, activity?.total, pauseController, layoutTabId, scope])
 
   useEffect(() => {
     const pending = pendingJump.current
     if (!pending || revealedMessageKey !== pending.messageKey) return
-    const index = displayedMessages.findIndex(
-      (message) => chatMessageKey(message) === pending.messageKey,
-    )
+    const index = displayedTimeline.findIndex((row) => timelineRowKey(row) === pending.messageKey)
     if (index < 0) return
     const timer = setTimeout(() => {
       if (pendingJump.current !== pending) return
       const list = listRef.current
       if (list) renderer.scrollToItem?.(list.id, index)
       pendingJump.current = null
-      setAtBottom(index === displayedMessages.length - 1)
+      setAtBottom(index === displayedTimeline.length - 1)
       finishChatSearchJump(pending.requestId, !!list)
     }, 20)
     return () => clearTimeout(timer)
-  }, [displayedMessages, revealedMessageKey, renderer])
+  }, [displayedTimeline, revealedMessageKey, renderer])
 
   useEffect(() => {
     if (paused || !resumeScrollRequested.current) return
     const timer = setTimeout(() => {
       resumeScrollRequested.current = false
       if (listRef.current)
-        renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedMessages.length - 1))
+        renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedTimeline.length - 1))
       setAtBottom(true)
     }, 0)
     return () => clearTimeout(timer)
-  }, [paused, displayedMessages, renderer])
+  }, [paused, displayedTimeline, renderer])
 
   const scrollToLatest = () => {
     if (listRef.current) {
-      renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedMessages.length - 1))
+      renderer.scrollToItem?.(listRef.current.id, Math.max(0, displayedTimeline.length - 1))
       setAtBottom(true)
     }
   }
@@ -825,9 +885,11 @@ export function ChatView({
       ? streamStatuses.get(`${watchedChannel.platform}:${watchedChannel.channelSlug.toLowerCase()}`)
       : undefined
 
-  const hasAnyConnection = (['twitch', 'youtube', 'kick'] satisfies Platform[]).some(
-    (platform) => statuses[platform]?.status === 'connected',
-  )
+  const hasAnyConnection =
+    pluginFeed.channels.length > 0 ||
+    (['twitch', 'youtube', 'kick'] satisfies Platform[]).some(
+      (platform) => statuses[platform]?.status === 'connected',
+    )
 
   const activePane = useStoreSelector(activePaneByWindowStore, (entries) => entries.get(scope))
   const paneLayout = useStoreSelector(layoutStore, (entries) => entries.get(layoutTabId)?.layout)
@@ -1184,7 +1246,7 @@ export function ChatView({
             >
               {'Live Chat'.toUpperCase()}
             </Text>
-            {displayedChannels.length > 0 ? (
+            {displayedChannels.length > 0 || pluginFeed.channels.length > 0 ? (
               <div
                 style={{
                   display: 'flex',
@@ -1198,6 +1260,36 @@ export function ChatView({
               >
                 {displayedChannels.map((ch) => (
                   <HeaderChannelChip key={`${ch.platform}:${ch.channelLogin}`} channel={ch} />
+                ))}
+                {pluginFeed.channels.map((channel) => (
+                  <div
+                    key={channel.id}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      flexShrink: 0,
+                      paddingLeft: 8,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      borderColor: theme.hairline,
+                      backgroundColor: theme.fill,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, color: theme.text2 }}>
+                      {`${channel.transportName} · ${channel.displayName}`}
+                    </Text>
+                    <HeaderButton
+                      testId={`home-plugin-remove-${channel.id}`}
+                      title={`Remove ${channel.displayName} from My channels`}
+                      onClick={() =>
+                        runUiTask(setHomePluginChannel(backend.api, channel.id, false))
+                      }
+                    >
+                      <Icon name="close" size={12} color={theme.text2} />
+                    </HeaderButton>
+                  </div>
                 ))}
               </div>
             ) : null}
@@ -1574,7 +1666,7 @@ export function ChatView({
               testId="chat-search-count"
               style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}
             >
-              {`${displayedMessages.length} / ${readingMessages.length}`}
+              {`${displayedTimeline.length} / ${readingMessages.length + readingPluginRows.length}`}
             </Text>
             <HeaderButton
               testId="chat-search-close"
@@ -1655,7 +1747,7 @@ export function ChatView({
           overflow: 'hidden',
         }}
       >
-        {displayedMessages.length > 0 ? (
+        {displayedTimeline.length > 0 ? (
           <virtual-list
             ref={listRef}
             alignment="bottom"
@@ -1667,7 +1759,7 @@ export function ChatView({
               setVisibleRange((current) =>
                 current?.start === start && current.end === end ? current : { start, end },
               )
-              setAtBottom(end >= displayedMessages.length - 1)
+              setAtBottom(end >= displayedTimeline.length - 1)
             }}
             style={{
               flexGrow: 1,
@@ -1676,7 +1768,18 @@ export function ChatView({
               scrollbarWidth: 5,
             }}
           >
-            {displayedMessages.map((message, index) => {
+            {displayedTimeline.map((message, index) => {
+              if ('message' in message) {
+                return (
+                  <PluginChatRow
+                    key={message.key}
+                    message={message.message}
+                    source={`${message.channel.transportName} · ${message.channel.displayName}`}
+                    fontSize={settings?.fontSize}
+                    showTimestamp={settings?.showTimestamp}
+                  />
+                )
+              }
               const key = chatMessageKey(message)
               const revealed = revealedMessageKey === key
               const outcome = moderationView.outcomeFor(message)
@@ -1694,7 +1797,7 @@ export function ChatView({
                   visible={
                     visibleRange
                       ? index >= visibleRange.start - 4 && index <= visibleRange.end + 4
-                      : index >= displayedMessages.length - 32
+                      : index >= displayedTimeline.length - 32
                   }
                   message={revealed ? message : classification.message}
                   hiddenLabel={
@@ -1768,7 +1871,7 @@ export function ChatView({
         )}
 
         {/* Scroll-to-latest pill */}
-        {paused || (!atBottom && displayedMessages.length > 0) ? (
+        {paused || (!atBottom && displayedTimeline.length > 0) ? (
           <div
             style={{
               position: 'absolute',
@@ -1872,8 +1975,8 @@ export function ChatView({
                   tab: layoutTabId,
                   panel: layoutPanelId,
                   channel: actionTarget,
-                  received: activeMessages.length,
-                  shown: displayedMessages.length,
+                  received: activeMessages.length + pluginFeed.rows.length,
+                  shown: displayedTimeline.length,
                   paused: !!paused,
                   visibleRange,
                   status: watchedChannelStatus ?? statuses,

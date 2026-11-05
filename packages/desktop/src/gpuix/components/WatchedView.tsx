@@ -18,10 +18,17 @@ import { dockSideAt, resizedPair, type DockSide } from '../layout-operations'
 import { nativeWindow, type NativePaintedElementBounds } from '../native-window'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
 import { setActivePane, activePaneByWindowStore } from '../state/active-pane'
-import { showNotice, tabChannelNamesStore, watchedChannelsStore } from '../state/app'
+import {
+  activeWatchedTabStore,
+  showNotice,
+  tabChannelNamesStore,
+  watchedChannelsStore,
+} from '../state/app'
+import { chatTabsStore } from '../state/chat-tabs'
 import { focusComposerForPane } from '../state/composer-focus'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
+import { setHomePluginChannel } from '../state/home-plugin-channels'
 import {
   allPanels,
   assignChannel,
@@ -29,6 +36,7 @@ import {
   layoutStore,
   loadLayout,
   removePanel,
+  restoreHomePanel,
   splitPanel,
   updateSplitFlexes,
   dockLayoutPanel,
@@ -530,6 +538,25 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
       await windows.close()
     else if (!permanentHome) await removePanel(backend, tabId, panel.id)
   }
+  const moveToHome = async (id: string) => {
+    if (!standalone && panels.length === 1 && chatTabsStore.get().value.metadata[tabId]?.locked)
+      throw new Error('Unlock this tab before moving it.')
+    if (!layoutStore.get().get('home')?.layout) await loadLayout(backend, 'home')
+    const homePanels = allPanels(layoutStore.get().get('home')?.layout ?? null)
+    const hasDestination = homePanels.some((candidate) => candidate.content.type === 'main')
+    if (!hasDestination && tabId !== 'home')
+      throw new Error('Open the combined chat pane in My channels before moving a channel there.')
+    await setHomePluginChannel(backend.api, id, true)
+    if (hasDestination) {
+      const latest = allPanels(layoutStore.get().get(tabId)?.layout ?? null).find(
+        (candidate) => candidate.id === panel.id,
+      )
+      if (latest?.content.type === 'watched' && latest.content.channelId === id) await closePane()
+    } else {
+      await restoreHomePanel(backend, panel.id, id)
+    }
+    if (!standalone) activeWatchedTabStore.set('home')
+  }
   const chooserActive =
     showForm && activePane?.tabId === tabId && activePane.paneId === paneIdentity
   const knownActive =
@@ -751,6 +778,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
             onSplitRight={() => runUiTask(splitPanel(backend, tabId, panel.id, 'vertical', scope))}
             onChangeChannel={() => setShowAddForm(true)}
             onClosePanel={() => runUiTask(closePane())}
+            onMoveToHome={() => moveToHome(watchedChannel.id)}
           />
         ) : watchedChannel ? (
           <ChatView
