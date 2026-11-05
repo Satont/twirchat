@@ -1,0 +1,268 @@
+diff --git a/crates/gpui/src/app.rs b/crates/gpui/src/app.rs
+index 216849e..3c2ae23 100644
+--- a/crates/gpui/src/app.rs
++++ b/crates/gpui/src/app.rs
+@@ -1413,6 +1413,11 @@ impl App {
+         self.platform.read_from_clipboard()
+     }
+ 
++    /// Reads clipboard data for an editor that accepts pasted images and files.
++    pub fn read_from_clipboard_for_image_paste(&self) -> Option<ClipboardItem> {
++        self.platform.read_from_clipboard_for_image_paste()
++    }
++
+     /// Reads data from the platform clipboard, resolving once the contents
+     /// are available.
+     ///
+diff --git a/crates/gpui/src/platform.rs b/crates/gpui/src/platform.rs
+index 15faafe..36dab96 100644
+--- a/crates/gpui/src/platform.rs
++++ b/crates/gpui/src/platform.rs
+@@ -314,6 +314,10 @@ pub trait Platform: 'static {
+     fn should_auto_hide_scrollbars(&self) -> bool;
+ 
+     fn read_from_clipboard(&self) -> Option<ClipboardItem>;
++    /// Read clipboard data, preferring an image or copied file list to text.
++    fn read_from_clipboard_for_image_paste(&self) -> Option<ClipboardItem> {
++        self.read_from_clipboard()
++    }
+     fn write_to_clipboard(&self, item: ClipboardItem);
+ 
+     /// Reads the clipboard, resolving once its contents are available.
+diff --git a/crates/gpui_linux/src/linux/platform.rs b/crates/gpui_linux/src/linux/platform.rs
+index a729fbc..f40e506 100644
+--- a/crates/gpui_linux/src/linux/platform.rs
++++ b/crates/gpui_linux/src/linux/platform.rs
+@@ -91,6 +91,9 @@ pub(crate) trait LinuxClient {
+     fn write_to_clipboard(&self, item: ClipboardItem);
+     fn read_from_primary(&self) -> Option<ClipboardItem>;
+     fn read_from_clipboard(&self) -> Option<ClipboardItem>;
++    fn read_from_clipboard_for_image_paste(&self) -> Option<ClipboardItem> {
++        self.read_from_clipboard()
++    }
+     fn active_window(&self) -> Option<AnyWindowHandle>;
+     fn window_stack(&self) -> Option<Vec<AnyWindowHandle>>;
+     fn run(&self);
+@@ -769,9 +772,37 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
+         self.inner.read_from_clipboard()
+     }
+ 
++    fn read_from_clipboard_for_image_paste(&self) -> Option<ClipboardItem> {
++        self.inner.read_from_clipboard_for_image_paste()
++    }
++
+     fn add_recent_document(&self, _path: &Path) {}
+ }
+ 
++#[cfg(any(feature = "wayland", feature = "x11"))]
++pub(super) fn decode_clipboard_file_list(bytes: &[u8]) -> Option<ClipboardItem> {
++    let list = str::from_utf8(bytes).ok()?;
++    let paths: smallvec::SmallVec<[_; 2]> = list
++        .lines()
++        .filter_map(|line| {
++            let url = http_client::Url::parse(line).ok()?;
++            if url.scheme() != "file" || url.host_str().is_some() {
++                return None;
++            }
++            let path = url.to_file_path().ok()?;
++            (!path.as_os_str().as_encoded_bytes().contains(&0)).then_some(path)
++        })
++        // One entry past the paste limit lets the consumer report the error.
++        .take(11)
++        .collect();
++    if paths.is_empty() {
++        return None;
++    }
++    Some(ClipboardItem {
++        entries: vec![gpui::ClipboardEntry::ExternalPaths(gpui::ExternalPaths(paths))],
++    })
++}
++
+ #[cfg(any(feature = "wayland", feature = "x11"))]
+ pub(super) fn open_uri_internal(
+     executor: BackgroundExecutor,
+diff --git a/crates/gpui_linux/src/linux/wayland/client.rs b/crates/gpui_linux/src/linux/wayland/client.rs
+index 044da41..3aabb76 100644
+--- a/crates/gpui_linux/src/linux/wayland/client.rs
++++ b/crates/gpui_linux/src/linux/wayland/client.rs
+@@ -1268,6 +1268,10 @@ impl LinuxClient for WaylandClient {
+         self.0.borrow_mut().clipboard.read()
+     }
+ 
++    fn read_from_clipboard_for_image_paste(&self) -> Option<gpui::ClipboardItem> {
++        self.0.borrow().clipboard.read_for_image_paste()
++    }
++
+     fn active_window(&self) -> Option<AnyWindowHandle> {
+         self.0
+             .borrow_mut()
+diff --git a/crates/gpui_linux/src/linux/wayland/clipboard.rs b/crates/gpui_linux/src/linux/wayland/clipboard.rs
+index 57ecd93..388d878 100644
+--- a/crates/gpui_linux/src/linux/wayland/clipboard.rs
++++ b/crates/gpui_linux/src/linux/wayland/clipboard.rs
+@@ -20,6 +20,7 @@ use gpui::{ClipboardEntry, ClipboardItem, Image, ImageFormat, hash};
+ pub(crate) const TEXT_MIME_TYPES: [&str; 3] =
+     ["text/plain;charset=utf-8", "UTF8_STRING", "text/plain"];
+ pub(crate) const FILE_LIST_MIME_TYPE: &str = "text/uri-list";
++const GNOME_COPIED_FILES: &str = "x-special/gnome-copied-files";
+ 
+ /// Text mime types that we'll accept from other programs.
+ pub(crate) const ALLOWED_TEXT_MIME_TYPES: [&str; 2] = ["text/plain;charset=utf-8", "UTF8_STRING"];
+@@ -120,6 +121,14 @@ impl<T: ReceiveData> DataOffer<T> {
+         Some(ClipboardItem::new_string(result))
+     }
+ 
++    fn read_file_list(&self, connection: &Connection) -> Option<ClipboardItem> {
++        let mime = [FILE_LIST_MIME_TYPE, GNOME_COPIED_FILES]
++            .into_iter()
++            .find(|mime| self.has_mime_type(mime))?;
++        let bytes = self.read_bytes(connection, mime)?;
++        crate::linux::platform::decode_clipboard_file_list(&bytes)
++    }
++
+     fn read_image(&self, connection: &Connection) -> Option<ClipboardItem> {
+         for format in ImageFormat::iter() {
+             let mime_type = format.mime_type();
+@@ -214,6 +223,21 @@ impl Clipboard {
+         Some(item)
+     }
+ 
++    pub fn read_for_image_paste(&self) -> Option<ClipboardItem> {
++        let offer = self.current_offer.as_ref()?;
++        if offer.has_mime_type(&self.self_mime) {
++            return self.contents.clone();
++        }
++        offer
++            .read_image(&self.connection)
++            .or_else(|| offer.read_file_list(&self.connection))
++            .or_else(|| {
++                self.cached_read
++                    .clone()
++                    .or_else(|| offer.read_text(&self.connection))
++            })
++    }
++
+     pub fn read_primary(&mut self) -> Option<ClipboardItem> {
+         let offer = self.current_primary_offer.as_ref()?;
+         if let Some(cached) = self.cached_primary_read.clone() {
+diff --git a/crates/gpui_linux/src/linux/x11/client.rs b/crates/gpui_linux/src/linux/x11/client.rs
+index d4650d2..f8a27b8 100644
+--- a/crates/gpui_linux/src/linux/x11/client.rs
++++ b/crates/gpui_linux/src/linux/x11/client.rs
+@@ -306,6 +306,23 @@ impl X11ClientStatePtr {
+ pub(crate) struct X11Client(pub(crate) Rc<RefCell<X11ClientState>>);
+ 
+ impl X11Client {
++    fn read_clipboard(&self, prefer_files: bool) -> Option<gpui::ClipboardItem> {
++        let state = self.0.borrow_mut();
++        // if the last copy was from this app, return our cached item
++        // which has metadata attached.
++        if state
++            .clipboard
++            .is_owner(clipboard::ClipboardKind::Clipboard)
++        {
++            return state.clipboard_item.clone();
++        }
++        state
++            .clipboard
++            .get_any(clipboard::ClipboardKind::Clipboard, prefer_files)
++            .context("X11: Failed to read from clipboard (clipboard)")
++            .log_with_level(log::Level::Debug)
++    }
++
+     pub(crate) fn new() -> anyhow::Result<Self> {
+         let event_loop = EventLoop::try_new()?;
+ 
+@@ -1812,26 +1829,17 @@ impl LinuxClient for X11Client {
+         let state = self.0.borrow_mut();
+         state
+             .clipboard
+-            .get_any(clipboard::ClipboardKind::Primary)
++            .get_any(clipboard::ClipboardKind::Primary, false)
+             .context("X11: Failed to read from clipboard (primary)")
+             .log_with_level(log::Level::Debug)
+     }
+ 
+     fn read_from_clipboard(&self) -> Option<gpui::ClipboardItem> {
+-        let state = self.0.borrow_mut();
+-        // if the last copy was from this app, return our cached item
+-        // which has metadata attached.
+-        if state
+-            .clipboard
+-            .is_owner(clipboard::ClipboardKind::Clipboard)
+-        {
+-            return state.clipboard_item.clone();
+-        }
+-        state
+-            .clipboard
+-            .get_any(clipboard::ClipboardKind::Clipboard)
+-            .context("X11: Failed to read from clipboard (clipboard)")
+-            .log_with_level(log::Level::Debug)
++        self.read_clipboard(false)
++    }
++
++    fn read_from_clipboard_for_image_paste(&self) -> Option<gpui::ClipboardItem> {
++        self.read_clipboard(true)
+     }
+ 
+     fn run(&self) {
+diff --git a/crates/gpui_linux/src/linux/x11/clipboard.rs b/crates/gpui_linux/src/linux/x11/clipboard.rs
+index 706e7b0..b19f688 100644
+--- a/crates/gpui_linux/src/linux/x11/clipboard.rs
++++ b/crates/gpui_linux/src/linux/x11/clipboard.rs
+@@ -78,7 +78,8 @@ x11rb::atom_manager! {
+         TEXT_MIME_UNKNOWN: b"text/plain",
+ 
+         // HTML: b"text/html",
+-        // URI_LIST: b"text/uri-list",
++        URI_LIST: b"text/uri-list",
++        GNOME_COPIED_FILES: b"x-special/gnome-copied-files",
+ 
+         PNG__MIME: ImageFormat::mime_type(ImageFormat::Png ).as_bytes(),
+         JPEG_MIME: ImageFormat::mime_type(ImageFormat::Jpeg).as_bytes(),
+@@ -1019,7 +1020,11 @@ impl Clipboard {
+         self.inner.write(data, selection, wait)
+     }
+ 
+-    pub(crate) fn get_any(&self, selection: ClipboardKind) -> Result<ClipboardItem> {
++    pub(crate) fn get_any(
++        &self,
++        selection: ClipboardKind,
++        prefer_files: bool,
++    ) -> Result<ClipboardItem> {
+         let image_entries = ImageFormat::iter()
+             .map(|format| (self.image_format_atom(format), format))
+             .collect::<Vec<_>>();
+@@ -1035,8 +1040,16 @@ impl Clipboard {
+ 
+         // image formats first, as they are more specific, and read will return the first
+         // format that the contents can be converted to
+-        let mut format_atoms = Vec::with_capacity(image_entries.len() + text_format_atoms.len());
++        let file_atoms = [self.inner.atoms.URI_LIST, self.inner.atoms.GNOME_COPIED_FILES];
++        let mut format_atoms = Vec::with_capacity(
++            image_entries.len()
++                + text_format_atoms.len()
++                + if prefer_files { file_atoms.len() } else { 0 },
++        );
+         format_atoms.extend(image_entries.iter().map(|(atom, _)| *atom));
++        if prefer_files {
++            format_atoms.extend_from_slice(&file_atoms);
++        }
+         format_atoms.extend_from_slice(text_format_atoms);
+ 
+         let result = self.inner.read(&format_atoms, selection)?;
+@@ -1058,6 +1071,14 @@ impl Clipboard {
+             }
+         }
+ 
++        if prefer_files && file_atoms.contains(&result.format) {
++            // Browsers also offer URI lists for copied links. Fall back to the
++            // ordinary clipboard formats if the list has no local file.
++            return crate::linux::platform::decode_clipboard_file_list(&result.bytes)
++                .map(Ok)
++                .unwrap_or_else(|| self.get_any(selection, false));
++        }
++
+         let text = if result.format == self.inner.atoms.STRING {
+             // ISO Latin-1
+             // See: https://stackoverflow.com/questions/28169745/what-are-the-options-to-convert-iso-8859-1-latin-1-to-a-string-utf-8

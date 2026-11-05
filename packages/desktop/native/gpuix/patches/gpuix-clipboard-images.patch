@@ -1,0 +1,458 @@
+diff --git a/packages/native/src/clipboard_images.rs b/packages/native/src/clipboard_images.rs
+new file mode 100644
+index 0000000..b632595
+--- /dev/null
++++ b/packages/native/src/clipboard_images.rs
+@@ -0,0 +1,160 @@
++use std::cell::RefCell;
++use std::collections::HashMap;
++use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::{Arc, Weak};
++
++use gpui::{ClipboardEntry, ClipboardItem, WindowId};
++use napi::bindgen_prelude::{Buffer, Either3, Function, Result};
++use napi::threadsafe_function::ThreadsafeFunctionCallMode;
++use napi_derive::napi;
++use parking_lot::Mutex;
++
++const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
++const MAX_PATHS: usize = 10;
++
++#[napi(object, object_from_js = false)]
++pub struct ClipboardImage {
++    pub mime_type: String,
++    pub bytes: Buffer,
++}
++
++#[napi(object, object_from_js = false)]
++pub struct ClipboardPaths {
++    pub paths: Vec<String>,
++}
++
++#[napi(object, object_from_js = false)]
++pub struct ClipboardImageError {
++    pub error: String,
++}
++
++pub(crate) type ClipboardImagePayload =
++    Either3<ClipboardImage, ClipboardPaths, ClipboardImageError>;
++pub(crate) type PasteHandler = Arc<dyn Fn(ClipboardPaste) + Send + Sync>;
++type Handlers = Mutex<HashMap<u64, PasteHandler>>;
++pub(crate) type ImagePasteHandlers = Arc<Handlers>;
++
++thread_local! {
++    static WINDOW_HANDLERS: RefCell<HashMap<WindowId, Weak<Handlers>>> = RefCell::new(HashMap::new());
++}
++
++pub(crate) fn attach(window_id: WindowId, handlers: &ImagePasteHandlers) {
++    WINDOW_HANDLERS.with(|windows| {
++        windows
++            .borrow_mut()
++            .insert(window_id, Arc::downgrade(handlers));
++    });
++}
++
++pub(crate) fn detach(window_id: WindowId) {
++    let handlers = WINDOW_HANDLERS.with(|windows| windows.borrow_mut().remove(&window_id));
++    if let Some(handlers) = handlers.and_then(|handlers| handlers.upgrade()) {
++        handlers.lock().clear();
++    }
++}
++
++pub(crate) fn set_handler(
++    handlers: &ImagePasteHandlers,
++    id: u64,
++    callback: Option<Function<ClipboardImagePayload, ()>>,
++) -> Result<()> {
++    let Some(callback) = callback else {
++        handlers.lock().remove(&id);
++        return Ok(());
++    };
++
++    let pending = Arc::new(AtomicBool::new(false));
++    let delivered = pending.clone();
++    let callback = callback
++        .build_threadsafe_function::<ClipboardPaste>()
++        .callee_handled::<false>()
++        .weak::<true>()
++        .build_callback(move |context| {
++            delivered.store(false, Ordering::Release);
++            Ok(context.value.into_payload())
++        })?;
++    handlers.lock().insert(
++        id,
++        Arc::new(move |paste| {
++            if !pending.swap(true, Ordering::AcqRel)
++                && callback.call(paste, ThreadsafeFunctionCallMode::NonBlocking) != napi::Status::Ok
++            {
++                pending.store(false, Ordering::Release);
++            }
++        }),
++    );
++    Ok(())
++}
++
++pub(crate) enum ClipboardPaste {
++    Image(gpui::Image),
++    Paths(gpui::ExternalPaths),
++    Error(&'static str),
++}
++
++impl ClipboardPaste {
++    fn take(item: &mut ClipboardItem) -> Option<Self> {
++        let index = item
++            .entries
++            .iter()
++            .position(|entry| matches!(entry, ClipboardEntry::Image(_)))
++            .or_else(|| {
++                item.entries.iter().position(|entry| {
++                    matches!(entry, ClipboardEntry::ExternalPaths(paths) if !paths.paths().is_empty())
++                })
++            })?;
++
++        match item.entries.swap_remove(index) {
++            ClipboardEntry::Image(image) if image.bytes.len() > MAX_IMAGE_BYTES => {
++                Some(Self::Error("Clipboard images must be 20 MiB or smaller."))
++            }
++            ClipboardEntry::Image(image) => Some(Self::Image(image)),
++            ClipboardEntry::ExternalPaths(paths) if paths.paths().len() > MAX_PATHS => {
++                Some(Self::Error("Paste up to 10 image files at a time."))
++            }
++            ClipboardEntry::ExternalPaths(paths) => Some(Self::Paths(paths)),
++            ClipboardEntry::String(_) => None,
++        }
++    }
++
++    fn into_payload(self) -> ClipboardImagePayload {
++        match self {
++            Self::Image(image) => Either3::A(ClipboardImage {
++                mime_type: image.format.mime_type().into(),
++                bytes: image.bytes.into(),
++            }),
++            Self::Paths(paths) => {
++                let paths = paths
++                    .0
++                    .into_iter()
++                    .map(|path| path.into_os_string().into_string())
++                    .collect::<std::result::Result<_, _>>();
++                match paths {
++                    Ok(paths) => Either3::B(ClipboardPaths { paths }),
++                    Err(_) => {
++                        Self::Error("The copied file name is not valid UTF-8.").into_payload()
++                    }
++                }
++            }
++            Self::Error(error) => Either3::C(ClipboardImageError {
++                error: error.into(),
++            }),
++        }
++    }
++}
++
++pub(crate) fn handler(window_id: WindowId, id: u64) -> Option<PasteHandler> {
++    WINDOW_HANDLERS.with(|windows| {
++        let handlers = windows.borrow().get(&window_id)?.upgrade()?;
++        let callback = handlers.lock().get(&id).cloned();
++        callback
++    })
++}
++
++pub(crate) fn dispatch(callback: PasteHandler, item: &mut ClipboardItem) -> bool {
++    let Some(paste) = ClipboardPaste::take(item) else {
++        return false;
++    };
++    callback(paste);
++    true
++}
+diff --git a/packages/native/src/custom_elements/input.rs b/packages/native/src/custom_elements/input.rs
+index 32e2305..c31ec60 100644
+--- a/packages/native/src/custom_elements/input.rs
++++ b/packages/native/src/custom_elements/input.rs
+@@ -350,6 +350,18 @@ impl TextEditorElement {
+ }
+ 
+ impl CustomElement for TextEditorElement {
++    fn insert_text(&self, text: &str, window: &mut Window, cx: &mut App) -> bool {
++        self.state.as_ref().is_some_and(|state| {
++            state.update(cx, |editor, cx| {
++                if editor.read_only {
++                    return false;
++                }
++                editor.replace_text_in_range(None, text, window, cx);
++                true
++            })
++        })
++    }
++
+     fn can_copy_selection(&self, cut: bool, cx: &gpui::App) -> bool {
+         self.state.as_ref().is_some_and(|state| {
+             let editor = state.read(cx);
+@@ -1127,7 +1139,24 @@ impl TextEditorState {
+             cx.propagate();
+             return;
+         }
+-        let Some(text) = cx.read_from_clipboard().and_then(clipboard_text) else {
++        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++        let item = if let Some(handler) =
++            crate::clipboard_images::handler(window.window_handle().window_id(), self.element_id)
++        {
++            let mut item = cx.read_from_clipboard_for_image_paste();
++            if item
++                .as_mut()
++                .is_some_and(|item| crate::clipboard_images::dispatch(handler, item))
++            {
++                return;
++            }
++            item
++        } else {
++            cx.read_from_clipboard()
++        };
++        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++        let item = cx.read_from_clipboard();
++        let Some(text) = item.and_then(clipboard_text) else {
+             cx.propagate();
+             return;
+         };
+diff --git a/packages/native/src/custom_elements/mod.rs b/packages/native/src/custom_elements/mod.rs
+index 0f40c0c..a7a0298 100644
+--- a/packages/native/src/custom_elements/mod.rs
++++ b/packages/native/src/custom_elements/mod.rs
+@@ -207,6 +207,10 @@ pub(crate) fn wire_standard_events<E: gpui::StatefulInteractiveElement>(
+ ///   3. Each GPUI frame calls render() → returns AnyElement
+ ///   4. React unmounts → destroy() for cleanup
+ pub trait CustomElement: 'static {
++    fn insert_text(&self, _text: &str, _window: &mut gpui::Window, _cx: &mut gpui::App) -> bool {
++        false
++    }
++
+     /// Whether this native editor has a nonempty selection for copy/cut.
+     fn can_copy_selection(&self, _cut: bool, _cx: &gpui::App) -> bool {
+         false
+@@ -362,6 +366,18 @@ impl CustomElementRegistry {
+         }
+     }
+ 
++    pub(crate) fn insert_text(
++        &self,
++        id: u64,
++        text: &str,
++        window: &mut gpui::Window,
++        cx: &mut gpui::App,
++    ) -> bool {
++        self.instances
++            .get(&id)
++            .is_some_and(|entry| entry.element.insert_text(text, window, cx))
++    }
++
+     /// Synchronize one retained frame into an adapter and render it.
+     pub fn render(
+         &mut self,
+diff --git a/packages/native/src/lib.rs b/packages/native/src/lib.rs
+index 251c894..bc0c55a 100644
+--- a/packages/native/src/lib.rs
++++ b/packages/native/src/lib.rs
+@@ -16,6 +16,8 @@ mod accessibility;
+ mod app_menu;
+ mod automation;
+ mod cached_flow;
++#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++mod clipboard_images;
+ mod color;
+ mod custom_elements;
+ mod diff;
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+index 10b8d8d..7eb33eb 100644
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -36,6 +36,8 @@ use wasm_bindgen::JsCast as _;
+ 
+ use crate::accessibility::{apply_a11y_click, apply_accessibility};
+ use crate::cached_flow::{FlowScope, Flows, SharedFlows};
++#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++use crate::clipboard_images::{self, ClipboardImagePayload, ImagePasteHandlers};
+ use crate::custom_elements::{CustomElementRegistry, CustomRenderContext};
+ use crate::element_tree::EventPayload;
+ use crate::image_resources::{ImageResourceStats, ImageResources, SharedImageResourceStats};
+@@ -490,6 +492,11 @@ enum UiCommand {
+         name: String,
+         deferred: PendingWindowOperation<bool>,
+     },
++    InsertTextInEditor {
++        id: u64,
++        text: String,
++        deferred: PendingWindowOperation<bool>,
++    },
+     ActivateWindow,
+     MinimizeWindow,
+     ZoomWindow,
+@@ -709,6 +716,13 @@ async fn run_ui_commands(
+                 }
+                 result
+             }
++            UiCommand::InsertTextInEditor { id, text, deferred } => {
++                let inserted = window
++                    .update(cx, |view, window, cx| view.insert_text_in_editor(id, &text, window, cx))
++                    .unwrap_or(false);
++                deferred.resolve(Box::new(move |_| Ok(inserted)));
++                Ok(())
++            }
+             UiCommand::Invalidate(kind) => refresh_ui_window(window, kind, cx),
+             UiCommand::ActivateWindow => window.update(cx, |_view, window, cx| {
+                 cx.activate(true);
+@@ -1144,6 +1158,7 @@ pub struct NativeWindowCapabilities {
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ #[derive(Default)]
+ struct NativeWindowState {
++    image_paste_handlers: ImagePasteHandlers,
+     hotkeys: crate::hotkey_capture::HotkeyCapture,
+     open: bool,
+     active: bool,
+@@ -1164,12 +1179,19 @@ type TextActionDeferred = JsDeferred<bool, Box<dyn FnOnce(Env) -> Result<bool> +
+ // A window can close while operations remain in the UI command queue. Reject
+ // cancelled work when its queue/task is dropped instead of leaving JS awaiting it.
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+-struct PendingWindowOperation<T: ToNapiValue> {
++struct PendingWindowOperation<T: ToNapiValue + Send + 'static> {
+     deferred: Option<JsDeferred<T, Box<dyn FnOnce(Env) -> Result<T> + Send>>>,
++    canceled_result: Option<T>,
+ }
+ 
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+-impl<T: ToNapiValue> PendingWindowOperation<T> {
++impl<T: ToNapiValue + Send + 'static> PendingWindowOperation<T> {
++    fn or_resolve(mut self, result: T) -> Self {
++        self.canceled_result = Some(result);
++        self
++    }
++
++
+     fn resolve(mut self, resolver: Box<dyn FnOnce(Env) -> Result<T> + Send>) {
+         if let Some(deferred) = self.deferred.take() {
+             deferred.resolve(resolver);
+@@ -1184,23 +1206,28 @@ impl<T: ToNapiValue> PendingWindowOperation<T> {
+ }
+ 
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+-impl<T: ToNapiValue> From<JsDeferred<T, Box<dyn FnOnce(Env) -> Result<T> + Send>>>
++impl<T: ToNapiValue + Send + 'static> From<JsDeferred<T, Box<dyn FnOnce(Env) -> Result<T> + Send>>>
+     for PendingWindowOperation<T>
+ {
+     fn from(deferred: JsDeferred<T, Box<dyn FnOnce(Env) -> Result<T> + Send>>) -> Self {
+         Self {
+             deferred: Some(deferred),
++            canceled_result: None,
+         }
+     }
+ }
+ 
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+-impl<T: ToNapiValue> Drop for PendingWindowOperation<T> {
++impl<T: ToNapiValue + Send + 'static> Drop for PendingWindowOperation<T> {
+     fn drop(&mut self) {
+         if let Some(deferred) = self.deferred.take() {
+-            deferred.reject(Error::from_reason(
+-                "Window closed before the operation completed",
+-            ));
++            if let Some(result) = self.canceled_result.take() {
++                deferred.resolve(Box::new(move |_| Ok(result)));
++            } else {
++                deferred.reject(Error::from_reason(
++                    "Window closed before the operation completed",
++                ));
++            }
+         }
+     }
+ }
+@@ -1302,6 +1329,7 @@ fn install_window_lifecycle(
+ ) {
+     let window_id = handle.window_id();
+     let observer_state = state.clone();
++    clipboard_images::attach(window_id, &state.lock().image_paste_handlers);
+     let root = handle
+         .update(cx, |view, window, cx| {
+             view.window_id = Some(window_id);
+@@ -1428,6 +1456,7 @@ fn install_window_lifecycle(
+             state.painted_bounds.close();
+             state.hotkeys.cancel();
+         }
++        clipboard_images::detach(window_id);
+         crate::tray::remove(renderer_id);
+         SCROLL_HANDLES.with(|windows| {
+             windows.borrow_mut().remove(&window_id);
+@@ -1707,6 +1736,9 @@ impl GpuixRenderer {
+                 | UiCommand::SetClickThrough { deferred, .. } => deferred.reject(error),
+                 UiCommand::RunTextInputAction { deferred, .. }
+                 | UiCommand::NotifyFromTray { deferred, .. } => deferred.reject(error),
++                UiCommand::InsertTextInEditor { deferred, .. } => {
++                    deferred.resolve(Box::new(|_| Ok(false)));
++                }
+                 _ => unreachable!("only deferred operations use this sender"),
+             }
+         }
+@@ -2630,6 +2662,45 @@ impl GpuixRenderer {
+         Ok(promise)
+     }
+ 
++    #[napi]
++    pub fn set_image_paste_handler(
++        &self,
++        element_id: f64,
++        callback: Option<Function<ClipboardImagePayload, ()>>,
++    ) -> Result<()> {
++        let id = to_element_id(element_id)?;
++        let state = self.window_state.lock();
++        if !state.open {
++            return Ok(());
++        }
++        clipboard_images::set_handler(&state.image_paste_handlers, id, callback)
++    }
++
++    #[napi(ts_return_type = "Promise<boolean>")]
++    pub fn insert_text_in_editor<'env>(
++        &self,
++        env: &'env Env,
++        element_id: f64,
++        text: String,
++    ) -> Result<Object<'env>> {
++        let id = to_element_id(element_id)?;
++        let (deferred, promise): (TextActionDeferred, Object<'env>) = env.create_deferred()?;
++        #[cfg(target_os = "macos")]
++        {
++            let inserted = update_window(self.renderer_id, |view, window, cx| {
++                view.insert_text_in_editor(id, &text, window, cx)
++            }).unwrap_or(false);
++            deferred.resolve(Box::new(move |_| Ok(inserted)));
++        }
++        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
++        self.send_window_operation(UiCommand::InsertTextInEditor {
++            id,
++            text,
++            deferred: PendingWindowOperation::from(deferred).or_resolve(false),
++        });
++        Ok(promise)
++    }
++
+     #[napi]
+     pub fn is_initialized(&self) -> bool {
+         *self.initialized.lock().unwrap()
+@@ -5119,6 +5190,20 @@ impl GpuixView {
+         }
+     }
+ 
++    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++    fn insert_text_in_editor(
++        &self,
++        id: u64,
++        text: &str,
++        window: &mut gpui::Window,
++        cx: &mut gpui::App,
++    ) -> bool {
++        if !self.tree.lock().unwrap().elements.contains_key(&id) {
++            return false;
++        }
++        self.custom_registry.insert_text(id, text, window, cx)
++    }
++
+     fn can_copy_native_selection(&self, name: &str, window: &gpui::Window, cx: &gpui::App) -> bool {
+         if !matches!(name, "copy" | "cut") {
+             return true;

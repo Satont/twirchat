@@ -56,6 +56,21 @@ the old release feeds are being retired. Preserve the `~/.twirchat` profile befo
 Install and manage local TypeScript extensions in **Settings → Plugins**. See the
 [plugin guide](docs/plugins.md) for commands, chat events and third-party channel transports.
 
+## Image uploads
+
+Set up **Settings → Chat → Image Uploader** to paste screenshots and other copied images
+into the chat input with **Ctrl+V** (**Cmd+V** on macOS). Enable uploads, enter your image
+host's multipart POST endpoint and file field, then save. You can import an existing
+Chatterino, Leafyrino or compatible ShareX configuration from the clipboard.
+
+Use `Authorization: Bearer TOKEN; X-Custom: value` for extra headers, or put each header
+on its own line. Leave **Image link** blank if the server replies with a plain URL, or use
+a JSON template such as `{data.images.0.url}`. **Deletion link** accepts the same syntax.
+
+TwirChat asks before uploading by default. The returned image link is inserted at the
+composer's caret; send the draft when you're ready. Copy an optional deletion link from
+the upload result in the composer.
+
 ## Release and backend delivery
 
 Pull requests validate types, lint, formatting, tests, native desktop packages and backend Docker

@@ -13,6 +13,7 @@ const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { SettingsPanel } = await import('../src/gpuix/components/SettingsPanel')
 const { SavedAccounts } = await import('../src/gpuix/components/SavedAccounts')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
+const { DEFAULT_IMAGE_UPLOADER_SETTINGS } = await import('../src/services/image-uploader')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
 const { accountsStore, settingsStore } = await import('../src/gpuix/state/app')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
@@ -27,6 +28,16 @@ const values = new Map([
   ],
 ])
 let durableSettings = structuredClone(DEFAULT_SETTINGS)
+let durableUploader = structuredClone(DEFAULT_IMAGE_UPLOADER_SETTINGS)
+const uploaderPreset = {
+  Version: '1.0.0',
+  RequestURL: 'https://upload.example.test/images',
+  FileFormName: 'image',
+  URL: '{json:data.images[0].url}',
+  DeletionURL: '{json:data.delete}',
+  Headers: { Authorization: 'Bearer qa-token' },
+}
+let clipboard = JSON.stringify(uploaderPreset)
 let failSettings = true
 let holdSettings = false
 let settingsWrite = null
@@ -69,6 +80,15 @@ const methods = {
     settings: structuredClone(DEFAULT_TRANSLATION_SETTINGS),
     credentials: [],
   }),
+  getImageUploaderSettings: async () => structuredClone(durableUploader),
+  saveImageUploaderSettings: async (value) => {
+    durableUploader = structuredClone(value)
+    return durableUploader
+  },
+  readClipboard: async () => clipboard,
+  copyText: async ({ text }) => {
+    clipboard = text
+  },
   getSavedAccounts: async () => structuredClone(saved),
   getAccounts: async () => structuredClone(active),
   setActiveAccount: async ({ accountId }) => {
@@ -279,6 +299,36 @@ try {
   assert.equal(settingsStore.get().theme, 'light')
   await click('settings-save')
   assert.equal(durableSettings.theme, 'light', 'App setting edited during save was overwritten')
+  await type(find('settings-search'), 'sharex headers')
+  assert.ok(find('settings-section-image-uploader'))
+  assert.ok(find('image-uploader-request-url'))
+  assert.equal(calls.filter((call) => call.name === 'getImageUploaderSettings').length, 1)
+  assert.equal(durableUploader.enabled, false)
+  assert.equal(durableUploader.confirm, true)
+  const uploader = await captureGuiQaDisplay('settings-image-uploader')
+  await clickNode(await scrollTo('image-uploader-import'))
+  await clickNode(await scrollTo('image-uploader-cancel-clipboard'))
+  assert.equal(durableUploader.requestUrl, '')
+  await clickNode(await scrollTo('image-uploader-import'))
+  await clickNode(await scrollTo('image-uploader-apply-import'))
+  assert.equal(durableUploader.requestUrl, '', 'Import should wait for Save')
+  await click('settings-search-clear')
+  await type(find('settings-search'), 'sharex headers')
+  await clickNode(await scrollTo('image-uploader-save'))
+  assert.deepEqual(durableUploader, {
+    enabled: true,
+    confirm: true,
+    requestUrl: uploaderPreset.RequestURL,
+    formField: uploaderPreset.FileFormName,
+    headers: 'Authorization: Bearer qa-token',
+    imageLink: '{data.images.0.url}',
+    deletionLink: '{data.delete}',
+  })
+  await clickNode(await scrollTo('image-uploader-export'))
+  assert.ok(hasText('includes any credentials'))
+  await clickNode(await scrollTo('image-uploader-copy-export'))
+  assert.equal(JSON.parse(clipboard).RequestURL, uploaderPreset.RequestURL)
+  assert.deepEqual(JSON.parse(clipboard).Headers, { authorization: 'Bearer qa-token' })
   mount(SavedAccounts)
   await Bun.sleep(250)
   assert.ok(hasText('Twitch · @alpha'))
@@ -315,8 +365,9 @@ try {
       pendingEditRetained: true,
       saveErrorRetry: true,
       appSettingsPendingEditRetained: true,
+      imageUploaderImportSaveExport: true,
       accountSwitchAnonymousForget: true,
-      screenshots: [narrow, search, accounts],
+      screenshots: [narrow, search, uploader, accounts],
     }),
   )
 } catch (error) {

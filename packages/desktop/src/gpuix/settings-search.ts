@@ -92,6 +92,7 @@ export type SettingsSectionId =
   | 'notifications'
   | 'rules'
   | 'history'
+  | 'image-uploader'
   | 'self-ping'
   | 'emotes'
   | 'translation'
@@ -179,6 +180,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'history logging retention keep messages days age limit write chat logs files absolute folder path include timestamps start new log daily session maximum file size MiB rotation channel overrides flush pending logs export история логи хранение дни папка файл ротация журнал',
+  },
+  {
+    id: 'image-uploader',
+    category: 'chat',
+    title: 'Image Uploader',
+    saveMode: 'section',
+    keywords:
+      'paste clipboard screenshot image upload ShareX Chatterino Leafyrino sxcu HTTP request URL multipart form field custom headers authorization image link deletion link import export загрузка изображений картинки скриншот вставка буфер обмена заголовки',
   },
   {
     id: 'self-ping',

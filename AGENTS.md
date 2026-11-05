@@ -14,8 +14,8 @@
 
 - Plugin systems, including Lua compatibility, are deferred to
   [issue #76](https://github.com/Satont/twirchat/issues/76).
-- Image uploads from the composer (clipboard, file picker, drag-and-drop) are deferred to
-  [issue #77](https://github.com/Satont/twirchat/issues/77).
+- Clipboard image uploads are supported in the composer. A file picker and drag-and-drop
+  remain deferred to [issue #77](https://github.com/Satont/twirchat/issues/77).
 - Neither feature blocks the current GPUIX migration or Chatterino/Leafyrino/Dankerino
   feature-parity acceptance. Resume them only when the user reopens their scope.
 - Avatar/emote rendering and ordinary text-link handling remain in the current scope.

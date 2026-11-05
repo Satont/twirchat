@@ -3,6 +3,8 @@ const { assertGuiQaEnvironment } = await import('../src/services/gui-qa')
 assertGuiQaEnvironment()
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 const require = createRequire(new URL('../package.json', import.meta.url))
 const React = await import(require.resolve('react'))
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider } = await import(
@@ -13,6 +15,10 @@ const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatInput } = await import('../src/gpuix/components/ChatInput')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
+const { DEFAULT_IMAGE_UPLOADER_SETTINGS, readClipboardUploadFile, uploadClipboardImage } =
+  await import('../src/services/image-uploader')
+const { applyImageUploaderSettings, imageUploaderSettingsStore } =
+  await import('../src/gpuix/state/image-uploader')
 const { composerStore, EMPTY_COMPOSER, editComposer, updateComposer } =
   await import('../src/gpuix/state/composer')
 const { actionBindingsStore, dispatchCustomHotkey } =
@@ -26,6 +32,7 @@ let cancelledReply = 0
 let failTranslation = false
 let releaseTranslation = null
 let holdTranslation = false
+let imageSettings = { ...DEFAULT_IMAGE_UPLOADER_SETTINGS }
 const backend = {
   events: createDesktopEvents(),
   api: {
@@ -35,6 +42,16 @@ const backend = {
       credentials: [],
     }),
     getChannelEmotes: async () => [],
+    getImageUploaderSettings: async () => ({ ...imageSettings }),
+    saveImageUploaderSettings: async (settings) => {
+      imageSettings = { ...settings }
+      return imageSettings
+    },
+    readClipboardUploadFile,
+    uploadClipboardImage: (request) => {
+      assert(request.image.bytes instanceof Uint8Array, JSON.stringify(Object.keys(request.image)))
+      return uploadClipboardImage(request)
+    },
     copyText: async ({ text }) => {
       copied.push(text)
     },
@@ -203,6 +220,174 @@ function configureTranslation(outgoingMode) {
     credentials: [],
   })
 }
+
+function pressNativeKeys(...keys) {
+  const result = Bun.spawnSync(['/usr/bin/xdotool', 'key', '--clearmodifiers', ...keys], {
+    timeout: 3000,
+  })
+  assert.equal(result.exitCode, 0, result.stderr.toString())
+}
+
+const has = (id) => flatten().some((node) => node.testId === id)
+
+async function checkImageUpload(clipboardTool) {
+  const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
+  const sharp = (await import('sharp')).default
+  const png = await sharp({
+    create: { width: 160, height: 96, channels: 3, background: '#7c4dff' },
+  })
+    .png()
+    .toBuffer()
+  const imageUrl = 'https://images.example/qa.png'
+  const deletionUrl = 'https://images.example/delete/qa'
+  let requests = 0
+  let requestError = null
+  let release = null
+  let hold = false
+  let clipboard = null
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    async fetch(request) {
+      try {
+        requests++
+        assert.equal(request.method, 'POST')
+        assert.equal(request.headers.get('Authorization'), 'Bearer qa:token')
+        const file = (await request.formData()).get('upload')
+        assert(file instanceof File)
+        assert.equal(file.name, 'control_v.png')
+        assert.equal(file.type, 'image/png')
+        assert.deepEqual(Buffer.from(await file.arrayBuffer()), png)
+        if (requests === 1) return new Response(null, { status: 503 })
+        if (hold)
+          await new Promise((resolve) => {
+            release = resolve
+          })
+        return Response.json({ data: [{ url: imageUrl, deletionUrl }] })
+      } catch (error) {
+        requestError = error
+        return new Response(null, { status: 500 })
+      }
+    },
+  })
+  async function ownClipboard(mime, bytes) {
+    clipboard?.kill()
+    clipboard = Bun.spawn([clipboardTool, '-quiet', '-selection', 'clipboard', '-target', mime], {
+      stdin: bytes,
+      stdout: 'ignore',
+      stderr: 'ignore',
+    })
+    await Bun.sleep(90)
+    assert(clipboard.exitCode === null, 'private X11 clipboard owner exited')
+  }
+  const sendCount = sent.length
+  const replyCount = cancelledReply
+  try {
+    await until(() => imageUploaderSettingsStore.get() !== null, 'initial image settings')
+    await draft('alpha beta')
+    await focus()
+    await ownClipboard('image/png', png)
+    pressNativeKeys('ctrl+v')
+    await Bun.sleep(150)
+    assert.equal(state().text, 'alpha beta')
+    assert.equal(requests, 0)
+    assert(!has('composer-image-confirm'), 'disabled uploader ignores an image paste')
+
+    imageSettings = {
+      enabled: true,
+      confirm: true,
+      requestUrl: server.url.href,
+      formField: 'upload',
+      headers: 'Authorization: Bearer qa:token',
+      imageLink: '{data.0.url}',
+      deletionLink: '{data.0.deletionUrl}',
+    }
+    applyImageUploaderSettings(imageSettings)
+    await Bun.sleep(120)
+    await ownClipboard('UTF8_STRING', Buffer.from('text paste'))
+    pressNativeKeys('ctrl+a', 'ctrl+v')
+    await until(() => state().text === 'text paste', 'native text paste with uploader enabled')
+    await draft('alpha beta')
+    await ownClipboard('image/png', png)
+    pressNativeKeys('ctrl+v')
+    await until(
+      () => has('composer-image-confirm') || has('composer-image-failed'),
+      'clipboard image confirmation',
+    )
+    await captureGuiQaDisplay('composer-image-confirm')
+    assert(has('composer-image-confirm'), renderer.getAllText().join(' '))
+    assert(renderer.getElementBounds(find('composer-image-preview').id)?.width > 0)
+    await click('composer-image-cancel')
+    await until(() => !has('composer-image-confirm'), 'dismiss confirmation')
+    assert.equal(requests, 0, 'cancel before confirmation makes no request')
+
+    await fire('paste')
+    await until(() => has('composer-image-confirm'), 'second image confirmation')
+    await click('composer-image-upload')
+    await until(() => has('composer-image-retry'), 'HTTP error is retryable')
+    assert.equal(state().text, 'alpha beta')
+    assert.equal(requests, 1, renderer.getAllText().join(' '))
+    hold = true
+    await click('composer-image-retry')
+    await until(() => release !== null, 'retry waiting for the upload host')
+    await focus()
+    pressNativeKeys('End', 'Left', 'Left', 'Left', 'Left', 'x')
+    await until(() => state().text === 'alpha xbeta', 'native typing while request is in flight')
+    release()
+    await until(() => state().text === `alpha x${imageUrl} beta`, 'URL inserted at current caret')
+    await until(() => has('composer-image-complete'), 'upload completion shown')
+    await click('composer-image-copy-deletion')
+    assert.equal(copied.at(-1), deletionUrl)
+    await click('composer-image-cancel')
+    await focus()
+    pressNativeKeys('ctrl+z')
+    await until(() => state().text === 'alpha xbeta', 'native undo restores the edited draft')
+
+    await renderer.setWindowBounds({ width: 510, height: 500 })
+    await focus()
+    hold = false
+    pressNativeKeys('ctrl+v')
+    await until(() => has('composer-image-confirm'), 'narrow composer confirmation')
+    const bounds = renderer.getElementBounds(find('composer-image-upload-remember').id)
+    assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 510, 'buttons fit narrow composer')
+    await click('composer-image-upload-remember')
+    await until(() => has('composer-image-complete'), 'confirm and persist preference')
+    assert.equal(imageSettings.confirm, false)
+    await click('composer-image-cancel')
+    hold = true
+    release = null
+    await focus()
+    const beforeCancel = state().text
+    pressNativeKeys('ctrl+v')
+    await until(() => release !== null, 'next upload starts without confirmation')
+    await click('composer-image-cancel')
+    release()
+    await Bun.sleep(150)
+    assert.equal(state().text, beforeCancel, 'aborted upload does not alter the draft')
+
+    hold = false
+    const filePath = join(process.env.TWIRCHAT_QA_SESSION_DIR, 'clipboard screenshot.png')
+    await Bun.write(filePath, png)
+    await ownClipboard('text/uri-list', Buffer.from(`${pathToFileURL(filePath).href}\r\n`))
+    await draft('copied file: ')
+    await focus()
+    pressNativeKeys('End', 'ctrl+v')
+    await until(() => state().text === `copied file: ${imageUrl} `, 'copied file uploads')
+    assert.equal(sent.length, sendCount, 'upload never sends a message')
+    assert.equal(cancelledReply, replyCount, 'upload preserves reply state')
+    assert.equal(requestError, null)
+    assert.equal(requests, 5)
+    console.log(JSON.stringify({ imageUpload: 'pass', requests, nativePaste: true }))
+  } finally {
+    release?.()
+    await server.stop(true)
+    clipboard?.kill()
+    imageSettings = { ...DEFAULT_IMAGE_UPLOADER_SETTINGS }
+    applyImageUploaderSettings(imageSettings)
+    await renderer.setWindowBounds({ width: 900, height: 780 })
+  }
+}
+
 try {
   await (await import('./qa-x11')).focusNativeQaWindow('TwirChat composer QA')
   await until(
@@ -334,6 +519,8 @@ try {
   await until(() => renderer.getAllText().join(' ').includes('No emotes'), 'emote picker opens')
   renderer.simulateKeystrokes('escape')
   await Bun.sleep(100)
+  const clipboardArg = process.argv.find((arg) => arg.startsWith('--xclip='))
+  if (clipboardArg) await checkImageUpload(clipboardArg.slice('--xclip='.length))
   renderer.blur()
   await Bun.sleep(80)
   const textBeforeBlur = state().text

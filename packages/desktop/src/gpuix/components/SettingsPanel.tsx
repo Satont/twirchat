@@ -41,6 +41,7 @@ import { ChatRulesSettings } from './ChatRulesSettings'
 import { CustomCommandsSettings } from './CustomCommandsSettings'
 import { EmoteProviderSettings } from './EmoteProviderSettings'
 import { HotkeySettings as ActionHotkeySettings } from './HotkeySettings'
+import { ImageUploaderSettings } from './ImageUploaderSettings'
 import { NotificationSettings } from './NotificationSettings'
 import { PlayerSettings } from './PlayerSettings'
 import { PluginSettings } from './PluginSettings'
@@ -637,6 +638,9 @@ export function SettingsPanel() {
               </Section>
               <Section id="history" title="History & Logging">
                 <RetainedSettingsEditor component={ChatLoggingSettings} />
+              </Section>
+              <Section id="image-uploader" title="Image Uploader">
+                <RetainedSettingsEditor component={ImageUploaderSettings} />
               </Section>
               <Section id="translation" title="Translation">
                 <RetainedSettingsEditor component={TranslationSettings} />

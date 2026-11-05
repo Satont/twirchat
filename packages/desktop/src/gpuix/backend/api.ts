@@ -70,6 +70,13 @@ import {
 } from '../../services/cosmetics'
 import { getProviderErrors } from '../../services/emote-providers'
 import {
+  readClipboardUploadFile,
+  type ClipboardImageUpload,
+  type ClipboardUploadImage,
+  type ImageUploaderSettings,
+  type ImageUploadResult,
+} from '../../services/image-uploader'
+import {
   resolveMentionUser,
   type MentionUser,
   type MentionUserRequest,
@@ -134,6 +141,7 @@ import {
   type ChatLoggingSettings,
 } from './chat-history'
 import type { DesktopEvents } from './events'
+import * as imageUploader from './image-uploader'
 import { createLayoutApi } from './layout-api'
 import { createStreamerModeApi } from './streamer-mode-api'
 import * as translation from './translation'
@@ -215,6 +223,10 @@ export interface DesktopApi {
   setProviderActiveChannel(
     params: { platform: Platform; channelId: string; channelSlug?: string } | null,
   ): Promise<void>
+  getImageUploaderSettings(): Promise<ImageUploaderSettings>
+  saveImageUploaderSettings(settings: ImageUploaderSettings): Promise<ImageUploaderSettings>
+  readClipboardUploadFile(path: string): Promise<ClipboardUploadImage | null>
+  uploadClipboardImage(request: ClipboardImageUpload): Promise<ImageUploadResult>
   getTranslationSettings(): Promise<TranslationSettingsView>
   saveTranslationSettings(settings: TranslationSettings): Promise<TranslationSettingsView>
   setTranslationCredential(params: {
@@ -826,6 +838,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     setProviderActiveChannel: async (params) => {
       ctx.providerRuntime?.setActiveChannel(params)
     },
+    getImageUploaderSettings: imageUploader.getImageUploaderSettings,
+    saveImageUploaderSettings: imageUploader.saveImageUploaderSettings,
+    readClipboardUploadFile,
+    uploadClipboardImage: imageUploader.uploadClipboardImage,
     getTranslationSettings: translation.getTranslationSettings,
     saveTranslationSettings: translation.saveTranslationSettings,
     setTranslationCredential: translation.setTranslationCredential,
