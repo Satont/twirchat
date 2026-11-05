@@ -1,37 +1,49 @@
 import { constants } from 'node:fs'
-import { copyFile, lstat, mkdir, mkdtemp, opendir, realpath, rename, rm } from 'node:fs/promises'
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  opendir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
 import { PLUGIN_API_VERSION, type PluginInfo } from './api'
+import {
+  MANIFEST_FILENAME,
+  MAX_MANIFEST_BYTES,
+  MAX_PACKAGE_BYTES,
+  MAX_PACKAGE_DEPTH,
+  MAX_PACKAGE_ENTRIES,
+  manifestSchema,
+  type Manifest,
+} from './manifest'
 import { MAX_PLUGINS, pluginError, pluginIdSchema } from './protocol'
+import {
+  MAX_REMOTE_MANIFEST_URL_LENGTH,
+  remoteManifestUrl,
+  type RemotePluginDownload,
+} from './remote-packages'
 
-const MANIFEST_FILENAME = 'manifest.json'
-const MAX_MANIFEST_BYTES = 32 * 1024
-const MAX_PACKAGE_BYTES = 16 * 1024 * 1024
-const MAX_PACKAGE_ENTRIES = 512
-const MAX_PACKAGE_DEPTH = 12
 const log = logger('plugins')
-
-const manifestSchema = z.object({
-  id: pluginIdSchema,
-  name: z.string().trim().min(1).max(100),
-  version: z
-    .string()
-    .regex(/^\d+\.\d+\.\d+(?:-[a-z\d]+(?:[.-][a-z\d]+)*)?$/iu)
-    .max(80),
-  apiVersion: z.number().int().positive(),
-  entry: z
-    .string()
-    .regex(/^(?:[a-z\d_][a-z\d_-]*\/)*[a-z\d_][a-z\d_.-]*\.(?:[cm]?[jt]s)$/iu)
-    .max(160),
+const REMOTE_POINTER = 'remote.json'
+const remoteSchema = z.object({
+  sourceUrl: z.string().max(MAX_REMOTE_MANIFEST_URL_LENGTH),
+  release: z.string().regex(/^package-[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/u),
 })
 
-type Manifest = z.infer<typeof manifestSchema>
+type RemotePointer = z.infer<typeof remoteSchema>
+
 export interface InstalledPlugin {
   readonly entry: string | null
+  readonly remote?: RemotePointer
   info: PluginInfo
 }
 
@@ -48,42 +60,84 @@ async function readManifest(path: string): Promise<Manifest> {
   return parsed.data
 }
 
-async function readInstalled(root: string, id: string): Promise<InstalledPlugin> {
-  const source = join(root, id, 'package')
-  const enabled = await Bun.file(join(root, id, 'enabled')).exists()
-  try {
-    const manifest = await readManifest(join(source, MANIFEST_FILENAME))
-    if (manifest.id !== id) throw new Error('Installed plugin ID does not match its directory.')
-    const { name, version, apiVersion } = manifest
-    if (apiVersion !== PLUGIN_API_VERSION)
-      return {
-        entry: null,
-        info: {
-          id,
-          name,
-          version,
-          enabled,
-          status: 'incompatible',
-          error: `Plugin API ${apiVersion} is incompatible with TwirChat API ${PLUGIN_API_VERSION}.`,
-        },
-      }
-    // Check every ancestor in case the installed files were changed outside TwirChat.
-    const segments = manifest.entry.split('/')
-    let entry = source
-    if (!(await lstat(source)).isDirectory())
-      throw new Error('Invalid installed package directory.')
-    for (const [index, segment] of segments.entries()) {
-      entry = join(entry, segment)
-      // eslint-disable-next-line no-await-in-loop
-      const stat = await lstat(entry)
-      if (index === segments.length - 1 ? !stat.isFile() : !stat.isDirectory())
-        throw new Error('Plugin entry must be a regular file inside its package.')
+async function readRemotePointer(directory: string): Promise<RemotePointer | undefined> {
+  const path = join(directory, REMOTE_POINTER)
+  const stat = await lstat(path).catch((error: unknown) => {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!stat) return undefined
+  if (!stat.isFile() || stat.size > MAX_MANIFEST_BYTES)
+    throw new Error('Invalid installed plugin remote pointer.')
+  const value: unknown = await Bun.file(path).json()
+  const parsed = remoteSchema.safeParse(value)
+  if (!parsed.success) throw new Error('Invalid installed plugin remote pointer.')
+  const sourceUrl = remoteManifestUrl(parsed.data.sourceUrl)
+  if (!sourceUrl) throw new Error('Invalid installed plugin remote source.')
+  return { sourceUrl, release: parsed.data.release }
+}
+
+async function entryPath(source: string, path: string): Promise<string> {
+  const segments = path.split('/')
+  let entry = source
+  for (const [index, segment] of segments.entries()) {
+    entry = join(entry, segment)
+    // eslint-disable-next-line no-await-in-loop
+    const stat = await lstat(entry)
+    if (index === segments.length - 1 ? !stat.isFile() : !stat.isDirectory())
+      throw new Error('Plugin entry must be a regular file inside its package.')
+  }
+  return entry
+}
+
+async function readInstalledPackage(
+  directory: string,
+  id: string,
+  enabled: boolean,
+  remote?: RemotePointer,
+): Promise<InstalledPlugin> {
+  const source = join(directory, remote?.release ?? 'package')
+  if (!(await lstat(source)).isDirectory()) throw new Error('Invalid installed package directory.')
+  const manifest = await readManifest(join(source, MANIFEST_FILENAME))
+  if (manifest.id !== id) throw new Error('Installed plugin ID does not match its directory.')
+  const { name, version, apiVersion } = manifest
+  const provenance = remote ? { remote } : {}
+  const info = { id, name, version, enabled, ...(remote && { sourceUrl: remote.sourceUrl }) }
+  const entry =
+    remote || apiVersion === PLUGIN_API_VERSION ? await entryPath(source, manifest.entry) : null
+  if (apiVersion !== PLUGIN_API_VERSION)
+    return {
+      entry: null,
+      ...provenance,
+      info: {
+        ...info,
+        status: 'incompatible',
+        error: `Plugin API ${apiVersion} is incompatible with TwirChat API ${PLUGIN_API_VERSION}.`,
+      },
     }
-    return { entry, info: { id, name, version, enabled, status: 'disabled' } }
+  return { entry, ...provenance, info: { ...info, status: 'disabled' } }
+}
+
+async function readInstalled(root: string, id: string): Promise<InstalledPlugin> {
+  const directory = join(root, id)
+  const enabled = await Bun.file(join(directory, 'enabled')).exists()
+  let remote: RemotePointer | undefined
+  try {
+    remote = await readRemotePointer(directory)
+    return await readInstalledPackage(directory, id, enabled, remote)
   } catch (error) {
     return {
       entry: null,
-      info: { id, name: id, version: '', enabled, status: 'error', error: pluginError(error) },
+      ...(remote && { remote }),
+      info: {
+        id,
+        name: id,
+        version: '',
+        enabled,
+        status: 'error',
+        error: pluginError(error),
+        ...(remote && { sourceUrl: remote.sourceUrl }),
+      },
     }
   }
 }
@@ -165,6 +219,119 @@ export async function installPluginPackage(
   } finally {
     await cleanStaging(staging)
   }
+}
+
+function remotePointer(download: RemotePluginDownload): RemotePointer {
+  return { sourceUrl: download.sourceUrl, release: `package-${crypto.randomUUID()}` }
+}
+
+async function writeRelease(
+  directory: string,
+  remote: RemotePointer,
+  download: RemotePluginDownload,
+): Promise<void> {
+  const release = join(directory, remote.release)
+  await mkdir(release)
+  for (const [name, bytes] of download.files) {
+    const path = join(release, name)
+    // eslint-disable-next-line no-await-in-loop
+    await mkdir(dirname(path), { recursive: true })
+    // eslint-disable-next-line no-await-in-loop
+    await writeFile(path, bytes, { flag: 'wx' })
+  }
+}
+
+async function writeRemotePointer(directory: string, remote: RemotePointer): Promise<void> {
+  const temporary = join(directory, `.remote-${crypto.randomUUID()}.tmp`)
+  try {
+    await writeFile(temporary, JSON.stringify(remote), { flag: 'wx' })
+    await rename(temporary, join(directory, REMOTE_POINTER))
+  } catch (error) {
+    await cleanStaging(temporary)
+    throw error
+  }
+}
+
+export async function installRemotePluginPackage(
+  root: string,
+  download: RemotePluginDownload,
+  installedIds: ReadonlyMap<string, InstalledPlugin>,
+): Promise<InstalledPlugin> {
+  if (installedIds.size >= MAX_PLUGINS) throw new Error('The installed plugin limit was reached.')
+  const { id } = download.manifest
+  if (installedIds.has(id)) throw new Error(`Plugin ${id} is already installed.`)
+  const remote = remotePointer(download)
+  const staging = await mkdtemp(join(root, '.install-'))
+  const candidate = join(staging, id)
+  try {
+    await mkdir(candidate)
+    await writeRelease(candidate, remote, download)
+    const record = await readInstalledPackage(candidate, id, false, remote)
+    await writeRemotePointer(candidate, remote)
+    await rename(candidate, join(root, id))
+    return {
+      ...record,
+      entry: record.entry ? join(root, id, relative(candidate, record.entry)) : null,
+    }
+  } finally {
+    await cleanStaging(staging)
+  }
+}
+
+interface StagedUpdate {
+  record: InstalledPlugin
+  commit(): Promise<void>
+  discard(): Promise<void>
+}
+
+export async function stageRemotePluginUpdate(
+  root: string,
+  previous: InstalledPlugin,
+  download: RemotePluginDownload,
+): Promise<StagedUpdate> {
+  const { id } = download.manifest
+  const old = previous.remote
+  if (!old || previous.info.id !== id || old.sourceUrl !== download.sourceUrl)
+    throw new Error('The update does not match the installed remote plugin.')
+  const directory = join(root, id)
+  if (!(await lstat(directory)).isDirectory())
+    throw new Error('Invalid installed plugin directory.')
+  const remote = remotePointer(download)
+  const release = join(directory, remote.release)
+  let record: InstalledPlugin
+  try {
+    await writeRelease(directory, remote, download)
+    const enabled = await Bun.file(join(directory, 'enabled')).exists()
+    record = await readInstalledPackage(directory, id, enabled, remote)
+  } catch (error) {
+    await cleanStaging(release)
+    throw error
+  }
+
+  let state: 'staged' | 'committed' | 'discarded' = 'staged'
+  let operation = Promise.resolve()
+  const settle = (commit: boolean): Promise<void> => {
+    const result = operation.then(async () => {
+      if (!commit) {
+        if (state === 'staged') {
+          state = 'discarded'
+          return cleanStaging(release)
+        }
+        return undefined
+      }
+      if (state === 'committed') return undefined
+      if (state === 'discarded') throw new Error('The remote plugin update was discarded.')
+      const current = await readRemotePointer(directory)
+      if (current?.release !== old.release || current.sourceUrl !== old.sourceUrl)
+        throw new Error('The installed remote plugin changed during the update.')
+      await writeRemotePointer(directory, remote)
+      state = 'committed'
+      return cleanStaging(join(directory, old.release))
+    })
+    operation = result.catch(() => undefined)
+    return result
+  }
+  return { record, commit: () => settle(true), discard: () => settle(false) }
 }
 
 export async function writePluginEnabled(

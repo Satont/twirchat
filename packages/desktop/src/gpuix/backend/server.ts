@@ -72,7 +72,14 @@ export interface DesktopBackend {
   events: DesktopEvents
   plugins?: Pick<
     ReturnType<typeof createPluginManager>,
-    'list' | 'install' | 'setEnabled' | 'remove' | 'hasCommand' | 'runCommand' | 'commandNames'
+    | 'list'
+    | 'install'
+    | 'checkForUpdate'
+    | 'setEnabled'
+    | 'remove'
+    | 'hasCommand'
+    | 'runCommand'
+    | 'commandNames'
   >
   dispose?: () => void
   shutdownPlugins?: () => Promise<void>

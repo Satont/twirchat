@@ -53,7 +53,7 @@ the old release feeds are being retired. Preserve the `~/.twirchat` profile befo
 
 ## Plugins
 
-Install and manage local TypeScript extensions in **Settings → Plugins**. See the
+Install TypeScript extensions from a local manifest or HTTPS URL in **Settings → Plugins**. See the
 [plugin guide](docs/plugins.md) for commands, chat events and third-party channel transports.
 
 ## Release and backend delivery

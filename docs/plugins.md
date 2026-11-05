@@ -1,6 +1,9 @@
 # TwirChat plugins
 
-In **Settings → Plugins**, enter the full path to a local `manifest.json` and select **Install plugin**. TwirChat copies the package into the active profile and leaves it disabled until you select **Enable**. Use **Disable** to unload it or **Remove** to delete the installed copy. The original package remains available.
+In **Settings → Plugins**, enter a local `manifest.json` path or an HTTPS link to the manifest
+and select **Install plugin**. TwirChat saves the package in the active profile and leaves it
+disabled until you select **Enable**. Use **Disable** to unload it or **Remove** to delete the
+installed copy.
 
 Enable code from sources you trust. Each plugin runs in its own Bun process with the permissions of your user account. It can access local files and the network. Through the TwirChat API it can read chat events and send messages through connected accounts.
 
@@ -109,3 +112,39 @@ Messages in the combined feed can be read there. To send through a writable plug
 open its channel in a tab or split.
 
 The v1 contract includes the APIs above and a text chat pane for third-party transports. Lua compatibility and fork-specific APIs for custom UI, rich message mutation and completion providers are outside this contract.
+
+## Remote installation and updates
+
+Paste the direct HTTPS URL of a hosted manifest into **Settings → Plugins**. For public GitHub
+repositories, both a file page link and its raw link work, including branch names with slashes.
+
+```text
+https://github.com/OWNER/REPO/blob/main/plugin/manifest.json
+https://raw.githubusercontent.com/OWNER/REPO/refs/heads/main/plugin/manifest.json
+```
+
+TwirChat checks saved remote sources after startup and every six hours. **Check for update**
+checks one plugin immediately. TwirChat installs only newer versions with the same plugin ID
+and a compatible API version. It keeps the enabled state, and an enabled plugin reloads after
+an update. If downloading or starting the replacement fails, TwirChat keeps the previous version.
+
+Publish a self-contained entrypoint or list its additional runtime files in the optional
+`files` array. Paths are relative to the manifest directory. TwirChat downloads the entrypoint
+automatically, so it does not need to appear in `files`. Bundle third-party dependencies into
+the package before publishing.
+
+```json
+{
+  "id": "local-echo",
+  "name": "Local Echo",
+  "version": "1.0.1",
+  "apiVersion": 1,
+  "entry": "index.ts",
+  "files": ["commands/echo.ts", "assets/icon.png"]
+}
+```
+
+For GitHub, each downloaded version comes from a single commit. A branch link tracks future
+releases and a commit link stays pinned. On other HTTPS hosts, publish a consistent set of
+files with each version. Using version-specific filenames helps keep the manifest and its
+files in sync while a new version is being published.

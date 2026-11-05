@@ -7,6 +7,8 @@ export interface PluginInfo {
   readonly enabled: boolean
   readonly status: 'disabled' | 'starting' | 'running' | 'incompatible' | 'error'
   readonly error?: string
+  readonly sourceUrl?: string
+  readonly updateError?: string
 }
 
 export interface PluginChannel {

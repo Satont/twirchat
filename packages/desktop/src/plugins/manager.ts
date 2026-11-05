@@ -3,21 +3,24 @@ import { resolve } from 'node:path'
 import { logger } from '@twirchat/shared/logger'
 
 import { APP_VERSION } from '../build-info'
-import type {
-  PluginChannel,
-  PluginCommandContext,
-  PluginEventMap,
-  PluginInfo,
-  PluginPlatform,
-  PluginTransportCallbacks,
-  PluginTransportConnection,
-  PluginTransportInfo,
-  PluginTransportStatus,
+import {
+  PLUGIN_API_VERSION,
+  type PluginChannel,
+  type PluginCommandContext,
+  type PluginEventMap,
+  type PluginInfo,
+  type PluginPlatform,
+  type PluginTransportCallbacks,
+  type PluginTransportConnection,
+  type PluginTransportInfo,
+  type PluginTransportStatus,
 } from './api'
 import {
   installPluginPackage,
+  installRemotePluginPackage,
   listInstalledPlugins,
   removePluginPackage,
+  stageRemotePluginUpdate,
   writePluginEnabled,
   type InstalledPlugin,
 } from './packages'
@@ -26,14 +29,31 @@ import {
   MAX_BATCH,
   MAX_CONNECTIONS,
   MAX_EVENT_QUEUE,
+  MAX_PLUGINS,
   pluginError,
   type HostAction,
   type HostResult,
   type PluginEvent,
   type TransportUpdate,
 } from './protocol'
+import {
+  downloadRemotePlugin,
+  readRemotePluginManifest,
+  remoteManifestUrl,
+  type PluginFetch,
+  type RemotePluginDownload,
+} from './remote-packages'
 
 const log = logger('plugins')
+const REMOTE_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
+const REMOTE_REQUEST_TIMEOUT_MS = 60_000
+
+function requireCompatible(apiVersion: number): void {
+  if (apiVersion !== PLUGIN_API_VERSION)
+    throw new Error(
+      `Plugin API ${apiVersion} is incompatible with TwirChat API ${PLUGIN_API_VERSION}.`,
+    )
+}
 
 type PluginEventName = keyof PluginEventMap
 
@@ -50,6 +70,8 @@ export interface PluginHost {
 interface PluginManagerOptions {
   directory: string
   appVersion?: string
+  remoteFetch?: PluginFetch
+  remoteUpdateIntervalMs?: number
   host: PluginHost
   onChange(): void
 }
@@ -79,10 +101,17 @@ interface EventRoute {
   dispose?: () => void
 }
 
+interface RemoteUpdate {
+  record: InstalledPlugin
+  abort: AbortController
+  task: Promise<boolean>
+}
+
 export interface PluginManager {
   initialize(): Promise<void>
   list(): readonly PluginInfo[]
   install(manifestPath: string): Promise<void>
+  checkForUpdate(id: string): Promise<boolean>
   setEnabled(id: string, enabled: boolean): Promise<void>
   remove(id: string): Promise<void>
   dispose(): Promise<void>
@@ -102,11 +131,17 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
   const { host } = options
   const installed = new Map<string, InstalledPlugin>()
   const active = new Map<string, ActivePlugin>()
+  const workers = new Map<InstalledPlugin, ActivePlugin>()
   const children = new Set<PluginProcess>()
   const closing = new Map<PluginProcess, Promise<void>>()
   const commands = new Map<string, ActivePlugin>()
   const transports = new Map<string, RegisteredTransport>()
   const routes = new Map<PluginEventName, EventRoute>()
+  const remoteLifetime = new AbortController()
+  const remoteUpdates = new Map<string, RemoteUpdate>()
+  let remoteInstall: Promise<void> | undefined
+  let updateTimer: ReturnType<typeof setInterval> | undefined
+  let backgroundUpdates: Promise<void> | undefined
   let infoSnapshot: readonly PluginInfo[] = Object.freeze([])
   let commandsSnapshot: readonly string[] = Object.freeze([])
   let transportsSnapshot: readonly PluginTransportInfo[] = Object.freeze([])
@@ -245,12 +280,14 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     for (const child of children) child.kill()
   }
 
-  function stopChild(child: PluginProcess): Promise<void> {
+  function stopChild(plugin: ActivePlugin): Promise<void> {
+    const { child, installed: record } = plugin
     const inProgress = closing.get(child)
     if (inProgress) return inProgress
     const task = child.close().finally(() => {
       children.delete(child)
       closing.delete(child)
+      if (workers.get(record) === plugin) workers.delete(record)
       if (children.size === 0) process.removeListener('exit', terminateOnExit)
     })
     closing.set(child, task)
@@ -275,7 +312,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     if (active.get(id) !== plugin) return
     log.warn('Plugin stopped', { id, error })
     forget(plugin, { status: 'error', error })
-    void stopChild(plugin.child).catch((reason: unknown) => {
+    void stopChild(plugin).catch((reason: unknown) => {
       log.warn('Could not stop plugin process', { id, error: pluginError(reason) })
     })
     setInfo(plugin.installed, { status: 'error', error })
@@ -326,6 +363,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     }
     if (children.size === 0) process.once('exit', terminateOnExit)
     children.add(child)
+    workers.set(record, plugin)
     active.set(id, plugin)
     try {
       const registration = await child.ready
@@ -380,11 +418,145 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
   }
 
   function stop(record: InstalledPlugin): Promise<void> {
-    const plugin = active.get(record.info.id)
+    const plugin = workers.get(record)
     if (!plugin) return Promise.resolve()
-    const stopped = stopChild(plugin.child)
-    forget(plugin, { status: 'disconnected' })
+    const stopped = stopChild(plugin)
+    if (active.get(record.info.id) === plugin) forget(plugin, { status: 'disconnected' })
     return stopped
+  }
+
+  function publishInstalled(record: InstalledPlugin): void {
+    record.info = Object.freeze(record.info)
+    installed.set(record.info.id, record)
+    publish()
+  }
+
+  async function installRemote(sourceUrl: string): Promise<void> {
+    await load()
+    const signal = AbortSignal.any([
+      remoteLifetime.signal,
+      AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS),
+    ])
+    signal.throwIfAborted()
+    const manifest = await readRemotePluginManifest(sourceUrl, signal, options.remoteFetch)
+    requireCompatible(manifest.manifest.apiVersion)
+    if (installed.size >= MAX_PLUGINS) throw new Error('The installed plugin limit was reached.')
+    if (installed.has(manifest.manifest.id))
+      throw new Error(`Plugin ${manifest.manifest.id} is already installed.`)
+    const download = await downloadRemotePlugin(manifest, signal, options.remoteFetch)
+    await mutate(async () => {
+      signal.throwIfAborted()
+      publishInstalled(await installRemotePluginPackage(directory, download, installed))
+    })
+  }
+
+  function applyRemoteUpdate(
+    previous: InstalledPlugin,
+    download: RemotePluginDownload,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    return mutate(async () => {
+      const { id } = previous.info
+      if (installed.get(id) !== previous) return false
+      signal.throwIfAborted()
+      const stage = await stageRemotePluginUpdate(directory, previous, download)
+      const candidate = stage.record
+      try {
+        signal.throwIfAborted()
+        await stop(previous)
+        signal.throwIfAborted()
+        if (candidate.info.enabled) {
+          await activate(candidate)
+          if (candidate.info.status !== 'running')
+            throw new Error(candidate.info.error ?? 'Updated plugin did not activate.')
+        }
+        signal.throwIfAborted()
+        await stage.commit()
+      } catch (error) {
+        try {
+          await stop(candidate)
+          await stage.discard()
+        } catch (reason) {
+          log.warn('Could not clean up updated plugin', { id, error: pluginError(reason) })
+        }
+        if (previous.info.enabled && !active.has(id) && !disposed) await activate(previous)
+        throw error
+      }
+      publishInstalled(candidate)
+      return true
+    })
+  }
+
+  async function updateRemote(
+    record: InstalledPlugin,
+    sourceUrl: string,
+    abort: AbortController,
+  ): Promise<boolean> {
+    const { id, version } = record.info
+    const signal = AbortSignal.any([
+      remoteLifetime.signal,
+      abort.signal,
+      AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS),
+    ])
+    try {
+      signal.throwIfAborted()
+      const manifest = await readRemotePluginManifest(sourceUrl, signal, options.remoteFetch)
+      if (manifest.manifest.id !== id)
+        throw new Error('The remote manifest belongs to a different plugin.')
+      if (Bun.semver.order(version, manifest.manifest.version) >= 0) {
+        if (installed.get(id) === record && record.info.updateError)
+          setInfo(record, { updateError: undefined })
+        return false
+      }
+      requireCompatible(manifest.manifest.apiVersion)
+      signal.throwIfAborted()
+      const download = await downloadRemotePlugin(manifest, signal, options.remoteFetch)
+      return await applyRemoteUpdate(record, download, signal)
+    } catch (error) {
+      if (!disposed && !abort.signal.aborted && installed.get(id) === record)
+        setInfo(record, { updateError: pluginError(error) })
+      throw error
+    }
+  }
+
+  async function checkForUpdate(id: string): Promise<boolean> {
+    await load()
+    remoteLifetime.signal.throwIfAborted()
+    const record = installed.get(id)
+    if (!record) throw new Error('This plugin is no longer installed.')
+    if (!record.remote) throw new Error('This plugin has no remote update source.')
+    const pending = remoteUpdates.get(id)
+    if (pending?.record === record) return pending.task
+    const abort = new AbortController()
+    const task = updateRemote(record, record.remote.sourceUrl, abort).finally(() => {
+      if (remoteUpdates.get(id)?.record === record) remoteUpdates.delete(id)
+    })
+    remoteUpdates.set(id, { record, abort, task })
+    return task
+  }
+
+  async function checkRemotePlugins(): Promise<void> {
+    const records = [...installed.values()]
+    for (const record of records) {
+      const { id } = record.info
+      if (disposed) return
+      if (!record.remote || installed.get(id) !== record) continue
+      // eslint-disable-next-line no-await-in-loop
+      await checkForUpdate(id).catch((error: unknown) => {
+        if (!disposed && installed.get(id) === record)
+          log.warn('Could not update plugin', { id, error: pluginError(error) })
+      })
+    }
+  }
+
+  function scheduleRemoteUpdates(): void {
+    if (disposed || backgroundUpdates) return
+    backgroundUpdates = checkRemotePlugins().finally(() => {
+      backgroundUpdates = undefined
+    })
+    void backgroundUpdates.catch((error: unknown) => {
+      log.warn('Could not check plugin updates', { error: pluginError(error) })
+    })
   }
 
   return {
@@ -392,18 +564,32 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
       return (initialized ??= load().then(async () => {
         await Promise.all(startup)
         startup = []
+        if (!disposed) {
+          updateTimer = setInterval(
+            scheduleRemoteUpdates,
+            options.remoteUpdateIntervalMs ?? REMOTE_UPDATE_INTERVAL_MS,
+          )
+          updateTimer.unref()
+          scheduleRemoteUpdates()
+        }
         return undefined
       }))
     },
     list: () => infoSnapshot,
-    install(manifestPath) {
+    async install(manifestPath) {
+      const sourceUrl = remoteManifestUrl(manifestPath)
+      if (sourceUrl) {
+        if (remoteInstall) throw new Error('Another remote plugin installation is in progress.')
+        remoteInstall = installRemote(sourceUrl).finally(() => {
+          remoteInstall = undefined
+        })
+        return remoteInstall
+      }
       return mutate(async () => {
-        const record = await installPluginPackage(directory, manifestPath, installed)
-        record.info = Object.freeze(record.info)
-        installed.set(record.info.id, record)
-        publish()
+        publishInstalled(await installPluginPackage(directory, manifestPath, installed))
       })
     },
+    checkForUpdate,
     async setEnabled(id, enabled) {
       const result = await mutate(async () => {
         const record = installed.get(id)
@@ -446,6 +632,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
           throw error
         }
         installed.delete(id)
+        remoteUpdates.get(id)?.abort.abort()
         publish()
       })
     },
@@ -453,8 +640,15 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
       if (!disposed) {
         const result = Promise.withResolvers<void>()
         disposed = result.promise
+        clearInterval(updateTimer)
+        remoteLifetime.abort()
+        const remoteTasks = Promise.allSettled([
+          remoteInstall,
+          backgroundUpdates,
+          ...Array.from(remoteUpdates.values(), (update) => update.task),
+        ])
         const tasks = [...active.values()].map(({ installed: record }) => stop(record))
-        void Promise.all([mutations, ...closing.values(), ...tasks]).then(
+        void Promise.all([mutations, remoteTasks, ...closing.values(), ...tasks]).then(
           () => result.resolve(),
           (error: unknown) => result.reject(error),
         )
