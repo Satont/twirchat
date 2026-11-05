@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.17",
+  "version": "0.11.0-twirchat.18",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -164,7 +164,7 @@
     {
       "path": "patches/gpuix-vertical-row-replay.patch",
       "root": "gpuix",
-      "sha256": "88d7d2e4ed4cdfaa30b758174e0c24c5513a87def5db81febd13ff5037bf2cbd"
+      "sha256": "71ccd2d2e3cd3117f33af52611f8171971762a23a706ea56c79f96b3b4d3d10d"
     }
   ]
 }

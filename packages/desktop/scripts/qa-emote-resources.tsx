@@ -45,11 +45,13 @@ const sharp = (await import('sharp')).default
 
 const configurationSchema = z.object({
   case: z.enum(['idle', 'churn', 'functional', 'live']).default('idle'),
+  chatTheme: z.enum(['compact', 'modern']).default('compact'),
   source: z.enum(['synthetic', 'seventv']).default('synthetic'),
   preset: z.enum(['standard', 'dense']).default('standard'),
   media: z.enum(['mixed', 'static-first-frame']).default('mixed'),
   inactiveChannels: z.number().int().min(0).max(19).default(19),
   liveInteractions: z.literal(true).optional(),
+  profileCpu: z.literal(true).optional(),
   verticalReplay: z.literal(true).optional(),
   activation: z.enum(['focused', 'unfocused']).default('focused'),
   pointerMotion: z.enum(['none', 'same-row', 'cross-rows']).default('none'),
@@ -99,6 +101,8 @@ if (config.pointerMotion !== 'none')
   )
 const live = config.case === 'live'
 if (config.liveInteractions) assert(live, 'The interaction probe requires the live fixture.')
+if (config.profileCpu)
+  assert(live && process.platform === 'linux', 'CPU profiling requires the Linux live fixture.')
 if (live) {
   assert.equal(config.preset, 'standard', 'The live case owns its four-pane geometry.')
   assert.equal(config.rate, 20, 'The live fixture uses a fixed 5/1/2/12 messages/s distribution.')
@@ -195,7 +199,7 @@ const layout: WatchedChannelsLayout = {
 }
 app.settingsStore.set({
   ...DEFAULT_SETTINGS,
-  chatTheme: 'compact',
+  chatTheme: config.chatTheme,
   ...(richMedia
     ? {
         showTimestamp: true,
@@ -892,7 +896,7 @@ async function preparePointerPath(renderer: GpuixRenderer): Promise<PointerPath 
   await Bun.sleep(300)
   return { viewport, from, to, visibleRows: rows.length }
 }
-function livePaneEvidence() {
+function livePaneEvidence(checkSeededMedia: boolean) {
   const renderer = current()
   const sources = nativeSources.get(renderer)
   assert(sources, 'Live fixture must observe the native image sources.')
@@ -910,7 +914,7 @@ function livePaneEvidence() {
       .filter((fixture) => fixture.frames === 1)
       .flatMap((fixture) => fixture.variants?.map((variant) => variant.path) ?? []),
   )
-  const evidence = panes.map((pane) => {
+  const evidence = panes.map((pane, index) => {
     const bounds = pane.bounds
     assert(
       bounds && bounds.width > 500 && bounds.height > 400,
@@ -948,9 +952,12 @@ function livePaneEvidence() {
       })
     const animatedEmotes = imageSources.filter((source) => animationPaths.has(source)).length
     const staticEmotes = imageSources.filter((source) => staticPaths.has(source)).length
-    assert(staticEmotes > 0, 'Each live pane must visibly paint static emotes.')
-    if (config.media === 'mixed')
-      assert(animatedEmotes > 0, 'Each live pane must visibly paint animated emotes.')
+    assert(staticEmotes + animatedEmotes > 0, `Live pane ${index + 1} must paint emotes.`)
+    if (checkSeededMedia) {
+      assert(staticEmotes > 0, `Live pane ${index + 1} must paint its seeded static emotes.`)
+      if (config.media === 'mixed')
+        assert(animatedEmotes > 0, `Live pane ${index + 1} must paint its seeded animated emotes.`)
+    }
     return { bounds, images: imageSources.length, animatedEmotes, staticEmotes }
   })
   for (const [index, pane] of evidence.entries()) {
@@ -1256,9 +1263,33 @@ function liveTailEvidence() {
   })
 }
 
+async function startCpuProfile(): Promise<() => void> {
+  const { dlopen, FFIType } = await import('bun:ffi')
+  const profiler = dlopen('libprofiler.so.0', {
+    ProfilerStart: { args: [FFIType.cstring], returns: FFIType.i32 },
+    ProfilerStop: { args: [], returns: FFIType.void },
+  })
+  const path = join(session, 'gui.prof')
+  try {
+    await Bun.write(join(session, 'app.maps'), await Bun.file('/proc/self/maps').text())
+    const started = profiler.symbols.ProfilerStart(Buffer.from(path + '\0'))
+    assert.equal(started, 1, `Failed to start native CPU profiling at ${path}.`)
+  } catch (error) {
+    profiler.close()
+    throw error
+  }
+  return () => {
+    try {
+      profiler.symbols.ProfilerStop()
+    } finally {
+      profiler.close()
+    }
+  }
+}
+
 async function measure() {
   const renderer = current()
-  const panesBefore = live ? livePaneEvidence() : null
+  const panesBefore = live ? livePaneEvidence(true) : null
   const channelCountsBefore = live
     ? channels.map((channel) => app.chatActivityStore.get().get(channel.id)?.total ?? 0)
     : []
@@ -1295,7 +1326,9 @@ async function measure() {
   let previous = performance.now()
   let fractional = 0
   let nextFixture = 8
+  const stopCpuProfile = config.profileCpu ? await startCpuProfile() : undefined
   const start = performance.now()
+  if (stopCpuProfile) previous = start
   const measurementStartedAtNs = process.hrtime.bigint()
   const cpuStart = process.cpuUsage()
   let expected = start + 50
@@ -1357,14 +1390,21 @@ async function measure() {
           }
         }, 20)
       : undefined
-  await Bun.sleep(config.durationSeconds * 1000)
-  if (generator) clearInterval(generator)
-  if (pointerTimer) clearInterval(pointerTimer)
-  clearInterval(sampleTimer)
-  clearInterval(lagTimer)
-  const wallMs = performance.now() - start
-  const cpu = process.cpuUsage(cpuStart)
-  const measurementEndedAtNs = process.hrtime.bigint()
+  let wallMs: number
+  let cpu: ReturnType<typeof process.cpuUsage>
+  let measurementEndedAtNs: bigint
+  try {
+    await Bun.sleep(config.durationSeconds * 1000)
+  } finally {
+    if (generator) clearInterval(generator)
+    if (pointerTimer) clearInterval(pointerTimer)
+    clearInterval(sampleTimer)
+    clearInterval(lagTimer)
+    wallMs = performance.now() - start
+    cpu = process.cpuUsage(cpuStart)
+    measurementEndedAtNs = process.hrtime.bigint()
+    stopCpuProfile?.()
+  }
   sample()
   const frames = renderer.getDebugFrameOverlayStats().frames - initialFrames
   const stats = imageStats(renderer)
@@ -1435,7 +1475,7 @@ async function measure() {
       'Traffic must preserve at least 99% of the offered message rate.',
     )
   }
-  const panesAfter = live ? livePaneEvidence() : null
+  const panesAfter = live ? livePaneEvidence(false) : null
   const tailsAfter = live ? liveTailEvidence() : null
   const processedByChannel = live
     ? channels.map((channel, index) => ({
@@ -1490,9 +1530,11 @@ async function measure() {
     panesAfter,
     ...(live ? { tailsAfter } : {}),
     processedByChannel,
-    label: config.sampleGpuDuringMeasurement
-      ? 'primary resource measurement'
-      : 'observer-overhead experiment',
+    label: config.profileCpu
+      ? 'native CPU profile'
+      : config.sampleGpuDuringMeasurement
+        ? 'primary resource measurement'
+        : 'observer-overhead experiment',
     pointer: pointerPath
       ? {
           kind: config.pointerMotion,
@@ -2574,9 +2616,12 @@ try {
     0,
     'Only the isolated empty profile may be used.',
   )
+  // Modern fits fewer rows in a pane. Rotate the seeded art so both kinds
+  // of emote are present in its initial viewport.
+  const seedOffset = live && config.chatTheme === 'modern' ? 2 : 0
   for (const channel of channels) {
     for (let index = 0; index < 200; index++)
-      inject(channel, fixtures[index % initialFixtureCount] ?? firstFixture)
+      inject(channel, fixtures[(index + seedOffset) % initialFixtureCount] ?? firstFixture)
   }
   await until(() => retained() === channels.length * 200, 'all retained channel histories filled')
   if (live) await activateMain()

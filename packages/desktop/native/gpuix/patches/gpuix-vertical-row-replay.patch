@@ -1,7 +1,35 @@
+diff --git a/packages/native/src/automation.rs b/packages/native/src/automation.rs
+index 80ba8a5..6765a5b 100644
+--- a/packages/native/src/automation.rs
++++ b/packages/native/src/automation.rs
+@@ -135,6 +135,22 @@ pub(crate) fn replay_bounds(window_id: gpui::WindowId, saved: &[(u64, ElementBou
+     });
+ }
+ 
++pub(crate) fn replay_bounds_at(
++    window_id: gpui::WindowId,
++    saved: &[(u64, ElementBounds)],
++    y: Pixels,
++) {
++    let y = f64::from(f32::from(y));
++    BOUNDS.with(|cell| {
++        Arc::make_mut(cell.borrow_mut().entry(window_id).or_default()).extend(saved.iter().map(
++            |&(id, mut bounds)| {
++                bounds.y += y;
++                (id, bounds)
++            },
++        ));
++    });
++}
++
+ pub fn get_bounds(window_id: gpui::WindowId, id: u64) -> Option<ElementBounds> {
+     BOUNDS.with(|cell| {
+         cell.borrow()
 diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flow.rs
+index eb7b273..90cc9cc 100644
 --- a/packages/native/src/cached_flow.rs
 +++ b/packages/native/src/cached_flow.rs
-@@ -8,29 +8,38 @@
+@@ -8,29 +8,38 @@ use crate::{
  };
  use gpui::{
      AnyElement, App, AppContext as _, AvailableSpace, Bounds, Element, ElementId, Entity,
@@ -45,7 +73,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
  }
  
  #[derive(Default)]
-@@ -39,14 +48,35 @@
+@@ -39,14 +48,35 @@ pub(crate) struct Flows {
      token: u64,
      epoch: u64,
      enabled: bool,
@@ -81,7 +109,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
      fn version(&mut self) -> Option<u64> {
          match self.token.checked_add(1) {
              Some(token) => {
-@@ -69,18 +99,49 @@
+@@ -69,18 +99,49 @@ impl Flows {
          cx: &App,
      ) {
          self.epoch = self.epoch.wrapping_add(1);
@@ -139,7 +167,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
          }
          self.frame = frame;
      }
-@@ -115,11 +176,79 @@
+@@ -115,11 +176,79 @@ pub(crate) struct FlowScope {
      pub(crate) list: u64,
      pub(crate) row: u64,
      pub(crate) available: Size<AvailableSpace>,
@@ -220,7 +248,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
      body: u64,
      row: u64,
      list: u64,
-@@ -135,11 +264,16 @@
+@@ -135,11 +264,16 @@ struct Source {
  impl Source {
      fn current(&self, tree: &RetainedTree, available: Size<AvailableSpace>, observed: u64) -> bool {
          self.available == available
@@ -242,7 +270,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
              && tree
                  .elements
                  .get(&self.body)
-@@ -164,6 +298,7 @@
+@@ -164,6 +298,7 @@ struct FlowEntry {
  
  struct Snapshot {
      bounds: Bounds<Pixels>,
@@ -250,10 +278,134 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
      text: TextPaintEffects,
      nodes: Vec<(u64, ElementBounds)>,
      images: ImageUses,
-@@ -368,6 +503,16 @@
+@@ -318,7 +453,12 @@ pub(crate) fn candidate(element: &RetainedElement) -> bool {
+     true
+ }
+ 
+-fn compact_geometry(tree: &RetainedTree, element: &RetainedElement, row: u64) -> bool {
++fn inline_geometry(
++    tree: &RetainedTree,
++    element: &RetainedElement,
++    row: u64,
++    vertical_replay: bool,
++) -> bool {
+     let Some(style) = element.style.as_deref() else {
+         return false;
+     };
+@@ -356,6 +496,108 @@ fn compact_geometry(tree: &RetainedTree, element: &RetainedElement, row: u64) ->
+                 || (style.flex_direction.as_deref() != Some("column")
+                     && ancestor.children.len() > 1)
+             {
++                return vertical_replay && modern_geometry(tree, parent, ancestor, row);
++            }
++        }
++        if ancestor.id == row {
++            return true;
++        }
++        node = ancestor.parent.and_then(|id| tree.elements.get(&id));
++    }
++    false
++}
++
++fn modern_geometry(
++    tree: &RetainedTree,
++    column: &RetainedElement,
++    shell: &RetainedElement,
++    row: u64,
++) -> bool {
++    if column.parent != Some(shell.id) || shell.children.len() > MAX_NODES {
++        return false;
++    }
++    let (Some(column_style), Some(shell_style)) = (column.style.as_deref(), shell.style.as_deref())
++    else {
++        return false;
++    };
++    if column_style.display.as_deref() != Some("flex")
++        || column_style.flex_grow != Some(1.)
++        || column_style.flex_basis != Some(0.)
++        || column_style.min_width != Some(DimensionValue::Pixels(0.))
++        || shell_style.display.as_deref() != Some("flex")
++        || shell_style.flex_direction.as_deref() != Some("row")
++        || shell_style.align_items.as_deref() != Some("flex-start")
++        || !matches!(shell_style.flex_wrap.as_deref(), None | Some("nowrap"))
++    {
++        return false;
++    }
++    let mut rest = column_style.clone();
++    rest.display = None;
++    rest.flex_direction = None;
++    rest.flex_grow = None;
++    rest.flex_basis = None;
++    rest.min_width = None;
++    rest.gap = None;
++    rest.row_gap = None;
++    rest.column_gap = None;
++    if rest != StyleDesc::default() || !stretch_ancestors(tree, shell, row) {
++        return false;
++    }
++    // A zero-basis column gets the remaining row width regardless of its body.
++    shell.children.iter().all(|id| {
++        *id == column.id
++            || tree
++                .elements
++                .get(id)
++                .and_then(|child| child.style.as_deref())
++                .is_some_and(fixed_width_sibling)
++    })
++}
++
++fn fixed_width_sibling(style: &StyleDesc) -> bool {
++    if style.hover.is_some() || style.active.is_some() || style.focus_visible.is_some() {
++        return false;
++    }
++    style.position.as_deref() == Some("absolute")
++        || (matches!(style.width, Some(DimensionValue::Pixels(width)) if width > 0. && width <= f64::from(f32::MAX))
++            && style.flex_shrink == Some(0.)
++            && style.flex_grow.is_none_or(|grow| grow == 0.)
++            && style.flex_basis.is_none()
++            && style.min_width.is_none()
++            && style.max_width.is_none()
++            && style.aspect_ratio.is_none())
++}
++
++fn stretch_ancestors(tree: &RetainedTree, shell: &RetainedElement, row: u64) -> bool {
++    let mut node = Some(shell);
++    while let Some(ancestor) = node {
++        if let Some(style) = ancestor.style.as_deref() {
++            if style.height.is_some()
++                || style.max_height.is_some()
++                || style.aspect_ratio.is_some()
++                || style.position.as_deref() == Some("absolute")
++                || style.hover.is_some()
++                || style.active.is_some()
++                || style.focus_visible.is_some()
++                || [
++                    style.overflow.as_deref(),
++                    style.overflow_x.as_deref(),
++                    style.overflow_y.as_deref(),
++                ]
++                .contains(&Some("scroll"))
++            {
++                return false;
++            }
++            if ancestor.id != shell.id
++                && !matches!(style.display.as_deref(), None | Some("block"))
++                && !(style.display.as_deref() == Some("flex")
++                    && style.flex_direction.as_deref() == Some("column")
++                    && matches!(style.flex_wrap.as_deref(), None | Some("nowrap"))
++                    && matches!(style.align_items.as_deref(), None | Some("stretch")))
++            {
++                return false;
++            }
++            if !matches!(style.align_self.as_deref(), None | Some("stretch")) {
+                 return false;
+             }
+         }
+@@ -368,7 +610,17 @@ fn compact_geometry(tree: &RetainedTree, element: &RetainedElement, row: u64) ->
  }
  
  fn eligible_ids(tree: &RetainedTree, body: u64, row: u64) -> Option<Arc<[u64]>> {
+-    if !compact_geometry(tree, tree.elements.get(&body)?, row) {
 +    eligible_body_ids(tree, body, row, None, false)
 +}
 +
@@ -264,10 +416,11 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
 +    overlay: Option<Overlay>,
 +    vertical_replay: bool,
 +) -> Option<Arc<[u64]>> {
-     if !compact_geometry(tree, tree.elements.get(&body)?, row) {
++    if !inline_geometry(tree, tree.elements.get(&body)?, row, vertical_replay) {
          return None;
      }
-@@ -404,7 +549,11 @@
+     let mut outside = vec![row];
+@@ -404,7 +656,11 @@ fn eligible_ids(tree: &RetainedTree, body: u64, row: u64) -> Option<Arc<[u64]>>
      let mut pending = vec![body];
      while let Some(id) = pending.pop() {
          let node = tree.elements.get(&id)?;
@@ -279,7 +432,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
              || !matches!(node.element_type.as_str(), "div" | "text" | "img" | "svg")
              || node.events().contains("scrollChange")
              || node.events().contains("highlight")
-@@ -437,6 +586,24 @@
+@@ -437,6 +693,24 @@ fn eligible_ids(tree: &RetainedTree, body: u64, row: u64) -> Option<Arc<[u64]>>
      Some(ids.into())
  }
  
@@ -304,7 +457,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
  impl FlowScope {
      pub(crate) fn prepare(
          &self,
-@@ -453,7 +620,10 @@
+@@ -453,7 +727,10 @@ impl FlowScope {
              return None;
          }
          let mut cache = self.cache.borrow_mut();
@@ -316,7 +469,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
              return None;
          }
          let generation = cache.frame.as_ref()?.generation;
-@@ -463,11 +633,32 @@
+@@ -463,11 +740,32 @@ impl FlowScope {
          }
          let node = tree.elements.get(&body)?;
          let existing = cache.entries.get(&body).cloned();
@@ -349,7 +502,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
          });
          let (ids, overlay, revision) = if let Some(entry) = unchanged {
              let previous = entry.borrow();
-@@ -477,16 +668,17 @@
+@@ -477,16 +775,17 @@ impl FlowScope {
                  previous.source.revision,
              )
          } else {
@@ -374,7 +527,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
              body,
              row: self.row,
              list: self.list,
-@@ -553,11 +745,14 @@
+@@ -553,11 +852,14 @@ impl FlowScope {
              cache.entries.insert(body, entry.clone());
              entry
          };
@@ -390,7 +543,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
              direct: None,
              view: None,
              capture: None,
-@@ -573,6 +768,7 @@
+@@ -573,6 +875,7 @@ pub(crate) struct FlowElement {
      scope: FlowScope,
      entry: Rc<RefCell<FlowEntry>>,
      epoch: u64,
@@ -398,7 +551,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
      direct: Option<AnyElement>,
      view: Option<ViewElement<Entity<FlowView>>>,
      capture: Option<ImageUseCapture>,
-@@ -607,11 +803,15 @@
+@@ -607,11 +910,15 @@ impl Element for FlowElement {
          let (scope, entry) = (&self.scope, &self.entry);
          let tree = scope.tree.lock().unwrap();
          let state = entry.borrow();
@@ -419,9 +572,12 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
          if !self.valid {
              let mut build = state.entity.read(cx).build.clone();
              build.part = FlowPart::Body {
-@@ -635,12 +835,21 @@
+@@ -633,14 +940,23 @@ impl Element for FlowElement {
+         self.cache_id = Some(
+             window.global_element_id_for(ElementId::NamedInteger("cached-flow".into(), self.body)),
          );
-         // Exact row space plus static column ancestry preserve the last actual body size.
+-        // Exact row space plus static column ancestry preserve the last actual body size.
++        // Exact row space and width-stable ancestry preserve the last body size.
          // Dirty views/assets instead measure their intrinsic contents before parent layout.
 -        let can_reuse = self.valid
 -            && !window.is_view_cache_invalidated(state.entity.entity_id())
@@ -444,7 +600,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
                      && scope
                          .images
                          .update(cx, |images, _| images.touch_uses(&snapshot.images))
-@@ -683,6 +892,9 @@
+@@ -683,6 +999,9 @@ impl Element for FlowElement {
          } else {
              entity.into_element()
          };
@@ -454,7 +610,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
          let capture =
              ImageUseCapture::new(scope.images.entity_id(), window.window_handle().window_id());
          // Delegate manually: Drawable<ViewElement> would push the changing Entity ID.
-@@ -816,7 +1028,7 @@
+@@ -816,7 +1135,7 @@ impl FlowElement {
          };
          let window_id = window.window_handle().window_id();
          let cache = scope.cache.borrow();
@@ -463,7 +619,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
              return;
          }
          if fresh {
-@@ -835,6 +1047,7 @@
+@@ -835,6 +1154,7 @@ impl FlowElement {
                  .collect();
              let snapshot = Snapshot {
                  bounds,
@@ -471,7 +627,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
                  text: text_paint_effects(window_id, marker),
                  nodes,
                  images,
-@@ -846,8 +1059,14 @@
+@@ -846,8 +1166,14 @@ impl FlowElement {
              let mut entry = entry.borrow_mut();
              if let Some(snapshot) = &entry.snapshot {
                  // Scene replay alone does not restore native selection/locator registries.
@@ -488,7 +644,7 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
                  scope.images.update(cx, |images, _| {
                      images.touch_uses(&snapshot.images);
                  });
-@@ -909,12 +1128,14 @@
+@@ -909,12 +1235,64 @@ mod tests {
          );
          tree.set_custom_prop(7, "src".into(), serde_json::json!("/emote.webp"));
          tree.set_custom_prop(8, "source".into(), serde_json::json!("<svg/>"));
@@ -496,6 +652,56 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
          tree.take_invalidation();
          tree
      }
++
++    fn modern_fixture() -> RetainedTree {
++        let mut tree = fixture();
++        for id in [9, 10, 11] {
++            tree.create_element(id, "div".into());
++        }
++        for (parent, child) in [(2, 9), (9, 10), (9, 11), (9, 3)] {
++            tree.append_child(parent, child);
++        }
++        tree.set_style(
++            9,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                align_items: Some("flex-start".into()),
++                gap: Some(10.),
++                padding: Some(14.),
++                ..Default::default()
++            }),
++        );
++        tree.set_style(
++            10,
++            Arc::new(StyleDesc {
++                width: Some(DimensionValue::Pixels(28.)),
++                flex_shrink: Some(0.),
++                ..Default::default()
++            }),
++        );
++        tree.set_style(
++            11,
++            Arc::new(StyleDesc {
++                position: Some("absolute".into()),
++                ..Default::default()
++            }),
++        );
++        tree.set_style(
++            3,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("column".into()),
++                flex_grow: Some(1.),
++                flex_basis: Some(0.),
++                min_width: Some(DimensionValue::Pixels(0.)),
++                gap: Some(2.),
++                ..Default::default()
++            }),
++        );
++        tree
++    }
++
      fn source(tree: &RetainedTree) -> Source {
          Source {
 -            generation: tree.cache_revision().unwrap(),
@@ -504,10 +710,11 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
              body: 4,
              row: 2,
              list: 1,
-@@ -930,6 +1151,57 @@
+@@ -929,6 +1307,91 @@ mod tests {
+             wash: gpui::hsla(0., 0., 0., 0.3),
          }
      }
-     #[test]
++    #[test]
 +    fn replay_source_survives_other_rows_appending_but_expires_on_own_changes() {
 +        let mut tree = fixture();
 +        let mut saved = source(&tree);
@@ -559,13 +766,63 @@ diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flo
 +    }
 +
 +    #[test]
++    fn modern_body_replays_with_a_fixed_width_avatar_and_an_absolute_sibling() {
++        let tree = modern_fixture();
++        assert!(eligible_body_ids(&tree, 4, 2, None, true).is_some());
++        assert!(eligible_ids(&tree, 4, 2).is_none());
++    }
++
++    #[test]
++    fn modern_body_does_not_replay_with_an_intrinsic_width_sibling() {
++        let mut tree = modern_fixture();
++        tree.set_style(
++            10,
++            Arc::new(StyleDesc {
++                flex_shrink: Some(0.),
++                ..Default::default()
++            }),
++        );
++        assert!(eligible_body_ids(&tree, 4, 2, None, true).is_none());
++    }
++
++    #[test]
++    fn modern_body_does_not_replay_inside_an_intrinsic_width_flex_row() {
++        let mut tree = modern_fixture();
++        tree.set_style(
++            2,
++            Arc::new(StyleDesc {
++                display: Some("flex".into()),
++                flex_direction: Some("row".into()),
++                ..Default::default()
++            }),
++        );
++        assert!(eligible_body_ids(&tree, 4, 2, None, true).is_none());
++    }
++
+     #[test]
      fn actual_compact_shape_includes_images_svg_and_layout_reporters() {
          let mut tree = fixture();
-         tree.set_event_listener(7, "layout".into(), true);
 diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+index 69614c7..8017e3b 100644
 --- a/packages/native/src/renderer.rs
 +++ b/packages/native/src/renderer.rs
-@@ -459,6 +459,7 @@
+@@ -399,15 +399,6 @@ fn update_window_without_view<R>(
+     })
+ }
+ 
+-#[cfg(target_os = "macos")]
+-fn invalidate_window(renderer_id: u64) -> Result<()> {
+-    update_window(renderer_id, |view, window, cx| {
+-        view.queue_invalidation(Invalidation::Full);
+-        cx.notify();
+-        window.refresh();
+-    })
+-}
+-
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+ enum MouseInput {
+     Click {
+@@ -461,6 +452,7 @@ enum ClockControl {
  #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
  enum UiCommand {
      Invalidate(Invalidation),
@@ -573,32 +830,44 @@ diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
      NotifyFromTray {
          renderer_id: u64,
          title: String,
-@@ -599,13 +600,22 @@
+@@ -606,15 +598,32 @@ enum UiCommand {
  fn refresh_ui_window(
      window: gpui::WindowHandle<GpuixView>,
      kind: Invalidation,
 +    retained: bool,
      cx: &mut gpui::AsyncApp,
  ) -> anyhow::Result<()> {
-     window.update(cx, |view, window, cx| {
--        view.queue_invalidation(kind);
+-    window.update(cx, |view, window, cx| {
++    window.update(cx, |view, window, cx| refresh_view(view, window, cx, kind, retained))
++}
++
++fn refresh_view(
++    view: &mut GpuixView,
++    window: &mut gpui::Window,
++    cx: &mut gpui::Context<GpuixView>,
++    kind: Invalidation,
++    retained: bool,
++) {
++    if retained {
++        view.queue_retained_invalidation(kind);
++    } else {
+         view.queue_invalidation(kind);
+-        cx.notify();
+-        if view.pending_invalidation == Invalidation::Full {
++    }
++    cx.notify();
++    if view.pending_invalidation == Invalidation::Full {
 +        if retained {
-+            view.queue_retained_invalidation(kind);
++            window.refresh_retained_tree();
 +        } else {
-+            view.queue_invalidation(kind);
-+        }
-         cx.notify();
-         if view.pending_invalidation == Invalidation::Full {
--            window.refresh();
-+            if retained {
-+                window.refresh_retained_tree();
-+            } else {
-+                window.refresh();
-+            }
+             window.refresh();
          }
-     })
+-    })
++    }
  }
-@@ -723,7 +733,8 @@
+ 
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+@@ -723,7 +732,8 @@ async fn run_ui_commands(
                  deferred.resolve(Box::new(move |_| Ok(inserted)));
                  Ok(())
              }
@@ -608,7 +877,7 @@ diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
              UiCommand::ActivateWindow => window.update(cx, |_view, window, cx| {
                  cx.activate(true);
                  window.activate_window();
-@@ -783,7 +794,7 @@
+@@ -797,7 +807,7 @@ async fn run_ui_commands(
                          }
                      });
                  }
@@ -617,7 +886,7 @@ diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
              }
              UiCommand::ScrollToItem { id, index, offset } => {
                  if !with_virtual_list_states(window_id, |cell| {
-@@ -799,7 +810,7 @@
+@@ -813,7 +823,7 @@ async fn run_ui_commands(
                          }
                      });
                  }
@@ -626,7 +895,7 @@ diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
              }
              UiCommand::ScrollIntoView { id } => window.update(cx, |view, window, cx| {
                  if view.scroll_element_into_view(id) {
-@@ -1898,15 +1909,19 @@
+@@ -1930,15 +1940,21 @@ impl GpuixRenderer {
      }
  
      fn request_invalidate(&self) -> Result<()> {
@@ -637,7 +906,10 @@ diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
 -    fn request_invalidation(&self, kind: Invalidation) -> Result<()> {
 +    fn request_invalidation(&self, kind: Invalidation, retained: bool) -> Result<()> {
          #[cfg(target_os = "macos")]
-         return invalidate_window(self.renderer_id);
+-        return invalidate_window(self.renderer_id);
++        return update_window(self.renderer_id, |view, window, cx| {
++            refresh_view(view, window, cx, kind, retained)
++        });
  
          #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 -        return self.send_ui_command(UiCommand::Invalidate(kind));
@@ -649,16 +921,34 @@ diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
  
          #[cfg(not(any(
              target_os = "macos",
-@@ -2348,7 +2363,7 @@
+@@ -2380,7 +2396,7 @@ impl GpuixRenderer {
          // Waking the window for it makes it rebuild and diff the whole element
          // tree to draw the frame it already has.
          if kind != Invalidation::None {
 -            self.request_invalidation(kind)?;
-+            self.request_invalidation(kind, cfg!(target_os = "linux"))?;
++            self.request_invalidation(kind, true)?;
          }
          Ok(destroyed)
      }
-@@ -5112,10 +5127,17 @@
+@@ -3326,7 +3342,7 @@ impl GpuixRenderer {
+             });
+         }
+         #[cfg(target_os = "macos")]
+-        return invalidate_window(self.renderer_id);
++        return self.request_invalidate();
+ 
+         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+         return self.send_ui_command(UiCommand::ScrollTo {
+@@ -3379,7 +3395,7 @@ impl GpuixRenderer {
+             });
+         }
+         #[cfg(target_os = "macos")]
+-        return invalidate_window(self.renderer_id);
++        return self.request_invalidate();
+ 
+         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+         return self.send_ui_command(UiCommand::ScrollToItem { id, index, offset });
+@@ -5183,10 +5199,17 @@ fn resolve_highlight(
  
  impl GpuixView {
      fn queue_invalidation(&mut self, kind: Invalidation) {
@@ -677,24 +967,24 @@ diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
          }
      }
  
-@@ -5431,6 +5453,13 @@
+@@ -5516,6 +5539,12 @@ impl GpuixView {
                  list: list_id,
                  row: expected_child_id,
                  available,
-+                vertical_replay: cfg!(target_os = "linux")
-+                    && tree
-+                        .elements
-+                        .get(&list_id)
-+                        .and_then(|list| list.custom_props().get("cacheChatRows"))
-+                        .and_then(serde_json::Value::as_bool)
-+                        == Some(true),
++                vertical_replay: tree
++                    .elements
++                    .get(&list_id)
++                    .and_then(|list| list.custom_props().get("cacheChatRows"))
++                    .and_then(serde_json::Value::as_bool)
++                    == Some(true),
              }),
              highlights: &mut self.highlights,
              paint_reports: &self.paint_reports,
 diff --git a/packages/native/src/retained_tree.rs b/packages/native/src/retained_tree.rs
+index d135704..3415fbf 100644
 --- a/packages/native/src/retained_tree.rs
 +++ b/packages/native/src/retained_tree.rs
-@@ -570,15 +570,11 @@
+@@ -570,15 +570,11 @@ impl RetainedTree {
              } else {
                  false
              };
@@ -712,7 +1002,7 @@ diff --git a/packages/native/src/retained_tree.rs b/packages/native/src/retained
                  }
                  self.track_focusable(id);
              }
-@@ -615,9 +611,9 @@
+@@ -615,9 +611,9 @@ impl RetainedTree {
              if key == "testId" {
                  let test_id = value.as_str().map(str::to_string);
                  if element.test_id != test_id {
@@ -724,36 +1014,11 @@ diff --git a/packages/native/src/retained_tree.rs b/packages/native/src/retained
                  return;
              }
              if value.is_null() {
-diff --git a/packages/native/src/automation.rs b/packages/native/src/automation.rs
---- a/packages/native/src/automation.rs
-+++ b/packages/native/src/automation.rs
-@@ -135,6 +135,22 @@
-     });
- }
- 
-+pub(crate) fn replay_bounds_at(
-+    window_id: gpui::WindowId,
-+    saved: &[(u64, ElementBounds)],
-+    y: Pixels,
-+) {
-+    let y = f64::from(f32::from(y));
-+    BOUNDS.with(|cell| {
-+        Arc::make_mut(cell.borrow_mut().entry(window_id).or_default()).extend(saved.iter().map(
-+            |&(id, mut bounds)| {
-+                bounds.y += y;
-+                (id, bounds)
-+            },
-+        ));
-+    });
-+}
-+
- pub fn get_bounds(window_id: gpui::WindowId, id: u64) -> Option<ElementBounds> {
-     BOUNDS.with(|cell| {
-         cell.borrow()
 diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.rs
+index 9db2078..d40748f 100644
 --- a/packages/native/src/text/paint.rs
 +++ b/packages/native/src/text/paint.rs
-@@ -41,10 +41,26 @@
+@@ -41,10 +41,26 @@ struct RegEntry {
      key: Arc<str>,
      text: SharedString,
      layout: TextLayout,
@@ -780,7 +1045,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
  /// Full element box that owns whether a press may start a selection.
  ///
  /// `userSelect: "none"` chrome and native inputs register `selectable: false`
-@@ -115,11 +131,23 @@
+@@ -115,11 +131,23 @@ pub(crate) fn text_paint_effects(window_id: WindowId, marker: TextPaintMarker) -
  
  impl TextPaintEffects {
      pub(crate) fn replay(&self, window_id: WindowId) {
@@ -806,7 +1071,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
              state.painted.extend(self.painted.iter().cloned());
          });
      }
-@@ -456,6 +484,7 @@
+@@ -456,6 +484,7 @@ impl gpui::Element for SelectableTextElement {
                      key: self.key.clone(),
                      text: opts.text.clone(),
                      layout: layout.clone(),
@@ -814,7 +1079,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
                      group: opts.group,
                  })
              });
-@@ -594,7 +623,7 @@
+@@ -594,7 +623,7 @@ fn registry_point(
          let mut nearest: Option<(usize, (f32, f32))> = None;
  
          for (ei, entry) in reg.iter().enumerate() {
@@ -823,7 +1088,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
              if b.contains(&position) {
                  contained = Some(ei);
                  continue;
-@@ -626,10 +655,7 @@
+@@ -626,10 +655,7 @@ fn registry_point(
          }
  
          let ei = contained.or(nearest.map(|(ei, _)| ei))?;
@@ -835,7 +1100,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
      })
  }
  
-@@ -642,7 +668,7 @@
+@@ -642,7 +668,7 @@ fn registry_point_on_line(
  ) -> Option<(usize, usize)> {
      let (ei, ix) = registry_point(window_id, position)?;
      with_state(window_id, |state| {
@@ -844,7 +1109,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
          (position.y >= b.top() && position.y <= b.bottom()).then_some((ei, ix))
      })
  }
-@@ -939,6 +965,7 @@
+@@ -939,6 +965,7 @@ mod tests {
                      key: "1:0".into(),
                      text: text.into(),
                      layout: TextLayout::default(),
@@ -852,7 +1117,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
                      group: None,
                  })
              });
-@@ -1026,6 +1053,7 @@
+@@ -1026,6 +1053,7 @@ mod text_paint_effects_tests {
                  key: "4:0".into(),
                  text: "word".into(),
                  layout: StyledText::new("word").layout().clone(),
@@ -860,7 +1125,7 @@ diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.
                  group: Some(3),
              });
              state.start_regions.push(StartRegion {
-@@ -1045,6 +1073,26 @@
+@@ -1045,6 +1073,26 @@ mod text_paint_effects_tests {
              assert_eq!(state.registry[0].group, Some(3));
              assert_eq!(state.start_regions.len(), 1);
          });

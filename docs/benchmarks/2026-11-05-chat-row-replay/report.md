@@ -1,6 +1,6 @@
-# Replay cached compact chat rows during vertical scrolling
+# Replay cached chat rows during vertical scrolling
 
-On Linux, a compact chat list opts in to reusing the prior frame's inline message body.
+Initially, a compact chat list on Linux opted in to reusing the prior frame's inline message body.
 The existing row cache keeps a body by identity and local revision across retained-tree changes
 in other rows. On a hit, GPUI translates the previous scene commands and hitboxes by a whole
 device-pixel displacement. GPUIX reapplies automation bounds and text selection geometry at
@@ -129,3 +129,117 @@ run and painted the latest message in all four panes.
 | Actual messages/s | 19.94 | 19.94 |
 
 The single-run smoke results are recorded separately from the three-repeat comparison.
+
+## Replay in both chat themes
+
+The `.18` runtime enables replay for Compact and Modern on the desktop targets. Modern's
+message column takes the remaining width after its fixed-size avatar and platform icon.
+The native cache checks that the column and its ancestors preserve that width and falls
+back to fresh layout when they do not. macOS applies retained-tree invalidation through its
+own event loop, with the same distinction between retained changes and explicit full refreshes
+as the threaded renderer on Linux and Windows.
+
+The Linux production rerun used the same four-pane media case and 18 s measurement
+with three fresh processes per theme and build. The Modern fixture rotates the seed art
+so each of its shorter visible histories starts with both static and animated emotes.
+The generated traffic and retained history lengths are the same in both revisions.
+Every run painted all four latest messages and delivered 359 of 359 messages.
+
+| Metric | Modern .17 median [range] | Modern .18 median [range] | Compact .17 median [range] | Compact .18 median [range] |
+| --- | ---: | ---: | ---: | ---: |
+| CPU % of one logical core | 56.81 [54.44–58.10] | 45.56 [45.48–46.34] | 54.54 [51.29–60.63] | 53.96 [51.09–56.65] |
+| RSS median MiB | 532.50 [481.17–534.37] | 530.34 [529.87–534.78] | 555.32 [552.46–555.66] | 552.34 [499.52–552.68] |
+| RSS peak MiB | 577.39 [569.12–577.73] | 574.96 [574.70–576.51] | 598.16 [597.84–598.34] | 594.52 [588.71–596.76] |
+| JS heap peak MiB | 212.83 [184.31–212.98] | 213.02 [212.99–213.11] | 213.96 [213.95–214.17] | 213.48 [185.78–214.24] |
+| Event-loop lag p95 ms | 0.224 [0.057–0.514] | 0.160 [0.091–0.276] | 0.099 [0.076–0.288] | 0.195 [0.098–0.260] |
+| Actual messages/s | 19.94 [19.94–19.94] | 19.94 [19.94–19.94] | 19.94 [19.94–19.94] | 19.94 [19.94–19.94] |
+
+Private Xvfb QA moved the same painted text body through eight 24 px steps per theme.
+The trace confirmed three nonzero replays of that body in Modern and four in Compact.
+Both kept exact glyph pixels, selected the same text, opened the expected link and
+showed motion in 784 emote pixels. The dense case also checked pointer and keyboard
+input after resizing to 420×300 and back to 770×1300. The native tests, 941 desktop tests
+and workspace checks passed. The GUI measurements were on Linux.
+
+Both groups were run from `5c36e221bc0645d99e063213f6a7a951f5a9bfbd` with the indicated
+working-tree changes. The unprofiled fixture's workload and capture intervals match.
+The candidate driver adds an optional sampler, which was off in every resource run.
+
+| Identity | .17 baseline | .18 candidate |
+| --- | --- | --- |
+| Runtime inputs SHA-256 | `81d94e02cd9f807d07406175f9b57ad2a90e0dd205dce0f6907224c1ebd0a265` | `a21594bbf445217b3736d8a9bbe801d77a019de7eb9170aabcbffb9ebe59defb` |
+| Native patch digest | `89020f82d558b2bd` | `4d8cd5e9a0fad627` |
+| Native addon SHA-256 | `2a6558f27cb81dc1127711da313d53a1f6771a7f58a4b304b31e98c03fc452e1` | `30ef544cb3ceb65011ad351c14a00cac6a27e0ee18a20f3885cb60d42ed19e94` |
+| Media driver SHA-256 | `d1356ef94d1cb132a714a653ce0fc3e95f790c675fbb48ebf9008cc9d4685dc0` | `f0a0b80058ef77d2d55ddb19c43d7d235c4244c0ae33cd2b6d1b3e5708f84755` |
+
+### CPU sampling
+
+Run on Linux with a built native addon, the hardware Weston QA environment,
+`libprofiler.so.0` from gperftools, and the standalone [pprof](https://github.com/google/pprof)
+command on PATH.
+
+```bash
+bun run --cwd packages/desktop profile:chat modern
+bun run --cwd packages/desktop profile:chat compact
+```
+
+The command opens four chats in isolated QA and samples CPU for the 18 s traffic window.
+It prints self and cumulative rankings and saves them alongside the symbolized
+`chat.pb.gz` profile in the printed directory. The symbolized file can also be opened
+with `pprof -symbolize=none -http=localhost:8080 /path/to/chat.pb.gz`.
+
+One profiled Modern run per build and one candidate Compact run attributed the following
+inclusive share of CPU samples to each stack. Rows overlap. These are separate diagnostics
+from the resource measurements.
+
+| Stack contains | Modern .17 (940 samples) | Modern .18 (841 samples) | Compact .18 (960 samples) |
+| --- | ---: | ---: | ---: |
+| GPUI `Window::draw` | 82.3% | 78.7% | 82.4% |
+| Virtual-list prepaint | 43.6% | 33.5% | 38.0% |
+| Taffy layout | 36.6% | 26.0% | 23.6% |
+| GPUIX retained element construction | 11.1% | 11.9% | 14.1% |
+| libvips | 2.7% | 2.5% | 2.2% |
+
+Taffy accounted for 3.44 s of sampled CPU time before the change and 2.19 s after it.
+Layout remains a large share of sampled render work.
+
+### Production load gate
+
+The text-only stress test used four Compact panes, 50 histories and 5,000 offered messages/s
+with the same 1200×800 window and 3 s warmup, 30 s measurement and 2 s drain as the earlier
+gate. Three candidate runs used fresh isolated processes. Each delivered at least 99.8% of
+the offered load.
+
+| Metric | Matched .17 repeat | .18 median [range] |
+| --- | ---: | ---: |
+| CPU % of one logical core | 80.65 | 81.39 [80.69–82.33] |
+| RSS median MiB | 497.54 | 494.35 [491.15–497.47] |
+| RSS peak MiB | 618.30 | 601.88 [596.91–606.90] |
+| JS heap peak MiB | 217.64 | 223.93 [219.53–239.07] |
+| Event-loop lag p95 ms | 1.884 | 1.983 [1.964–2.066] |
+| Actual messages/s | 4994.31 | 4996.45 [4996.01–4996.54] |
+
+### Development controls
+
+All 15 development scenarios completed. The four-pane runs delivered 997.49, 4,988.35
+and 4,987.36 messages/s at their respective 1,000, 5,000 and 5,000 messages/s targets.
+The 50- and 100-channel four-pane peaks at 5,000 messages/s were 1,049.7 and 1,134.8 MiB.
+Those are −3.2% and +4.7% against the archived .17 development matrix.
+
+Fresh matched controls repeated the one-pane cases with larger differences against the
+archive. For example, the 1-channel, 1,000 messages/s peak was 677.8 MiB on the fresh .17
+run and 588.8 MiB on .18, compared with 574.6 MiB in the archived .17 run.
+The 50-channel, 1,000 messages/s, one-pane case showed a repeatable development CPU
+cost. The repeat reversed the run order. Production improved in its own matched pair.
+
+| 50 channels, 1,000 messages/s, one pane | .17 CPU % of one core | .18 CPU % of one core | .17 / .18 peak RSS MiB |
+| --- | ---: | ---: | ---: |
+| Development matched pair | 23.59 | 25.85 | 473.4 / 482.9 |
+| Development reversed pair | 24.63 | 26.13 | 472.2 / 474.2 |
+| Production matched pair | 19.77 | 18.14 | 337.9 / 336.9 |
+
+The pairs delivered 997.16–998.30 messages/s. The development CPU increase was
+1.50–2.26 percentage points of one core. The isolated cause of that development
+difference is still open. The matched .17 repeats use the same runtime inputs as the
+original .17 measurements plus the profiling command entry in the package scripts
+(`146cd5e9b58692824ebb27294599c5cfb687ed87bce6722c0c44b51b75987169`).

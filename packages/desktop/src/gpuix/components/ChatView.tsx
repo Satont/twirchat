@@ -1750,9 +1750,7 @@ export function ChatView({
       >
         {displayedTimeline.length > 0 ? (
           <virtual-list
-            {...(process.platform === 'linux' &&
-              settings?.chatTheme === 'compact' &&
-              cacheChatRows)}
+            {...cacheChatRows}
             ref={listRef}
             alignment="bottom"
             followTail={!paused}
