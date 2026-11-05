@@ -137,6 +137,28 @@ describe('custom command expansion', () => {
     })
   })
 
+  test('leaves auto-translation commands for the composer despite legacy alias collisions', () => {
+    const commands = validateCustomCommands([
+      command('translateauto', 'legacy'),
+      command('translateauto off', 'legacy multiword'),
+      command('autoff', '/translateauto off'),
+      command('translateautoextra', 'distinct alias'),
+    ])
+    expect(expandCustomCommand('/TRANSLATEAUTO en', commands, context)).toEqual({
+      ok: true,
+      matched: false,
+      outputs: ['/TRANSLATEAUTO en'],
+    })
+    expect(expandCustomCommand('/autoff', commands, context)).toEqual({
+      ok: true,
+      matched: true,
+      outputs: ['/translateauto off'],
+    })
+    expect(expandCustomCommand('/translateautoextra', commands, context)).toMatchObject({
+      outputs: ['distinct alias'],
+    })
+  })
+
   test('rejects direct and indirect alias cycles instead of sending a partial expansion', () => {
     const direct = expandCustomCommand('/loop', [command('loop', '/loop')], context)
     expect(direct.ok).toBe(false)

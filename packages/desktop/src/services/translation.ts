@@ -799,11 +799,29 @@ export function createTranslationService(options: {
   }
 }
 
-export interface TranslationCommand {
-  mode: 'preview' | 'send'
-  targetLanguage?: string
-  text: string
+export const AUTO_TRANSLATION_COMMAND = '/translateauto'
+const autoTranslationCommandPattern = new RegExp(`^${AUTO_TRANSLATION_COMMAND}(?=\\s|$)`, 'iu')
+
+export function isAutoTranslationCommand(text: string): boolean {
+  return autoTranslationCommandPattern.test(text)
 }
+
+export function parseAutoTranslationCommand(
+  text: string,
+): { targetLanguage: string | null } | null {
+  const input = text.trim()
+  if (!isAutoTranslationCommand(input)) return null
+  const argument = input.slice(AUTO_TRANSLATION_COMMAND.length).trim()
+  if (!argument) throw new Error(`Usage: ${AUTO_TRANSLATION_COMMAND} <language|off>`)
+  return {
+    targetLanguage:
+      argument.toLowerCase() === 'off' ? null : normalizeTranslationLanguage(argument),
+  }
+}
+
+export type TranslationCommand =
+  | { mode: 'preview'; targetLanguage?: string; text: string }
+  | { mode: 'send'; targetLanguage: string; text: string }
 export function parseTranslationCommand(text: string): TranslationCommand | null {
   const match = text.trim().match(/^\/(translate|translateto|saytranslate|tl)(?:\s+([\s\S]*))?$/iu)
   if (!match) return null

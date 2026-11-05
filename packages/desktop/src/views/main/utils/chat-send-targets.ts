@@ -24,7 +24,7 @@ export function ownChatSendTargets(accounts: readonly Account[]): ChatSendTarget
   })
 }
 
-function chatChannelKey(platform: Platform, channelLogin: string): string {
+export function chatChannelKey(platform: Platform, channelLogin: string): string {
   return `${platform}:${channelLogin.trim().toLowerCase()}`
 }
 

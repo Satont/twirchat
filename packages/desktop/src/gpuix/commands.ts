@@ -1,6 +1,8 @@
 import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { isAutoTranslationCommand } from '../services/translation'
+
 export interface CustomCommandDefinition {
   id: string
   name: string
@@ -235,7 +237,7 @@ export function expandCustomCommand(
       throw new Error('Command expansion is too complex (more than 100 alias steps).')
     if (text.length > MAX_EXPANDED_LENGTH) throw new Error('Expanded command is too long.')
     const invocationText = text.trim()
-    const candidates = definitions
+    const candidates = (isAutoTranslationCommand(invocationText) ? [] : definitions)
       .map((command) => {
         const escaped = command.name
           .trim()

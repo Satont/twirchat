@@ -20,6 +20,7 @@ const { actionBindingsStore, dispatchCustomHotkey } =
 const { applyTranslationSettings } = await import('../src/gpuix/state/translation')
 const sent = []
 const copied = []
+const translations = []
 let runner = null
 let cancelledReply = 0
 let failTranslation = false
@@ -37,7 +38,8 @@ const backend = {
     copyText: async ({ text }) => {
       copied.push(text)
     },
-    translateText: async ({ text, targetLanguage }) => {
+    translateText: async ({ text, sourceLanguage, targetLanguage }) => {
+      translations.push({ text, sourceLanguage, targetLanguage })
       if (holdTranslation)
         await new Promise((resolve) => {
           releaseTranslation = resolve
@@ -52,7 +54,7 @@ const backend = {
     },
   },
 }
-const key = 'qa:composer'
+let key = 'qa:composer'
 composerStore.set(
   new Map([
     [
@@ -62,12 +64,13 @@ composerStore.set(
   ]),
 )
 const renderer = createRenderer()
+const compact = process.argv.includes('--compact')
 renderer.init({
   title: 'TwirChat composer QA',
   appId: process.env.TWIRCHAT_QA_APP_ID,
   focus: false,
-  width: 900,
-  height: 780,
+  width: compact ? 480 : 900,
+  height: compact ? 480 : 780,
 })
 renderer.activateWindow()
 const root = createRoot(renderer)
@@ -126,9 +129,12 @@ function flatten(node = JSON.parse(renderer.getAutomationTree())) {
   return [node, ...(node.children ?? []).flatMap((child) => flatten(child))]
 }
 function find(id) {
-  const node = flatten().find((node) => node.testId === id)
+  const node = lookup(id)
   assert(node, `Missing ${id}`)
   return node
+}
+function lookup(id) {
+  return flatten().find((node) => node.testId === id)
 }
 async function until(check, label) {
   const deadline = performance.now() + 5000
@@ -188,7 +194,12 @@ async function click(id) {
 }
 function configureTranslation(outgoingMode) {
   applyTranslationSettings({
-    settings: { ...structuredClone(DEFAULT_TRANSLATION_SETTINGS), outgoingMode },
+    settings: {
+      ...structuredClone(DEFAULT_TRANSLATION_SETTINGS),
+      outgoingMode,
+      sourceLanguage: 'de',
+      targetLanguage: 'fr',
+    },
     credentials: [],
   })
 }
@@ -335,8 +346,57 @@ try {
   })
   assert.equal(handledWhileBlurred, false, 'composer route only exists while an editor is focused')
   assert.equal(state().text, textBeforeBlur)
+  configureTranslation('preview')
+  updateComposer(key, (current) => ({ ...current, translateOnSend: undefined }))
+  await draft('/translateaut')
+  await focus()
+  await until(
+    () => renderer.getAllText().includes('/translateauto'),
+    'auto translation command autocomplete',
+  )
+  await draft('/translateauto en')
+  const beforeAuto = sent.length
+  const beforeAutoRequests = translations.length
+  renderer.simulateKeystrokes('enter')
+  await until(() => lookup('auto-translation-status') && !state().text, 'auto translation enabled')
+  assert.equal(sent.length, beforeAuto, 'enabling auto translation is local')
+  assert.equal(translations.length, beforeAutoRequests, 'enabling does not call the provider')
+  assert(!state().history.includes('/translateauto en'))
+  const statusBounds = renderer.getElementBounds(find('auto-translation-status').id)
+  const editorBounds = renderer.getElementBounds(find('chat-input').id)
+  assert(statusBounds && editorBounds && statusBounds.y + statusBounds.height <= editorBounds.y)
+
+  await draft('Привет!')
+  renderer.simulateKeystrokes('enter')
+  await until(() => sent.length === beforeAuto + 1, 'auto translation sends without preview')
+  assert.deepEqual(translations.at(-1), {
+    text: 'Привет!',
+    sourceLanguage: 'auto',
+    targetLanguage: 'en',
+  })
+  assert.equal(sent.at(-1).text, 'translated:Привет!')
+  assert.equal(sent.at(-1).replyToMessageId, 'reply')
+
+  await draft('an unsent draft')
+  failTranslation = true
+  await assert.rejects(runner('an unsent draft'), /QA translation unavailable/)
+  assert.equal(sent.length, beforeAuto + 1)
+  assert.equal(state().text, 'an unsent draft')
+  failTranslation = false
+
+  await click('auto-translation-off')
+  await until(() => !lookup('auto-translation-status'), 'Turn off disables auto translation')
+  assert.equal(state().text, 'an unsent draft')
+  await assert.rejects(runner('an unsent draft'), /Review the translation preview/)
+  assert.deepEqual(translations.at(-1), {
+    text: 'an unsent draft',
+    sourceLanguage: 'de',
+    targetLanguage: 'fr',
+  })
+  assert.equal(sent.length, beforeAuto + 1, 'turning off restores the configured preview')
+  await runner('/translateauto en')
   configureTranslation('off')
-  updateComposer(key, (current) => ({ ...current, translateOnSend: false }))
+  key = 'qa:home-composer'
   let contextPlatform = 'twitch'
   const homeAccounts = ['twitch', 'kick'].map((platform) => ({
     id: platform,
@@ -399,11 +459,13 @@ try {
   mountHome()
   await Bun.sleep(100)
   await focus()
+  await until(() => lookup('auto-translation-status'), 'same channel in a different composer')
   await draft('twitch context')
   let beforeContext = sent.length
   await fire('sendMessage', ['keepInput'])
   assert.equal(sent.length, beforeContext + 1)
   assert.equal(sent.at(-1).platform, 'twitch')
+  assert.equal(sent.at(-1).text, 'translated:twitch context')
   const chip = find('composer-target-twitch')
   assert(chip, 'home platform control visible')
   const chipBounds = renderer.getElementBounds(chip.id)
@@ -415,21 +477,41 @@ try {
   await Bun.sleep(100)
   assert.equal(contextPlatform, null, 'clicking a chip clears the context override')
   await focus()
+  await assert.rejects(runner('/translateauto off'), /Select one/)
   await draft('both contexts')
   beforeContext = sent.length
   await fire('sendMessage', ['keepInput'])
   assert.deepEqual(
     sent
       .slice(beforeContext)
-      .map((target) => target.platform)
-      .sort((left, right) => left.localeCompare(right)),
-    ['kick', 'twitch'],
+      .map(({ platform, text }) => [platform, text])
+      .sort(([left], [right]) => left.localeCompare(right)),
+    [
+      ['kick', 'both contexts'],
+      ['twitch', 'translated:both contexts'],
+    ],
   )
   contextPlatform = 'kick'
   mountHome()
   await Bun.sleep(100)
   await runner('kick context command')
   assert.equal(sent.at(-1).platform, 'kick')
+  assert.equal(sent.at(-1).text, 'kick context command')
+  assert(!lookup('auto-translation-status'), 'another channel has no auto translation')
+  contextPlatform = 'twitch'
+  mountHome()
+  await until(() => lookup('auto-translation-status'), 'returning to an enabled channel')
+  await draft('/translateauto OFF')
+  await focus()
+  const beforeOff = sent.length
+  renderer.simulateKeystrokes('enter')
+  await until(
+    () => !lookup('auto-translation-status') && !state().text,
+    'auto translation disabled',
+  )
+  assert.equal(sent.length, beforeOff, 'disabling auto translation is local')
+  await runner('normal after off')
+  assert.equal(sent.at(-1).text, 'normal after off')
   contextPlatform = 'youtube'
   mountHome()
   await Bun.sleep(100)
@@ -448,6 +530,7 @@ try {
       nativeEditing: true,
       keepInput: true,
       translationPreview: true,
+      channelAutoTranslation: true,
       asyncDraftSafety: true,
       commandRunner: true,
       focusedRouting: true,

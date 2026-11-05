@@ -24,6 +24,20 @@ export const composerStore = persistentResource('composers', () =>
   createStore<Map<string, ComposerState>>(new Map()),
 )
 
+export const autoTranslationLanguagesStore = persistentResource('autoTranslationLanguages', () =>
+  createStore<ReadonlyMap<string, string>>(new Map()),
+)
+
+export function setAutoTranslationLanguage(channelKey: string, language: string | null): void {
+  autoTranslationLanguagesStore.modify((current) => {
+    if ((current.get(channelKey) ?? null) === language) return current
+    const next = new Map(current)
+    if (language === null) next.delete(channelKey)
+    else next.set(channelKey, language)
+    return next
+  })
+}
+
 export function editComposer(state: ComposerState, text: string): ComposerState {
   return { ...state, text, historyIndex: null }
 }
@@ -161,5 +175,6 @@ export function composerTranslationMode(
 declare module './persistent-resources' {
   interface PersistentResources {
     composers: Store<Map<string, ComposerState>>
+    autoTranslationLanguages: Store<ReadonlyMap<string, string>>
   }
 }
