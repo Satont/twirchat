@@ -5,7 +5,7 @@
 import { motion } from '@gpuix/react'
 import { useState } from 'react'
 
-import { accountsStore, activeTabStore, unreadEventsStore, type MainTab } from '../state/app'
+import { accountsStore, activeTabStore, type MainTab } from '../state/app'
 import { useStore } from '../state/create-store'
 import { accent } from '../theme'
 import { useTheme } from '../theme-context'
@@ -24,7 +24,6 @@ interface NavItem {
 
 const ITEMS: NavItem[] = [
   { id: 'chat', label: 'Chat', icon: 'chat' },
-  { id: 'events', label: 'Events', icon: 'bell' },
   { id: 'platforms', label: 'Platforms', icon: 'globe' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ]
@@ -34,14 +33,12 @@ function NavItemButton({
   active,
   collapsed,
   badge,
-  badgeColor,
   onClick,
 }: {
   item: NavItem
   active: boolean
   collapsed: boolean
   badge?: number
-  badgeColor?: string
   onClick: () => void
 }) {
   const theme = useTheme()
@@ -93,7 +90,7 @@ function NavItemButton({
               position: 'absolute',
               top: -6,
               right: -8,
-              backgroundColor: badgeColor ?? '#ef4444',
+              backgroundColor: '#22c55e',
               borderRadius: 10,
               paddingLeft: 4,
               paddingRight: 4,
@@ -123,14 +120,8 @@ function NavItemButton({
 export function NavRail({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const theme = useTheme()
   const activeTab = useStore(activeTabStore)
-  const unreadEvents = useStore(unreadEventsStore)
-  const accounts = useStore(accountsStore)
+  const accountCount = useStore(accountsStore).length
   const [collapseHovered, setCollapseHovered] = useState(false)
-
-  const badges: Partial<Record<MainTab, { count: number; color?: string }>> = {
-    events: unreadEvents > 0 ? { count: unreadEvents } : undefined,
-    platforms: accounts.length > 0 ? { count: accounts.length, color: '#22c55e' } : undefined,
-  }
 
   return (
     <motion.div
@@ -181,12 +172,8 @@ export function NavRail({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             item={item}
             active={activeTab === item.id}
             collapsed={collapsed}
-            badge={badges[item.id]?.count}
-            badgeColor={badges[item.id]?.color}
-            onClick={() => {
-              activeTabStore.set(item.id)
-              if (item.id === 'events') unreadEventsStore.set(0)
-            }}
+            badge={item.id === 'platforms' ? accountCount : undefined}
+            onClick={() => activeTabStore.set(item.id)}
           />
         ))}
       </div>

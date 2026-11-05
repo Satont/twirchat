@@ -3,8 +3,12 @@ const { assertGuiQaEnvironment } = await import('../src/services/gui-qa')
 assertGuiQaEnvironment()
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
+
+import type { MainTab } from '../src/gpuix/state/app'
+
 const { focusNativeQaWindow } = await import('./qa-x11')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
+process.env.TWIRCHAT_GPUIX_START_MAIN_TAB = 'events'
 await import('../src/gpuix/main')
 const app = await import('../src/gpuix/state/app')
 const { layoutStore, allPanels } = await import('../src/gpuix/state/layout')
@@ -28,6 +32,14 @@ function find(renderer, testId) {
   return visit(JSON.parse(renderer.getAutomationTree()))
 }
 let main
+async function openNavTab(tab: MainTab, contentId: string) {
+  const item = find(main, `nav-${tab}`)
+  assert.ok(item, `Missing ${tab} navigation item`)
+  const bounds = main.getElementBounds(item.id)
+  assert.ok(bounds, `Missing painted bounds for ${tab}`)
+  main.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
+  await until(() => app.activeTabStore.get() === tab && !!find(main, contentId), `opens ${tab}`)
+}
 async function action(category, name, args = []) {
   actionBindingsStore.update({
     value: {
@@ -57,7 +69,15 @@ try {
   main = mounts.get('main').renderer
   await focusNativeQaWindow('TwirChat')
   assert.deepEqual(app.accountsStore.get(), [], 'Private QA must not load real credentials.')
-  assert.equal(allPanels(layoutStore.get().get('home')!.layout).length, 1)
+  const homePanes = allPanels(layoutStore.get().get('home')?.layout ?? null)
+  assert.equal(homePanes.length, 1)
+  const [homePane] = homePanes
+  assert.ok(homePane)
+  await until(() => !!find(main, `pane-${homePane.id}`), 'legacy tab selection falls back to Chat')
+  assert.equal(find(main, 'nav-events'), undefined)
+  await openNavTab('platforms', 'connect-twitch')
+  await openNavTab('settings', 'settings-search')
+  await openNavTab('chat', `pane-${homePane.id}`)
   await action('window', 'newSplit')
   await until(
     () => allPanels(layoutStore.get().get('home')?.layout ?? null).length === 2,

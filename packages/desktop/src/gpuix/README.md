@@ -62,7 +62,7 @@ in-process facade with exactly the same shape as the Wails gateway:
 `src/gpuix/state/` — observable stores on `useSyncExternalStore`
 (`create-store.ts`), replacing Pinia:
 
-- `app.ts` — settings/accounts/statuses/messages/events/watched/tabs/emotes/
+- `app.ts` — settings/accounts/statuses/messages/watched/tabs/emotes/
   stream-status polling/moderation outcomes/notices + `wireBackendToStores()`
   - `loadInitialData()` (ports `App.vue`'s boot sequence).
 - `layout.ts` — per-tab watched-channel split layouts (ports `stores/layout.ts`).
@@ -207,7 +207,7 @@ served by `src/overlay-server.ts` (started by the GPUIX backend too).
   `services/gui-qa-screenshot.ts` captures only the private framebuffer.
 - Linux rejects standalone `GPUIX_BACKGROUND=1` launches: `focus: false` alone
   does not provide compositor isolation. Use the QA launcher for agent tests.
-- `TWIRCHAT_GPUIX_START_MAIN_TAB=events|platforms|settings` — boot onto a tab.
+- `TWIRCHAT_GPUIX_START_MAIN_TAB=platforms|settings` — boot onto a tab.
 - `TWIRCHAT_GPUIX_START_TAB=<watchedChannelId>` — boot onto a watched tab.
 - `POST http://localhost:55824/dev/inject-chat` with a `NormalizedChatMessage`
   JSON body injects a fake chat message (dev only).

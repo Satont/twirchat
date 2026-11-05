@@ -142,19 +142,6 @@ export const semantic = {
   renamed: '#818cf8',
 }
 
-/** Event type → color (from EventsFeed.vue) */
-export const eventColors: Record<string, string> = {
-  follow: '#22c55e',
-  sub: '#a78bfa',
-  resub: '#a78bfa',
-  membership: '#a78bfa',
-  gift_sub: '#f59e0b',
-  bits: '#f59e0b',
-  raid: '#3b82f6',
-  host: '#06b6d4',
-  superchat: '#ef4444',
-}
-
 /** Elevated surfaces */
 export const elevated = {
   tooltip: '#1e1e30',

@@ -2,7 +2,7 @@ import { motion, useGpuixRequired, type StyleDesc } from '@gpuix/react'
 import { useEffect, useMemo, useState } from 'react'
 /**
  * Root component — port of App.vue's shell: nav rail + channel tab bar +
- * tabbed content area (chat / events / platforms / settings) + modals +
+ * tabbed content area (chat / platforms / settings) + modals +
  * transient notice toast. Window chrome is the native GPUI titlebar.
  */
 
@@ -51,7 +51,6 @@ import { accent, withAlpha } from '../theme'
 import { resolveFont, resolveTheme, useTheme, FontContext, ThemeContext } from '../theme-context'
 import { AddChannelModal } from './AddChannelModal'
 import { ChannelTabBar, type WatchedLiveStatus } from './ChannelTabBar'
-import { EventsFeed } from './EventsFeed'
 import { NavRail } from './NavRail'
 import { PlatformsPanel } from './PlatformsPanel'
 import { SavedAccounts } from './SavedAccounts'
@@ -536,7 +535,6 @@ export function App() {
                 onGoToPlatforms={() => activeTabStore.set('platforms')}
               />
             ) : null}
-            {activeTab === 'events' ? <EventsFeed /> : null}
             {activeTab === 'platforms' ? <PlatformsPanel /> : null}
             {activeTab === 'settings' ? <SettingsPanel /> : null}
           </div>

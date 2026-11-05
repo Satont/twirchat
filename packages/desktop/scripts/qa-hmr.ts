@@ -25,7 +25,7 @@ import { useWindowScope } from ${JSON.stringify(join(desktop, 'src/gpuix/state/w
 import { useStore } from ${JSON.stringify(join(desktop, 'src/gpuix/state/create-store.ts'))}
 import { registerHotkeyActions } from ${JSON.stringify(join(desktop, 'src/gpuix/state/hotkeys.ts'))}
 import { focusNativeQaWindow } from ${JSON.stringify(join(desktop, 'scripts/qa-x11.ts'))}
-import { unreadEventsStore } from ${JSON.stringify(join(desktop, 'src/gpuix/state/app.ts'))}
+import { moderationRevisionStore } from ${JSON.stringify(join(desktop, 'src/gpuix/state/app.ts'))}
 import { mountDesktopWindows } from ${JSON.stringify(join(desktop, 'src/gpuix/window-manager.tsx'))}
 declare global {
   var __hmrRound: number | undefined
@@ -43,7 +43,7 @@ function Probe() {
   const windows = useDesktopWindows()
   const scope = useWindowScope()
   const renderer = useGpuixRequired()
-  const retained = useStore(unreadEventsStore)
+  const retained = useStore(moderationRevisionStore)
   const [count] = React.useState(round)
   const [clicked, setClicked] = React.useState(false)
   const [shortcuts, setShortcuts] = React.useState(0)
@@ -76,7 +76,7 @@ function Probe() {
       sameBackend: currentBackend === globalThis.__hmrFirstBackend,
       retained, clicked, shortcuts,
     }) + '\\n')
-    unreadEventsStore.set(stage)
+    moderationRevisionStore.set(stage)
   }, [currentBackend, windows, scope, renderer, retained, count, clicked, shortcuts])
   return React.createElement('div', {
     testId:'hmr-probe', ref:button, onClick:() => setClicked(true),

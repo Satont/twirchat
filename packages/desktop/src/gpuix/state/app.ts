@@ -9,7 +9,6 @@ import type {
   AppSettings,
   ModerationOutcome,
   NormalizedChatMessage,
-  NormalizedEvent,
   Platform,
   PlatformStatusInfo,
 } from '@twirchat/shared/types'
@@ -71,8 +70,6 @@ export const watchedMessagesStore = persistentResource('watchedMessages', () =>
 export const watchedStatusesStore = persistentResource('watchedStatuses', () =>
   createStore<Map<string, PlatformStatusInfo>>(new Map()),
 )
-export const eventsStore = persistentResource('events', () => createStore<NormalizedEvent[]>([]))
-export const unreadEventsStore = persistentResource('unreadEvents', () => createStore<number>(0))
 /** 'platform:login' → stream status */
 export const streamStatusStore = persistentResource('streamStatuses', () =>
   createStore<Map<string, ChannelStatus>>(new Map()),
@@ -85,15 +82,16 @@ export const authorEmoteStore = persistentResource('authorEmotes', () =>
   createStore<Map<string, EmoteCatalogEntry[]>>(new Map()),
 )
 
-export type MainTab = 'chat' | 'events' | 'platforms' | 'settings'
-const initialMainTab = process.env.TWIRCHAT_GPUIX_START_MAIN_TAB
+export type MainTab = 'chat' | 'platforms' | 'settings'
+function normalizeMainTab(tab: string | undefined): MainTab {
+  return tab === 'platforms' || tab === 'settings' ? tab : 'chat'
+}
 export const activeTabStore = persistentResource('activeMainTab', () =>
-  createStore<MainTab>(
-    initialMainTab === 'events' || initialMainTab === 'platforms' || initialMainTab === 'settings'
-      ? initialMainTab
-      : 'chat',
-  ),
+  createStore(normalizeMainTab(process.env.TWIRCHAT_GPUIX_START_MAIN_TAB)),
 )
+// A hot reload can retain a selection from the previous version.
+activeTabStore.set(normalizeMainTab(activeTabStore.get()))
+
 export const tabChannelIdsStore = persistentResource('tabChannelIds', () =>
   createStore<string[]>([]),
 )
@@ -722,16 +720,6 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
     applyModerationOutcome(outcome)
   })
 
-  subscribe('chat_event', (ev) => {
-    eventsStore.modify((current) => {
-      const next = [...current, ev]
-      return next.length > 200 ? next.slice(next.length - 200) : next
-    })
-    if (activeTabStore.get() !== 'events') {
-      unreadEventsStore.modify((v) => v + 1)
-    }
-  })
-
   subscribe('platform_status', (s) => {
     showConnectionNotice(s)
     channelStatusStore.modify((current) => ({ ...current, [s.platform]: s }))
@@ -838,8 +826,6 @@ declare module './persistent-resources' {
     watchedChannels: Store<DesktopWatchedChannel[]>
     watchedMessages: Store<Map<string, NormalizedChatMessage[]>>
     watchedStatuses: Store<Map<string, PlatformStatusInfo>>
-    events: Store<NormalizedEvent[]>
-    unreadEvents: Store<number>
     streamStatuses: Store<Map<string, ChannelStatus>>
     emotes: Store<Map<string, EmoteCatalogEntry[]>>
     authorEmotes: Store<Map<string, EmoteCatalogEntry[]>>

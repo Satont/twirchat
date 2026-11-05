@@ -159,7 +159,7 @@ describe('global chat navigation', () => {
 
   test('focused settings and other non-chat editors never invoke chat navigation', () => {
     focusComposer()
-    for (const tab of literal(['settings', 'platforms', 'events'])) {
+    for (const tab of literal(['settings', 'platforms'])) {
       activeTabStore.set(tab)
       for (const [key, modifiers] of literal([
         ['tab', { ctrl: true }],
@@ -191,7 +191,7 @@ describe('global chat navigation', () => {
   })
 
   test('unfocused navigation still works from another main tab', () => {
-    activeTabStore.set('events')
+    activeTabStore.set('platforms')
     handleGlobalKeyDown(keyEvent('tab', { ctrl: true }))
     expect(activeTabStore.get()).toBe('chat')
     expect(activeWatchedTabStore.get()).toBe('first')
