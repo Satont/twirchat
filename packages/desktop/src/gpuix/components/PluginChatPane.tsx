@@ -1,4 +1,5 @@
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
+import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
@@ -10,8 +11,11 @@ import type {
 import { useBackend } from '../backend/context'
 import { parsePluginCommand } from '../commands'
 import { runUiTask } from '../hooks/run-ui-task'
+import { settingsStore } from '../state/app'
 import { useComposerFocusRegistration } from '../state/composer-focus'
+import { useStoreSelector } from '../state/create-store'
 import { useTextInputFocusTracking } from '../state/focus'
+import { useWindowPresentation } from '../state/window-presentation'
 import { useTheme } from '../theme-context'
 import { PluginChatRow } from './PluginChatRow'
 import { ActionButton, FormError } from './ui/Form'
@@ -40,16 +44,32 @@ const PluginChatMessages = memo(function PluginChatMessages({
   messages: readonly PluginChannelMessage[] | undefined
 }) {
   const theme = useTheme()
+  const { zoom } = useWindowPresentation()
+  const fontSize =
+    useStoreSelector(settingsStore, (settings) => settings?.fontSize ?? DEFAULT_SETTINGS.fontSize) *
+    zoom
+  const chatTheme = useStoreSelector(
+    settingsStore,
+    (settings) => settings?.chatTheme ?? DEFAULT_SETTINGS.chatTheme,
+  )
+  const showTimestamp = useStoreSelector(settingsStore, (settings) => settings?.showTimestamp)
+  const estimatedItemHeight = Math.round(fontSize * (chatTheme === 'compact' ? 2.1 : 4))
   return (
     <virtual-list
       testId="plugin-chat-messages"
       alignment="bottom"
       followTail
-      estimatedItemHeight={22}
+      estimatedItemHeight={estimatedItemHeight}
       style={{ flexGrow: 1, minHeight: 0, scrollbarColor: theme.scrollbar, scrollbarWidth: 5 }}
     >
       {messages?.map((message) => (
-        <PluginChatRow key={message.id} message={message} />
+        <PluginChatRow
+          key={message.id}
+          message={message}
+          fontSize={fontSize}
+          chatTheme={chatTheme}
+          showTimestamp={showTimestamp}
+        />
       ))}
     </virtual-list>
   )

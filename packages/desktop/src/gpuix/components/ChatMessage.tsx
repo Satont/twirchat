@@ -56,7 +56,7 @@ function platformIconSize(fontSize: number): number {
   return Math.max(9, Math.round(fontSize * 0.85))
 }
 
-function timestampSize(fontSize: number): number {
+export function timestampSize(fontSize: number): number {
   return Math.max(10, Math.round(fontSize * 0.78))
 }
 

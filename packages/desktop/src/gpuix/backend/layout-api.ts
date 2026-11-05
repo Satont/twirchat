@@ -56,15 +56,16 @@ function countPanels(node: LayoutNode): number {
   return node.children.reduce((sum, child) => sum + countPanels(child), 0)
 }
 
-export function createLayoutApi(onUiStateSaved?: (key: string) => void): LayoutApi {
+export function readUiState(key: string): string | null {
+  const row = getDb()
+    .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
+    .get(`gpuix_ui_${key}`)
+  return row?.value ?? null
+}
+
+export function createLayoutApi(onUiStateSaved?: (key: string, value: string) => void): LayoutApi {
   return {
-    getUiState: async ({ key }) => {
-      const db = getDb()
-      const row = db
-        .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
-        .get(`gpuix_ui_${key}`)
-      return row?.value ?? null
-    },
+    getUiState: async ({ key }) => readUiState(key),
 
     setUiState: async ({ key, value }) => {
       const db = getDb()
@@ -72,7 +73,7 @@ export function createLayoutApi(onUiStateSaved?: (key: string) => void): LayoutA
         'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
         [`gpuix_ui_${key}`, value],
       )
-      onUiStateSaved?.(key)
+      onUiStateSaved?.(key, value)
     },
 
     getTabChannelIds: async () => {

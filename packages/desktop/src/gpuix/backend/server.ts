@@ -24,7 +24,12 @@ import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } fro
 import { BackendConnection } from '../../backend-connection'
 import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
-import { pushOverlayEvent, pushOverlayMessage, startOverlayServer } from '../../overlay-server'
+import {
+  pushOverlayEvent,
+  pushOverlayMessage,
+  pushOverlayPluginMessage,
+  startOverlayServer,
+} from '../../overlay-server'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { TwitchAdapter } from '../../platforms/twitch/adapter'
 import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
@@ -51,6 +56,10 @@ import { getClientSecret } from '../../store/client-secret'
 import { getDb } from '../../store/db'
 import { initDb } from '../../store/db'
 import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
+import {
+  HOME_PLUGIN_CHANNELS_KEY,
+  readHomePluginChannelIds,
+} from '../../watched-channels/home-plugin-preference'
 import { WatchedChannelManager } from '../../watched-channels/manager'
 import { createPluginChannels } from '../../watched-channels/plugin-channels'
 import {
@@ -62,6 +71,7 @@ import {
 import { twitchEventSubscriptionSchema } from './api-schemas'
 import { recordChatMessage } from './chat-history'
 import { createDesktopEvents, type DesktopEvents } from './events'
+import { readUiState } from './layout-api'
 import { createPluginHost } from './plugin-host'
 import { createTwitchHistoryRuntime } from './twitch-history'
 
@@ -389,9 +399,13 @@ function boot(): DesktopBackend {
       events.emit('plugins_changed', plugins.list())
     },
   })
+  let homePluginChannelIds = readHomePluginChannelIds(readUiState(HOME_PLUGIN_CHANNELS_KEY))
   const pluginChannels: ReturnType<typeof createPluginChannels> = createPluginChannels({
     manager: plugins,
-    onMessage: (channel, message) => events.emit('plugin_channel_message', { channel, message }),
+    onMessage: (channel, message) => {
+      if (homePluginChannelIds.has(channel.id)) pushOverlayPluginMessage(channel, message)
+      events.emit('plugin_channel_message', { channel, message })
+    },
     onStatus: (channel, status) => events.emit('plugin_channel_status', { channel, status }),
   })
   const api: DesktopApi = createDesktopApi({
@@ -406,6 +420,9 @@ function boot(): DesktopBackend {
     backendConn,
     watchedChannelManager,
     pluginChannels,
+    onUiStateSaved: (key, value) => {
+      if (key === HOME_PLUGIN_CHANNELS_KEY) homePluginChannelIds = readHomePluginChannelIds(value)
+    },
     currentStatuses,
     events,
     openBrowser,

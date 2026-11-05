@@ -430,6 +430,7 @@ export interface DesktopApiContext {
   backendConn: BackendConnection
   watchedChannelManager: WatchedChannelManager
   pluginChannels?: PluginChannels
+  onUiStateSaved?: (key: string, value: string) => void
   currentStatuses: Map<string, PlatformStatusInfo>
   events: DesktopEvents
   openBrowser: (url: string) => void
@@ -1293,8 +1294,9 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.openBrowser(url)
     },
 
-    ...createLayoutApi((key) => {
+    ...createLayoutApi((key, value) => {
       if (key === 'emote_preferences_v1') ctx.providerRuntime?.refreshPreferences()
+      ctx.onUiStateSaved?.(key, value)
     }),
 
     copyText: async ({ text }) => {

@@ -142,7 +142,7 @@ function readChat({ endpoint, socketUrl, channelId, signal, context }: ChatSessi
       const merged = new Map<string, PluginTransportMessage>()
       for (const item of messages) {
         const message = chatMessage(item)
-        if (message) merged.set(message.id, message)
+        if (message) merged.set(message.id, { ...message, historical: true })
       }
       for (const [id, message] of pending) merged.set(id, message)
       pending = undefined

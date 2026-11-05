@@ -122,9 +122,9 @@ test('subscribes before loading history, merges overlapping chat and closes the 
       expect.objectContaining({ type: 'pong' }),
     ])
     expect(statuses).toEqual([{ status: 'connecting' }, { status: 'connected' }])
-    expect(messages.map(({ id, text }) => [id, text])).toEqual([
-      ['old', 'Earlier message'],
-      ['overlap', 'Live copy'],
+    expect(messages.map(({ id, text, historical }) => [id, text, historical])).toEqual([
+      ['old', 'Earlier message', true],
+      ['overlap', 'Live copy', undefined],
     ])
 
     expect(messages[0]?.author.color).toBeUndefined()

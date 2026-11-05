@@ -71,6 +71,7 @@ export interface PluginTransportMessage {
   author: PluginMessageAuthor
   text: string
   timestamp?: number
+  historical?: boolean
 }
 
 export interface PluginTransportStatus {
