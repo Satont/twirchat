@@ -91,21 +91,8 @@ export const icons = {
     '<line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />',
   ),
   sparkle: fill('<path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />'),
-
-  // ── Events feed (inline SVGs from EventsFeed.vue) ───────────────────────
-  heart: stroke(
-    '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />',
-  ),
   star: stroke(
     '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />',
-  ),
-  gift: stroke(
-    '<polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />',
-  ),
-  zap: stroke('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />'),
-  playCircle: stroke('<circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" />'),
-  dollar: stroke(
-    '<line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />',
   ),
 
   // ── Platform logos (monochrome paths tinted with the platform color) ────

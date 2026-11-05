@@ -153,7 +153,7 @@ describe('tab unread activity', () => {
   })
 
   test('home counts only own channels while another main screen is open', async () => {
-    activeTabStore.set('events')
+    activeTabStore.set('platforms')
     events.emit('chat_message', message('own', 'Streamer!'))
     events.emit('chat_message', { ...message('foreign'), channelId: 'another-channel' })
     await Bun.sleep(35)
