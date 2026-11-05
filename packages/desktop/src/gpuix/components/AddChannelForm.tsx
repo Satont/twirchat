@@ -6,6 +6,10 @@
 import type { PublicInstance } from '@gpuix/react'
 import { useState, type Ref } from 'react'
 
+import type { PluginTransportInfo } from '../../plugins/api'
+import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
+import { isPluginPlatform, type WatchedPlatform } from '../../watched-channels/plugin-channel-types'
+import { useBackend, useBackendEvent } from '../backend/context'
 import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
 import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor, withAlpha } from '../theme'
@@ -14,6 +18,7 @@ import { PlatformIcon } from './ui/Icon'
 import { Text } from './ui/Text'
 
 type FormPlatform = 'twitch' | 'kick' | 'youtube'
+const noPluginTransports: readonly PluginTransportInfo[] = []
 
 export function AddChannelForm({
   cancelable,
@@ -31,39 +36,46 @@ export function AddChannelForm({
   popupContextId?: string
   inputRef?: Ref<PublicInstance>
   onFocus?: () => void
-  onConfirm: (platform: FormPlatform, channelSlug: string) => void
+  onConfirm: (platform: WatchedPlatform, channelSlug: string) => void
   onCancel?: () => void
 }) {
   const theme = useTheme()
-  const [platform, setPlatform] = useState<FormPlatform>('twitch')
+  const { api, plugins } = useBackend()
+  const readTransports = () => (plugins ? api.getPluginTransports() : noPluginTransports)
+  const [transports, setTransports] = useState(readTransports)
+  useBackendEvent('plugins_changed', () => setTransports(readTransports()))
+  const [platform, setPlatform] = useState<WatchedPlatform>('twitch')
+  const transport = transports.find((item) => item.platform === platform)
+  const unavailable = isPluginPlatform(platform) && !transport
   const [slug, setSlug] = useState('')
   const [inputFocused, setInputFocused] = useState(false)
   const inputFocus = useTextInputFocusTracking(setInputFocused)
 
-  const placeholder =
-    platform === 'twitch'
-      ? 'Twitch channel name'
-      : platform === 'kick'
-        ? 'Kick channel name'
-        : 'YouTube channel handle or ID'
+  const canConfirm = !unavailable && Boolean(slug.trim())
+  const placeholder = unavailable
+    ? 'Select an available platform'
+    : transport
+      ? `${sanitizeDisplayText(transport.name)} channel identifier`
+      : platform === 'twitch'
+        ? 'Twitch channel name'
+        : platform === 'kick'
+          ? 'Kick channel name'
+          : 'YouTube channel handle or ID'
 
   const confirm = () => {
-    const trimmed = platform === 'youtube' ? slug.trim() : slug.trim().toLowerCase()
-    if (!trimmed) return
+    if (!canConfirm) return
+    const trimmed =
+      platform === 'youtube' || isPluginPlatform(platform) ? slug.trim() : slug.trim().toLowerCase()
     onConfirm(platform, trimmed)
     setSlug('')
   }
 
   usePopupHotkeys(
     'add-channel',
-    { accept: slug.trim() ? confirm : null, reject: onCancel ?? null },
+    { accept: canConfirm ? confirm : null, reject: onCancel ?? null },
     popup,
     popupContextId,
   )
-
-  const selectPlatform = (p: FormPlatform) => {
-    setPlatform(p)
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
@@ -75,7 +87,7 @@ export function AddChannelForm({
             <div
               key={p}
               testId={`add-platform-${p}`}
-              onClick={() => selectPlatform(p)}
+              onClick={() => setPlatform(p)}
               style={{
                 flexGrow: 1,
                 display: 'flex',
@@ -110,6 +122,52 @@ export function AddChannelForm({
           )
         })}
       </div>
+      {transports.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Text style={{ fontSize: 11, color: theme.text2 }}>Plugin platforms</Text>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              maxHeight: 100,
+              overflowY: 'scroll',
+            }}
+          >
+            {transports.map((item) => {
+              const active = platform === item.platform
+              return (
+                <div
+                  key={item.platform}
+                  testId={`add-platform-${item.platform}`}
+                  tabIndex={0}
+                  aria-label={`Use ${sanitizeDisplayText(item.name)}`}
+                  onClick={() => setPlatform(item.platform)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'enter' || event.key === 'space') {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setPlatform(item.platform)
+                    }
+                  }}
+                  style={{
+                    padding: 5,
+                    borderRadius: 5,
+                    backgroundColor: active ? theme.fillHover : theme.fill,
+                    cursor: 'pointer',
+                    hover: { backgroundColor: theme.fillHover },
+                    focusVisible: { outlineWidth: 1, outlineColor: theme.link },
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: active ? theme.link : theme.text }}>
+                    {sanitizeDisplayText(item.name)}
+                  </Text>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div
         style={{
@@ -186,9 +244,9 @@ export function AddChannelForm({
             paddingRight: 16,
             borderRadius: 8,
             backgroundColor: '#7c3aed',
-            cursor: slug.trim() ? 'pointer' : 'default',
-            opacity: slug.trim() ? 1 : 0.4,
-            hover: { backgroundColor: slug.trim() ? '#6d28d9' : '#7c3aed' },
+            cursor: canConfirm ? 'pointer' : 'default',
+            opacity: canConfirm ? 1 : 0.4,
+            hover: { backgroundColor: canConfirm ? '#6d28d9' : '#7c3aed' },
           }}
         >
           <Text style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>Add</Text>

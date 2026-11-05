@@ -9,6 +9,7 @@ import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import type { LayoutNode, PanelNode, SplitNode } from '@twirchat/shared/types'
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
+import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
@@ -39,6 +40,7 @@ import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { AddChannelForm } from './AddChannelForm'
 import { ChatView } from './ChatView'
+import { PluginChatPane } from './PluginChatPane'
 import { AppStatusIcon } from './ui/AppStatusIcon'
 import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'
@@ -739,6 +741,16 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
             onGoToPlatforms={goToPlatforms}
             onSplitRight={() => void splitPanel(backend, tabId, panel.id, 'vertical', scope)}
             onClosePanel={() => void closePane()}
+          />
+        ) : watchedChannel && isPluginWatchedChannel(watchedChannel) ? (
+          <PluginChatPane
+            key={watchedChannel.id}
+            channel={watchedChannel}
+            paneId={`${tabId}:${panel.id}`}
+            headerLeading={headerLeading}
+            onSplitRight={() => runUiTask(splitPanel(backend, tabId, panel.id, 'vertical', scope))}
+            onChangeChannel={() => setShowAddForm(true)}
+            onClosePanel={() => runUiTask(closePane())}
           />
         ) : watchedChannel ? (
           <ChatView

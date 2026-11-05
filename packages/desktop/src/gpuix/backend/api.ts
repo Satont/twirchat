@@ -37,7 +37,6 @@ import type {
   Platform,
   PlatformStatusInfo,
   SplitDirection,
-  WatchedChannel,
   WatchedChannelsLayout,
 } from '@twirchat/shared/types'
 import type {
@@ -59,6 +58,7 @@ import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
 import { KickAdapter } from '../../platforms/kick/adapter'
+import type { PluginTransportInfo } from '../../plugins/api'
 import { backendFetch } from '../../runtime-config'
 import type { AccountSessions } from '../../services/account-sessions'
 import type { ChannelActions, PlayerSettings } from '../../services/channel-actions'
@@ -99,6 +99,12 @@ import { UserAliasStore } from '../../store/user-alias-store'
 import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
 import { mergeChatMessageSnapshot } from '../../views/main/utils/chat-message-buffer'
 import type { WatchedChannelManager } from '../../watched-channels/manager'
+import {
+  isPluginPlatform,
+  type DesktopWatchedChannel,
+  type WatchedPlatform,
+} from '../../watched-channels/plugin-channel-types'
+import type { PluginChannels } from '../../watched-channels/plugin-channels'
 import {
   twitchActivitiesSnapshotSchema,
   twitchRewardQueueSummarySchema,
@@ -340,12 +346,12 @@ export interface DesktopApi {
   downloadUpdate(): Promise<{ success: boolean; error?: string }>
   applyUpdate(): Promise<void>
   skipUpdate(params: { hash: string }): Promise<void>
-  getWatchedChannels(): Promise<WatchedChannel[]>
+  getWatchedChannels(): Promise<DesktopWatchedChannel[]>
   setActiveWatchedChannels(params: { ids: string[] }): Promise<void>
   addWatchedChannel(params: {
-    platform: 'twitch' | 'kick' | 'youtube'
+    platform: WatchedPlatform
     channelSlug: string
-  }): Promise<WatchedChannel>
+  }): Promise<DesktopWatchedChannel>
   removeWatchedChannel(params: { id: string }): Promise<void>
   getWatchedChannelMessages(params: { id: string }): Promise<NormalizedChatMessage[]>
   sendWatchedChannelMessage(params: {
@@ -354,6 +360,9 @@ export interface DesktopApi {
     replyToMessageId?: string
   }): Promise<void | ChatSendReceipt>
   getWatchedChannelStatuses(): Promise<Array<{ channelId: string; status: PlatformStatusInfo }>>
+  getPluginTransports(): readonly PluginTransportInfo[]
+  observePluginChannel: PluginChannels['observe']
+  sendPluginChannelMessage(params: { id: string; text: string }): Promise<void>
   getChatters(params: { targets: ChattersTarget[] }): Promise<{ results: ChannelChatters[] }>
   openExternalUrl(params: { url: string }): Promise<void>
   /** GPUIX-only: generic UI preference stored in the settings KV table. */
@@ -398,6 +407,7 @@ export interface DesktopApiContext {
   aggregator: ChatAggregator
   backendConn: BackendConnection
   watchedChannelManager: WatchedChannelManager
+  pluginChannels?: PluginChannels
   currentStatuses: Map<string, PlatformStatusInfo>
   events: DesktopEvents
   openBrowser: (url: string) => void
@@ -1148,7 +1158,13 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     applyUpdate: () => updater.apply(),
     skipUpdate: ({ hash }) => updater.skip(hash),
 
-    getWatchedChannels: async () => watchedChannelManager.getAll(),
+    getWatchedChannels: async () => {
+      const builtin = watchedChannelManager.getAll()
+      const external = ctx.pluginChannels?.list() ?? []
+      return external.length === 0
+        ? builtin
+        : [...builtin, ...external].toSorted((a, b) => a.createdAt - b.createdAt)
+    },
 
     setActiveWatchedChannels: async ({ ids }) => {
       const active = new Set(ids)
@@ -1158,10 +1174,15 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           channel.platform,
           active.has(channel.id) ? channel.channelSlug : null,
         )
+      ctx.pluginChannels?.setActive(active)
       await watchedChannelManager.setActiveChannels(ids)
     },
 
     addWatchedChannel: async ({ platform, channelSlug }) => {
+      if (isPluginPlatform(platform)) {
+        if (!ctx.pluginChannels) throw new Error('Plugin transports are unavailable.')
+        return ctx.pluginChannels.add(platform, channelSlug)
+      }
       void ctx.providerRuntime?.warm(platform, channelSlug).catch((error) =>
         log.warn('Could not warm channel emotes', {
           platform,
@@ -1174,6 +1195,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     removeWatchedChannel: async ({ id }) => {
+      if (ctx.pluginChannels?.remove(id)) return
       const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === id)
       if (channel) ctx.providerRuntime?.setJoined(`watched:${id}`, channel.platform, null)
       await watchedChannelManager.removeChannel(id)
@@ -1208,6 +1230,13 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     getWatchedChannelStatuses: async () => {
       return watchedChannelManager.getAllStatuses()
+    },
+
+    getPluginTransports: () => ctx.pluginChannels?.transports() ?? [],
+    observePluginChannel: (id, listener) => ctx.pluginChannels?.observe(id, listener) ?? (() => {}),
+    sendPluginChannelMessage: async ({ id, text }) => {
+      if (!ctx.pluginChannels) throw new Error('Plugin transports are unavailable.')
+      await ctx.pluginChannels.sendMessage(id, text)
     },
 
     getChatters: async ({ targets }) => {

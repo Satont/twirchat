@@ -123,7 +123,13 @@ if (!g.__twirchatWatchedSubscriptionsWired) {
 mountDesktopWindows(
   backend,
   (descriptor) => (descriptor.kind === 'main' ? <App /> : <ChatWindow descriptor={descriptor} />),
-  () => process.exit(0),
+  () => {
+    const exit = () => {
+      backend.dispose?.()
+      process.exit(0)
+    }
+    void (backend.shutdownPlugins?.() ?? Promise.resolve()).then(exit, exit)
+  },
 )
 
 // Dev-only debug actions driven through POST :55824/dev/hook by default.

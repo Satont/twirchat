@@ -5,6 +5,7 @@ import type {
   WatchedChannelsLayout,
 } from '@twirchat/shared/types'
 
+import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { chatMessageKey, compileChatSearch, type SearchDetails } from '../chat-tools'
 import { compileMessageRules } from '../message-rules'
@@ -132,7 +133,7 @@ function currentInput(): ChatSearchInput {
     layouts: new Map(
       [...layoutStore.get()].map(([id, state]) => [id, state.error ? null : state.layout]),
     ),
-    channels: watchedChannelsStore.get(),
+    channels: watchedChannelsStore.get().filter((channel) => !isPluginWatchedChannel(channel)),
     homeMessages: homeMessagesStore.get(),
     watchedMessages: watchedMessagesStore.get(),
   }

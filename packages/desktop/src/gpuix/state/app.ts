@@ -12,7 +12,6 @@ import type {
   NormalizedEvent,
   Platform,
   PlatformStatusInfo,
-  WatchedChannel,
 } from '@twirchat/shared/types'
 
 import { similarityChannelKey } from '../../services/message-similarity'
@@ -26,6 +25,10 @@ import {
  * from the in-process backend event bus.
  */
 import { filterHomeChatMessages } from '../../views/main/utils/chat-send-targets'
+import {
+  isPluginWatchedChannel,
+  type DesktopWatchedChannel,
+} from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import type { UserAlias } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
@@ -58,7 +61,7 @@ export const channelStatusStore = persistentResource('channelStatuses', () =>
   createStore<Partial<Record<Platform, PlatformStatusInfo>>>({}),
 )
 export const watchedChannelsStore = persistentResource('watchedChannels', () =>
-  createStore<WatchedChannel[]>([]),
+  createStore<DesktopWatchedChannel[]>([]),
 )
 /** channelId → messages (oldest first, capped at 200) */
 export const watchedMessagesStore = persistentResource('watchedMessages', () =>
@@ -476,7 +479,7 @@ async function refreshStreamStatuses(backend: DesktopBackend): Promise<void> {
     })
   }
   for (const channel of watched) {
-    if (channel.platform === 'youtube') continue
+    if (isPluginWatchedChannel(channel) || channel.platform === 'youtube') continue
     const platform = channel.platform
     const key = `${platform}:${channel.channelSlug.toLowerCase()}`
     if (requests.some((r) => `${r.platform}:${r.channelLogin.toLowerCase()}` === key)) continue
@@ -618,6 +621,7 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
   }
 
   for (const ch of watchedChannelsStore.get()) {
+    if (isPluginWatchedChannel(ch)) continue
     try {
       const msgs = await backend.api.getWatchedChannelMessages({ id: ch.id })
       if (msgs.length > 0) {
@@ -831,7 +835,7 @@ declare module './persistent-resources' {
     accounts: Store<Account[]>
     aliases: Store<UserAlias[]>
     channelStatuses: Store<Partial<Record<Platform, PlatformStatusInfo>>>
-    watchedChannels: Store<WatchedChannel[]>
+    watchedChannels: Store<DesktopWatchedChannel[]>
     watchedMessages: Store<Map<string, NormalizedChatMessage[]>>
     watchedStatuses: Store<Map<string, PlatformStatusInfo>>
     events: Store<NormalizedEvent[]>

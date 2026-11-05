@@ -3,6 +3,7 @@ const { assertGuiQaEnvironment } = await import('../src/services/gui-qa')
 assertGuiQaEnvironment()
 
 import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { NativeRenderer } from '@gpuix/react'
@@ -19,6 +20,7 @@ import {
   benchmarkResultSchema,
   benchmarkReactModeSchema,
   gpuMeasurements,
+  pluginSubscriberResultSchema,
   percentile,
   readDrmSnapshot,
   verifyBenchmarkReactMode,
@@ -197,6 +199,62 @@ function generator(rate: number): { stop(): void; generated(): number } {
   }, 20)
   return { stop: () => clearInterval(timer), generated: () => generated }
 }
+
+async function startPluginSubscriber() {
+  const plugins = backend.plugins
+  assert(plugins)
+  const fixture = join(directory, 'subscriber-fixture')
+  const manifest = join(fixture, 'manifest.json')
+  const metricsPath = join(fixture, 'subscriber.json')
+  await mkdir(fixture)
+  await Bun.write(
+    manifest,
+    JSON.stringify({
+      id: 'benchmark-subscriber',
+      name: 'Benchmark subscriber',
+      version: '1.0.0',
+      apiVersion: 1,
+      entry: 'index.ts',
+    }),
+  )
+  await Bun.write(
+    join(fixture, 'index.ts'),
+    `export default function activate(api) {
+      let first = Infinity
+      let received = 0
+      let cpuStart = process.cpuUsage()
+      let start = performance.now()
+      api.on('message', ({ id }) => {
+        if (Number(id.slice('bench-message-'.length)) >= first) received++
+      })
+      api.registerCommand('benchmark-start', ({ args }) => {
+        first = Number(args[0])
+        start = performance.now()
+        cpuStart = process.cpuUsage()
+      })
+      api.registerCommand('benchmark-finish', async () => {
+        const cpu = process.cpuUsage(cpuStart)
+        await Bun.write(${JSON.stringify(metricsPath)}, JSON.stringify({
+          received, cpuMicroseconds: cpu.user + cpu.system, wallMs: performance.now() - start,
+          rssBytes: process.memoryUsage.rss(),
+        }))
+      })
+    }`,
+  )
+  await plugins.install(manifest)
+  await plugins.setEnabled('benchmark-subscriber', true)
+  assert.equal(plugins.list()[0]?.status, 'running', plugins.list()[0]?.error)
+  return {
+    start: () =>
+      plugins.runCommand('benchmark-start', { text: '', args: [String(sequence)], channel: null }),
+    async finish() {
+      await plugins.runCommand('benchmark-finish', { text: '', args: [], channel: null })
+      const result = pluginSubscriberResultSchema.parse(await Bun.file(metricsPath).json())
+      return { ...result, warning: plugins.list()[0]?.error }
+    },
+  }
+}
+
 try {
   await manager.start()
   await until(() => renderer !== undefined, 'native benchmark window')
@@ -217,10 +275,12 @@ try {
     () => renderer !== undefined && paintedText(renderer).some((text) => text.includes('Viewer')),
     'real native message text painted',
   )
+  const subscriber = config.pluginSubscriber ? await startPluginSubscriber() : undefined
   const warmup = generator(config.rate)
   await Bun.sleep(config.warmupSeconds * 1000)
   warmup.stop()
   await Bun.sleep(100)
+  if (subscriber) await subscriber.start()
   if (process.env.TWIRCHAT_QA_COMPOSITOR === 'xvfb') await captureGuiQaDisplay('benchmark-before')
   const initialProcessed = processed()
   const baselineMemory = process.memoryUsage()
@@ -265,6 +325,7 @@ try {
   const endGpu = readDrmSnapshot()
   const userTimingMeasureCount = performance.getEntriesByType('measure').length
   await Bun.sleep(2000)
+  const pluginSubscriber = subscriber ? await subscriber.finish() : undefined
   const bounds = nativeWindow(renderer).getWindowBounds()
   assert.ok(bounds)
   assert.equal(bounds.width, 1200)
@@ -273,6 +334,7 @@ try {
   const gpu = gpuMeasurements(initialGpu, endGpu)
   const result = benchmarkResultSchema.parse({
     config,
+    pluginSubscriber,
     reactMode,
     userTimingMeasureCount,
     wallMs,
@@ -334,6 +396,7 @@ try {
 } finally {
   stopMessages()
   await manager.quit()
+  await backend.shutdownPlugins?.()
   backend.dispose?.()
 }
 process.exit(0)

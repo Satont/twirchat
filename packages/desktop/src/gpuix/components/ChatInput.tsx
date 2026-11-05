@@ -43,6 +43,7 @@ import {
   commandApplies,
   runCommandActions,
   expandCustomCommand,
+  parsePluginCommand,
   type CommandContext,
 } from '../commands'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
@@ -707,6 +708,29 @@ export function ChatInput(props: ChatInputProps) {
       const onPlatformCommand = props.onPlatformCommand
       if (!onPlatformCommand) throw new Error('Platform commands are unavailable in this chat.')
       return () => onPlatformCommand(output, target)
+    }
+    if (commandName && backend.plugins?.hasCommand(commandName)) {
+      const plugins = backend.plugins
+      const invocation = parsePluginCommand(output)
+      if (invocation) {
+        const watched = props.watchedChannel
+        const target = commandTargets.length === 1 ? commandTargets[0] : undefined
+        const channel = watched
+          ? {
+              platform: watched.platform,
+              id: watched.channelSlug,
+              name: watched.displayName,
+              watchedChannelId: watched.id,
+            }
+          : target
+            ? { platform: target.platform, id: target.channelSlug, name: target.channelSlug }
+            : null
+        return Object.assign(
+          () =>
+            plugins.runCommand(invocation.name, { text: output, args: invocation.args, channel }),
+          { localOnly: true },
+        )
+      }
     }
     return prepareNormalOutput(output)
   }

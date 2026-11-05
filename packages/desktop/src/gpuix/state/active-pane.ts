@@ -1,4 +1,5 @@
 import { runInBackground } from '../../services/background-task'
+import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopBackend } from '../backend/server'
 import { accountsStore, activeTabStore, activeWatchedTabStore, watchedChannelsStore } from './app'
 import { chatWindowsStore } from './chat-windows'
@@ -73,7 +74,7 @@ export function wireProviderChannelFocus(backend: DesktopBackend): () => void {
               channelSlug: account.username,
             }
           : null
-        : watched
+        : watched && !isPluginWatchedChannel(watched)
           ? {
               platform: watched.platform,
               channelId: watched.channelSlug,

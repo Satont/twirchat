@@ -51,6 +51,11 @@ can download the update before restarting to apply it.
 Users of the previous distribution should install the new GPUIX package manually once because
 the old release feeds are being retired. Preserve the `~/.twirchat` profile before reinstalling.
 
+## Plugins
+
+Install and manage local TypeScript extensions in **Settings → Plugins**. See the
+[plugin guide](docs/plugins.md) for commands, chat events and third-party channel transports.
+
 ## Release and backend delivery
 
 Pull requests validate types, lint, formatting, tests, native desktop packages and backend Docker

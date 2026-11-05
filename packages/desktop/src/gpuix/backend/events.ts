@@ -24,9 +24,14 @@ import type {
   PlatformStatusInfo,
 } from '@twirchat/shared/types'
 
+import type { PluginInfo, PluginTransportMessage, PluginTransportStatus } from '../../plugins/api'
 import type { StreamerModeStatus } from '../../services/streamer-mode'
+import type { PluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 
 export type DesktopEventMap = {
+  plugins_changed: readonly PluginInfo[]
+  plugin_channel_message: { channel: PluginWatchedChannel; message: PluginTransportMessage }
+  plugin_channel_status: { channel: PluginWatchedChannel; status: PluginTransportStatus }
   streamer_mode_changed: StreamerModeStatus
   accounts_changed: { platform: Platform; identityChanged: boolean }
   author_emote_catalog: { platform: Platform; authorId: string; emotes: EmoteCatalogEntry[] }
@@ -83,6 +88,9 @@ type EventHandlers = {
 
 export function createDesktopEvents(): DesktopEvents {
   const handlers: EventHandlers = {
+    plugins_changed: new Set(),
+    plugin_channel_message: new Set(),
+    plugin_channel_status: new Set(),
     streamer_mode_changed: new Set(),
     accounts_changed: new Set(),
     author_emote_catalog: new Set(),

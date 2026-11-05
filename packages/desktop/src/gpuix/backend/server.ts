@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path'
+
 import { DEV_SERVER_PORT } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
@@ -27,7 +29,8 @@ import { KickAdapter } from '../../platforms/kick/adapter'
 import { TwitchAdapter } from '../../platforms/twitch/adapter'
 import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
 import { createYouTubeChatRelay } from '../../platforms/youtube/relay'
-import { setRuntimeConfig } from '../../runtime-config'
+import { createPluginManager } from '../../plugins/manager'
+import { getDbPath, setRuntimeConfig } from '../../runtime-config'
 import { createAccountSessions } from '../../services/account-sessions'
 import {
   createChannelActions,
@@ -49,6 +52,7 @@ import { getDb } from '../../store/db'
 import { initDb } from '../../store/db'
 import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
 import { WatchedChannelManager } from '../../watched-channels/manager'
+import { createPluginChannels } from '../../watched-channels/plugin-channels'
 import {
   createDesktopApi,
   twitchActivitiesRequest,
@@ -58,6 +62,7 @@ import {
 import { twitchEventSubscriptionSchema } from './api-schemas'
 import { recordChatMessage } from './chat-history'
 import { createDesktopEvents, type DesktopEvents } from './events'
+import { createPluginHost } from './plugin-host'
 import { createTwitchHistoryRuntime } from './twitch-history'
 
 const log = logger('gpuix-backend')
@@ -65,7 +70,12 @@ const log = logger('gpuix-backend')
 export interface DesktopBackend {
   api: DesktopApi
   events: DesktopEvents
+  plugins?: Pick<
+    ReturnType<typeof createPluginManager>,
+    'list' | 'install' | 'setEnabled' | 'remove' | 'hasCommand' | 'runCommand' | 'commandNames'
+  >
   dispose?: () => void
+  shutdownPlugins?: () => Promise<void>
 }
 
 /** Open a URL in the system default browser (replaces Electrobun Utils.openExternal). */
@@ -364,7 +374,20 @@ function boot(): DesktopBackend {
       .refresh(channel)
       .catch((error) => log.debug('Twitch history unavailable', { channel, error: String(error) }))
   }
-  const api = createDesktopApi({
+  const plugins: ReturnType<typeof createPluginManager> = createPluginManager({
+    directory: join(dirname(getDbPath()), 'plugins'),
+    host: createPluginHost({ events, getApi: () => api, getPluginChannels: () => pluginChannels }),
+    onChange: () => {
+      pluginChannels.transportChanged()
+      events.emit('plugins_changed', plugins.list())
+    },
+  })
+  const pluginChannels: ReturnType<typeof createPluginChannels> = createPluginChannels({
+    manager: plugins,
+    onMessage: (channel, message) => events.emit('plugin_channel_message', { channel, message }),
+    onStatus: (channel, status) => events.emit('plugin_channel_status', { channel, status }),
+  })
+  const api: DesktopApi = createDesktopApi({
     twitchHistory,
     streamerMode,
     channelActions,
@@ -375,12 +398,25 @@ function boot(): DesktopBackend {
     aggregator,
     backendConn,
     watchedChannelManager,
+    pluginChannels,
     currentStatuses,
     events,
     openBrowser,
   })
+  let pluginShutdown: Promise<void> | undefined
+  function shutdownPlugins(): Promise<void> {
+    return (pluginShutdown ??= Promise.allSettled([
+      plugins.dispose(),
+      pluginChannels.dispose(),
+    ]).then((results) => {
+      for (const result of results) {
+        if (result.status === 'rejected')
+          log.warn('Plugin shutdown failed', { error: String(result.reason) })
+      }
+    }))
+  }
 
-  // Auto-check on startup (auto-downloads; the toast offers "restart to apply").
+  // Auto-check on startup (auto-downloads; the toast offers “restart to apply”).
   if (SettingsStore.get().autoCheckUpdates) {
     void api
       .checkForUpdate()
@@ -600,11 +636,19 @@ function boot(): DesktopBackend {
     log.info(`[Dev] Test injection endpoint listening on port ${DEV_SERVER_PORT}`)
   }
 
+  void plugins.initialize().catch((error) => {
+    log.error('Could not load installed plugins', { error: String(error) })
+  })
   log.info('GPUIX backend ready')
   return {
     api,
     events,
+    plugins,
+    shutdownPlugins,
     dispose: () => {
+      void shutdownPlugins().catch((error) => {
+        log.warn('Plugin shutdown failed', { error: String(error) })
+      })
       twitchHistory.dispose()
       streamerMode.stop()
       providerRuntime.stop()

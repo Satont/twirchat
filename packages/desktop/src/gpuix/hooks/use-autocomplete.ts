@@ -1,3 +1,4 @@
+import { PLATFORM_COMMAND_NAMES } from '@twirchat/shared/channel-tools'
 import type {
   NormalizedChatMessage,
   Platform,
@@ -40,6 +41,7 @@ type AliasMap = Map<Platform, Map<string, string>>
 
 const EMPTY_MENTION_SUGGESTIONS: MentionSuggestion[] = []
 const EMPTY_EMOTE_SUGGESTIONS: EmoteSuggestion[] = []
+const EMPTY_PLUGIN_COMMANDS: readonly string[] = []
 
 const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
   {
@@ -143,6 +145,16 @@ export function useAutocomplete(params: {
     return parseToken(text)
   }, [text, params.customCommands])
   const mode = token.mode
+  const completingCommand = mode === 'command'
+  const [pluginCommands, setPluginCommands] = useState(EMPTY_PLUGIN_COMMANDS)
+  useEffect(() => {
+    if (!completingCommand || !backend.plugins) return undefined
+    const plugins = backend.plugins
+    const refresh = () => setPluginCommands(plugins.commandNames())
+    const unsubscribe = backend.events.on('plugins_changed', refresh)
+    refresh()
+    return unsubscribe
+  }, [backend, completingCommand])
   const query = token.query
   const queryKey = mode === 'command' ? `/${query}` : query
   const mentionCompletionActive = mode === 'mention' && query.length > 0
@@ -215,6 +227,23 @@ export function useAutocomplete(params: {
         description: command.template.replace(/\n/g, ' · '),
       }))
       const commands = [...custom, ...COMMAND_SUGGESTIONS]
+      if (pluginCommands.length) {
+        const reserved = new Set<string>([
+          ...commands.map((command) => command.label.slice(1)),
+          ...PLATFORM_COMMAND_NAMES,
+          'w',
+          'whisper',
+        ])
+        for (const name of pluginCommands) {
+          if (reserved.has(name)) continue
+          commands.push({
+            type: 'command',
+            label: `/${name}`,
+            insertText: `/${name}`,
+            description: 'Plugin command',
+          })
+        }
+      }
       if (!query) return commands.slice(0, 15)
       return fuzzyFilter(commands, query).slice(0, 15)
     }
@@ -236,6 +265,7 @@ export function useAutocomplete(params: {
     mentionSuggestions,
     emoteSuggestions,
     params.customCommands,
+    pluginCommands,
     emotePreferences.emojiCompletion,
   ])
 

@@ -166,6 +166,17 @@ function runMigrations(db: Database): void {
   `)
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS plugin_watched_channels (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL,
+      channel_slug TEXT NOT NULL,
+      transport_name TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE (platform, channel_slug)
+    )
+  `)
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS user_aliases (
       platform TEXT NOT NULL,
       platform_user_id TEXT NOT NULL,
