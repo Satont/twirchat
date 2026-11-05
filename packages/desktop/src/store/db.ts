@@ -5,6 +5,7 @@ import { dirname } from 'node:path'
 import { logger } from '@twirchat/shared'
 
 import { getDbPath } from '../runtime-config'
+import { reconcileTwitchHistoryEchoes } from './twitch-history-echoes'
 
 const log = logger('db')
 
@@ -144,6 +145,10 @@ function runMigrations(db: Database): void {
     db.run(
       `CREATE INDEX IF NOT EXISTS idx_chat_messages_chronology ON chat_messages(created_at DESC, id DESC, platform DESC, channel_id DESC)`,
     )
+    if (!columns.some((column) => column.name === 'local_twitch_echo_id')) {
+      db.run('ALTER TABLE chat_messages ADD COLUMN local_twitch_echo_id TEXT')
+      reconcileTwitchHistoryEchoes(db)
+    }
   })()
 
   db.run(`

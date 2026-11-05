@@ -6,6 +6,7 @@ import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { normalizedChatMessageSchema } from '../services/persisted-schemas'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../shared/rpc'
 import { getDb } from './db'
+import { reconcileTwitchHistoryEchoes } from './twitch-history-echoes'
 
 export interface ChatHistoryQuery {
   platform?: Platform
@@ -28,6 +29,7 @@ interface HistoryRow {
   channel_id: string
   created_at: number
   data: string | null
+  local_twitch_echo_id: string | null
   author_id: string
   author_name: string
   text: string
@@ -36,6 +38,8 @@ interface HistoryRow {
 
 const DEFAULT_RETENTION: HistoryRetention = { maxMessages: 1000, maxAgeDays: 0 }
 const ORDER = 'created_at DESC, id DESC, platform DESC, channel_id DESC'
+const HISTORY_COLUMNS =
+  'id, platform, channel_id, created_at, data, local_twitch_echo_id, author_id, author_name, text, type'
 
 function pageLimit(value: number | undefined, fallback: number, maximum: number): number {
   if (value === undefined) return fallback
@@ -57,6 +61,7 @@ function parseMessage(row: HistoryRow): NormalizedChatMessage | null {
     if (row.data === null)
       return {
         id: row.id,
+        ...(row.local_twitch_echo_id ? { localTwitchEchoId: row.local_twitch_echo_id } : {}),
         platform: row.platform,
         channelId: normalizeMessageChannel(row.platform, row.channel_id),
         author: { id: row.author_id, displayName: row.author_name, badges: [] },
@@ -71,6 +76,7 @@ function parseMessage(row: HistoryRow): NormalizedChatMessage | null {
       platform: row.platform,
       channelId: normalizeMessageChannel(row.platform, row.channel_id),
       timestamp: row.created_at,
+      localTwitchEchoId: row.local_twitch_echo_id ?? undefined,
     })
     if (
       !message ||
@@ -79,7 +85,8 @@ function parseMessage(row: HistoryRow): NormalizedChatMessage | null {
       typeof message.text !== 'string'
     )
       return null
-    return { ...message, timestamp: new Date(row.created_at) }
+    if (message.localTwitchEchoId === undefined) delete message.localTwitchEchoId
+    return message
   } catch {
     return null
   }
@@ -155,7 +162,7 @@ function search(
     const count = Math.max(100, limit + 1)
     const rows = database
       .query<HistoryRow, (string | number)[]>(
-        `SELECT id, platform, channel_id, created_at, data, author_id, author_name, text, type FROM chat_messages WHERE ${conditions.join(' AND ')} ORDER BY ${ascending ? ORDER.replaceAll('DESC', 'ASC') : ORDER} LIMIT ?`,
+        `SELECT ${HISTORY_COLUMNS} FROM chat_messages WHERE ${conditions.join(' AND ')} ORDER BY ${ascending ? ORDER.replaceAll('DESC', 'ASC') : ORDER} LIMIT ?`,
       )
       .all(...bindings, count)
     for (const row of rows) {
@@ -215,10 +222,7 @@ export const MessageStore = {
     const stored = new Map<string, NormalizedChatMessage>()
     for (const [channel, ids] of channels) {
       const rows = database
-        .query<
-          HistoryRow,
-          [string, string]
-        >(`SELECT id, platform, channel_id, created_at, data, author_id, author_name, text, type
+        .query<HistoryRow, [string, string]>(`SELECT ${HISTORY_COLUMNS}
         FROM chat_messages WHERE platform = 'twitch' AND lower(ltrim(channel_id, '#@')) = ?
         AND id IN (SELECT value FROM json_each(?)) ORDER BY ${ORDER}`)
         .all(channel, JSON.stringify(ids))
@@ -234,21 +238,23 @@ export const MessageStore = {
     messages: readonly NormalizedChatMessage[],
     retention: Partial<HistoryRetention> | null = DEFAULT_RETENTION,
     database: Database = getDb(),
-  ): void {
-    if (!messages.length) return
-    database.transaction(() => {
+  ): readonly NormalizedChatMessage[] {
+    if (!messages.length) return messages
+    return database.transaction(() => {
       const insert = database.query(`INSERT INTO chat_messages
-        (id, platform, channel_id, author_id, author_name, text, type, created_at, data)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
+        (id, platform, channel_id, author_id, author_name, text, type, created_at, data, local_twitch_echo_id)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
           SELECT 1 FROM chat_messages WHERE platform = ? AND lower(ltrim(channel_id, '#@')) = ? AND id = ?
         ) ON CONFLICT(platform, channel_id, id) DO NOTHING`)
       const insertExact = database.query(`INSERT INTO chat_messages
-        (id, platform, channel_id, author_id, author_name, text, type, created_at, data)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
+        (id, platform, channel_id, author_id, author_name, text, type, created_at, data, local_twitch_echo_id)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
           SELECT 1 FROM chat_messages WHERE platform = ? AND channel_id = ? AND id = ?
         ) ON CONFLICT(platform, channel_id, id) DO NOTHING`)
+      const twitchRanges = new Map<string, { channel: string; first: number; last: number }>()
       for (const message of messages) {
         const channel = normalizeMessageChannel(message.platform, message.channelId)
+        const timestamp = message.timestamp.getTime()
         const statement = message.platform === 'youtube' ? insertExact : insert
         statement.run(
           message.id,
@@ -258,14 +264,30 @@ export const MessageStore = {
           message.author.displayName,
           message.text,
           message.type,
-          message.timestamp.getTime(),
+          timestamp,
           JSON.stringify({ ...message, channelId: channel }),
+          message.localTwitchEchoId ?? null,
           message.platform,
           message.platform === 'youtube' ? channel : channel.toLowerCase(),
           message.id,
         )
+        if (message.platform === 'twitch' && message.type === 'message') {
+          const range = twitchRanges.get(channel)
+          if (range) {
+            range.first = Math.min(range.first, timestamp)
+            range.last = Math.max(range.last, timestamp)
+          } else twitchRanges.set(channel, { channel, first: timestamp, last: timestamp })
+        }
       }
+      const replacements = new Map<string, string>()
+      for (const range of twitchRanges.values())
+        reconcileTwitchHistoryEchoes(database, replacements, range)
       if (retention) prune(retention, database)
+      if (!replacements.size) return messages
+      return messages.map((message) => {
+        const localTwitchEchoId = replacements.get(chatMessageIdentity(message))
+        return localTwitchEchoId ? { ...message, localTwitchEchoId } : message
+      })
     })()
   },
   getRecent(limit = 100): NormalizedChatMessage[] {

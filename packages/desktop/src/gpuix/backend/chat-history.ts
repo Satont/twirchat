@@ -173,10 +173,13 @@ export function recordChatMessage(message: NormalizedChatMessage): void {
     state.timer.unref()
   }
 }
-export async function getChatHistory(query: ChatHistoryQuery): Promise<UserChatHistoryPage> {
+export function flushChatHistory(): void {
   const database = getDb()
   flushDatabase(database, recorder(database))
-  return MessageStore.search(query, database)
+}
+export async function getChatHistory(query: ChatHistoryQuery): Promise<UserChatHistoryPage> {
+  flushChatHistory()
+  return MessageStore.search(query)
 }
 export async function getChatLoggingSettings(): Promise<ChatLoggingSettings> {
   return structuredClone(recorder().settings)
