@@ -108,8 +108,12 @@ interface Recorder {
   error: string | null
   seen: Set<string>
   retryAt: number
+  nextPruneAt: number
 }
 const recorders = new WeakMap<Database, Recorder>()
+/** History is written on the UI thread, so a busy chat must not commit per frame. */
+const DATABASE_FLUSH_MS = 1000
+const PRUNE_INTERVAL_MS = 60_000
 function recorder(database = getDb()): Recorder {
   let current = recorders.get(database)
   if (current) return current
@@ -131,6 +135,7 @@ function recorder(database = getDb()): Recorder {
     error,
     seen: new Set(),
     retryAt: 0,
+    nextPruneAt: 0,
   }
   recorders.set(database, current)
   return current
@@ -140,12 +145,15 @@ function flushDatabase(database: Database, state: Recorder): void {
   state.timer = undefined
   if (!state.pending.length) return
   const pending = state.pending
+  const prune = Date.now() >= state.nextPruneAt
   try {
     MessageStore.saveMany(
       pending,
       { maxMessages: state.settings.maxMessages, maxAgeDays: state.settings.maxAgeDays },
       database,
+      prune,
     )
+    if (prune) state.nextPruneAt = Date.now() + PRUNE_INTERVAL_MS
     state.pending = []
     state.error = null
     state.retryAt = 0
@@ -168,7 +176,7 @@ export function recordChatMessage(message: NormalizedChatMessage): void {
   else if (!state.timer) {
     state.timer = setTimeout(
       () => flushDatabase(database, state),
-      Math.max(50, state.retryAt - Date.now()),
+      Math.max(DATABASE_FLUSH_MS, state.retryAt - Date.now()),
     )
     state.timer.unref()
   }

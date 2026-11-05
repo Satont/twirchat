@@ -142,6 +142,18 @@ describe('durable chat history', () => {
     expect(MessageStore.getRecent(500000)).toHaveLength(500)
   })
 
+  test('leaves pruning to the caller when a save skips it', () => {
+    const database = setup()
+    const messages = Array.from({ length: 5 }, (_, index) => message(`skip-${index}`))
+    MessageStore.saveMany(messages, { maxMessages: 2 }, database, false)
+    const total = () =>
+      database.query<{ total: number }, []>('SELECT COUNT(*) AS total FROM chat_messages').get()
+        ?.total
+    expect(total()).toBe(5)
+    MessageStore.saveMany([message('skip-5')], { maxMessages: 2 }, database)
+    expect(total()).toBe(2)
+  })
+
   test('applies configured age retention independently of the message count', () => {
     setup()
     MessageStore.saveMany(

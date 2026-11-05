@@ -110,6 +110,20 @@ function pushSegment(
   }
 }
 
+/**
+ * Words are separate flex items only so they can wrap around emotes. A plain message
+ * can be one text element, which costs a fraction of the native work per repaint.
+ */
+export function mergePlainText(tokens: MessageToken[]): MessageToken[] {
+  if (tokens.length < 2 || tokens.some((token) => token.kind !== 'text')) return tokens
+  return [
+    {
+      kind: 'text',
+      text: tokens.map((token) => (token.kind === 'text' ? token.text : '')).join(''),
+    },
+  ]
+}
+
 export function buildMessageTokens(
   message: NormalizedChatMessage,
   options: { zeroWidth?: boolean; modifiers?: boolean } = {},

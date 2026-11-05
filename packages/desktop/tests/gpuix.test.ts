@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
-import { buildMessageTokens } from '../src/gpuix/message-tokens'
+import { buildMessageTokens, mergePlainText } from '../src/gpuix/message-tokens'
 import { createStore } from '../src/gpuix/state/create-store'
 import { messageLength, messageLengthLimit } from '../src/views/main/utils/chat-send-targets'
 import {
@@ -266,5 +266,17 @@ describe('composer message length', () => {
 
   test('counts emoji as one character', () => {
     expect(messageLength('👍👍 hi')).toBe(5)
+  })
+})
+
+describe('mergePlainText', () => {
+  test('joins a plain message into one text token without losing text', () => {
+    const tokens = buildMessageTokens(makeMessage({ text: 'hello big world' }))
+    expect(mergePlainText(tokens)).toEqual([{ kind: 'text', text: 'hello big world' }])
+  })
+
+  test('keeps words separate when a link has to wrap between them', () => {
+    const tokens = buildMessageTokens(makeMessage({ text: 'see https://example.com now' }))
+    expect(mergePlainText(tokens)).toBe(tokens)
   })
 })
