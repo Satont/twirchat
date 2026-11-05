@@ -12,6 +12,7 @@ import type {
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { emojiShortcodeSuggestions } from '../../services/emoji-shortcodes'
+import { AUTO_TRANSLATION_COMMAND, isAutoTranslationCommand } from '../../services/translation'
 import {
   parseToken,
   replaceToken,
@@ -44,6 +45,12 @@ const EMPTY_EMOTE_SUGGESTIONS: EmoteSuggestion[] = []
 const EMPTY_PLUGIN_COMMANDS: readonly string[] = []
 
 const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
+  {
+    type: 'command',
+    label: AUTO_TRANSLATION_COMMAND,
+    insertText: AUTO_TRANSLATION_COMMAND,
+    description: 'Translate outgoing chat in this channel: <language|off>',
+  },
   {
     type: 'command',
     label: '/translate',
@@ -138,7 +145,10 @@ export function useAutocomplete(params: {
     const query = trimmed.slice(1).toLowerCase()
     if (
       text.trimStart().startsWith('/') &&
-      params.customCommands?.some((command) => command.name.startsWith(query))
+      params.customCommands?.some(
+        (command) =>
+          command.name.startsWith(query) && !isAutoTranslationCommand(`/${command.name}`),
+      )
     ) {
       return { mode: 'command', query }
     }
@@ -220,12 +230,14 @@ export function useAutocomplete(params: {
   const suggestions = useMemo((): AutocompleteSuggestion[] => {
     if (!mode) return []
     if (mode === 'command') {
-      const custom: CommandSuggestion[] = (params.customCommands ?? []).map((command) => ({
-        type: 'command',
-        label: `/${command.name}`,
-        insertText: `/${command.name}`,
-        description: command.template.replace(/\n/g, ' · '),
-      }))
+      const custom: CommandSuggestion[] = (params.customCommands ?? [])
+        .filter((command) => !isAutoTranslationCommand(`/${command.name}`))
+        .map((command) => ({
+          type: 'command',
+          label: `/${command.name}`,
+          insertText: `/${command.name}`,
+          description: command.template.replace(/\n/g, ' · '),
+        }))
       const commands = [...custom, ...COMMAND_SUGGESTIONS]
       if (pluginCommands.length) {
         const reserved = new Set<string>([

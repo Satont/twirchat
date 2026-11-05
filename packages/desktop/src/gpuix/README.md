@@ -121,6 +121,10 @@ latest" pill tracks `onVisibleRange` and jumps via
 - Local commands: `/clearmessages`, `/copy`, `/pause`, `/resume`, `/mentions`,
   `/search <query>`. Clearing only hides the current pane's retained messages;
   copying exports its displayed messages. `/clear` remains a platform command.
+- `/translateauto en` detects the source language and translates outgoing chat
+  messages in the selected channel until the app restarts. `/translateauto off`
+  or the **Turn off** button above the input restores the channel's usual
+  translation behavior. Select a single platform to use the command on My Channels.
 
 ### Live message pipeline
 

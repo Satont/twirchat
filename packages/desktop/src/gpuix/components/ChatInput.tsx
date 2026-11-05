@@ -26,11 +26,13 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 
 import { normalizePrivateCommand } from '../../services/private-commands'
 import {
+  parseAutoTranslationCommand,
   parseTranslationCommand,
   resolveChannelTranslation,
   type TranslationResult,
 } from '../../services/translation'
 import {
+  chatChannelKey,
   createChatMessageTargets,
   messageLength,
   messageLengthLimit,
@@ -56,6 +58,7 @@ import {
 import { aliasesStore, streamStatusStore } from '../state/app'
 import { emoteStore } from '../state/app'
 import {
+  autoTranslationLanguagesStore,
   browseComposerHistory,
   completeComposerSend,
   composerTranslationMode,
@@ -66,6 +69,7 @@ import {
   editComposer,
   EMPTY_COMPOSER,
   parseComposerCommand,
+  setAutoTranslationLanguage,
   updateComposer,
 } from '../state/composer'
 import { useComposerFocusRegistration } from '../state/composer-focus'
@@ -105,6 +109,10 @@ interface OutgoingPreview {
   error?: string
   keepInput?: boolean
 }
+
+type OutgoingTranslationOverride =
+  | { kind: 'command'; targetLanguage: string }
+  | { kind: 'channel'; languages: ReadonlyMap<string, string> }
 
 export type ComposerCommandRunner = (text: string) => Promise<void>
 interface HistorySearch {
@@ -383,6 +391,17 @@ export function ChatInput(props: ChatInputProps) {
         )
         .map((target) => ({ platform: target.platform, channelSlug: target.channelLogin }))
 
+  function autoTranslationSignature(languages: ReadonlyMap<string, string>): string {
+    if (languages.size === 0) return ''
+    return commandTargets
+      .map((target) => languages.get(chatChannelKey(target.platform, target.channelSlug)) ?? '')
+      .join(',')
+  }
+  const autoTranslationKey = useStoreSelector(
+    autoTranslationLanguagesStore,
+    autoTranslationSignature,
+  )
+
   function commandContext(input: string): CommandContext {
     const target = commandTargets.length === 1 ? commandTargets[0] : undefined
     const account = target
@@ -471,7 +490,7 @@ export function ChatInput(props: ChatInputProps) {
   }
   async function prepareNormalOutput(
     output: string,
-    forcedLanguage?: string,
+    override: OutgoingTranslationOverride,
   ): Promise<PreparedAction> {
     if (isDisabled) throw new Error('Connect to chat and log in before sending a message.')
     const targets = props.watchedChannel
@@ -486,13 +505,19 @@ export function ChatInput(props: ChatInputProps) {
       : createChatMessageTargets(sendablePlatforms, output, isEnabled, props.replyTarget)
     if (!targets.length) throw new Error('Select a connected platform before sending a message.')
     const settings = (await loadTranslationSettings(backend)).settings
+    const isSlashCommand = output.trim().startsWith('/')
     let previewRequired = false
     const translated = await Promise.all(
       targets.map(async (target) => {
         const selected = resolveChannelTranslation(settings, target.platform, target.channelLogin)
-        const mode = forcedLanguage
+        const autoLanguage =
+          override.kind === 'channel' && override.languages.size > 0 && !isSlashCommand
+            ? override.languages.get(chatChannelKey(target.platform, target.channelLogin))
+            : undefined
+        const targetLanguage = override.kind === 'command' ? override.targetLanguage : autoLanguage
+        const mode = targetLanguage
           ? 'send'
-          : output.trim().startsWith('/')
+          : isSlashCommand
             ? 'off'
             : composerTranslationMode(composer, selected.outgoingMode)
         if (mode === 'preview') previewRequired = true
@@ -501,8 +526,8 @@ export function ChatInput(props: ChatInputProps) {
             ? null
             : await backend.api.translateText({
                 text: output,
-                sourceLanguage: selected.sourceLanguage,
-                targetLanguage: forcedLanguage ?? selected.targetLanguage,
+                sourceLanguage: autoLanguage ? 'auto' : selected.sourceLanguage,
+                targetLanguage: targetLanguage ?? selected.targetLanguage,
                 protectedTerms: protectedTerms(output, target.platform, target.channelLogin),
               })
         const text = result ? result.text.replace(/[\r\n]+/gu, ' ').trim() : output
@@ -537,7 +562,11 @@ export function ChatInput(props: ChatInputProps) {
       })),
     })
   }
-  function previewSignature(input: string, items: OutgoingPreviewItem[]): string {
+  function previewSignature(
+    input: string,
+    items: OutgoingPreviewItem[],
+    autoTranslationLanguages: ReadonlyMap<string, string>,
+  ): string {
     return JSON.stringify([
       input,
       items,
@@ -545,12 +574,14 @@ export function ChatInput(props: ChatInputProps) {
       props.replyTarget?.id,
       translation.value.settings,
       composer.translateOnSend,
+      autoTranslationSignature(autoTranslationLanguages),
     ])
   }
   const commandTargetKey = JSON.stringify(commandTargets)
   const syncOutgoingPreview = useEffectEvent(() => {
     const token = ++previewRevision.value
     const input = text
+    const languages = autoTranslationLanguagesStore.get()
     setOutgoingPreview(null)
     if (
       !input.trim() ||
@@ -562,6 +593,8 @@ export function ChatInput(props: ChatInputProps) {
     if (
       !commandTargets.some(
         (target) =>
+          (languages.size === 0 ||
+            !languages.has(chatChannelKey(target.platform, target.channelSlug))) &&
           composerTranslationMode(
             composer,
             resolveChannelTranslation(
@@ -587,13 +620,13 @@ export function ChatInput(props: ChatInputProps) {
       keepInput: sendIntent.current?.input === input && sendIntent.current.keepInput,
     })
     const timer = setTimeout(() => {
-      void prepareNormalOutput(input.trim())
+      void prepareNormalOutput(input.trim(), { kind: 'channel', languages })
         .then((action) => {
           if (previewRevision.value !== token || !mounted.current) return
           const items = action.previewItems ?? []
           setOutgoingPreview({
             input,
-            signature: previewSignature(input, items),
+            signature: previewSignature(input, items, languages),
             items,
             status: 'ready',
             keepInput: sendIntent.current?.input === input && sendIntent.current.keepInput,
@@ -623,15 +656,29 @@ export function ChatInput(props: ChatInputProps) {
       commandTargetKey,
       translation.value.settings,
       composer.translateOnSend,
+      autoTranslationKey,
       props.replyTarget?.id,
       isDisabled,
       customCommands.commands,
     ],
   )
 
-  async function prepareOutput(output: string): Promise<PreparedAction> {
+  async function prepareOutput(
+    output: string,
+    languages: ReadonlyMap<string, string>,
+  ): Promise<PreparedAction> {
     const privateCommand = normalizePrivateCommand(output, lastWhisperRecipientStore.get())
     if (privateCommand) return privateAction(privateCommand)
+    const autoTranslation = parseAutoTranslationCommand(output)
+    if (autoTranslation) {
+      const target = commandTargets[0]
+      if (commandTargets.length !== 1 || !target)
+        throw new Error('Select one platform before configuring auto-translation.')
+      const key = chatChannelKey(target.platform, target.channelSlug)
+      return Object.assign(() => setAutoTranslationLanguage(key, autoTranslation.targetLanguage), {
+        localOnly: true,
+      })
+    }
     const translationCommand = parseTranslationCommand(output)
     if (translationCommand) {
       const nestedPrivate = normalizePrivateCommand(
@@ -650,7 +697,10 @@ export function ChatInput(props: ChatInputProps) {
         return Object.assign(() => setCommandTranslation({ ...result, text }), { localOnly: true })
       }
       if (translationCommand.mode === 'send')
-        return prepareNormalOutput(translationCommand.text, translationCommand.targetLanguage)
+        return prepareNormalOutput(translationCommand.text, {
+          kind: 'command',
+          targetLanguage: translationCommand.targetLanguage,
+        })
       const result = await backend.api.translateText({
         text: translationCommand.text,
         targetLanguage: translationCommand.targetLanguage,
@@ -732,7 +782,7 @@ export function ChatInput(props: ChatInputProps) {
         )
       }
     }
-    return prepareNormalOutput(output)
+    return prepareNormalOutput(output, { kind: 'channel', languages })
   }
 
   async function send(
@@ -748,6 +798,7 @@ export function ChatInput(props: ChatInputProps) {
     const keepInput = options.keepInput ?? false
     const trimmed = input.trim()
     if (!trimmed) return
+    const languages = autoTranslationLanguagesStore.get()
     if (executingRef.current) {
       const error = new Error('A message or command is already being prepared.')
       setCommandError(error.message)
@@ -771,15 +822,19 @@ export function ChatInput(props: ChatInputProps) {
       if (!expansion.ok) throw new Error(expansion.error)
       if (expansion.matched && commandTargets.length > 1)
         throw new Error('Select one platform before running a custom command.')
-      const actions = await Promise.all(expansion.outputs.map(prepareOutput))
+      const actions = await Promise.all(
+        expansion.outputs.map((output) => prepareOutput(output, languages)),
+      )
       if (cancellation.signal.aborted)
         throw new Error('The composer closed before the command completed.')
       const items = actions.flatMap((action) => action.previewItems ?? [])
-      const signature = previewSignature(input, items)
-      if (
-        actions.some((action) => action.previewRequired) &&
-        (!confirmTranslation || outgoingPreview?.signature !== signature)
-      ) {
+      const signature = previewSignature(input, items, languages)
+      const previewRequired = actions.some((action) => action.previewRequired)
+      if (confirmTranslation && !previewRequired && outgoingPreview?.signature !== signature) {
+        setOutgoingPreview(null)
+        return
+      }
+      if (previewRequired && (!confirmTranslation || outgoingPreview?.signature !== signature)) {
         if (keepInput || (composerStore.get().get(composerKey)?.text ?? '') === input)
           setOutgoingPreview({ input, signature, items, status: 'ready', keepInput })
         if (options.requireComplete)
@@ -909,6 +964,16 @@ export function ChatInput(props: ChatInputProps) {
       selectWord: () => editorAction('selectWord'),
       toggleTranslateOnSend: commandTargets.length
         ? () => {
+            const languages = autoTranslationLanguagesStore.get()
+            const active = commandTargets.find((target) =>
+              languages.has(chatChannelKey(target.platform, target.channelSlug)),
+            )
+            if (active) {
+              if (commandTargets.length !== 1)
+                throw new Error('Select one platform before turning off auto-translation.')
+              setAutoTranslationLanguage(chatChannelKey(active.platform, active.channelSlug), null)
+              return
+            }
             const configured = commandTargets.some(
               (target) =>
                 resolveChannelTranslation(
@@ -967,6 +1032,7 @@ export function ChatInput(props: ChatInputProps) {
       ? { platform: ownChannelTarget.platform, channelId: ownChannelTarget.channelLogin }
       : null
 
+  const autoTranslationTargets = autoTranslationKey ? autoTranslationKey.split(',') : null
   return (
     <div
       style={{
@@ -1052,7 +1118,39 @@ export function ChatInput(props: ChatInputProps) {
           </Text>
         </div>
       ) : null}
-      {composer.translateOnSend !== undefined ? (
+      {autoTranslationTargets?.some(Boolean) ? (
+        <div
+          testId="auto-translation-status"
+          style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+        >
+          {commandTargets.map(({ platform, channelSlug }, index) => {
+            const language = autoTranslationTargets[index]
+            if (!language) return null
+            const key = chatChannelKey(platform, channelSlug)
+            const multiple = commandTargets.length > 1
+            return (
+              <div
+                key={key}
+                style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}
+              >
+                <Text style={{ fontSize: 10, color: theme.text2 }}>
+                  {`Auto-translate${multiple ? ` ${platform}/${channelSlug}` : ''} → ${language}`}
+                </Text>
+                <ActionButton
+                  testId={multiple ? `auto-translation-off-${platform}` : 'auto-translation-off'}
+                  disabled={executing}
+                  onClick={() => {
+                    setAutoTranslationLanguage(key, null)
+                    if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
+                  }}
+                >
+                  Turn off
+                </ActionButton>
+              </div>
+            )
+          })}
+        </div>
+      ) : composer.translateOnSend !== undefined ? (
         <Text
           style={{ fontSize: 10, color: theme.text2 }}
         >{`Translate on send: ${composer.translateOnSend ? 'on' : 'off'}`}</Text>

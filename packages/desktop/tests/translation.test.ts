@@ -7,6 +7,7 @@ import {
   decodeMorseText,
   encodeMorseText,
   normalizeTranslationLanguage,
+  parseAutoTranslationCommand,
   parseTranslationCommand,
   protectTranslationText,
   resolveChannelTranslation,
@@ -224,6 +225,16 @@ describe('translation safety and local commands', () => {
     })
     expect(() => parseTranslationCommand('/tl')).toThrow('Usage')
     expect(parseTranslationCommand('/timeout user')).toBeNull()
+  })
+  test('parses auto-translation language and off without consuming neighboring commands', () => {
+    expect(parseAutoTranslationCommand(' /TranslateAuto English ')).toEqual({
+      targetLanguage: 'en',
+    })
+    expect(parseAutoTranslationCommand('/translateauto zh_CN')).toEqual({ targetLanguage: 'zh-CN' })
+    expect(parseAutoTranslationCommand('/translateauto OFF')).toEqual({ targetLanguage: null })
+    expect(parseAutoTranslationCommand('/translateautoextra en')).toBeNull()
+    expect(() => parseAutoTranslationCommand('/translateauto')).toThrow('Usage')
+    expect(() => parseAutoTranslationCommand('/translateauto en extra')).toThrow('language code')
   })
   test('private shorthand never falls through to public dispatch', () => {
     expect(normalizePrivateCommand('.w @alice hi', null)).toEqual({
