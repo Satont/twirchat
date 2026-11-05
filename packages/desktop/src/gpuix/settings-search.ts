@@ -98,6 +98,7 @@ export type SettingsSectionId =
   | 'translation'
   | 'moderation'
   | 'commands'
+  | 'twir-integration'
   | 'players'
   | 'plugins'
   | 'streamer-mode'
@@ -228,6 +229,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'custom command name template variables placeholders platform scope channel message menu action add delete priority order move up down macro alias команды имя шаблон переменные платформа канал меню действия макрос',
+  },
+  {
+    id: 'twir-integration',
+    category: 'commands',
+    title: 'Twir Integration',
+    saveMode: 'app',
+    keywords:
+      'twir bot command autocomplete completion suggestions команды бота автодополнение интеграция',
   },
   {
     id: 'plugins',

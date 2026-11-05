@@ -6,6 +6,7 @@
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { useCallback, useEffect, useRef } from 'react'
 
+import type { ParsedToken } from '../../views/main/utils/autocompleteUtils'
 import type { AutocompleteSuggestion } from '../hooks/use-autocomplete'
 import { nativeWindow } from '../native-window'
 import { useTheme } from '../theme-context'
@@ -22,7 +23,7 @@ export function AutocompletePopup({
 }: {
   suggestions: AutocompleteSuggestion[]
   selectedIndex: number
-  mode: 'mention' | 'emote' | 'command' | null
+  mode: ParsedToken['mode']
   onSelect: (index: number) => void
   anchorId: number | null
   anchorWidth: number

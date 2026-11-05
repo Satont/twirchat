@@ -186,6 +186,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     hotkeys: hotkeySettingsSchema,
     overlay: overlayConfigSchema,
     autoCheckUpdates: z.boolean().optional(),
+    twirIntegrationEnabled: z.boolean().optional(),
     chatLayout: chatLayoutSchema.optional(),
     selfPing: selfPingConfigSchema.optional(),
   }),

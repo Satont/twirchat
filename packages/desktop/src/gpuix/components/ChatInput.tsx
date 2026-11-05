@@ -31,6 +31,7 @@ import {
   resolveChannelTranslation,
   type TranslationResult,
 } from '../../services/translation'
+import type { TwirCommandTarget } from '../../services/twir-commands'
 import {
   chatChannelKey,
   createChatMessageTargets,
@@ -429,6 +430,38 @@ export function ChatInput(props: ChatInputProps) {
     }
   }
 
+  const completingTwir =
+    editorFocused &&
+    !historySearchOpen &&
+    props.settings.twirIntegrationEnabled !== false &&
+    text.trimStart().startsWith('!')
+  const twirWatchedPlatform = completingTwir ? props.watchedChannel?.platform : undefined
+  const twirWatchedSlug = completingTwir ? props.watchedChannel?.channelSlug : undefined
+  const twirWatchedKickId =
+    twirWatchedPlatform === 'kick' ? props.watchedChannelStatus?.channelId : undefined
+  const completingHomeTwir = completingTwir && !props.watchedChannel
+  const twirHomeTwitchId =
+    completingHomeTwir && commandTargets.some((target) => target.platform === 'twitch')
+      ? props.accounts.find((account) => account.platform === 'twitch')?.platformUserId
+      : undefined
+  const twirHomeKickId =
+    completingHomeTwir && commandTargets.some((target) => target.platform === 'kick')
+      ? props.accounts.find((account) => account.platform === 'kick')?.platformUserId
+      : undefined
+  const twirTargets = useMemo((): TwirCommandTarget[] | undefined => {
+    if (twirWatchedPlatform === 'kick')
+      return twirWatchedKickId
+        ? [{ platform: 'kick', platformChannelId: twirWatchedKickId }]
+        : undefined
+    if (twirWatchedPlatform && twirWatchedSlug)
+      return [{ platform: twirWatchedPlatform, channelSlug: twirWatchedSlug }]
+    if (!twirHomeTwitchId && !twirHomeKickId) return undefined
+    const targets: TwirCommandTarget[] = []
+    if (twirHomeTwitchId) targets.push({ platform: 'twitch', platformChannelId: twirHomeTwitchId })
+    if (twirHomeKickId) targets.push({ platform: 'kick', platformChannelId: twirHomeKickId })
+    return targets
+  }, [twirWatchedPlatform, twirWatchedSlug, twirWatchedKickId, twirHomeTwitchId, twirHomeKickId])
+
   const autocomplete = useAutocomplete({
     text,
     setText: (next) => {
@@ -439,6 +472,7 @@ export function ChatInput(props: ChatInputProps) {
     watchedChannel: props.watchedChannel,
     statuses: props.statuses,
     aliasMap,
+    twirTargets,
     customCommands: customCommands.commands.filter(
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
     ),

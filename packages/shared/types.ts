@@ -195,6 +195,7 @@ export interface AppSettings {
   overlay: OverlayConfig
   /** Auto-check for updates on startup */
   autoCheckUpdates?: boolean
+  twirIntegrationEnabled?: boolean
   /** Chat layout configuration (combined / split) */
   chatLayout?: ChatLayout
   /** Self-ping highlight settings */
@@ -250,6 +251,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showPlatformIcon: true,
   showTimestamp: true,
   theme: 'dark',
+  twirIntegrationEnabled: true,
   chatLayout: {
     version: 1,
     mode: 'combined',

@@ -69,8 +69,20 @@ const layout: WatchedChannelsLayout = {
   },
 }
 const sent: string[] = []
+let twirRequests = 0
+let waitForTwirCommands: Promise<void> | undefined
 backend.api.getChannelEmotes = async () => []
-backend.api.sendWatchedChannelMessage = async ({ text }) => {
+backend.api.getTwirCommands = async (target) => {
+  assert.deepEqual(target, { platform: 'kick', platformChannelId: '12345' })
+  twirRequests++
+  await waitForTwirCommands
+  return Array.from({ length: 20 }, (_, index) => ({
+    name: `twir${String(index).padStart(2, '0')}`,
+    description: 'A public bot command',
+  }))
+}
+backend.api.sendWatchedChannelMessage = async ({ id, text }) => {
+  assert.equal(id, channel.id)
   sent.push(text)
 }
 app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
@@ -83,6 +95,7 @@ app.watchedStatusesStore.set(
         platform: 'kick',
         status: 'connected',
         mode: 'authenticated',
+        channelId: '12345',
       },
     ],
   ]),
@@ -168,10 +181,10 @@ function paintedBounds(testId: string) {
   assert(bounds, `Unpainted ${testId}`)
   return bounds
 }
-function selectedLabel(): string | undefined {
+function selectedLabel(prefix = '/command'): string | undefined {
   const selected = nodes().find((node) => node.testId === 'autocomplete-selected')
   return selected
-    ? flatten(selected).find((node) => node.text?.startsWith('/command'))?.text
+    ? flatten(selected).find((node) => node.text?.startsWith(prefix))?.text
     : undefined
 }
 async function until(check: () => boolean, label: string): Promise<void> {
@@ -186,10 +199,10 @@ async function draft(text: string): Promise<void> {
   updateComposer(composerKey, (state) => editComposer(state, text))
   await Bun.sleep(60)
 }
-async function selectKey(key: string, index: number): Promise<void> {
+async function selectKey(key: string, index: number, prefix = '/command'): Promise<void> {
   currentRenderer().simulateKeystrokes(key)
   await until(
-    () => selectedLabel() === `/command${String(index).padStart(2, '0')}`,
+    () => selectedLabel(prefix) === `${prefix}${String(index).padStart(2, '0')}`,
     `native ${key} selects ${index}`,
   )
   await until(() => {
@@ -206,6 +219,13 @@ async function selectKey(key: string, index: number): Promise<void> {
     )
   }, 'selected option scrolls into view')
 }
+async function typeNative(text: string): Promise<void> {
+  const input = Bun.spawn(['/usr/bin/xdotool', 'type', '--clearmodifiers', '--', text], {
+    stdout: 'ignore',
+    stderr: 'inherit',
+  })
+  assert.equal(await input.exited, 0, 'native text input')
+}
 let incoming = 0
 let traffic: ReturnType<typeof setInterval> | undefined
 const screenshots: string[] = []
@@ -217,6 +237,18 @@ try {
   )
   await focusNativeQaWindow('TwirChat')
   assert.equal((await backend.api.getAccounts()).length, 0, 'No real credentials')
+  app.accountsStore.set([
+    {
+      id: 'qa-kick-account',
+      platform: 'kick',
+      platformUserId: '9000',
+      username: 'qa-sender',
+      displayName: 'QA Sender',
+      scopes: [],
+      createdAt: 0,
+      updatedAt: 0,
+    },
+  ])
   traffic = setInterval(() => {
     incoming++
     const message: NormalizedChatMessage = {
@@ -231,10 +263,12 @@ try {
     }
     backend.events.emit('watched_channel_message', { channelId: channel.id, message })
   }, 20)
+  /* eslint-disable no-await-in-loop -- Each native action depends on the preceding UI state. */
   for (const size of [
     { width: 420, height: 300 },
     { width: 900, height: 600 },
   ]) {
+    const beforeTwir = twirRequests
     await currentRenderer().setWindowBounds(size)
     await draft('')
     currentRenderer().focusElement(find('chat-input').id)
@@ -283,12 +317,62 @@ try {
     )
     currentRenderer().simulateKeystrokes('x')
     await until(() => composerStore.get().get(composerKey)?.text === '/x', 'Native typing resumes')
+
+    await draft('')
+    assert.equal(twirRequests, beforeTwir, 'Slash completion never queries Twir')
+    const beforeTraffic = app.chatActivityStore.get().get(channel.id)?.total ?? 0
+    await typeNative('!')
+    await until(() => selectedLabel('!twir') === '!twir00', 'Twir suggestions for bare !')
+    for (let index = 1; index <= 14; index++) await selectKey('down', index, '!twir')
+    await selectKey('down', 0, '!twir')
+    await selectKey('up', 14, '!twir')
+    const twirPopup = paintedBounds('autocomplete-popup')
+    assert(twirPopup.x >= 7 && twirPopup.x + twirPopup.width <= size.width - 7)
+    assert(twirPopup.y >= 7 && twirPopup.y + twirPopup.height <= composer.y - 4)
+    assert((app.chatActivityStore.get().get(channel.id)?.total ?? 0) > beforeTraffic + 5)
+    await typeNative('TWIR1')
+    await until(() => selectedLabel('!twir') === '!twir10', 'Case-insensitive Twir prefix')
+    assert.equal(twirRequests, beforeTwir + 1, 'Typing a prefix reuses the loaded commands')
+    currentRenderer().simulateKeystrokes('enter')
+    await until(() => composerStore.get().get(composerKey)?.text === '!twir10 ', 'Enter inserts !')
+    await until(
+      () => !nodes().some((node) => node.testId === 'autocomplete-popup'),
+      'Completion closes after the command is inserted',
+    )
+    assert.equal(sent.length, 0, 'Twir completion only inserts text')
+    currentRenderer().simulateKeystrokes('enter')
+    await until(() => sent.at(-1) === '!twir10', 'A second Enter sends the command as chat')
+    sent.length = 0
   }
+  /* eslint-enable no-await-in-loop */
+
+  await draft('')
+  const pending = Promise.withResolvers<void>()
+  waitForTwirCommands = pending.promise
+  const beforeDisable = twirRequests
+  await typeNative('!')
+  await until(() => twirRequests === beforeDisable + 1, 'Twir request started')
+  app.settingsStore.update({ twirIntegrationEnabled: false })
+  await Bun.sleep(60)
+  pending.resolve()
+  await draft('')
+  await typeNative('!')
+  await until(() => composerStore.get().get(composerKey)?.text === '!', 'Disabled ! draft')
+  await Bun.sleep(100)
+  assert.equal(twirRequests, beforeDisable + 1)
+  assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
+  app.settingsStore.update({ twirIntegrationEnabled: true })
+  await until(() => selectedLabel('!twir') === '!twir00', 'Re-enable Twir completion')
+  currentRenderer().simulateKeystrokes('escape')
+  await until(
+    () => !nodes().some((node) => node.testId === 'autocomplete-popup'),
+    'Escape closes bare !',
+  )
   await Bun.write(
     join(session, 'autocomplete-result.json'),
     JSON.stringify({ ok: true, incoming, screenshots }, null, 2),
   )
-  console.log('Native bounded autocomplete, arrow scrolling, selection and live traffic QA passed.')
+  console.log('Native slash and Twir autocomplete, selection and live traffic QA passed.')
 } catch (error) {
   process.exitCode = 1
   await captureGuiQaDisplay('autocomplete-failure').catch(() => undefined)

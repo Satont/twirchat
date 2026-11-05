@@ -584,6 +584,23 @@ export function SettingsPanel() {
               >
                 <RetainedSettingsEditor component={CustomCommandsSettings} />
               </Section>
+              <Section id="twir-integration" title="Twir Integration">
+                <FormRow
+                  first
+                  last
+                  label="Suggest Twir commands"
+                  hint="Show public commands for the selected chat when you type !"
+                >
+                  <Switch
+                    checked={local.twirIntegrationEnabled !== false}
+                    onChange={(value) =>
+                      patch((draft) => {
+                        draft.twirIntegrationEnabled = value
+                      })
+                    }
+                  />
+                </FormRow>
+              </Section>
               <Section
                 id="players"
                 title="Stream Players"
