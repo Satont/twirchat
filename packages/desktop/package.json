@@ -26,7 +26,8 @@
     "qa:composer": "bun scripts/qa-gui.ts --keep --timeout 60 -- bun scripts/qa-composer.tsx",
     "qa:status": "bun scripts/qa-gui.ts --dbus --keep --timeout 60 -- bun scripts/qa-status.tsx",
     "qa:churn": "bun scripts/qa-gui.ts --dbus --keep --timeout 80 -- bun --expose-gc scripts/qa-window-churn.tsx",
-    "bench:chat": "bun scripts/bench-chat.ts"
+    "bench:chat": "bun scripts/bench-chat.ts",
+    "bench:flood": "bun scripts/flood-stand.tsx"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.16.0",

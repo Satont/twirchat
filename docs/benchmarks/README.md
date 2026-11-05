@@ -85,6 +85,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-05 chat flood](2026-11-05-chat-flood/report.md) measures one busy channel with default
+settings through `bench:flood`, which also runs on Windows. This matrix does not model that case.
+
 [2026-11-05 TypeScript plugins](2026-11-05-plugins/report.md) records the default matrix,
 production target repetitions, active subscriber load and isolated native plugin checks.
 
