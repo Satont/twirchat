@@ -1,3 +1,5 @@
+import type { Platform } from '@twirchat/shared/types'
+
 import { TWIR_RELOAD_COMMAND_NAME } from '../commands'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
@@ -9,6 +11,8 @@ export interface ComposerState {
   historyIndex: number | null
   savedDraft: string | null
   translateOnSend?: boolean
+  activePlatform?: Platform
+  disabledPlatforms?: ReadonlySet<Platform>
 }
 
 export const EMPTY_COMPOSER: ComposerState = {

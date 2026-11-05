@@ -164,8 +164,6 @@ export interface ChatInputProps {
   watchedChannelStatus?: PlatformStatusInfo | null
   replyTarget?: NormalizedChatMessage | null
   messages?: NormalizedChatMessage[]
-  activePlatform?: Platform
-  onActivePlatformChange?: (platform: Platform | null) => void
   composerKey?: string
   hotkeyContextId?: string
   hotkeyParentContextIds?: readonly string[]
@@ -372,24 +370,25 @@ export function ChatInput(props: ChatInputProps) {
     ? props.watchedChannelStatus?.mode !== 'authenticated' ||
       props.watchedChannelStatus.status !== 'connected'
     : !sendablePlatforms.some(
-        (target) => !props.activePlatform || target.platform === props.activePlatform,
+        (target) => !composer.activePlatform || target.platform === composer.activePlatform,
       )
 
-  const [enabledMap, setEnabledMap] = useState<Record<string, boolean>>({})
   const isEnabled = (platform: Platform): boolean => {
     const info = connectedPlatforms.find((p) => p.platform === platform)
     if (!info || info.mode !== 'authenticated') return false
-    if (props.activePlatform) return platform === props.activePlatform
-    return enabledMap[platform] !== false
+    if (composer.activePlatform) return platform === composer.activePlatform
+    return !composer.disabledPlatforms?.has(platform)
   }
   const toggle = (platform: Platform) => {
-    if (props.activePlatform) {
-      props.onActivePlatformChange?.(null)
-      return
-    }
-    const info = connectedPlatforms.find((p) => p.platform === platform)
-    if (!info || info.mode !== 'authenticated') return
-    setEnabledMap((current) => ({ ...current, [platform]: !isEnabled(platform) }))
+    updateComposer(composerKey, (current) => {
+      if (current.activePlatform) return { ...current, activePlatform: undefined }
+      const info = connectedPlatforms.find((p) => p.platform === platform)
+      if (!info || info.mode !== 'authenticated') return current
+      const disabledPlatforms = new Set(current.disabledPlatforms)
+      if (disabledPlatforms.has(platform)) disabledPlatforms.delete(platform)
+      else disabledPlatforms.add(platform)
+      return { ...current, disabledPlatforms }
+    })
   }
 
   // Over-limit messages are rejected by the platform after the fact; catch
@@ -1111,7 +1110,7 @@ export function ChatInput(props: ChatInputProps) {
     return (
       !!props.watchedChannel ||
       ownChatSendTargets(props.accounts).some(
-        (target) => !props.activePlatform || target.platform === props.activePlatform,
+        (target) => !composer.activePlatform || target.platform === composer.activePlatform,
       )
     )
   }
@@ -1127,7 +1126,7 @@ export function ChatInput(props: ChatInputProps) {
   }
 
   const ownChannelTarget = ownChatSendTargets(props.accounts).find(
-    (target) => !props.activePlatform || target.platform === props.activePlatform,
+    (target) => !composer.activePlatform || target.platform === composer.activePlatform,
   )
   const currentChannelInfo = props.watchedChannel
     ? { platform: props.watchedChannel.platform, channelId: props.watchedChannel.channelSlug }

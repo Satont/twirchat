@@ -212,6 +212,19 @@ try {
   assert.deepEqual(submissions[0]?.map((target) => target.platform).toSorted(), ['kick', 'twitch'])
   assert.equal(composerStore.get().get('qa:compact-frame')?.text, '')
   await click('composer-target-kick')
+  root.render(React.createElement('div', { testId: 'composer-unmounted' }))
+  await until(
+    () =>
+      nodes().some((node) => node.testId === 'composer-unmounted') &&
+      !nodes().some((node) => node.testId === 'chat-input'),
+    'composer unmounted between tabs',
+  )
+  await Bun.sleep(80)
+  renderComposer(props)
+  await until(
+    () => nodes().some((node) => node.testId === 'composer-target-kick'),
+    'composer remounted with the same session key',
+  )
   await focus()
   renderer.simulateKeystrokes('n e x t')
   await until(
@@ -220,7 +233,10 @@ try {
   )
   await Bun.sleep(80)
   renderer.simulateKeystrokes('enter')
-  await until(() => submissions.length === 2, 'native Enter respects toggled platform')
+  await until(
+    () => submissions.length === 2,
+    'native Enter preserves toggled platform after remount',
+  )
   assert.deepEqual(submissions[1]?.map((target) => target.platform).toSorted(), ['twitch'])
   await nativeWindow(renderer).setWindowBounds({ width: 320, height: 240 })
   await Bun.sleep(160)
@@ -301,6 +317,7 @@ try {
     watched,
     enterExactlyOnce: true,
     targetRouting: true,
+    targetRoutingAfterRemount: true,
     emoji: true,
     screenshot,
   }

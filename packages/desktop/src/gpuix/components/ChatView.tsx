@@ -64,6 +64,7 @@ import { channelRoomStore, loadRoomState, roomKey } from '../state/channel-state
 import { chatPauseStore } from '../state/chat-pause'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
 import { chatSearchJumpStore, finishChatSearchJump } from '../state/chat-search'
+import { composerStore, updateComposer } from '../state/composer'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
 import { useTextInputFocusTracking } from '../state/focus'
@@ -378,7 +379,10 @@ export function ChatView({
   const [activitiesTab, setActivitiesTab] = useState<'polls' | 'queue'>('polls')
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [moderationMode, setModerationMode] = useState(true)
-  const [activePlatform, setActivePlatform] = useState<Platform | undefined>(undefined)
+  const activePlatform = useStoreSelector(
+    composerStore,
+    (states) => states.get(paneKey)?.activePlatform,
+  )
   const commandRunner = useRef<((text: string) => Promise<void>) | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [bannersHidden, setBannersHidden] = useState(false)
@@ -1085,15 +1089,19 @@ export function ChatView({
       changeMultichannelContext:
         !watchedChannel && allChannels.length > 1
           ? ([argument]) => {
-              const index = allChannels.findIndex((channel) => channel.platform === activePlatform)
-              const target =
-                argument === 'next'
-                  ? (index + 1) % allChannels.length
-                  : argument === 'prev'
-                    ? (index - 1 + allChannels.length) % allChannels.length
-                    : Number(argument)
-              const channel = allChannels[target]
-              if (channel) setActivePlatform(channel.platform)
+              updateComposer(paneKey, (current) => {
+                const index = allChannels.findIndex(
+                  (channel) => channel.platform === current.activePlatform,
+                )
+                const target =
+                  argument === 'next'
+                    ? (index + 1) % allChannels.length
+                    : argument === 'prev'
+                      ? (index - 1 + allChannels.length) % allChannels.length
+                      : Number(argument)
+                const channel = allChannels[target]
+                return channel ? { ...current, activePlatform: channel.platform } : current
+              })
             }
           : null,
     },
@@ -1943,8 +1951,6 @@ export function ChatView({
           onCommandRunnerReady={(runner) => {
             commandRunner.current = runner
           }}
-          activePlatform={activePlatform}
-          onActivePlatformChange={(platform) => setActivePlatform(platform ?? undefined)}
           composerKey={paneKey}
           accounts={accounts}
           settings={settings}
