@@ -13,6 +13,12 @@ import { useTheme } from '../theme-context'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
+function suggestionKey(suggestion: AutocompleteSuggestion): string {
+  if (suggestion.type === 'mention') return `${suggestion.label}:${suggestion.insertLabel}`
+  if (suggestion.type === 'command') return `${suggestion.label}:${suggestion.insertText}`
+  return suggestion.label
+}
+
 export function AutocompletePopup({
   suggestions,
   selectedIndex,
@@ -31,11 +37,22 @@ export function AutocompletePopup({
   const theme = useTheme()
   const renderer = nativeWindow(useGpuixRequired())
   const rows = useRef(new Map<number, PublicInstance>())
+  const revealPending = useRef(false)
   const revealSelected = useCallback(
     () => rows.current.get(selectedIndex)?.scrollIntoView?.(),
     [selectedIndex],
   )
-  useEffect(revealSelected, [revealSelected, suggestions])
+  // Suggestions are rebuilt on unrelated renders; only real changes may move the user's scroll.
+  const contentKey = suggestions.map(suggestionKey).join('\n')
+  useEffect(() => {
+    revealPending.current = true
+    revealSelected()
+  }, [revealSelected, contentKey])
+  const revealAfterLayout = useCallback(() => {
+    if (!revealPending.current) return
+    revealPending.current = false
+    revealSelected()
+  }, [revealSelected])
 
   if (!mode || suggestions.length === 0) return null
   const windowBounds = renderer.getWindowBounds()
@@ -69,7 +86,7 @@ export function AutocompletePopup({
     >
       <div
         testId="autocomplete-viewport"
-        onLayout={revealSelected}
+        onLayout={revealAfterLayout}
         style={{
           width: '100%',
           height: Math.max(1, height - 2),
@@ -87,13 +104,7 @@ export function AutocompletePopup({
       >
         {suggestions.map((suggestion, i) => (
           <div
-            key={
-              suggestion.type === 'mention'
-                ? `${suggestion.label}:${suggestion.insertLabel}`
-                : suggestion.type === 'command'
-                  ? `${suggestion.label}:${suggestion.insertText}`
-                  : suggestion.label
-            }
+            key={suggestionKey(suggestion)}
             ref={(element) => {
               if (element) rows.current.set(i, element)
               else rows.current.delete(i)
