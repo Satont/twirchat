@@ -44,9 +44,13 @@ const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const sharp = (await import('sharp')).default
 
 const configurationSchema = z.object({
-  case: z.enum(['idle', 'churn', 'functional']).default('idle'),
+  case: z.enum(['idle', 'churn', 'functional', 'live']).default('idle'),
   source: z.enum(['synthetic', 'seventv']).default('synthetic'),
   preset: z.enum(['standard', 'dense']).default('standard'),
+  media: z.enum(['mixed', 'static-first-frame']).default('mixed'),
+  inactiveChannels: z.number().int().min(0).max(19).default(19),
+  liveInteractions: z.literal(true).optional(),
+  verticalReplay: z.literal(true).optional(),
   activation: z.enum(['focused', 'unfocused']).default('focused'),
   pointerMotion: z.enum(['none', 'same-row', 'cross-rows']).default('none'),
   pointerSweepSeconds: z.number().min(0.25).max(4).default(2),
@@ -70,9 +74,17 @@ type ImageResourceStats = z.infer<typeof imageResourceStatsSchema>
 const config = configurationSchema.parse(JSON.parse(process.argv[2] ?? '{}'))
 const provenance = benchmarkProvenanceSchema.parse(JSON.parse(process.argv[3] ?? '{}'))
 const session = z.string().min(1).parse(process.env.TWIRCHAT_QA_SESSION_DIR)
+const scriptSha256 = createHash('sha256')
+  .update(await Bun.file(import.meta.path).bytes())
+  .digest('hex')
 if (config.case === 'functional' && process.env.TWIRCHAT_QA_COMPOSITOR !== 'xvfb')
   throw new Error('Functional focus/pixel checks require the isolated Xvfb compositor.')
-if (config.source === 'seventv' && config.case !== 'functional' && config.preset !== 'dense')
+if (
+  config.source === 'seventv' &&
+  config.case !== 'functional' &&
+  config.case !== 'live' &&
+  config.preset !== 'dense'
+)
   throw new Error(
     '7TV sizing checks are a separate functional case; resource comparisons use synthetic sources.',
   )
@@ -85,9 +97,27 @@ if (config.pointerMotion !== 'none')
     config.preset === 'dense' && config.case === 'idle' && config.activation === 'focused',
     'Pointer measurements require the focused dense idle fixture.',
   )
+const live = config.case === 'live'
+if (config.liveInteractions) assert(live, 'The interaction probe requires the live fixture.')
+if (live) {
+  assert.equal(config.preset, 'standard', 'The live case owns its four-pane geometry.')
+  assert.equal(config.rate, 20, 'The live fixture uses a fixed 5/1/2/12 messages/s distribution.')
+  assert.equal(config.activation, 'focused', 'Live media validation requires a focused window.')
+}
+if (!live) assert.equal(config.media, 'mixed', 'The first-frame control belongs to the live case.')
 const dense = config.preset === 'dense'
-const usesSevenTvSources = config.source === 'seventv' || dense
-const initialWindow = dense ? { width: 770, height: 1300 } : { width: 1200, height: 800 }
+if (config.verticalReplay)
+  assert(
+    config.case === 'functional' && dense && config.activation === 'focused',
+    'Vertical replay checks require the focused dense functional fixture.',
+  )
+const richMedia = dense || live
+const usesSevenTvSources = config.source === 'seventv' || richMedia
+const initialWindow = live
+  ? { width: 1280, height: 1300 }
+  : dense
+    ? { width: 770, height: 1300 }
+    : { width: 1200, height: 800 }
 const denseDelays = [40, 50, 70, 90, 110, 130, 60, 80, 100, 120, 140, 150]
 const imageAnimationStatsSchema = z.object({
   fullDraws: z.number().int().nonnegative(),
@@ -106,35 +136,67 @@ const animationCounterKeys: Array<keyof ImageAnimationStats> = [
 ]
 
 const backend = getDesktopBackend()
+const replayLinkPrefix = 'https://e.invalid/r'
+const openedReplayLinks: string[] = []
+if (config.verticalReplay)
+  backend.api.openExternalUrl = ({ url }) => {
+    openedReplayLinks.push(url)
+    return Promise.resolve()
+  }
 const renderers = new Map<string, GpuixRenderer>()
-const channels: WatchedChannel[] = Array.from({ length: dense ? 23 : 10 }, (_, index) => ({
-  id: `emote-${index}`,
-  platform: 'kick',
-  channelSlug: `emote-${index}`,
-  displayName: `Emote resource channel ${index + 1}`,
-  createdAt: 0,
-}))
+const channels: WatchedChannel[] = Array.from(
+  { length: live ? 4 + config.inactiveChannels : dense ? 23 : 10 },
+  (_, index) => ({
+    id: `emote-${index}`,
+    platform: 'kick',
+    channelSlug: `emote-${index}`,
+    displayName: `Emote resource channel ${index + 1}`,
+    createdAt: 0,
+  }),
+)
 function firstChannel(): WatchedChannel {
   const channel = channels[0]
   assert(channel)
   return channel
 }
 const visibleChannel = firstChannel()
+const visibleChannels = live ? channels.slice(0, 4) : [visibleChannel]
+const liveRows = [visibleChannels.slice(0, 2), visibleChannels.slice(2)]
+const liveChannelSchedule = [0, 3, 0, 3, 2, 3, 0, 3, 1, 3, 0, 3, 2, 3, 0, 3, 3, 3, 3, 3]
 const tabId = 'emote-resources'
 const panelId = 'emote-resources-panel'
 const layout: WatchedChannelsLayout = {
   version: 2,
-  root: {
-    type: 'panel',
-    id: panelId,
-    flex: 100,
-    content: { type: 'watched', channelId: visibleChannel.id },
-  },
+  root: live
+    ? {
+        type: 'split',
+        id: 'live-grid',
+        direction: 'vertical',
+        flex: 100,
+        children: liveRows.map((row, index) => ({
+          type: 'split',
+          id: `live-row-${index}`,
+          direction: 'horizontal',
+          flex: 50,
+          children: row.map((channel) => ({
+            type: 'panel',
+            id: channel.id,
+            flex: 50,
+            content: { type: 'watched', channelId: channel.id },
+          })),
+        })),
+      }
+    : {
+        type: 'panel',
+        id: panelId,
+        flex: 100,
+        content: { type: 'watched', channelId: visibleChannel.id },
+      },
 }
 app.settingsStore.set({
   ...DEFAULT_SETTINGS,
   chatTheme: 'compact',
-  ...(dense
+  ...(richMedia
     ? {
         showTimestamp: true,
         showBadges: true,
@@ -202,12 +264,14 @@ const animationMetadataSchema = z.object({
 })
 const cache = join(dirname(getDbPath()), 'image-cache')
 await mkdir(cache, { recursive: true })
-const fixtureCount = dense
-  ? denseDelays.length
-  : config.case === 'churn'
-    ? Math.ceil(config.durationSeconds * config.rate) + 8
-    : 8
-const initialFixtureCount = dense ? denseDelays.length : 8
+const fixtureCount = live
+  ? 48
+  : dense
+    ? denseDelays.length
+    : config.case === 'churn'
+      ? Math.ceil(config.durationSeconds * config.rate) + 8
+      : 8
+const initialFixtureCount = live ? 48 : dense ? denseDelays.length : 8
 const fixtures: Fixture[] = []
 const frameWidth = 96
 const frameHeight = 96
@@ -254,14 +318,14 @@ async function animation(
 if (usesSevenTvSources) {
   const encodedVariants = new Map<string, Buffer>()
   for (const variant of [1, 2, 3, 4]) {
-    for (const delayMs of new Set(dense ? denseDelays : [config.delayMs, 20]))
+    for (const delayMs of new Set(richMedia ? denseDelays : [config.delayMs, 20]))
       encodedVariants.set(
         `${variant}:${delayMs}`,
         await animation(delayMs, variant * 32, variant * 32),
       )
   }
   for (let index = 0; index < fixtureCount; index++) {
-    const delayMs = dense
+    const delayMs = richMedia
       ? (denseDelays[index % denseDelays.length] ?? config.delayMs)
       : index % 2 === 1
         ? 20
@@ -273,8 +337,12 @@ if (usesSevenTvSources) {
         cache,
         `${createHash('sha256').update(url).digest('hex').slice(0, 32)}.webp`,
       )
-      const bytes = encodedVariants.get(`${variant}:${delayMs}`)
-      assert(bytes)
+      const animatedBytes = encodedVariants.get(`${variant}:${delayMs}`)
+      assert(animatedBytes)
+      const bytes =
+        live && (config.media === 'static-first-frame' || index % 3 === 0)
+          ? await sharp(animatedBytes, { page: 0, pages: 1 }).webp({ lossless: true }).toBuffer()
+          : animatedBytes
       await Bun.write(path, bytes)
       variants.push({
         url,
@@ -293,7 +361,7 @@ if (usesSevenTvSources) {
       sha256: original.sha256,
       encodedBytes: Bun.file(original.path).size,
       delayMs,
-      frames: frameCount,
+      frames: live && (config.media === 'static-first-frame' || index % 3 === 0) ? 1 : frameCount,
       variants,
     })
   }
@@ -317,8 +385,8 @@ if (usesSevenTvSources) {
 }
 const denseAvatarUrls: string[] = []
 const denseBadgeUrls: string[] = []
-if (dense) {
-  for (let index = 0; index < 16; index++) {
+if (richMedia) {
+  for (let index = 0; index < (live ? 256 : 16); index++) {
     const url = `https://emote-qa.invalid/avatar/dense-${index}.png`
     const path = join(cache, `${createHash('sha256').update(url).digest('hex').slice(0, 32)}.png`)
     await sharp({
@@ -356,84 +424,141 @@ if (dense) {
 }
 const firstFixture = fixtures[0]
 assert(firstFixture)
+const liveTexts = [
+  'Wooooo 🔥',
+  'EmoteQA WHAT is happening',
+  'actually having a pretty good time',
+  'wow that was the play! 😂',
+  'EmoteQA EmoteQB',
+  'the next time we should try again',
+  'EmoteQA I saw this part too and I had exactly the same reaction EmoteQA',
+  'This is so good — I missed the start of the stream, can someone explain how we ended up here? EmoteQB',
+  'W streamer 💜',
+  'nice EmoteQA',
+]
+function liveEmotes(text: string, primary: Fixture, secondary: Fixture) {
+  return [
+    { name: 'EmoteQA', asset: primary },
+    { name: 'EmoteQB', asset: secondary },
+  ].flatMap(({ name, asset }) => {
+    const positions = [...text.matchAll(new RegExp(name, 'gu'))].map(({ index }) => ({
+      start: index,
+      end: index + name.length - 1,
+    }))
+    return positions.length
+      ? [
+          {
+            id: asset.url,
+            name,
+            imageUrl: asset.url,
+            provider: 'seventv',
+            source: 'seventv',
+            animated: asset.frames > 1,
+            aspectRatio: 1,
+            positions,
+          } satisfies NormalizedChatMessage['emotes'][number],
+        ]
+      : []
+  })
+}
 let sequence = 0
-function inject(channel: WatchedChannel, fixture: Fixture): void {
+const channelSequences = new Map<string, number>()
+const latestGeneratedByChannel = new Map<string, string>()
+function inject(channel: WatchedChannel, fixture: Fixture, textOverride?: string): void {
   const id = sequence++
+  const channelSequence = channelSequences.get(channel.id) ?? 0
+  if (live) channelSequences.set(channel.id, channelSequence + 1)
+  const authorId = richMedia ? id % denseAvatarUrls.length : 0
   const secondary = fixtures[(id + 5) % initialFixtureCount] ?? fixture
-  const denseText = `EmoteQA dense_${id} EmoteQB EmoteQA — This message includes several words and punctuation to wrap naturally in a busy chat pane. Продолжаем обсуждать стрим, интерфейс и анимированные смайлы! ${id % 7 === 0 ? 'One more sentence makes this particular row taller than its neighbors.' : ''}`
+  const replayLink = config.verticalReplay ? ` ${replayLinkPrefix}${id}` : ''
+  const denseText = `EmoteQA dense_${id} EmoteQB EmoteQA${replayLink} — This message includes several words and punctuation to wrap naturally in a busy chat pane. Продолжаем обсуждать стрим, интерфейс и анимированные смайлы! ${id % 7 === 0 ? 'One more sentence makes this particular row taller than its neighbors.' : ''}`
+  const text =
+    textOverride ??
+    (live
+      ? (liveTexts[channelSequence % liveTexts.length] ?? '')
+      : dense
+        ? denseText
+        : `EmoteQA ${id}: repeated image EmoteQA`)
   const message: NormalizedChatMessage = {
     id: `emote-message-${id}`,
     platform: 'kick',
     channelId: channel.channelSlug,
     type: 'message',
-    timestamp: new Date(Date.UTC(2026, 10, 4, 0, 0, 0)),
-    text: dense ? denseText : `EmoteQA ${id}: repeated image EmoteQA`,
+    timestamp: new Date(Date.UTC(2026, 10, 4, 0, 0, 0) + (live ? id : 0)),
+    text,
     author: {
-      id: dense ? `viewer-${id % 16}` : 'viewer',
-      username: dense ? `viewer${id % 16}` : 'viewer',
-      displayName: dense ? `Viewer ${id % 16} streaming enthusiast` : 'Viewer',
+      id: richMedia ? `viewer-${authorId}` : 'viewer',
+      username: richMedia ? `viewer${authorId}` : 'viewer',
+      displayName: live
+        ? `Viewer ${authorId}`
+        : dense
+          ? `Viewer ${id % 16} streaming enthusiast`
+          : 'Viewer',
       color: '#c084fc',
-      ...(dense ? { avatarUrl: denseAvatarUrls[id % denseAvatarUrls.length] } : {}),
-      badges: dense
-        ? [
-            {
-              id: 'subscriber',
-              type: 'subscriber',
-              text: 'Subscriber',
-              imageUrl: denseBadgeUrls[id % denseBadgeUrls.length],
-            },
-            {
-              id: 'moderator',
-              type: 'moderator',
-              text: 'Moderator',
-              imageUrl: denseBadgeUrls[(id + 1) % denseBadgeUrls.length],
-            },
-          ]
-        : [],
-    },
-    emotes: [
-      {
-        id: fixture.url,
-        name: 'EmoteQA',
-        imageUrl: fixture.url,
-        provider: 'seventv',
-        source: 'seventv',
-        animated: true,
-        aspectRatio: 1,
-        positions: dense
+      ...(richMedia ? { avatarUrl: denseAvatarUrls[id % denseAvatarUrls.length] } : {}),
+      badges:
+        richMedia && (!live || id % 3 !== 0)
           ? [
-              { start: 0, end: 6 },
               {
-                start: denseText.lastIndexOf('EmoteQA'),
-                end: denseText.lastIndexOf('EmoteQA') + 6,
+                id: 'subscriber',
+                type: 'subscriber',
+                text: 'Subscriber',
+                imageUrl: denseBadgeUrls[id % denseBadgeUrls.length],
+              },
+              {
+                id: 'moderator',
+                type: 'moderator',
+                text: 'Moderator',
+                imageUrl: denseBadgeUrls[(id + 1) % denseBadgeUrls.length],
               },
             ]
-          : [
-              { start: 0, end: 6 },
-              {
-                start: `EmoteQA ${id}: repeated image `.length,
-                end: `EmoteQA ${id}: repeated image `.length + 6,
-              },
-            ],
-      },
-      ...(dense
-        ? [
-            {
-              id: secondary.url,
-              name: 'EmoteQB',
-              imageUrl: secondary.url,
-              provider: 'seventv',
-              source: 'seventv',
-              animated: true,
-              aspectRatio: 1,
-              positions: [
-                { start: denseText.indexOf('EmoteQB'), end: denseText.indexOf('EmoteQB') + 6 },
-              ],
-            } satisfies NormalizedChatMessage['emotes'][number],
-          ]
-        : []),
-    ],
-    ...(dense && id % 3 === 0
+          : [],
+    },
+    emotes: live
+      ? liveEmotes(text, fixture, secondary)
+      : [
+          {
+            id: fixture.url,
+            name: 'EmoteQA',
+            imageUrl: fixture.url,
+            provider: 'seventv',
+            source: 'seventv',
+            animated: true,
+            aspectRatio: 1,
+            positions: dense
+              ? [
+                  { start: 0, end: 6 },
+                  {
+                    start: denseText.lastIndexOf('EmoteQA'),
+                    end: denseText.lastIndexOf('EmoteQA') + 6,
+                  },
+                ]
+              : [
+                  { start: 0, end: 6 },
+                  {
+                    start: `EmoteQA ${id}: repeated image `.length,
+                    end: `EmoteQA ${id}: repeated image `.length + 6,
+                  },
+                ],
+          },
+          ...(dense
+            ? [
+                {
+                  id: secondary.url,
+                  name: 'EmoteQB',
+                  imageUrl: secondary.url,
+                  provider: 'seventv',
+                  source: 'seventv',
+                  animated: true,
+                  aspectRatio: 1,
+                  positions: [
+                    { start: denseText.indexOf('EmoteQB'), end: denseText.indexOf('EmoteQB') + 6 },
+                  ],
+                } satisfies NormalizedChatMessage['emotes'][number],
+              ]
+            : []),
+        ],
+    ...(richMedia && id % (live ? 7 : 3) === 0
       ? {
           reply: {
             parentMessageId: `emote-message-${Math.max(0, id - 2)}`,
@@ -449,6 +574,7 @@ function inject(channel: WatchedChannel, fixture: Fixture): void {
       : {}),
   }
   backend.events.emit('watched_channel_message', { channelId: channel.id, message })
+  if (live) latestGeneratedByChannel.set(channel.id, message.id)
 }
 function processed(): number {
   return channels.reduce(
@@ -554,12 +680,48 @@ function Content({ windowId, layoutId }: { windowId: string; layoutId: string })
         backgroundColor: '#16161c',
       }}
     >
-      <ChatView
-        paneId={`${windowId}:emote-pane`}
-        layoutTabId={layoutId}
-        layoutPanelId={panelId}
-        watchedChannel={visibleChannel}
-      />
+      {live ? (
+        liveRows.map((row, index) => (
+          <div
+            key={index}
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              width: '100%',
+              height: '50%',
+              minHeight: 0,
+            }}
+          >
+            {row.map((channel) => (
+              <div
+                key={channel.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '50%',
+                  height: '100%',
+                  minWidth: 0,
+                  minHeight: 0,
+                }}
+              >
+                <ChatView
+                  paneId={channel.id}
+                  layoutTabId={layoutId}
+                  layoutPanelId={channel.id}
+                  watchedChannel={channel}
+                />
+              </div>
+            ))}
+          </div>
+        ))
+      ) : (
+        <ChatView
+          paneId={`${windowId}:emote-pane`}
+          layoutTabId={layoutId}
+          layoutPanelId={panelId}
+          watchedChannel={visibleChannel}
+        />
+      )}
     </div>
   )
 }
@@ -730,8 +892,376 @@ async function preparePointerPath(renderer: GpuixRenderer): Promise<PointerPath 
   await Bun.sleep(300)
   return { viewport, from, to, visibleRows: rows.length }
 }
+function livePaneEvidence() {
+  const renderer = current()
+  const sources = nativeSources.get(renderer)
+  assert(sources, 'Live fixture must observe the native image sources.')
+  const tree = automationSchema.parse(JSON.parse(renderer.getAutomationTree()))
+  const panes = allNodes(tree).filter((node) => node.testId === 'chat-messages')
+  assert.equal(panes.length, 4, 'Four real chat lists must be mounted.')
+  const painted = renderer.getPaintedText()
+  const animationPaths = new Set(
+    fixtures
+      .filter((fixture) => fixture.frames > 1)
+      .flatMap((fixture) => fixture.variants?.map((variant) => variant.path) ?? []),
+  )
+  const staticPaths = new Set(
+    fixtures
+      .filter((fixture) => fixture.frames === 1)
+      .flatMap((fixture) => fixture.variants?.map((variant) => variant.path) ?? []),
+  )
+  const evidence = panes.map((pane) => {
+    const bounds = pane.bounds
+    assert(
+      bounds && bounds.width > 500 && bounds.height > 400,
+      'Each chat pane must occupy its visible quadrant.',
+    )
+    assert(
+      bounds.x >= 0 &&
+        bounds.y >= 0 &&
+        bounds.x + bounds.width <= initialWindow.width + 1 &&
+        bounds.y + bounds.height <= initialWindow.height + 1,
+      'Chat panes must remain inside the client window.',
+    )
+    const visible = allNodes(pane).filter(
+      (node) =>
+        node.bounds &&
+        node.bounds.width > 0 &&
+        node.bounds.height > 0 &&
+        node.bounds.x >= bounds.x &&
+        node.bounds.y >= bounds.y &&
+        node.bounds.x + node.bounds.width <= bounds.x + bounds.width + 1 &&
+        node.bounds.y + node.bounds.height <= bounds.y + bounds.height + 1,
+    )
+    assert(
+      visible.some(
+        (node) =>
+          node.text?.includes('Viewer') && painted.some((text) => text.includes(node.text ?? '')),
+      ),
+      'Every pane must paint viewer text.',
+    )
+    const imageSources = visible
+      .filter((node) => node.type === 'img')
+      .flatMap((node) => {
+        const source = sources.get(node.id)
+        return source ? [source] : []
+      })
+    const animatedEmotes = imageSources.filter((source) => animationPaths.has(source)).length
+    const staticEmotes = imageSources.filter((source) => staticPaths.has(source)).length
+    assert(staticEmotes > 0, 'Each live pane must visibly paint static emotes.')
+    if (config.media === 'mixed')
+      assert(animatedEmotes > 0, 'Each live pane must visibly paint animated emotes.')
+    return { bounds, images: imageSources.length, animatedEmotes, staticEmotes }
+  })
+  for (const [index, pane] of evidence.entries()) {
+    for (const other of evidence.slice(index + 1)) {
+      assert(
+        pane.bounds.x + pane.bounds.width <= other.bounds.x + 1 ||
+          other.bounds.x + other.bounds.width <= pane.bounds.x + 1 ||
+          pane.bounds.y + pane.bounds.height <= other.bounds.y + 1 ||
+          other.bounds.y + other.bounds.height <= pane.bounds.y + 1,
+        'The four chat viewports must not overlap.',
+      )
+    }
+  }
+  return evidence
+}
+function interactionPaneSnapshot() {
+  const renderer = current()
+  const client = nativeWindow(renderer).getWindowBounds()
+  assert(client)
+  const panes = allNodes(automationSchema.parse(JSON.parse(renderer.getAutomationTree()))).filter(
+    (node) => node.testId === 'chat-messages',
+  )
+  assert.equal(panes.length, 4, 'The interaction probe must retain four chat viewports.')
+  const painted = renderer.getPaintedText()
+  const evidence = panes.map((pane) => {
+    const bounds = pane.bounds
+    assert(bounds && bounds.width >= 200 && bounds.height >= 150)
+    assert(
+      bounds.x >= 0 &&
+        bounds.y >= 0 &&
+        bounds.x + bounds.width <= client.width + 1 &&
+        bounds.y + bounds.height <= client.height + 1,
+      'Resized chat viewports must remain inside the window.',
+    )
+    const descendants = allNodes(pane)
+    const list = descendants.find((node) => node.type === 'virtual-list')
+    assert(list, 'Each chat viewport must contain its native virtual list.')
+    const visible = descendants.filter(
+      (node) =>
+        node.bounds &&
+        node.bounds.width > 0 &&
+        node.bounds.height > 0 &&
+        node.bounds.x >= bounds.x &&
+        node.bounds.y >= bounds.y &&
+        node.bounds.x + node.bounds.width <= bounds.x + bounds.width + 1 &&
+        node.bounds.y + node.bounds.height <= bounds.y + bounds.height + 1,
+    )
+    const rows = visible
+      .filter((node) => node.testId?.startsWith('chat-timestamp-'))
+      .map((node) => ({ id: node.id, testId: node.testId, bounds: node.bounds }))
+    assert(rows.length > 0, 'Each viewport must contain painted message rows.')
+    assert(
+      visible.some(
+        (node) =>
+          node.text?.includes('Viewer') && painted.some((text) => text.includes(node.text ?? '')),
+      ),
+      'Every resized pane must paint its viewer text.',
+    )
+    const scrollTop = renderer.getListScrollTop(list.id)
+    assert(scrollTop, 'Every visible list must expose its scroll position.')
+    return { bounds, listId: list.id, scrollTop, rows }
+  })
+  for (const [index, pane] of evidence.entries()) {
+    for (const other of evidence.slice(index + 1)) {
+      assert(
+        pane.bounds.x + pane.bounds.width <= other.bounds.x + 1 ||
+          other.bounds.x + other.bounds.width <= pane.bounds.x + 1 ||
+          pane.bounds.y + pane.bounds.height <= other.bounds.y + 1 ||
+          other.bounds.y + other.bounds.height <= pane.bounds.y + 1,
+        'Resized sibling viewports must not overlap.',
+      )
+    }
+  }
+  return evidence
+}
+
+interface LiveProbeMarker {
+  sequence: number
+  text: string
+}
+
+async function verifyLiveInteractions() {
+  const renderer = current()
+  const before = interactionPaneSnapshot()
+  const sibling = before[0]
+  assert(sibling)
+  const activeChannels = visibleChannels.slice(1)
+  const recentMarkers = new Map<string, LiveProbeMarker[]>()
+  const markerProof: Array<{ label: string; watermark: number; markers: Record<string, string> }> =
+    []
+  const startProcessed = processed()
+  let generated = 0
+  let pendingError: unknown
+  const started = performance.now()
+  const timer = setInterval(() => {
+    try {
+      const due = Math.floor(((performance.now() - started) * 20) / 1000)
+      while (generated < due) {
+        const channel = activeChannels[generated % activeChannels.length]
+        const fixture = fixtures[generated % fixtures.length]
+        assert(channel && fixture)
+        const marker = `LIVE_PROBE_${channel.id}_${generated}`
+        inject(channel, fixture, `EmoteQA ${marker} EmoteQB`)
+        const recent = recentMarkers.get(channel.id) ?? []
+        recent.push({ sequence: generated, text: marker })
+        if (recent.length > 16) recent.shift()
+        recentMarkers.set(channel.id, recent)
+        generated++
+      }
+    } catch (error) {
+      pendingError = error
+      clearInterval(timer)
+    }
+  }, 20)
+  const waitForActivePanePaint = async (label: string) => {
+    const watermark = generated
+    const observed = new Map<string, string>()
+    try {
+      await until(() => {
+        if (pendingError) throw pendingError
+        const painted = renderer.getPaintedText()
+        for (const channel of activeChannels) {
+          if (observed.has(channel.id)) continue
+          const marker = recentMarkers
+            .get(channel.id)
+            ?.find(
+              (candidate) =>
+                candidate.sequence >= watermark &&
+                painted.some((text) => text.includes(candidate.text)),
+            )
+          if (marker) observed.set(channel.id, marker.text)
+        }
+        return observed.size === activeChannels.length
+      }, label)
+    } catch (error) {
+      await Bun.write(
+        join(session, 'live-interaction-failure.json'),
+        JSON.stringify(
+          {
+            label,
+            watermark,
+            generated,
+            processedMessages: processed() - startProcessed,
+            observed: Object.fromEntries(observed),
+            recentMarkers: Object.fromEntries(recentMarkers),
+            paintedMarkers: renderer.getPaintedText().filter((text) => text.includes('LIVE_PROBE')),
+            lists: before.map((pane) => ({
+              id: pane.listId,
+              scrollTop: renderer.getListScrollTop(pane.listId),
+            })),
+            channels: activeChannels.map((channel) => ({
+              id: channel.id,
+              activity: app.chatActivityStore.get().get(channel.id),
+              retainedTail: app.watchedMessagesStore
+                .get()
+                .get(channel.id)
+                ?.slice(-3)
+                .map((message) => message.text),
+            })),
+          },
+          null,
+          2,
+        ),
+      )
+      throw error
+    }
+    markerProof.push({ label, watermark, markers: Object.fromEntries(observed) })
+  }
+  try {
+    await waitForActivePanePaint('all three sibling panes paint incoming traffic')
+    renderer.scrollToItem(sibling.listId, 120, 0)
+    await Bun.sleep(200)
+    const beforeWheel = interactionPaneSnapshot()[0]
+    assert(beforeWheel)
+    const previousRows = new Set(beforeWheel.rows.map((row) => row.id))
+    // Let the other panes draw several updates without an automation-tree refresh.
+    await Bun.sleep(300)
+    renderer.simulateScrollWheel(
+      beforeWheel.bounds.x + beforeWheel.bounds.width / 2,
+      beforeWheel.bounds.y + beforeWheel.bounds.height / 2,
+      0,
+      -180,
+    )
+    await until(
+      () =>
+        JSON.stringify(renderer.getListScrollTop(sibling.listId)) !==
+        JSON.stringify(beforeWheel.scrollTop),
+      'native wheel changes the scroll offset without an automation refresh',
+    )
+    let afterWheel = interactionPaneSnapshot()
+    try {
+      await until(() => {
+        afterWheel = interactionPaneSnapshot()
+        return afterWheel[0]?.rows.some((row) => !previousRows.has(row.id)) === true
+      }, 'native wheel changes the painted sibling rows')
+    } catch (error) {
+      await Bun.write(
+        join(session, 'live-wheel-failure.json'),
+        JSON.stringify({ beforeWheel, afterWheel }, null, 2),
+      )
+      throw error
+    }
+    await waitForActivePanePaint(
+      'traffic remains painted in the other three panes after wheel input',
+    )
+    await nativeWindow(renderer).setWindowBounds({ width: 1000, height: 900 })
+    await until(
+      () =>
+        nativeWindow(renderer).getWindowBounds()?.width === 1000 &&
+        nativeWindow(renderer).getWindowBounds()?.height === 900,
+      'live interaction resize applied',
+    )
+    await Bun.sleep(200)
+    const resized = interactionPaneSnapshot()
+    assert(
+      resized.every((pane, index) => pane.bounds.width < (before[index]?.bounds.width ?? 0)),
+      'All four viewports must reflect the smaller window.',
+    )
+    await waitForActivePanePaint('live traffic paints after resizing all four panes')
+    const input = allNodes(automationSchema.parse(JSON.parse(renderer.getAutomationTree()))).find(
+      (node) => node.testId === 'chat-input',
+    )
+    assert(input)
+    renderer.focusElement(input.id)
+    const keyboardStarted = performance.now()
+    renderer.simulateKeystrokes('l i v e space q a')
+    await until(
+      () => [...composerStore.get().values()].some((composer) => composer.text === 'live qa'),
+      'native keyboard input remains usable after resizing during live traffic',
+    )
+    const keyboardLatencyMs = performance.now() - keyboardStarted
+    renderer.simulateKeystrokes('ctrl-a backspace')
+    await until(
+      () => [...composerStore.get().values()].every((composer) => composer.text !== 'live qa'),
+      'probe composer cleared',
+    )
+    await waitForActivePanePaint('live traffic remains visible during native keyboard input')
+    clearInterval(timer)
+    await Bun.sleep(100)
+    assert.equal(
+      processed() - startProcessed,
+      generated,
+      'Every interaction-phase message must be processed.',
+    )
+    assert.equal(
+      retained(),
+      channels.length * 200,
+      'Interaction checks must preserve retained histories.',
+    )
+    return {
+      label: 'post-measurement live interaction probe',
+      before,
+      beforeWheel,
+      afterWheel,
+      resized,
+      keyboardLatencyMs,
+      generatedMessages: generated,
+      processedMessages: processed() - startProcessed,
+      offeredRate: 20,
+      trafficChannels: activeChannels.map((channel) => channel.id),
+      markerProof,
+    }
+  } finally {
+    clearInterval(timer)
+    renderer.simulateMouseMove(0, 0)
+    await nativeWindow(renderer).setWindowBounds(initialWindow)
+    await until(
+      () =>
+        nativeWindow(renderer).getWindowBounds()?.width === initialWindow.width &&
+        nativeWindow(renderer).getWindowBounds()?.height === initialWindow.height,
+      'original live geometry restored after interaction probe',
+    )
+  }
+}
+
+function liveTailEvidence() {
+  const tree = automationSchema.parse(JSON.parse(current().getAutomationTree()))
+  const panes = allNodes(tree).filter((node) => node.testId === 'chat-messages')
+  return visibleChannels.map((channel, index) => {
+    const expected = latestGeneratedByChannel.get(channel.id)
+    const retainedTail = app.watchedMessagesStore.get().get(channel.id)?.at(-1)
+    assert(expected)
+    assert.equal(
+      retainedTail?.id,
+      expected,
+      'Every live channel must retain its newest generated message at the tail.',
+    )
+    const pane = panes[index]
+    assert(pane?.bounds)
+    const tail = allNodes(pane).find((node) => node.testId === `chat-timestamp-${expected}`)
+    const bounds = tail?.bounds
+    assert(
+      bounds &&
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        bounds.x >= pane.bounds.x &&
+        bounds.y >= pane.bounds.y &&
+        bounds.x + bounds.width <= pane.bounds.x + pane.bounds.width + 1 &&
+        bounds.y + bounds.height <= pane.bounds.y + pane.bounds.height + 1,
+      `The newest message must paint inside its live pane: ${channel.id}/${expected}`,
+    )
+    return { channelId: channel.id, messageId: expected, bounds }
+  })
+}
+
 async function measure() {
   const renderer = current()
+  const panesBefore = live ? livePaneEvidence() : null
+  const channelCountsBefore = live
+    ? channels.map((channel) => app.chatActivityStore.get().get(channel.id)?.total ?? 0)
+    : []
   const pointerPath = await preparePointerPath(renderer)
   const measuredBounds = nativeWindow(renderer).getWindowBounds()
   assert.equal(
@@ -804,7 +1334,7 @@ async function measure() {
       }, 8)
     : undefined
   const generator =
-    config.case === 'churn'
+    config.case === 'churn' || live
       ? setInterval(() => {
           const now = performance.now()
           fractional += ((now - previous) * config.rate) / 1000
@@ -813,9 +1343,16 @@ async function measure() {
           fractional -= count
           offered += count
           for (let index = 0; index < count; index++) {
-            const fixture = fixtures[nextFixture++]
+            const fixture = live
+              ? fixtures[(generated * 13 + Math.floor(generated / 12)) % fixtures.length]
+              : fixtures[nextFixture++]
             if (!fixture) continue
-            inject(visibleChannel, fixture)
+            const channel = live
+              ? (visibleChannels[
+                  liveChannelSchedule[generated % liveChannelSchedule.length] ?? 0
+                ] ?? visibleChannel)
+              : visibleChannel
+            inject(channel, fixture)
             generated++
           }
         }, 20)
@@ -861,7 +1398,7 @@ async function measure() {
     'Window activation must not change during a resource sample.',
   )
   const gpu = gpuMeasurements(initialGpu, readDrmSnapshot())
-  if (dense && !gpu.some((device) => (device.engines.gfx ?? 0) > 0))
+  if (richMedia && !gpu.some((device) => (device.engines.gfx ?? 0) > 0))
     await Bun.write(
       join(session, 'emote-resources-invalid-gpu.json'),
       JSON.stringify(
@@ -881,7 +1418,7 @@ async function measure() {
         2,
       ),
     )
-  if (dense)
+  if (richMedia)
     assert(
       gpu.some((device) => (device.engines.gfx ?? 0) > 0),
       'Dense resource measurements require active hardware GPU counters; a software Vulkan run is not a valid comparison.',
@@ -891,14 +1428,68 @@ async function measure() {
     channels.length * 200,
     'Message retention must not shrink during measurement.',
   )
-  if (config.case === 'churn') {
+  if (config.case === 'churn' || live) {
     assert.equal(count, generated, 'Every generated message must be processed.')
     assert(
       generated >= Math.floor((config.rate * wallMs) / 1000) * 0.99,
-      'Churn must preserve the offered message rate.',
+      'Traffic must preserve at least 99% of the offered message rate.',
     )
   }
+  const panesAfter = live ? livePaneEvidence() : null
+  const tailsAfter = live ? liveTailEvidence() : null
+  const processedByChannel = live
+    ? channels.map((channel, index) => ({
+        channelId: channel.id,
+        messages:
+          (app.chatActivityStore.get().get(channel.id)?.total ?? 0) -
+          (channelCountsBefore[index] ?? 0),
+      }))
+    : []
+  if (live) {
+    assert(
+      countersBefore && countersAfter,
+      'Live media comparisons require native animation counters.',
+    )
+    assert(
+      countersAfter.fullDraws > countersBefore.fullDraws,
+      'Incoming live messages must draw new frames.',
+    )
+    if (config.media === 'mixed') {
+      assert(countersAfter.liveSlots > 0, 'Animated emotes must retain visible native slots.')
+      assert(
+        countersAfter.slotUploads > countersBefore.slotUploads,
+        'Visible animations must upload new frames during live traffic.',
+      )
+    } else {
+      assert.equal(countersAfter.liveSlots, 0, 'First-frame controls must not animate.')
+      assert.equal(
+        countersAfter.slotUploads - countersBefore.slotUploads,
+        0,
+        'First-frame controls must not upload animated frames.',
+      )
+    }
+    for (const [index, channel] of processedByChannel.entries()) {
+      const expected =
+        Math.floor(generated / liveChannelSchedule.length) *
+          liveChannelSchedule.filter((target) => target === index).length +
+        liveChannelSchedule
+          .slice(0, generated % liveChannelSchedule.length)
+          .filter((target) => target === index).length
+      assert.equal(
+        channel.messages,
+        expected,
+        'Each channel must process its complete deterministic traffic allocation.',
+      )
+    }
+  }
   return {
+    nativeSourceObserver: live
+      ? 'applyBatch JSON parsing enabled identically in mixed and static-first-frame samples'
+      : null,
+    panesBefore,
+    panesAfter,
+    ...(live ? { tailsAfter } : {}),
+    processedByChannel,
     label: config.sampleGpuDuringMeasurement
       ? 'primary resource measurement'
       : 'observer-overhead experiment',
@@ -1110,6 +1701,202 @@ async function verifyDenseSync() {
     worstColorDifference,
   }
 }
+async function selectPaintedGlyph(
+  renderer: GpuixRenderer,
+  box: NonNullable<AutomationNode['bounds']>,
+) {
+  const start = { x: box.x + 0.1, y: box.y + box.height / 2 }
+  const end = { x: box.x + box.width + 1, y: start.y }
+  renderer.simulateMouseDown(start.x, start.y, 0)
+  for (let step = 1; step <= 8; step++) {
+    renderer.simulateMouseMove(start.x + ((end.x - start.x) * step) / 8, start.y, 0)
+    await Bun.sleep(12)
+  }
+  renderer.simulateMouseUp(end.x, end.y, 0)
+  await Bun.sleep(80)
+  return renderer.getSelectedText()
+}
+async function verifyVerticalReplay() {
+  const renderer = current()
+  const window = nativeWindow(renderer)
+  const tree = () => allNodes(automationSchema.parse(JSON.parse(renderer.getAutomationTree())))
+  const list = tree().find((node) => node.type === 'virtual-list')
+  assert(list)
+  renderer.clearSelection()
+  renderer.scrollToItem(list.id, 100, 0)
+  renderer.simulateMouseMove(0, 0)
+  await Bun.sleep(150)
+  const nodes = tree()
+  const viewport = nodes.find((node) => node.testId === 'chat-messages')?.bounds
+  assert(viewport)
+  const mountedList = nodes.find((node) => node.id === list.id)
+  assert(mountedList)
+  const sources = nativeSources.get(renderer)
+  assert(sources)
+  const animatedPaths = new Set(
+    fixtures.flatMap((fixture) => fixture.variants?.map((variant) => variant.path) ?? []),
+  )
+  const abovePointer = (node: AutomationNode) => {
+    const box = node.bounds
+    return (
+      box &&
+      box.width > 12 &&
+      box.height > 8 &&
+      box.x >= viewport.x &&
+      box.x + box.width < viewport.x + viewport.width - 90 &&
+      box.y > viewport.y + viewport.height / 4 &&
+      box.y + box.height < viewport.y + viewport.height / 2
+    )
+  }
+  const targets = mountedList.children
+    .flatMap((row) => {
+      const children = allNodes(row)
+      const glyph = children.find(
+        (node) =>
+          node.children.length === 0 && node.text?.trim() === 'includes' && abovePointer(node),
+      )
+      const emote = children.find(
+        (node) =>
+          node.type === 'img' &&
+          animatedPaths.has(sources.get(node.id) ?? '') &&
+          abovePointer(node),
+      )
+      const link = children.find(
+        (node) =>
+          node.children.length === 0 &&
+          node.text?.startsWith(replayLinkPrefix) &&
+          abovePointer(node),
+      )
+      if (!glyph || !emote || !link) return []
+      const body = children.findLast((candidate) => {
+        if (candidate.type !== 'div') return false
+        const ids = new Set(allNodes(candidate).map((node) => node.id))
+        return ids.has(glyph.id) && ids.has(emote.id) && ids.has(link.id)
+      })
+      assert(body, 'The text, emote and link must share the compact row body.')
+      return [{ bodyId: body.id, glyph, emote, link }]
+    })
+    .at(0)
+  if (!targets) {
+    const rows = mountedList.children.flatMap((row) => {
+      const elements = allNodes(row).flatMap(({ id, text, type, bounds }) =>
+        bounds && (type === 'img' || text?.trim() === 'includes' || text?.includes('invalid'))
+          ? [{ id, text, type, bounds, source: sources.get(id) }]
+          : [],
+      )
+      return elements.length ? [{ id: row.id, elements }] : []
+    })
+    await Bun.write(
+      join(session, 'vertical-target-failure.json'),
+      JSON.stringify({ viewport, rows }),
+    )
+  }
+  assert(targets, 'An interior row with text, an animated emote and a link must be painted.')
+  const { bodyId, glyph, emote, link } = targets
+  const expectedLink = link.text?.trim()
+  assert(expectedLink)
+  const wheelX = viewport.x + viewport.width / 2
+  const wheelY = viewport.y + (viewport.height * 3) / 4
+  renderer.simulateMouseMove(wheelX, wheelY)
+  await Bun.sleep(150)
+  const glyphBefore = window.getPaintedElementBounds(glyph.id)
+  const emoteBefore = window.getPaintedElementBounds(emote.id)
+  const linkBefore = window.getPaintedElementBounds(link.id)
+  assert(glyphBefore && emoteBefore && linkBefore)
+  const baselineSelection = await selectPaintedGlyph(renderer, glyphBefore)
+  assert(baselineSelection?.trim(), 'The baseline drag must select text.')
+  renderer.clearSelection()
+  renderer.simulateMouseMove(wheelX, wheelY)
+  await Bun.sleep(150)
+
+  const geometry = getNativeQaWindowGeometry('TwirChat')
+  const scale = readWindowScale(renderer)
+  const pixelsAt = async (bounds: NonNullable<AutomationNode['bounds']>) => {
+    const frame = await stableFramebuffer()
+    const left = Math.ceil(geometry.x + bounds.x * scale)
+    const top = Math.ceil(geometry.y + bounds.y * scale)
+    const width = Math.floor(geometry.x + (bounds.x + bounds.width) * scale) - left
+    const height = Math.floor(geometry.y + (bounds.y + bounds.height) * scale) - top
+    return sharp(frame.pixels, {
+      raw: { width: frame.width, height: frame.height, channels: 4 },
+    })
+      .extract({ left, top, width, height })
+      .raw()
+      .toBuffer()
+  }
+  const before = await pixelsAt(glyphBefore)
+  const glyphColors = new Set<number>()
+  for (let offset = 0; offset < before.length; offset += 4)
+    glyphColors.add(before.readUIntBE(offset, 3))
+  assert(glyphColors.size > 2, 'The baseline crop must contain antialiased glyphs.')
+
+  const imageBefore = await pixelsAt(emoteBefore)
+  let glyphAfter = glyphBefore
+  let linkAfter = linkBefore
+  let motionPixels = 0
+  const scrollDeltas: number[] = []
+  const moveRow = async (amount: number) => {
+    const previousY = glyphAfter.y
+    renderer.simulateScrollWheel(wheelX, wheelY, 0, amount)
+    await until(() => {
+      const bounds = window.getPaintedElementBounds(glyph.id)
+      return bounds !== null && bounds.y !== previousY
+    }, 'wheel translates the previously painted row')
+    await Bun.sleep(30)
+    const movedGlyph = window.getPaintedElementBounds(glyph.id)
+    const movedEmote = window.getPaintedElementBounds(emote.id)
+    const movedLink = window.getPaintedElementBounds(link.id)
+    assert(movedGlyph && movedEmote && movedLink)
+    const dy = movedGlyph.y - glyphBefore.y
+    const delta = movedGlyph.y - previousY
+    assert(
+      Math.abs(delta) > 0 && Math.abs(delta) <= 60,
+      'The same row must survive the wheel step.',
+    )
+    scrollDeltas.push(delta)
+    for (const { original, moved } of [
+      { original: glyphBefore, moved: movedGlyph },
+      { original: emoteBefore, moved: movedEmote },
+      { original: linkBefore, moved: movedLink },
+    ]) {
+      assert(Math.abs(moved.y - original.y - dy) < 0.01, 'Row contents must move together.')
+      assert.deepEqual(moved, { ...original, y: moved.y })
+    }
+    glyphAfter = movedGlyph
+    linkAfter = movedLink
+    return movedEmote
+  }
+  for (let step = 0; step < 7; step++) {
+    const movedEmote = await moveRow(step % 2 === 0 ? -24 : 24)
+    motionPixels = Math.max(motionPixels, changedPixels(imageBefore, await pixelsAt(movedEmote)))
+  }
+  const after = await pixelsAt(glyphAfter)
+  assert(before.equals(after), 'The translated row must retain its exact glyph pixels.')
+  assert(motionPixels > 100, 'The emote must keep changing while its row scrolls.')
+
+  // Querying the automation tree would invalidate the painted selection registry.
+  const selection = await selectPaintedGlyph(renderer, glyphAfter)
+  assert.equal(selection, baselineSelection, 'Native drag must select the same translated text.')
+  renderer.clearSelection()
+  renderer.simulateMouseMove(wheelX, wheelY)
+  await Bun.sleep(150)
+  await moveRow(24)
+  renderer.simulateClick(linkAfter.x + linkAfter.width / 2, linkAfter.y + linkAfter.height / 2)
+  await until(() => openedReplayLinks.length > 0, 'native click reaches the translated chat link')
+  assert.deepEqual(openedReplayLinks, [expectedLink])
+  renderer.clearSelection()
+  renderer.simulateMouseMove(0, 0)
+  return {
+    bodyId,
+    glyphId: glyph.id,
+    emoteId: emote.id,
+    scrollDeltas,
+    glyphColors: glyphColors.size,
+    selection,
+    link: expectedLink,
+    motionPixels,
+  }
+}
 async function verifyDenseHoverText() {
   const renderer = current()
   await until(
@@ -1141,18 +1928,7 @@ async function verifyDenseHoverText() {
   const windowGeometry = getNativeQaWindowGeometry('TwirChat')
   const windowScale = readWindowScale(renderer)
   const start = { x: box.x + 0.1, y: box.y + box.height / 2 }
-  const end = { x: box.x + box.width + 1, y: start.y }
-  const select = async () => {
-    renderer.simulateMouseDown(start.x, start.y, 0)
-    for (let step = 1; step <= 8; step++) {
-      renderer.simulateMouseMove(start.x + ((end.x - start.x) * step) / 8, start.y, 0)
-      await Bun.sleep(12)
-    }
-    renderer.simulateMouseUp(end.x, end.y, 0)
-    await Bun.sleep(80)
-    return renderer.getSelectedText()
-  }
-  const baselineSelection = await select()
+  const baselineSelection = await selectPaintedGlyph(renderer, box)
   assert(baselineSelection?.trim(), 'The baseline native drag must select visible text.')
   renderer.clearSelection()
   renderer.simulateMouseMove(start.x, start.y)
@@ -1272,7 +2048,7 @@ async function verifyDenseHoverText() {
     'Hover reuse must preserve every fully visible text host and raw text bounds snapshot.',
   )
   // No invalidate or geometry query may precede this mouse-down: it must use the replayed registry.
-  const selectionAfterHover = await select()
+  const selectionAfterHover = await selectPaintedGlyph(renderer, box)
   assert.equal(
     selectionAfterHover,
     baselineSelection,
@@ -1340,6 +2116,7 @@ async function denseFunctional() {
   )
   const backgroundSync = await verifyDenseSync()
   await activateMain()
+  const verticalReplay = config.verticalReplay ? await verifyVerticalReplay() : undefined
   const interactions: Array<{
     width: number
     height: number
@@ -1434,6 +2211,7 @@ async function denseFunctional() {
     backgroundPixels,
     backgroundRendering,
     foregroundSync,
+    ...(verticalReplay ? { verticalReplay } : {}),
     backgroundSync,
     interactions,
     visibility: await verifyDenseVisibility(),
@@ -1801,6 +2579,7 @@ try {
       inject(channel, fixtures[index % initialFixtureCount] ?? firstFixture)
   }
   await until(() => retained() === channels.length * 200, 'all retained channel histories filled')
+  if (live) await activateMain()
   await until(
     () =>
       current()
@@ -1837,6 +2616,12 @@ try {
         ? await denseFunctional()
         : await functional()
       : await measure()
+  const liveInteractions = config.liveInteractions ? await verifyLiveInteractions() : undefined
+  if (liveInteractions)
+    await Bun.write(
+      join(session, 'live-interaction-evidence.json'),
+      JSON.stringify(liveInteractions, null, 2),
+    )
   if (config.case === 'functional')
     await Bun.write(join(session, 'functional-evidence.json'), JSON.stringify(measurement, null, 2))
   const settledStats = await waitForImageStats(
@@ -1897,6 +2682,13 @@ try {
   const nativeManifest: unknown = await Bun.file(
     resolve(import.meta.dir, '../dist/native/gpuix.linux-x64.node.json'),
   ).json()
+  assert.equal(
+    createHash('sha256')
+      .update(await Bun.file(import.meta.path).bytes())
+      .digest('hex'),
+    scriptSha256,
+    'The fixture source must remain frozen during measurement.',
+  )
   report = {
     ok: true,
     config,
@@ -1905,9 +2697,7 @@ try {
     bunVersion: Bun.version,
     compositor: process.env.TWIRCHAT_QA_COMPOSITOR,
     provenance,
-    scriptSha256: createHash('sha256')
-      .update(await Bun.file(import.meta.path).bytes())
-      .digest('hex'),
+    scriptSha256,
     nativeManifest,
     nativeWindow: nativeWindow(current()).getWindowBounds(),
     channels: channels.length,
@@ -1921,21 +2711,35 @@ try {
       width: process.env.TWIRCHAT_QA_DISPLAY_WIDTH ?? null,
       height: process.env.TWIRCHAT_QA_DISPLAY_HEIGHT ?? null,
     },
-    denseContent: dense
+    liveContent: live
+      ? {
+          workloadVersion: 'monotonic-timestamps-v2',
+          visibleChannels: visibleChannels.map((channel) => channel.id),
+          inactiveChannels: config.inactiveChannels,
+          channelRates: [5, 1, 2, 12],
+          schedule: liveChannelSchedule,
+          retentionPerChannel: 200,
+          media: config.media,
+          animatedFixtures: fixtures.filter((fixture) => fixture.frames > 1).length,
+          staticFixtures: fixtures.filter((fixture) => fixture.frames === 1).length,
+        }
+      : null,
+    denseContent: richMedia
       ? {
           avatars: denseAvatarUrls.length,
           badgeImages: denseBadgeUrls.length,
           showTimestamp: true,
           showBadges: true,
           showAvatars: true,
-          repliesEvery: 3,
+          repliesEvery: live ? 7 : 3,
           wrappingText: true,
         }
       : null,
-    framesPerImage: frameCount,
+    framesPerImage: live ? [...new Set(fixtures.map((fixture) => fixture.frames))] : frameCount,
     uniqueFixtureUrls: fixtures.length,
     fixtures: fixtures.map(({ path: _path, ...fixture }) => fixture),
     measurement,
+    ...(liveInteractions ? { liveInteractions } : {}),
     settledImageStats: settledStats,
     churnCacheBounds: churnBounds,
     afterRemoval: {

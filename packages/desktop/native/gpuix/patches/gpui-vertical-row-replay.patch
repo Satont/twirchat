@@ -1,0 +1,890 @@
+diff --git a/crates/gpui/src/app.rs b/crates/gpui/src/app.rs
+--- a/crates/gpui/src/app.rs
++++ b/crates/gpui/src/app.rs
+@@ -1807,8 +1807,7 @@
+     fn apply_refresh_effect(&mut self) {
+         for window in self.windows.values_mut() {
+             if let Some(window) = window.as_deref_mut() {
+-                window.refreshing = true;
+-                window.invalidator.set_dirty(true);
++                window.force_refresh();
+             }
+         }
+     }
+diff --git a/crates/gpui/src/elements/cached.rs b/crates/gpui/src/elements/cached.rs
+--- a/crates/gpui/src/elements/cached.rs
++++ b/crates/gpui/src/elements/cached.rs
+@@ -213,14 +213,14 @@
+         let content_mask = window.content_mask();
+         let text_style = window.text_style();
+         let start = window.prepaint_index();
+-        let refreshing = std::mem::replace(&mut window.refreshing, true);
+-        let (element, accessed_entities) = cx.detect_accessed_entities(|cx| {
+-            let mut element = self.build(window, cx);
+-            element.layout_as_root(bounds.size.into(), window, cx);
+-            element.prepaint_at(bounds.origin, window, cx);
+-            element
++        let (element, accessed_entities) = window.with_force_view_refresh(|window| {
++            cx.detect_accessed_entities(|cx| {
++                let mut element = self.build(window, cx);
++                element.layout_as_root(bounds.size.into(), window, cx);
++                element.prepaint_at(bounds.origin, window, cx);
++                element
++            })
+         });
+-        window.refreshing = refreshing;
+         let mut state = state.borrow_mut();
+         state.measurement = Some((context, bounds.size));
+         state.recorded = Some(RecordedElement {
+diff --git a/crates/gpui/src/image_scene_animation.rs b/crates/gpui/src/image_scene_animation.rs
+--- a/crates/gpui/src/image_scene_animation.rs
++++ b/crates/gpui/src/image_scene_animation.rs
+@@ -159,6 +159,15 @@
+             .map(|slot| slot.frame)
+     }
+ 
++    pub(crate) fn is_stable(&self, source: ImageId, animate_when_inactive: bool) -> bool {
++        self.slots
++            .get(&SourceKey {
++                image: source,
++                animate_when_inactive,
++            })
++            .is_some_and(|slot| slot.stable)
++    }
++
+     pub(crate) fn paint_tile(
+         &mut self,
+         source: Arc<RenderImage>,
+@@ -228,6 +237,16 @@
+             .min()
+     }
+ 
++    pub(crate) fn stable_tiles_present(&self) -> bool {
++        self.slots.values().filter(|slot| slot.stable).all(|slot| {
++            slot.tile.is_some_and(|tile| {
++                self.atlas
++                    .get_or_insert_with(&slot.params(slot.frame).into(), &mut || Ok(None))
++                    .is_ok_and(|current| current == Some(tile))
++            })
++        })
++    }
++
+     pub(crate) fn advance(&mut self, elapsed: Duration, active: bool) -> ImageAnimationAdvance {
+         let mut advance = ImageAnimationAdvance {
+             changed: false,
+diff --git a/crates/gpui/src/scene.rs b/crates/gpui/src/scene.rs
+--- a/crates/gpui/src/scene.rs
++++ b/crates/gpui/src/scene.rs
+@@ -40,6 +40,7 @@
+ #[expect(missing_docs)]
+ pub struct Scene {
+     cached_frame_id: Option<u64>,
++    vertical_capture: Option<VerticalPaintCapture>,
+     pub(crate) paint_operations: Vec<PaintOperation>,
+     primitive_bounds: BoundsTree<ScaledPixels>,
+     layer_stack: Vec<DrawOrder>,
+@@ -53,6 +54,25 @@
+     pub surfaces: Vec<PaintSurface>,
+ }
+ 
++#[derive(Default)]
++struct VerticalPaintCapture {
++    extent: Option<Range<ScaledPixels>>,
++    unsupported: bool,
++}
++
++impl VerticalPaintCapture {
++    fn record(&mut self, bounds: Bounds<ScaledPixels>) {
++        let top = bounds.origin.y;
++        let bottom = bounds.bottom();
++        if let Some(extent) = &mut self.extent {
++            extent.start = extent.start.min(top);
++            extent.end = extent.end.max(bottom);
++        } else {
++            self.extent = Some(top..bottom);
++        }
++    }
++}
++
+ #[expect(missing_docs)]
+ impl Scene {
+     /// Identifies an explicitly repeated immutable window scene for this presentation.
+@@ -67,6 +87,7 @@
+ 
+     pub fn clear(&mut self) {
+         self.cached_frame_id = None;
++        self.vertical_capture = None;
+         self.paint_operations.clear();
+         self.primitive_bounds.clear();
+         self.layer_stack.clear();
+@@ -98,6 +119,13 @@
+ 
+     pub fn insert_primitive(&mut self, primitive: impl Into<Primitive>) {
+         let mut primitive = primitive.into();
++        if let Some(capture) = &mut self.vertical_capture {
++            if primitive.supports_vertical_replay() {
++                capture.record(*primitive.bounds());
++            } else {
++                capture.unsupported = true;
++            }
++        }
+         let clipped_bounds = primitive
+             .bounds()
+             .intersect(&primitive.content_mask().bounds);
+@@ -155,6 +183,57 @@
+             match operation {
+                 PaintOperation::Primitive(primitive) => self.insert_primitive(primitive.clone()),
+                 PaintOperation::StartLayer(bounds) => self.push_layer(*bounds),
++                PaintOperation::EndLayer => self.pop_layer(),
++            }
++        }
++    }
++
++    pub(crate) fn begin_vertical_capture(&mut self) -> bool {
++        if self.vertical_capture.is_some() {
++            return false;
++        }
++        self.vertical_capture = Some(VerticalPaintCapture::default());
++        true
++    }
++
++    pub(crate) fn finish_vertical_capture(&mut self) -> Option<Range<ScaledPixels>> {
++        let capture = self.vertical_capture.take()?;
++        if capture.unsupported {
++            return None;
++        }
++        capture.extent
++    }
++
++    pub(crate) fn record_vertical_bounds(&mut self, bounds: Bounds<ScaledPixels>) {
++        if let Some(capture) = &mut self.vertical_capture {
++            capture.record(bounds);
++        }
++    }
++
++    pub(crate) fn is_capturing_vertical_paint(&self) -> bool {
++        self.vertical_capture.is_some()
++    }
++
++    pub(crate) fn reject_vertical_capture(&mut self) {
++        if let Some(capture) = &mut self.vertical_capture {
++            capture.unsupported = true;
++        }
++    }
++
++    pub(crate) fn replay_vertical(
++        &mut self,
++        range: Range<usize>,
++        prev_scene: &Scene,
++        dy: ScaledPixels,
++    ) {
++        let offset = point(ScaledPixels(0.0), dy);
++        for operation in &prev_scene.paint_operations[range] {
++            match operation {
++                PaintOperation::Primitive(primitive) => {
++                    let shifted = primitive.shift_vertical(offset);
++                    self.insert_primitive(shifted);
++                }
++                PaintOperation::StartLayer(bounds) => self.push_layer(*bounds + offset),
+                 PaintOperation::EndLayer => self.pop_layer(),
+             }
+         }
+@@ -244,6 +323,30 @@
+ 
+ #[expect(missing_docs)]
+ impl Primitive {
++    fn supports_vertical_replay(&self) -> bool {
++        match self {
++            Self::Quad(_) | Self::Underline(_) | Self::PolychromeSprite(_) => true,
++            Self::MonochromeSprite(sprite) => sprite.transformation == TransformationMatrix::unit(),
++            Self::SubpixelSprite(sprite) => sprite.transformation == TransformationMatrix::unit(),
++            Self::Shadow(_) | Self::Path(_) | Self::Surface(_) => false,
++        }
++    }
++
++    fn shift_vertical(&self, offset: Point<ScaledPixels>) -> Self {
++        let mut primitive = self.clone();
++        let (bounds, mask) = match &mut primitive {
++            Self::Quad(quad) => (&mut quad.bounds, &mut quad.content_mask),
++            Self::Underline(underline) => (&mut underline.bounds, &mut underline.content_mask),
++            Self::MonochromeSprite(sprite) => (&mut sprite.bounds, &mut sprite.content_mask),
++            Self::SubpixelSprite(sprite) => (&mut sprite.bounds, &mut sprite.content_mask),
++            Self::PolychromeSprite(sprite) => (&mut sprite.bounds, &mut sprite.content_mask),
++            _ => unreachable!("vertical capture rejected unsupported primitives"),
++        };
++        *bounds = *bounds + offset;
++        mask.bounds = mask.bounds + offset;
++        primitive
++    }
++
+     pub fn bounds(&self) -> &Bounds<ScaledPixels> {
+         match self {
+             Primitive::Shadow(shadow) => &shadow.bounds,
+@@ -980,3 +1083,63 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++mod vertical_replay_tests {
++    use super::*;
++    use crate::size;
++
++    fn box_at(y: f32) -> Bounds<ScaledPixels> {
++        Bounds::new(
++            point(ScaledPixels(0.), ScaledPixels(y)),
++            size(ScaledPixels(12.), ScaledPixels(10.)),
++        )
++    }
++
++    #[test]
++    fn capture_records_quads_that_were_culled_before_insertion() {
++        let mut scene = Scene::default();
++        assert!(scene.begin_vertical_capture());
++        scene.insert_primitive(Quad {
++            bounds: box_at(14.),
++            content_mask: ContentMask {
++                bounds: box_at(40.),
++            },
++            ..Quad::default()
++        });
++
++        assert!(scene.quads.is_empty());
++        assert_eq!(
++            scene.finish_vertical_capture(),
++            Some(ScaledPixels(14.)..ScaledPixels(24.)),
++        );
++    }
++
++    #[test]
++    fn replay_translates_quads_and_local_clip_inside_the_layer() {
++        let mut previous = Scene::default();
++        previous.push_layer(box_at(14.));
++        previous.insert_primitive(Quad {
++            bounds: box_at(14.),
++            content_mask: ContentMask {
++                bounds: box_at(16.),
++            },
++            ..Quad::default()
++        });
++        previous.pop_layer();
++
++        let mut next = Scene::default();
++        next.replay_vertical(0..previous.len(), &previous, ScaledPixels(24.));
++
++        assert!(matches!(
++            next.paint_operations.as_slice(),
++            [
++                PaintOperation::StartLayer(layer),
++                PaintOperation::Primitive(Primitive::Quad(_)),
++                PaintOperation::EndLayer,
++            ] if *layer == box_at(38.)
++        ));
++        assert_eq!(next.quads[0].bounds, box_at(38.));
++        assert_eq!(next.quads[0].content_mask.bounds, box_at(40.));
++    }
++}
+diff --git a/crates/gpui/src/text_system/line.rs b/crates/gpui/src/text_system/line.rs
+--- a/crates/gpui/src/text_system/line.rs
++++ b/crates/gpui/src/text_system/line.rs
+@@ -550,6 +550,8 @@
+                             color,
+                         )?;
+                     }
++                } else {
++                    window.record_vertical_paint_bounds(max_glyph_bounds);
+                 }
+             }
+         }
+diff --git a/crates/gpui/src/view.rs b/crates/gpui/src/view.rs
+--- a/crates/gpui/src/view.rs
++++ b/crates/gpui/src/view.rs
+@@ -1,14 +1,22 @@
+ use crate::{
+     AnyElement, AnyEntity, AnyWeakEntity, App, Bounds, ContentMask, Context, Element, ElementId,
+     Entity, EntityId, GlobalElementId, InspectorElementId, IntoElement, LayoutId, PaintIndex,
+-    Pixels, PrepaintStateIndex, Render, RenderOnce, Style, StyleRefinement, TextStyle, WeakEntity,
++    Pixels, PrepaintStateIndex, Render, RenderOnce, ScaledPixels, Style, StyleRefinement,
++    TextStyle, WeakEntity,
+ };
+ use crate::{Empty, Window};
+ use anyhow::Result;
+ use collections::FxHashSet;
+ use refineable::Refineable;
+-use std::mem;
+-use std::{any::TypeId, fmt, ops::Range};
++use std::{
++    any::TypeId,
++    fmt,
++    ops::Range,
++    sync::{
++        OnceLock,
++        atomic::{AtomicU64, Ordering},
++    },
++};
+ 
+ /// A dynamically-typed view handle that can be downcast to a specific `Entity<V>`.
+ ///
+@@ -242,6 +250,7 @@
+     entity_id: Option<EntityId>,
+     cached_style: Option<StyleRefinement>,
+     cache_version: Option<u64>,
++    cache_vertical_replay: bool,
+     #[cfg(debug_assertions)]
+     source: &'static core::panic::Location<'static>,
+ }
+@@ -255,6 +264,7 @@
+             entity_id,
+             cached_style: None,
+             cache_version: None,
++            cache_vertical_replay: false,
+             view: Some(view),
+             #[cfg(debug_assertions)]
+             source: core::panic::Location::caller(),
+@@ -267,6 +277,16 @@
+     /// and has no effect unless caching is enabled.
+     pub fn cache_version(mut self, version: u64) -> Self {
+         self.cache_version = Some(version);
++        self
++    }
++
++    /// Permit a cached view to move by whole device pixels inside the same clip.
++    ///
++    /// The caller must use a cache version covering retained content, style, interaction
++    /// state and resources. The subtree's retained listeners may refer to hitbox IDs, but
++    /// must not capture absolute geometry. The caller must translate its own paint effects.
++    pub fn cache_vertical_replay(mut self) -> Self {
++        self.cache_vertical_replay = true;
+         self
+     }
+ 
+@@ -298,6 +318,96 @@
+     paint_range: Range<PaintIndex>,
+     cache_key: ViewElementCacheKey,
+     accessed_entities: FxHashSet<EntityId>,
++    vertical_replay: Option<VerticalReplay>,
++    paint_shift: Option<VerticalShift>,
++}
++
++struct VerticalReplay {
++    scale: f32,
++    extent: Range<ScaledPixels>,
++}
++
++struct VerticalShift {
++    logical: Pixels,
++    scaled: ScaledPixels,
++}
++
++enum ViewReplay {
++    InPlace,
++    Shift(VerticalShift),
++}
++
++impl VerticalReplay {
++    fn at(
++        &self,
++        old_bounds: Bounds<Pixels>,
++        bounds: Bounds<Pixels>,
++        mask: ContentMask<Pixels>,
++        window: &Window,
++    ) -> Option<ViewReplay> {
++        if old_bounds.size != bounds.size
++            || old_bounds.origin.x != bounds.origin.x
++            || self.scale != window.scale_factor()
++            || mask.bounds.intersect(&bounds) != bounds
++            || old_bounds.contains(&window.mouse_position())
++            || bounds.contains(&window.mouse_position())
++        {
++            return None;
++        }
++
++        let logical = bounds.origin.y - old_bounds.origin.y;
++        let scaled = logical.scale(self.scale);
++        if !scaled.0.is_finite() || scaled.0.fract() != 0.0 {
++            return None;
++        }
++
++        let clip = mask.scale(self.scale).bounds;
++        if self.extent.start + scaled < clip.top() || self.extent.end + scaled > clip.bottom() {
++            return None;
++        }
++        Some(if logical == Pixels::ZERO {
++            ViewReplay::InPlace
++        } else {
++            ViewReplay::Shift(VerticalShift { logical, scaled })
++        })
++    }
++}
++
++fn trace_vertical_replay(id: &GlobalElementId, shift: VerticalShift) {
++    enum Trace {
++        Off,
++        Sparse,
++        Detail,
++    }
++
++    static MODE: OnceLock<Trace> = OnceLock::new();
++    static HITS: AtomicU64 = AtomicU64::new(0);
++    match MODE.get_or_init(
++        || match std::env::var("GPUIX_TRACE_VERTICAL_REPLAY").as_deref() {
++            Ok("1") => Trace::Sparse,
++            Ok("detail") => Trace::Detail,
++            _ => Trace::Off,
++        },
++    ) {
++        Trace::Off => {}
++        Trace::Sparse => {
++            let count = HITS.fetch_add(1, Ordering::Relaxed) + 1;
++            if count == 1 || count % 256 == 0 {
++                eprintln!("GPUIX vertical replay hit {count}");
++            }
++        }
++        Trace::Detail => {
++            let logical = shift.logical.0;
++            let scaled = shift.scaled.0;
++            if let Some(ElementId::NamedInteger(name, body)) = id.last() {
++                eprintln!(
++                    "GPUIX vertical replay shift {name} {body} logical={logical} scaled={scaled}"
++                );
++            } else {
++                eprintln!("GPUIX vertical replay shift {id} logical={logical} scaled={scaled}");
++            }
++        }
++    }
+ }
+ 
+ struct ViewElementCacheKey {
+@@ -397,42 +507,83 @@
+ 
+                         if let Some(mut element_state) = element_state
+                             && element_state.cache_key.version == self.cache_version
+-                            && element_state.cache_key.bounds == bounds
+                             && element_state.cache_key.content_mask == content_mask
+                             && element_state.cache_key.text_style == text_style
+-                            && !window.is_view_cache_invalidated(entity_id)
+                         {
+-                            let prepaint_start = window.prepaint_index();
+-                            window.reuse_prepaint(element_state.prepaint_range.clone());
+-                            cx.entities
+-                                .extend_accessed(&element_state.accessed_entities);
+-                            let prepaint_end = window.prepaint_index();
+-                            element_state.prepaint_range = prepaint_start..prepaint_end;
+-
+-                            return (None, element_state);
++                            let old_bounds = element_state.cache_key.bounds;
++                            let replay = if self.cache_vertical_replay
++                                && self.cache_version.is_some()
++                            {
++                                if !window.is_vertical_replay_invalidated(entity_id)
++                                    && !window.vertical_replay_has_pointer_capture()
++                                    && !cx.has_active_drag()
++                                {
++                                    element_state
++                                        .vertical_replay
++                                        .as_ref()
++                                        .and_then(|cached| {
++                                            cached.at(old_bounds, bounds, content_mask, window)
++                                        })
++                                        .filter(|_| window.prepare_vertical_replay_animations(cx))
++                                } else {
++                                    None
++                                }
++                            } else {
++                                (old_bounds == bounds
++                                    && !window.is_view_cache_invalidated(entity_id))
++                                .then_some(ViewReplay::InPlace)
++                            };
++                            if let Some(replay) = replay {
++                                let prepaint_start = window.prepaint_index();
++                                element_state.paint_shift = match replay {
++                                    ViewReplay::InPlace => {
++                                        window.reuse_prepaint(element_state.prepaint_range.clone());
++                                        None
++                                    }
++                                    ViewReplay::Shift(shift) => {
++                                        window.reuse_prepaint_vertical(
++                                            element_state.prepaint_range.clone(),
++                                            shift.logical,
++                                        );
++                                        if let Some(cached) = &mut element_state.vertical_replay {
++                                            cached.extent.start += shift.scaled;
++                                            cached.extent.end += shift.scaled;
++                                        }
++                                        Some(shift)
++                                    }
++                                };
++                                cx.entities
++                                    .extend_accessed(&element_state.accessed_entities);
++                                element_state.prepaint_range =
++                                    prepaint_start..window.prepaint_index();
++                                element_state.cache_key.bounds = bounds;
++                                return (None, element_state);
++                            }
+                         }
+ 
+-                        let refreshing = mem::replace(&mut window.refreshing, true);
+                         let prepaint_start = window.prepaint_index();
+-                        let (mut element, accessed_entities) = cx.detect_accessed_entities(|cx| {
+-                            let mut element = self
+-                                .view
+-                                .take()
+-                                .unwrap()
+-                                .render(window, cx)
+-                                .into_any_element();
+-                            element.layout_as_root(bounds.size.into(), window, cx);
+-                            element.prepaint_at(bounds.origin, window, cx);
+-                            element
+-                        });
+-
++                        let (element, accessed_entities) =
++                            window.with_force_view_refresh(|window| {
++                                cx.detect_accessed_entities(|cx| {
++                                    let mut element = self
++                                        .view
++                                        .take()
++                                        .unwrap()
++                                        .render(window, cx)
++                                        .into_any_element();
++                                    element.layout_as_root(bounds.size.into(), window, cx);
++                                    element.prepaint_at(bounds.origin, window, cx);
++                                    element
++                                })
++                            });
+                         let prepaint_end = window.prepaint_index();
+-                        window.refreshing = refreshing;
+ 
+                         (
+                             Some(element),
+                             ViewElementState {
+                                 accessed_entities,
++                                vertical_replay: None,
++                                paint_shift: None,
+                                 prepaint_range: prepaint_start..prepaint_end,
+                                 paint_range: PaintIndex::default()..PaintIndex::default(),
+                                 cache_key: ViewElementCacheKey {
+@@ -473,23 +624,57 @@
+             window.with_rendered_view(entity_id, |window| {
+                 let caching_disabled = window.is_inspector_picking(cx) || window.is_a11y_active();
+                 if self.cached_style.is_some() && !caching_disabled {
++                    let global_id = global_id.unwrap();
+                     window.with_element_state::<ViewElementState, _>(
+-                        global_id.unwrap(),
++                        global_id,
+                         |element_state, window| {
+                             let mut element_state = element_state.unwrap();
+ 
+                             let paint_start = window.paint_index();
+ 
+                             if let Some(element) = element {
+-                                let refreshing = mem::replace(&mut window.refreshing, true);
+-                                element.paint(window, cx);
+-                                window.refreshing = refreshing;
++                                let bounds = element_state.cache_key.bounds;
++                                let mask = element_state.cache_key.content_mask;
++                                let recording = self.cache_vertical_replay
++                                    && self.cache_version.is_some()
++                                    && window.content_mask() == mask
++                                    && mask.bounds.intersect(&bounds) == bounds
++                                    && !bounds.contains(&window.mouse_position())
++                                    && !window.vertical_replay_has_pointer_capture()
++                                    && !cx.has_active_drag()
++                                    && window.vertical_replay_prepaint_supported(
++                                        &element_state.prepaint_range,
++                                        bounds,
++                                    )
++                                    && window.next_frame.scene.begin_vertical_capture();
++                                window.with_force_view_refresh(|window| element.paint(window, cx));
++                                element_state.paint_range = paint_start..window.paint_index();
++                                if recording {
++                                    let extent = window.next_frame.scene.finish_vertical_capture();
++                                    let scale = window.scale_factor();
++                                    let clip = mask.scale(scale).bounds;
++                                    if let Some(extent) = extent
++                                        && extent.start >= clip.top()
++                                        && extent.end <= clip.bottom()
++                                        && Window::vertical_replay_paint_supported(
++                                            &element_state.paint_range,
++                                        )
++                                    {
++                                        element_state.vertical_replay =
++                                            Some(VerticalReplay { scale, extent });
++                                    }
++                                }
+                             } else {
+-                                window.reuse_paint(element_state.paint_range.clone());
++                                let shift = element_state.paint_shift.take();
++                                window.reuse_paint_at(
++                                    element_state.paint_range.clone(),
++                                    shift.as_ref().map(|shift| shift.scaled),
++                                );
++                                element_state.paint_range = paint_start..window.paint_index();
++                                if let Some(shift) = shift {
++                                    trace_vertical_replay(global_id, shift);
++                                }
+                             }
+-
+-                            let paint_end = window.paint_index();
+-                            element_state.paint_range = paint_start..paint_end;
+ 
+                             ((), element_state)
+                         },
+diff --git a/crates/gpui/src/window.rs b/crates/gpui/src/window.rs
+--- a/crates/gpui/src/window.rs
++++ b/crates/gpui/src/window.rs
+@@ -1001,6 +1001,7 @@
+ #[derive(Clone, Default)]
+ pub(crate) struct PrepaintStateIndex {
+     hitboxes_index: usize,
++    window_control_hitboxes_index: usize,
+     tooltips_index: usize,
+     deferred_draws_index: usize,
+     dispatch_tree_index: usize,
+@@ -1220,6 +1221,8 @@
+     last_input_modality: InputModality,
+     keyboard_modality_mouse_origin: Point<Pixels>,
+     pub(crate) refreshing: bool,
++    retained_tree_refresh: bool,
++    vertical_replay_animations_ready: Option<bool>,
+     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
+     pub(crate) focus: Option<FocusId>,
+     focus_enabled: bool,
+@@ -1934,6 +1937,8 @@
+             last_input_modality: InputModality::Mouse,
+             keyboard_modality_mouse_origin: mouse_position,
+             refreshing: false,
++            retained_tree_refresh: false,
++            vertical_replay_animations_ready: None,
+             activation_observers: SubscriberSet::new(),
+             focus: None,
+             focus_enabled: true,
+@@ -2007,6 +2012,24 @@
+         self.refreshing || self.dirty_views.contains(&view_id)
+     }
+ 
++    /// Whether an explicitly versioned vertical replay view must render fresh.
++    pub fn is_vertical_replay_invalidated(&self, view_id: EntityId) -> bool {
++        (self.refreshing && !self.retained_tree_refresh) || self.dirty_views.contains(&view_id)
++    }
++
++    pub(crate) fn vertical_replay_has_pointer_capture(&self) -> bool {
++        self.captured_identity.is_some() || self.captured_hitbox.is_some()
++    }
++
++    pub(crate) fn with_force_view_refresh<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
++        let refreshing = mem::replace(&mut self.refreshing, true);
++        let retained = mem::take(&mut self.retained_tree_refresh);
++        let result = f(self);
++        self.retained_tree_refresh = retained;
++        self.refreshing = refreshing;
++        result
++    }
++
+     fn mark_view_dirty(&mut self, view_id: EntityId) {
+         // Mark ancestor views as dirty. If already in the `dirty_views` set, then all its ancestors
+         // should already be dirty.
+@@ -2086,6 +2109,25 @@
+     /// Mark the window as dirty, scheduling it to be redrawn on the next frame.
+     pub fn refresh(&mut self) {
+         if self.invalidator.not_drawing() {
++            self.force_refresh();
++        }
++    }
++
++    pub(crate) fn force_refresh(&mut self) {
++        self.retained_tree_refresh = false;
++        self.refreshing = true;
++        self.invalidator.set_dirty(true);
++    }
++
++    /// Request a refresh after a retained-tree mutation. A force refresh always wins.
++    ///
++    /// Ordinary view caches still invalidate. Explicitly versioned vertical replay
++    /// views may reuse unaffected ranges if the caller maintains their version.
++    pub fn refresh_retained_tree(&mut self) {
++        if self.invalidator.not_drawing() {
++            if !self.refreshing {
++                self.retained_tree_refresh = true;
++            }
+             self.refreshing = true;
+             self.invalidator.set_dirty(true);
+         }
+@@ -2545,6 +2587,25 @@
+         self.image_scene_animations.frame(source, inactive)
+     }
+ 
++    pub(crate) fn prepare_vertical_replay_animations(&mut self, cx: &App) -> bool {
++        if let Some(ready) = self.vertical_replay_animations_ready {
++            return ready;
++        }
++
++        let ready = self.image_scene_animations.stable_tiles_present()
++            && (cx.reduce_motion()
++                || self.image_animation_hidden()
++                || !self
++                    .image_scene_animations
++                    .advance(
++                        crate::image_animation::synchronized_elapsed(self.animation_time),
++                        self.is_window_active(),
++                    )
++                    .needs_draw);
++        self.vertical_replay_animations_ready = Some(ready);
++        ready
++    }
++
+     fn present_image_animation(&mut self, cx: &App) -> ImageAnimationFrame {
+         if !mem::take(&mut self.image_animation_ready) {
+             return ImageAnimationFrame::Idle;
+@@ -3123,6 +3184,7 @@
+     #[profiling::function]
+     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+         self.draw_id += 1;
++        self.vertical_replay_animations_ready = None;
+         self.image_animation_ready = false;
+         self.animation_time = Instant::now();
+         self.image_animation_deadline = None;
+@@ -3246,6 +3308,7 @@
+         self.record_entities_accessed(cx);
+         self.reset_cursor_style(cx);
+         self.refreshing = false;
++        self.retained_tree_refresh = false;
+         self.invalidator.set_phase(DrawPhase::None);
+         // Focus listeners may move focus (e.g. a dock forwarding focus to its active
+         // panel). `Window::focus` suppresses `refresh` while a draw is in progress, so
+@@ -3707,6 +3770,7 @@
+     pub(crate) fn prepaint_index(&self) -> PrepaintStateIndex {
+         PrepaintStateIndex {
+             hitboxes_index: self.next_frame.hitboxes.len(),
++            window_control_hitboxes_index: self.next_frame.window_control_hitboxes.len(),
+             tooltips_index: self.next_frame.tooltip_requests.len(),
+             deferred_draws_index: self.next_frame.deferred_draws.len(),
+             dispatch_tree_index: self.next_frame.dispatch_tree.len(),
+@@ -3766,6 +3830,33 @@
+         );
+     }
+ 
++    pub(crate) fn vertical_replay_prepaint_supported(
++        &self,
++        range: &Range<PrepaintStateIndex>,
++        bounds: Bounds<Pixels>,
++    ) -> bool {
++        range.start.tooltips_index == range.end.tooltips_index
++            && range.start.deferred_draws_index == range.end.deferred_draws_index
++            && range.start.window_control_hitboxes_index == range.end.window_control_hitboxes_index
++            && self.next_frame.hitboxes[range.start.hitboxes_index..range.end.hitboxes_index]
++                .iter()
++                .all(|hitbox| hitbox.bounds.intersect(&bounds) == hitbox.bounds)
++    }
++
++    pub(crate) fn reuse_prepaint_vertical(
++        &mut self,
++        range: Range<PrepaintStateIndex>,
++        offset: Pixels,
++    ) {
++        let start = self.next_frame.hitboxes.len();
++        self.reuse_prepaint(range);
++        let offset = point(Pixels::ZERO, offset);
++        for hitbox in &mut self.next_frame.hitboxes[start..] {
++            hitbox.bounds = hitbox.bounds + offset;
++            hitbox.content_mask.bounds = hitbox.content_mask.bounds + offset;
++        }
++    }
++
+     pub(crate) fn paint_index(&self) -> PaintIndex {
+         PaintIndex {
+             scene_index: self.next_frame.scene.len(),
+@@ -3779,7 +3870,16 @@
+         }
+     }
+ 
++    pub(crate) fn vertical_replay_paint_supported(range: &Range<PaintIndex>) -> bool {
++        range.start.root_key_listeners_index == range.end.root_key_listeners_index
++            && range.start.input_handlers_index == range.end.input_handlers_index
++    }
++
+     pub(crate) fn reuse_paint(&mut self, range: Range<PaintIndex>) {
++        self.reuse_paint_at(range, None);
++    }
++
++    pub(crate) fn reuse_paint_at(&mut self, range: Range<PaintIndex>, dy: Option<ScaledPixels>) {
+         self.next_frame.cursor_styles.extend(
+             self.rendered_frame.cursor_styles
+                 [range.start.cursor_styles_index..range.end.cursor_styles_index]
+@@ -3817,10 +3917,16 @@
+ 
+         self.text_system
+             .reuse_layouts(range.start.line_layout_index..range.end.line_layout_index);
+-        self.next_frame.scene.replay(
+-            range.start.scene_index..range.end.scene_index,
+-            &self.rendered_frame.scene,
+-        );
++        let scene_range = range.start.scene_index..range.end.scene_index;
++        if let Some(dy) = dy {
++            self.next_frame
++                .scene
++                .replay_vertical(scene_range, &self.rendered_frame.scene, dy);
++        } else {
++            self.next_frame
++                .scene
++                .replay(scene_range, &self.rendered_frame.scene);
++        }
+     }
+ 
+     /// Push a text style onto the stack, and call a function with that style active.
+@@ -4281,6 +4387,7 @@
+ 
+         let content_mask = self.content_mask();
+         let clipped_bounds = bounds.intersect(&content_mask.bounds);
++        self.record_vertical_paint_bounds(bounds);
+         if !clipped_bounds.is_empty() {
+             self.next_frame
+                 .scene
+@@ -4294,6 +4401,13 @@
+         }
+ 
+         result
++    }
++
++    pub(crate) fn record_vertical_paint_bounds(&mut self, bounds: Bounds<Pixels>) {
++        if self.next_frame.scene.is_capturing_vertical_paint() {
++            let bounds = self.cover_bounds(bounds);
++            self.next_frame.scene.record_vertical_bounds(bounds);
++        }
+     }
+ 
+     /// Paint the drop (non-inset) shadows from `shadows` into the scene at the current
+@@ -4903,17 +5017,31 @@
+             return Ok(());
+         }
+ 
++        if self.element_opacity() == 0.0 {
++            return Ok(());
++        }
+         if visible_bounds
+             .intersect(&self.content_mask().bounds)
+             .is_empty()
+-            || self.element_opacity() == 0.0
+         {
++            self.record_vertical_paint_bounds(visible_bounds);
+             return Ok(());
+         }
+         let tile = if let Some(inactive) = synchronized {
+-            self.image_scene_animations
+-                .paint_tile(data, frame_index, self.draw_id, inactive)?
++            let id = data.id;
++            let tile =
++                self.image_scene_animations
++                    .paint_tile(data, frame_index, self.draw_id, inactive);
++            if self.next_frame.scene.is_capturing_vertical_paint()
++                && (tile.is_err() || !self.image_scene_animations.is_stable(id, inactive))
++            {
++                self.next_frame.scene.reject_vertical_capture();
++            }
++            tile?
+         } else {
++            if data.frame_count() > 1 {
++                self.next_frame.scene.reject_vertical_capture();
++            }
+             let params = RenderImageParams {
+                 image_id: data.id,
+                 frame_index,

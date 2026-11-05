@@ -1,0 +1,889 @@
+diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flow.rs
+--- a/packages/native/src/cached_flow.rs
++++ b/packages/native/src/cached_flow.rs
+@@ -8,29 +8,38 @@
+ };
+ use gpui::{
+     AnyElement, App, AppContext as _, AvailableSpace, Bounds, Element, ElementId, Entity,
+-    GlobalElementId, InspectorElementId, IntoElement, LayoutId, Pixels, Render, Size,
+-    StyleRefinement, ViewElement, WeakEntity, Window, canvas, px,
++    GlobalElementId, InspectorElementId, IntoElement, LayoutId, Pixels, Point, Render, Size,
++    StyleRefinement, TextStyle, ViewElement, WeakEntity, Window, canvas, px,
+ };
+ use rustc_hash::{FxHashMap, FxHashSet};
+ use std::{
+     cell::RefCell,
+     rc::Rc,
+-    sync::{Arc, Mutex},
++    sync::{Arc, Mutex, atomic::Ordering},
+ };
+ 
+ const MAX_FLOWS: usize = 256;
+ const MAX_NODES: usize = 2048;
++const MAX_ANCESTORS: usize = 64;
+ pub(crate) type SharedFlows = Rc<RefCell<Flows>>;
+ 
+ #[derive(PartialEq)]
+-struct Frame {
+-    generation: u64,
++struct FrameContext {
+     selection: u64,
+     focus: Option<gpui::FocusId>,
+     keyboard: bool,
+     viewport: Size<Pixels>,
+     scale: f32,
+     rem: Pixels,
++    active: bool,
++    visibility: Option<u8>,
++    reduce_motion: bool,
++    focus_dim: bool,
++}
++
++struct Frame {
++    generation: u64,
++    context: FrameContext,
+ }
+ 
+ #[derive(Default)]
+@@ -39,14 +48,35 @@
+     token: u64,
+     epoch: u64,
+     enabled: bool,
++    vertical_enabled: bool,
+     frame: Option<Frame>,
++    pointer: Option<Point<Pixels>>,
++    pointer_cooldown: u8,
+ }
+ 
+ impl Flows {
+     pub(crate) fn clear(&mut self) {
+         self.entries.clear();
+         self.enabled = false;
++        self.vertical_enabled = false;
++    }
++
++    pub(crate) fn invalidate_legacy(&mut self) {
++        if self.enabled {
++            self.entries
++                .retain(|_, entry| entry.borrow().source.vertical.is_some());
++            self.enabled = false;
++        }
++    }
++
++    fn enabled_for(&self, vertical: bool) -> bool {
++        if vertical {
++            self.vertical_enabled
++        } else {
++            self.enabled
++        }
+     }
++
+     fn version(&mut self) -> Option<u64> {
+         match self.token.checked_add(1) {
+             Some(token) => {
+@@ -69,18 +99,49 @@
+         cx: &App,
+     ) {
+         self.epoch = self.epoch.wrapping_add(1);
++        let pointer = window.mouse_position();
++        self.pointer_cooldown = if self
++            .pointer
++            .replace(pointer)
++            .is_some_and(|old| old != pointer)
++        {
++            2
++        } else {
++            self.pointer_cooldown.saturating_sub(1)
++        };
+         let frame = tree.cache_revision().map(|generation| Frame {
+             generation,
+-            selection,
+-            focus: window.focused(cx).map(|f| f.id()),
+-            keyboard: window.last_input_was_keyboard(),
+-            viewport: window.viewport_size(),
+-            scale: window.scale_factor(),
+-            rem: window.rem_size(),
++            context: FrameContext {
++                selection,
++                focus: window.focused(cx).map(|f| f.id()),
++                keyboard: window.last_input_was_keyboard(),
++                viewport: window.viewport_size(),
++                scale: window.scale_factor(),
++                rem: window.rem_size(),
++                active: window.is_window_active(),
++                visibility: window
++                    .native_window_visibility_state()
++                    .map(|state| state.load(Ordering::Relaxed)),
++                reduce_motion: cx.reduce_motion(),
++                focus_dim: tree.keyboard_focus_dim(),
++            },
+         });
+-        self.enabled = safe && kind != Invalidation::Full && frame.is_some() && frame == self.frame;
+-        if !self.enabled {
++        self.vertical_enabled = safe
++            && frame
++                .as_ref()
++                .zip(self.frame.as_ref())
++                .is_some_and(|(next, last)| next.context == last.context);
++        self.enabled = self.vertical_enabled
++            && kind != Invalidation::Full
++            && frame
++                .as_ref()
++                .zip(self.frame.as_ref())
++                .is_some_and(|(next, last)| next.generation == last.generation);
++        if !self.vertical_enabled {
+             self.entries.clear();
++        } else if !self.enabled {
++            self.entries
++                .retain(|_, entry| entry.borrow().source.vertical.is_some());
+         }
+         self.frame = frame;
+     }
+@@ -115,11 +176,79 @@
+     pub(crate) list: u64,
+     pub(crate) row: u64,
+     pub(crate) available: Size<AvailableSpace>,
++    pub(crate) vertical_replay: bool,
++}
++
++struct Ancestor {
++    id: u64,
++    style: Option<Arc<StyleDesc>>,
++}
++
++struct ReplaySource {
++    row_revision: u64,
++    ancestors: Rc<[Ancestor]>,
++}
++
++impl PartialEq for ReplaySource {
++    fn eq(&self, other: &Self) -> bool {
++        self.row_revision == other.row_revision && Rc::ptr_eq(&self.ancestors, &other.ancestors)
++    }
++}
++
++impl ReplaySource {
++    fn ancestor_styles(tree: &RetainedTree, row: &RetainedElement) -> Option<Rc<[Ancestor]>> {
++        let mut ancestors = Vec::new();
++        let mut parent = row.parent;
++        while let Some(id) = parent {
++            let ancestor = tree.elements.get(&id)?;
++            if ancestors.len() == MAX_ANCESTORS || !Self::stable_ancestor(ancestor) {
++                return None;
++            }
++            ancestors.push(Ancestor {
++                id,
++                style: ancestor.style.clone(),
++            });
++            parent = ancestor.parent;
++        }
++        (ancestors.last().map(|ancestor| ancestor.id) == tree.root_id).then(|| Rc::from(ancestors))
++    }
++
++    fn stable_ancestor(ancestor: &RetainedElement) -> bool {
++        matches!(ancestor.element_type.as_str(), "div" | "virtual-list")
++            && !ancestor.custom_props().contains_key("motion")
++            && !ancestor
++                .style
++                .as_deref()
++                .is_some_and(StyleDesc::has_dynamic_opacity)
++    }
++
++    fn ancestors_match(&self, tree: &RetainedTree, row: &RetainedElement) -> bool {
++        let mut parent = row.parent;
++        for old in self.ancestors.iter() {
++            if parent != Some(old.id) {
++                return false;
++            }
++            let Some(current) = tree.elements.get(&old.id) else {
++                return false;
++            };
++            if !Self::stable_ancestor(current) {
++                return false;
++            }
++            match (&old.style, &current.style) {
++                (Some(old), Some(current)) if Arc::ptr_eq(old, current) => {}
++                (None, None) => {}
++                _ => return false,
++            }
++            parent = current.parent;
++        }
++        parent.is_none() && self.ancestors.last().map(|ancestor| ancestor.id) == tree.root_id
++    }
+ }
+ 
+ #[derive(PartialEq)]
+ struct Source {
+-    generation: u64,
++    generation: Option<u64>,
++    vertical: Option<ReplaySource>,
+     body: u64,
+     row: u64,
+     list: u64,
+@@ -135,11 +264,16 @@
+ impl Source {
+     fn current(&self, tree: &RetainedTree, available: Size<AvailableSpace>, observed: u64) -> bool {
+         self.available == available
+-            && tree.cache_revision() == Some(self.generation)
+-            && tree
+-                .elements
+-                .get(&self.row)
+-                .is_some_and(|row| row.parent == Some(self.list))
++            && self
++                .generation
++                .is_none_or(|generation| tree.cache_revision() == Some(generation))
++            && tree.elements.get(&self.row).is_some_and(|row| {
++                row.parent == Some(self.list)
++                    && self.vertical.as_ref().is_none_or(|replay| {
++                        row.subtree_revision == replay.row_revision
++                            && replay.ancestors_match(tree, row)
++                    })
++            })
+             && tree
+                 .elements
+                 .get(&self.body)
+@@ -164,6 +298,7 @@
+ 
+ struct Snapshot {
+     bounds: Bounds<Pixels>,
++    text_style: Option<TextStyle>,
+     text: TextPaintEffects,
+     nodes: Vec<(u64, ElementBounds)>,
+     images: ImageUses,
+@@ -368,6 +503,16 @@
+ }
+ 
+ fn eligible_ids(tree: &RetainedTree, body: u64, row: u64) -> Option<Arc<[u64]>> {
++    eligible_body_ids(tree, body, row, None, false)
++}
++
++fn eligible_body_ids(
++    tree: &RetainedTree,
++    body: u64,
++    row: u64,
++    overlay: Option<Overlay>,
++    vertical_replay: bool,
++) -> Option<Arc<[u64]>> {
+     if !compact_geometry(tree, tree.elements.get(&body)?, row) {
+         return None;
+     }
+@@ -404,7 +549,11 @@
+     let mut pending = vec![body];
+     while let Some(id) = pending.pop() {
+         let node = tree.elements.get(&id)?;
++        if vertical_replay && overlay.is_some_and(|overlay| overlay.id == id) {
++            continue;
++        }
+         if visited + ids.len() >= MAX_NODES
++            || (vertical_replay && !vertical_events_safe(node))
+             || !matches!(node.element_type.as_str(), "div" | "text" | "img" | "svg")
+             || node.events().contains("scrollChange")
+             || node.events().contains("highlight")
+@@ -437,6 +586,24 @@
+     Some(ids.into())
+ }
+ 
++fn vertical_events_safe(node: &RetainedElement) -> bool {
++    node.events().iter().all(|event| {
++        matches!(
++            event.as_str(),
++            "click"
++                | "mouseDown"
++                | "mouseUp"
++                | "mouseMove"
++                | "mouseEnter"
++                | "mouseLeave"
++                | "focus"
++                | "blur"
++                | "keyDown"
++                | "keyUp"
++        )
++    })
++}
++
+ impl FlowScope {
+     pub(crate) fn prepare(
+         &self,
+@@ -453,7 +620,10 @@
+             return None;
+         }
+         let mut cache = self.cache.borrow_mut();
+-        if !cache.enabled {
++        // Wait for two draws at the same pointer position so coalesced motion
++        // does not repeatedly swap the hover and scroll cache policies.
++        let vertical_replay = self.vertical_replay && cache.pointer_cooldown == 0;
++        if !cache.enabled_for(vertical_replay) {
+             return None;
+         }
+         let generation = cache.frame.as_ref()?.generation;
+@@ -463,11 +633,32 @@
+         }
+         let node = tree.elements.get(&body)?;
+         let existing = cache.entries.get(&body).cloned();
++        let row = tree.elements.get(&self.row)?;
++        let vertical = if vertical_replay {
++            let ancestors = existing
++                .as_ref()
++                .and_then(|entry| {
++                    let entry = entry.borrow();
++                    let previous = entry.source.vertical.as_ref()?;
++                    previous
++                        .ancestors_match(tree, row)
++                        .then(|| previous.ancestors.clone())
++                })
++                .or_else(|| ReplaySource::ancestor_styles(tree, row))?;
++            Some(ReplaySource {
++                row_revision: row.subtree_revision,
++                ancestors,
++            })
++        } else {
++            None
++        };
+         let unchanged = existing.as_ref().filter(|entry| {
+             let previous = entry.borrow();
+             previous.observed == node.subtree_revision
+                 && previous.source.row == self.row
+                 && previous.source.list == self.list
++                && previous.source.vertical.is_some() == vertical_replay
++                && (!vertical_replay || previous.source.vertical == vertical)
+         });
+         let (ids, overlay, revision) = if let Some(entry) = unchanged {
+             let previous = entry.borrow();
+@@ -477,16 +668,17 @@
+                 previous.source.revision,
+             )
+         } else {
+-            let ids = eligible_ids(tree, body, self.row)?;
+             let overlay = split_overlay(tree, node);
+-            (
+-                inline_ids(tree, ids, overlay),
+-                overlay,
+-                content_revision(tree, node, overlay),
+-            )
++            let ids = if vertical_replay {
++                eligible_body_ids(tree, body, self.row, overlay, true)?
++            } else {
++                inline_ids(tree, eligible_ids(tree, body, self.row)?, overlay)
++            };
++            (ids, overlay, content_revision(tree, node, overlay))
+         };
+         let source = Source {
+-            generation,
++            generation: (!vertical_replay).then_some(generation),
++            vertical,
+             body,
+             row: self.row,
+             list: self.list,
+@@ -553,11 +745,14 @@
+             cache.entries.insert(body, entry.clone());
+             entry
+         };
++        let mut scope = self.clone();
++        scope.vertical_replay = vertical_replay;
+         Some(FlowElement {
+             body,
+-            scope: self.clone(),
++            scope,
+             entry,
+             epoch,
++            generation,
+             direct: None,
+             view: None,
+             capture: None,
+@@ -573,6 +768,7 @@
+     scope: FlowScope,
+     entry: Rc<RefCell<FlowEntry>>,
+     epoch: u64,
++    generation: u64,
+     direct: Option<AnyElement>,
+     view: Option<ViewElement<Entity<FlowView>>>,
+     capture: Option<ImageUseCapture>,
+@@ -607,11 +803,15 @@
+         let (scope, entry) = (&self.scope, &self.entry);
+         let tree = scope.tree.lock().unwrap();
+         let state = entry.borrow();
+-        self.valid = scope.cache.borrow().enabled
+-            && scope.cache.borrow().epoch == self.epoch
+-            && state.source.current(&tree, scope.available, state.observed)
+-            && !window.is_a11y_active()
+-            && !window.is_inspector_picking(cx);
++        self.valid = {
++            let cache = scope.cache.borrow();
++            cache.enabled_for(scope.vertical_replay)
++                && cache.epoch == self.epoch
++                && tree.cache_revision() == Some(self.generation)
++                && state.source.current(&tree, scope.available, state.observed)
++                && !window.is_a11y_active()
++                && !window.is_inspector_picking(cx)
++        };
+         if !self.valid {
+             let mut build = state.entity.read(cx).build.clone();
+             build.part = FlowPart::Body {
+@@ -635,12 +835,21 @@
+         );
+         // Exact row space plus static column ancestry preserve the last actual body size.
+         // Dirty views/assets instead measure their intrinsic contents before parent layout.
+-        let can_reuse = self.valid
+-            && !window.is_view_cache_invalidated(state.entity.entity_id())
++        let entity_id = state.entity.entity_id();
++        let invalidated = if scope.vertical_replay {
++            window.is_vertical_replay_invalidated(entity_id)
++        } else {
++            window.is_view_cache_invalidated(entity_id)
++        };
++        let can_reuse = !invalidated
+             && state.painted.saturating_add(1) == self.epoch
+             && state.snapshot.as_ref().is_some_and(|snapshot| {
+                 // Protect existing resources before another row can trim the cache.
+-                snapshot.images.data_ready(cx)
++                snapshot
++                    .text_style
++                    .as_ref()
++                    .is_none_or(|style| *style == window.text_style())
++                    && snapshot.images.data_ready(cx)
+                     && scope
+                         .images
+                         .update(cx, |images, _| images.touch_uses(&snapshot.images))
+@@ -683,6 +892,9 @@
+         } else {
+             entity.into_element()
+         };
++        if scope.vertical_replay {
++            view = view.cache_vertical_replay();
++        }
+         let capture =
+             ImageUseCapture::new(scope.images.entity_id(), window.window_handle().window_id());
+         // Delegate manually: Drawable<ViewElement> would push the changing Entity ID.
+@@ -816,7 +1028,7 @@
+         };
+         let window_id = window.window_handle().window_id();
+         let cache = scope.cache.borrow();
+-        if !self.valid || !cache.enabled || cache.epoch != self.epoch {
++        if !self.valid || !cache.enabled_for(scope.vertical_replay) || cache.epoch != self.epoch {
+             return;
+         }
+         if fresh {
+@@ -835,6 +1047,7 @@
+                 .collect();
+             let snapshot = Snapshot {
+                 bounds,
++                text_style: scope.vertical_replay.then(|| window.text_style()),
+                 text: text_paint_effects(window_id, marker),
+                 nodes,
+                 images,
+@@ -846,8 +1059,14 @@
+             let mut entry = entry.borrow_mut();
+             if let Some(snapshot) = &entry.snapshot {
+                 // Scene replay alone does not restore native selection/locator registries.
+-                snapshot.text.replay(window_id);
+-                automation::replay_bounds(window_id, &snapshot.nodes);
++                let offset_y = bounds.origin.y - snapshot.bounds.origin.y;
++                if offset_y == Pixels::ZERO {
++                    snapshot.text.replay(window_id);
++                    automation::replay_bounds(window_id, &snapshot.nodes);
++                } else {
++                    snapshot.text.replay_at(window_id, offset_y);
++                    automation::replay_bounds_at(window_id, &snapshot.nodes, offset_y);
++                }
+                 scope.images.update(cx, |images, _| {
+                     images.touch_uses(&snapshot.images);
+                 });
+@@ -909,12 +1128,14 @@
+         );
+         tree.set_custom_prop(7, "src".into(), serde_json::json!("/emote.webp"));
+         tree.set_custom_prop(8, "source".into(), serde_json::json!("<svg/>"));
++        tree.set_root(1);
+         tree.take_invalidation();
+         tree
+     }
+     fn source(tree: &RetainedTree) -> Source {
+         Source {
+-            generation: tree.cache_revision().unwrap(),
++            generation: Some(tree.cache_revision().unwrap()),
++            vertical: None,
+             body: 4,
+             row: 2,
+             list: 1,
+@@ -930,6 +1151,57 @@
+         }
+     }
+     #[test]
++    fn replay_source_survives_other_rows_appending_but_expires_on_own_changes() {
++        let mut tree = fixture();
++        let mut saved = source(&tree);
++        let row = &tree.elements[&2];
++        saved.generation = None;
++        saved.vertical = Some(ReplaySource {
++            row_revision: row.subtree_revision,
++            ancestors: ReplaySource::ancestor_styles(&tree, row).unwrap(),
++        });
++        let observed = tree.elements[&4].subtree_revision;
++
++        tree.create_element(9, "div".into());
++        tree.append_child(1, 9);
++        tree.take_invalidation();
++        assert!(saved.current(&tree, saved.available, observed));
++
++        tree.set_event_listener(5, "click".into(), true);
++        tree.take_invalidation();
++        assert!(!saved.current(&tree, saved.available, observed));
++    }
++
++    #[test]
++    fn replay_source_expires_on_ancestor_style_change() {
++        let mut tree = fixture();
++        let mut saved = source(&tree);
++        let row = &tree.elements[&2];
++        saved.generation = None;
++        saved.vertical = Some(ReplaySource {
++            row_revision: row.subtree_revision,
++            ancestors: ReplaySource::ancestor_styles(&tree, row).unwrap(),
++        });
++        tree.set_style(
++            1,
++            Arc::new(StyleDesc {
++                opacity: Some(0.5),
++                ..Default::default()
++            }),
++        );
++        assert!(!saved.current(&tree, saved.available, saved.revision));
++    }
++
++    #[test]
++    fn replay_rejects_position_dependent_mouse_listener() {
++        let mut tree = fixture();
++        tree.set_event_listener(5, "click".into(), true);
++        assert!(eligible_body_ids(&tree, 4, 2, None, true).is_some());
++        tree.set_event_listener(5, "mouseDownOutside".into(), true);
++        assert!(eligible_body_ids(&tree, 4, 2, None, true).is_none());
++    }
++
++    #[test]
+     fn actual_compact_shape_includes_images_svg_and_layout_reporters() {
+         let mut tree = fixture();
+         tree.set_event_listener(7, "layout".into(), true);
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -459,6 +459,7 @@
+ #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+ enum UiCommand {
+     Invalidate(Invalidation),
++    RetainedInvalidation(Invalidation),
+     NotifyFromTray {
+         renderer_id: u64,
+         title: String,
+@@ -599,13 +600,22 @@
+ fn refresh_ui_window(
+     window: gpui::WindowHandle<GpuixView>,
+     kind: Invalidation,
++    retained: bool,
+     cx: &mut gpui::AsyncApp,
+ ) -> anyhow::Result<()> {
+     window.update(cx, |view, window, cx| {
+-        view.queue_invalidation(kind);
++        if retained {
++            view.queue_retained_invalidation(kind);
++        } else {
++            view.queue_invalidation(kind);
++        }
+         cx.notify();
+         if view.pending_invalidation == Invalidation::Full {
+-            window.refresh();
++            if retained {
++                window.refresh_retained_tree();
++            } else {
++                window.refresh();
++            }
+         }
+     })
+ }
+@@ -723,7 +733,8 @@
+                 deferred.resolve(Box::new(move |_| Ok(inserted)));
+                 Ok(())
+             }
+-            UiCommand::Invalidate(kind) => refresh_ui_window(window, kind, cx),
++            UiCommand::Invalidate(kind) => refresh_ui_window(window, kind, false, cx),
++            UiCommand::RetainedInvalidation(kind) => refresh_ui_window(window, kind, true, cx),
+             UiCommand::ActivateWindow => window.update(cx, |_view, window, cx| {
+                 cx.activate(true);
+                 window.activate_window();
+@@ -783,7 +794,7 @@
+                         }
+                     });
+                 }
+-                refresh_ui_window(window, Invalidation::Full, cx)
++                refresh_ui_window(window, Invalidation::Full, false, cx)
+             }
+             UiCommand::ScrollToItem { id, index, offset } => {
+                 if !with_virtual_list_states(window_id, |cell| {
+@@ -799,7 +810,7 @@
+                         }
+                     });
+                 }
+-                refresh_ui_window(window, Invalidation::Full, cx)
++                refresh_ui_window(window, Invalidation::Full, false, cx)
+             }
+             UiCommand::ScrollIntoView { id } => window.update(cx, |view, window, cx| {
+                 if view.scroll_element_into_view(id) {
+@@ -1898,15 +1909,19 @@
+     }
+ 
+     fn request_invalidate(&self) -> Result<()> {
+-        self.request_invalidation(Invalidation::Full)
++        self.request_invalidation(Invalidation::Full, false)
+     }
+ 
+-    fn request_invalidation(&self, kind: Invalidation) -> Result<()> {
++    fn request_invalidation(&self, kind: Invalidation, retained: bool) -> Result<()> {
+         #[cfg(target_os = "macos")]
+         return invalidate_window(self.renderer_id);
+ 
+         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
+-        return self.send_ui_command(UiCommand::Invalidate(kind));
++        return self.send_ui_command(if retained {
++            UiCommand::RetainedInvalidation(kind)
++        } else {
++            UiCommand::Invalidate(kind)
++        });
+ 
+         #[cfg(not(any(
+             target_os = "macos",
+@@ -2348,7 +2363,7 @@
+         // Waking the window for it makes it rebuild and diff the whole element
+         // tree to draw the frame it already has.
+         if kind != Invalidation::None {
+-            self.request_invalidation(kind)?;
++            self.request_invalidation(kind, cfg!(target_os = "linux"))?;
+         }
+         Ok(destroyed)
+     }
+@@ -5112,10 +5127,17 @@
+ 
+ impl GpuixView {
+     fn queue_invalidation(&mut self, kind: Invalidation) {
++        self.queue_retained_invalidation(kind);
++        if self.pending_invalidation == Invalidation::Full {
++            self.flow_cache.borrow_mut().clear();
++        }
++    }
++
++    fn queue_retained_invalidation(&mut self, kind: Invalidation) {
+         self.pending_invalidation.merge(kind);
+         if self.pending_invalidation == Invalidation::Full {
+             self.plain_text_cache.borrow_mut().clear();
+-            self.flow_cache.borrow_mut().clear();
++            self.flow_cache.borrow_mut().invalidate_legacy();
+         }
+     }
+ 
+@@ -5431,6 +5453,13 @@
+                 list: list_id,
+                 row: expected_child_id,
+                 available,
++                vertical_replay: cfg!(target_os = "linux")
++                    && tree
++                        .elements
++                        .get(&list_id)
++                        .and_then(|list| list.custom_props().get("cacheChatRows"))
++                        .and_then(serde_json::Value::as_bool)
++                        == Some(true),
+             }),
+             highlights: &mut self.highlights,
+             paint_reports: &self.paint_reports,
+diff --git a/packages/native/src/retained_tree.rs b/packages/native/src/retained_tree.rs
+--- a/packages/native/src/retained_tree.rs
++++ b/packages/native/src/retained_tree.rs
+@@ -570,15 +570,11 @@
+             } else {
+                 false
+             };
+-            // Which listeners exist decides how the element is built, though it
+-            // does not touch any cached text.
+-            if changed {
+-                self.invalidation = Invalidation::Full;
+-            }
+             if changed {
++                // The cached subtree includes the listener registrations.
++                self.mark_render_changed(id);
+                 if affects_focus {
+                     self.bump_focus_revision();
+-                    self.mark_render_changed(id);
+                 }
+                 self.track_focusable(id);
+             }
+@@ -615,9 +611,9 @@
+             if key == "testId" {
+                 let test_id = value.as_str().map(str::to_string);
+                 if element.test_id != test_id {
+-                    self.invalidation = Invalidation::Full;
++                    element.test_id = test_id;
++                    self.mark_render_changed(id);
+                 }
+-                element.test_id = test_id;
+                 return;
+             }
+             if value.is_null() {
+diff --git a/packages/native/src/automation.rs b/packages/native/src/automation.rs
+--- a/packages/native/src/automation.rs
++++ b/packages/native/src/automation.rs
+@@ -135,6 +135,22 @@
+     });
+ }
+ 
++pub(crate) fn replay_bounds_at(
++    window_id: gpui::WindowId,
++    saved: &[(u64, ElementBounds)],
++    y: Pixels,
++) {
++    let y = f64::from(f32::from(y));
++    BOUNDS.with(|cell| {
++        Arc::make_mut(cell.borrow_mut().entry(window_id).or_default()).extend(saved.iter().map(
++            |&(id, mut bounds)| {
++                bounds.y += y;
++                (id, bounds)
++            },
++        ));
++    });
++}
++
+ pub fn get_bounds(window_id: gpui::WindowId, id: u64) -> Option<ElementBounds> {
+     BOUNDS.with(|cell| {
+         cell.borrow()
+diff --git a/packages/native/src/text/paint.rs b/packages/native/src/text/paint.rs
+--- a/packages/native/src/text/paint.rs
++++ b/packages/native/src/text/paint.rs
+@@ -41,10 +41,26 @@
+     key: Arc<str>,
+     text: SharedString,
+     layout: TextLayout,
++    offset_y: gpui::Pixels,
+     /// See [`selection::RegisteredText::group`].
+     group: Option<u64>,
+ }
+ 
++impl RegEntry {
++    fn bounds(&self) -> Bounds<gpui::Pixels> {
++        let mut bounds = self.layout.bounds();
++        bounds.origin.y += self.offset_y;
++        bounds
++    }
++
++    fn index_for_position(&self, mut position: gpui::Point<gpui::Pixels>) -> usize {
++        position.y -= self.offset_y;
++        match self.layout.index_for_position(position) {
++            Ok(index) | Err(index) => index,
++        }
++    }
++}
++
+ /// Full element box that owns whether a press may start a selection.
+ ///
+ /// `userSelect: "none"` chrome and native inputs register `selectable: false`
+@@ -115,11 +131,23 @@
+ 
+ impl TextPaintEffects {
+     pub(crate) fn replay(&self, window_id: WindowId) {
++        self.replay_at(window_id, gpui::Pixels::ZERO);
++    }
++
++    pub(crate) fn replay_at(&self, window_id: WindowId, offset_y: gpui::Pixels) {
+         update_state(window_id, |state| {
+-            state.registry.extend(self.registry.iter().cloned());
++            state
++                .registry
++                .extend(self.registry.iter().cloned().map(|mut entry| {
++                    entry.offset_y += offset_y;
++                    entry
++                }));
+             state
+                 .start_regions
+-                .extend(self.start_regions.iter().cloned());
++                .extend(self.start_regions.iter().cloned().map(|mut region| {
++                    region.bounds.origin.y += offset_y;
++                    region
++                }));
+             state.painted.extend(self.painted.iter().cloned());
+         });
+     }
+@@ -456,6 +484,7 @@
+                     key: self.key.clone(),
+                     text: opts.text.clone(),
+                     layout: layout.clone(),
++                    offset_y: gpui::Pixels::ZERO,
+                     group: opts.group,
+                 })
+             });
+@@ -594,7 +623,7 @@
+         let mut nearest: Option<(usize, (f32, f32))> = None;
+ 
+         for (ei, entry) in reg.iter().enumerate() {
+-            let b = entry.layout.bounds();
++            let b = entry.bounds();
+             if b.contains(&position) {
+                 contained = Some(ei);
+                 continue;
+@@ -626,10 +655,7 @@
+         }
+ 
+         let ei = contained.or(nearest.map(|(ei, _)| ei))?;
+-        let ix = match reg[ei].layout.index_for_position(position) {
+-            Ok(ix) | Err(ix) => ix,
+-        };
+-        Some((ei, ix))
++        Some((ei, reg[ei].index_for_position(position)))
+     })
+ }
+ 
+@@ -642,7 +668,7 @@
+ ) -> Option<(usize, usize)> {
+     let (ei, ix) = registry_point(window_id, position)?;
+     with_state(window_id, |state| {
+-        let b = state.registry.get(ei)?.layout.bounds();
++        let b = state.registry.get(ei)?.bounds();
+         (position.y >= b.top() && position.y <= b.bottom()).then_some((ei, ix))
+     })
+ }
+@@ -939,6 +965,7 @@
+                     key: "1:0".into(),
+                     text: text.into(),
+                     layout: TextLayout::default(),
++                    offset_y: gpui::Pixels::ZERO,
+                     group: None,
+                 })
+             });
+@@ -1026,6 +1053,7 @@
+                 key: "4:0".into(),
+                 text: "word".into(),
+                 layout: StyledText::new("word").layout().clone(),
++                offset_y: gpui::Pixels::ZERO,
+                 group: Some(3),
+             });
+             state.start_regions.push(StartRegion {
+@@ -1045,6 +1073,26 @@
+             assert_eq!(state.registry[0].group, Some(3));
+             assert_eq!(state.start_regions.len(), 1);
+         });
++        reset_frame(window_id);
++        effects.replay_at(window_id, px(40.));
++        assert_eq!(start_region_at(window_id, point(px(5.), px(5.))), None);
++        assert_eq!(
++            start_region_at(window_id, point(px(5.), px(45.))),
++            Some(true)
++        );
++        with_state(window_id, |state| {
++            assert_eq!(state.registry[0].offset_y, px(40.))
++        });
++
++        reset_frame(window_id);
++        effects.replay_at(window_id, px(80.));
++        assert_eq!(
++            start_region_at(window_id, point(px(5.), px(85.))),
++            Some(true)
++        );
++        with_state(window_id, |state| {
++            assert_eq!(state.registry[0].offset_y, px(80.))
++        });
+         clear_window_text_state(window_id);
+     }
+ }

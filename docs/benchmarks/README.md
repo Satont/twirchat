@@ -51,6 +51,10 @@ Each scenario starts a fresh process with 200 retained messages per channel, a 1
 3 seconds of warmup, 12 seconds of measurement and a 2-second drain. The workload is text-only
 compact chat, with avatars and provider cosmetics disabled.
 
+A separate production fixture exercises four panes at 20 messages/s with avatars, badges, Unicode
+emoji and mixed emotes. It includes a matched first-frame control.
+[Run the four-pane media fixture](2026-11-05-four-pane-live/report.md#run-the-media-fixture).
+
 Results are written to a new temporary directory printed by the runner. To keep a named run:
 
 ```bash
@@ -84,6 +88,9 @@ and `generatorMissedMessages` alongside the target rate; a missed target does no
 absolute application throughput limit. The machine remains shared with the user's normal work.
 
 ## Saved baseline and next session
+
+[2026-11-05 scrolling chat row replay](2026-11-05-chat-row-replay/report.md) records the
+four-pane media comparison, the pointer guard, and the production and development load gates.
 
 [2026-11-05 TypeScript plugins](2026-11-05-plugins/report.md) records the default matrix,
 production target repetitions, active subscriber load and isolated native plugin checks.

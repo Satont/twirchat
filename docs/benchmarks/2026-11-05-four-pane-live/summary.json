@@ -1,0 +1,2311 @@
+{
+  "environment": {
+    "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+    "logicalCpus": 16,
+    "kernel": "7.3.1-1-cachyos",
+    "bun": "1.4.4",
+    "reactMode": "production",
+    "timestamp": "2026-11-05T07:00:21.361Z"
+  },
+  "nativeArtifacts": {
+    "appImageBaseline": {
+      "version": "0.11.0-twirchat.15",
+      "rustToolchain": "1.97.1",
+      "apiVersion": 3,
+      "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+      "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+      "patchDigest": "279b40c830eed623",
+      "target": "linux-x64",
+      "size": 56947632,
+      "sha256": "3bbf3182fa916c69d1a090cc1b52c1420aac3dcee28910ac369f3be124264b9e"
+    },
+    "localBaseline": {
+      "apiVersion": 3,
+      "version": "0.11.0-twirchat.15",
+      "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+      "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+      "patchDigest": "279b40c830eed623",
+      "rustToolchain": "1.97.1",
+      "target": "linux-x64",
+      "size": 56977600,
+      "sha256": "c29461a214f44b8f4b5696883b81db9613b611b0f07d8a7dfeb680b6cc7fb9c5"
+    },
+    "unscoped": {
+      "apiVersion": 3,
+      "version": "0.11.0-twirchat.16",
+      "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+      "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+      "patchDigest": "27d3827263b20fd2",
+      "rustToolchain": "1.97.1",
+      "target": "linux-x64",
+      "size": 57017872,
+      "sha256": "88da23414627353802a7decdaeb88afeb1cbda1c0b6ebbab85846bc84022a268"
+    },
+    "scoped": {
+      "apiVersion": 3,
+      "version": "0.11.0-twirchat.16",
+      "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+      "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+      "patchDigest": "ebbd1d16979c85d3",
+      "rustToolchain": "1.97.1",
+      "target": "linux-x64",
+      "size": 57016704,
+      "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+    }
+  },
+  "installedApp": {
+    "version": "1.3.1",
+    "nativeSha256": "3bbf3182fa916c69d1a090cc1b52c1420aac3dcee28910ac369f3be124264b9e",
+    "sampleSeconds": 2,
+    "cpuPercent": [
+      77.0,
+      94.4,
+      106.5,
+      101.5,
+      106.0,
+      111.0,
+      83.5,
+      95.5
+    ],
+    "gpuixUiCpuPercent": [
+      70.0,
+      81.5,
+      90.0,
+      91.5,
+      85.5,
+      94.5,
+      73.5,
+      86.0
+    ],
+    "rssMiB": [
+      835.6,
+      843.3,
+      857.1,
+      861.9,
+      846.0,
+      851.4,
+      858.4,
+      869.1
+    ]
+  },
+  "summary": {
+    "mixedBaseline": {
+      "cpuPercent": {
+        "median": 34.70062767247775,
+        "min": 27.41553883021432,
+        "max": 38.11421940702063
+      },
+      "rssMedianMiB": {
+        "median": 550.390625,
+        "min": 467.31640625,
+        "max": 551.2734375
+      },
+      "rssPeakMiB": {
+        "median": 586.78125,
+        "min": 585.390625,
+        "max": 586.84375
+      },
+      "heapPeakMiB": {
+        "median": 194.31466674804688,
+        "min": 186.38397216796875,
+        "max": 195.23156833648682
+      },
+      "actualRate": {
+        "median": 19.916534278143896,
+        "min": 19.916531420140636,
+        "max": 19.91653746144931
+      },
+      "eventLoopLagP95Ms": {
+        "median": 0.058039999999891734,
+        "min": 0.05781999999999243,
+        "max": 0.06321000000025379
+      },
+      "eventLoopLagMaxMs": {
+        "median": 0.8388050000003204,
+        "min": 0.5218869999998788,
+        "max": 2.2414089999983844
+      },
+      "nativeFramesPerSecond": {
+        "median": 16.583223101885505,
+        "min": 11.166590838070483,
+        "max": 18.999876741466284
+      },
+      "totalPresentsPerSecond": {
+        "median": 49.33300540862421,
+        "min": 47.99967405021342,
+        "max": 51.9996626608551
+      }
+    },
+    "mixedCandidate": {
+      "cpuPercent": {
+        "median": 30.5724828948241,
+        "min": 27.12838916561636,
+        "max": 35.1231570465402
+      },
+      "rssMedianMiB": {
+        "median": 551.52734375,
+        "min": 466.7265625,
+        "max": 552.00390625
+      },
+      "rssPeakMiB": {
+        "median": 586.33203125,
+        "min": 585.68359375,
+        "max": 588.27734375
+      },
+      "heapPeakMiB": {
+        "median": 195.35335063934326,
+        "min": 185.67400550842285,
+        "max": 195.38626956939697
+      },
+      "actualRate": {
+        "median": 19.91653635276931,
+        "min": 19.916530661657912,
+        "max": 19.916538351048914
+      },
+      "eventLoopLagP95Ms": {
+        "median": 0.06893599999966682,
+        "min": 0.06275999999979831,
+        "max": 0.07001099999979488
+      },
+      "eventLoopLagMaxMs": {
+        "median": 2.2716679999994085,
+        "min": 2.1054720000001907,
+        "max": 2.3860500000000684
+      },
+      "nativeFramesPerSecond": {
+        "median": 13.08324399113093,
+        "min": 11.41659196790542,
+        "max": 15.249901749966323
+      },
+      "totalPresentsPerSecond": {
+        "median": 48.166356346888165,
+        "min": 47.416342872315276,
+        "max": 48.33301709040251
+      }
+    },
+    "staticCandidate": {
+      "cpuPercent": {
+        "median": 25.78073296162894,
+        "min": 25.420483586574043,
+        "max": 37.45536722758383
+      },
+      "rssMedianMiB": {
+        "median": 551.6015625,
+        "min": 549.28125,
+        "max": 552.65625
+      },
+      "rssPeakMiB": {
+        "median": 592.1953125,
+        "min": 590.9453125,
+        "max": 594.8046875
+      },
+      "heapPeakMiB": {
+        "median": 193.45723915100098,
+        "min": 193.39761066436768,
+        "max": 197.26237773895264
+      },
+      "actualRate": {
+        "median": 19.916529755461998,
+        "min": 19.91651630526711,
+        "max": 19.916569812387667
+      },
+      "eventLoopLagP95Ms": {
+        "median": 0.058254999999917345,
+        "min": 0.05807500000082655,
+        "max": 0.05961300000126357
+      },
+      "eventLoopLagMaxMs": {
+        "median": 0.6576829999994516,
+        "min": 0.5011579999991227,
+        "max": 0.6930040000006557
+      },
+      "nativeFramesPerSecond": {
+        "median": 11.416611147686654,
+        "min": 10.583260581354283,
+        "max": 15.999879207578598
+      },
+      "totalPresentsPerSecond": {
+        "median": 11.416611147686654,
+        "min": 10.583260581354283,
+        "max": 15.999879207578598
+      }
+    },
+    "targetBaseline": {
+      "cpuPercent": {
+        "median": 90.11991779523764,
+        "min": 83.46795672670532,
+        "max": 92.07427592356632
+      },
+      "rssMedianMiB": {
+        "median": 496.640625,
+        "min": 493.80859375,
+        "max": 499.25
+      },
+      "rssPeakMiB": {
+        "median": 599.62890625,
+        "min": 580.1953125,
+        "max": 603.9453125
+      },
+      "heapPeakMiB": {
+        "median": 230.2604455947876,
+        "min": 224.34699058532715,
+        "max": 240.22991561889648
+      },
+      "actualRate": {
+        "median": 4995.944198906414,
+        "min": 4994.680295153788,
+        "max": 4996.5939269221835
+      },
+      "eventLoopLagP95Ms": {
+        "median": 2.3282989999988786,
+        "min": 2.1030750000027183,
+        "max": 2.360859000000346
+      },
+      "eventLoopLagMaxMs": {
+        "median": 9.72675999999774,
+        "min": 9.453317000001334,
+        "max": 11.414521000000605
+      }
+    },
+    "targetCandidate": {
+      "cpuPercent": {
+        "median": 88.48967633308841,
+        "min": 86.40830336231323,
+        "max": 89.96967518513561
+      },
+      "rssMedianMiB": {
+        "median": 497.80078125,
+        "min": 487.421875,
+        "max": 500.19140625
+      },
+      "rssPeakMiB": {
+        "median": 589.53125,
+        "min": 587.6796875,
+        "max": 597.625
+      },
+      "heapPeakMiB": {
+        "median": 215.36381912231445,
+        "min": 208.9413480758667,
+        "max": 218.95782566070557
+      },
+      "actualRate": {
+        "median": 4994.477844662764,
+        "min": 4993.980490182885,
+        "max": 4996.980216788756
+      },
+      "eventLoopLagP95Ms": {
+        "median": 2.164128000000346,
+        "min": 2.0542119999990973,
+        "max": 2.2027949999974226
+      },
+      "eventLoopLagMaxMs": {
+        "median": 8.759210000000166,
+        "min": 5.307117000000289,
+        "max": 11.82626800000071
+      }
+    },
+    "singlePaneBaseline": {
+      "cpuPercent": {
+        "median": 62.49700954576076,
+        "min": 60.34355484984476,
+        "max": 64.65046424167676
+      },
+      "rssMedianMiB": {
+        "median": 497.943359375,
+        "min": 496.10546875,
+        "max": 499.78125
+      },
+      "rssPeakMiB": {
+        "median": 603.087890625,
+        "min": 585.2890625,
+        "max": 620.88671875
+      },
+      "heapPeakMiB": {
+        "median": 140.10373735427856,
+        "min": 131.6237030029297,
+        "max": 148.58377170562744
+      },
+      "actualRate": {
+        "median": 997.1571769179418,
+        "min": 996.9905813468954,
+        "max": 997.3237724889883
+      },
+      "eventLoopLagP95Ms": {
+        "median": 3.6196644999990895,
+        "min": 3.5967119999986608,
+        "max": 3.642616999999518
+      },
+      "eventLoopLagMaxMs": {
+        "median": 9.008142499999849,
+        "min": 7.267982999999731,
+        "max": 10.748301999999967
+      }
+    },
+    "singlePaneUnscoped": {
+      "cpuPercent": {
+        "median": 66.69027805715498,
+        "min": 65.38873835953228,
+        "max": 67.9918177547777
+      },
+      "rssMedianMiB": {
+        "median": 495.533203125,
+        "min": 491.98046875,
+        "max": 499.0859375
+      },
+      "rssPeakMiB": {
+        "median": 585.240234375,
+        "min": 573.44921875,
+        "max": 597.03125
+      },
+      "heapPeakMiB": {
+        "median": 148.58121299743652,
+        "min": 142.7168893814087,
+        "max": 154.44553661346436
+      },
+      "actualRate": {
+        "median": 997.3665454006182,
+        "min": 996.9101367391191,
+        "max": 997.8229540621171
+      },
+      "eventLoopLagP95Ms": {
+        "median": 4.2544660000003205,
+        "min": 4.128407000000152,
+        "max": 4.380525000000489
+      },
+      "eventLoopLagMaxMs": {
+        "median": 18.192850499999622,
+        "min": 9.574642999999924,
+        "max": 26.81105799999932
+      }
+    },
+    "singlePaneCandidate": {
+      "cpuPercent": {
+        "median": 64.13878409121692,
+        "min": 63.35735476109061,
+        "max": 64.92021342134322
+      },
+      "rssMedianMiB": {
+        "median": 497.34375,
+        "min": 489.94921875,
+        "max": 504.73828125
+      },
+      "rssPeakMiB": {
+        "median": 600.263671875,
+        "min": 586.109375,
+        "max": 614.41796875
+      },
+      "heapPeakMiB": {
+        "median": 159.81720542907715,
+        "min": 138.25856685638428,
+        "max": 181.37584400177002
+      },
+      "actualRate": {
+        "median": 997.907088061339,
+        "min": 997.8240900730268,
+        "max": 997.990086049651
+      },
+      "eventLoopLagP95Ms": {
+        "median": 3.858790499999941,
+        "min": 3.7936460000000807,
+        "max": 3.923934999999801
+      },
+      "eventLoopLagMaxMs": {
+        "median": 6.895630499999243,
+        "min": 6.342661999999109,
+        "max": 7.448598999999376
+      }
+    }
+  },
+  "runs": {
+    "mixedBaseline": [
+      {
+        "run": "b1",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.15",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "279b40c830eed623",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 56977600,
+          "sha256": "c29461a214f44b8f4b5696883b81db9613b611b0f07d8a7dfeb680b6cc7fb9c5"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "mixed",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "96372e06bfdb4cef6b4b605cb0ac3215f2ae40a8b6ee508ccfa833ed5a9af0ef",
+          "sourceHash": "f9c40deeb905cf62b067f96b475b25c1690e57dc9cffa45fed493f70ed49aa2f",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 34.70062767247775,
+          "rssMedianMiB": 550.390625,
+          "rssPeakMiB": 585.390625,
+          "heapPeakMiB": 195.23156833648682,
+          "actualRate": 19.916534278143896,
+          "eventLoopLagP95Ms": 0.06321000000025379,
+          "eventLoopLagMaxMs": 2.2414089999983844,
+          "nativeFramesPerSecond": 16.583223101885505,
+          "totalPresentsPerSecond": 49.33300540862421
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 199,
+          "animationOnlyPresents": 393,
+          "slotUploads": 1841,
+          "liveSlots": 2,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 4,
+            "static": 6
+          },
+          {
+            "animated": 6,
+            "static": 3
+          },
+          {
+            "animated": 8,
+            "static": 1
+          },
+          {
+            "animated": 7,
+            "static": 2
+          }
+        ]
+      },
+      {
+        "run": "b2",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.15",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "279b40c830eed623",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 56977600,
+          "sha256": "c29461a214f44b8f4b5696883b81db9613b611b0f07d8a7dfeb680b6cc7fb9c5"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "mixed",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "96372e06bfdb4cef6b4b605cb0ac3215f2ae40a8b6ee508ccfa833ed5a9af0ef",
+          "sourceHash": "f9c40deeb905cf62b067f96b475b25c1690e57dc9cffa45fed493f70ed49aa2f",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 38.11421940702063,
+          "rssMedianMiB": 551.2734375,
+          "rssPeakMiB": 586.84375,
+          "heapPeakMiB": 194.31466674804688,
+          "actualRate": 19.91653746144931,
+          "eventLoopLagP95Ms": 0.058039999999891734,
+          "eventLoopLagMaxMs": 0.8388050000003204,
+          "nativeFramesPerSecond": 18.999876741466284,
+          "totalPresentsPerSecond": 51.9996626608551
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 228,
+          "animationOnlyPresents": 396,
+          "slotUploads": 1848,
+          "liveSlots": 2,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 4,
+            "static": 6
+          },
+          {
+            "animated": 6,
+            "static": 3
+          },
+          {
+            "animated": 8,
+            "static": 1
+          },
+          {
+            "animated": 7,
+            "static": 2
+          }
+        ]
+      },
+      {
+        "run": "b3",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.15",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "279b40c830eed623",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 56977600,
+          "sha256": "c29461a214f44b8f4b5696883b81db9613b611b0f07d8a7dfeb680b6cc7fb9c5"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "mixed",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "96372e06bfdb4cef6b4b605cb0ac3215f2ae40a8b6ee508ccfa833ed5a9af0ef",
+          "sourceHash": "f9c40deeb905cf62b067f96b475b25c1690e57dc9cffa45fed493f70ed49aa2f",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 27.41553883021432,
+          "rssMedianMiB": 467.31640625,
+          "rssPeakMiB": 586.78125,
+          "heapPeakMiB": 186.38397216796875,
+          "actualRate": 19.916531420140636,
+          "eventLoopLagP95Ms": 0.05781999999999243,
+          "eventLoopLagMaxMs": 0.5218869999998788,
+          "nativeFramesPerSecond": 11.166590838070483,
+          "totalPresentsPerSecond": 47.99967405021342
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 134,
+          "animationOnlyPresents": 442,
+          "slotUploads": 1847,
+          "liveSlots": 2,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 4,
+            "static": 6
+          },
+          {
+            "animated": 6,
+            "static": 3
+          },
+          {
+            "animated": 8,
+            "static": 1
+          },
+          {
+            "animated": 7,
+            "static": 2
+          }
+        ]
+      }
+    ],
+    "mixedCandidate": [
+      {
+        "run": "f1",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.16",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "ebbd1d16979c85d3",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 57016704,
+          "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "mixed",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 27.12838916561636,
+          "rssMedianMiB": 466.7265625,
+          "rssPeakMiB": 585.68359375,
+          "heapPeakMiB": 185.67400550842285,
+          "actualRate": 19.91653635276931,
+          "eventLoopLagP95Ms": 0.06275999999979831,
+          "eventLoopLagMaxMs": 2.2716679999994085,
+          "nativeFramesPerSecond": 11.41659196790542,
+          "totalPresentsPerSecond": 48.33301709040251
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 137,
+          "animationOnlyPresents": 443,
+          "slotUploads": 1843,
+          "liveSlots": 2,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 4,
+            "static": 6
+          },
+          {
+            "animated": 6,
+            "static": 3
+          },
+          {
+            "animated": 8,
+            "static": 1
+          },
+          {
+            "animated": 7,
+            "static": 2
+          }
+        ]
+      },
+      {
+        "run": "f2",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.16",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "ebbd1d16979c85d3",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 57016704,
+          "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "mixed",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 30.5724828948241,
+          "rssMedianMiB": 552.00390625,
+          "rssPeakMiB": 586.33203125,
+          "heapPeakMiB": 195.35335063934326,
+          "actualRate": 19.916530661657912,
+          "eventLoopLagP95Ms": 0.07001099999979488,
+          "eventLoopLagMaxMs": 2.1054720000001907,
+          "nativeFramesPerSecond": 13.08324399113093,
+          "totalPresentsPerSecond": 47.416342872315276
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 157,
+          "animationOnlyPresents": 412,
+          "slotUploads": 1843,
+          "liveSlots": 2,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 4,
+            "static": 6
+          },
+          {
+            "animated": 6,
+            "static": 3
+          },
+          {
+            "animated": 8,
+            "static": 1
+          },
+          {
+            "animated": 7,
+            "static": 2
+          }
+        ]
+      },
+      {
+        "run": "f3",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.16",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "ebbd1d16979c85d3",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 57016704,
+          "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "mixed",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 35.1231570465402,
+          "rssMedianMiB": 551.52734375,
+          "rssPeakMiB": 588.27734375,
+          "heapPeakMiB": 195.38626956939697,
+          "actualRate": 19.916538351048914,
+          "eventLoopLagP95Ms": 0.06893599999966682,
+          "eventLoopLagMaxMs": 2.3860500000000684,
+          "nativeFramesPerSecond": 15.249901749966323,
+          "totalPresentsPerSecond": 48.166356346888165
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 183,
+          "animationOnlyPresents": 395,
+          "slotUploads": 1837,
+          "liveSlots": 2,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 4,
+            "static": 6
+          },
+          {
+            "animated": 6,
+            "static": 3
+          },
+          {
+            "animated": 8,
+            "static": 1
+          },
+          {
+            "animated": 7,
+            "static": 2
+          }
+        ]
+      }
+    ],
+    "staticCandidate": [
+      {
+        "run": "s1",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.16",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "ebbd1d16979c85d3",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 57016704,
+          "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "static-first-frame",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 25.78073296162894,
+          "rssMedianMiB": 551.6015625,
+          "rssPeakMiB": 592.1953125,
+          "heapPeakMiB": 197.26237773895264,
+          "actualRate": 19.916569812387667,
+          "eventLoopLagP95Ms": 0.058254999999917345,
+          "eventLoopLagMaxMs": 0.6930040000006557,
+          "nativeFramesPerSecond": 11.416611147686654,
+          "totalPresentsPerSecond": 11.416611147686654
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 137,
+          "animationOnlyPresents": 0,
+          "slotUploads": 0,
+          "liveSlots": 0,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 0,
+            "static": 10
+          },
+          {
+            "animated": 0,
+            "static": 9
+          },
+          {
+            "animated": 0,
+            "static": 9
+          },
+          {
+            "animated": 0,
+            "static": 9
+          }
+        ]
+      },
+      {
+        "run": "s2",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.16",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "ebbd1d16979c85d3",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 57016704,
+          "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "static-first-frame",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 25.420483586574043,
+          "rssMedianMiB": 549.28125,
+          "rssPeakMiB": 590.9453125,
+          "heapPeakMiB": 193.39761066436768,
+          "actualRate": 19.916529755461998,
+          "eventLoopLagP95Ms": 0.05807500000082655,
+          "eventLoopLagMaxMs": 0.5011579999991227,
+          "nativeFramesPerSecond": 10.583260581354283,
+          "totalPresentsPerSecond": 10.583260581354283
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 127,
+          "animationOnlyPresents": 0,
+          "slotUploads": 0,
+          "liveSlots": 0,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 0,
+            "static": 10
+          },
+          {
+            "animated": 0,
+            "static": 9
+          },
+          {
+            "animated": 0,
+            "static": 9
+          },
+          {
+            "animated": 0,
+            "static": 9
+          }
+        ]
+      },
+      {
+        "run": "s3",
+        "scriptSha256": "18d83b827298c153e64a8fd91937c2838b5aabf6d0c1b059c9a20751540cf846",
+        "nativeManifest": {
+          "apiVersion": 3,
+          "version": "0.11.0-twirchat.16",
+          "upstreamSHA": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
+          "gpuiSHA": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
+          "patchDigest": "ebbd1d16979c85d3",
+          "rustToolchain": "1.97.1",
+          "target": "linux-x64",
+          "size": 57016704,
+          "sha256": "b135cf63238849a098281367651b00a5f552be78d511de2f2262e08d5c9e54eb"
+        },
+        "config": {
+          "case": "live",
+          "source": "synthetic",
+          "preset": "standard",
+          "media": "static-first-frame",
+          "inactiveChannels": 19,
+          "activation": "focused",
+          "pointerMotion": "none",
+          "pointerSweepSeconds": 2,
+          "durationSeconds": 12,
+          "warmupSeconds": 3,
+          "delayMs": 100,
+          "rate": 20,
+          "backgroundAnimation": false,
+          "sampleGpuDuringMeasurement": true
+        },
+        "compositor": "weston",
+        "reactMode": "production",
+        "nativeWindow": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 1300,
+          "mode": "windowed"
+        },
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "metrics": {
+          "cpuPercent": 37.45536722758383,
+          "rssMedianMiB": 552.65625,
+          "rssPeakMiB": 594.8046875,
+          "heapPeakMiB": 193.45723915100098,
+          "actualRate": 19.91651630526711,
+          "eventLoopLagP95Ms": 0.05961300000126357,
+          "eventLoopLagMaxMs": 0.6576829999994516,
+          "nativeFramesPerSecond": 15.999879207578598,
+          "totalPresentsPerSecond": 15.999879207578598
+        },
+        "nativeRenderCounterDeltas": {
+          "fullDraws": 192,
+          "animationOnlyPresents": 0,
+          "slotUploads": 0,
+          "liveSlots": 0,
+          "fallbacks": 0
+        },
+        "retainedMessages": 4600,
+        "processedByChannel": {
+          "emote-0": 60,
+          "emote-1": 12,
+          "emote-2": 24,
+          "emote-3": 143
+        },
+        "viewports": [
+          {
+            "x": 0,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 44,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 0,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          },
+          {
+            "x": 640,
+            "y": 694,
+            "width": 640,
+            "height": 555
+          }
+        ],
+        "paintedEmotesPerPane": [
+          {
+            "animated": 0,
+            "static": 10
+          },
+          {
+            "animated": 0,
+            "static": 9
+          },
+          {
+            "animated": 0,
+            "static": 9
+          },
+          {
+            "animated": 0,
+            "static": 9
+          }
+        ]
+      }
+    ],
+    "targetBaseline": [
+      {
+        "run": "twirchat-benchmark-28IOHt",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourceHash": "a895beef56deccf3b3ad72715c4b8483e9e9cac726bb96ba26d32902b9d280a8",
+          "sourceFiles": 388
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 30
+        },
+        "reactMode": "production",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 83.46795672670532,
+          "rssMedianMiB": 499.25,
+          "rssPeakMiB": 580.1953125,
+          "heapPeakMiB": 230.2604455947876,
+          "actualRate": 4996.5939269221835,
+          "eventLoopLagP95Ms": 2.1030750000027183,
+          "eventLoopLagMaxMs": 9.453317000001334
+        },
+        "termination": "completed",
+        "processedMessages": 149909,
+        "generatedMessages": 149909,
+        "userTimingMeasureCount": 0
+      },
+      {
+        "run": "b1",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "a518817bc9a740a7165a8eab0abf7c55a2f780c06d7a75ac47cb7785c5d35cfe",
+          "sourceHash": "a895beef56deccf3b3ad72715c4b8483e9e9cac726bb96ba26d32902b9d280a8",
+          "sourceFiles": 388
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 30
+        },
+        "reactMode": "production",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 90.11991779523764,
+          "rssMedianMiB": 493.80859375,
+          "rssPeakMiB": 599.62890625,
+          "heapPeakMiB": 224.34699058532715,
+          "actualRate": 4994.680295153788,
+          "eventLoopLagP95Ms": 2.360859000000346,
+          "eventLoopLagMaxMs": 9.72675999999774
+        },
+        "termination": "completed",
+        "processedMessages": 149841,
+        "generatedMessages": 149941,
+        "userTimingMeasureCount": 0
+      },
+      {
+        "run": "b2",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "99f64932c435dab2f9bc92b4f59ca6f996969df8ec4960f5200f9333593d6d80",
+          "sourceHash": "a895beef56deccf3b3ad72715c4b8483e9e9cac726bb96ba26d32902b9d280a8",
+          "sourceFiles": 388
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 30
+        },
+        "reactMode": "production",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 92.07427592356632,
+          "rssMedianMiB": 496.640625,
+          "rssPeakMiB": 603.9453125,
+          "heapPeakMiB": 240.22991561889648,
+          "actualRate": 4995.944198906414,
+          "eventLoopLagP95Ms": 2.3282989999988786,
+          "eventLoopLagMaxMs": 11.414521000000605
+        },
+        "termination": "completed",
+        "processedMessages": 149879,
+        "generatedMessages": 149987,
+        "userTimingMeasureCount": 0
+      }
+    ],
+    "targetCandidate": [
+      {
+        "run": "p1",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 30
+        },
+        "reactMode": "production",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 89.96967518513561,
+          "rssMedianMiB": 497.80078125,
+          "rssPeakMiB": 587.6796875,
+          "heapPeakMiB": 215.36381912231445,
+          "actualRate": 4993.980490182885,
+          "eventLoopLagP95Ms": 2.0542119999990973,
+          "eventLoopLagMaxMs": 11.82626800000071
+        },
+        "termination": "completed",
+        "processedMessages": 149820,
+        "generatedMessages": 149920,
+        "userTimingMeasureCount": 0
+      },
+      {
+        "run": "p2",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 30
+        },
+        "reactMode": "production",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 88.48967633308841,
+          "rssMedianMiB": 487.421875,
+          "rssPeakMiB": 597.625,
+          "heapPeakMiB": 208.9413480758667,
+          "actualRate": 4996.980216788756,
+          "eventLoopLagP95Ms": 2.2027949999974226,
+          "eventLoopLagMaxMs": 5.307117000000289
+        },
+        "termination": "completed",
+        "processedMessages": 149910,
+        "generatedMessages": 149910,
+        "userTimingMeasureCount": 0
+      },
+      {
+        "run": "p3",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 30
+        },
+        "reactMode": "production",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 86.40830336231323,
+          "rssMedianMiB": 500.19140625,
+          "rssPeakMiB": 589.53125,
+          "heapPeakMiB": 218.95782566070557,
+          "actualRate": 4994.477844662764,
+          "eventLoopLagP95Ms": 2.164128000000346,
+          "eventLoopLagMaxMs": 8.759210000000166
+        },
+        "termination": "completed",
+        "processedMessages": 149835,
+        "generatedMessages": 149935,
+        "userTimingMeasureCount": 0
+      }
+    ],
+    "defaultMatrix": [
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 0,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 1.1791872539684407,
+          "rssMedianMiB": 281.35546875,
+          "rssPeakMiB": 281.8671875,
+          "heapPeakMiB": 62.64307498931885,
+          "actualRate": 0,
+          "eventLoopLagP95Ms": 0.06677499999932479,
+          "eventLoopLagMaxMs": 1.3508320000000822
+        },
+        "termination": "completed",
+        "processedMessages": 0,
+        "generatedMessages": 0,
+        "userTimingMeasureCount": 511
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 100,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 45.382908558041244,
+          "rssMedianMiB": 479.984375,
+          "rssPeakMiB": 582.25390625,
+          "heapPeakMiB": 164.10732173919678,
+          "actualRate": 99.66560570968295,
+          "eventLoopLagP95Ms": 1.1292630000007193,
+          "eventLoopLagMaxMs": 3.3689269999995304
+        },
+        "termination": "completed",
+        "processedMessages": 1196,
+        "generatedMessages": 1198,
+        "userTimingMeasureCount": 55274
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 63.173152660377156,
+          "rssMedianMiB": 496.8125,
+          "rssPeakMiB": 598.7109375,
+          "heapPeakMiB": 136.81945896148682,
+          "actualRate": 997.1596056133061,
+          "eventLoopLagP95Ms": 4.163997999999992,
+          "eventLoopLagMaxMs": 6.275159000000713
+        },
+        "termination": "completed",
+        "processedMessages": 11966,
+        "generatedMessages": 11989,
+        "userTimingMeasureCount": 66633
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 5000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 111.57854892846018,
+          "rssMedianMiB": 595.12109375,
+          "rssPeakMiB": 685.38671875,
+          "heapPeakMiB": 211.6369752883911,
+          "actualRate": 4953.182932628054,
+          "eventLoopLagP95Ms": 25.655063000000155,
+          "eventLoopLagMaxMs": 35.204460999999355
+        },
+        "termination": "completed",
+        "processedMessages": 59551,
+        "generatedMessages": 59794,
+        "userTimingMeasureCount": 39590
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 10,
+          "rate": 0,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 1.033937906545276,
+          "rssMedianMiB": 279.66796875,
+          "rssPeakMiB": 280.20703125,
+          "heapPeakMiB": 63.37890148162842,
+          "actualRate": 0,
+          "eventLoopLagP95Ms": 0.05780899999990652,
+          "eventLoopLagMaxMs": 0.44329400000015085
+        },
+        "termination": "completed",
+        "processedMessages": 0,
+        "generatedMessages": 0,
+        "userTimingMeasureCount": 511
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 10,
+          "rate": 100,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 17.512257698105437,
+          "rssMedianMiB": 340.90625,
+          "rssPeakMiB": 365.80078125,
+          "heapPeakMiB": 91.82193756103516,
+          "actualRate": 99.74904705579138,
+          "eventLoopLagP95Ms": 0.5743540000003122,
+          "eventLoopLagMaxMs": 3.0504070000006323
+        },
+        "termination": "completed",
+        "processedMessages": 1197,
+        "generatedMessages": 1199,
+        "userTimingMeasureCount": 10965
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 10,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 45.18078384874253,
+          "rssMedianMiB": 478.53125,
+          "rssPeakMiB": 567.2890625,
+          "heapPeakMiB": 171.84045886993408,
+          "actualRate": 997.8267191557732,
+          "eventLoopLagP95Ms": 0.9436949999999342,
+          "eventLoopLagMaxMs": 3.7903740000001562
+        },
+        "termination": "completed",
+        "processedMessages": 11974,
+        "generatedMessages": 11994,
+        "userTimingMeasureCount": 56526
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 10,
+          "rate": 5000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 56.55487707749924,
+          "rssMedianMiB": 482.66796875,
+          "rssPeakMiB": 606.8046875,
+          "heapPeakMiB": 135.4900302886963,
+          "actualRate": 4991.118311048763,
+          "eventLoopLagP95Ms": 2.090923000001567,
+          "eventLoopLagMaxMs": 3.4122480000005453
+        },
+        "termination": "completed",
+        "processedMessages": 59894,
+        "generatedMessages": 59998,
+        "userTimingMeasureCount": 66144
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 0,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 1.0794699613991865,
+          "rssMedianMiB": 292.87890625,
+          "rssPeakMiB": 293.64453125,
+          "heapPeakMiB": 69.66363620758057,
+          "actualRate": 0,
+          "eventLoopLagP95Ms": 0.056829000000107044,
+          "eventLoopLagMaxMs": 0.499250999999731
+        },
+        "termination": "completed",
+        "processedMessages": 0,
+        "generatedMessages": 0,
+        "userTimingMeasureCount": 511
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 100,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 6.7106972098320945,
+          "rssMedianMiB": 304.17578125,
+          "rssPeakMiB": 311.3046875,
+          "heapPeakMiB": 76.81472301483154,
+          "actualRate": 99.7489675815607,
+          "eventLoopLagP95Ms": 0.5221009999986563,
+          "eventLoopLagMaxMs": 4.4936509999997725
+        },
+        "termination": "completed",
+        "processedMessages": 1197,
+        "generatedMessages": 1199,
+        "userTimingMeasureCount": 2718
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 28.914544184514934,
+          "rssMedianMiB": 414.5625,
+          "rssPeakMiB": 477.63671875,
+          "heapPeakMiB": 137.3617925643921,
+          "actualRate": 998.407545714533,
+          "eventLoopLagP95Ms": 0.055873000000246975,
+          "eventLoopLagMaxMs": 0.3696060000002035
+        },
+        "termination": "completed",
+        "processedMessages": 11981,
+        "generatedMessages": 11981,
+        "userTimingMeasureCount": 20482
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 47.37011553102199,
+          "rssMedianMiB": 481.41015625,
+          "rssPeakMiB": 537.27734375,
+          "heapPeakMiB": 172.22548294067383,
+          "actualRate": 4986.276196840962,
+          "eventLoopLagP95Ms": 0.7858780000005936,
+          "eventLoopLagMaxMs": 5.214408000000731
+        },
+        "termination": "completed",
+        "processedMessages": 59836,
+        "generatedMessages": 59937,
+        "userTimingMeasureCount": 56374
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 1000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 71.86312937262947,
+          "rssMedianMiB": 647.78125,
+          "rssPeakMiB": 793.59765625,
+          "heapPeakMiB": 189.24246978759766,
+          "actualRate": 997.6818022133073,
+          "eventLoopLagP95Ms": 0.44308899999850837,
+          "eventLoopLagMaxMs": 11.960985999998229
+        },
+        "termination": "completed",
+        "processedMessages": 11973,
+        "generatedMessages": 12000,
+        "userTimingMeasureCount": 56994
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 50,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 115.84165194854825,
+          "rssMedianMiB": 857.65625,
+          "rssPeakMiB": 1026.484375,
+          "heapPeakMiB": 239.4059066772461,
+          "actualRate": 4987.831343026253,
+          "eventLoopLagP95Ms": 11.409459999999854,
+          "eventLoopLagMaxMs": 17.15092199999981
+        },
+        "termination": "completed",
+        "processedMessages": 59875,
+        "generatedMessages": 60019,
+        "userTimingMeasureCount": 144104
+      },
+      {
+        "run": "matrix",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 100,
+          "rate": 5000,
+          "panes": 4,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 104.44079177032125,
+          "rssMedianMiB": 908.12890625,
+          "rssPeakMiB": 1018.703125,
+          "heapPeakMiB": 237.72280502319336,
+          "actualRate": 4985.3120010977655,
+          "eventLoopLagP95Ms": 6.476063000000067,
+          "eventLoopLagMaxMs": 13.998298000000432
+        },
+        "termination": "completed",
+        "processedMessages": 59871,
+        "generatedMessages": 60045,
+        "userTimingMeasureCount": 114172
+      }
+    ],
+    "singlePaneBaseline": [
+      {
+        "run": "b1",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "96372e06bfdb4cef6b4b605cb0ac3215f2ae40a8b6ee508ccfa833ed5a9af0ef",
+          "sourceHash": "f9c40deeb905cf62b067f96b475b25c1690e57dc9cffa45fed493f70ed49aa2f",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 64.65046424167676,
+          "rssMedianMiB": 496.10546875,
+          "rssPeakMiB": 585.2890625,
+          "heapPeakMiB": 148.58377170562744,
+          "actualRate": 996.9905813468954,
+          "eventLoopLagP95Ms": 3.642616999999518,
+          "eventLoopLagMaxMs": 7.267982999999731
+        },
+        "termination": "completed",
+        "processedMessages": 11964,
+        "generatedMessages": 11986,
+        "userTimingMeasureCount": 66789
+      },
+      {
+        "run": "b2",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "96372e06bfdb4cef6b4b605cb0ac3215f2ae40a8b6ee508ccfa833ed5a9af0ef",
+          "sourceHash": "f9c40deeb905cf62b067f96b475b25c1690e57dc9cffa45fed493f70ed49aa2f",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 60.34355484984476,
+          "rssMedianMiB": 499.78125,
+          "rssPeakMiB": 620.88671875,
+          "heapPeakMiB": 131.6237030029297,
+          "actualRate": 997.3237724889883,
+          "eventLoopLagP95Ms": 3.5967119999986608,
+          "eventLoopLagMaxMs": 10.748301999999967
+        },
+        "termination": "completed",
+        "processedMessages": 11968,
+        "generatedMessages": 11994,
+        "userTimingMeasureCount": 65655
+      }
+    ],
+    "singlePaneUnscoped": [
+      {
+        "run": "f1",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "96372e06bfdb4cef6b4b605cb0ac3215f2ae40a8b6ee508ccfa833ed5a9af0ef",
+          "sourceHash": "5bafeea47b0a38fc4e47f1cf1b67afe2e733d579dc45fe4c29ee2ea599e67058",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 67.9918177547777,
+          "rssMedianMiB": 491.98046875,
+          "rssPeakMiB": 573.44921875,
+          "heapPeakMiB": 154.44553661346436,
+          "actualRate": 997.8229540621171,
+          "eventLoopLagP95Ms": 4.380525000000489,
+          "eventLoopLagMaxMs": 26.81105799999932
+        },
+        "termination": "completed",
+        "processedMessages": 11974,
+        "generatedMessages": 11996,
+        "userTimingMeasureCount": 66241
+      },
+      {
+        "run": "f2",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "96372e06bfdb4cef6b4b605cb0ac3215f2ae40a8b6ee508ccfa833ed5a9af0ef",
+          "sourceHash": "5bafeea47b0a38fc4e47f1cf1b67afe2e733d579dc45fe4c29ee2ea599e67058",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 65.38873835953228,
+          "rssMedianMiB": 499.0859375,
+          "rssPeakMiB": 597.03125,
+          "heapPeakMiB": 142.7168893814087,
+          "actualRate": 996.9101367391191,
+          "eventLoopLagP95Ms": 4.128407000000152,
+          "eventLoopLagMaxMs": 9.574642999999924
+        },
+        "termination": "completed",
+        "processedMessages": 11963,
+        "generatedMessages": 11987,
+        "userTimingMeasureCount": 66341
+      }
+    ],
+    "singlePaneCandidate": [
+      {
+        "run": "f1",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 63.35735476109061,
+          "rssMedianMiB": 489.94921875,
+          "rssPeakMiB": 614.41796875,
+          "heapPeakMiB": 138.25856685638428,
+          "actualRate": 997.8240900730268,
+          "eventLoopLagP95Ms": 3.923934999999801,
+          "eventLoopLagMaxMs": 6.342661999999109
+        },
+        "termination": "completed",
+        "processedMessages": 11974,
+        "generatedMessages": 11996,
+        "userTimingMeasureCount": 65978
+      },
+      {
+        "run": "f2",
+        "provenance": {
+          "gitHead": "b190ee533ab897cfd4fab5584053e280ad00d0b0",
+          "dirtyHash": "bb754dd623e08894abbb664638c5ef4a6a80f4808fa328846ac2e9e4ea1da981",
+          "sourceHash": "016f34a50925a5aadc2845ad82b823c54aa72f876cc01359b6b9cfde58a82bd3",
+          "sourceFiles": 389
+        },
+        "config": {
+          "channels": 1,
+          "rate": 1000,
+          "panes": 1,
+          "warmupSeconds": 3,
+          "durationSeconds": 12
+        },
+        "reactMode": "development",
+        "compositor": "weston",
+        "metrics": {
+          "cpuPercent": 64.92021342134322,
+          "rssMedianMiB": 504.73828125,
+          "rssPeakMiB": 586.109375,
+          "heapPeakMiB": 181.37584400177002,
+          "actualRate": 997.990086049651,
+          "eventLoopLagP95Ms": 3.7936460000000807,
+          "eventLoopLagMaxMs": 7.448598999999376
+        },
+        "termination": "completed",
+        "processedMessages": 11976,
+        "generatedMessages": 11998,
+        "userTimingMeasureCount": 66648
+      }
+    ]
+  }
+}

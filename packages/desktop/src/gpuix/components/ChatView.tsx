@@ -106,6 +106,7 @@ import { UserCardDialog } from './UserCardDialog'
 const EMPTY_MESSAGES: NormalizedChatMessage[] = []
 const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
 const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
+const cacheChatRows = { cacheChatRows: true }
 
 interface PausedChat {
   messages: NormalizedChatMessage[]
@@ -1749,6 +1750,9 @@ export function ChatView({
       >
         {displayedTimeline.length > 0 ? (
           <virtual-list
+            {...(process.platform === 'linux' &&
+              settings?.chatTheme === 'compact' &&
+              cacheChatRows)}
             ref={listRef}
             alignment="bottom"
             followTail={!paused}
