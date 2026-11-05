@@ -5,7 +5,17 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
-Native version `0.11.0-twirchat.15` keeps GIF/WebP images animating in visible,
+Native version `0.11.0-twirchat.16` lets a text editor opt in to native clipboard
+images and copied file lists. The same paste action handles the OS shortcut and
+the configurable Paste action. Upload results use the editor's native selection
+and undo history. X11 and Wayland read local file URLs only for opted-in editors.
+
+To test clipboard images on the private X11 display, install `xclip` and run
+`bun run qa:composer --xclip=/usr/bin/xclip` from `packages/desktop`. The probe
+uses a local upload server and checks normal text paste, image preview, retry,
+cancellation, caret insertion, undo, and copied image files.
+
+The image patches keep GIF/WebP images animating in visible,
 unfocused windows. [GPUIX issue #67](https://github.com/remorses/gpuix/issues/67)
 remains open, and the pinned GPUI source still stops both image frame advancement
 and scheduling on focus loss. The background-image patches add an opt-in GPUI

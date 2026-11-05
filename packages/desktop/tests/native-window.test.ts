@@ -39,6 +39,10 @@ function controls(): NativeWindowControls {
     async runTextInputAction() {
       return true
     },
+    setImagePasteHandler() {},
+    async insertTextInEditor() {
+      return true
+    },
   }
 }
 

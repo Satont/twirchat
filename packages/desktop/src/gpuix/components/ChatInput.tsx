@@ -82,6 +82,7 @@ import { useWindowScope } from '../state/window-scope'
 import { accent, platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { AutocompletePopup } from './AutocompletePopup'
+import { ComposerImageUpload } from './ComposerImageUpload'
 import { EmotePicker } from './EmotePicker'
 import { ActionButton } from './ui/Form'
 import { Icon, PlatformIcon } from './ui/Icon'
@@ -1050,6 +1051,7 @@ export function ChatInput(props: ChatInputProps) {
         backgroundColor: theme.surface,
       }}
     >
+      <ComposerImageUpload key={composerKey} editor={textareaRef} />
       {historySearch ? (
         <div
           testId="composer-history-search"

@@ -11,6 +11,11 @@ export interface NativeWindowBounds {
 }
 export type NativePaintedElementBounds = Pick<NativeWindowBounds, 'x' | 'y' | 'width' | 'height'>
 
+export type NativeImagePaste =
+  | { mimeType: string; bytes: Uint8Array<ArrayBuffer> }
+  | { paths: string[] }
+  | { error: string }
+
 export type NativeTextAction =
   | 'undo'
   | 'redo'
@@ -39,6 +44,11 @@ export interface NativeWindowControls {
   setWindowBounds(bounds: Partial<NativeWindowBounds>): Promise<void>
   setClickThrough(enabled: boolean): Promise<void>
   runTextInputAction(action: NativeTextAction): Promise<boolean>
+  setImagePasteHandler(
+    elementId: number,
+    callback: ((paste: NativeImagePaste) => void) | null,
+  ): void
+  insertTextInEditor(elementId: number, text: string): Promise<boolean>
 }
 export type NativeWindowOptions = WindowOptions & {
   x?: number
@@ -61,6 +71,8 @@ const nativeControlMethods: (keyof NativeWindowControls)[] = [
   'setWindowBounds',
   'setClickThrough',
   'runTextInputAction',
+  'setImagePasteHandler',
+  'insertTextInEditor',
 ]
 
 export function hasNativeControls(renderer: object): renderer is NativeWindowControls {
