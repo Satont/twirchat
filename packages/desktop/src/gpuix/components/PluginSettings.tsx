@@ -23,6 +23,7 @@ export function PluginSettings() {
   const [path, setPath] = useState('')
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState<{ id: string; text: string } | null>(null)
   const busy = useRef(false)
   useEffect(() => {
     const unsubscribe = events.on('plugins_changed', setList)
@@ -37,6 +38,7 @@ export function PluginSettings() {
     if (busy.current) return
     busy.current = true
     setError('')
+    setNotice(null)
     setPending(key)
     void action()
       .catch((cause) =>
@@ -55,7 +57,8 @@ export function PluginSettings() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
       <Text style={{ fontSize: 12, color: theme.text2 }}>
         New plugins start disabled. Enable plugins from sources you trust. Enabled plugins can read
-        chat, use your connected accounts to send messages, and access files as your user.
+        chat, use your connected accounts to send messages, and access files as your user. Plugins
+        installed from a URL update automatically.
       </Text>
       {list.length === 0 ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>No plugins installed.</Text>
@@ -84,7 +87,27 @@ export function PluginSettings() {
                 ? `${plugin.version} · ${STATUS_LABELS[plugin.status]}`
                 : STATUS_LABELS[plugin.status]}
             </Text>
+            {plugin.sourceUrl ? (
+              <Text
+                testId={`plugin-source-${plugin.id}`}
+                style={{
+                  fontSize: 12,
+                  color: theme.text2,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {sanitizeDisplayText(plugin.sourceUrl.split(/[?#]/u, 1)[0] ?? '')}
+              </Text>
+            ) : null}
             <FormError>{plugin.error && sanitizeDisplayText(plugin.error)}</FormError>
+            <FormError>
+              {plugin.updateError && `Update failed. ${sanitizeDisplayText(plugin.updateError)}`}
+            </FormError>
+            {notice?.id === plugin.id ? (
+              <Text style={{ fontSize: 12, color: theme.text2 }}>{notice.text}</Text>
+            ) : null}
             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {plugin.enabled && plugin.status === 'error' ? (
                 <ActionButton
@@ -105,6 +128,25 @@ export function PluginSettings() {
                   {plugin.enabled ? 'Disable' : 'Enable'}
                 </ActionButton>
               ) : null}
+              {plugin.sourceUrl ? (
+                <ActionButton
+                  testId={`plugin-check-update-${plugin.id}`}
+                  disabled={pending !== null}
+                  onClick={() =>
+                    run(`check:${plugin.id}`, async () => {
+                      const updated = await plugins.checkForUpdate(plugin.id).catch(() => null)
+                      if (updated === null) return
+                      const name = sanitizeDisplayText(plugin.name)
+                      setNotice({
+                        id: plugin.id,
+                        text: updated ? `Updated ${name}.` : `No newer version of ${name}.`,
+                      })
+                    })
+                  }
+                >
+                  {pending === `check:${plugin.id}` ? 'Checking…' : 'Check for update'}
+                </ActionButton>
+              ) : null}
               <ActionButton
                 testId={`plugin-remove-${plugin.id}`}
                 danger
@@ -117,12 +159,15 @@ export function PluginSettings() {
           </div>
         ))
       )}
-      <FormField label="Install a local plugin" hint="Enter the full path to its manifest.json.">
+      <FormField
+        label="Install a plugin"
+        hint="Enter a local manifest path or an HTTPS URL. GitHub file links also work."
+      >
         <FormInput
           testId="plugin-manifest-path"
           value={path}
           onChange={setPath}
-          placeholder="/path/to/plugin/manifest.json"
+          placeholder="https://example.com/plugin/manifest.json"
         />
       </FormField>
       <FormError>{error}</FormError>

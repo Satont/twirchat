@@ -5,11 +5,16 @@ import { join } from 'node:path'
 
 import type { PluginChannel, PluginEventMap, PluginTransportStatus } from '../src/plugins/api'
 import { createPluginManager, type PluginManager } from '../src/plugins/manager'
+import type { PluginFetch } from '../src/plugins/remote-packages'
 
 const channel: PluginChannel = { platform: 'twitch', id: 'example', name: 'Example' }
 const input = { text: '/plugin-test message', args: ['message'], channel }
 
 type Listeners = { [Event in keyof PluginEventMap]: Set<(event: PluginEventMap[Event]) => void> }
+type RemoteOptions = Pick<
+  Parameters<typeof createPluginManager>[0],
+  'remoteFetch' | 'remoteUpdateIntervalMs'
+>
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'twirchat-plugin-test-'))
@@ -24,8 +29,9 @@ async function fixture() {
     chatCleared: new Set(),
   }
   const managers: PluginManager[] = []
-  function createManager() {
+  function createManager(remoteOptions?: RemoteOptions) {
     const manager = createPluginManager({
+      ...remoteOptions,
       directory: installed,
       appVersion: '1.2.3',
       host: {
@@ -112,6 +118,194 @@ async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<voi
     await Bun.sleep(5)
   }
 }
+
+const remoteManifestUrl = 'https://plugins.example.com/chat/manifest.json'
+const remoteEntryUrl = 'https://plugins.example.com/chat/index.ts'
+
+function remoteEntry(version: string): string {
+  return `
+    export default (api) => {
+      api.registerCommand('plugin-test', ({channel}) => api.sendMessage(channel, ${JSON.stringify(version)}))
+      api.registerTransport('chat', {
+        name: 'Remote Chat',
+        connect(channel, {emitMessage}) {
+          emitMessage({id: channel, author: {id: 'source', name: 'Source'}, text: ${JSON.stringify(version)}})
+        },
+      })
+    }
+  `
+}
+
+function remoteFixture() {
+  const manifest = {
+    id: 'remote-chat',
+    name: 'Remote Chat',
+    version: '1.0.0',
+    apiVersion: 1,
+    entry: 'index.ts',
+  }
+  const requests: string[] = []
+  const remote = {
+    manifest,
+    requests,
+    source: remoteEntry(manifest.version),
+    update(version: string) {
+      manifest.version = version
+      remote.source = remoteEntry(version)
+    },
+  }
+  const fetcher: PluginFetch = async (url, { signal }) => {
+    signal?.throwIfAborted()
+    requests.push(url.href)
+    if (url.href === remoteManifestUrl) return Response.json(manifest)
+    if (url.href === remoteEntryUrl) return new Response(remote.source)
+    return new Response(null, { status: 404 })
+  }
+  return Object.assign(remote, { fetcher })
+}
+
+test('remote plugins install disabled, update enabled commands and transports, and retain their source after restart', async () => {
+  const testData = await fixture()
+  const remote = remoteFixture()
+  try {
+    const manager = testData.createManager({ remoteFetch: remote.fetcher })
+    await manager.initialize()
+    await manager.install(remoteManifestUrl)
+    expect(manager.list()[0]).toMatchObject({
+      id: remote.manifest.id,
+      version: '1.0.0',
+      sourceUrl: remoteManifestUrl,
+      enabled: false,
+      status: 'disabled',
+    })
+    expect(manager.commandNames()).toEqual([])
+    await manager.setEnabled(remote.manifest.id, true)
+    await manager.runCommand('plugin-test', input)
+    expect(testData.messages).toEqual(['1.0.0'])
+
+    remote.requests.length = 0
+    remote.update('2.0.0')
+    const updates = await Promise.all([
+      manager.checkForUpdate(remote.manifest.id),
+      manager.checkForUpdate(remote.manifest.id),
+    ])
+    expect(updates).toEqual([true, true])
+    expect(remote.requests.filter((url) => url === remoteEntryUrl)).toHaveLength(1)
+    expect(manager.list()[0]).toMatchObject({ version: '2.0.0', enabled: true, status: 'running' })
+    await manager.runCommand('plugin-test', input)
+    expect(testData.messages).toEqual(['1.0.0', '2.0.0'])
+    const received: string[] = []
+    const connection = await manager.openTransport('plugin:remote-chat:chat', 'room', {
+      message: (message) => received.push(message.text),
+      status() {},
+    })
+    await waitFor(() => received.length > 0)
+    expect(received).toEqual(['2.0.0'])
+    await connection.close()
+    await manager.dispose()
+
+    remote.requests.length = 0
+    const restarted = testData.createManager({ remoteFetch: remote.fetcher })
+    await restarted.initialize()
+    expect(restarted.list()[0]).toMatchObject({
+      sourceUrl: remoteManifestUrl,
+      version: '2.0.0',
+      enabled: true,
+      status: 'running',
+    })
+    await waitFor(() => remote.requests.length > 0)
+    expect(remote.requests).toEqual([remoteManifestUrl])
+  } finally {
+    await testData.dispose()
+  }
+})
+
+test('a failed remote activation restores the current package and incompatible or older versions are not downloaded', async () => {
+  const testData = await fixture()
+  const remote = remoteFixture()
+  try {
+    const manager = testData.createManager({ remoteFetch: remote.fetcher })
+    const id = remote.manifest.id
+    await manager.install(remoteManifestUrl)
+    await manager.setEnabled(id, true)
+    remote.manifest.version = '2.0.0'
+    remote.source = "export default () => { throw new Error('candidate activation failed') }"
+    await expect(manager.checkForUpdate(id)).rejects.toThrow('candidate activation failed')
+    expect(manager.list()[0]).toMatchObject({
+      version: '1.0.0',
+      enabled: true,
+      status: 'running',
+      updateError: 'candidate activation failed',
+    })
+    await manager.runCommand('plugin-test', input)
+    expect(testData.messages).toEqual(['1.0.0'])
+
+    remote.requests.length = 0
+    remote.manifest.version = '0.9.0'
+    expect(await manager.checkForUpdate(id)).toBe(false)
+    expect(manager.list()[0]?.updateError).toBeUndefined()
+    expect(remote.requests).toEqual([remoteManifestUrl])
+
+    remote.requests.length = 0
+    remote.manifest.version = '2.0.0'
+    remote.manifest.apiVersion = 999
+    await expect(manager.checkForUpdate(id)).rejects.toThrow('incompatible')
+    expect(remote.requests).toEqual([remoteManifestUrl])
+    expect(manager.list()[0]).toMatchObject({ version: '1.0.0', status: 'running' })
+
+    remote.requests.length = 0
+    remote.manifest.apiVersion = 1
+    remote.manifest.id = 'other-plugin'
+    await expect(manager.checkForUpdate(id)).rejects.toThrow('different plugin')
+    expect(remote.requests).toEqual([remoteManifestUrl])
+    await manager.dispose()
+
+    remote.manifest.version = '1.0.0'
+    remote.manifest.id = id
+    const restarted = testData.createManager({ remoteFetch: remote.fetcher })
+    await restarted.initialize()
+    await restarted.runCommand('plugin-test', input)
+    expect(testData.messages).toEqual(['1.0.0', '1.0.0'])
+  } finally {
+    await testData.dispose()
+  }
+})
+
+test('the automatic updater checks periodically and aborts an in-flight request on shutdown', async () => {
+  const testData = await fixture()
+  const remote = remoteFixture()
+  let blockRequests = false
+  let inFlight: AbortSignal | undefined
+  const fetcher: PluginFetch = async (url, init) => {
+    if (!blockRequests) return remote.fetcher(url, init)
+    const { signal } = init
+    if (!signal) throw new Error('Remote requests must be cancellable.')
+    signal.throwIfAborted()
+    inFlight = signal
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('request aborted')), { once: true })
+    })
+  }
+  try {
+    const manager = testData.createManager({ remoteFetch: fetcher, remoteUpdateIntervalMs: 25 })
+    await manager.initialize()
+    await manager.install(remoteManifestUrl)
+    remote.update('2.0.0')
+    await waitFor(() => manager.list()[0]?.version === '2.0.0')
+    expect(manager.list()[0]).toMatchObject({ enabled: false, status: 'disabled' })
+
+    blockRequests = true
+    await waitFor(() => inFlight !== undefined)
+    const check = manager.checkForUpdate(remote.manifest.id).catch((error: unknown) => error)
+    await manager.setEnabled(remote.manifest.id, true)
+    expect(manager.list()[0]?.status).toBe('running')
+    await manager.dispose()
+    expect(await check).toMatchObject({ message: 'request aborted' })
+    expect(inFlight?.aborted).toBe(true)
+  } finally {
+    await testData.dispose()
+  }
+})
 
 test('plugins stay disabled after install, run commands and events, and restore saved enablement', async () => {
   const testData = await fixture()

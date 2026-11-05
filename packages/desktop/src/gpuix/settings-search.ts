@@ -55,8 +55,8 @@ export const SETTINGS_CATEGORIES = defineSettingsCategories([
   {
     id: 'plugins',
     label: 'Plugins',
-    description: 'Local extensions and channel transports',
-    aliases: 'plugins extensions transports плагины расширения транспорты',
+    description: 'Local and remote extensions and channel transports',
+    aliases: 'plugins extensions transports manifest github url плагины расширения транспорты',
   },
   {
     id: 'overlay',
