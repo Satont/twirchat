@@ -64,10 +64,11 @@ test('keeps My channels scoped to the connected account channels', () => {
   ])
 })
 
-test('historical snapshots preserve pending live messages without publishing live events or activity', async () => {
+test('history replaces saved Twitch echoes while preserving queued live messages', async () => {
   const {
     accountsStore,
     homeMessagesStore,
+    watchedChannelsStore,
     watchedMessagesStore,
     chatActivityStore,
     wireBackendToStores,
@@ -77,12 +78,23 @@ test('historical snapshots preserve pending live messages without publishing liv
   const previous = {
     accounts: accountsStore.get(),
     home: homeMessagesStore.get(),
+    channels: watchedChannelsStore.get(),
     watched: watchedMessagesStore.get(),
     activity: chatActivityStore.get(),
   }
+  const echo = message('local:twitch:mystreamer:echo', 'twitch', 'MyStreamer')
   accountsStore.set(accounts)
-  homeMessagesStore.set([])
-  watchedMessagesStore.set(new Map())
+  homeMessagesStore.set([echo])
+  watchedChannelsStore.set([
+    {
+      id: 'watched',
+      platform: 'twitch',
+      channelSlug: 'mystreamer',
+      displayName: 'MyStreamer',
+      createdAt: 0,
+    },
+  ])
+  watchedMessagesStore.set(new Map([['watched', [echo]]]))
   chatActivityStore.set(new Map())
   const stop = wireBackendToStores({
     events,
@@ -98,16 +110,24 @@ test('historical snapshots preserve pending live messages without publishing liv
   })
   try {
     const live = message('same-id', 'twitch', 'MyStreamer')
-    const historical = { ...live, text: 'stale historical copy' }
+    const historical = { ...live, text: 'stale historical copy', localTwitchEchoId: echo.id }
     const older = message('older-history', 'twitch', 'mystreamer')
     older.timestamp = new Date('2026-07-13T00:00:00Z')
     events.emit('chat_message', live)
+    events.emit('watched_channel_message', { channelId: 'watched', message: live })
     events.emit('chat_history_snapshot', {
       channelId: 'mystreamer',
       messages: [older, historical, older],
     })
+    events.emit('chat_history_snapshot', {
+      channelId: 'mystreamer',
+      watchedChannelId: 'watched',
+      messages: [older, historical],
+    })
     await Bun.sleep(30)
-    expect(homeMessagesStore.get()).toEqual([older, live])
+    const expected = [older, { ...live, localTwitchEchoId: echo.id }]
+    expect(homeMessagesStore.get()).toEqual(expected)
+    expect(watchedMessagesStore.get().get('watched')).toEqual(expected)
     expect(chatActivityStore.get().get('home')?.total).toBe(1)
     expect(liveEvents).toBe(1)
     events.emit('chat_history_snapshot', {
@@ -121,6 +141,7 @@ test('historical snapshots preserve pending live messages without publishing liv
     stop()
     accountsStore.set(previous.accounts)
     homeMessagesStore.set(previous.home)
+    watchedChannelsStore.set(previous.channels)
     watchedMessagesStore.set(previous.watched)
     chatActivityStore.set(previous.activity)
   }

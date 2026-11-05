@@ -80,6 +80,7 @@ export const emoteSchema = z.toZod<Emote>()(
 export const normalizedChatMessageSchema = z.toZod<NormalizedChatMessage>()(
   z.object({
     id: z.string(),
+    localTwitchEchoId: z.string().optional(),
     platform: platformSchema,
     channelId: z.string(),
     author: z.object({

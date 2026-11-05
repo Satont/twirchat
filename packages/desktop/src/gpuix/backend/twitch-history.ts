@@ -15,7 +15,12 @@ import type { UserChatHistoryPage } from '../../shared/rpc'
 import { getDb, openDatabase } from '../../store/db'
 import { MessageStore, type ChatHistoryQuery } from '../../store/message-store'
 import { mergeChatMessageSnapshot } from '../../views/main/utils/chat-message-buffer'
-import { getChatHistory, getChatLoggingSettings, exportChatHistory } from './chat-history'
+import {
+  exportChatHistory,
+  flushChatHistory,
+  getChatHistory,
+  getChatLoggingSettings,
+} from './chat-history'
 
 export interface TwitchHistoryRuntimeOptions {
   channels(): string[]
@@ -158,16 +163,16 @@ export function createTwitchHistoryRuntime(options: TwitchHistoryRuntimeOptions)
           }),
           persist ? options.warmChannel?.(channel).catch(() => {}) : undefined,
         ])
-        if (disposed) return
-        await getChatHistory({ platform: 'twitch', channelId: channel, limit: 1 })
+        if (!(await getChatLoggingSettings()).twitchHistoryEnabled || disposed) return
+        flushChatHistory()
         const resolved = MessageStore.resolveHistory(batch.messages)
-        if (disposed || !(await getChatLoggingSettings()).twitchHistoryEnabled) return
-        if (persist)
-          MessageStore.importHistory(resolved, {
-            maxMessages: settings.maxMessages,
-            maxAgeDays: settings.maxAgeDays,
-          })
-        const merged = mergeChatMessageSnapshot(remote, resolved, 0)
+        const messages = persist
+          ? MessageStore.importHistory(resolved, {
+              maxMessages: settings.maxMessages,
+              maxAgeDays: settings.maxAgeDays,
+            })
+          : resolved
+        const merged = mergeChatMessageSnapshot(remote, messages, 0)
         history.truncated ||= merged.length > 1000
         remote = merged.length > 1000 ? merged.slice(-1000) : merged
         history.partial ||= batch.partial
@@ -289,15 +294,15 @@ export function createTwitchHistoryRuntime(options: TwitchHistoryRuntimeOptions)
       const refresh = async () => {
         const settings = await getChatLoggingSettings()
         if (disposed || !settings.twitchHistoryEnabled) return
-        await getChatHistory({ platform: 'twitch', channelId: channel, limit: 500 })
         const batch = await client.load({ channel, limit: 1000 })
-        if (disposed || !(await getChatLoggingSettings()).twitchHistoryEnabled) return
-        MessageStore.importHistory(batch.messages, {
+        if (!(await getChatLoggingSettings()).twitchHistoryEnabled || disposed) return
+        flushChatHistory()
+        const messages = MessageStore.importHistory(batch.messages, {
           maxMessages: settings.maxMessages,
           maxAgeDays: settings.maxAgeDays,
         })
         const local = await getChatHistory({ platform: 'twitch', channelId: channel, limit: 500 })
-        options.publish?.(channel, mergeChatMessageSnapshot(local.messages, batch.messages, 500))
+        options.publish?.(channel, mergeChatMessageSnapshot(local.messages, messages, 500))
       }
       const result = refresh().finally(() => refreshing.delete(channel))
       refreshing.set(channel, result)

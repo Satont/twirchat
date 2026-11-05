@@ -115,12 +115,32 @@ export function appendLiveChatMessages(
 // snapshot can erase messages that were just rendered.
 export function mergeChatMessageSnapshot(
   current: NormalizedChatMessage[],
-  snapshot: NormalizedChatMessage[],
+  snapshot: readonly NormalizedChatMessage[],
   limit = 500,
 ): NormalizedChatMessage[] {
   const messagesByID = new Map<string, NormalizedChatMessage>()
   for (const message of snapshot) messagesByID.set(messageKey(message), message)
-  for (const message of current) messagesByID.set(messageKey(message), message)
+  for (const message of current) {
+    const key = messageKey(message)
+    const localTwitchEchoId = messagesByID.get(key)?.localTwitchEchoId
+    messagesByID.set(
+      key,
+      localTwitchEchoId && message.localTwitchEchoId !== localTwitchEchoId
+        ? { ...message, localTwitchEchoId }
+        : message,
+    )
+  }
+  for (const message of messagesByID.values()) {
+    if (message.platform === 'twitch' && message.localTwitchEchoId) {
+      messagesByID.delete(
+        chatMessageIdentity({
+          platform: 'twitch',
+          channelId: message.channelId,
+          id: message.localTwitchEchoId,
+        }),
+      )
+    }
+  }
 
   const messages = [...messagesByID.values()].sort(compareMessages)
   const next = limit > 0 && messages.length > limit ? messages.slice(-limit) : messages

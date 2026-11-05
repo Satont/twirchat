@@ -40,6 +40,8 @@ export interface Emote {
 
 export interface NormalizedChatMessage {
   id: string
+  /** Desktop history ID superseded by this Twitch message. */
+  localTwitchEchoId?: string
   platform: Platform
   channelId: string
   author: {

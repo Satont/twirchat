@@ -9,6 +9,7 @@ import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import {
   defaultChatLoggingSettings,
+  recordChatMessage,
   saveChatLoggingSettings,
   flushChatLogs,
 } from '../src/gpuix/backend/chat-history'
@@ -49,6 +50,10 @@ function message(id: string, text = 'same'): NormalizedChatMessage {
   const parsed = parseTwitchHistoryLine(raw(id, text), 'channel')
   if (!parsed) throw new Error('Invalid history fixture')
   return parsed
+}
+
+function localEcho(id: string, offset = 0): NormalizedChatMessage {
+  return { ...message(`local:twitch:channel:${id}`), timestamp: new Date(time + offset) }
 }
 
 test('history uses Twitch IRC metadata, canonical IDs, badges, emotes and replies', () => {
@@ -209,6 +214,81 @@ test('cold history import preserves existing local payload across channel aliase
   expect(page.messages.filter((item) => item.text === 'same')).toHaveLength(2)
 })
 
+test('reopening legacy history repairs stored Twitch echoes without dropping unmatched sends', async () => {
+  const db = await setup()
+  db.run('ALTER TABLE chat_messages DROP COLUMN local_twitch_echo_id')
+  const matched = localEcho('matched', 800)
+  const unmatched = localEcho('unmatched', 5000)
+  MessageStore.saveMany([
+    { ...matched, channelId: '#ChAnNeL' },
+    unmatched,
+    { ...message('provider'), author: { ...matched.author, color: '#123456' } },
+  ])
+  db.close()
+  database = initDb(db.filename)
+
+  const messages = MessageStore.getRecent()
+  expect(messages.map((item) => item.id)).toEqual(['provider', unmatched.id])
+  expect(messages[0]).toMatchObject({
+    localTwitchEchoId: matched.id,
+    author: { color: '#123456' },
+  })
+  expect(messages[1]).not.toHaveProperty('localTwitchEchoId')
+})
+
+test('overlapping imports consume a Twitch echo once and keep real repeated messages', async () => {
+  await setup()
+  const first = localEcho('first', -100)
+  const second = localEcho('second', 100)
+  MessageStore.saveMany([first, second])
+
+  const canonical = message('provider-first')
+  MessageStore.importHistory([canonical, canonical])
+  MessageStore.save({ ...canonical, author: { ...canonical.author, color: '#123456' } })
+  MessageStore.importHistory([canonical])
+  expect(MessageStore.getRecent().map((item) => item.id)).toEqual([canonical.id, second.id])
+  expect(MessageStore.getRecent()[0]).toMatchObject({
+    localTwitchEchoId: first.id,
+    author: { color: '#123456' },
+  })
+
+  MessageStore.importHistory([
+    canonical,
+    { ...message('provider-second'), timestamp: new Date(time + 150) },
+  ])
+  expect(MessageStore.getRecent().map((item) => [item.id, item.localTwitchEchoId])).toEqual([
+    [canonical.id, first.id],
+    ['provider-second', second.id],
+  ])
+})
+
+test('Twitch echo matching checks author, channel, message type and reply target', async () => {
+  await setup()
+  const local = {
+    ...localEcho('reply'),
+    reply: {
+      parentMessageId: 'expected-parent',
+      parentMessageText: 'parent',
+      parentAuthor: { id: '1', displayName: 'Parent', username: 'parent' },
+    },
+  }
+  MessageStore.save(local)
+  const canonical = { ...message('provider'), reply: local.reply }
+  MessageStore.importHistory([
+    { ...canonical, id: 'different-reply', reply: { ...local.reply, parentMessageId: 'other' } },
+    { ...canonical, id: 'different-author', author: { ...canonical.author, id: 'someone' } },
+    { ...canonical, id: 'different-channel', channelId: 'other' },
+    { ...canonical, id: 'announcement', metadata: { announcement: 'blue' } },
+    { ...canonical, id: 'action', type: 'action' },
+  ])
+  expect(MessageStore.getRecent().some((item) => item.id === local.id)).toBe(true)
+  MessageStore.importHistory([canonical])
+  expect(MessageStore.getRecent().find((item) => item.id === canonical.id)).toMatchObject({
+    localTwitchEchoId: local.id,
+  })
+  expect(MessageStore.getRecent().some((item) => item.id === local.id)).toBe(false)
+})
+
 test('merged log pages preserve local authority and stable cursor ties', () => {
   const local = { messages: [message('b', 'live')], nextCursor: null, hasMore: false }
   const history = { sources: [], partial: false, truncated: false }
@@ -337,6 +417,35 @@ test('runtime merges live arrivals during backfill and publishes only cold snaps
   expect(published).toHaveLength(1)
   expect(published[0]?.map((item) => item.id)).toEqual(['a', 'b'])
   expect(published[0]?.[0]?.text).toBe('live')
+})
+
+test('backfill reconciles a local echo recorded while the provider request is in flight', async () => {
+  await setup()
+  const loading = Promise.withResolvers<void>()
+  const gate = Promise.withResolvers<void>()
+  const published: NormalizedChatMessage[][] = []
+  const runtime = createTwitchHistoryRuntime({
+    channels: () => ['channel'],
+    publish: (_channel, messages) => published.push(messages),
+    client: {
+      async load() {
+        loading.resolve()
+        await gate.promise
+        return { messages: [message('provider')], sources: [], partial: false, truncated: false }
+      },
+      dispose() {},
+    },
+  })
+  cleanups.push(() => runtime.dispose())
+  const refreshing = runtime.refresh('channel')
+  await loading.promise
+  const echo = localEcho('during-refresh')
+  recordChatMessage(echo)
+  gate.resolve()
+  await refreshing
+
+  expect(MessageStore.getRecent().map((item) => item.id)).toEqual(['provider'])
+  expect(published).toMatchObject([[{ id: 'provider', localTwitchEchoId: echo.id }]])
 })
 
 test('external transcript export pages into isolated SQLite without replacing global database', async () => {
