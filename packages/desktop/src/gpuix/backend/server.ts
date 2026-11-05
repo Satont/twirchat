@@ -62,6 +62,7 @@ import {
 import { twitchEventSubscriptionSchema } from './api-schemas'
 import { recordChatMessage } from './chat-history'
 import { createDesktopEvents, type DesktopEvents } from './events'
+import { browserCommand } from './open-url'
 import { createPluginHost } from './plugin-host'
 import { createTwitchHistoryRuntime } from './twitch-history'
 
@@ -87,14 +88,8 @@ export interface DesktopBackend {
 
 /** Open a URL in the system default browser (replaces Electrobun Utils.openExternal). */
 function openBrowser(url: string): void {
-  const cmd =
-    process.platform === 'darwin'
-      ? ['open', url]
-      : process.platform === 'win32'
-        ? ['cmd', '/c', 'start', '', url.replaceAll('&', '^&')]
-        : ['xdg-open', url]
   try {
-    Bun.spawn(cmd, { stdout: 'ignore', stderr: 'ignore' }).unref()
+    Bun.spawn(browserCommand(url), { stdout: 'ignore', stderr: 'ignore' }).unref()
   } catch (error) {
     log.error('Failed to open browser', { url, error: String(error) })
     log.info('Please open manually', { url })
