@@ -78,6 +78,7 @@ export function createAvatarThumbnailer(options: { directory: () => string }) {
               stdout: 'pipe',
               stderr: 'pipe',
               timeout: 30_000,
+              windowsHide: true,
               env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
             },
           )

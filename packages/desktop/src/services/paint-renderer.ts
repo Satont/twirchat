@@ -145,6 +145,7 @@ export function createPaintRenderer(
             stderr: 'pipe',
             env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
             timeout: 30_000,
+            windowsHide: true,
           })
           await worker.stdin.write(
             JSON.stringify({

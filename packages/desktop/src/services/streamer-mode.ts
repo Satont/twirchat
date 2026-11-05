@@ -99,7 +99,12 @@ export async function listStreamingProcesses(
     platform === 'win32'
       ? ['tasklist', '/FO', 'CSV', '/NH']
       : ['ps', '-A', '-o', platform === 'darwin' ? 'comm=' : 'exe=']
-  const child = Bun.spawn(argv, { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
+  const child = Bun.spawn(argv, {
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'ignore',
+    windowsHide: true,
+  })
   const abort = () => {
     child.kill()
   }

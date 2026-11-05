@@ -1311,7 +1311,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       let lastError: unknown = null
       for (const cmd of candidates) {
         try {
-          const proc = Bun.spawn(cmd, { stdin: 'pipe', stdout: 'ignore', stderr: 'ignore' })
+          const proc = Bun.spawn(cmd, {
+            stdin: 'pipe',
+            stdout: 'ignore',
+            stderr: 'ignore',
+            windowsHide: true,
+          })
           await proc.stdin.write(text)
           await proc.stdin.end()
           await proc.exited
