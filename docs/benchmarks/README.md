@@ -85,6 +85,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-07 split layout](2026-11-07-split-layout/report.md) measures four panes in a 2×2 split,
+where nested split layout made each frame about 105 ms in a live profile.
+
 [2026-11-05 chat flood](2026-11-05-chat-flood/report.md) measures one busy channel with default
 settings through `bench:flood`, which also runs on Windows. This matrix does not model that case.
 
