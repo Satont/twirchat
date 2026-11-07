@@ -32,6 +32,12 @@ const { values: args } = parseArgs({
     theme: { type: 'string', default: 'modern' },
     // Scrolls up during the flood and reports whether older rows stay reachable and stable.
     'scroll-check': { type: 'boolean', default: false },
+    // panes: bare ChatViews in one row; watched: the real WatchedView with its split layout.
+    view: { type: 'string', default: 'panes' },
+    // row | 2x2: split shape used by --view watched.
+    grid: { type: 'string', default: 'row' },
+    width: { type: 'string', default: '1200' },
+    height: { type: 'string', default: '800' },
   },
 })
 
@@ -66,6 +72,7 @@ const { recordChatMessage } = await import('../src/gpuix/backend/chat-history')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
+const { WatchedView } = await import('../src/gpuix/components/WatchedView')
 const app = await import('../src/gpuix/state/app')
 const { layoutStore } = await import('../src/gpuix/state/layout')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
@@ -73,6 +80,7 @@ const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 import type { NativeRenderer } from '@gpuix/react'
 import type {
   Emote,
+  LayoutNode,
   NormalizedChatMessage,
   WatchedChannel,
   WatchedChannelsLayout,
@@ -138,20 +146,42 @@ const channels: WatchedChannel[] = Array.from({ length: channelCount }, (_, inde
   createdAt: 0,
 }))
 const visibleChannels = channels.slice(0, paneCount)
+assert.ok(args.view === 'panes' || args.view === 'watched', '--view must be panes or watched')
+assert.ok(
+  args.grid === 'row' || (args.grid === '2x2' && paneCount === 4),
+  '--grid 2x2 needs 4 panes',
+)
+const panel = (channel: WatchedChannel, flex: number): LayoutNode => ({
+  type: 'panel',
+  id: channel.id,
+  flex,
+  content: { type: 'watched', channelId: channel.id },
+})
+const columns = [visibleChannels.slice(0, 2), visibleChannels.slice(2, 4)]
 const layout: WatchedChannelsLayout = {
   version: 2,
-  root: {
-    type: 'split',
-    id: 'stand-root',
-    direction: 'horizontal',
-    flex: 100,
-    children: visibleChannels.map((channel) => ({
-      type: 'panel',
-      id: channel.id,
-      flex: 100 / visibleChannels.length,
-      content: { type: 'watched', channelId: channel.id },
-    })),
-  },
+  root:
+    args.grid === '2x2'
+      ? {
+          type: 'split',
+          id: 'stand-root',
+          direction: 'vertical',
+          flex: 100,
+          children: columns.map((column, index) => ({
+            type: 'split',
+            id: `stand-column-${index}`,
+            direction: 'horizontal',
+            flex: 50,
+            children: column.map((channel) => panel(channel, 50)),
+          })),
+        }
+      : {
+          type: 'split',
+          id: 'stand-root',
+          direction: 'horizontal',
+          flex: 100,
+          children: visibleChannels.map((channel) => panel(channel, 100 / visibleChannels.length)),
+        },
 }
 app.settingsStore.set(
   realistic
@@ -169,6 +199,8 @@ app.watchedStatusesStore.set(
   ),
 )
 layoutStore.set(new Map([['stand', { layout, isLoading: false, error: null }]]))
+// WatchedView reloads its layout from the profile when it mounts.
+await backend.api.setWatchedChannelsLayout({ tabId: 'stand', layout })
 if (!realistic) {
   emotePreferencesStore.update({
     value: {
@@ -211,7 +243,10 @@ function Content() {
       },
     },
     ...(tickFrames ? [React.createElement(Ticker, { key: 'ticker' })] : []),
-    ...(mountChat ? visibleChannels : []).map((channel) =>
+    ...(mountChat && args.view === 'watched'
+      ? [React.createElement(WatchedView, { key: 'watched', tabId: 'stand' })]
+      : []),
+    ...(mountChat && args.view !== 'watched' ? visibleChannels : []).map((channel) =>
       React.createElement(
         'div',
         {
@@ -399,7 +434,10 @@ try {
   await manager.start()
   await until(() => renderer !== undefined, 'native window')
   assert.ok(renderer)
-  await nativeWindow(renderer).setWindowBounds({ width: 1200, height: 800 })
+  await nativeWindow(renderer).setWindowBounds({
+    width: Number(args.width),
+    height: Number(args.height),
+  })
   assert.equal((await backend.api.getAccounts()).length, 0)
   for (let index = 0; index < channelCount * 200; index++) inject()
   await until(
@@ -480,6 +518,12 @@ try {
     cpuPercent: Math.round(((cpu.user + cpu.system) / (wallMs * 1000)) * 1000) / 10,
     userPercent: Math.round((cpu.user / (wallMs * 1000)) * 1000) / 10,
     framesPerSecond: Math.round((frames / wallMs) * 10_000) / 10,
+    paintedAuthors: visibleIds(renderer).length,
+    // The busiest thread is the native renderer; its time per full draw approximates frame cost.
+    nativeMsPerDraw:
+      busiestThreads[0] !== undefined && animationPerSecond.fullDraws
+        ? Math.round((busiestThreads[0] * 100) / animationPerSecond.fullDraws) / 10
+        : null,
     lagP95Ms: Math.round((sortedLags[Math.floor(sortedLags.length * 0.95)] ?? 0) * 10) / 10,
     rssMiB: Math.round(process.memoryUsage().rss / 1024 ** 2),
     busiestThreads,

@@ -703,13 +703,18 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
       {(showForm || (!isMain && !watchedChannel)) && headerLeading ? (
         <div style={{ position: 'absolute', top: 6, right: 6 }}>{headerLeading}</div>
       ) : null}
+      {/* Absolute content keeps the split layout from measuring the whole chat pane at every
+          nesting level; the pane is laid out once at its final size. */}
       <div
         style={{
-          flexGrow: 1,
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          minHeight: 0,
         }}
       >
         {showForm ? (
