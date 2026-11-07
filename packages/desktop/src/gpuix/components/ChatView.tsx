@@ -692,6 +692,8 @@ export function ChatView({
   const [userCardTarget, setUserCardTarget] = useState<UserCardTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  // The trigger click that dismissed the menu (mousedown closes, click toggles) must not reopen it.
+  const menuDismissedAt = useRef(0)
   useOverlayClose(menuOpen, () => setMenuOpen(false))
   const [watchedModerationAllowed, setWatchedModerationAllowed] = useState(false)
   const [moderationPendingIds, setModerationPendingIds] = useState<Set<string>>(new Set())
@@ -1399,95 +1401,104 @@ export function ChatView({
               <HeaderButton testId="split-right" onClick={() => onSplitRight?.()}>
                 <Icon name="plus" size={14} color={theme.text2} />
               </HeaderButton>
-              <HeaderButton testId="panel-menu" onClick={() => setMenuOpen((open) => !open)}>
+              <HeaderButton
+                testId="panel-menu"
+                onClick={() => {
+                  if (Date.now() - menuDismissedAt.current < 250) return
+                  setMenuOpen((open) => !open)
+                }}
+              >
                 <Icon name="moreVertical" size={14} color={theme.text2} />
               </HeaderButton>
               {menuOpen ? (
-                <anchored
-                  deferred
-                  side="bottom"
-                  align="end"
-                  gap={4}
-                  onMouseDownOutside={() => setMenuOpen(false)}
-                  style={{
-                    backgroundColor: theme.surface,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 8,
-                    padding: 4,
-                    minWidth: 180,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    boxShadow: {
-                      offsetX: 0,
-                      offsetY: 4,
-                      blurRadius: 12,
-                      spreadRadius: 0,
-                      color: '#00000066',
-                    },
-                  }}
-                >
-                  {onChangeChannel ? (
-                    <MenuItem
-                      icon="refresh"
-                      label="Change channel"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        onChangeChannel?.()
-                      }}
-                    />
-                  ) : null}
-                  {windows ? (
-                    <>
+                <anchored deferred side="bottom" align="end" gap={4}>
+                  <div
+                    onMouseDownOutside={() => {
+                      menuDismissedAt.current = Date.now()
+                      setMenuOpen(false)
+                    }}
+                    style={{
+                      backgroundColor: theme.surface,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      borderRadius: 8,
+                      padding: 4,
+                      minWidth: 180,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      boxShadow: {
+                        offsetX: 0,
+                        offsetY: 4,
+                        blurRadius: 12,
+                        spreadRadius: 0,
+                        color: '#00000066',
+                      },
+                    }}
+                  >
+                    {onChangeChannel ? (
                       <MenuItem
-                        icon="externalLink"
-                        label="Open chat in a new window"
+                        icon="refresh"
+                        label="Change channel"
                         onClick={() => {
                           setMenuOpen(false)
-                          void windows
-                            .openChat(layoutTabId, layoutPanelId)
-                            .catch((error) => showNotice('error', String(error)))
+                          onChangeChannel?.()
                         }}
                       />
+                    ) : null}
+                    {windows ? (
+                      <>
+                        <MenuItem
+                          icon="externalLink"
+                          label="Open chat in a new window"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            void windows
+                              .openChat(layoutTabId, layoutPanelId)
+                              .catch((error) => showNotice('error', String(error)))
+                          }}
+                        />
+                        <MenuItem
+                          icon="externalLink"
+                          label="Open chat overlay"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            void windows
+                              .openChat(layoutTabId, layoutPanelId, true)
+                              .catch((error) => showNotice('error', String(error)))
+                          }}
+                        />
+                      </>
+                    ) : null}
+                    {onChangeChannel || windows ? (
+                      <div
+                        style={{
+                          height: 1,
+                          backgroundColor: theme.border,
+                          marginTop: 4,
+                          marginBottom: 4,
+                        }}
+                      />
+                    ) : null}
+                    {layoutTabId !== 'home' || (paneLayout && allPanels(paneLayout).length > 1) ? (
                       <MenuItem
-                        icon="externalLink"
-                        label="Open chat overlay"
+                        icon="close"
+                        label="Close panel"
+                        danger
                         onClick={() => {
                           setMenuOpen(false)
-                          void windows
-                            .openChat(layoutTabId, layoutPanelId, true)
-                            .catch((error) => showNotice('error', String(error)))
+                          if (
+                            windows?.descriptor.kind !== 'main' &&
+                            paneLayout &&
+                            allPanels(paneLayout).length === 1
+                          )
+                            void windows
+                              ?.close()
+                              .catch((error) => showNotice('error', String(error)))
+                          else onClosePanel?.()
                         }}
                       />
-                    </>
-                  ) : null}
-                  {onChangeChannel || windows ? (
-                    <div
-                      style={{
-                        height: 1,
-                        backgroundColor: theme.border,
-                        marginTop: 4,
-                        marginBottom: 4,
-                      }}
-                    />
-                  ) : null}
-                  {layoutTabId !== 'home' || (paneLayout && allPanels(paneLayout).length > 1) ? (
-                    <MenuItem
-                      icon="close"
-                      label="Close panel"
-                      danger
-                      onClick={() => {
-                        setMenuOpen(false)
-                        if (
-                          windows?.descriptor.kind !== 'main' &&
-                          paneLayout &&
-                          allPanels(paneLayout).length === 1
-                        )
-                          void windows?.close().catch((error) => showNotice('error', String(error)))
-                        else onClosePanel?.()
-                      }}
-                    />
-                  ) : null}
+                    ) : null}
+                  </div>
                 </anchored>
               ) : null}
             </div>

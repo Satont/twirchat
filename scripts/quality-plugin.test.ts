@@ -9,6 +9,7 @@ interface QualityFixture {
   assertions?: number
   localTypes?: number
   blockingGeometry?: number
+  anchoredEvents?: number
 }
 interface QualityDiagnostic {
   filename: string
@@ -49,6 +50,25 @@ const fixtures: QualityFixture[] = [
   { code: 'renderer?.getElementBounds(id)', blockingGeometry: 1 },
   { code: 'renderer["getElementBounds"](id)', blockingGeometry: 1 },
   { code: 'const read = renderer.getElementBounds', blockingGeometry: 1 },
+  {
+    code: 'const view = <anchored onClick={open} onMouseEnter={show} onMouseLeave={hide} onFileDrop={drop} />',
+    extension: 'tsx',
+  },
+  {
+    code: 'const view = <anchored><div onMouseDownOutside={close} /></anchored>',
+    extension: 'tsx',
+  },
+  { code: 'const view = <div onMouseDownOutside={close} />', extension: 'tsx' },
+  {
+    code: 'const view = <anchored onMouseDownOutside={close} />',
+    extension: 'tsx',
+    anchoredEvents: 1,
+  },
+  {
+    code: 'const view = <anchored deferred onKeyDown={key} onMouseDown={press}><div /></anchored>',
+    extension: 'tsx',
+    anchoredEvents: 2,
+  },
 ]
 const directory = mkdtempSync(join(tmpdir(), 'twirchat-quality-'))
 let diagnostics: QualityDiagnostic[] = []
@@ -85,6 +105,7 @@ beforeAll(async () => {
         'project-quality/no-type-assertions': 'error',
         'project-quality/no-local-type-declarations': 'error',
         'project-quality/no-blocking-native-geometry': 'error',
+        'project-quality/no-unsupported-anchored-events': 'error',
       },
     }),
   )
@@ -129,8 +150,16 @@ for (const [index, fixture] of fixtures.entries()) {
         (diagnostic) => diagnostic.code === 'project-quality(no-blocking-native-geometry)',
       ),
     ).toHaveLength(fixture.blockingGeometry ?? 0)
+    expect(
+      found.filter(
+        (diagnostic) => diagnostic.code === 'project-quality(no-unsupported-anchored-events)',
+      ),
+    ).toHaveLength(fixture.anchoredEvents ?? 0)
     expect(found).toHaveLength(
-      (fixture.assertions ?? 0) + (fixture.localTypes ?? 0) + (fixture.blockingGeometry ?? 0),
+      (fixture.assertions ?? 0) +
+        (fixture.localTypes ?? 0) +
+        (fixture.blockingGeometry ?? 0) +
+        (fixture.anchoredEvents ?? 0),
     )
   })
 }
