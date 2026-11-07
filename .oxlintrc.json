@@ -96,7 +96,8 @@
     {
       "files": ["packages/desktop/src/gpuix/**/*.ts", "packages/desktop/src/gpuix/**/*.tsx"],
       "rules": {
-        "project-quality/no-blocking-native-geometry": "error"
+        "project-quality/no-blocking-native-geometry": "error",
+        "project-quality/no-unsupported-anchored-events": "error"
       }
     },
     {

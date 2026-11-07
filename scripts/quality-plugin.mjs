@@ -72,11 +72,40 @@ const noBlockingNativeGeometry = {
   },
 }
 
+// GPUIX wires only these events on <anchored> (custom_elements/anchored.rs) and drops the rest.
+const anchoredEvents = new Set(['onClick', 'onMouseEnter', 'onMouseLeave', 'onFileDrop'])
+
+/** @type {Parameters<import('oxlint/plugins-dev').RuleTester['run']>[1]} */
+const noUnsupportedAnchoredEvents = {
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: {
+      unsupportedEvent:
+        '<anchored> ignores {{name}}. Put the handler on the content element inside it.',
+    },
+  },
+  create(context) {
+    return {
+      JSXOpeningElement(node) {
+        if (node.name.type !== 'JSXIdentifier' || node.name.name !== 'anchored') return
+        for (const attribute of node.attributes) {
+          if (attribute.type !== 'JSXAttribute' || attribute.name.type !== 'JSXIdentifier') continue
+          const name = attribute.name.name
+          if (/^on[A-Z]/.test(name) && !anchoredEvents.has(name))
+            context.report({ node: attribute, messageId: 'unsupportedEvent', data: { name } })
+        }
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'project-quality' },
   rules: {
     'no-type-assertions': noTypeAssertions,
     'no-local-type-declarations': noLocalTypeDeclarations,
     'no-blocking-native-geometry': noBlockingNativeGeometry,
+    'no-unsupported-anchored-events': noUnsupportedAnchoredEvents,
   },
 }

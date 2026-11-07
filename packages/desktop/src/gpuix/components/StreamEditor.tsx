@@ -315,20 +315,12 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                 side="bottom"
                 align="start"
                 gap={4}
-                onMouseDownOutside={() => setCategoryResults([])}
                 style={{
                   width: '100%',
-                  maxHeight: 200,
-                  overflowY: 'scroll',
-                  scrollbarColor: theme.scrollbar,
-                  scrollbarWidth: 4,
                   backgroundColor: theme.surface,
                   borderWidth: 1,
                   borderColor: theme.border,
                   borderRadius: 8,
-                  padding: 4,
-                  display: 'flex',
-                  flexDirection: 'column',
                   boxShadow: {
                     offsetX: 0,
                     offsetY: 8,
@@ -338,34 +330,49 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                   },
                 }}
               >
-                {categoryResults.map((cat) => (
-                  <div
-                    key={cat.id}
-                    onClick={() => selectCategory(cat)}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 8,
-                      paddingTop: 7,
-                      paddingBottom: 7,
-                      paddingLeft: 10,
-                      paddingRight: 10,
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      hover: { backgroundColor: accent.tint12 },
-                    }}
-                  >
-                    {cat.thumbnailUrl ? (
-                      <RemoteImage
-                        url={cat.thumbnailUrl}
-                        objectFit="cover"
-                        style={{ width: 26, height: 36, borderRadius: 3, flexShrink: 0 }}
-                      />
-                    ) : null}
-                    <Text style={{ fontSize: 13, color: theme.text }}>{cat.name}</Text>
-                  </div>
-                ))}
+                {/* The scroll container owns the scrollbar, so dragging it is not an outside click. */}
+                <div
+                  onMouseDownOutside={() => setCategoryResults([])}
+                  style={{
+                    width: '100%',
+                    maxHeight: 200,
+                    overflowY: 'scroll',
+                    scrollbarColor: theme.scrollbar,
+                    scrollbarWidth: 4,
+                    padding: 4,
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  {categoryResults.map((cat) => (
+                    <div
+                      key={cat.id}
+                      onClick={() => selectCategory(cat)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingTop: 7,
+                        paddingBottom: 7,
+                        paddingLeft: 10,
+                        paddingRight: 10,
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        hover: { backgroundColor: accent.tint12 },
+                      }}
+                    >
+                      {cat.thumbnailUrl ? (
+                        <RemoteImage
+                          url={cat.thumbnailUrl}
+                          objectFit="cover"
+                          style={{ width: 26, height: 36, borderRadius: 3, flexShrink: 0 }}
+                        />
+                      ) : null}
+                      <Text style={{ fontSize: 13, color: theme.text }}>{cat.name}</Text>
+                    </div>
+                  ))}
+                </div>
               </anchored>
             ) : null}
           </div>
