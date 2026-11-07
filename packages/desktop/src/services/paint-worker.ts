@@ -1,74 +1,53 @@
-import { z } from 'zod'
-
 import { setRuntimeConfig } from '../runtime-config'
 import { avatarThumbnailer } from './avatar-image'
 import { getPaintNameImage, cosmeticPaintSchema } from './cosmetics'
 import { modifiedEmoteImage } from './emote-image'
+import { disableImageSweeps } from './image-cache-sweep'
+import {
+  paintWorkerJobSchema,
+  paintWorkerRequestSchema,
+  type PaintWorkerReply,
+} from './paint-worker-client'
 
-try {
-  const input = await Bun.stdin.text()
-  if (input.length > 100_000) throw new Error('Paint job is too large.')
-  const job = z
-    .object({
-      kind: z.unknown().optional(),
-      path: z.unknown().optional(),
-      width: z.unknown().optional(),
-      height: z.unknown().optional(),
-      modifiers: z.unknown().optional(),
-      name: z.unknown().optional(),
-      paint: z.unknown().optional(),
-      fontSize: z.unknown().optional(),
-      fontFamily: z.unknown().optional(),
-      dbPath: z.unknown().optional(),
-      backendUrl: z.string().url().optional(),
-      size: z.unknown().optional(),
-      scale: z.unknown().optional(),
-    })
-    .parse(JSON.parse(input))
-  if (job.kind === 'avatar') {
-    const avatar = z
-      .object({ path: z.string(), size: z.number(), scale: z.number(), dbPath: z.string() })
-      .parse(job)
-    setRuntimeConfig({ dbPath: avatar.dbPath })
-    const path = await avatarThumbnailer.render(avatar.path, avatar.size, avatar.scale)
-    process.stdout.write(JSON.stringify({ path }))
-  } else if (job.kind === 'emote') {
-    if (
-      typeof job.path !== 'string' ||
-      typeof job.width !== 'number' ||
-      typeof job.height !== 'number' ||
-      typeof job.dbPath !== 'string' ||
-      !Array.isArray(job.modifiers) ||
-      !job.modifiers.every((value) => typeof value === 'string')
-    )
-      throw new Error('Invalid emote job.')
-    setRuntimeConfig({
-      dbPath: job.dbPath,
-      ...(job.backendUrl ? { backendUrl: job.backendUrl } : {}),
-    })
-    const path = await modifiedEmoteImage(job.path, job.width, job.height, job.modifiers)
-    process.stdout.write(JSON.stringify({ path }))
-  } else {
-    if (
-      typeof job.name !== 'string' ||
-      !job.paint ||
-      typeof job.paint !== 'object' ||
-      typeof job.dbPath !== 'string'
-    )
-      throw new Error('Invalid paint job.')
-    setRuntimeConfig({
-      dbPath: job.dbPath,
-      ...(job.backendUrl ? { backendUrl: job.backendUrl } : {}),
-    })
-    const output = await getPaintNameImage(
-      job.name,
-      cosmeticPaintSchema.parse(job.paint),
-      typeof job.fontSize === 'number' ? job.fontSize : 14,
-      typeof job.fontFamily === 'string' ? job.fontFamily : 'Inter',
-    )
-    process.stdout.write(JSON.stringify(output))
+// The app sweeps its image directories before it sends the first job; sweeping here
+// would delete files that its native image views may still read.
+disableImageSweeps()
+
+if (!process.send) throw new Error('The image worker requires desktop IPC.')
+
+async function runJob(input: unknown): Promise<unknown> {
+  const job = paintWorkerJobSchema.parse(input)
+  setRuntimeConfig({
+    dbPath: job.dbPath,
+    ...(job.kind !== 'avatar' && job.backendUrl ? { backendUrl: job.backendUrl } : {}),
+  })
+  switch (job.kind) {
+    case 'avatar':
+      return { path: await avatarThumbnailer.render(job.path, job.size, job.scale) }
+    case 'emote':
+      return { path: await modifiedEmoteImage(job.path, job.width, job.height, job.modifiers) }
+    case 'paint':
+      return getPaintNameImage(
+        job.name,
+        cosmeticPaintSchema.parse(job.paint),
+        job.fontSize,
+        job.fontFamily,
+      )
   }
-} catch (error) {
-  process.stderr.write(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
 }
+
+function reply(message: PaintWorkerReply): void {
+  process.send?.(message)
+}
+
+process.on('message', (data: unknown) => {
+  const request = paintWorkerRequestSchema.safeParse(data)
+  if (!request.success) return
+  const { id, job } = request.data
+  runJob(job).then(
+    (value) => reply({ id, ok: true, value }),
+    (error: unknown) =>
+      reply({ id, ok: false, error: error instanceof Error ? error.message : String(error) }),
+  )
+})
+process.on('disconnect', () => process.exit(0))

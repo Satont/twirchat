@@ -8,12 +8,13 @@ import { createHash } from 'node:crypto'
  * Files land in `<profile>/image-cache/<sha256(url)>.<ext>`. Downloads share a
  * bounded queue, and each image has its own deferred store notification.
  */
-import { mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { getDbPath } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
 import { deleteOldestEntry } from '../../services/bounded-cache'
+import { type ImageSweepLimits, sweepImageDirectoryOnce } from '../../services/image-cache-sweep'
 import { fetchProviderImage } from '../../services/provider-relay'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
@@ -23,35 +24,14 @@ export const imageCacheRevisionStore = persistentResource('imageCacheRevision', 
 )
 
 const MAX_CACHED_FILES = 4000
-const PRUNE_DOWN_TO = 3000
 const FAILURE_RETRY_MS = 5 * 60 * 1000
 const MAX_DOWNLOADS = 6
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
-
-/** Unbounded growth guard: keep the newest files by mtime. */
-function pruneCacheDir(dir: string): void {
-  try {
-    const entries = [...new Bun.Glob('*').scanSync({ cwd: dir })]
-    if (entries.length <= MAX_CACHED_FILES) return
-    const withMtime = entries
-      .map((name) => {
-        try {
-          return { name, mtime: Bun.file(join(dir, name)).lastModified }
-        } catch {
-          return { name, mtime: 0 }
-        }
-      })
-      .sort((a, b) => b.mtime - a.mtime)
-    for (const entry of withMtime.slice(PRUNE_DOWN_TO)) {
-      try {
-        rmSync(join(dir, entry.name))
-      } catch {
-        // best-effort sweep
-      }
-    }
-  } catch {
-    // best-effort sweep
-  }
+const IMAGE_FILE = /^([a-f0-9]{32})\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?|avif)$/i
+const DISK_LIMITS: ImageSweepLimits = {
+  pattern: IMAGE_FILE,
+  maxFiles: MAX_CACHED_FILES,
+  keepFiles: 3000,
 }
 
 const EXTENSIONS_BY_CONTENT_TYPE: Record<string, string> = {
@@ -109,17 +89,23 @@ export function createImageCache(options: {
   const now = options.now ?? Date.now
   const maxEntries = options.maxEntries ?? MAX_CACHED_FILES
   let downloads = 0
+  let directoryPath: string | undefined
   let directory: string | undefined
   let diskFiles: Map<string, string> | undefined
 
+  function getDirectoryPath(): string {
+    directoryPath ??= options.directory()
+    return directoryPath
+  }
+
+  /** Lists files after the process-wide sweep, so every listed file stays on disk. */
   function getDirectory(): string {
     if (directory) return directory
-    directory = options.directory()
+    directory = getDirectoryPath()
     mkdirSync(directory, { recursive: true })
-    pruneCacheDir(directory)
     diskFiles = new Map()
     for (const file of readdirSync(directory)) {
-      const hash = file.match(/^([a-f0-9]{32})\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?|avif)$/i)?.[1]
+      const hash = file.match(IMAGE_FILE)?.[1]
       if (hash) diskFiles.set(hash, join(directory, file))
     }
     return directory
@@ -150,6 +136,7 @@ export function createImageCache(options: {
   }
 
   async function load(url: string): Promise<string> {
+    await sweepImageDirectoryOnce(getDirectoryPath(), DISK_LIMITS)
     const dir = getDirectory()
     const hash = hashUrl(url)
     const savedPath = diskFiles?.get(hash)

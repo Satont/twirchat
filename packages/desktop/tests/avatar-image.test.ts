@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { z } from 'zod'
+
 import { avatarRasterSize, createAvatarThumbnailer } from '../src/services/avatar-image'
 import { loadSharp } from '../src/services/paint-renderer'
+import { createPaintWorkerClient } from '../src/services/paint-worker-client'
 
 const directories: string[] = []
 afterEach(() => {
@@ -72,6 +75,28 @@ describe('avatar thumbnails', () => {
     expect(await sharp(path).metadata()).toMatchObject({ width: 64, height: 64 })
   })
 
+  test('never deletes a thumbnail it has handed out, even past the disk limit', async () => {
+    // Native <img> keeps a failed read for every row that shows the path, so a thumbnail
+    // deleted mid-session draws a broken avatar for that user until restart. Packaged
+    // builds render in a separate worker with its own instance, so a second instance on
+    // the same directory must not sweep either.
+    const f = fixture()
+    await Bun.write(
+      f.source,
+      await loadSharp()({ create: { width: 64, height: 64, channels: 3, background: '#345678' } })
+        .png()
+        .toBuffer(),
+    )
+    const handedOut = await f.cache.render(f.source, 18)
+    const thumbnails = join(f.directory, 'thumbnails')
+    for (let index = 0; index < 2100; index++)
+      writeFileSync(join(thumbnails, `${index.toString(16).padStart(32, '0')}.png`), 'x')
+    const next = createAvatarThumbnailer({ directory: () => thumbnails })
+    await next.render(f.source, 20)
+    expect(await Bun.file(handedOut).exists()).toBe(true)
+    expect(readdirSync(thumbnails).length).toBe(2102)
+  })
+
   test('rejects invalid dimensions, excessive encoded bytes and excessive decoded pixels', async () => {
     const f = fixture()
     for (const size of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 513])
@@ -130,40 +155,29 @@ describe('avatar thumbnails', () => {
         .png()
         .toBuffer(),
     )
-    const worker = Bun.spawn(['bun', join(import.meta.dir, '../src/services/paint-worker.ts')], {
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'pipe',
+    const worker = createPaintWorkerClient({
+      command: () => [process.execPath, join(import.meta.dir, '../src/services/paint-worker.ts')],
     })
-    await worker.stdin.write(
-      JSON.stringify({
-        kind: 'avatar',
-        path: f.source,
-        size: 28,
-        scale: 2,
-        dbPath: join(f.directory, 'test.db'),
-      }),
-    )
-    await worker.stdin.end()
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(worker.stdout).text(),
-      new Response(worker.stderr).text(),
-      worker.exited,
-    ])
-    expect(stderr).toBe('')
-    expect(code).toBe(0)
-    const output: unknown = JSON.parse(stdout)
-    if (
-      !output ||
-      typeof output !== 'object' ||
-      !('path' in output) ||
-      typeof output.path !== 'string'
-    )
-      throw new Error('Missing worker output path')
-    expect(await loadSharp()(output.path).metadata()).toMatchObject({
-      width: 56,
-      height: 56,
-      format: 'png',
-    })
+    try {
+      const dbPath = join(f.directory, 'test.db')
+      // Both jobs share one long-lived process.
+      const outputs = await Promise.all(
+        [28, 14].map((size) =>
+          worker.run({ kind: 'avatar', path: f.source, size, scale: 2, dbPath }),
+        ),
+      )
+      const sizes = await Promise.all(
+        outputs.map(async (output) => {
+          const { path } = z.object({ path: z.string() }).parse(output)
+          return loadSharp()(path).metadata()
+        }),
+      )
+      expect(sizes).toMatchObject([
+        { width: 56, height: 56, format: 'png' },
+        { width: 28, height: 28, format: 'png' },
+      ])
+    } finally {
+      await worker.close()
+    }
   })
 })

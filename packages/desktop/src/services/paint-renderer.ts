@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, rename, unlink } from 'node:fs/promises'
+import { mkdir, rename } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
@@ -12,6 +12,8 @@ import { timelineValue } from './animation-timeline'
 import { deleteOldestEntry } from './bounded-cache'
 import type { CosmeticPaint } from './cosmetics'
 import type { ProviderFetch } from './emote-providers'
+import { type ImageSweepLimits, sweepImageDirectoryOnce } from './image-cache-sweep'
+import { PACKAGED_PAINT_WORKER, paintWorker } from './paint-worker-client'
 import { fetchProviderImage } from './provider-relay'
 
 interface Mask {
@@ -47,6 +49,12 @@ const escapeMarkup = (text: string): string =>
   )
 
 let sharpFactory: typeof import('sharp').default | null = null
+const DISK_LIMITS: ImageSweepLimits = {
+  pattern: /^[a-f0-9]{32}\.webp$/,
+  maxFiles: 512,
+  keepFiles: 450,
+}
+
 const isStandalone = (): boolean =>
   import.meta.dir.includes('$bunfs') || import.meta.dir.includes('~BUN')
 export function loadSharp(): typeof import('sharp').default {
@@ -69,8 +77,7 @@ export function createPaintRenderer(
   const images = new Map<string, Promise<ImageData>>()
   const renders = new Map<string, Promise<RenderedPaint>>()
   const waiting: Array<() => void> = []
-  let active = 0,
-    writes = 0
+  let active = 0
 
   const loadImage = (url: string): Promise<ImageData> => {
     const pending = images.get(url)
@@ -135,39 +142,26 @@ export function createPaintRenderer(
       if (active >= 2) await new Promise<void>((resolve) => waiting.push(resolve))
       else active++
       try {
+        const directory =
+          options.directory?.() ?? join(dirname(getDbPath()), 'image-cache', 'paints')
+        await sweepImageDirectoryOnce(directory, DISK_LIMITS)
         if (isStandalone()) {
-          const workerPath = join(dirname(process.execPath), 'paint-worker.js')
+          const workerPath = join(dirname(process.execPath), PACKAGED_PAINT_WORKER)
           if (!(await Bun.file(workerPath).exists()))
             throw new Error('The paint renderer asset is missing.')
-          const worker = Bun.spawn([process.execPath, workerPath], {
-            stdin: 'pipe',
-            stdout: 'pipe',
-            stderr: 'pipe',
-            env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
-            timeout: 30_000,
-            windowsHide: true,
-          })
-          await worker.stdin.write(
-            JSON.stringify({
-              name,
-              paint,
-              fontSize,
-              fontFamily,
-              dbPath: getDbPath(),
-              backendUrl: getBackendUrl(),
-            }),
-          )
-          await worker.stdin.end()
-          const [stdout, stderr, code] = await Promise.all([
-            new Response(worker.stdout).text(),
-            new Response(worker.stderr).text(),
-            worker.exited,
-          ])
-          if (code !== 0)
-            throw new Error(`Paint renderer failed: ${stderr.slice(0, 1000) || `exit ${code}`}`)
           const result = z
             .object({ path: z.string(), width: z.number(), height: z.number() })
-            .parse(JSON.parse(stdout))
+            .parse(
+              await paintWorker.run({
+                kind: 'paint',
+                name,
+                paint,
+                fontSize,
+                fontFamily,
+                dbPath: getDbPath(),
+                backendUrl: getBackendUrl(),
+              }),
+            )
           if (
             typeof result.path !== 'string' ||
             !Number.isFinite(result.width) ||
@@ -177,8 +171,6 @@ export function createPaintRenderer(
           return result
         }
         const sharp = loadSharp()
-        const directory =
-          options.directory?.() ?? join(dirname(getDbPath()), 'image-cache', 'paints')
         const path = join(directory, `${key}.webp`)
         if (await Bun.file(path).exists()) {
           const metadata = await sharp(path).metadata()
@@ -307,16 +299,6 @@ export function createPaintRenderer(
         const temporary = `${path}.${crypto.randomUUID()}.tmp`
         await Bun.write(temporary, output)
         await rename(temporary, path)
-        if (++writes % 25 === 0 || process.env.TWIRCHAT_PAINT_WORKER === '1') {
-          const files = (await readdir(directory)).filter((file) => file.endsWith('.webp'))
-          if (files.length > 512) {
-            const old = files
-              .map((file) => ({ file, time: Bun.file(join(directory, file)).lastModified }))
-              .sort((a, b) => a.time - b.time)
-              .slice(0, files.length - 450)
-            await Promise.all(old.map((file) => unlink(join(directory, file.file)).catch(() => {})))
-          }
-        }
         return { path, width, height }
       } finally {
         const next = waiting.shift()

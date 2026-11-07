@@ -5,7 +5,12 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
-Native version `0.11.0-twirchat.16` lets a text editor opt in to native clipboard
+Native version `0.11.0-twirchat.17` keeps a missing, undecodable or unreadable
+`<img>` as an empty box of its declared size. Upstream drew `img: load failed`
+text without a width budget, which overflowed avatars, badges and emotes; now
+whatever the app paints beneath the image stays visible instead.
+
+Since `0.11.0-twirchat.16` a text editor can opt in to native clipboard
 images and copied file lists. The same paste action handles the OS shortcut and
 the configurable Paste action. Upload results use the editor's native selection
 and undo history. X11 and Wayland read local file URLs only for opted-in editors.

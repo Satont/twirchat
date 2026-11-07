@@ -12,6 +12,7 @@ import { buildOverlayChatMessage } from '../src/overlay-server'
 import { getRuntimeConfig, setRuntimeConfig } from '../src/runtime-config'
 import { createCosmeticsService, updateSevenTvPresence } from '../src/services/cosmetics'
 import { createEmoteProviderService } from '../src/services/emote-providers'
+import { createPaintWorkerClient } from '../src/services/paint-worker-client'
 import { fetchProviderImage, fetchProviderMetadata } from '../src/services/provider-relay'
 
 const gif = new Uint8Array([71, 73, 70, 56, 57, 97])
@@ -193,39 +194,27 @@ test('paint worker inherits the configured backend for image layers', async () =
     },
   })
   const imageUrl = 'https://cdn.7tv.app/paint/qa/1x.png'
-  const worker = Bun.spawn([process.execPath, 'src/services/paint-worker.ts'], {
+  const worker = createPaintWorkerClient({
+    command: () => [process.execPath, 'src/services/paint-worker.ts'],
     cwd: join(import.meta.dir, '..'),
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe',
-    timeout: 15_000,
+    jobTimeoutMs: 15_000,
   })
   try {
-    await worker.stdin.write(
-      JSON.stringify({
+    const output = await worker.run({
+      kind: 'paint',
+      name: 'Proxy',
+      paint: {
+        id: 'proxy',
         name: 'Proxy',
-        paint: {
-          id: 'proxy',
-          name: 'Proxy',
-          layers: [{ type: 'image', imageUrl, opacity: 1 }],
-          shadows: [],
-        },
-        fontSize: 14,
-        fontFamily: 'Inter',
-        dbPath: join(directory, 'db.sqlite'),
-        backendUrl: server.url.origin,
-      }),
-    )
-    await worker.stdin.end()
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(worker.stdout).text(),
-      new Response(worker.stderr).text(),
-      worker.exited,
-    ])
-    expect(stderr).toBe('')
-    expect(code).toBe(0)
+        layers: [{ type: 'image', imageUrl, opacity: 1 }],
+        shadows: [],
+      },
+      fontSize: 14,
+      fontFamily: 'Inter',
+      dbPath: join(directory, 'db.sqlite'),
+      backendUrl: server.url.origin,
+    })
     expect(sources).toEqual([imageUrl])
-    const output: unknown = JSON.parse(stdout)
     const { z } = await import('zod')
     const rendered = z
       .object({ path: z.string(), width: z.number(), height: z.number() })
@@ -233,8 +222,7 @@ test('paint worker inherits the configured backend for image layers', async () =
     expect(rendered.width).toBeGreaterThan(0)
     expect((await sharp(rendered.path).metadata()).format).toBe('webp')
   } finally {
-    worker.kill()
-    await worker.exited
+    await worker.close()
     await server.stop(true)
     await rm(directory, { recursive: true, force: true })
   }

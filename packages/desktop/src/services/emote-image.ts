@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, rename, unlink } from 'node:fs/promises'
+import { mkdir, rename } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { z } from 'zod'
@@ -7,7 +7,15 @@ import { z } from 'zod'
 import { getDbPath } from '../runtime-config'
 import { timelineValue } from './animation-timeline'
 import { deleteOldestEntry } from './bounded-cache'
+import { type ImageSweepLimits, sweepImageDirectoryOnce } from './image-cache-sweep'
 import { loadSharp } from './paint-renderer'
+import { paintWorker } from './paint-worker-client'
+
+const DISK_LIMITS: ImageSweepLimits = {
+  pattern: /^[a-f0-9]{32}\.(?:svg|webp)$/,
+  maxFiles: 512,
+  keepFiles: 450,
+}
 
 const renders = new Map<string, Promise<string>>()
 const waiting: Array<() => void> = []
@@ -43,31 +51,20 @@ export function modifiedEmoteImage(
     else active++
     try {
       const directory = join(dirname(getDbPath()), 'image-cache', 'modifiers')
+      await sweepImageDirectoryOnce(directory, DISK_LIMITS)
       const outputPath = join(directory, `${key}.webp`)
       if (await Bun.file(outputPath).exists()) return outputPath
       if (import.meta.dir.includes('$bunfs') || import.meta.dir.includes('~BUN')) {
-        const worker = Bun.spawn(
-          [process.execPath, join(dirname(process.execPath), 'paint-worker.js')],
-          {
-            stdin: 'pipe',
-            stdout: 'pipe',
-            stderr: 'pipe',
-            timeout: 30_000,
-            windowsHide: true,
-            env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
-          },
+        const result = z.object({ path: z.string() }).parse(
+          await paintWorker.run({
+            kind: 'emote',
+            path,
+            width,
+            height,
+            modifiers,
+            dbPath: getDbPath(),
+          }),
         )
-        await worker.stdin.write(
-          JSON.stringify({ kind: 'emote', path, width, height, modifiers, dbPath: getDbPath() }),
-        )
-        await worker.stdin.end()
-        const [stdout, stderr, code] = await Promise.all([
-          new Response(worker.stdout).text(),
-          new Response(worker.stderr).text(),
-          worker.exited,
-        ])
-        if (code !== 0) throw new Error(`Emote renderer failed: ${stderr.slice(0, 1000)}`)
-        const result = z.object({ path: z.string() }).parse(JSON.parse(stdout))
         if (typeof result.path !== 'string' || !(await Bun.file(result.path).exists()))
           throw new Error('Invalid emote renderer result.')
         return result.path
@@ -175,16 +172,6 @@ export function modifiedEmoteImage(
       const temporary = `${outputPath}.${crypto.randomUUID()}.tmp`
       await Bun.write(temporary, output)
       await rename(temporary, outputPath)
-      const files = (await readdir(directory)).filter((name) => /\.(?:svg|webp)$/.test(name))
-      if (files.length > 512) {
-        const oldest = files
-          .map((name) => ({ name, time: Bun.file(join(directory, name)).lastModified }))
-          .sort((a, b) => a.time - b.time)
-          .slice(0, files.length - 450)
-        await Promise.all(
-          oldest.map((entry) => unlink(join(directory, entry.name)).catch(() => {})),
-        )
-      }
       return outputPath
     } finally {
       const next = waiting.shift()
