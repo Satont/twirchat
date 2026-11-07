@@ -8,6 +8,7 @@ import { getDbPath } from '../runtime-config'
 import { timelineValue } from './animation-timeline'
 import { deleteOldestEntry } from './bounded-cache'
 import { loadSharp } from './paint-renderer'
+import { paintWorker } from './paint-worker-client'
 
 const renders = new Map<string, Promise<string>>()
 const waiting: Array<() => void> = []
@@ -46,28 +47,16 @@ export function modifiedEmoteImage(
       const outputPath = join(directory, `${key}.webp`)
       if (await Bun.file(outputPath).exists()) return outputPath
       if (import.meta.dir.includes('$bunfs') || import.meta.dir.includes('~BUN')) {
-        const worker = Bun.spawn(
-          [process.execPath, join(dirname(process.execPath), 'paint-worker.js')],
-          {
-            stdin: 'pipe',
-            stdout: 'pipe',
-            stderr: 'pipe',
-            timeout: 30_000,
-            windowsHide: true,
-            env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
-          },
+        const result = z.object({ path: z.string() }).parse(
+          await paintWorker.run({
+            kind: 'emote',
+            path,
+            width,
+            height,
+            modifiers,
+            dbPath: getDbPath(),
+          }),
         )
-        await worker.stdin.write(
-          JSON.stringify({ kind: 'emote', path, width, height, modifiers, dbPath: getDbPath() }),
-        )
-        await worker.stdin.end()
-        const [stdout, stderr, code] = await Promise.all([
-          new Response(worker.stdout).text(),
-          new Response(worker.stderr).text(),
-          worker.exited,
-        ])
-        if (code !== 0) throw new Error(`Emote renderer failed: ${stderr.slice(0, 1000)}`)
-        const result = z.object({ path: z.string() }).parse(JSON.parse(stdout))
         if (typeof result.path !== 'string' || !(await Bun.file(result.path).exists()))
           throw new Error('Invalid emote renderer result.')
         return result.path

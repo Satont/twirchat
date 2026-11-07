@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { getDbPath } from '../runtime-config'
 import { loadSharp } from './paint-renderer'
+import { paintWorker } from './paint-worker-client'
 
 const MAX_INPUT_BYTES = 20 * 1024 * 1024
 const MAX_INPUT_PIXELS = 16_000_000
@@ -71,28 +72,11 @@ export function createAvatarThumbnailer(options: { directory: () => string }) {
         const outputPath = join(directory, `${key}.png`)
         if (await Bun.file(outputPath).exists()) return outputPath
         if (import.meta.dir.includes('$bunfs') || import.meta.dir.includes('~BUN')) {
-          const worker = Bun.spawn(
-            [process.execPath, join(dirname(process.execPath), 'paint-worker.js')],
-            {
-              stdin: 'pipe',
-              stdout: 'pipe',
-              stderr: 'pipe',
-              timeout: 30_000,
-              windowsHide: true,
-              env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
-            },
-          )
-          await worker.stdin.write(
-            JSON.stringify({ kind: 'avatar', path, size, scale, dbPath: getDbPath() }),
-          )
-          await worker.stdin.end()
-          const [stdout, stderr, code] = await Promise.all([
-            new Response(worker.stdout).text(),
-            new Response(worker.stderr).text(),
-            worker.exited,
-          ])
-          if (code !== 0) throw new Error(`Avatar renderer failed: ${stderr.slice(0, 1000)}`)
-          const result = z.object({ path: z.string() }).parse(JSON.parse(stdout))
+          const result = z
+            .object({ path: z.string() })
+            .parse(
+              await paintWorker.run({ kind: 'avatar', path, size, scale, dbPath: getDbPath() }),
+            )
           if (!(await Bun.file(result.path).exists()))
             throw new Error('Invalid avatar renderer result.')
           return result.path
