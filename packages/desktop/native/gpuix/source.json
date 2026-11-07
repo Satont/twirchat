@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.17",
+  "version": "0.11.0-twirchat.18",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -155,6 +155,16 @@
       "path": "patches/gpuix-image-placeholder.patch",
       "root": "gpuix",
       "sha256": "1ce9b2f589e28d6cefd216659e48e618ccd642ce7712fec9acdbb161cc566194"
+    },
+    {
+      "path": "patches/gpuix-row-cache.patch",
+      "root": "gpuix",
+      "sha256": "1f0462b21a060eb337bc5523ef9caa1d343fd527090761310ee823cd71e59d5e"
+    },
+    {
+      "path": "patches/gpui-resolved-fonts.patch",
+      "root": "gpui",
+      "sha256": "08c8333e73b600826cbe5079844fdf29057a66cbbdc32c826b17a68027484b99"
     }
   ]
 }

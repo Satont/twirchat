@@ -38,6 +38,12 @@ const { values: args } = parseArgs({
     grid: { type: 'string', default: 'row' },
     width: { type: 'string', default: '1200' },
     height: { type: 'string', default: '800' },
+    // Native pointer moves per second during measurement, sweeping down across the chat rows.
+    hover: { type: 'string', default: '0' },
+    // rows: crosses every visible row; row: moves sideways within one row.
+    'hover-path': { type: 'string', default: 'rows' },
+    // Duration of one pointer sweep.
+    'hover-sweep-ms': { type: 'string', default: '250' },
   },
 })
 
@@ -387,6 +393,29 @@ function scrollUp(current: NativeRenderer): void {
   if (typeof scroll !== 'function') throw new Error('Native scroll simulation unavailable.')
   Reflect.apply(scroll, current, [300, 400, 0, 120])
 }
+function startHover(current: NativeRenderer, perSecond: number): () => void {
+  if (perSecond <= 0) return () => {}
+  const move: unknown = Reflect.get(current, 'simulateMouseMove')
+  if (typeof move !== 'function') throw new Error('Native pointer simulation unavailable.')
+  const width = Number(args.width)
+  const top = 80
+  const bottom = Number(args.height) - 120
+  const sweepMs = Number(args['hover-sweep-ms'])
+  const acrossRows = args['hover-path'] === 'rows'
+  assert.ok(acrossRows || args['hover-path'] === 'row', '--hover-path must be rows or row')
+  const start = performance.now()
+  const timer = setInterval(() => {
+    const phase = ((performance.now() - start) % sweepMs) / sweepMs
+    Reflect.apply(
+      move,
+      current,
+      acrossRows
+        ? [width / 2, top + (bottom - top) * phase]
+        : [width * (0.3 + 0.4 * phase), (top + bottom) / 2],
+    )
+  }, 1000 / perSecond)
+  return () => clearInterval(timer)
+}
 function frameCount(current: NativeRenderer): number {
   return current.getDebugFrameOverlayStats?.().frames ?? 0
 }
@@ -481,7 +510,9 @@ try {
   const start = performance.now()
   const load = generator(rate)
   const ticker = tickFrames ? setInterval(() => tickListener?.(), 20) : undefined
+  const stopHover = startHover(renderer, Number(args.hover))
   await Bun.sleep(Number(args.duration) * 1000)
+  stopHover()
   clearInterval(ticker)
   load.stop()
   const wallMs = performance.now() - start
@@ -512,6 +543,7 @@ try {
     experiment,
     mode: args.mode,
     rate,
+    hover: Number(args.hover),
     channels: channelCount,
     panes: paneCount,
     actualRate: Math.round(load.generated() / (wallMs / 1000)),

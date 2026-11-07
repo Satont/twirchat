@@ -5,7 +5,17 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
-Native version `0.11.0-twirchat.17` keeps a missing, undecodable or unreadable
+Native version `0.11.0-twirchat.18` caches whole virtual-list rows. GPUI redraws
+the window on every frame, so a pointer that crossed chat rows used to rebuild,
+lay out and paint every visible message for each one-row hover change. Now a
+row whose own subtree is unchanged replays its last layout, prepaint and paint.
+Only the rows whose hover colour changed are re-rendered, at their measured size,
+in one frame. See [Whole-row cache](#whole-row-cache) below. The GPUI text system
+also remembers the font that `resolve_font` settled on. Before, a family missing
+from the system formatted its cached error and retried every fallback on each
+shaping call.
+
+Since `0.11.0-twirchat.17` a missing, undecodable or unreadable
 `<img>` as an empty box of its declared size. Upstream drew `img: load failed`
 text without a width budget, which overflowed avatars, badges and emotes; now
 whatever the app paints beneath the image stays visible instead.
@@ -100,6 +110,24 @@ Cached misses constrain the body root to its measured width while preserving the
 width of long words. Cache-state identities add no descendant scope or layout container. Ancestor geometry is guarded by the committed Full generation;
 row background changes do not invalidate otherwise unchanged content. Text with no background
 decorations skips the empty background layer, avoiding its glyph walk and overlap bookkeeping.
+
+### Whole-row cache
+
+Each virtual-list row first tries the same entity-backed view cache as a whole. A row is
+laid out as the list's own item, so its size depends only on its subtree, the list's
+available space and the inherited text style. Those, the styles of the list and its
+ancestors, and the frame context (viewport, scale, rem, focus, selection, keyboard mode
+and keyboard-focus dimming) key the entry. A row reuses its measured size only when it
+was painted in the previous frame with every image decoded. Unlike a message body, a row
+entry survives Full commits elsewhere in the tree, such as a new message, and those
+commits no longer refresh the whole window. A row only re-renders when GPUI sees new
+bounds, so after a new message shifts the list it replays from the next frame.
+
+Elements carry a layout revision that colour-only restyles leave alone. A row whose
+only change is a hover colour keeps its measured size and re-renders once, in the frame
+that shows the change. Inputs, custom elements, anchored layers, scroll containers,
+motion, search highlights, inspector picking and active accessibility keep the ordinary
+path. When a row is not eligible, the body cache above still applies to its message body.
 
 Run from `packages/desktop`:
 

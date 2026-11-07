@@ -1,0 +1,530 @@
+diff --git a/packages/native/src/cached_flow.rs b/packages/native/src/cached_flow.rs
+index eb7b273..65bf094 100644
+--- a/packages/native/src/cached_flow.rs
++++ b/packages/native/src/cached_flow.rs
+@@ -31,6 +31,20 @@ struct Frame {
+     viewport: Size<Pixels>,
+     scale: f32,
+     rem: Pixels,
++    focus_dim: bool,
++}
++
++impl Frame {
++    /// Everything except the tree generation: a change here invalidates every flow.
++    fn same_context(&self, other: &Frame) -> bool {
++        self.selection == other.selection
++            && self.focus == other.focus
++            && self.keyboard == other.keyboard
++            && self.viewport == other.viewport
++            && self.scale == other.scale
++            && self.rem == other.rem
++            && self.focus_dim == other.focus_dim
++    }
+ }
+ 
+ #[derive(Default)]
+@@ -38,7 +52,10 @@ pub(crate) struct Flows {
+     entries: FxHashMap<u64, Rc<RefCell<FlowEntry>>>,
+     token: u64,
+     epoch: u64,
++    /// Whole virtual-list rows may be served this frame.
+     enabled: bool,
++    /// Message bodies may be served this frame: no Full commit since the last draw.
++    bodies: bool,
+     frame: Option<Frame>,
+ }
+ 
+@@ -46,6 +63,14 @@ impl Flows {
+     pub(crate) fn clear(&mut self) {
+         self.entries.clear();
+         self.enabled = false;
++        self.bodies = false;
++    }
++    /// A Full commit can move a body's ancestors, so only whole-row entries survive it:
++    /// they are keyed by the complete row subtree and laid out from the list's own space.
++    pub(crate) fn invalidate_bodies(&mut self) {
++        self.entries
++            .retain(|_, entry| entry.borrow().source.generation.is_none());
++        self.bodies = false;
+     }
+     fn version(&mut self) -> Option<u64> {
+         match self.token.checked_add(1) {
+@@ -77,10 +102,18 @@ impl Flows {
+             viewport: window.viewport_size(),
+             scale: window.scale_factor(),
+             rem: window.rem_size(),
++            focus_dim: tree.keyboard_focus_dim(),
+         });
+-        self.enabled = safe && kind != Invalidation::Full && frame.is_some() && frame == self.frame;
++        let same_context = match (&frame, &self.frame) {
++            (Some(current), Some(previous)) => current.same_context(previous),
++            _ => false,
++        };
++        self.enabled = safe && same_context;
++        self.bodies = self.enabled && kind != Invalidation::Full && frame == self.frame;
+         if !self.enabled {
+             self.entries.clear();
++        } else if !self.bodies {
++            self.invalidate_bodies();
+         }
+         self.frame = frame;
+     }
+@@ -119,13 +152,17 @@ pub(crate) struct FlowScope {
+ 
+ #[derive(PartialEq)]
+ struct Source {
+-    generation: u64,
++    /// Tree generation a message body depends on; `None` for a whole row, which
++    /// depends only on its own subtree, the list's space and the inherited context.
++    generation: Option<u64>,
+     body: u64,
+     row: u64,
+     list: u64,
+     // A split body excludes toolbar-only revisions; its live stamp stays in FlowEntry.
+     revision: u64,
+     style: Option<Arc<StyleDesc>>,
++    /// Styles of the list and its ancestors, for a whole row; 0 for a body.
++    ancestry: u64,
+     overlay: Option<Overlay>,
+     available: Size<AvailableSpace>,
+     selectable: bool,
+@@ -133,9 +170,29 @@ struct Source {
+ }
+ 
+ impl Source {
+-    fn current(&self, tree: &RetainedTree, available: Size<AvailableSpace>, observed: u64) -> bool {
++    /// Equal apart from the content revision and the element's own style: with an
++    /// unchanged layout revision those differ only by colour, so the size still holds.
++    fn same_geometry(&self, other: &Source) -> bool {
++        self.generation == other.generation
++            && self.body == other.body
++            && self.row == other.row
++            && self.list == other.list
++            && self.ancestry == other.ancestry
++            && self.overlay == other.overlay
++            && self.available == other.available
++            && self.selectable == other.selectable
++            && self.wash == other.wash
++    }
++    fn current(
++        &self,
++        tree: &RetainedTree,
++        available: Size<AvailableSpace>,
++        observed: u64,
++        frame: u64,
++    ) -> bool {
+         self.available == available
+-            && tree.cache_revision() == Some(self.generation)
++            && tree.cache_revision() == Some(frame)
++            && self.generation.is_none_or(|generation| generation == frame)
+             && tree
+                 .elements
+                 .get(&self.row)
+@@ -156,6 +213,8 @@ struct FlowEntry {
+     source: Source,
+     ids: Arc<[u64]>,
+     observed: u64,
++    /// Layout revision of the cached element when `source` was taken.
++    layout: u64,
+     entity: Entity<FlowView>,
+     version: u64,
+     painted: u64,
+@@ -164,6 +223,8 @@ struct FlowEntry {
+ 
+ struct Snapshot {
+     bounds: Bounds<Pixels>,
++    /// Inherited text style the cached size was measured with.
++    text_style: gpui::TextStyle,
+     text: TextPaintEffects,
+     nodes: Vec<(u64, ElementBounds)>,
+     images: ImageUses,
+@@ -367,8 +428,9 @@ fn compact_geometry(tree: &RetainedTree, element: &RetainedElement, row: u64) ->
+     false
+ }
+ 
++/// A whole row is laid out as the list's own item, so it needs no ancestry geometry check.
+ fn eligible_ids(tree: &RetainedTree, body: u64, row: u64) -> Option<Arc<[u64]>> {
+-    if !compact_geometry(tree, tree.elements.get(&body)?, row) {
++    if body != row && !compact_geometry(tree, tree.elements.get(&body)?, row) {
+         return None;
+     }
+     let mut outside = vec![row];
+@@ -437,6 +499,24 @@ fn eligible_ids(tree: &RetainedTree, body: u64, row: u64) -> Option<Arc<[u64]>>
+     Some(ids.into())
+ }
+ 
++/// Identity of every style from the list up to the root. Interned styles share one
++/// `Arc` per content, so any ancestor restyle (opacity, inherited text) changes it.
++fn ancestry(tree: &RetainedTree, list: u64) -> u64 {
++    use std::hash::{Hash, Hasher};
++    let mut hasher = rustc_hash::FxHasher::default();
++    let mut node = tree.elements.get(&list);
++    while let Some(element) = node {
++        element.id.hash(&mut hasher);
++        element
++            .style
++            .as_ref()
++            .map(|style| Arc::as_ptr(style).addr())
++            .hash(&mut hasher);
++        node = element.parent.and_then(|id| tree.elements.get(&id));
++    }
++    hasher.finish()
++}
++
+ impl FlowScope {
+     pub(crate) fn prepare(
+         &self,
+@@ -452,8 +532,9 @@ impl FlowScope {
+         {
+             return None;
+         }
++        let whole_row = body == self.row;
+         let mut cache = self.cache.borrow_mut();
+-        if !cache.enabled {
++        if !cache.enabled || (!whole_row && !cache.bodies) {
+             return None;
+         }
+         let generation = cache.frame.as_ref()?.generation;
+@@ -478,7 +559,8 @@ impl FlowScope {
+             )
+         } else {
+             let ids = eligible_ids(tree, body, self.row)?;
+-            let overlay = split_overlay(tree, node);
++            // A whole row repaints its own toolbar; only a body splits it out.
++            let overlay = (!whole_row).then(|| split_overlay(tree, node)).flatten();
+             (
+                 inline_ids(tree, ids, overlay),
+                 overlay,
+@@ -486,12 +568,17 @@ impl FlowScope {
+             )
+         };
+         let source = Source {
+-            generation,
++            generation: (!whole_row).then_some(generation),
+             body,
+             row: self.row,
+             list: self.list,
+             revision,
+             style: node.style.clone(),
++            ancestry: if whole_row {
++                ancestry(tree, self.list)
++            } else {
++                0
++            },
+             overlay,
+             available: self.available,
+             selectable: inherited.selectable,
+@@ -502,12 +589,16 @@ impl FlowScope {
+             if entry.borrow().source != source {
+                 let version = cache.version()?;
+                 let mut state = entry.borrow_mut();
++                // A colour-only change re-renders at the measured size in one frame.
++                if state.layout != node.layout_revision || !state.source.same_geometry(&source) {
++                    state.snapshot = None;
++                }
+                 state.source = source;
+                 state.version = version;
+-                state.snapshot = None;
+                 state.ids = ids;
+             }
+             entry.borrow_mut().observed = node.subtree_revision;
++            entry.borrow_mut().layout = node.layout_revision;
+             entry.borrow().entity.update(cx, |view, _| {
+                 view.build = FlowBuild {
+                     body,
+@@ -545,6 +636,7 @@ impl FlowScope {
+                 source,
+                 ids,
+                 observed: node.subtree_revision,
++                layout: node.layout_revision,
+                 entity,
+                 version,
+                 painted: 0,
+@@ -564,6 +656,7 @@ impl FlowScope {
+             valid: false,
+             cache_id: None,
+             overlay: None,
++            text_style: None,
+         })
+     }
+ }
+@@ -579,6 +672,7 @@ pub(crate) struct FlowElement {
+     valid: bool,
+     cache_id: Option<GlobalElementId>,
+     overlay: Option<AnyElement>,
++    text_style: Option<gpui::TextStyle>,
+ }
+ 
+ impl IntoElement for FlowElement {
+@@ -607,9 +701,16 @@ impl Element for FlowElement {
+         let (scope, entry) = (&self.scope, &self.entry);
+         let tree = scope.tree.lock().unwrap();
+         let state = entry.borrow();
++        let frame = scope.cache.borrow().frame.as_ref().map(|frame| frame.generation);
++        let whole_row = state.source.generation.is_none();
++        let text_style = window.text_style();
+         self.valid = scope.cache.borrow().enabled
+             && scope.cache.borrow().epoch == self.epoch
+-            && state.source.current(&tree, scope.available, state.observed)
++            && frame.is_some_and(|frame| {
++                state
++                    .source
++                    .current(&tree, scope.available, state.observed, frame)
++            })
+             && !window.is_a11y_active()
+             && !window.is_inspector_picking(cx);
+         if !self.valid {
+@@ -629,18 +730,23 @@ impl Element for FlowElement {
+             self.direct = Some(direct);
+             return (layout, None);
+         }
++        self.text_style = Some(text_style.clone());
+         // Own the cache state key without pushing it onto descendant element paths.
+         self.cache_id = Some(
+             window.global_element_id_for(ElementId::NamedInteger("cached-flow".into(), self.body)),
+         );
+         // Exact row space plus static column ancestry preserve the last actual body size.
+         // Dirty views/assets instead measure their intrinsic contents before parent layout.
++        // A whole row's size depends only on its unchanged subtree, the list's space and
++        // the inherited text style, so a window refresh re-renders it at that same size;
++        // that keeps its view state current for the next, unchanged frame.
+         let can_reuse = self.valid
+-            && !window.is_view_cache_invalidated(state.entity.entity_id())
++            && (whole_row || !window.is_view_cache_invalidated(state.entity.entity_id()))
+             && state.painted.saturating_add(1) == self.epoch
+             && state.snapshot.as_ref().is_some_and(|snapshot| {
+                 // Protect existing resources before another row can trim the cache.
+-                snapshot.images.data_ready(cx)
++                snapshot.text_style == text_style
++                    && snapshot.images.data_ready(cx)
+                     && scope
+                         .images
+                         .update(cx, |images, _| images.touch_uses(&snapshot.images))
+@@ -833,8 +939,12 @@ impl FlowElement {
+                 .iter()
+                 .filter_map(|id| automation::get_bounds(window_id, *id).map(|bounds| (*id, bounds)))
+                 .collect();
++            let Some(text_style) = self.text_style.clone() else {
++                return;
++            };
+             let snapshot = Snapshot {
+                 bounds,
++                text_style,
+                 text: text_paint_effects(window_id, marker),
+                 nodes,
+                 images,
+@@ -912,14 +1022,70 @@ mod tests {
+         tree.take_invalidation();
+         tree
+     }
++    impl Source {
++        /// `current` against the generation a frame drawn now would capture.
++        fn now(&self, tree: &RetainedTree, available: Size<AvailableSpace>, observed: u64) -> bool {
++            self.current(tree, available, observed, tree.cache_revision().unwrap_or(u64::MAX))
++        }
++    }
++    fn row_source(tree: &RetainedTree) -> Source {
++        Source {
++            generation: None,
++            body: 2,
++            revision: tree.elements[&2].subtree_revision,
++            style: tree.elements[&2].style.clone(),
++            ancestry: ancestry(tree, 1),
++            ..source(tree)
++        }
++    }
++    #[test]
++    fn whole_rows_survive_full_commits_outside_their_subtree() {
++        let mut tree = fixture();
++        let saved = row_source(&tree);
++        assert!(eligible_ids(&tree, 2, 2).is_some());
++        tree.create_element(9, "div".into());
++        tree.append_child(1, 9);
++        tree.set_text(6, "abcdefghijklmnopqrstuvwxyzAB ".into());
++        assert!(!saved.now(&tree, saved.available, saved.revision));
++        assert_eq!(tree.take_invalidation(), crate::retained_tree::Invalidation::Full);
++        assert!(saved.now(&tree, saved.available, saved.revision));
++        assert_eq!(saved.ancestry, ancestry(&tree, 1));
++        // A body still depends on the generation it was measured in.
++        let body = source(&tree);
++        tree.set_text(9, "new row".into());
++        tree.take_invalidation();
++        assert!(!body.now(&tree, body.available, body.revision));
++        assert!(saved.now(&tree, saved.available, saved.revision));
++    }
++    #[test]
++    fn whole_rows_reject_their_own_changes_and_restyled_ancestors() {
++        let mut tree = fixture();
++        let saved = row_source(&tree);
++        let mut style = tree.elements[&4].style.as_deref().unwrap().clone();
++        style.background_color = Some("#333333".into());
++        tree.set_style(4, Arc::new(style));
++        tree.take_invalidation();
++        assert!(!saved.now(&tree, saved.available, saved.revision));
++        let mut tree = fixture();
++        tree.set_style(
++            1,
++            Arc::new(StyleDesc {
++                opacity: Some(0.5),
++                ..Default::default()
++            }),
++        );
++        tree.take_invalidation();
++        assert_ne!(saved.ancestry, ancestry(&tree, 1));
++    }
+     fn source(tree: &RetainedTree) -> Source {
+         Source {
+-            generation: tree.cache_revision().unwrap(),
++            generation: tree.cache_revision(),
+             body: 4,
+             row: 2,
+             list: 1,
+             revision: tree.elements[&4].subtree_revision,
+             style: tree.elements[&4].style.clone(),
++            ancestry: 0,
+             overlay: None,
+             available: size(
+                 AvailableSpace::Definite(px(180.)),
+@@ -1009,12 +1175,12 @@ mod tests {
+             style.background_color = Some("#333333".into());
+             tree.set_style(id, Arc::new(style));
+             assert_ne!(tree.elements[&2].subtree_revision, row_revision);
+-            assert!(saved.current(&tree, saved.available, saved.revision));
++            assert!(saved.now(&tree, saved.available, saved.revision));
+             assert_eq!(
+                 tree.take_invalidation(),
+                 crate::retained_tree::Invalidation::PaintOnly
+             );
+-            assert!(saved.current(&tree, saved.available, saved.revision));
++            assert!(saved.now(&tree, saved.available, saved.revision));
+         }
+     }
+     #[test]
+@@ -1047,12 +1213,12 @@ mod tests {
+         let mut style = tree.elements[&10].style.as_deref().unwrap().clone();
+         style.background_color = Some("#333333".into());
+         tree.set_style(10, Arc::new(style));
+-        assert!(saved.current(&tree, saved.available, saved.revision));
++        assert!(saved.now(&tree, saved.available, saved.revision));
+         assert_eq!(
+             tree.take_invalidation(),
+             crate::retained_tree::Invalidation::PaintOnly
+         );
+-        assert!(saved.current(&tree, saved.available, saved.revision));
++        assert!(saved.now(&tree, saved.available, saved.revision));
+     }
+     #[test]
+     fn full_ancestor_commits_are_detected_before_their_ui_commands() {
+@@ -1080,9 +1246,9 @@ mod tests {
+                 }
+             }
+             assert_eq!(tree.elements[&4].subtree_revision, saved.revision);
+-            assert!(!saved.current(&tree, saved.available, saved.revision));
++            assert!(!saved.now(&tree, saved.available, saved.revision));
+             tree.take_invalidation();
+-            assert!(!saved.current(&tree, saved.available, saved.revision));
++            assert!(!saved.now(&tree, saved.available, saved.revision));
+         }
+     }
+     fn overlay_fixture() -> RetainedTree {
+@@ -1135,8 +1301,8 @@ mod tests {
+             }),
+         );
+         assert!(before == split_source(&tree));
+-        assert!(!before.current(&tree, before.available, observed));
+-        assert!(before.current(&tree, before.available, tree.elements[&4].subtree_revision));
++        assert!(!before.now(&tree, before.available, observed));
++        assert!(before.now(&tree, before.available, tree.elements[&4].subtree_revision));
+     }
+     #[test]
+     fn inline_color_and_root_style_changes_invalidate_split_content() {
+@@ -1181,8 +1347,8 @@ mod tests {
+     fn changed_or_unknown_available_space_cannot_impose_old_height() {
+         let tree = fixture();
+         let saved = source(&tree);
+-        assert!(saved.current(&tree, saved.available, saved.revision));
+-        assert!(!saved.current(
++        assert!(saved.now(&tree, saved.available, saved.revision));
++        assert!(!saved.now(
+             &tree,
+             size(
+                 AvailableSpace::Definite(px(100.)),
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+index 7eb33eb..f70e243 100644
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -608,12 +608,11 @@ fn refresh_ui_window(
+     kind: Invalidation,
+     cx: &mut gpui::AsyncApp,
+ ) -> anyhow::Result<()> {
+-    window.update(cx, |view, window, cx| {
++    window.update(cx, |view, _window, cx| {
+         view.queue_invalidation(kind);
++        // No window refresh: it would re-render every cached row. Cached message bodies
++        // were dropped by `queue_invalidation`, and each whole row checks its own subtree.
+         cx.notify();
+-        if view.pending_invalidation == Invalidation::Full {
+-            window.refresh();
+-        }
+     })
+ }
+ 
+@@ -5186,7 +5185,8 @@ impl GpuixView {
+         self.pending_invalidation.merge(kind);
+         if self.pending_invalidation == Invalidation::Full {
+             self.plain_text_cache.borrow_mut().clear();
+-            self.flow_cache.borrow_mut().clear();
++            // Whole rows are keyed by their own subtree and survive commits elsewhere.
++            self.flow_cache.borrow_mut().invalidate_bodies();
+         }
+     }
+ 
+@@ -5520,7 +5520,15 @@ impl GpuixView {
+             highlight_events: &mut highlight_events,
+             keyboard_focus,
+         };
+-        let child = build_element(expected_child_id, &mut build_ctx, window, cx);
++        // An unchanged row replays its last layout and paint; otherwise its message
++        // body may still be served from the body cache below.
++        let whole_row = build_ctx.flow_scope.clone().and_then(|scope| {
++            scope.prepare(&tree, expected_child_id, &build_ctx.inherited, window, cx)
++        });
++        let child = match whole_row {
++            Some(flow) => flow.into_any_element(),
++            None => build_element(expected_child_id, &mut build_ctx, window, cx),
++        };
+         emit_highlight_events(&callback, &highlight_events);
+         emit_motion_settled(&callback, &tree, &motion_settled);
+         if motion_active {
+diff --git a/packages/native/src/retained_tree.rs b/packages/native/src/retained_tree.rs
+index 6fc79c7..ec7c069 100644
+--- a/packages/native/src/retained_tree.rs
++++ b/packages/native/src/retained_tree.rs
+@@ -45,6 +45,9 @@ pub struct RetainedElement {
+     pub auto_focus: bool,
+     /// Last mutation applied to this element or one of its descendants.
+     pub subtree_revision: u64,
++    /// Like `subtree_revision`, but only moved by changes that can alter layout:
++    /// a colour-only restyle leaves it alone.
++    pub layout_revision: u64,
+     /// Last change to the searchable TEXT of this subtree: content, structure,
+     /// or the set of nested `highlight` declarations.
+     ///
+@@ -97,6 +100,7 @@ impl RetainedElement {
+             extras: None,
+             auto_focus: false,
+             subtree_revision: revision,
++            layout_revision: revision,
+             search_revision: revision,
+             test_id: None,
+         }
+@@ -411,6 +415,9 @@ impl RetainedTree {
+                 break;
+             };
+             element.subtree_revision = revision;
++            if kind != Invalidation::PaintOnly {
++                element.layout_revision = revision;
++            }
+             if search {
+                 element.search_revision = revision;
+             }
