@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -73,6 +73,28 @@ describe('avatar thumbnails', () => {
     expect(await next.render(f.source, 32)).toBe(path)
     expect(Bun.file(path).lastModified).toBe(oldMtime)
     expect(await sharp(path).metadata()).toMatchObject({ width: 64, height: 64 })
+  })
+
+  test('never deletes a thumbnail it has handed out, even past the disk limit', async () => {
+    // Native <img> keeps a failed read for every row that shows the path, so a thumbnail
+    // deleted mid-session draws a broken avatar for that user until restart. Packaged
+    // builds render in a separate worker with its own instance, so a second instance on
+    // the same directory must not sweep either.
+    const f = fixture()
+    await Bun.write(
+      f.source,
+      await loadSharp()({ create: { width: 64, height: 64, channels: 3, background: '#345678' } })
+        .png()
+        .toBuffer(),
+    )
+    const handedOut = await f.cache.render(f.source, 18)
+    const thumbnails = join(f.directory, 'thumbnails')
+    for (let index = 0; index < 2100; index++)
+      writeFileSync(join(thumbnails, `${index.toString(16).padStart(32, '0')}.png`), 'x')
+    const next = createAvatarThumbnailer({ directory: () => thumbnails })
+    await next.render(f.source, 20)
+    expect(await Bun.file(handedOut).exists()).toBe(true)
+    expect(readdirSync(thumbnails).length).toBe(2102)
   })
 
   test('rejects invalid dimensions, excessive encoded bytes and excessive decoded pixels', async () => {

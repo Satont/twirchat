@@ -1,0 +1,74 @@
+diff --git a/packages/native/src/custom_elements/img.rs b/packages/native/src/custom_elements/img.rs
+--- a/packages/native/src/custom_elements/img.rs
++++ b/packages/native/src/custom_elements/img.rs
+@@ -151,27 +151,19 @@
+     }
+ }
+ 
+-fn img_fallback(ctx: &CustomRenderContext, alt: &str, message: &str) -> gpui::AnyElement {
++/// A missing or undecodable image keeps its declared box and paints nothing, like a
++/// failed `objectFit` image: whatever the app drew underneath stays visible. Diagnostic
++/// text has no width budget and would overflow small boxes such as avatars and badges.
++fn img_placeholder(ctx: &CustomRenderContext, alt: &str) -> gpui::AnyElement {
+     use gpui::prelude::*;
+ 
+-    let mut fallback = super::custom_surface(
+-        gpui::div()
+-            .id(gpui::SharedString::from(format!("__gpuix_img_{}", ctx.id)))
+-            .flex()
+-            .items_center()
+-            .justify_center()
+-            .bg(gpui::rgba(0x1f2230ff))
+-            .border(gpui::px(1.0))
+-            .border_color(gpui::rgba(0x5d6481ff))
+-            .text_color(gpui::rgba(0xa4accdff)),
++    let mut placeholder = super::custom_surface(
++        gpui::div().id(gpui::SharedString::from(format!("__gpuix_img_{}", ctx.id))),
+         ctx,
+     );
+-    fallback =
+-        crate::accessibility::apply_accessibility(fallback, ctx.props, Some(gpui::Role::Image));
+-    fallback = crate::accessibility::apply_image_label(fallback, ctx.props, alt);
+-    fallback
+-        .child(ctx.chrome_text(message.to_string(), None))
+-        .into_any_element()
++    placeholder =
++        crate::accessibility::apply_accessibility(placeholder, ctx.props, Some(gpui::Role::Image));
++    crate::accessibility::apply_image_label(placeholder, ctx.props, alt).into_any_element()
+ }
+ 
+ impl CustomElement for ImgElement {
+@@ -200,30 +192,18 @@
+                 gpui::img(image.clone())
+             }
+             ImgSource::Render(image) => gpui::img(image.clone()),
+-            ImgSource::Empty => return img_fallback(&ctx, &self.alt, "img: no src"),
+-            ImgSource::Invalid => return img_fallback(&ctx, &self.alt, "img: load failed"),
++            ImgSource::Empty | ImgSource::Invalid => return img_placeholder(&ctx, &self.alt),
+         };
+         // The id is what makes gpui's `ImgState` persist. Without it `Img` has no
+         // `GlobalElementId`, so the animated-GIF frame index and the delayed
+         // loading state are rebuilt from scratch on every frame and an animation
+-        // never advances past frame zero.
++        // never advances past frame zero. A failed load keeps the box empty; see
++        // `img_placeholder`.
+         let mut el = el
+             .image_cache(ctx.image_resources)
+             .animate_when_inactive(true)
+             .synchronize_animation(true)
+             .object_fit(self.object_fit.as_gpui())
+-            .with_fallback(|| {
+-                gpui::div()
+-                    .flex()
+-                    .items_center()
+-                    .justify_center()
+-                    .bg(gpui::rgba(0x1f2230ff))
+-                    .border(gpui::px(1.0))
+-                    .border_color(gpui::rgba(0x5d6481ff))
+-                    .text_color(gpui::rgba(0xa4accdff))
+-                    .child("img: load failed")
+-                    .into_any_element()
+-            })
+             .id(gpui::SharedString::from(format!("__gpuix_img_{}", ctx.id)));
+ 
+         if let Some(style) = ctx.style {

@@ -2,11 +2,16 @@ import { setRuntimeConfig } from '../runtime-config'
 import { avatarThumbnailer } from './avatar-image'
 import { getPaintNameImage, cosmeticPaintSchema } from './cosmetics'
 import { modifiedEmoteImage } from './emote-image'
+import { disableImageSweeps } from './image-cache-sweep'
 import {
   paintWorkerJobSchema,
   paintWorkerRequestSchema,
   type PaintWorkerReply,
 } from './paint-worker-client'
+
+// The app sweeps its image directories before it sends the first job; sweeping here
+// would delete files that its native image views may still read.
+disableImageSweeps()
 
 if (!process.send) throw new Error('The image worker requires desktop IPC.')
 
