@@ -12,6 +12,7 @@ import { timelineValue } from './animation-timeline'
 import { deleteOldestEntry } from './bounded-cache'
 import type { CosmeticPaint } from './cosmetics'
 import type { ProviderFetch } from './emote-providers'
+import { PACKAGED_PAINT_WORKER, paintWorker } from './paint-worker-client'
 import { fetchProviderImage } from './provider-relay'
 
 interface Mask {
@@ -136,38 +137,22 @@ export function createPaintRenderer(
       else active++
       try {
         if (isStandalone()) {
-          const workerPath = join(dirname(process.execPath), 'paint-worker.js')
+          const workerPath = join(dirname(process.execPath), PACKAGED_PAINT_WORKER)
           if (!(await Bun.file(workerPath).exists()))
             throw new Error('The paint renderer asset is missing.')
-          const worker = Bun.spawn([process.execPath, workerPath], {
-            stdin: 'pipe',
-            stdout: 'pipe',
-            stderr: 'pipe',
-            env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
-            timeout: 30_000,
-            windowsHide: true,
-          })
-          await worker.stdin.write(
-            JSON.stringify({
-              name,
-              paint,
-              fontSize,
-              fontFamily,
-              dbPath: getDbPath(),
-              backendUrl: getBackendUrl(),
-            }),
-          )
-          await worker.stdin.end()
-          const [stdout, stderr, code] = await Promise.all([
-            new Response(worker.stdout).text(),
-            new Response(worker.stderr).text(),
-            worker.exited,
-          ])
-          if (code !== 0)
-            throw new Error(`Paint renderer failed: ${stderr.slice(0, 1000) || `exit ${code}`}`)
           const result = z
             .object({ path: z.string(), width: z.number(), height: z.number() })
-            .parse(JSON.parse(stdout))
+            .parse(
+              await paintWorker.run({
+                kind: 'paint',
+                name,
+                paint,
+                fontSize,
+                fontFamily,
+                dbPath: getDbPath(),
+                backendUrl: getBackendUrl(),
+              }),
+            )
           if (
             typeof result.path !== 'string' ||
             !Number.isFinite(result.width) ||
@@ -307,7 +292,7 @@ export function createPaintRenderer(
         const temporary = `${path}.${crypto.randomUUID()}.tmp`
         await Bun.write(temporary, output)
         await rename(temporary, path)
-        if (++writes % 25 === 0 || process.env.TWIRCHAT_PAINT_WORKER === '1') {
+        if (++writes % 25 === 0) {
           const files = (await readdir(directory)).filter((file) => file.endsWith('.webp'))
           if (files.length > 512) {
             const old = files

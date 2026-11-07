@@ -12,6 +12,7 @@ import {
   GPUI_SOURCE_REVISION,
   validateNativeRuntimeManifest,
 } from '../src/services/native-runtime'
+import { PACKAGED_PAINT_WORKER, createPaintWorkerClient } from '../src/services/paint-worker-client'
 import { nativeArtifactName, parseNativeSourceManifest } from './build-gpuix-native'
 
 const packageManifestSchema = z.object({
@@ -191,7 +192,7 @@ export async function packageRuntimeAssets(directory = join(desktop, 'dist')): P
     entrypoints: [join(desktop, 'src/services/paint-worker.ts')],
     target: 'bun',
     outdir: output,
-    naming: 'paint-worker.js',
+    naming: PACKAGED_PAINT_WORKER,
   })
   if (!worker.success) throw new AggregateError(worker.logs, 'Could not build the paint worker.')
   const pluginRunner = await Bun.build({
@@ -219,16 +220,15 @@ export async function packageRuntimeAssets(directory = join(desktop, 'dist')): P
   try {
     // The compiled executable supplies Bun itself; this proves native addon resolution
     // and bundled-font rasterization from an unrelated working directory.
-    const child = Bun.spawn([join(output, binaryName), join(output, 'paint-worker.js')], {
+    const paintWorker = createPaintWorkerClient({
+      command: () => [join(output, binaryName), join(output, PACKAGED_PAINT_WORKER)],
       cwd: temporary,
-      env: { ...process.env, BUN_BE_BUN: '1', TWIRCHAT_PAINT_WORKER: '1' },
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'pipe',
-      timeout: 30_000,
+      env: { BUN_BE_BUN: '1' },
     })
-    await child.stdin.write(
-      JSON.stringify({
+    let rendered: unknown
+    try {
+      rendered = await paintWorker.run({
+        kind: 'paint',
         name: 'Runtime check',
         paint: {
           id: 'runtime-check',
@@ -239,16 +239,11 @@ export async function packageRuntimeAssets(directory = join(desktop, 'dist')): P
         fontSize: 14,
         fontFamily: 'Inter',
         dbPath: join(temporary, 'profile/db.sqlite'),
-      }),
-    )
-    await child.stdin.end()
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.exited,
-    ])
-    if (code !== 0) throw new Error(`Packaged paint renderer failed: ${stderr.slice(0, 2000)}`)
-    const result = z.object({ path: z.string() }).parse(JSON.parse(stdout))
+      })
+    } finally {
+      await paintWorker.close()
+    }
+    const result = z.object({ path: z.string() }).parse(rendered)
     if (typeof result.path !== 'string' || !(await Bun.file(result.path).exists()))
       throw new Error('Packaged paint renderer did not create its output.')
     const pluginEntry = join(temporary, 'smoke-plugin.ts')
