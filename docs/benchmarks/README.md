@@ -85,6 +85,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-08 Linux window controls](2026-11-08-linux-window-controls/report.md) records the
+title bar cache, the complete development matrix and three production runs per version.
+
 [2026-11-08 desktop memory](2026-11-08-desktop-memory/report.md) records the Linux font fallback
 and streamed image download fixes, the complete development matrix, and paired production runs.
 
