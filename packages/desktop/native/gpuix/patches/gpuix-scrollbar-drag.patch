@@ -1,0 +1,562 @@
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -7225,6 +7225,7 @@
+         .and_then(|style| ThumbStyle::of(style, false, true));
+     ListWithScrollbar {
+         list,
++        element_id: element.id,
+         state: scroll_state,
+         thumbs,
+         visible_range,
+@@ -7778,7 +7779,7 @@
+             style.overflow_x.as_deref().or(style.overflow.as_deref()) == Some("scroll"),
+             style.overflow_y.as_deref().or(style.overflow.as_deref()) == Some("scroll"),
+         ) {
+-            el = el.child(scrollbar_overlay(handle.clone(), thumbs));
++            el = el.child(scrollbar_overlay(element.id, handle.clone(), thumbs));
+         }
+     }
+ 
+@@ -7829,6 +7830,334 @@
+     }
+ }
+ 
++/// One scrollable surface a thumb can drive: a plain scroll container or a
++/// virtual list, which needs its content height frozen for the drag.
++#[derive(Clone)]
++enum ScrollbarScroll {
++    Element(gpui::ScrollHandle),
++    List(gpui::ListState),
++}
++
++impl ScrollbarScroll {
++    fn extent(&self) -> (gpui::Point<gpui::Pixels>, gpui::Point<gpui::Pixels>) {
++        match self {
++            ScrollbarScroll::Element(handle) => (handle.max_offset(), handle.offset()),
++            ScrollbarScroll::List(state) => list_scroll_extent(state),
++        }
++    }
++
++    fn set_offset(&self, offset: gpui::Point<gpui::Pixels>) {
++        match self {
++            ScrollbarScroll::Element(handle) => handle.set_offset(offset),
++            ScrollbarScroll::List(state) => state.set_offset_from_scrollbar(offset),
++        }
++    }
++
++    fn begin_drag(&self) {
++        if let ScrollbarScroll::List(state) = self {
++            state.scrollbar_drag_started();
++        }
++    }
++
++    fn end_drag(&self) {
++        if let ScrollbarScroll::List(state) = self {
++            state.scrollbar_drag_ended();
++        }
++    }
++}
++
++#[derive(Clone, Copy, PartialEq, Eq)]
++enum ScrollbarAxis {
++    Vertical,
++    Horizontal,
++}
++
++#[derive(Clone, Copy)]
++struct ThumbGeometry {
++    /// Distance from the viewport's leading edge to the thumb's start.
++    start: f32,
++    length: f32,
++    /// How far the thumb can travel.
++    travel: f32,
++    /// How far the content can scroll.
++    max_scroll: f32,
++}
++
++impl ThumbGeometry {
++    fn contains(&self, pointer: f32) -> bool {
++        pointer >= self.start && pointer <= self.start + self.length
++    }
++
++    /// Scroll offset that puts the thumb under `pointer`, keeping the point
++    /// inside the thumb where the pointer grabbed it.
++    fn offset_for(&self, pointer: f32, grab: f32) -> f32 {
++        if self.travel <= 0.0 {
++            return 0.0;
++        }
++        let start = (pointer - grab).clamp(0.0, self.travel);
++        -(start / self.travel) * self.max_scroll
++    }
++}
++
++struct ScrollbarGeometry {
++    vertical: Option<ThumbGeometry>,
++    horizontal: Option<ThumbGeometry>,
++}
++
++fn scrollbar_geometry(
++    size: gpui::Size<gpui::Pixels>,
++    max: gpui::Point<gpui::Pixels>,
++    offset: gpui::Point<gpui::Pixels>,
++    thumbs: ThumbStyle,
++) -> ScrollbarGeometry {
++    let (width, height) = (f32::from(size.width), f32::from(size.height));
++    let thumb = |track: f32, max_scroll: gpui::Pixels, offset: gpui::Pixels| {
++        scrollbar_thumb(track, f32::from(max_scroll), f32::from(offset)).map(
++            |(start, length)| ThumbGeometry {
++                start,
++                length,
++                travel: (track - length).max(0.0),
++                max_scroll: f32::from(max_scroll),
++            },
++        )
++    };
++    let mut vertical = thumbs
++        .vertical
++        .then(|| thumb(height, max.y, offset.y))
++        .flatten();
++    let mut horizontal = thumbs
++        .horizontal
++        .then(|| thumb(width, max.x, offset.x))
++        .flatten();
++    if vertical.is_some() && horizontal.is_some() {
++        // Leave the corner to whichever thumb reaches it first.
++        vertical = thumbs
++            .vertical
++            .then(|| thumb(height - thumbs.thickness, max.y, offset.y))
++            .flatten();
++        horizontal = thumbs
++            .horizontal
++            .then(|| thumb(width - thumbs.thickness, max.x, offset.x))
++            .flatten();
++    }
++    ScrollbarGeometry {
++        vertical,
++        horizontal,
++    }
++}
++
++/// Pointer target wider than the painted thumb, so a 5px bar is still easy to
++/// grab without painting a wider bar.
++const SCROLLBAR_HIT_WIDTH: f32 = 10.0;
++
++#[derive(Clone, Default)]
++struct ScrollbarHits {
++    vertical: Option<gpui::Hitbox>,
++    horizontal: Option<gpui::Hitbox>,
++}
++
++fn insert_scrollbar_hits(
++    window: &mut gpui::Window,
++    origin: gpui::Point<gpui::Pixels>,
++    size: gpui::Size<gpui::Pixels>,
++    max: gpui::Point<gpui::Pixels>,
++    offset: gpui::Point<gpui::Pixels>,
++    thumbs: ThumbStyle,
++) -> ScrollbarHits {
++    let geometry = scrollbar_geometry(size, max, offset, thumbs);
++    let (width, height) = (f32::from(size.width), f32::from(size.height));
++    let hit = thumbs.thickness.max(SCROLLBAR_HIT_WIDTH);
++    let vertical = geometry.vertical.map(|_| {
++        let strip = hit.min(width);
++        window.insert_hitbox(
++            gpui::Bounds::new(
++                gpui::point(origin.x + gpui::px(width - strip), origin.y),
++                gpui::size(gpui::px(strip), gpui::px(height)),
++            ),
++            gpui::HitboxBehavior::BlockMouseExceptScroll,
++        )
++    });
++    let horizontal = geometry.horizontal.map(|_| {
++        let strip = hit.min(height);
++        window.insert_hitbox(
++            gpui::Bounds::new(
++                gpui::point(origin.x, origin.y + gpui::px(height - strip)),
++                gpui::size(gpui::px(width), gpui::px(strip)),
++            ),
++            gpui::HitboxBehavior::BlockMouseExceptScroll,
++        )
++    });
++    ScrollbarHits {
++        vertical,
++        horizontal,
++    }
++}
++
++#[derive(Clone)]
++struct ActiveScrollbarDrag {
++    element_id: u64,
++    axis: ScrollbarAxis,
++    grab: f32,
++}
++
++thread_local! {
++    static ACTIVE_SCROLLBAR_DRAG: RefCell<Option<ActiveScrollbarDrag>> = const { RefCell::new(None) };
++}
++
++fn scrollbar_offset_point(
++    axis: ScrollbarAxis,
++    value: f32,
++    current: gpui::Point<gpui::Pixels>,
++) -> gpui::Point<gpui::Pixels> {
++    match axis {
++        ScrollbarAxis::Vertical => gpui::point(current.x, gpui::px(value)),
++        ScrollbarAxis::Horizontal => gpui::point(gpui::px(value), current.y),
++    }
++}
++
++/// Starts a thumb drag on a press inside the painted scrollbar and keeps
++/// setting the offset while the pointer moves. Once a drag begins it is
++/// handled in the capture phase, so content under the pointer cannot swallow
++/// the move or release events.
++fn install_scrollbar_interaction(
++    window: &mut gpui::Window,
++    element_id: u64,
++    origin: gpui::Point<gpui::Pixels>,
++    size: gpui::Size<gpui::Pixels>,
++    thumbs: ThumbStyle,
++    scroll: ScrollbarScroll,
++    hits: ScrollbarHits,
++) {
++    if hits.vertical.is_none() && hits.horizontal.is_none() {
++        return;
++    }
++
++    window.on_mouse_event({
++        let scroll = scroll.clone();
++        let hits = hits.clone();
++        move |event: &gpui::MouseDownEvent, phase, window, cx| {
++            if phase != gpui::DispatchPhase::Capture
++                || event.button != gpui::MouseButton::Left
++            {
++                return;
++            }
++            let axis = if hits.vertical.as_ref().is_some_and(|hit| hit.is_hovered(window)) {
++                ScrollbarAxis::Vertical
++            } else if hits
++                .horizontal
++                .as_ref()
++                .is_some_and(|hit| hit.is_hovered(window))
++            {
++                ScrollbarAxis::Horizontal
++            } else {
++                return;
++            };
++            let (max, offset) = scroll.extent();
++            let geometry = scrollbar_geometry(size, max, offset, thumbs);
++            let Some(thumb) = (match axis {
++                ScrollbarAxis::Vertical => geometry.vertical,
++                ScrollbarAxis::Horizontal => geometry.horizontal,
++            }) else {
++                return;
++            };
++            let local = event.position - origin;
++            let pointer = match axis {
++                ScrollbarAxis::Vertical => f32::from(local.y),
++                ScrollbarAxis::Horizontal => f32::from(local.x),
++            };
++            let grab = if thumb.contains(pointer) {
++                pointer - thumb.start
++            } else {
++                thumb.length / 2.0
++            };
++            scroll.begin_drag();
++            if !thumb.contains(pointer) {
++                let target = thumb.offset_for(pointer, grab);
++                scroll.set_offset(scrollbar_offset_point(axis, target, offset));
++                window.refresh();
++            }
++            ACTIVE_SCROLLBAR_DRAG.with(|active| {
++                *active.borrow_mut() = Some(ActiveScrollbarDrag {
++                    element_id,
++                    axis,
++                    grab,
++                });
++            });
++            cx.stop_propagation();
++        }
++    });
++
++    window.on_mouse_event({
++        let scroll = scroll.clone();
++        move |event: &gpui::MouseMoveEvent, phase, window, cx| {
++            let Some(active) = ACTIVE_SCROLLBAR_DRAG.with(|active| active.borrow().clone())
++            else {
++                return;
++            };
++            if active.element_id != element_id
++                || phase != gpui::DispatchPhase::Capture
++            {
++                return;
++            }
++            if !event.dragging() {
++                ACTIVE_SCROLLBAR_DRAG.with(|active| *active.borrow_mut() = None);
++                scroll.end_drag();
++                window.refresh();
++                return;
++            }
++            let (max, offset) = scroll.extent();
++            let geometry = scrollbar_geometry(size, max, offset, thumbs);
++            let Some(thumb) = (match active.axis {
++                ScrollbarAxis::Vertical => geometry.vertical,
++                ScrollbarAxis::Horizontal => geometry.horizontal,
++            }) else {
++                return;
++            };
++            let local = event.position - origin;
++            let pointer = match active.axis {
++                ScrollbarAxis::Vertical => f32::from(local.y),
++                ScrollbarAxis::Horizontal => f32::from(local.x),
++            };
++            let target = thumb.offset_for(pointer, active.grab);
++            let next = scrollbar_offset_point(active.axis, target, offset);
++            if next != offset {
++                scroll.set_offset(next);
++                window.refresh();
++            }
++            cx.stop_propagation();
++        }
++    });
++
++    window.on_mouse_event({
++        let scroll = scroll.clone();
++        move |event: &gpui::MouseUpEvent, phase, window, cx| {
++            if event.button != gpui::MouseButton::Left
++                || phase != gpui::DispatchPhase::Capture
++            {
++                return;
++            }
++            let is_active = ACTIVE_SCROLLBAR_DRAG.with(|active| {
++                let mut active = active.borrow_mut();
++                if active
++                    .as_ref()
++                    .is_some_and(|drag| drag.element_id == element_id)
++                {
++                    *active = None;
++                    true
++                } else {
++                    false
++                }
++            });
++            if !is_active {
++                return;
++            }
++            scroll.end_drag();
++            window.refresh();
++            cx.stop_propagation();
++        }
++    });
++}
++
+ /// Paints the thumbs of a viewport at `origin` with `size`. `max` is how far
+ /// its content can move and `offset` how far it has (zero or negative).
+ fn paint_scrollbars(
+@@ -7842,21 +8171,10 @@
+     let ThumbStyle {
+         color,
+         thickness,
+-        horizontal,
+-        vertical,
++        ..
+     } = thumbs;
++    let geometry = scrollbar_geometry(size, max, offset, thumbs);
+     let (width, height) = (f32::from(size.width), f32::from(size.height));
+-    let along = |show: bool, track: f32, max_scroll: gpui::Pixels, offset: gpui::Pixels| {
+-        show.then(|| scrollbar_thumb(track, f32::from(max_scroll), f32::from(offset)))
+-            .flatten()
+-    };
+-    let mut across = along(vertical, height, max.y, offset.y);
+-    let mut sideways = along(horizontal, width, max.x, offset.x);
+-    if across.is_some() && sideways.is_some() {
+-        // Leave the corner to whichever thumb reaches it first.
+-        across = along(vertical, height - thickness, max.y, offset.y);
+-        sideways = along(horizontal, width - thickness, max.x, offset.x);
+-    }
+     let paint = |window: &mut gpui::Window, x: f32, y: f32, w: f32, h: f32| {
+         // Whole pixels, so a thumb is as crisp as a browser's.
+         let rect = gpui::Bounds::new(
+@@ -7875,11 +8193,11 @@
+             gpui::BorderStyle::default(),
+         ));
+     };
+-    if let Some((start, length)) = across {
+-        paint(window, width - thickness, start, thickness, length);
++    if let Some(thumb) = geometry.vertical {
++        paint(window, width - thickness, thumb.start, thickness, thumb.length);
+     }
+-    if let Some((start, length)) = sideways {
+-        paint(window, start, height - thickness, length, thickness);
++    if let Some(thumb) = geometry.horizontal {
++        paint(window, thumb.start, height - thickness, thumb.length, thickness);
+     }
+ }
+ 
+@@ -7888,22 +8206,49 @@
+ ///
+ /// It is the container's last child, absolutely placed over its padding box.
+ /// Children of a scroller are painted shifted by the scroll offset, so the
+-/// viewport is this box moved back by it. It has no hitbox and takes no input.
+-fn scrollbar_overlay(handle: gpui::ScrollHandle, thumbs: ThumbStyle) -> gpui::AnyElement {
++/// viewport is this box moved back by it. The painted thumb has no hitbox of
++/// its own; the wider strip inserted here only starts a pointer drag.
++fn scrollbar_overlay(
++    element_id: u64,
++    handle: gpui::ScrollHandle,
++    thumbs: ThumbStyle,
++) -> gpui::AnyElement {
+     use gpui::prelude::*;
+ 
++    let scroll = ScrollbarScroll::Element(handle.clone());
++    let prepared_handle = handle.clone();
+     gpui::canvas(
+-        |_, _, _| (),
+-        move |bounds, _, window, _| {
++        move |bounds, window, _| {
++            let offset = prepared_handle.offset();
++            insert_scrollbar_hits(
++                window,
++                bounds.origin - offset,
++                bounds.size,
++                prepared_handle.max_offset(),
++                offset,
++                thumbs,
++            )
++        },
++        move |bounds, hits, window, _cx| {
+             let offset = handle.offset();
++            let origin = bounds.origin - offset;
+             paint_scrollbars(
+                 window,
+-                bounds.origin - offset,
++                origin,
+                 bounds.size,
+                 handle.max_offset(),
+                 offset,
+                 thumbs,
+             );
++            install_scrollbar_interaction(
++                window,
++                element_id,
++                origin,
++                bounds.size,
++                thumbs,
++                scroll.clone(),
++                hits,
++            );
+         },
+     )
+     .absolute()
+@@ -7920,6 +8265,12 @@
+ fn list_scroll_extent(
+     state: &gpui::ListState,
+ ) -> (gpui::Point<gpui::Pixels>, gpui::Point<gpui::Pixels>) {
++    if state.is_scrollbar_dragging() {
++        return (
++            state.max_offset_for_scrollbar(),
++            state.scroll_px_offset_for_scrollbar(),
++        );
++    }
+     match state.averaged_scroll_extent() {
+         Some((max, offset)) => (
+             gpui::point(gpui::px(0.0), max),
+@@ -7960,6 +8311,7 @@
+ /// the list scrolls by, so the thumb and the scroll position cannot disagree.
+ struct ListWithScrollbar {
+     list: gpui::AnyElement,
++    element_id: u64,
+     state: gpui::ListState,
+     thumbs: Option<ThumbStyle>,
+     visible_range: Option<ListVisibleRange>,
+@@ -7975,7 +8327,7 @@
+ 
+ impl gpui::Element for ListWithScrollbar {
+     type RequestLayoutState = ();
+-    type PrepaintState = ();
++    type PrepaintState = ScrollbarHits;
+ 
+     fn id(&self) -> Option<gpui::ElementId> {
+         None
+@@ -7999,17 +8351,22 @@
+         &mut self,
+         _: Option<&gpui::GlobalElementId>,
+         _: Option<&gpui::InspectorElementId>,
+-        _: gpui::Bounds<gpui::Pixels>,
++        bounds: gpui::Bounds<gpui::Pixels>,
+         _: &mut (),
+         window: &mut gpui::Window,
+         cx: &mut gpui::App,
+-    ) {
++    ) -> ScrollbarHits {
+         self.list.prepaint(window, cx);
+         if let Some(observer) = &self.visible_range {
+             if let Some(range) = self.state.visible_range() {
+                 observer.update(range);
+             }
+         }
++        let Some(thumbs) = self.thumbs else {
++            return ScrollbarHits::default();
++        };
++        let (max, offset) = list_scroll_extent(&self.state);
++        insert_scrollbar_hits(window, bounds.origin, bounds.size, max, offset, thumbs)
+     }
+ 
+     fn paint(
+@@ -8018,15 +8375,25 @@
+         _: Option<&gpui::InspectorElementId>,
+         bounds: gpui::Bounds<gpui::Pixels>,
+         _: &mut (),
+-        _: &mut (),
++        hits: &mut ScrollbarHits,
+         window: &mut gpui::Window,
+         cx: &mut gpui::App,
+     ) {
+         self.list.paint(window, cx);
+-        if let Some(thumbs) = self.thumbs {
+-            let (max, offset) = list_scroll_extent(&self.state);
+-            paint_scrollbars(window, bounds.origin, bounds.size, max, offset, thumbs);
+-        }
++        let Some(thumbs) = self.thumbs else {
++            return;
++        };
++        let (max, offset) = list_scroll_extent(&self.state);
++        paint_scrollbars(window, bounds.origin, bounds.size, max, offset, thumbs);
++        install_scrollbar_interaction(
++            window,
++            self.element_id,
++            bounds.origin,
++            bounds.size,
++            thumbs,
++            ScrollbarScroll::List(self.state.clone()),
++            std::mem::take(hits),
++        );
+     }
+ }
+ 
+@@ -8075,7 +8442,25 @@
+ 
+ #[cfg(test)]
+ mod scrollbar_tests {
+-    use super::scrollbar_thumb;
++    use super::{scrollbar_thumb, ThumbGeometry};
++
++    #[test]
++    fn dragging_maps_the_pointer_to_the_whole_scroll_range() {
++        let thumb = ThumbGeometry {
++            start: 0.0,
++            length: 40.0,
++            travel: 60.0,
++            max_scroll: 300.0,
++        };
++        assert_eq!(thumb.offset_for(0.0, 0.0), 0.0);
++        assert!((thumb.offset_for(100.0, 40.0) + 300.0).abs() < 0.01);
++        assert!((thumb.offset_for(50.0, 20.0) + 150.0).abs() < 0.01);
++        assert_eq!(
++            thumb.offset_for(-20.0, 0.0),
++            0.0,
++            "a pointer above the track does not overshoot"
++        );
++    }
+ 
+     #[test]
+     fn a_thumb_is_the_viewports_share_of_the_content() {

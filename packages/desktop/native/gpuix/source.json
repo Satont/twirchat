@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.19",
+  "version": "0.11.0-twirchat.20",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -170,6 +170,11 @@
       "path": "patches/gpuix-editor-single-line.patch",
       "root": "gpuix",
       "sha256": "9a3b92a9d38c70b8ea384e787e13b46500781a2bd8c6fa095d2774e834d3b748"
+    },
+    {
+      "path": "patches/gpuix-scrollbar-drag.patch",
+      "root": "gpuix",
+      "sha256": "ffee4b6b3706be0bc7cd015ab0e85f5e592ad467adbd60438f55f420f1421020"
     }
   ]
 }
