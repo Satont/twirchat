@@ -85,6 +85,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-08 desktop memory](2026-11-08-desktop-memory/report.md) records the Linux font fallback
+and streamed image download fixes, the complete development matrix, and paired production runs.
+
 [2026-11-08 tall chat scrolling](2026-11-08-tall-chat-scroll/report.md) records the 24-row
 cutoff and its fix, the complete development matrix, and repeated production measurements.
 
