@@ -5,6 +5,11 @@ pins GPUIX and its GPUI submodule to full Git revisions and verifies the `cosmic
 source archive and each local patch by SHA-256. Build caches live outside the repository.
 No upstream commits, publishing, or downloaded native binaries are part of this build.
 
+Native version `0.11.0-twirchat.23` lets users resize Linux client-decorated
+windows from free edges and corners. A six-pixel frame keeps resize targets
+outside the titlebar and chat controls. The compositor takes over the drag.
+Maximized and fullscreen windows have no resize frame.
+
 Native version `0.11.0-twirchat.22` adds Linux client titlebars when the Wayland
 compositor delegates window decorations to the app, as on GNOME. GPUI follows the
 desktop's button order and the compositor's window capabilities. Close uses the same
