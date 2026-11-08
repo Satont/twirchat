@@ -59,13 +59,16 @@ Install TypeScript extensions from a local manifest or HTTPS URL in **Settings �
 ## Image uploads
 
 Set up **Settings → Chat → Image Uploader** to paste screenshots and other copied images
-into the chat input with **Ctrl+V** (**Cmd+V** on macOS). Enable uploads, enter your image
-host's multipart POST endpoint and file field, then save. You can import an existing
-Chatterino, Leafyrino or compatible ShareX configuration from the clipboard.
+into the chat input with **Ctrl+V** (**Cmd+V** on macOS). Choose **Sign in with Twir** and
+authorize TwirChat in your browser to upload through your Twir account. TwirChat enables
+uploads as soon as you sign in. Disconnect Twir to return to your previous uploader settings.
 
-Use `Authorization: Bearer TOKEN; X-Custom: value` for extra headers, or put each header
-on its own line. Leave **Image link** blank if the server replies with a plain URL, or use
-a JSON template such as `{data.images.0.url}`. **Deletion link** accepts the same syntax.
+For another image host, enable uploads, enter its multipart POST endpoint and file field,
+then save. You can also import a Chatterino, Leafyrino or compatible ShareX configuration
+from the clipboard. Use `Authorization: Bearer TOKEN; X-Custom: value` for extra headers, or
+put each header on its own line. Leave **Image link** blank if the server replies with a
+plain URL, or use a JSON template such as `{data.images.0.url}`. **Deletion link** accepts
+the same syntax.
 
 TwirChat asks before uploading by default. The returned image link is inserted at the
 composer's caret; send the draft when you're ready. Copy an optional deletion link from

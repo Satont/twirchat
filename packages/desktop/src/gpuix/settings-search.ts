@@ -188,7 +188,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     title: 'Image Uploader',
     saveMode: 'section',
     keywords:
-      'paste clipboard screenshot image upload ShareX Chatterino Leafyrino sxcu HTTP request URL multipart form field custom headers authorization image link deletion link import export загрузка изображений картинки скриншот вставка буфер обмена заголовки',
+      'paste clipboard screenshot image upload Twir OAuth sign in account ShareX Chatterino Leafyrino sxcu HTTP request URL multipart form field custom headers authorization image link deletion link import export загрузка изображений картинки скриншот вставка буфер обмена заголовки вход',
   },
   {
     id: 'self-ping',
