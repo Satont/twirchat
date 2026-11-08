@@ -306,9 +306,6 @@ export class DesktopWindowManager {
         minWidth: 320,
         minHeight: 240,
         kind: descriptor.kind === 'overlay' || descriptor.kind === 'user' ? 'floating' : 'normal',
-        titlebarTransparent: process.platform === 'darwin',
-        trafficLightX: 16,
-        trafficLightY: 17,
         focus: process.env.GPUIX_BACKGROUND !== '1',
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
       }
