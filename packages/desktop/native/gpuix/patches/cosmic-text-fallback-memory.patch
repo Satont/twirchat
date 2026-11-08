@@ -1,0 +1,313 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -51,6 +51,7 @@
+ peniko = []
+ shape-run-cache = []
+ std = [
++    "dep:memmap2",
+     "fontdb/memmap",
+     "fontdb/std",
+     "harfrust/std",
+@@ -212,3 +213,7 @@
+ 
+ [profile.test]
+ opt-level = 1
++
++[target.'cfg(target_os = "linux")'.dependencies.memmap2]
++version = "0.9"
++optional = true
+diff --git a/src/font/mod.rs b/src/font/mod.rs
+--- a/src/font/mod.rs
++++ b/src/font/mod.rs
+@@ -133,6 +133,14 @@
+             fontdb::Source::SharedFile(_path, data) => Arc::clone(data),
+         };
+ 
++        Self::new_with_data(info, data, weight)
++    }
++
++    pub(crate) fn new_with_data(
++        info: &fontdb::FaceInfo,
++        data: Arc<dyn AsRef<[u8]> + Send + Sync>,
++        weight: fontdb::Weight,
++    ) -> Option<Self> {
+         // It's a bit unfortunate but we need to parse the data into a `FontRef`
+         // twice--once to construct the HarfRust `ShaperInstance` and
+         // `ShaperData`, and once to create the persistent `FontRef` tied to the
+diff --git a/src/font/system.rs b/src/font/system.rs
+--- a/src/font/system.rs
++++ b/src/font/system.rs
+@@ -1,3 +1,7 @@
++#[cfg(all(feature = "std", target_os = "linux"))]
++use crate::AttrsOwned;
++#[cfg(all(feature = "std", target_os = "linux"))]
++use alloc::collections::VecDeque;
+ use crate::{Attrs, Font, FontMatchAttrs, HashMap, ShapeBuffer};
+ use alloc::boxed::Box;
+ use alloc::collections::BTreeSet;
+@@ -128,6 +132,16 @@
+     }
+ }
+ 
++#[cfg(all(feature = "std", target_os = "linux"))]
++const MISSING_FALLBACK_LIMIT: usize = 32;
++
++#[cfg(all(feature = "std", target_os = "linux"))]
++struct MissingFallbackRun {
++    text: Box<str>,
++    attrs: AttrsOwned,
++    rtl: bool,
++}
++
+ /// Access to the system fonts.
+ pub struct FontSystem {
+     /// The locale of the system.
+@@ -138,6 +152,9 @@
+ 
+     /// Cache for loaded fonts from the database.
+     font_cache: HashMap<(fontdb::ID, fontdb::Weight), Option<Arc<Font>>>,
++
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    missing_fallback_runs: VecDeque<MissingFallbackRun>,
+ 
+     /// Sorted unique ID's of all Monospace fonts in DB
+     monospace_font_ids: Vec<fontdb::ID>,
+@@ -261,6 +278,8 @@
+             monospace_font_ids,
+             per_script_monospace_font_ids,
+             font_cache: HashMap::default(),
++            #[cfg(all(feature = "std", target_os = "linux"))]
++            missing_fallback_runs: VecDeque::new(),
+             font_matches_cache: HashMap::default(),
+             font_codepoint_support_info_cache: HashMap::default(),
+             monospace_fallbacks_buffer: BTreeSet::default(),
+@@ -290,6 +309,8 @@
+     /// Get a mutable reference to the database.
+     pub fn db_mut(&mut self) -> &mut fontdb::Database {
+         self.font_matches_cache.clear();
++        #[cfg(all(feature = "std", target_os = "linux"))]
++        self.missing_fallback_runs.clear();
+         &mut self.db
+     }
+ 
+@@ -320,6 +341,61 @@
+             .clone()
+     }
+ 
++    pub(crate) fn get_fallback_font(
++        &mut self,
++        id: fontdb::ID,
++        weight: fontdb::Weight,
++        retain: bool,
++    ) -> Option<Arc<Font>> {
++        #[cfg(all(feature = "std", target_os = "linux"))]
++        if !retain {
++            if let Some(font) = self.font_cache.get(&(id, weight)) {
++                return font.clone();
++            }
++            let info = self.db.face(id)?;
++            if let fontdb::Source::File(path) = &info.source {
++                let file = std::fs::File::open(path).ok()?;
++                // The system font file is subject to the same immutability assumption as
++                // fontdb's shared map. Keep this map local until the candidate contributes a glyph.
++                let data = unsafe { memmap2::MmapOptions::new().map(&file).ok()? };
++                return Font::new_with_data(info, Arc::new(data), weight).map(Arc::new);
++            }
++            return Font::new(&self.db, id, weight).map(Arc::new);
++        }
++        let _ = retain;
++        self.get_font(id, weight)
++    }
++
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    pub(crate) fn retain_fallback_font(&mut self, font: Arc<Font>, weight: fontdb::Weight) {
++        self.font_cache.entry((font.id(), weight)).or_insert(Some(font));
++    }
++
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    pub(crate) fn has_missing_fallback(&self, text: &str, attrs: &Attrs<'_>, rtl: bool) -> bool {
++        self.missing_fallback_runs.iter().any(|run| {
++            run.text.as_ref() == text && run.rtl == rtl && run.attrs.as_attrs() == *attrs
++        })
++    }
++
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    pub(crate) fn remember_missing_fallback(&mut self, text: &str, attrs: &Attrs<'_>, rtl: bool) {
++        if text.len() > 128
++            || matches!(attrs.family, fontdb::Family::Name(name) if name.len() > 128)
++            || attrs.font_features.features.len() > 16
++        {
++            return;
++        }
++        if self.missing_fallback_runs.len() == MISSING_FALLBACK_LIMIT {
++            self.missing_fallback_runs.pop_front();
++        }
++        self.missing_fallback_runs.push_back(MissingFallbackRun {
++            text: text.into(),
++            attrs: AttrsOwned::new(attrs),
++            rtl,
++        });
++    }
++
+     pub fn is_monospace(&self, id: fontdb::ID) -> bool {
+         self.monospace_font_ids.binary_search(&id).is_ok()
+     }
+diff --git a/src/font/fallback/mod.rs b/src/font/fallback/mod.rs
+--- a/src/font/fallback/mod.rs
++++ b/src/font/fallback/mod.rs
+@@ -286,11 +286,11 @@
+             .find(|m_key| self.face_contains_family(m_key.id, default_family_name))
+     }
+ 
+-    fn next_item(&mut self, fallbacks: &Fallbacks) -> Option<<Self as Iterator>::Item> {
++    fn next_item(&mut self, fallbacks: &Fallbacks, retain: bool) -> Option<Arc<Font>> {
+         if let Some(fallback_info) = self.font_system.monospace_fallbacks_buffer.pop_first() {
+             if let Some(font) = self
+                 .font_system
+-                .get_font(fallback_info.id, self.ideal_weight)
++                .get_fallback_font(fallback_info.id, self.ideal_weight, retain)
+             {
+                 return Some(font);
+             }
+@@ -340,7 +340,7 @@
+                     break 'DEF_FAM;
+                 }
+                 (false, Some(m_key)) => {
+-                    if let Some(font) = self.font_system.get_font(m_key.id, self.ideal_weight) {
++                    if let Some(font) = self.font_system.get_fallback_font(m_key.id, self.ideal_weight, retain) {
+                         return Some(font);
+                     }
+                     break 'DEF_FAM;
+@@ -355,7 +355,7 @@
+                         // Otherewise, add to fallbacks set
+                         if fallback_info.codepoint_non_matches == Some(0) {
+                             if let Some(font) =
+-                                self.font_system.get_font(m_key.id, self.ideal_weight)
++                                self.font_system.get_fallback_font(m_key.id, self.ideal_weight, retain)
+                             {
+                                 return Some(font);
+                             }
+@@ -416,7 +416,7 @@
+             if let Some(fallback_info) = self.font_system.monospace_fallbacks_buffer.pop_first() {
+                 if let Some(font) = self
+                     .font_system
+-                    .get_font(fallback_info.id, self.ideal_weight)
++                    .get_fallback_font(fallback_info.id, self.ideal_weight, retain)
+                 {
+                     return Some(font);
+                 }
+@@ -433,7 +433,7 @@
+                 self.script_i.1 += 1;
+                 for m_key in font_match_keys_iter(false) {
+                     if self.face_contains_family(m_key.id, script_family) {
+-                        if let Some(font) = self.font_system.get_font(m_key.id, self.ideal_weight) {
++                        if let Some(font) = self.font_system.get_fallback_font(m_key.id, self.ideal_weight, retain) {
+                             return Some(font);
+                         }
+                     }
+@@ -456,7 +456,7 @@
+             self.common_i += 1;
+             for m_key in font_match_keys_iter(false) {
+                 if self.face_contains_family(m_key.id, common_family) {
+-                    if let Some(font) = self.font_system.get_font(m_key.id, self.ideal_weight) {
++                    if let Some(font) = self.font_system.get_fallback_font(m_key.id, self.ideal_weight, retain) {
+                         return Some(font);
+                     }
+                 }
+@@ -474,7 +474,7 @@
+                 .iter()
+                 .all(|family_name| !self.face_contains_family(id, family_name))
+             {
+-                if let Some(font) = self.font_system.get_font(id, self.ideal_weight) {
++                if let Some(font) = self.font_system.get_fallback_font(id, self.ideal_weight, retain) {
+                     return Some(font);
+                 }
+             }
+@@ -483,14 +483,38 @@
+         self.end = true;
+         None
+     }
++
++    fn next_font(&mut self, retain: bool) -> Option<Arc<Font>> {
++        let mut fallbacks = mem::take(&mut self.font_system.fallbacks);
++        let item = self.next_item(&fallbacks, retain);
++        mem::swap(&mut fallbacks, &mut self.font_system.fallbacks);
++        item
++    }
++
++    pub(crate) fn next_candidate(&mut self) -> Option<Arc<Font>> {
++        self.next_font(false)
++    }
++
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    pub(crate) fn retain_candidate(&mut self, font: Arc<Font>) {
++        self.font_system.retain_fallback_font(font, self.ideal_weight);
++    }
++
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    pub(crate) fn has_cached_miss(&self, attrs: &crate::Attrs<'_>, rtl: bool) -> bool {
++        self.font_system.has_missing_fallback(self.word, attrs, rtl)
++    }
++
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    pub(crate) fn remember_miss(&mut self, attrs: &crate::Attrs<'_>, rtl: bool) {
++        self.font_system.remember_missing_fallback(self.word, attrs, rtl);
++    }
+ }
+ 
+ impl Iterator for FontFallbackIter<'_> {
+     type Item = Arc<Font>;
++
+     fn next(&mut self) -> Option<Self::Item> {
+-        let mut fallbacks = mem::take(&mut self.font_system.fallbacks);
+-        let item = self.next_item(&fallbacks);
+-        mem::swap(&mut fallbacks, &mut self.font_system.fallbacks);
+-        item
+-    }
+-}
++        self.next_font(true)
++    }
++}
+diff --git a/src/shape.rs b/src/shape.rs
+--- a/src/shape.rs
++++ b/src/shape.rs
+@@ -323,11 +323,23 @@
+         )
+     };
+ 
+-    //TODO: improve performance!
+-    while !missing.is_empty() {
+-        let Some(font) = font_iter.next() else {
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    let initial_missing = missing.len();
++    #[cfg(all(feature = "std", target_os = "linux"))]
++    let try_fallback = !missing.is_empty() && !font_iter.has_cached_miss(&attrs, span_rtl);
++    #[cfg(not(all(feature = "std", target_os = "linux")))]
++    let try_fallback = true;
++
++    while try_fallback && !missing.is_empty() {
++        let Some(font) = font_iter.next_candidate() else {
++            #[cfg(all(feature = "std", target_os = "linux"))]
++            if missing.len() == initial_missing {
++                font_iter.remember_miss(&attrs, span_rtl);
++            }
+             break;
+         };
++        #[cfg(all(feature = "std", target_os = "linux"))]
++        let missing_before = missing.len();
+ 
+         log::trace!(
+             "Evaluating fallback with font '{}'",
+@@ -397,6 +409,11 @@
+                     break;
+                 }
+             }
++        }
++
++        #[cfg(all(feature = "std", target_os = "linux"))]
++        if missing.len() < missing_before {
++            font_iter.retain_candidate(font);
+         }
+     }
+ 

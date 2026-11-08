@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.20",
+  "version": "0.11.0-twirchat.21",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -175,6 +175,20 @@
       "path": "patches/gpuix-scrollbar-drag.patch",
       "root": "gpuix",
       "sha256": "ffee4b6b3706be0bc7cd015ab0e85f5e592ad467adbd60438f55f420f1421020"
+    },
+    {
+      "path": "patches/cosmic-text-fallback-memory.patch",
+      "root": "cosmic-text",
+      "sha256": "36bb5dca38eae797d0cdfcf5b3c649cd7937936432f9dd56924916ee68e74cc9"
+    },
+    {
+      "path": "patches/gpuix-cosmic-text-dependency.patch",
+      "root": "gpuix",
+      "sha256": "aa575ef5f70f89f955969a723321563671906b06bc44e343f9f90cc892e749f2"
     }
-  ]
+  ],
+  "cosmicText": {
+    "version": "0.19.0",
+    "sha256": "be17b688510d934ce13f48a2beba700e11583e281e0fda99c22bb256a14eda73"
+  }
 }
