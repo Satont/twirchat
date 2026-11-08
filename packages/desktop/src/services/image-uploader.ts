@@ -5,6 +5,7 @@ import { extname, isAbsolute } from 'node:path'
 import { z } from 'zod'
 
 const settingsSchema = z.object({
+  provider: z.literal('twir').optional(),
   enabled: z.boolean(),
   confirm: z.boolean(),
   requestUrl: z.string().max(4096).trim(),
@@ -15,6 +16,7 @@ const settingsSchema = z.object({
 })
 
 export type ImageUploaderSettings = z.infer<typeof settingsSchema>
+export type ImageUploaderPreferences = Pick<ImageUploaderSettings, 'enabled' | 'confirm'>
 
 export const DEFAULT_IMAGE_UPLOADER_SETTINGS: ImageUploaderSettings = {
   enabled: false,
@@ -24,6 +26,20 @@ export const DEFAULT_IMAGE_UPLOADER_SETTINGS: ImageUploaderSettings = {
   headers: '',
   imageLink: '',
   deletionLink: '',
+}
+
+export function twirImageUploaderSettings(
+  preferences: ImageUploaderPreferences,
+): ImageUploaderSettings {
+  return {
+    provider: 'twir',
+    ...preferences,
+    requestUrl: 'https://twir.app/api/v1/uploader/files',
+    formField: 'file',
+    headers: '',
+    imageLink: '{data.link}',
+    deletionLink: '{data.delete_link}',
+  }
 }
 
 export interface ClipboardUploadImage {
@@ -40,6 +56,12 @@ export interface ClipboardImageUpload {
   image: ClipboardUploadImage
   settings: ImageUploaderSettings
   signal: AbortSignal
+}
+
+export class ImageUploadHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`The image host rejected the upload (HTTP ${status}).`)
+  }
 }
 
 export const MAX_CLIPBOARD_IMAGE_BYTES = 20 * 1024 * 1024
@@ -143,6 +165,7 @@ export function importImageUploaderSettings(
 }
 
 export function exportImageUploaderSettings(settings: ImageUploaderSettings): string {
+  if (settings.provider === 'twir') throw new Error('Twir sign-in cannot be exported.')
   const headers = Object.fromEntries(parseHeaders(settings.headers))
   return JSON.stringify(
     {
@@ -322,11 +345,22 @@ async function readResponse(response: Response): Promise<string> {
 
 let uploading = false
 
-export async function uploadClipboardImage({
-  image,
-  settings,
-  signal,
-}: ClipboardImageUpload): Promise<ImageUploadResult> {
+export function uploadClipboardImage(request: ClipboardImageUpload): Promise<ImageUploadResult> {
+  return uploadImage(request)
+}
+
+export function uploadTwirClipboardImage(
+  { image, signal }: Pick<ClipboardImageUpload, 'image' | 'signal'>,
+  accessToken: string,
+): Promise<ImageUploadResult> {
+  const settings = twirImageUploaderSettings({ enabled: true, confirm: true })
+  return uploadImage({ image, settings, signal }, `Bearer ${accessToken}`)
+}
+
+async function uploadImage(
+  { image, settings, signal }: ClipboardImageUpload,
+  authorization?: string,
+): Promise<ImageUploadResult> {
   if (uploading) throw new Error('An image upload is already in progress.')
   if (!settings.enabled) throw new Error('Enable image uploads in Settings first.')
   requireImageSize(image.bytes.length)
@@ -334,6 +368,7 @@ export async function uploadClipboardImage({
   if (!format?.matches(image.bytes))
     throw new Error('The clipboard does not contain a supported image.')
   const headers = parseHeaders(settings.headers)
+  if (authorization) headers.set('Authorization', authorization)
   const data = new FormData()
   data.set(
     settings.formField,
@@ -362,7 +397,7 @@ export async function uploadClipboardImage({
       await response.body?.cancel().catch(() => {})
       if (response.status >= 300 && response.status < 400)
         throw new Error('The image host redirected the request. Use its final upload URL.')
-      throw new Error(`The image host rejected the upload (HTTP ${response.status}).`)
+      throw new ImageUploadHttpError(response.status)
     }
     const body = await readResponse(response)
     cancellation.throwIfAborted()

@@ -29,6 +29,8 @@ const values = new Map([
 ])
 let durableSettings = structuredClone(DEFAULT_SETTINGS)
 let durableUploader = structuredClone(DEFAULT_IMAGE_UPLOADER_SETTINGS)
+let twirUploader = null
+let twirSignIn = 'pending'
 const uploaderPreset = {
   Version: '1.0.0',
   RequestURL: 'https://upload.example.test/images',
@@ -80,9 +82,36 @@ const methods = {
     settings: structuredClone(DEFAULT_TRANSLATION_SETTINGS),
     credentials: [],
   }),
-  getImageUploaderSettings: async () => structuredClone(durableUploader),
+  getImageUploaderSettings: async () => structuredClone(twirUploader ?? durableUploader),
   saveImageUploaderSettings: async (value) => {
+    if (value.provider === 'twir') {
+      twirUploader = structuredClone(value)
+      return twirUploader
+    }
     durableUploader = structuredClone(value)
+    return durableUploader
+  },
+  connectTwirImageUploader: async ({ signal }) => {
+    if (twirSignIn === 'pending') {
+      await new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    }
+    if (twirSignIn === 'denied') throw new Error('Twir sign-in was denied.')
+    twirUploader ??= {
+      ...DEFAULT_IMAGE_UPLOADER_SETTINGS,
+      provider: 'twir',
+      enabled: true,
+      confirm: durableUploader.confirm,
+      requestUrl: 'https://twir.app/api/v1/uploader/files',
+      formField: 'file',
+      imageLink: '{data.link}',
+      deletionLink: '{data.delete_link}',
+    }
+    return twirUploader
+  },
+  disconnectTwirImageUploader: async () => {
+    twirUploader = null
     return durableUploader
   },
   readClipboard: async () => clipboard,
@@ -329,6 +358,30 @@ try {
   await clickNode(await scrollTo('image-uploader-copy-export'))
   assert.equal(JSON.parse(clipboard).RequestURL, uploaderPreset.RequestURL)
   assert.deepEqual(JSON.parse(clipboard).Headers, { authorization: 'Bearer qa-token' })
+  await type(find('settings-search'), 'twir oauth')
+  assert.ok(find('settings-section-image-uploader'))
+  await clickNode(await scrollTo('image-uploader-twir-connect'))
+  await clickNode(await scrollTo('image-uploader-twir-cancel'))
+  assert.equal(twirUploader, null)
+  twirSignIn = 'denied'
+  await clickNode(await scrollTo('image-uploader-twir-connect'))
+  assert.ok(hasText('Twir sign-in was denied.'))
+  twirSignIn = 'success'
+  await clickNode(await scrollTo('image-uploader-twir-connect'))
+  assert.equal(twirUploader?.enabled, true)
+  assert.ok(find('image-uploader-twir-disconnect'))
+  for (const id of ['image-uploader-request-url', 'image-uploader-export']) {
+    assert.ok(!flatten().some((node) => node.testId === id), `${id} is only for custom uploads`)
+  }
+  const twir = await captureGuiQaDisplay('settings-image-uploader-twir')
+  twirSignIn = 'denied'
+  await clickNode(await scrollTo('image-uploader-twir-connect'))
+  assert.ok(find('image-uploader-twir-disconnect'), 'Failed reconnect removed the active account')
+  await clickNode(await scrollTo('image-uploader-twir-disconnect'))
+  assert.equal(twirUploader, null)
+  assert.ok(find('image-uploader-request-url'))
+  assert.equal(durableUploader.requestUrl, uploaderPreset.RequestURL)
+  assert.equal(durableUploader.headers, 'Authorization: Bearer qa-token')
   mount(SavedAccounts)
   await Bun.sleep(250)
   assert.ok(hasText('Twitch · @alpha'))
@@ -366,8 +419,9 @@ try {
       saveErrorRetry: true,
       appSettingsPendingEditRetained: true,
       imageUploaderImportSaveExport: true,
+      twirUploaderSignInCancelRetryDisconnect: true,
       accountSwitchAnonymousForget: true,
-      screenshots: [narrow, search, uploader, accounts],
+      screenshots: [narrow, search, uploader, twir, accounts],
     }),
   )
 } catch (error) {

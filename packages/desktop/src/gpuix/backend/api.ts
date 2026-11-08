@@ -231,6 +231,8 @@ export interface DesktopApi {
   ): Promise<void>
   getImageUploaderSettings(): Promise<ImageUploaderSettings>
   saveImageUploaderSettings(settings: ImageUploaderSettings): Promise<ImageUploaderSettings>
+  connectTwirImageUploader(params: { signal: AbortSignal }): Promise<ImageUploaderSettings>
+  disconnectTwirImageUploader(): Promise<ImageUploaderSettings>
   readClipboardUploadFile(path: string): Promise<ClipboardUploadImage | null>
   uploadClipboardImage(request: ClipboardImageUpload): Promise<ImageUploadResult>
   getTranslationSettings(): Promise<TranslationSettingsView>
@@ -852,6 +854,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
     getImageUploaderSettings: imageUploader.getImageUploaderSettings,
     saveImageUploaderSettings: imageUploader.saveImageUploaderSettings,
+    connectTwirImageUploader: imageUploader.connectTwirImageUploader,
+    disconnectTwirImageUploader: imageUploader.disconnectTwirImageUploader,
     readClipboardUploadFile,
     uploadClipboardImage: imageUploader.uploadClipboardImage,
     getTranslationSettings: translation.getTranslationSettings,
