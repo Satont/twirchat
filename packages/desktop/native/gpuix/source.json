@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.18",
+  "version": "0.11.0-twirchat.19",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -79,7 +79,7 @@
     {
       "path": "patches/gpui-list-visible-range.patch",
       "root": "gpui",
-      "sha256": "2265543698503f0243d022e21c34bd90bf73334d6879c384bf7720b034d23e6a"
+      "sha256": "1205202cc1dc0fd10ecdc7edc6cdf0e77a1936d329ddac60ebbe82103586e874"
     },
     {
       "path": "patches/gpuix-list-visible-range.patch",
