@@ -64,6 +64,7 @@ export class WatchedChannelManager {
 
   private eventHandlers = new Set<(channelId: string, event: NormalizedEvent) => void>()
   private messageHandlers = new Set<WatchedChannelMessageHandler>()
+  private noticeHandlers = new Set<WatchedChannelMessageHandler>()
   private statusHandlers = new Set<WatchedChannelStatusHandler>()
   private moderationHandlers = new Set<(outcome: ModerationOutcome) => void>()
   private roomStateHandlers = new Set<(state: RoomState) => void>()
@@ -150,6 +151,17 @@ export class WatchedChannelManager {
   /** Get all current watched channels */
   getAll(): WatchedChannel[] {
     return WatchedChannelStore.findAll()
+  }
+
+  findActiveChannelId(
+    platform: WatchedChannel['platform'],
+    channelSlug: string,
+  ): string | undefined {
+    for (const { watchedChannel } of this.entries.values()) {
+      if (watchedChannel.platform === platform && watchedChannel.channelSlug === channelSlug)
+        return watchedChannel.id
+    }
+    return undefined
   }
 
   /** Get buffered messages for a specific watched channel */
@@ -242,6 +254,11 @@ export class WatchedChannelManager {
   /** Register a handler for incoming messages */
   onMessage(handler: WatchedChannelMessageHandler): void {
     this.messageHandlers.add(handler)
+  }
+
+  onNotice(handler: WatchedChannelMessageHandler): () => void {
+    this.noticeHandlers.add(handler)
+    return () => this.noticeHandlers.delete(handler)
   }
 
   /** Register a handler for status changes */
@@ -413,8 +430,12 @@ export class WatchedChannelManager {
           },
         })
     }
+    const onNotice = (notice: NormalizedChatMessage) => {
+      for (const handler of this.noticeHandlers) handler(watchedChannel.id, notice)
+    }
     adapter.on('event', onEvent)
     adapter.on('message', onMessage)
+    adapter.on('notice', onNotice)
     adapter.on('status', onStatus)
     const onModeration = (outcome: ModerationOutcome) => {
       for (const handler of this.moderationHandlers) handler(outcome)
@@ -432,6 +453,7 @@ export class WatchedChannelManager {
     entry.cleanup = () => {
       adapter.off('event', onEvent)
       adapter.off('message', onMessage)
+      adapter.off('notice', onNotice)
       adapter.off('status', onStatus)
       adapter.off('moderation', onModeration)
       adapter.off('room_state', onRoomState)

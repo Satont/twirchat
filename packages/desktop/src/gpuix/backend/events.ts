@@ -26,6 +26,7 @@ import type {
 
 import type { PluginInfo, PluginTransportMessage, PluginTransportStatus } from '../../plugins/api'
 import type { StreamerModeStatus } from '../../services/streamer-mode'
+import type { TwitchAutoModEvent } from '../../services/twitch-automod'
 import type { PluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 
 export type DesktopEventMap = {
@@ -37,6 +38,7 @@ export type DesktopEventMap = {
   author_emote_catalog: { platform: Platform; authorId: string; emotes: EmoteCatalogEntry[] }
   channel_emote_catalog: { platform: Platform; channelId: string; emotes: EmoteCatalogEntry[] }
   chat_message: NormalizedChatMessage
+  twitch_chat_notice: { message: NormalizedChatMessage; watchedChannelId?: string }
   chat_history_snapshot: {
     channelId: string
     messages: NormalizedChatMessage[]
@@ -47,6 +49,7 @@ export type DesktopEventMap = {
   channel_room_state: RoomState
   chat_clear: ChatClear
   twitch_activity: TwitchActivityEvent
+  twitch_automod: TwitchAutoModEvent
   twitch_whisper: TwitchWhisper
   twitch_eventsub_status: TwitchEventSubStatus
   twitch_activity_snapshot: TwitchActivitySnapshotUpdate
@@ -96,12 +99,14 @@ export function createDesktopEvents(): DesktopEvents {
     author_emote_catalog: new Set(),
     channel_emote_catalog: new Set(),
     chat_message: new Set(),
+    twitch_chat_notice: new Set(),
     chat_history_snapshot: new Set(),
     chat_event: new Set(),
     chat_moderation: new Set(),
     channel_room_state: new Set(),
     chat_clear: new Set(),
     twitch_activity: new Set(),
+    twitch_automod: new Set(),
     twitch_whisper: new Set(),
     twitch_eventsub_status: new Set(),
     twitch_activity_snapshot: new Set(),

@@ -88,6 +88,9 @@ absolute application throughput limit. The machine remains shared with the user'
 [2026-11-08 Linux window controls](2026-11-08-linux-window-controls/report.md) records the
 title bar cache, the complete development matrix and three production runs per version.
 
+[2026-11-08 Twitch chat notices](2026-11-08-twitch-chat-notices/report.md) records the complete
+development matrix and repeated production measurements for the notices and AutoMod change.
+
 [2026-11-08 desktop memory](2026-11-08-desktop-memory/report.md) records the Linux font fallback
 and streamed image download fixes, the complete development matrix, and paired production runs.
 

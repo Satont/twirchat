@@ -5,6 +5,7 @@ import type { TwitchActivityAction } from '@twirchat/shared/twitch-activities'
 import {
   createTwitchActivitiesService,
   type TwitchActivitiesCredentials,
+  type TwitchActivitiesDependencies,
 } from '../src/api/twitch-activities'
 import { twitchActivitiesRoutes } from '../src/routes/twitch-activities'
 import { textBody } from './literal'
@@ -27,6 +28,7 @@ const account: TwitchActivitiesCredentials = {
 }
 function fixture(
   respond: (url: URL, init: RequestInit) => Response = () => Response.json({ data: [] }),
+  isModerator?: TwitchActivitiesDependencies['isModerator'],
 ) {
   const calls: { url: URL; init: RequestInit }[] = []
   const service = createTwitchActivitiesService({
@@ -38,6 +40,7 @@ function fixture(
     async resolveUser(identifier) {
       return identifier === 'creator' ? '100' : '200'
     },
+    isModerator,
   })
   return { service, calls }
 }
@@ -535,6 +538,58 @@ test('activity route requires a desktop client', async () => {
   ).toBe(401)
 })
 
+test('registers AutoMod v2 for broadcasters and moderators with the proper scope', async () => {
+  let id = 0
+  let canModerate = true
+  const roleChecks: string[][] = []
+  const { service, calls } = fixture(
+    () => Response.json({ data: [{ id: String(++id) }] }),
+    async (token, broadcasterId, userId) => {
+      roleChecks.push([token, broadcasterId, userId])
+      return { platform: 'twitch', userId, isModerator: canModerate }
+    },
+  )
+  const moderator = {
+    ...account,
+    scopes: [...account.scopes, 'moderator:manage:automod', 'user:read:moderated_channels'],
+  }
+  const definitions = ['automod.message.hold', 'automod.message.update']
+  const own = await service.subscribe(moderator, 'session', 'creator')
+  expect(own.errors).toEqual([])
+  expect(own.subscriptions.map((subscription) => subscription.type)).toEqual(
+    expect.arrayContaining(definitions),
+  )
+  expect(roleChecks).toEqual([])
+
+  const foreign = await service.subscribe(moderator, 'session', 'friend')
+  expect(foreign.errors).toEqual([])
+  expect(roleChecks).toEqual([['oauth-token', '200', '100']])
+  const registrations = calls
+    .map((call) => JSON.parse(textBody(call.init.body)))
+    .filter(
+      (body) => definitions.includes(body.type) && body.condition.broadcaster_user_id === '200',
+    )
+  expect(registrations).toEqual(
+    definitions.map((type) => ({
+      type,
+      version: '2',
+      condition: { broadcaster_user_id: '200', moderator_user_id: '100' },
+      transport: { method: 'websocket', session_id: 'session' },
+    })),
+  )
+
+  canModerate = false
+  const viewer = await service.subscribe(moderator, 'session', 'friend')
+  expect(viewer.subscriptions.map((subscription) => subscription.type)).toEqual([
+    'stream.online',
+    'stream.offline',
+  ])
+  const oldAccount = await service.subscribe(account, 'session', 'creator')
+  expect(
+    oldAccount.subscriptions.some((subscription) => definitions.includes(subscription.type)),
+  ).toBe(false)
+})
+
 test('reports EventSub registration failures without claiming a live subscription', async () => {
   const denied = fixture(() =>
     Response.json({ message: 'Missing authorization scope' }, { status: 403 }),
@@ -872,4 +927,42 @@ describe('web session channel roles from pinned upstream operations', () => {
     ).rejects.toThrow('Invalid Twitch username')
     expect(calls).toHaveLength(1)
   })
+})
+
+test('subscribes to channel.moderate v2 only with the full scope set and moderator role', async () => {
+  const moderationScopes = [
+    'moderator:manage:blocked_terms',
+    'moderator:manage:chat_settings',
+    'moderator:read:unban_requests',
+    'moderator:manage:banned_users',
+    'moderator:read:chat_messages',
+    'moderator:manage:warnings',
+    'moderator:read:moderators',
+    'moderator:read:vips',
+    'user:read:moderated_channels',
+  ]
+  let isModerator = true
+  const { service, calls } = fixture(
+    () => Response.json({ data: [{ id: 'subscription' }] }),
+    async () => ({ platform: 'twitch', userId: account.platformUserId, isModerator }),
+  )
+  const moderator = { ...account, scopes: moderationScopes }
+  const authorized = await service.subscribe(moderator, 'session', 'friend')
+  expect(authorized.subscriptions.map(({ type }) => type)).toContain('channel.moderate')
+  expect(calls.map(({ init }) => JSON.parse(textBody(required(init.body))))).toContainEqual({
+    type: 'channel.moderate',
+    version: '2',
+    condition: { broadcaster_user_id: '200', moderator_user_id: '100' },
+    transport: { method: 'websocket', session_id: 'session' },
+  })
+
+  isModerator = false
+  const viewer = await service.subscribe(moderator, 'session', 'friend')
+  expect(viewer.subscriptions.map(({ type }) => type)).not.toContain('channel.moderate')
+  const missingScope = await service.subscribe(
+    { ...moderator, scopes: moderationScopes.filter((scope) => scope !== 'moderator:read:vips') },
+    'session',
+    'creator',
+  )
+  expect(missingScope.subscriptions.map(({ type }) => type)).not.toContain('channel.moderate')
 })

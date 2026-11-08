@@ -9,7 +9,7 @@
  */
 
 import type { Account, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState, type ReactElement } from 'react'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
@@ -34,6 +34,7 @@ import { MessageActionsMenu } from './MessageActionsMenu'
 import { MessageModerationRail } from './MessageModerationRail'
 import { MessageText, MessageTokens } from './MessageText'
 import { MessageTranslation } from './MessageTranslation'
+import { TwitchChatNotice } from './TwitchChatNotice'
 import { BadgeTooltip } from './ui/BadgeTooltip'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
@@ -465,6 +466,33 @@ export interface ChatMessageProps {
   onSearch?: (query: string) => void
 }
 
+function wrapTwitchMessage(
+  content: ReactElement,
+  id: string,
+  fontSize: number,
+  announcement: string | undefined,
+  bits: number | undefined,
+): ReactElement {
+  if (announcement)
+    return (
+      <ChatAnnouncement id={id} color={announcement} fontSize={fontSize}>
+        {content}
+      </ChatAnnouncement>
+    )
+  if (bits)
+    return (
+      <TwitchChatNotice
+        id={id}
+        kind="cheer"
+        fontSize={fontSize}
+        summary={`${bits.toLocaleString()} ${bits === 1 ? 'Bit' : 'Bits'}`}
+      >
+        {content}
+      </TwitchChatNotice>
+    )
+  return content
+}
+
 const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessageProps) {
   const { message } = props
   const theme = useTheme()
@@ -557,6 +585,19 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
 
   // ── System message ────────────────────────────────────────────────────────
   if (isSystem) {
+    const notice = message.metadata?.twitchNotice
+    if (message.platform === 'twitch' && notice)
+      return (
+        <TwitchChatNotice
+          id={message.id}
+          kind={notice.kind}
+          fontSize={fontSize}
+          summary={message.text}
+          detail={notice.detail}
+          time={props.showTimestamp ? formatMessageTime(message.timestamp) : undefined}
+        />
+      )
+
     const t = message.text
     const action = t.includes(' added ') ? 'added' : t.includes(' removed ') ? 'removed' : 'renamed'
     const palette =
@@ -643,6 +684,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const rowOpacity =
     message.delivery?.state === 'pending' ? 0.52 : props.moderationOutcome ? 0.48 : 1
   const announcement = message.platform === 'twitch' ? message.metadata?.announcement : undefined
+  const bits = message.platform === 'twitch' && !isTombstone ? message.metadata?.bits : undefined
 
   // Platform stripe: one continuous hairline down the list (rows are flush),
   // so a run of same-platform messages reads as a single column.
@@ -805,13 +847,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         {moderationRail}
       </div>
     )
-    return announcement ? (
-      <ChatAnnouncement id={message.id} color={announcement} fontSize={fontSize}>
-        {content}
-      </ChatAnnouncement>
-    ) : (
-      content
-    )
+    return wrapTwitchMessage(content, message.id, fontSize, announcement, bits)
   }
 
   // ── Modern (default) ──────────────────────────────────────────────────────
@@ -969,13 +1005,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       {moderationRail}
     </div>
   )
-  return announcement ? (
-    <ChatAnnouncement id={message.id} color={announcement} fontSize={fontSize}>
-      {content}
-    </ChatAnnouncement>
-  ) : (
-    content
-  )
+  return wrapTwitchMessage(content, message.id, fontSize, announcement, bits)
 })
 
 export const ChatMessage = memo(function ChatMessage(props: ChatMessageProps) {

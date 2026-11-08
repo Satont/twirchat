@@ -5,7 +5,9 @@ import type {
   TwitchEventSubStatus,
   TwitchWhisper,
 } from '@twirchat/shared/twitch-activities'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
+import type { TwitchAutoModEvent } from '../src/services/twitch-automod'
 import { TwitchEventSubClient, type EventSubSocket } from '../src/services/twitch-eventsub'
 import { required } from './fixture-values'
 
@@ -39,6 +41,16 @@ class FakeSocket implements EventSubSocket {
   }
 }
 const clients: TwitchEventSubClient[] = []
+const hold = (channel: string, messageId = 'held-message') => ({
+  subscription: { type: 'automod.message.hold' },
+  event: {
+    broadcaster_user_login: channel,
+    message_id: messageId,
+    user_name: 'Viewer',
+    message: { text: 'Held text' },
+    reason: 'blocked_term',
+  },
+})
 afterEach(() => {
   for (const client of clients.splice(0)) client.stop()
 })
@@ -58,6 +70,8 @@ function fixture(override?: {
   const registrations: string[] = []
   const removed: string[][] = []
   const activities: TwitchActivityEvent[] = []
+  const autoMod: TwitchAutoModEvent[] = []
+  const moderationNotices: NormalizedChatMessage[] = []
   const whispers: TwitchWhisper[] = []
   const statuses: TwitchEventSubStatus[] = []
   let account = true
@@ -88,6 +102,8 @@ function fixture(override?: {
       removed.push(ids)
     },
     activity: (event) => activities.push(event),
+    autoMod: (event) => autoMod.push(event),
+    moderationNotice: (message) => moderationNotices.push(message),
     whisper: (event) => whispers.push(event),
     status: (status) => statuses.push(status),
     reconnectDelayMs: 1,
@@ -99,6 +115,8 @@ function fixture(override?: {
     registrations,
     removed,
     activities,
+    autoMod,
+    moderationNotices,
     whispers,
     statuses,
     setAccount: (value: boolean) => {
@@ -108,6 +126,83 @@ function fixture(override?: {
 }
 
 describe('Twitch EventSub lifecycle', () => {
+  test('shows privileged supplemental moderation events only for watched channels', async () => {
+    const f = fixture()
+    await f.client.watch('creator', true)
+    const socket = required(f.sockets[0])
+    socket.welcome()
+    const action = {
+      broadcaster_user_login: 'Creator',
+      source_broadcaster_user_login: 'Friend',
+      moderator_user_login: 'mod',
+      action: 'shared_chat_delete',
+      shared_chat_delete: { user_login: 'chatter', message_body: 'deleted body' },
+    }
+    const send = (event: object, id: string) =>
+      socket.message(
+        'notification',
+        {
+          subscription: { type: 'channel.moderate' },
+          event,
+        },
+        id,
+      )
+    send(action, 'shared-delete')
+    send(action, 'shared-delete')
+    send({ ...action, action: 'delete', delete: action.shared_chat_delete }, 'irc-duplicate')
+    send({ ...action, broadcaster_user_login: 'other' }, 'other-channel')
+    send({ ...action, shared_chat_delete: { user_login: '../invalid' } }, 'invalid-target')
+    expect(f.moderationNotices).toHaveLength(1)
+    expect(f.moderationNotices[0]).toMatchObject({
+      id: 'twitch:notice:eventsub:shared-delete',
+      channelId: 'creator',
+      text: '@mod deleted a message from @chatter in #friend (Shared Chat)',
+      metadata: { twitchNotice: { kind: 'moderation' } },
+    })
+    await f.client.watch('creator', false)
+    send(action, 'closed-channel')
+    expect(f.moderationNotices).toHaveLength(1)
+  })
+
+  test('delivers AutoMod only for watched channels and clears the queue on final unwatch', async () => {
+    const f = fixture()
+    await f.client.watch('Creator', true)
+    await f.client.watch('creator', true)
+    const socket = required(f.sockets[0])
+    socket.welcome()
+    await settle()
+
+    socket.message('notification', hold('other'))
+    socket.message('notification', hold('creator', 'held-message another'))
+    socket.message('notification', hold('Creator'))
+    socket.message('notification', {
+      subscription: { type: 'automod.message.update' },
+      event: {
+        broadcaster_user_login: 'creator',
+        message_id: 'held-message',
+        status: 'Approved',
+      },
+    })
+    await f.client.watch('creator', false)
+    expect(f.autoMod).toEqual([
+      {
+        type: 'hold',
+        channelSlug: 'creator',
+        messageId: 'held-message',
+        displayName: 'Viewer',
+        text: 'Held text',
+        blockedTerm: true,
+      },
+      { type: 'resolve', channelSlug: 'creator', messageId: 'held-message' },
+    ])
+    await f.client.watch('creator', false)
+    socket.message('notification', hold('creator'))
+    expect(f.autoMod.at(-1)).toEqual({ type: 'clear', channelSlug: 'creator' })
+    expect(f.autoMod).toHaveLength(3)
+    f.client.stop()
+    expect(f.autoMod.at(-1)).toEqual({ type: 'clear' })
+  })
+
   test('shares one socket and refcounts channel subscriptions', async () => {
     const f = fixture()
     await f.client.watch('Creator', true)

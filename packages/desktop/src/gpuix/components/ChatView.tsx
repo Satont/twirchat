@@ -97,6 +97,7 @@ import { ChatMessageRow } from './ChatMessageRow'
 import { ChattersDialog } from './ChattersDialog'
 import { PluginChatRow } from './PluginChatRow'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
+import { TwitchAutoMod } from './TwitchAutoMod'
 import { Icon, PlatformIcon, type IconName } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { RemoteImage } from './ui/RemoteImage'
@@ -1955,6 +1956,14 @@ export function ChatView({
       </div>
 
       {/* Composer */}
+      {twitchChannel && !(streamerMode.effectiveEnabled && streamerMode.settings.hideModActions) ? (
+        <TwitchAutoMod
+          channelSlug={twitchChannel}
+          hideBlockedTerms={
+            streamerMode.effectiveEnabled && streamerMode.settings.hideBlockedTermText
+          }
+        />
+      ) : null}
       {settings ? (
         <ChatInput
           hotkeyContextId={`input:${paneKey}`}

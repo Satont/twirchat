@@ -38,6 +38,13 @@ export interface Emote {
 // Нормализованные сообщения и события
 // ============================================================
 
+export interface TwitchChatNotice {
+  kind: 'sub' | 'resub' | 'gift_sub' | 'community_gift' | 'raid' | 'reward_gift' | 'moderation'
+  detail?: string
+}
+
+export type TwitchNoticeKind = TwitchChatNotice['kind']
+
 export interface NormalizedChatMessage {
   id: string
   /** Desktop history ID superseded by this Twitch message. */
@@ -64,6 +71,7 @@ export interface NormalizedChatMessage {
     rewardTitle?: string
     bits?: number
     announcement?: string
+    twitchNotice?: TwitchChatNotice
     subscriptionMonths?: number
     rewardCost?: number
     flags?: Record<string, boolean>

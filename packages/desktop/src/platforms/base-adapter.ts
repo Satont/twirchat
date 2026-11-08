@@ -13,6 +13,7 @@ const log = logger('base-adapter')
 
 export interface PlatformEventMap {
   message: NormalizedChatMessage
+  notice: NormalizedChatMessage
   event: NormalizedEvent
   status: PlatformStatusInfo
   moderation: ModerationOutcome
@@ -49,6 +50,7 @@ export abstract class BasePlatformAdapter implements IPlatformAdapter {
 
   private listeners: { [K in keyof PlatformEventMap]: Set<PlatformEventHandler<K>> } = {
     message: new Set(),
+    notice: new Set(),
     event: new Set(),
     status: new Set(),
     moderation: new Set(),

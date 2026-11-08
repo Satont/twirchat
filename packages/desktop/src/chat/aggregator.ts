@@ -27,6 +27,7 @@ export class ChatAggregator {
   private readonly bufferSize: number
 
   private onMessageHandlers = new Set<AggregatorEventHandler<NormalizedChatMessage>>()
+  private onNoticeHandlers = new Set<AggregatorEventHandler<NormalizedChatMessage>>()
   private onEventHandlers = new Set<AggregatorEventHandler<NormalizedEvent>>()
   private onStatusHandlers = new Set<AggregatorEventHandler<PlatformStatusInfo>>()
   private onModerationHandlers = new Set<AggregatorEventHandler<ModerationOutcome>>()
@@ -46,6 +47,9 @@ export class ChatAggregator {
 
   registerAdapter(adapter: IPlatformAdapter): void {
     this.adapters.set(adapter.platform, adapter)
+    adapter.on('notice', (notice) => {
+      for (const handler of this.onNoticeHandlers) handler(notice)
+    })
     adapter.on('moderation', (outcome) => {
       for (const handler of this.onModerationHandlers) handler(outcome)
     })
@@ -159,6 +163,11 @@ export class ChatAggregator {
   onMessage(handler: AggregatorEventHandler<NormalizedChatMessage>): () => void {
     this.onMessageHandlers.add(handler)
     return () => this.onMessageHandlers.delete(handler)
+  }
+
+  onNotice(handler: AggregatorEventHandler<NormalizedChatMessage>): () => void {
+    this.onNoticeHandlers.add(handler)
+    return () => this.onNoticeHandlers.delete(handler)
   }
 
   onEvent(handler: AggregatorEventHandler<NormalizedEvent>): () => void {

@@ -4,10 +4,13 @@ import type {
   TwitchEventSubscription,
   TwitchWhisper,
 } from '@twirchat/shared/twitch-activities'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { runInBackground } from './background-task'
 import { deleteOldestEntry } from './bounded-cache'
+import { parseTwitchAutoModEvent, type TwitchAutoModEvent } from './twitch-automod'
+import { buildTwitchModerationNotice } from './twitch-moderation-notice'
 
 export interface EventSubSocket {
   onmessage: ((event: MessageEvent) => void) | null
@@ -25,6 +28,8 @@ export interface TwitchEventSubDependencies {
   ): Promise<{ subscriptions: TwitchEventSubscription[]; errors: string[] }>
   unsubscribe(ids: string[]): Promise<void>
   activity(event: TwitchActivityEvent): void
+  autoMod(event: TwitchAutoModEvent): void
+  moderationNotice?(message: NormalizedChatMessage): void
   whisper(event: TwitchWhisper): void
   status(status: TwitchEventSubStatus): void
   reconnectDelayMs?: number
@@ -89,6 +94,7 @@ export class TwitchEventSubClient {
     this.subscriptions.clear()
     this.registering.clear()
     this.seenMessages.clear()
+    this.dependencies.autoMod({ type: 'clear' })
     this.dependencies.status({ status: 'disconnected' })
   }
 
@@ -103,6 +109,7 @@ export class TwitchEventSubClient {
     } else if (count > 1) this.channels.set(key, count - 1)
     else {
       this.channels.delete(key)
+      this.dependencies.autoMod({ type: 'clear', channelSlug: key })
       const ids = this.subscriptions.get(key) ?? []
       this.subscriptions.delete(key)
       if (ids.length) {
@@ -210,11 +217,17 @@ export class TwitchEventSubClient {
         if (next && !this.replacement) this.connect(next, true)
       } else if (type === 'revocation') {
         const revoked = envelope.payload?.subscription
-        for (const [key, ids] of this.subscriptions)
-          this.subscriptions.set(
-            key,
-            ids.filter((id) => id !== revoked?.id),
-          )
+        if (revoked?.id) {
+          for (const [key, ids] of this.subscriptions) {
+            if (!ids.includes(revoked.id)) continue
+            this.subscriptions.set(
+              key,
+              ids.filter((id) => id !== revoked.id),
+            )
+            if (revoked.type?.startsWith('automod.message.'))
+              this.dependencies.autoMod({ type: 'clear', channelSlug: key })
+          }
+        }
         this.dependencies.status({
           status: 'error',
           message: `Twitch subscription revoked: ${revoked?.status ?? 'unknown reason'}. Reconnect Twitch if authorization was revoked.`,
@@ -237,6 +250,7 @@ export class TwitchEventSubClient {
       this.generation++
       this.registering.clear()
       clearTimeout(this.keepaliveTimer)
+      this.dependencies.autoMod({ type: 'clear' })
       this.dependencies.status({ status: 'disconnected' })
       this.scheduleReconnect()
     }
@@ -317,6 +331,21 @@ export class TwitchEventSubClient {
     if (!data) return
     const eventType =
       envelope.payload?.subscription?.type ?? envelope.metadata?.subscription_type ?? ''
+    if (eventType === 'automod.message.hold' || eventType === 'automod.message.update') {
+      const event = parseTwitchAutoModEvent(eventType, data)
+      if (event && this.channels.has(event.channelSlug)) this.dependencies.autoMod(event)
+      return
+    }
+    if (eventType === 'channel.moderate') {
+      const notice = buildTwitchModerationNotice(
+        data,
+        envelope.metadata?.message_id,
+        envelope.metadata?.message_timestamp,
+      )
+      if (notice && this.channels.has(notice.channelId))
+        this.dependencies.moderationNotice?.(notice)
+      return
+    }
     if (eventType === 'user.whisper.message') {
       const whisper = z.object({ text: z.string().optional() }).optional().parse(data.whisper)
       this.dependencies.whisper({
