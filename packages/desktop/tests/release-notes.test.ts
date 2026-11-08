@@ -21,9 +21,7 @@ Backend image: \`ghcr.io/satont/twirchat/backend@sha256:07a1\`
     expect(parseReleaseNotes(notes)).toEqual([
       {
         kind: 'new',
-        items: [
-          'Make native scrollbars draggable by @infybtw in https://github.com/Satont/twirchat/pull/117',
-        ],
+        items: ['Make native scrollbars draggable'],
       },
     ])
   })
