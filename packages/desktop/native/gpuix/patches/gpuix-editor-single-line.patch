@@ -1,0 +1,144 @@
+diff --git a/packages/native/src/custom_elements/input.rs b/packages/native/src/custom_elements/input.rs
+index c31ec60..3cabbf5 100644
+--- a/packages/native/src/custom_elements/input.rs
++++ b/packages/native/src/custom_elements/input.rs
+@@ -24,7 +24,7 @@ use unicode_segmentation::UnicodeSegmentation;
+ use web_time::Instant;
+ 
+ use super::{CustomElement, CustomElementFactory, CustomRenderContext};
+-use crate::renderer::{emit_event_full, emit_key_event, EventCallback};
++use crate::renderer::{emit_event_full, emit_key_event, emit_key_event_with, EventCallback};
+ use crate::theme::Theme;
+ 
+ actions!(
+@@ -709,6 +709,17 @@ struct TextEditorState {
+ }
+ 
+ impl TextEditorState {
++    fn is_single_visual_line(&self) -> bool {
++        self.marked_range.is_none()
++            && (self.content.is_empty()
++                || matches!(
++                    self.last_lines.as_slice(),
++                    [line] if line.wrap_boundaries.is_empty()
++                        && line.text.as_ref() == self.content.as_str()
++                        && !self.content.contains('\n')
++                ))
++    }
++
+     fn reset_blink(&mut self, cx: &Context<Self>) {
+         self.blink_anchor = cx.background_executor().now();
+     }
+@@ -958,15 +969,21 @@ impl TextEditorState {
+     }
+ 
+     fn up(&mut self, _: &Up, _: &mut Window, cx: &mut Context<Self>) {
+-        if let Some(offset) = self.vertical_target(-1.0) {
+-            self.move_to(offset, cx);
+-        }
++        self.move_vertically(-1.0, cx);
+     }
+ 
+     fn down(&mut self, _: &Down, _: &mut Window, cx: &mut Context<Self>) {
+-        if let Some(offset) = self.vertical_target(1.0) {
++        self.move_vertically(1.0, cx);
++    }
++
++    fn move_vertically(&mut self, direction: f32, cx: &mut Context<Self>) {
++        if let Some(offset) = self.vertical_target(direction) {
+             self.move_to(offset, cx);
+         }
++        // A handled GPUI action normally suppresses the raw key event.
++        if self.emits_key_down {
++            cx.propagate();
++        }
+     }
+ 
+     fn select_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
+@@ -1710,6 +1727,7 @@ impl EntityInputHandler for TextEditorState {
+ impl gpui::Render for TextEditorState {
+     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+         let key_down_callback = self.callback.clone();
++        let textarea_state = self.multiline.then(|| cx.weak_entity());
+         let key_up_callback = self.callback.clone();
+         let element_id = self.element_id;
+         div()
+@@ -1762,13 +1780,23 @@ impl gpui::Render for TextEditorState {
+             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
+             .on_scroll_wheel(cx.listener(Self::on_scroll_wheel))
+             .when(self.emits_key_down, move |editor| {
+-                editor.on_key_down(move |event, _window, _cx| {
+-                    emit_key_event(
++                editor.on_key_down(move |event, _window, cx| {
++                    emit_key_event_with(
+                         &key_down_callback,
+                         element_id,
+                         "keyDown",
+                         &event.keystroke,
+                         Some(event.is_held),
++                        |payload| {
++                            if !event.keystroke.modifiers.modified()
++                                && matches!(event.keystroke.key.as_str(), "up" | "down")
++                            {
++                                payload.editor_single_line = textarea_state
++                                    .as_ref()
++                                    .and_then(gpui::WeakEntity::upgrade)
++                                    .map(|state| state.read(cx).is_single_visual_line());
++                            }
++                        },
+                     );
+                 })
+             })
+diff --git a/packages/native/src/element_tree.rs b/packages/native/src/element_tree.rs
+index dc99273..d1b587f 100644
+--- a/packages/native/src/element_tree.rs
++++ b/packages/native/src/element_tree.rs
+@@ -65,6 +65,10 @@ pub struct EventPayload {
+     /// Populated for: keyDown.
+     pub is_held: Option<bool>,
+ 
++    /// Whether a textarea has one fresh, unwrapped line and no active IME composition.
++    /// Populated for: unmodified Up/Down keyDown.
++    pub editor_single_line: Option<bool>,
++
+     /// Id of the GPUI key dispatch that produced this event. Every element
+     /// `keyDown` and the trailing `windowKeyDown` of one keystroke share it, so
+     /// JS can apply `preventDefault` / `stopPropagation` across them.
+@@ -161,6 +165,7 @@ impl Default for EventPayload {
+             key: None,
+             key_char: None,
+             is_held: None,
++            editor_single_line: None,
+             keystroke_id: None,
+             hotkey_generation: None,
+             hotkey_binding_id: None,
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+index f70e243..06867c8 100644
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -5027,6 +5027,17 @@ pub(crate) fn emit_key_event(
+     event_type: &str,
+     keystroke: &gpui::Keystroke,
+     is_held: Option<bool>,
++) {
++    emit_key_event_with(callback, element_id, event_type, keystroke, is_held, |_| {});
++}
++
++pub(crate) fn emit_key_event_with(
++    callback: &Option<EventCallback>,
++    element_id: u64,
++    event_type: &str,
++    keystroke: &gpui::Keystroke,
++    is_held: Option<bool>,
++    fill: impl FnOnce(&mut EventPayload),
+ ) {
+     let keystroke_id = KEYSTROKE_ID.with(|id| id.get());
+     emit_event_full(callback, element_id, event_type, |payload| {
+@@ -5035,6 +5046,7 @@ pub(crate) fn emit_key_event(
+         payload.is_held = is_held;
+         payload.modifiers = Some(keystroke.modifiers.into());
+         payload.keystroke_id = Some(keystroke_id as f64);
++        fill(payload);
+     });
+ }
+ 
