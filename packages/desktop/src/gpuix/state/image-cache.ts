@@ -8,8 +8,10 @@ import { createHash } from 'node:crypto'
  * Files land in `<profile>/image-cache/<sha256(url)>.<ext>`. Downloads share a
  * bounded queue, and each image has its own deferred store notification.
  */
-import { mkdirSync, readdirSync } from 'node:fs'
+import { createWriteStream, mkdirSync, readdirSync } from 'node:fs'
+import { rename, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 
 import { getDbPath } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
@@ -30,6 +32,7 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 const IMAGE_FILE = /^([a-f0-9]{32})\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?|avif)$/i
 const DISK_LIMITS: ImageSweepLimits = {
   pattern: IMAGE_FILE,
+  temporaryPattern: /^[a-f0-9]{32}\.[a-f0-9-]{36}\.download$/i,
   maxFiles: MAX_CACHED_FILES,
   keepFiles: 3000,
 }
@@ -60,6 +63,26 @@ function extensionFor(url: string, contentType: string | null): string {
 
 function hashUrl(url: string): string {
   return createHash('sha256').update(url).digest('hex').slice(0, 32)
+}
+
+async function* limitImageBody(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array> {
+  const reader = body.getReader()
+  let size = 0
+  try {
+    while (true) {
+      // Read only when the file stream is ready for another chunk.
+      // eslint-disable-next-line no-await-in-loop
+      const chunk = await reader.read()
+      if (chunk.done) break
+      size += chunk.value.byteLength
+      if (size > MAX_IMAGE_BYTES) throw new Error('image is too large')
+      yield chunk.value
+    }
+    if (size === 0) throw new Error('empty body')
+  } finally {
+    reader.cancel().catch(() => {})
+    reader.releaseLock()
+  }
 }
 
 /** Synchronous read: local path if the image is already on disk. */
@@ -158,27 +181,16 @@ export function createImageCache(options: {
       await response.body?.cancel()
       throw new Error('image is too large')
     }
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('empty body')
-    const chunks: Uint8Array[] = []
-    let size = 0
-    try {
-      while (true) {
-        // Streaming reads must remain sequential to enforce the byte budget.
-        // eslint-disable-next-line no-await-in-loop
-        const chunk = await reader.read()
-        if (chunk.done) break
-        size += chunk.value.byteLength
-        if (size > MAX_IMAGE_BYTES) throw new Error('image is too large')
-        chunks.push(chunk.value)
-      }
-    } finally {
-      await reader.cancel()
-      reader.releaseLock()
-    }
-    if (size === 0) throw new Error('empty body')
+    if (!response.body) throw new Error('empty body')
     const path = join(dir, `${hash}${extensionFor(url, response.headers.get('content-type'))}`)
-    await Bun.write(path, Buffer.concat(chunks, size))
+    const temporary = join(dir, `${hash}.${crypto.randomUUID()}.download`)
+    try {
+      await pipeline(limitImageBody(response.body), createWriteStream(temporary, { flags: 'wx' }))
+      await rename(temporary, path)
+    } catch (error) {
+      await unlink(temporary).catch(() => {})
+      throw error
+    }
     diskFiles?.set(hash, path)
     if (diskFiles && diskFiles.size > MAX_CACHED_FILES) {
       deleteOldestEntry(diskFiles)

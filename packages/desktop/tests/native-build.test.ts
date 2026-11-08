@@ -35,6 +35,7 @@ test('native source pins and patch checksums match the reviewed checkout contrac
   expect(manifest.revision).toBe('2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf')
   expect(manifest.gpuiRevision).toBe('f77e5cfe9dad04288566f00c66ecf3c58d6f84b3')
   expect(manifest.rustToolchain).toBe('1.97.1')
+  expect(manifest.cosmicText.version).toBe('0.19.0')
   expect(manifest.patches.slice(0, 2).map((patch) => patch.root)).toEqual(['gpui', 'gpuix'])
   expect(manifest.patches).toEqual(
     expect.arrayContaining([
@@ -47,6 +48,10 @@ test('native source pins and patch checksums match the reviewed checkout contrac
       expect.objectContaining({ path: 'patches/gpui-image-frame-deadlines.patch', root: 'gpui' }),
       expect.objectContaining({ path: 'patches/gpui-image-resources.patch', root: 'gpui' }),
       expect.objectContaining({ path: 'patches/gpuix-image-resources.patch', root: 'gpuix' }),
+      expect.objectContaining({
+        path: 'patches/cosmic-text-fallback-memory.patch',
+        root: 'cosmic-text',
+      }),
     ]),
   )
   for (const patch of manifest.patches) {
@@ -64,6 +69,7 @@ test('native source boundary rejects malformed pins, unsafe patch paths and unre
     gpuiRevision: 'f77e5cfe9dad04288566f00c66ecf3c58d6f84b3',
     rustToolchain: '1.97.1',
     patches: [{ path: 'patches/native.patch', root: 'gpui', sha256: 'a'.repeat(64) }],
+    cosmicText: { version: '0.19.0', sha256: 'b'.repeat(64) },
   }
   expect(() => parseNativeSourceManifest(manifest)).not.toThrow()
   for (const invalid of [
@@ -73,6 +79,8 @@ test('native source boundary rejects malformed pins, unsafe patch paths and unre
     { ...manifest, rustToolchain: 'nightly' },
     { ...manifest, patches: [] },
     { ...manifest, unexpected: true },
+    { ...manifest, cosmicText: { ...manifest.cosmicText, version: '../cosmic-text' } },
+    { ...manifest, cosmicText: { ...manifest.cosmicText, sha256: 'bad' } },
     { ...manifest, patches: [{ ...manifest.patches[0], path: '../escape.patch' }] },
     { ...manifest, patches: [{ ...manifest.patches[0], root: 'unknown' }] },
     { ...manifest, patches: [{ ...manifest.patches[0], sha256: 'bad' }] },
