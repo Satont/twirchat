@@ -1,4 +1,5 @@
 import {
+  collectGarbageWhenIdle,
   createRenderer,
   createRoot,
   flushSync,
@@ -100,10 +101,11 @@ const currentUiRuntime: WindowUiRuntime = {
 
 /** Each window owns its React root, native editor, event route and lifetime. */
 export class DesktopWindowManager {
-  readonly runtimeVersion = 4
+  readonly runtimeVersion = 5
   private readonly mounted = new Map<string, MountedWindow>()
   private readonly session
   private readonly poller: ReturnType<typeof setInterval>
+  private stopIdleGc?: () => void
   private factory: WindowContentFactory
   private started = false
   private opening = 0
@@ -170,6 +172,8 @@ export class DesktopWindowManager {
       onEmpty: () => {
         this.stopWindowsNotifications()
         clearInterval(this.poller)
+        this.stopIdleGc?.()
+        this.stopIdleGc = undefined
         this.stopRegistry()
         void Promise.allSettled(this.cleanupTasks)
           .then(() => this.flushLayouts())
@@ -217,6 +221,7 @@ export class DesktopWindowManager {
       }
     }
     await this.session.persist().catch(() => {})
+    if (this.mounted.size) this.stopIdleGc = collectGarbageWhenIdle()
   }
 
   remount(factory: WindowContentFactory, runtime: WindowUiRuntime = this.uiRuntime): void {
@@ -485,7 +490,7 @@ export function mountDesktopWindows(
 ): DesktopWindowManager {
   const global = globalThis
   if (global.__twirchatWindows) {
-    if (global.__twirchatWindows.runtimeVersion !== 4)
+    if (global.__twirchatWindows.runtimeVersion !== 5)
       throw new Error('Restart TwirChat once to apply the hot-reload runtime upgrade.')
     global.__twirchatWindows.remount(factory, currentUiRuntime)
   } else {
