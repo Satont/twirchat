@@ -297,6 +297,7 @@ function createModerationView(): ModerationView {
   const clears = new Map(channelClears)
   return {
     outcomeFor(message) {
+      if (message.metadata?.twitchNotice) return undefined
       const clearedAt = clears.get(
         `${message.platform}:${message.channelId.replace(/^#/u, '').toLowerCase()}`,
       )
@@ -790,12 +791,22 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
     showNotice('error', `${platform}: ${error}`, 6000)
   })
 
-  subscribe('watched_channel_message', ({ channelId, message }) => {
-    classifyIncomingSimilarity(message)
+  const queueWatchedMessage = (channelId: string, message: NormalizedChatMessage) => {
     const messages = pendingWatched.get(channelId)
     if (messages) messages.push(message)
     else pendingWatched.set(channelId, [message])
     scheduleMessages()
+  }
+  subscribe('watched_channel_message', ({ channelId, message }) => {
+    classifyIncomingSimilarity(message)
+    queueWatchedMessage(channelId, message)
+  })
+  subscribe('twitch_chat_notice', ({ message, watchedChannelId }) => {
+    if (watchedChannelId) queueWatchedMessage(watchedChannelId, message)
+    else {
+      pendingHome.push(message)
+      scheduleMessages()
+    }
   })
 
   subscribe('watched_channel_status', ({ channelId, status }) => {

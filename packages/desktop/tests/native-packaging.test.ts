@@ -41,7 +41,11 @@ async function fixture() {
   const output = join(directory, 'package')
   await Promise.all([mkdir(join(sourceRoot, 'patches'), { recursive: true }), mkdir(artifactRoot)])
   const patch = Buffer.from('pinned patch bytes')
-  await Bun.write(join(sourceRoot, 'patches/test.patch'), patch)
+  const cosmicPatch = Buffer.from('pinned Cosmic Text patch bytes')
+  await Promise.all([
+    Bun.write(join(sourceRoot, 'patches/test.patch'), patch),
+    Bun.write(join(sourceRoot, 'patches/cosmic-text-test.patch'), cosmicPatch),
+  ])
   const source = parseNativeSourceManifest({
     schema: 1,
     version: '0.11.0-test',
@@ -49,13 +53,17 @@ async function fixture() {
     rustToolchain: '1.97.1',
     revision: GPUIX_SOURCE_REVISION,
     gpuiRevision: GPUI_SOURCE_REVISION,
-    patches: [{ path: 'patches/test.patch', root: 'gpuix', sha256: sha(patch) }],
+    patches: [
+      { path: 'patches/test.patch', root: 'gpuix', sha256: sha(patch) },
+      { path: 'patches/cosmic-text-test.patch', root: 'cosmic-text', sha256: sha(cosmicPatch) },
+    ],
     cosmicText: { version: '0.19.0', sha256: sha(patch) },
   })
   await Bun.write(join(sourceRoot, 'source.json'), JSON.stringify(source))
   const patchDigest = createHash('sha256')
     .update(JSON.stringify({ manifest: source, platform: process.platform, arch: process.arch }))
     .update(patch)
+    .update(cosmicPatch)
     .digest('hex')
     .slice(0, 16)
   const bytes = binary()

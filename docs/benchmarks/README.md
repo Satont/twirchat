@@ -85,6 +85,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-08 Twitch chat notices](2026-11-08-twitch-chat-notices/report.md) records the complete
+development matrix and repeated production measurements for the notices and AutoMod change.
+
 [2026-11-08 desktop memory](2026-11-08-desktop-memory/report.md) records the Linux font fallback
 and streamed image download fixes, the complete development matrix, and paired production runs.
 

@@ -176,6 +176,16 @@ function boot(): DesktopBackend {
         )
       events.emit('twitch_activity', event)
     },
+    autoMod: (event) => events.emit('twitch_automod', event),
+    moderationNotice: (message) => {
+      if (AccountStore.findByPlatform('twitch')?.username.toLowerCase() === message.channelId)
+        events.emit('twitch_chat_notice', { message })
+      const watchedChannelId = watchedChannelManager.findActiveChannelId(
+        'twitch',
+        message.channelId,
+      )
+      if (watchedChannelId) events.emit('twitch_chat_notice', { message, watchedChannelId })
+    },
     whisper: (event) => events.emit('twitch_whisper', event),
     status: (status) => {
       twitchEventSubConnected = status.status === 'connected'
@@ -453,6 +463,10 @@ function boot(): DesktopBackend {
     pushOverlayMessage(msg)
     events.emit('chat_message', msg)
   })
+  aggregator.onNotice((message) => events.emit('twitch_chat_notice', { message }))
+  watchedChannelManager.onNotice((watchedChannelId, message) =>
+    events.emit('twitch_chat_notice', { message, watchedChannelId }),
+  )
 
   const seenChatEvents = new Set<string>()
   const emitChatEvent = (event: Parameters<typeof pushOverlayEvent>[0]) => {

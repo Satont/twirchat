@@ -13,13 +13,20 @@ import { logger } from '@twirchat/shared/logger'
  */
 import type { Badge, NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
 import { StaticAuthProvider } from '@twurple/auth'
-import { ChatClient, UserState } from '@twurple/chat'
-import type { ChatMessage, UserNotice } from '@twurple/chat'
+import { ChatClient, RoomState as TwitchRoomState, UserState } from '@twurple/chat'
+import type {
+  ChatMessage,
+  ChatRaidInfo,
+  ChatSubGiftInfo,
+  ChatSubInfo,
+  UserNotice,
+} from '@twurple/chat'
 import { LogLevel } from '@twurple/chat'
 
 import { refreshTwitchToken } from '../../auth/twitch'
 import { getBackendUrl } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
+import { buildTwitchSystemMessage } from '../../services/twitch-system-message'
 import { AccountStore } from '../../store/account-store'
 import { MessageStore } from '../../store/message-store'
 import { BasePlatformAdapter } from '../base-adapter'
@@ -28,6 +35,20 @@ import { parseTwitchBadgeCatalog } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
 
 const log = logger('twitch')
+
+type RoomMode = keyof Omit<RoomState, 'platform' | 'channelId'>
+type BooleanRoomMode = 'subscribersOnly' | 'emoteOnly' | 'uniqueChat'
+const booleanRoomModes: ReadonlyArray<[tag: string, mode: BooleanRoomMode, label: string]> = [
+  ['subs-only', 'subscribersOnly', 'Subscribers-only'],
+  ['emote-only', 'emoteOnly', 'Emote-only'],
+  ['r9k', 'uniqueChat', 'Unique chat'],
+]
+
+function roomDuration(tag: string | undefined): number | undefined {
+  if (!tag) return undefined
+  const value = Number(tag)
+  return Number.isSafeInteger(value) ? value : undefined
+}
 
 interface LocalTwitchSentMessageParams {
   channelId: string
@@ -44,6 +65,11 @@ interface LocalTwitchSentMessageParams {
   reply?: NormalizedChatMessage['reply']
   timestamp?: Date
 }
+
+type TwitchIrcNotice = Pick<
+  Parameters<typeof buildTwitchSystemMessage>[0],
+  'text' | 'notice' | 'author'
+>
 
 export function createLocalTwitchSentMessage(
   params: LocalTwitchSentMessageParams,
@@ -90,10 +116,24 @@ export class TwitchAdapter extends BasePlatformAdapter {
     return this.roomState
   }
 
-  private updateRoomState(channel: string, patch: Partial<RoomState>): void {
+  private updateRoomMode<K extends RoomMode>(
+    channel: string,
+    mode: K,
+    value: RoomState[K],
+    summary: string,
+    announce = true,
+  ): void {
+    if (this.roomState?.[mode] === value) return
     const channelId = channel.replace(/^#/, '').toLowerCase()
-    this.roomState = { ...this.roomState, platform: 'twitch', channelId, ...patch }
+    this.roomState = { ...this.roomState, platform: 'twitch', channelId, [mode]: value }
     this.emit('room_state', this.roomState)
+    if (announce) this.emitModerationNotice({ channelId, text: summary })
+  }
+
+  private emitModerationNotice(
+    input: Omit<Parameters<typeof buildTwitchSystemMessage>[0], 'notice'>,
+  ): void {
+    this.emit('notice', buildTwitchSystemMessage({ ...input, notice: { kind: 'moderation' } }))
   }
 
   /** "setId/version" → badge appearance and metadata from backend /api/twitch/badges */
@@ -448,6 +488,30 @@ export class TwitchAdapter extends BasePlatformAdapter {
       if (!current()) return
       this.handleSubGiftEvent(msg, user, subInfo)
     })
+    client.onCommunitySub((channel, user, info, msg) => {
+      if (!current()) return
+      const displayName = info.gifterDisplayName || info.gifter || 'Anonymous'
+      this.emitUserNotice(msg, {
+        author: { displayName, username: info.gifter, id: info.gifterUserId ?? '' },
+        text:
+          Number.isSafeInteger(info.count) && info.count > 0
+            ? `${displayName} gifted ${info.count} ${info.count === 1 ? 'subscription' : 'subscriptions'} to the community.`
+            : `${displayName} gifted subscriptions to the community.`,
+        notice: { kind: 'community_gift' },
+      })
+    })
+    client.onRewardGift((channel, user, info, msg) => {
+      if (!current() || info.triggerType !== 'CHEER') return
+      const displayName = info.gifterDisplayName || user || 'Anonymous'
+      this.emitUserNotice(msg, {
+        author: { displayName, username: user, id: info.gifterId ?? '' },
+        text:
+          Number.isSafeInteger(info.count) && info.count > 0
+            ? `${displayName} shared ${info.count} ${info.count === 1 ? 'reward' : 'rewards'} with a Cheer.`
+            : `${displayName} shared rewards with a Cheer.`,
+        notice: { kind: 'reward_gift' },
+      })
+    })
 
     // Raids
     client.onRaid((channel, user, raidInfo, msg) => {
@@ -457,58 +521,137 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     client.onBan((channel, user, msg) => {
       if (!current()) return
+      const channelId = channel.replace(/^#/, '').toLowerCase()
       this.emit('moderation', {
         platform: 'twitch',
-        channelId: channel.replace(/^#/, '').toLowerCase(),
+        channelId,
         action: 'ban',
         targetUserId: msg.tags.get('target-user-id'),
+      })
+      const at = msg.tags.get('tmi-sent-ts')
+      this.emitModerationNotice({
+        channelId,
+        id: at ? `ban:${channelId}:${user}:${at}` : undefined,
+        text: `@${user} was banned`,
+        timestamp: msg.date,
       })
     })
 
     client.onTimeout((channel, user, duration, msg) => {
       if (!current()) return
+      const channelId = channel.replace(/^#/, '').toLowerCase()
       this.emit('moderation', {
         platform: 'twitch',
-        channelId: channel.replace(/^#/, '').toLowerCase(),
+        channelId,
         action: 'timeout',
         targetUserId: msg.tags.get('target-user-id'),
         durationSeconds: duration,
       })
+      const at = msg.tags.get('tmi-sent-ts')
+      this.emitModerationNotice({
+        channelId,
+        id: at ? `timeout:${channelId}:${user}:${at}` : undefined,
+        text:
+          Number.isSafeInteger(duration) && duration > 0
+            ? `@${user} was timed out for ${duration}s`
+            : `@${user} was timed out`,
+        timestamp: msg.date,
+      })
     })
-    client.onMessageRemove((channel, messageId) => {
+    client.onMessageRemove((channel, messageId, msg) => {
       if (!current()) return
+      const channelId = channel.replace(/^#/, '').toLowerCase()
       this.emit('moderation', {
         platform: 'twitch',
-        channelId: channel.replace(/^#/, '').toLowerCase(),
+        channelId,
         action: 'delete_message',
         messageId,
       })
-    })
-    client.onChatClear((channel) => {
-      if (!current()) return
-      this.emit('chat_clear', {
-        platform: 'twitch',
-        channelId: channel.replace(/^#/, '').toLowerCase(),
+      const user = msg.tags.get('login')
+      this.emitModerationNotice({
+        channelId,
+        id: messageId ? `delete:${channelId}:${messageId}` : undefined,
+        text: user ? `Deleted a message from @${user}` : 'Deleted a chat message',
+        timestamp: msg.date,
       })
     })
-    client.onSlow((channel, enabled, delay) =>
-      current()
-        ? this.updateRoomState(channel, { slowSeconds: enabled ? (delay ?? 30) : 0 })
-        : undefined,
-    )
-    client.onFollowersOnly((channel, enabled, delay) =>
-      current()
-        ? this.updateRoomState(channel, { followersOnlyMinutes: enabled ? (delay ?? 0) : null })
-        : undefined,
-    )
+    client.onChatClear((channel, msg) => {
+      if (!current()) return
+      const channelId = channel.replace(/^#/, '').toLowerCase()
+      this.emit('chat_clear', { platform: 'twitch', channelId })
+      const at = msg.tags.get('tmi-sent-ts')
+      this.emitModerationNotice({
+        channelId,
+        id: at ? `clear:${channelId}:${at}` : undefined,
+        text: 'Chat was cleared',
+        timestamp: msg.date,
+      })
+    })
+    client.irc.onTypedMessage(TwitchRoomState, ({ channel, tags }) => {
+      if (!current()) return
+      // Twitch sends a full snapshot on join, followed by per-mode updates.
+      const announce = !(tags.has('subs-only') && tags.has('slow'))
+      const slow = roomDuration(tags.get('slow'))
+      if (slow !== undefined && slow >= 0)
+        this.updateRoomMode(
+          channel,
+          'slowSeconds',
+          slow,
+          slow ? `Slow mode enabled (${slow}s)` : 'Slow mode disabled',
+          announce,
+        )
+      const followers = roomDuration(tags.get('followers-only'))
+      if (followers !== undefined && followers >= -1) {
+        const duration = followers < 0 ? null : followers
+        const summary =
+          duration === null
+            ? 'Followers-only mode disabled'
+            : duration
+              ? `Followers-only mode enabled (${duration}m minimum)`
+              : 'Followers-only mode enabled'
+        this.updateRoomMode(channel, 'followersOnlyMinutes', duration, summary, announce)
+      }
+      for (const [tag, mode, label] of booleanRoomModes) {
+        const value = tags.get(tag)
+        if (value === '0' || value === '1')
+          this.updateRoomMode(
+            channel,
+            mode,
+            value === '1',
+            `${label} mode ${value === '1' ? 'enabled' : 'disabled'}`,
+            announce,
+          )
+      }
+    })
     client.onSubsOnly((channel, enabled) =>
-      current() ? this.updateRoomState(channel, { subscribersOnly: enabled }) : undefined,
+      current()
+        ? this.updateRoomMode(
+            channel,
+            'subscribersOnly',
+            enabled,
+            `Subscribers-only mode ${enabled ? 'enabled' : 'disabled'}`,
+          )
+        : undefined,
     )
     client.onEmoteOnly((channel, enabled) =>
-      current() ? this.updateRoomState(channel, { emoteOnly: enabled }) : undefined,
+      current()
+        ? this.updateRoomMode(
+            channel,
+            'emoteOnly',
+            enabled,
+            `Emote-only mode ${enabled ? 'enabled' : 'disabled'}`,
+          )
+        : undefined,
     )
     client.onUniqueChat((channel, enabled) =>
-      current() ? this.updateRoomState(channel, { uniqueChat: enabled }) : undefined,
+      current()
+        ? this.updateRoomMode(
+            channel,
+            'uniqueChat',
+            enabled,
+            `Unique chat mode ${enabled ? 'enabled' : 'disabled'}`,
+          )
+        : undefined,
     )
   }
 
@@ -706,14 +849,24 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.emit('message', normalized)
   }
 
-  private handleSubEvent(
-    msg: UserNotice,
-    type: 'sub' | 'resub',
-    subInfo: { months: number; plan?: string },
-  ): void {
+  private emitUserNotice(msg: UserNotice, input: TwitchIrcNotice): void {
+    this.emit(
+      'notice',
+      buildTwitchSystemMessage({
+        ...input,
+        channelId: msg.channel,
+        id: msg.tags.get('id'),
+        timestamp: msg.date,
+        text: msg.tags.get('system-msg')?.trim() || input.text,
+      }),
+    )
+  }
+
+  private handleSubEvent(msg: UserNotice, type: 'sub' | 'resub', subInfo: ChatSubInfo): void {
     const { tags } = msg
     const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? 'unknown'
+    const username = tags.get('login')
+    const displayName = tags.get('display-name') || username || 'unknown'
     const channelId = msg.channelId ?? ''
 
     const event: NormalizedEvent = {
@@ -734,13 +887,20 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     this.emit('event', event)
+    const hasMonths = Number.isSafeInteger(subInfo.months) && subInfo.months > 0
+    const months = `${subInfo.months} ${subInfo.months === 1 ? 'month' : 'months'}`
+    const subscription = subInfo.isPrime ? ' with Prime' : ''
+    this.emitUserNotice(msg, {
+      author: { id: userId, username, displayName },
+      text:
+        type === 'resub'
+          ? `${displayName} resubscribed${subscription}${hasMonths ? ` for ${months}` : ''}.`
+          : `${displayName} subscribed${subscription}.`,
+      notice: { kind: type, detail: subInfo.message || undefined },
+    })
   }
 
-  private handleSubGiftEvent(
-    msg: UserNotice,
-    recipient: string,
-    subInfo: { months: number; plan?: string },
-  ): void {
+  private handleSubGiftEvent(msg: UserNotice, recipient: string, subInfo: ChatSubGiftInfo): void {
     const { tags } = msg
     const userId = tags.get('user-id') ?? ''
     const displayName = tags.get('display-name') ?? 'unknown'
@@ -766,9 +926,18 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     this.emit('event', event)
+    const gifterName = subInfo.gifterDisplayName || subInfo.gifter || 'Anonymous'
+    const recipientName = subInfo.displayName || recipient
+    this.emitUserNotice(msg, {
+      author: { id: subInfo.gifterUserId ?? '', username: subInfo.gifter, displayName: gifterName },
+      text: recipientName
+        ? `${gifterName} gifted a subscription to ${recipientName}.`
+        : `${gifterName} gifted a subscription.`,
+      notice: { kind: 'gift_sub' },
+    })
   }
 
-  private handleRaidEvent(msg: UserNotice, raidInfo: { viewerCount: number }): void {
+  private handleRaidEvent(msg: UserNotice, raidInfo: ChatRaidInfo): void {
     const { tags } = msg
     const userId = tags.get('user-id') ?? ''
     const displayName = tags.get('display-name') ?? 'unknown'
@@ -791,6 +960,16 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     this.emit('event', event)
+    const username = tags.get('msg-param-login') || tags.get('login')
+    const raiderName = raidInfo.displayName || tags.get('display-name') || username || 'Someone'
+    this.emitUserNotice(msg, {
+      author: { id: userId, username, displayName: raiderName },
+      text:
+        Number.isSafeInteger(raidInfo.viewerCount) && raidInfo.viewerCount > 0
+          ? `${raiderName} raided with ${raidInfo.viewerCount} ${raidInfo.viewerCount === 1 ? 'viewer' : 'viewers'}.`
+          : `${raiderName} raided the channel.`,
+      notice: { kind: 'raid' },
+    })
   }
 
   private handleCheerEvent(msg: ChatMessage): void {
