@@ -147,13 +147,14 @@ function Content() {
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {view === 'tabs' ? (
         <ChannelTabBar
-          watchedChannels={tabs.tabsForChannels(channels, ids, state.value.metadata)}
-          activeTabId="a"
-          watchedStatuses={app.watchedStatusesStore.get()}
-          watchedLiveStatuses={new Map()}
-          onSelectTab={() => {}}
-          onAddChannel={() => {}}
-          onRemoveChannel={() => {}}
+          tabs={{
+            watchedChannels: tabs.tabsForChannels(channels, ids, state.value.metadata),
+            activeTabId: 'a',
+            watchedLiveStatuses: new Map(),
+            onSelectTab: () => {},
+            onAddChannel: () => {},
+            onRemoveChannel: () => {},
+          }}
         />
       ) : (
         <WatchedView tabId={tabId} />

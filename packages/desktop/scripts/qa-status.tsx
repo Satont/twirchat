@@ -124,29 +124,33 @@ function bounds(renderer, id) {
   assert.ok(result)
   return result
 }
-async function tooltip(renderer, expected) {
-  renderer.focusElement(node(renderer, 'app-status-icon').id)
+async function tooltip(renderer, trigger, expected) {
+  renderer.focusElement(node(renderer, trigger).id)
   await Bun.sleep(90)
   assert.ok(
-    nodes(renderer).some((entry) => entry.testId === 'app-status-tooltip'),
+    nodes(renderer).some((entry) => entry.testId === 'streamer-mode-tooltip'),
     'Status tooltip must open with keyboard focus',
   )
   assert.ok(renderer.getPaintedText().includes(expected), `Tooltip must show ${expected}`)
 }
-async function check(renderer, enabled, expected) {
+async function check(renderer, enabled, expected, trigger = 'nav-settings') {
   await Bun.sleep(100)
   assert.equal(
-    nodes(renderer).some((entry) => entry.testId === 'streamer-mode-dot'),
-    enabled,
+    nodes(renderer).some((entry) => entry.testId === 'app-status-icon'),
+    false,
+  )
+  assert.equal(
+    nodes(renderer).filter((entry) => entry.testId === 'streamer-mode-dot').length,
+    enabled ? 1 : 0,
   )
   renderer.blur()
   await Bun.sleep(100)
   assert.equal(
-    renderer.getPaintedText().includes('Streamer mode enabled'),
+    renderer.getPaintedText().includes(expected),
     false,
     'No standalone status banner may consume a row',
   )
-  await tooltip(renderer, expected)
+  if (trigger) await tooltip(renderer, trigger, expected)
 }
 try {
   await manager.start()
@@ -220,16 +224,16 @@ try {
   assert.ok(child)
   await focusNativeQaWindow('TwirChat chat')
   assert.equal(
-    nodes(child).filter((entry) => entry.testId === 'app-status-icon').length,
+    nodes(child).filter((entry) => entry.testId === 'streamer-mode-indicator').length,
     1,
-    'Only the first native chat header owns the app icon',
+    'Only the first native chat header owns the status indicator',
   )
-  await check(child, true, 'Streamer mode enabled (automatic)')
-  const icon = bounds(child, 'app-status-icon'),
+  await check(child, true, 'Streamer mode enabled (automatic)', 'streamer-mode-indicator')
+  const indicator = bounds(child, 'streamer-mode-indicator'),
     header = bounds(child, 'chat-header')
   assert.ok(
-    icon.y >= header.y && icon.y + icon.height <= header.y + header.height,
-    'Standalone status icon stays in the existing header',
+    indicator.y >= header.y && indicator.y + indicator.height <= header.y + header.height,
+    'Standalone status indicator stays in the existing header',
   )
   screenshots.push(await captureGuiQaDisplay('status-native-tooltip'))
   child.blur()
@@ -241,7 +245,12 @@ try {
   automatic = false
   status = { ...status, effectiveEnabled: false }
   events.emit('streamer_mode_changed', status)
-  await check(child, false, 'Streamer mode disabled (automatic)')
+  await check(child, false, 'Streamer mode disabled (automatic)', null)
+  assert.equal(
+    nodes(child).some((entry) => entry.testId === 'streamer-mode-indicator'),
+    false,
+  )
+  assert.equal(bounds(child, 'chat-header').height, header.height)
   await Bun.write(
     join(process.env.TWIRCHAT_QA_SESSION_DIR, 'status-result.json'),
     JSON.stringify(

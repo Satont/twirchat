@@ -49,8 +49,8 @@ import { useTheme } from '../theme-context'
 import { AddChannelForm } from './AddChannelForm'
 import { ChatView } from './ChatView'
 import { PluginChatPane } from './PluginChatPane'
-import { AppStatusIcon } from './ui/AppStatusIcon'
 import { Icon } from './ui/Icon'
+import { StreamerModeIndicator } from './ui/StreamerModeIndicator'
 import { Text } from './ui/Text'
 
 interface DockPreview {
@@ -589,8 +589,10 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
   useHotkeyRoute([chooserId, 'window'], chooserActive)
 
   const canDock = panels.length > 1
-  const showAppStatus =
-    !!windows && windows.descriptor.kind !== 'main' && panels[0]?.id === panel.id
+  const streamerModeIndicator =
+    windows && windows.descriptor.kind !== 'main' && panels[0]?.id === panel.id ? (
+      <StreamerModeIndicator />
+    ) : null
   const dragGrip = canDock ? (
     <div
       testId={`pane-drag-${panel.id}`}
@@ -643,21 +645,22 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
       <Icon name="grip" size={12} color={theme.text2} />
     </div>
   ) : null
-  const headerLeading =
-    showAppStatus || canDock ? (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 2,
-          flexShrink: 0,
-        }}
-      >
-        {showAppStatus ? <AppStatusIcon compact size={18} /> : null}
-        {dragGrip}
-      </div>
-    ) : null
+  const headerLeading = canDock ? (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        flexShrink: 0,
+      }}
+    >
+      {streamerModeIndicator}
+      {dragGrip}
+    </div>
+  ) : (
+    streamerModeIndicator
+  )
 
   return (
     <div

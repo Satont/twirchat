@@ -17,7 +17,6 @@ const fill = (body: string) =>
 
 export const icons = {
   // ── App shell (from App.vue) ────────────────────────────────────────────
-  logo: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="3" fill="#000" opacity=".9" /><path d="M7 21h10M12 17v4" stroke="#000" stroke-width="2" stroke-linecap="round" /></svg>`,
   chat: stroke('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />'),
   bell: stroke(
     '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />',
