@@ -48,21 +48,10 @@ export async function stageNativeRuntime(options: {
   const name = nativeArtifactName()
   const path = join(artifactRoot, name)
   const source = parseNativeSourceManifest(await Bun.file(join(sourceRoot, 'source.json')).json())
-  if (
-    source.schema !== 1 ||
-    source.revision !== GPUIX_SOURCE_REVISION ||
-    source.gpuiRevision !== GPUI_SOURCE_REVISION ||
-    !Array.isArray(source.patches) ||
-    !source.patches.length
-  )
+  if (source.revision !== GPUIX_SOURCE_REVISION || source.gpuiRevision !== GPUI_SOURCE_REVISION)
     throw new Error('Native packaging source pins do not match this application.')
   const patches = await Promise.all(
     source.patches.map(async (patch) => {
-      if (
-        !['gpuix', 'gpui'].includes(patch.root) ||
-        !/^patches\/[a-z\d-]+\.patch$/u.test(patch.path)
-      )
-        throw new Error('Invalid native patch path.')
       const bytes = Buffer.from(await Bun.file(join(sourceRoot, patch.path)).arrayBuffer())
       if (createHash('sha256').update(bytes).digest('hex') !== patch.sha256)
         throw new Error(`Native patch checksum mismatch: ${patch.path}`)
