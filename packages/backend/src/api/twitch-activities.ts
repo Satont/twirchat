@@ -15,6 +15,8 @@ import { z } from 'zod'
 
 import { config } from '../config'
 import { ChatToolsError } from './chat-tools'
+import { isModerator } from './moderation/twitch'
+import { hasChannelModerationScopes } from './moderation/twitch-eventsub'
 import { resolveTwitchUserId } from './twitch-users'
 
 export interface TwitchActivitiesCredentials {
@@ -122,6 +124,7 @@ function reward(value: Row): TwitchReward {
 export interface TwitchActivitiesDependencies {
   fetch(input: string, init?: RequestInit): Promise<Response>
   resolveUser(identifier: string, token: string): Promise<string | null>
+  isModerator?: typeof isModerator
 }
 const defaults: TwitchActivitiesDependencies = {
   fetch: (...args) => fetch(...args),
@@ -1007,6 +1010,7 @@ export function createTwitchActivitiesService(
     ): Promise<{ subscriptions: TwitchEventSubscription[]; errors: string[] }> {
       string(sessionId, 'EventSub session', 200)
       const definitions: { type: string; version: string; condition: Record<string, string> }[] = []
+      const errors: string[] = []
       const allowed = (...scopes: string[]) =>
         scopes.some((name) => credentials.scopes.includes(name))
       if (!channelSlug) {
@@ -1018,9 +1022,43 @@ export function createTwitchActivitiesService(
           })
       } else {
         const id = await channelId(channelSlug, credentials)
+        const ownChannel = id === credentials.platformUserId
+        const canUseAutoMod = allowed('moderator:manage:automod')
+        const canUseModerationEvents = hasChannelModerationScopes(credentials.scopes)
+        let moderatesChannel = ownChannel
+        if (
+          !ownChannel &&
+          (canUseAutoMod || canUseModerationEvents) &&
+          allowed('user:read:moderated_channels')
+        ) {
+          try {
+            const role = await (dependencies.isModerator ?? isModerator)(
+              credentials.accessToken,
+              id,
+              credentials.platformUserId,
+            )
+            moderatesChannel = role.isModerator
+            if (role.error) errors.push(role.error.message)
+          } catch {
+            errors.push('Could not check Twitch moderator permissions.')
+          }
+        }
         for (const type of ['stream.online', 'stream.offline'])
           definitions.push({ type, version: '1', condition: { broadcaster_user_id: id } })
-        if (id === credentials.platformUserId) {
+        if (canUseAutoMod && moderatesChannel)
+          for (const type of ['automod.message.hold', 'automod.message.update'])
+            definitions.push({
+              type,
+              version: '2',
+              condition: { broadcaster_user_id: id, moderator_user_id: credentials.platformUserId },
+            })
+        if (canUseModerationEvents && moderatesChannel)
+          definitions.push({
+            type: 'channel.moderate',
+            version: '2',
+            condition: { broadcaster_user_id: id, moderator_user_id: credentials.platformUserId },
+          })
+        if (ownChannel) {
           if (allowed('moderator:read:followers'))
             definitions.push({
               type: 'channel.follow',
@@ -1050,7 +1088,6 @@ export function createTwitchActivitiesService(
         }
       }
       const subscriptions: TwitchEventSubscription[] = []
-      const errors: string[] = []
       for (const definition of definitions) {
         try {
           // EventSub registration is bounded and sequential to respect the welcome window.

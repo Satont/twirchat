@@ -37,6 +37,7 @@ import { loadStreamerMode, wireStreamerMode } from './state/streamer-mode'
 import { wireTabUnread } from './state/tab-unread'
 import { loadTranslationSettings, wireAutoTranslations } from './state/translation'
 import { wireTwitchActivities } from './state/twitch-activities'
+import { wireTwitchAutoMod } from './state/twitch-automod'
 import { wireActiveWatchedChannels } from './state/watched-subscriptions'
 import { windowPresentationPreferences } from './state/window-presentation'
 import { mountDesktopWindows } from './window-manager'
@@ -98,6 +99,7 @@ if (!g.__twirchatChannelStateWired) {
 if (!g.__twirchatActivitiesWired) {
   g.__twirchatActivitiesWired = true
   wireTwitchActivities(backend)
+  wireTwitchAutoMod(backend.events)
 }
 if (!g.__twirchatHighlightNotificationsWired) {
   g.__twirchatHighlightNotificationsWired = true

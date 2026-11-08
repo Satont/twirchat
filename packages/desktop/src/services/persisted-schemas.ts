@@ -104,6 +104,20 @@ export const normalizedChatMessageSchema = z.toZod<NormalizedChatMessage>()(
         rewardTitle: z.string().optional(),
         bits: z.number().optional(),
         announcement: z.string().optional(),
+        twitchNotice: z
+          .object({
+            kind: z.enum([
+              'sub',
+              'resub',
+              'gift_sub',
+              'community_gift',
+              'raid',
+              'reward_gift',
+              'moderation',
+            ]),
+            detail: z.string().optional(),
+          })
+          .optional(),
         subscriptionMonths: z.number().optional(),
         rewardCost: z.number().optional(),
         flags: z.record(z.string(), z.boolean()).optional(),
