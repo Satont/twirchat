@@ -1,0 +1,311 @@
+diff --git a/packages/native/src/lib.rs b/packages/native/src/lib.rs
+index bc0c55a..221e9e3 100644
+--- a/packages/native/src/lib.rs
++++ b/packages/native/src/lib.rs
+@@ -25,6 +25,8 @@ mod element_tree;
+ #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ mod hotkey_capture;
+ mod image_resources;
++#[cfg(target_os = "linux")]
++mod linux_titlebar;
+ mod markdown;
+ mod motion;
+ mod plain_text_cache;
+diff --git a/packages/native/src/linux_titlebar.rs b/packages/native/src/linux_titlebar.rs
+new file mode 100644
+index 0000000..1fe0a67
+--- /dev/null
++++ b/packages/native/src/linux_titlebar.rs
+@@ -0,0 +1,182 @@
++use std::{cell::Cell, rc::Rc};
++
++use gpui::{
++    div, prelude::*, px, svg, App, Decorations, FontWeight, Hsla, MouseButton, Role, SharedString,
++    Window, WindowAppearance, WindowButton, WindowButtonLayout,
++};
++
++use crate::theme::grey;
++
++pub(crate) type CloseRequest = Rc<dyn Fn(&mut Window) -> bool>;
++
++pub(crate) struct ClientTitlebar {
++    can_close: CloseRequest,
++    drag_pending: Rc<Cell<bool>>,
++}
++
++impl ClientTitlebar {
++    pub(crate) fn new(can_close: CloseRequest) -> Self {
++        Self {
++            can_close,
++            drag_pending: Rc::new(Cell::new(false)),
++        }
++    }
++
++    pub(crate) fn render(
++        &self,
++        title: &str,
++        window: &Window,
++        cx: &App,
++    ) -> Option<impl IntoElement> {
++        if window.is_fullscreen()
++            || !matches!(window.window_decorations(), Decorations::Client { .. })
++        {
++            self.drag_pending.set(false);
++            return None;
++        }
++
++        let controls = window.window_controls();
++        let can_maximize = controls.maximize && window.is_resizable();
++        let can_minimize = controls.minimize && window.is_minimizable();
++        let layout = cx
++            .button_layout()
++            .unwrap_or_else(WindowButtonLayout::linux_default);
++        let dark = matches!(
++            window.appearance(),
++            WindowAppearance::Dark | WindowAppearance::VibrantDark
++        );
++        let (background, foreground) = if dark {
++            (grey(0x30), grey(0xff))
++        } else {
++            (grey(0xeb), grey(0x2e))
++        };
++        let buttons = |side: [Option<WindowButton>; gpui::MAX_BUTTONS_PER_SIDE]| {
++            div().flex().flex_none().gap(px(6.)).children(
++                side.into_iter()
++                    .flatten()
++                    .filter(|button| match button {
++                        WindowButton::Minimize => can_minimize,
++                        WindowButton::Maximize => can_maximize,
++                        WindowButton::Close => true,
++                    })
++                    .map(|button| {
++                        render_button(button, window.is_maximized(), foreground, &self.can_close)
++                    }),
++            )
++        };
++
++        let press = self.drag_pending.clone();
++        let release = press.clone();
++        let outside_release = press.clone();
++        let outside_press = press.clone();
++        let drag = press.clone();
++        let title_area = div()
++            .id("window-title")
++            .flex()
++            .flex_1()
++            .h_full()
++            .min_w(px(0.))
++            .items_center()
++            .justify_center()
++            .child(
++                div()
++                    .min_w(px(0.))
++                    .truncate()
++                    .text_size(px(13.))
++                    .font_weight(FontWeight::SEMIBOLD)
++                    .child(SharedString::new(title)),
++            )
++            .on_mouse_down(MouseButton::Left, move |_, _, _| press.set(true))
++            .on_mouse_down_out(move |_, _, _| outside_press.set(false))
++            .on_mouse_up(MouseButton::Left, move |_, _, _| release.set(false))
++            .on_mouse_up_out(MouseButton::Left, move |_, _, _| outside_release.set(false))
++            .on_mouse_move(move |event, window, _| {
++                if drag.replace(false) && event.dragging() {
++                    window.start_window_move();
++                }
++            })
++            .when(can_maximize, |area| {
++                area.on_click(|event, window, _| {
++                    if event.click_count() == 2 {
++                        window.zoom_window();
++                    }
++                })
++            })
++            .when(controls.window_menu, |area| {
++                area.on_mouse_down(MouseButton::Right, |event, window, _| {
++                    window.show_window_menu(event.position);
++                })
++            });
++
++        Some(
++            div()
++                .id("linux-client-titlebar")
++                .flex()
++                .flex_none()
++                .w_full()
++                .h(px(44.))
++                .px(px(10.))
++                .gap(px(8.))
++                .items_center()
++                .bg(background)
++                .text_color(foreground)
++                .border_b_1()
++                .border_color(foreground.opacity(0.12))
++                .child(buttons(layout.left))
++                .child(title_area)
++                .child(buttons(layout.right)),
++        )
++    }
++}
++
++fn render_button(
++    button: WindowButton,
++    maximized: bool,
++    foreground: Hsla,
++    can_close: &CloseRequest,
++) -> impl IntoElement {
++    let (label, icon): (&str, &[u8]) = match button {
++        WindowButton::Minimize => (
++            "Minimize",
++            br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 8h8" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round"/></svg>"#,
++        ),
++        WindowButton::Maximize if maximized => (
++            "Restore",
++            br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M6 5.5V3.75h6.25V10H10.5M3.75 6h6.25v6.25H3.75z" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round"/></svg>"#,
++        ),
++        WindowButton::Maximize => (
++            "Maximize",
++            br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 4h8v8H4z" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round"/></svg>"#,
++        ),
++        WindowButton::Close => (
++            "Close",
++            br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round"/></svg>"#,
++        ),
++    };
++    let can_close = can_close.clone();
++    div()
++        .id(button.id())
++        .role(Role::Button)
++        .aria_label(label)
++        .focusable()
++        .flex()
++        .flex_none()
++        .size(px(24.))
++        .items_center()
++        .justify_center()
++        .rounded_full()
++        .bg(foreground.opacity(0.1))
++        .hover(move |style| style.bg(foreground.opacity(0.17)))
++        .active(move |style| style.bg(foreground.opacity(0.24)))
++        .focus_visible(move |style| style.bg(foreground.opacity(0.24)))
++        .child(svg().data(icon).size(px(16.)).text_color(foreground))
++        .on_click(move |_, window, cx| {
++            cx.stop_propagation();
++            match button {
++                WindowButton::Minimize => window.minimize_window(),
++                WindowButton::Maximize => window.zoom_window(),
++                WindowButton::Close if can_close(window) => window.remove_window(),
++                WindowButton::Close => {}
++            }
++        })
++}
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+index af3f6a2..f37bafc 100644
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -1324,6 +1324,7 @@ fn install_window_lifecycle(
+     renderer_id: u64,
+     handle: gpui::WindowHandle<GpuixView>,
+     state: Arc<parking_lot::Mutex<NativeWindowState>>,
++    _options: &WindowOptions,
+     cx: &mut gpui::App,
+ ) {
+     let window_id = handle.window_id();
+@@ -1345,8 +1346,10 @@ fn install_window_lifecycle(
+             capture_native_window(window, &observer_state);
+             #[cfg(target_os = "linux")]
+             {
++                use crate::linux_titlebar::{ClientTitlebar, CloseRequest};
++
+                 let close_state = observer_state.clone();
+-                window.on_window_should_close(cx, move |window, _| {
++                let can_close: CloseRequest = Rc::new(move |window| {
+                     if !crate::tray::is_enabled(renderer_id) || !window.hide_window() {
+                         return true;
+                     }
+@@ -1355,6 +1358,13 @@ fn install_window_lifecycle(
+                     state.hotkeys.cancel();
+                     false
+                 });
++                if _options.layer_shell.is_none() && _options.kind.as_deref() != Some("popup") {
++                    view.client_titlebar = Some(ClientTitlebar::new(can_close.clone()));
++                    window.observe_button_layout_changed(|window, _| window.refresh()).detach();
++                    window.observe_window_appearance(|window, _| window.refresh()).detach();
++                    window.refresh();
++                }
++                window.on_window_should_close(cx, move |window, _| can_close(window));
+             }
+             let painted_bounds = observer_state.lock().painted_bounds.clone();
+             window.on_after_paint(move |_| {
+@@ -2043,7 +2053,7 @@ impl GpuixRenderer {
+                                     })
+                                 },
+                             )?;
+-                            install_window_lifecycle(renderer_id, handle, state, cx);
++                            install_window_lifecycle(renderer_id, handle, state, &options, cx);
+                             if options.focus.unwrap_or(true) {
+                                 cx.activate(true);
+                             }
+@@ -2167,6 +2177,7 @@ impl GpuixRenderer {
+                         self.renderer_id,
+                         window_handle,
+                         self.window_state.clone(),
++                        &options,
+                         cx,
+                     )
+                 });
+@@ -2301,7 +2312,13 @@ impl GpuixRenderer {
+                                 }
+                             };
+ 
+-                            install_window_lifecycle(renderer_id, window, window_state, cx);
++                            install_window_lifecycle(
++                                renderer_id,
++                                window,
++                                window_state,
++                                &window_options,
++                                cx,
++                            );
+                             let commands = cx.spawn(async move |cx| {
+                                 run_ui_commands(command_receiver, window, cx).await;
+                             });
+@@ -4855,6 +4872,8 @@ impl Drop for GpuixRenderer {
+ // ── GPUI View ────────────────────────────────────────────────────────
+ 
+ pub(crate) struct GpuixView {
++    #[cfg(target_os = "linux")]
++    client_titlebar: Option<crate::linux_titlebar::ClientTitlebar>,
+     pending_invalidation: Invalidation,
+     plain_text_cache: SharedPlainTextCache,
+     flow_cache: SharedFlows,
+@@ -5239,6 +5258,8 @@ impl GpuixView {
+         selection: SharedSelection,
+     ) -> Self {
+         Self {
++            #[cfg(target_os = "linux")]
++            client_titlebar: None,
+             pending_invalidation: Invalidation::None,
+             plain_text_cache: SharedPlainTextCache::default(),
+             flow_cache: SharedFlows::default(),
+@@ -6840,6 +6861,21 @@ impl gpui::Render for GpuixView {
+             let drag_move_view = cx.weak_entity();
+             let drag_end_view = drag_move_view.clone();
+             let root = gpui::div().size_full();
++            #[cfg(target_os = "linux")]
++            let result = match self
++                .client_titlebar
++                .as_ref()
++                .and_then(|titlebar| titlebar.render(&self.window_title, window, cx))
++            {
++                Some(titlebar) => gpui::div()
++                    .flex()
++                    .flex_col()
++                    .size_full()
++                    .child(titlebar)
++                    .child(gpui::div().flex_1().min_h(gpui::px(0.)).w_full().child(result))
++                    .into_any_element(),
++                None => result,
++            };
+             with_window_menu_actions(root)
+                 .child(window_key_events(
+                     callback.clone(),

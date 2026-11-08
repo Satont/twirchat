@@ -5,6 +5,12 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
+Native version `0.11.0-twirchat.21` adds Linux client titlebars when the Wayland
+compositor delegates window decorations to the app, as on GNOME. GPUI follows the
+desktop's button order and the compositor's window capabilities. Close uses the same
+close-to-tray behavior as a compositor close request. On X11 and on Wayland when
+the compositor provides decorations, the window manager supplies the frame.
+
 Native version `0.11.0-twirchat.20` makes the painted scrollbars interactive.
 `scrollbarColor` already enabled a thumb; it now also inserts a wider hit strip
 over that thumb. Pressing it starts a drag in the capture phase, so pointer

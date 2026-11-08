@@ -43,6 +43,7 @@
     "scripts/qa-tray.tsx",
     "scripts/qa-built-app.ts",
     "scripts/qa-wayland-tray.tsx",
+    "scripts/qa-wayland-titlebar.tsx",
     "scripts/qa-mention-user-card.tsx",
     "scripts/qa-emote-resources.tsx",
     "scripts/qa-text-rendering.tsx",
