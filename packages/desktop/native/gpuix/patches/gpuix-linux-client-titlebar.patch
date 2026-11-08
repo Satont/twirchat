@@ -13,55 +13,124 @@ index bc0c55a..221e9e3 100644
  mod plain_text_cache;
 diff --git a/packages/native/src/linux_titlebar.rs b/packages/native/src/linux_titlebar.rs
 new file mode 100644
-index 0000000..1fe0a67
+index 0000000..974bf7f
 --- /dev/null
 +++ b/packages/native/src/linux_titlebar.rs
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,247 @@
 +use std::{cell::Cell, rc::Rc};
 +
 +use gpui::{
-+    div, prelude::*, px, svg, App, Decorations, FontWeight, Hsla, MouseButton, Role, SharedString,
-+    Window, WindowAppearance, WindowButton, WindowButtonLayout,
++    div, prelude::*, px, svg, App, Context, Decorations, Entity, FontWeight, Hsla, MouseButton,
++    Pixels, Render, Role, SharedString, StyleRefinement, Window, WindowAppearance, WindowButton,
++    WindowButtonLayout,
 +};
 +
 +use crate::theme::grey;
 +
++const TITLEBAR_HEIGHT: Pixels = px(44.);
++
 +pub(crate) type CloseRequest = Rc<dyn Fn(&mut Window) -> bool>;
++
++#[derive(Clone, Copy, PartialEq, Eq)]
++struct TitlebarState {
++    layout: WindowButtonLayout,
++    appearance: WindowAppearance,
++    can_minimize: bool,
++    can_maximize: bool,
++    window_menu: bool,
++    maximized: bool,
++}
++
++impl TitlebarState {
++    fn read(window: &Window, cx: &App) -> Self {
++        let controls = window.window_controls();
++        Self {
++            layout: cx
++                .button_layout()
++                .unwrap_or_else(WindowButtonLayout::linux_default),
++            appearance: window.appearance(),
++            can_minimize: controls.minimize && window.is_minimizable(),
++            can_maximize: controls.maximize && window.is_resizable(),
++            window_menu: controls.window_menu,
++            maximized: window.is_maximized(),
++        }
++    }
++}
 +
 +pub(crate) struct ClientTitlebar {
 +    can_close: CloseRequest,
 +    drag_pending: Rc<Cell<bool>>,
++    title: SharedString,
++    state: TitlebarState,
++    version: u64,
 +}
 +
 +impl ClientTitlebar {
-+    pub(crate) fn new(can_close: CloseRequest) -> Self {
++    pub(crate) fn new(can_close: CloseRequest, title: &str, window: &Window, cx: &App) -> Self {
 +        Self {
 +            can_close,
 +            drag_pending: Rc::new(Cell::new(false)),
++            title: SharedString::new(title),
++            state: TitlebarState::read(window, cx),
++            version: 0,
 +        }
 +    }
 +
-+    pub(crate) fn render(
-+        &self,
++    pub(crate) fn element(
++        view: &Entity<Self>,
 +        title: &str,
 +        window: &Window,
-+        cx: &App,
++        cx: &mut App,
 +    ) -> Option<impl IntoElement> {
-+        if window.is_fullscreen()
-+            || !matches!(window.window_decorations(), Decorations::Client { .. })
++        if !matches!(window.window_decorations(), Decorations::Client { .. })
++            || window.is_fullscreen()
 +        {
-+            self.drag_pending.set(false);
++            view.read(cx).drag_pending.set(false);
 +            return None;
 +        }
 +
-+        let controls = window.window_controls();
-+        let can_maximize = controls.maximize && window.is_resizable();
-+        let can_minimize = controls.minimize && window.is_minimizable();
-+        let layout = cx
-+            .button_layout()
-+            .unwrap_or_else(WindowButtonLayout::linux_default);
++        let state = TitlebarState::read(window, cx);
++        let previous = view.read(cx);
++        let title_changed = previous.title.as_str() != title;
++        let version = if title_changed || previous.state != state {
++            // Rebuild this header in the current frame without scheduling another frame.
++            view.update(cx, |view, _| {
++                if title_changed {
++                    view.title = SharedString::new(title);
++                }
++                view.state = state;
++                view.version = view.version.wrapping_add(1);
++                view.version
++            })
++        } else {
++            previous.version
++        };
++
++        Some(
++            view.clone()
++                .cached(
++                    StyleRefinement::default()
++                        .w_full()
++                        .h(TITLEBAR_HEIGHT)
++                        .flex_none(),
++                )
++                .cache_version(version),
++        )
++    }
++}
++
++impl Render for ClientTitlebar {
++    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
++        let TitlebarState {
++            layout,
++            appearance,
++            can_minimize,
++            can_maximize,
++            window_menu,
++            maximized,
++        } = self.state;
 +        let dark = matches!(
-+            window.appearance(),
++            appearance,
 +            WindowAppearance::Dark | WindowAppearance::VibrantDark
 +        );
 +        let (background, foreground) = if dark {
@@ -78,9 +147,7 @@ index 0000000..1fe0a67
 +                        WindowButton::Maximize => can_maximize,
 +                        WindowButton::Close => true,
 +                    })
-+                    .map(|button| {
-+                        render_button(button, window.is_maximized(), foreground, &self.can_close)
-+                    }),
++                    .map(|button| render_button(button, maximized, foreground, &self.can_close)),
 +            )
 +        };
 +
@@ -103,7 +170,7 @@ index 0000000..1fe0a67
 +                    .truncate()
 +                    .text_size(px(13.))
 +                    .font_weight(FontWeight::SEMIBOLD)
-+                    .child(SharedString::new(title)),
++                    .child(self.title.clone()),
 +            )
 +            .on_mouse_down(MouseButton::Left, move |_, _, _| press.set(true))
 +            .on_mouse_down_out(move |_, _, _| outside_press.set(false))
@@ -121,30 +188,28 @@ index 0000000..1fe0a67
 +                    }
 +                })
 +            })
-+            .when(controls.window_menu, |area| {
++            .when(window_menu, |area| {
 +                area.on_mouse_down(MouseButton::Right, |event, window, _| {
 +                    window.show_window_menu(event.position);
 +                })
 +            });
 +
-+        Some(
-+            div()
-+                .id("linux-client-titlebar")
-+                .flex()
-+                .flex_none()
-+                .w_full()
-+                .h(px(44.))
-+                .px(px(10.))
-+                .gap(px(8.))
-+                .items_center()
-+                .bg(background)
-+                .text_color(foreground)
-+                .border_b_1()
-+                .border_color(foreground.opacity(0.12))
-+                .child(buttons(layout.left))
-+                .child(title_area)
-+                .child(buttons(layout.right)),
-+        )
++        div()
++            .id("linux-client-titlebar")
++            .flex()
++            .flex_none()
++            .w_full()
++            .h(TITLEBAR_HEIGHT)
++            .px(px(10.))
++            .gap(px(8.))
++            .items_center()
++            .bg(background)
++            .text_color(foreground)
++            .border_b_1()
++            .border_color(foreground.opacity(0.12))
++            .child(buttons(layout.left))
++            .child(title_area)
++            .child(buttons(layout.right))
 +    }
 +}
 +
@@ -200,7 +265,7 @@ index 0000000..1fe0a67
 +        })
 +}
 diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
-index af3f6a2..f37bafc 100644
+index af3f6a2..7b956db 100644
 --- a/packages/native/src/renderer.rs
 +++ b/packages/native/src/renderer.rs
 @@ -1324,6 +1324,7 @@ fn install_window_lifecycle(
@@ -223,12 +288,14 @@ index af3f6a2..f37bafc 100644
                      if !crate::tray::is_enabled(renderer_id) || !window.hide_window() {
                          return true;
                      }
-@@ -1355,6 +1358,13 @@ fn install_window_lifecycle(
+@@ -1355,6 +1358,15 @@ fn install_window_lifecycle(
                      state.hotkeys.cancel();
                      false
                  });
 +                if _options.layer_shell.is_none() && _options.kind.as_deref() != Some("popup") {
-+                    view.client_titlebar = Some(ClientTitlebar::new(can_close.clone()));
++                    view.client_titlebar = Some(cx.new(|cx| {
++                        ClientTitlebar::new(can_close.clone(), &view.window_title, window, cx)
++                    }));
 +                    window.observe_button_layout_changed(|window, _| window.refresh()).detach();
 +                    window.observe_window_appearance(|window, _| window.refresh()).detach();
 +                    window.refresh();
@@ -237,7 +304,7 @@ index af3f6a2..f37bafc 100644
              }
              let painted_bounds = observer_state.lock().painted_bounds.clone();
              window.on_after_paint(move |_| {
-@@ -2043,7 +2053,7 @@ impl GpuixRenderer {
+@@ -2043,7 +2055,7 @@ impl GpuixRenderer {
                                      })
                                  },
                              )?;
@@ -246,7 +313,7 @@ index af3f6a2..f37bafc 100644
                              if options.focus.unwrap_or(true) {
                                  cx.activate(true);
                              }
-@@ -2167,6 +2177,7 @@ impl GpuixRenderer {
+@@ -2167,6 +2179,7 @@ impl GpuixRenderer {
                          self.renderer_id,
                          window_handle,
                          self.window_state.clone(),
@@ -254,7 +321,7 @@ index af3f6a2..f37bafc 100644
                          cx,
                      )
                  });
-@@ -2301,7 +2312,13 @@ impl GpuixRenderer {
+@@ -2301,7 +2314,13 @@ impl GpuixRenderer {
                                  }
                              };
  
@@ -269,16 +336,16 @@ index af3f6a2..f37bafc 100644
                              let commands = cx.spawn(async move |cx| {
                                  run_ui_commands(command_receiver, window, cx).await;
                              });
-@@ -4855,6 +4872,8 @@ impl Drop for GpuixRenderer {
+@@ -4855,6 +4874,8 @@ impl Drop for GpuixRenderer {
  // ── GPUI View ────────────────────────────────────────────────────────
  
  pub(crate) struct GpuixView {
 +    #[cfg(target_os = "linux")]
-+    client_titlebar: Option<crate::linux_titlebar::ClientTitlebar>,
++    client_titlebar: Option<gpui::Entity<crate::linux_titlebar::ClientTitlebar>>,
      pending_invalidation: Invalidation,
      plain_text_cache: SharedPlainTextCache,
      flow_cache: SharedFlows,
-@@ -5239,6 +5258,8 @@ impl GpuixView {
+@@ -5239,6 +5260,8 @@ impl GpuixView {
          selection: SharedSelection,
      ) -> Self {
          Self {
@@ -287,7 +354,7 @@ index af3f6a2..f37bafc 100644
              pending_invalidation: Invalidation::None,
              plain_text_cache: SharedPlainTextCache::default(),
              flow_cache: SharedFlows::default(),
-@@ -6840,6 +6861,21 @@ impl gpui::Render for GpuixView {
+@@ -6840,6 +6863,28 @@ impl gpui::Render for GpuixView {
              let drag_move_view = cx.weak_entity();
              let drag_end_view = drag_move_view.clone();
              let root = gpui::div().size_full();
@@ -295,7 +362,14 @@ index af3f6a2..f37bafc 100644
 +            let result = match self
 +                .client_titlebar
 +                .as_ref()
-+                .and_then(|titlebar| titlebar.render(&self.window_title, window, cx))
++                .and_then(|titlebar| {
++                    crate::linux_titlebar::ClientTitlebar::element(
++                        titlebar,
++                        &self.window_title,
++                        window,
++                        cx,
++                    )
++                })
 +            {
 +                Some(titlebar) => gpui::div()
 +                    .flex()

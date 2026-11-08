@@ -189,7 +189,7 @@
     {
       "path": "patches/gpuix-linux-client-titlebar.patch",
       "root": "gpuix",
-      "sha256": "87cac8689c059418c7f53951b535e99966e8e6fb89b4117b0547c8aaeaae87b8"
+      "sha256": "762bffd3c6a4e995c701298ed390ebf3ce6ddf5ecca991e44a7ef742dc97d831"
     }
   ],
   "cosmicText": {
