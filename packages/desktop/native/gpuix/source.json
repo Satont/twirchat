@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.18",
+  "version": "0.11.0-twirchat.19",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -165,6 +165,11 @@
       "path": "patches/gpui-resolved-fonts.patch",
       "root": "gpui",
       "sha256": "08c8333e73b600826cbe5079844fdf29057a66cbbdc32c826b17a68027484b99"
+    },
+    {
+      "path": "patches/gpuix-scrollbar-drag.patch",
+      "root": "gpuix",
+      "sha256": "ffee4b6b3706be0bc7cd015ab0e85f5e592ad467adbd60438f55f420f1421020"
     }
   ]
 }

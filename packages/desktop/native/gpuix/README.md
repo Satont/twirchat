@@ -5,6 +5,15 @@ pins both GPUIX and its GPUI submodule to full Git revisions; every local patch 
 a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
 publishing, or downloaded native binaries are part of this build.
 
+Native version `0.11.0-twirchat.19` makes the painted scrollbars interactive.
+`scrollbarColor` already enabled a thumb; it now also inserts a wider hit strip
+over that thumb. Pressing it starts a drag in the capture phase, so pointer
+moves keep scrolling even over rows, and releasing ends the gesture. Virtual
+lists freeze their measured content height for the drag and route positions
+through `set_offset_from_scrollbar`; plain scroll containers use
+`ScrollHandle::set_offset`. Track clicks move the thumb under the pointer and
+continue as a drag. Content that fits still has no thumb and no hit strip.
+
 Native version `0.11.0-twirchat.18` caches whole virtual-list rows. GPUI redraws
 the window on every frame, so a pointer that crossed chat rows used to rebuild,
 lay out and paint every visible message for each one-row hover change. Now a
