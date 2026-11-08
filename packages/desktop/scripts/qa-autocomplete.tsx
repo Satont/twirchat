@@ -229,6 +229,56 @@ async function typeNative(text: string): Promise<void> {
   })
   assert.equal(await input.exited, 0, 'native text input')
 }
+async function pressNative(...keys: string[]): Promise<void> {
+  const input = Bun.spawn(['/usr/bin/xdotool', 'key', '--clearmodifiers', ...keys], {
+    stdout: 'ignore',
+    stderr: 'inherit',
+  })
+  assert.equal(await input.exited, 0, `native ${keys.join(', ')}`)
+}
+
+async function checkArrowHistory(): Promise<void> {
+  const currentText = () => composerStore.get().get(composerKey)?.text ?? ''
+  const expectText = async (text: string, ...keys: string[]) => {
+    await pressNative(...keys)
+    await until(() => currentText() === text, `draft after ${keys.join(', ')}`)
+  }
+  const long = 'more words in one message '.repeat(14).trimEnd()
+  const latest = 'most recent message'
+  const unsent = 'an unsent draft'
+  await draft(long)
+  await expectText('', 'Return')
+  await draft(latest)
+  await expectText('', 'Return')
+  assert.deepEqual(sent.slice(-2), [long, latest])
+
+  await expectText(latest, 'Up')
+  await expectText('', 'Down')
+  await draft(unsent)
+  await expectText(long, 'Up', 'Up')
+  await expectText(unsent, 'Down', 'Down')
+  await expectText(latest, 'Up')
+
+  // Both arrows must move the native caret inside soft-wrapped text. Typing
+  // distinct characters after each key makes their movement observable.
+  await draft(long)
+  assert(paintedBounds('chat-input').height > 20, 'fixture wraps without newlines')
+  await pressNative('Up', 'x', 'Down', 'y')
+  await until(() => currentText().includes('y'), 'editing across wrapped rows')
+  const wrappedEdit = currentText()
+  assert.equal(wrappedEdit.replace(/[xy]/gu, ''), long)
+  assert(
+    wrappedEdit.indexOf('x') < long.length && wrappedEdit.indexOf('y') > wrappedEdit.indexOf('x'),
+  )
+
+  await draft('first row\nsecond row')
+  await pressNative('Up', 'x', 'Down', 'y')
+  await until(() => currentText().includes('y'), 'editing across explicit lines')
+  const [first, second] = currentText().split('\n')
+  assert(first?.includes('x') && second?.includes('y'), currentText())
+  assert.equal(currentText().replace(/[xy]/gu, ''), 'first row\nsecond row')
+}
+
 let incoming = 0
 let traffic: ReturnType<typeof setInterval> | undefined
 const screenshots: string[] = []
@@ -402,11 +452,22 @@ try {
   await typeNative('!')
   await until(() => selectedLabel('!updated') === '!updated', 'Autocomplete uses reloaded commands')
 
+  // Remove the deliberate shortcut conflict used by the autocomplete checks.
+  actionBindingsStore.update({ value: { legacyNavigation: false, bindings: [] } })
+  const beforeHistory = app.chatActivityStore.get().get(channel.id)?.total ?? 0
+  /* eslint-disable no-await-in-loop -- Each native check uses the resized window. */
+  for (const width of [420, 900]) {
+    await currentRenderer().setWindowBounds({ width, height: 480 })
+    await checkArrowHistory()
+  }
+  /* eslint-enable no-await-in-loop */
+  assert((app.chatActivityStore.get().get(channel.id)?.total ?? 0) > beforeHistory + 5)
+
   await Bun.write(
     join(session, 'autocomplete-result.json'),
     JSON.stringify({ ok: true, incoming, screenshots }, null, 2),
   )
-  console.log('Native slash and Twir autocomplete, selection and live traffic QA passed.')
+  console.log('Native autocomplete and arrow history QA passed during live chat traffic.')
 } catch (error) {
   process.exitCode = 1
   await captureGuiQaDisplay('autocomplete-failure').catch(() => undefined)

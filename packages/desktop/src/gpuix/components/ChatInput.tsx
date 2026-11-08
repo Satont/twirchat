@@ -490,7 +490,7 @@ export function ChatInput(props: ChatInputProps) {
   ])
 
   const autocomplete = useAutocomplete({
-    text,
+    text: composer.historyIndex === null ? text : '',
     setText: (next) => {
       setText(next)
       setCommandError('')
@@ -1653,6 +1653,7 @@ export function ChatInput(props: ChatInputProps) {
                 (event.key === 'up' || event.key === 'down') &&
                 event.modifiers?.alt &&
                 !event.modifiers.ctrl &&
+                !event.modifiers.cmd &&
                 !event.modifiers.shift
               ) {
                 if (
@@ -1669,17 +1670,24 @@ export function ChatInput(props: ChatInputProps) {
               if (!autocomplete.isOpen) {
                 const up = event.key === 'up'
                 const down = event.key === 'down'
-                const browsing = composer.historyIndex !== null
                 if (
                   (up || down) &&
                   !event.modifiers?.ctrl &&
                   !event.modifiers?.shift &&
-                  (browsing || (up && text === ''))
+                  !event.modifiers?.alt &&
+                  !event.modifiers?.cmd
                 ) {
                   if (
-                    updateComposer(composerKey, (current) =>
-                      browseComposerHistory(current, up ? -1 : 1),
-                    )
+                    updateComposer(composerKey, (current) => {
+                      const browsing = current.historyIndex !== null
+                      const singleLine =
+                        'editorSingleLine' in event
+                          ? event.editorSingleLine === true
+                          : current.text === ''
+                      if (!browsing && !singleLine) return current
+                      if (down && !browsing && current.savedDraft === null) return current
+                      return browseComposerHistory(current, up ? -1 : 1)
+                    })
                   ) {
                     event.preventDefault()
                     setCommandError('')
