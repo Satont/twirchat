@@ -13,11 +13,15 @@ import { join } from 'node:path'
 export interface ImageSweepLimits {
   /** Generated file names. Temporary files and subdirectories must not match. */
   pattern: RegExp
+  /** Discard abandoned temporary files once they are old enough to be from a prior run. */
+  temporaryPattern?: RegExp
   maxFiles: number
   keepFiles: number
   maxBytes?: number
   keepBytes?: number
 }
+
+const STALE_TEMPORARY_MS = 60 * 60 * 1000
 
 declare global {
   var __twirchatImageSweeps: Map<string, Promise<void>> | undefined
@@ -48,13 +52,18 @@ async function sweep(directory: string, limits: ImageSweepLimits): Promise<void>
   const keepBytes = limits.keepBytes ?? maxBytes
   let count = files.length
   let bytes = files.reduce((total, file) => total + file.bytes, 0)
-  if (count <= limits.maxFiles && bytes <= maxBytes) return
-  const removed: string[] = []
-  for (const file of files.toSorted((a, b) => a.time - b.time)) {
-    if (count <= limits.keepFiles && bytes <= keepBytes) break
-    removed.push(file.name)
-    count--
-    bytes -= file.bytes
+  const cutoff = Date.now() - STALE_TEMPORARY_MS
+  const removed = names.filter(
+    (name) =>
+      limits.temporaryPattern?.test(name) && Bun.file(join(directory, name)).lastModified < cutoff,
+  )
+  if (count > limits.maxFiles || bytes > maxBytes) {
+    for (const file of files.toSorted((a, b) => a.time - b.time)) {
+      if (count <= limits.keepFiles && bytes <= keepBytes) break
+      removed.push(file.name)
+      count--
+      bytes -= file.bytes
+    }
   }
   await Promise.all(
     removed.map((name) =>

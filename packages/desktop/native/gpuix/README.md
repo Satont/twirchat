@@ -1,9 +1,13 @@
 # Pinned GPUIX native extension
 
 TwirChat extends GPUIX 0.11.0 without modifying installed npm packages. `source.json`
-pins both GPUIX and its GPUI submodule to full Git revisions; every local patch has
-a SHA-256 checksum. Build caches live outside the repository. No upstream commits,
-publishing, or downloaded native binaries are part of this build.
+pins GPUIX and its GPUI submodule to full Git revisions and verifies the `cosmic-text`
+source archive and each local patch by SHA-256. Build caches live outside the repository.
+No upstream commits, publishing, or downloaded native binaries are part of this build.
+
+Native version `0.11.0-twirchat.21` keeps Linux font candidates mapped only while
+shaping them. The font cache keeps a fallback when it supplies a missing glyph.
+A bounded cache of exact unsuccessful runs avoids repeating the search for the same text.
 
 Native version `0.11.0-twirchat.20` makes the painted scrollbars interactive.
 `scrollbarColor` already enabled a thumb; it now also inserts a wider hit strip

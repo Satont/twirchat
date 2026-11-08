@@ -50,6 +50,7 @@ async function fixture() {
     revision: GPUIX_SOURCE_REVISION,
     gpuiRevision: GPUI_SOURCE_REVISION,
     patches: [{ path: 'patches/test.patch', root: 'gpuix', sha256: sha(patch) }],
+    cosmicText: { version: '0.19.0', sha256: sha(patch) },
   })
   await Bun.write(join(sourceRoot, 'source.json'), JSON.stringify(source))
   const patchDigest = createHash('sha256')

@@ -16,11 +16,15 @@ const sourceManifestSchema = z.strictObject({
     .array(
       z.strictObject({
         path: z.string().regex(/^patches\/[a-z\d-]+\.patch$/u),
-        root: z.enum(['gpuix', 'gpui']),
+        root: z.enum(['gpuix', 'gpui', 'cosmic-text']),
         sha256: z.string().regex(/^[a-f\d]{64}$/u),
       }),
     )
     .min(1),
+  cosmicText: z.strictObject({
+    version: z.string().regex(/^\d+\.\d+\.\d+$/u),
+    sha256: z.string().regex(/^[a-f\d]{64}$/u),
+  }),
 })
 const cachedArtifactSchema = z.object({
   apiVersion: z.literal(3),
@@ -67,6 +71,21 @@ async function command(args: string[], cwd: string, env?: Record<string, string>
   const [code, output] = await Promise.all([child.exited, stdout])
   if (code !== 0) throw new Error(`${args[0]} ${args[1] ?? ''} failed (${code}).`)
   return output.trim()
+}
+
+async function unpackCosmicText(
+  vendorRoot: string,
+  pin: z.infer<typeof sourceManifestSchema>['cosmicText'],
+): Promise<void> {
+  const name = `cosmic-text-${pin.version}`
+  const response = await fetch(`https://static.crates.io/crates/cosmic-text/${name}.crate`, {
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!response.ok) throw new Error(`Failed to download ${name} (${response.status}).`)
+  const archive = await response.bytes()
+  if (createHash('sha256').update(archive).digest('hex') !== pin.sha256)
+    throw new Error(`Crate checksum mismatch: ${name}`)
+  await new Bun.Archive(archive).extract(vendorRoot)
 }
 
 export async function buildNative(args: string[] = process.argv.slice(2)): Promise<void> {
@@ -137,11 +156,15 @@ export async function buildNative(args: string[] = process.argv.slice(2)): Promi
     const gpuiRevision = await command(['git', 'rev-parse', 'HEAD'], gpui)
     if (gpuiRevision !== manifest.gpuiRevision)
       throw new Error('GPUI source revision does not match the pin.')
+    await unpackCosmicText(join(checkout, 'vendor'), manifest.cosmicText)
     for (const patch of manifest.patches) {
       const cwd = patch.root === 'gpui' ? gpui : checkout
+      const apply = ['git', 'apply']
+      if (patch.root === 'cosmic-text')
+        apply.push(`--directory=vendor/cosmic-text-${manifest.cosmicText.version}`)
       const path = join(nativeRoot, patch.path)
-      await command(['git', 'apply', '--check', path], cwd)
-      await command(['git', 'apply', path], cwd)
+      await command([...apply, '--check', path], cwd)
+      await command([...apply, path], cwd)
     }
     await Bun.write(stamp, identity)
   }

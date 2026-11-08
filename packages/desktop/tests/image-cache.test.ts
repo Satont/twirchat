@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -104,6 +104,61 @@ describe('image cache', () => {
     expect(requests).toBe(1)
   })
 
+  test('writes incoming chunks without publishing an incomplete image', async () => {
+    const { promise: remaining, resolve: finish } = Promise.withResolvers<void>()
+    const { directory, url } = fixture(() => {
+      let first = true
+      return new Response(
+        new ReadableStream({
+          async pull(controller) {
+            if (first) {
+              first = false
+              controller.enqueue(png.subarray(0, 16))
+              return
+            }
+            await remaining
+            controller.enqueue(png.subarray(16))
+            controller.close()
+          },
+        }),
+        { headers: { 'Content-Type': 'image/png' } },
+      )
+    })
+    const cache = createImageCache({ directory: () => directory })
+    const imageUrl = url('streamed')
+    cache.ensureImage(imageUrl)
+    try {
+      await until(() =>
+        readdirSync(directory).some(
+          (file) => file.endsWith('.download') && Bun.file(join(directory, file)).size === 16,
+        ),
+      )
+      expect(cache.snapshot(imageUrl)).toBeUndefined()
+      expect(readdirSync(directory).some((file) => file.endsWith('.png'))).toBe(false)
+    } finally {
+      finish()
+    }
+    await until(() => cache.cachedImagePath(imageUrl) !== undefined)
+    const path = required(cache.cachedImagePath(imageUrl))
+    expect(await Bun.file(path).bytes()).toEqual(new Uint8Array(png))
+    expect(readdirSync(directory)).toHaveLength(1)
+  })
+
+  test('cleans abandoned downloads without removing a recent temporary file', async () => {
+    const { directory, url } = fixture(imageResponse)
+    const hash = '1'.repeat(32)
+    const abandoned = `${hash}.00000000-0000-0000-0000-000000000001.download`
+    const recent = `${hash}.00000000-0000-0000-0000-000000000002.download`
+    await Bun.write(join(directory, abandoned), 'partial')
+    await Bun.write(join(directory, recent), 'partial')
+    utimesSync(join(directory, abandoned), 1, 1)
+    const cache = createImageCache({ directory: () => directory })
+    cache.ensureImage(url('emote'))
+    await until(() => cache.cachedImagePath(url('emote')) !== undefined)
+    expect(readdirSync(directory)).not.toContain(abandoned)
+    expect(readdirSync(directory)).toContain(recent)
+  })
+
   test('caps downloads at six and drains the queue', async () => {
     let active = 0
     let peak = 0
@@ -175,17 +230,27 @@ describe('image cache', () => {
     await until(() => cache.cachedImagePath(url('old')) !== undefined)
   })
 
-  test('rejects oversized images and continues processing later requests', async () => {
-    const { directory, url } = fixture((request) =>
-      new URL(request.url).pathname === '/large'
-        ? new Response(new Uint8Array(21 * 1024 * 1024))
-        : imageResponse(),
-    )
+  test('rejects oversized chunked images and removes the partial file', async () => {
+    const chunk = new Uint8Array(1024 * 1024)
+    const { directory, url } = fixture((request) => {
+      if (new URL(request.url).pathname !== '/large') return imageResponse()
+      let sent = 0
+      return new Response(
+        new ReadableStream({
+          pull(controller) {
+            if (sent++ === 21) controller.close()
+            else controller.enqueue(chunk)
+          },
+        }),
+        { headers: { 'Content-Type': 'image/png' } },
+      )
+    })
     const cache = createImageCache({ directory: () => directory })
     cache.ensureImage(url('large'))
     cache.ensureImage(url('small'))
     await until(() => cache.snapshot(url('large')) === null)
     await until(() => cache.cachedImagePath(url('small')) !== undefined)
     expect(cache.cachedImagePath(url('large'))).toBeUndefined()
+    expect(readdirSync(directory)).toHaveLength(1)
   })
 })
