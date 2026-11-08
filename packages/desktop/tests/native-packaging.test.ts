@@ -4,8 +4,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { parseNativeSourceManifest } from '../scripts/build-gpuix-native'
-import { nativeArtifactName } from '../scripts/build-gpuix-native'
+import { nativeArtifactName, parseNativeSourceManifest } from '../scripts/build-gpuix-native'
 import { assertNativeBinaryTarget, stageNativeRuntime } from '../scripts/package-runtime-assets'
 import { GPUI_SOURCE_REVISION, GPUIX_SOURCE_REVISION } from '../src/services/native-runtime'
 import { literal } from './fixture-values'
@@ -41,7 +40,11 @@ async function fixture() {
   const output = join(directory, 'package')
   await Promise.all([mkdir(join(sourceRoot, 'patches'), { recursive: true }), mkdir(artifactRoot)])
   const patch = Buffer.from('pinned patch bytes')
-  await Bun.write(join(sourceRoot, 'patches/test.patch'), patch)
+  const cosmicTextPatch = Buffer.from('pinned cosmic-text patch bytes')
+  await Promise.all([
+    Bun.write(join(sourceRoot, 'patches/test.patch'), patch),
+    Bun.write(join(sourceRoot, 'patches/cosmic-text.patch'), cosmicTextPatch),
+  ])
   const source = parseNativeSourceManifest({
     schema: 1,
     version: '0.11.0-test',
@@ -49,13 +52,17 @@ async function fixture() {
     rustToolchain: '1.97.1',
     revision: GPUIX_SOURCE_REVISION,
     gpuiRevision: GPUI_SOURCE_REVISION,
-    patches: [{ path: 'patches/test.patch', root: 'gpuix', sha256: sha(patch) }],
+    patches: [
+      { path: 'patches/test.patch', root: 'gpuix', sha256: sha(patch) },
+      { path: 'patches/cosmic-text.patch', root: 'cosmic-text', sha256: sha(cosmicTextPatch) },
+    ],
     cosmicText: { version: '0.19.0', sha256: sha(patch) },
   })
   await Bun.write(join(sourceRoot, 'source.json'), JSON.stringify(source))
   const patchDigest = createHash('sha256')
     .update(JSON.stringify({ manifest: source, platform: process.platform, arch: process.arch }))
     .update(patch)
+    .update(cosmicTextPatch)
     .digest('hex')
     .slice(0, 16)
   const bytes = binary()
@@ -107,7 +114,7 @@ test('rejects another target and stale patch identity', async () => {
 })
 test('refuses changed patch bytes before staging any addon', async () => {
   const f = await fixture()
-  await Bun.write(join(f.sourceRoot, 'patches/test.patch'), 'tampered')
+  await Bun.write(join(f.sourceRoot, 'patches/cosmic-text.patch'), 'tampered')
   await expect(stageNativeRuntime(f)).rejects.toThrow('checksum')
   expect(await Bun.file(join(f.output, 'native', nativeArtifactName())).exists()).toBe(false)
 })
