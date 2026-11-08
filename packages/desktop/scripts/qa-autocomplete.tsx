@@ -23,6 +23,8 @@ import type { NativeWindowControls } from '../src/gpuix/native-window'
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const app = await import('../src/gpuix/state/app')
 const { actionBindingsStore } = await import('../src/gpuix/state/action-bindings')
+const { useStore } = await import('../src/gpuix/state/create-store')
+const { registerHotkeyActions } = await import('../src/gpuix/state/hotkeys')
 const { layoutStore } = await import('../src/gpuix/state/layout')
 const { customCommandsStore } = await import('../src/gpuix/state/custom-commands')
 const { composerStore, editComposer, updateComposer } = await import('../src/gpuix/state/composer')
@@ -50,20 +52,22 @@ const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
 const backend = getDesktopBackend()
 const channel: WatchedChannel = {
-  id: 'qa-autocomplete-channel',
+  id: '1c2b38ca-f407-4b10-8e98-886a813429bc',
   platform: 'kick',
   channelSlug: 'qa-autocomplete',
   displayName: 'Autocomplete QA',
   createdAt: 0,
 }
-const tabId = 'qa-autocomplete'
-const paneId = `${tabId}:pane`
+const tabId = `tab:${channel.id}`
+const panelId = '2cd30a1a-a11b-4818-b0cd-a277e0b32b56'
+const nextTabId = 'tab:3612b68c-3c3c-45da-84bd-dd985940ba44'
+const paneId = `${tabId}:${panelId}`
 const composerKey = `${paneId}:${channel.id}`
 const layout: WatchedChannelsLayout = {
   version: 2,
   root: {
     type: 'panel',
-    id: 'pane',
+    id: panelId,
     flex: 100,
     content: { type: 'watched', channelId: channel.id },
   },
@@ -90,6 +94,9 @@ backend.api.sendWatchedChannelMessage = async ({ id, text }) => {
 }
 app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
 app.watchedChannelsStore.set([channel])
+app.tabChannelIdsStore.set([tabId, nextTabId])
+app.activeWatchedTabStore.set(tabId)
+const stopHotkeys = registerHotkeyActions({ openAddChannel: () => {}, openTabSelector: () => {} })
 app.watchedStatusesStore.set(
   new Map([
     [
@@ -119,7 +126,7 @@ customCommandsStore.set({
 })
 actionBindingsStore.update({
   value: {
-    legacyNavigation: false,
+    legacyNavigation: true,
     bindings: [
       {
         id: 'qa-conflicting-down',
@@ -146,6 +153,7 @@ const stopMessages = app.wireBackendToStores(backend)
 let renderer: Renderer | undefined
 function Content() {
   const current = useGpuixRequired()
+  const activeTab = useStore(app.activeWatchedTabStore)
   React.useEffect(() => {
     assert(current instanceof NativeRenderer)
     renderer = nativeWindow(current)
@@ -155,7 +163,16 @@ function Content() {
   }, [current])
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <ChatView paneId={paneId} layoutTabId={tabId} layoutPanelId="pane" watchedChannel={channel} />
+      {activeTab === tabId ? (
+        <ChatView
+          paneId={paneId}
+          layoutTabId={tabId}
+          layoutPanelId={panelId}
+          watchedChannel={channel}
+        />
+      ) : (
+        <div testId="other-tab">{activeTab}</div>
+      )}
     </div>
   )
 }
@@ -202,8 +219,8 @@ async function draft(text: string): Promise<void> {
   updateComposer(composerKey, (state) => editComposer(state, text))
   await Bun.sleep(60)
 }
-async function selectKey(key: string, index: number, prefix = '/command'): Promise<void> {
-  currentRenderer().simulateKeystrokes(key)
+async function selectKey(key: 'down' | 'up', index: number, prefix = '/command'): Promise<void> {
+  await pressNative(key === 'down' ? 'Down' : 'Up')
   await until(
     () => selectedLabel(prefix) === `${prefix}${String(index).padStart(2, '0')}`,
     `native ${key} selects ${index}`,
@@ -326,9 +343,12 @@ try {
     await draft('')
     currentRenderer().focusElement(find('chat-input').id)
     await Bun.sleep(100)
-    await draft('/')
+    await typeNative('/')
     await until(() => selectedLabel() === '/command00', 'command popup')
     const startTotal = app.chatActivityStore.get().get(channel.id)?.total ?? 0
+    await pressNative('Down', 'Down', 'Up')
+    await until(() => selectedLabel() === '/command01', 'Rapid arrows update selection')
+    await selectKey('up', 0)
     for (let index = 1; index <= 14; index++) await selectKey('down', index)
     await selectKey('down', 0)
     await selectKey('up', 14)
@@ -370,6 +390,23 @@ try {
     )
     currentRenderer().simulateKeystrokes('x')
     await until(() => composerStore.get().get(composerKey)?.text === '/x', 'Native typing resumes')
+
+    for (const { key, expectedTab } of [
+      { key: 'ctrl+Tab', expectedTab: nextTabId },
+      { key: 'alt+Left', expectedTab: 'home' },
+    ]) {
+      await draft('')
+      await typeNative('/')
+      await until(() => selectedLabel() === '/command00', `Completion before ${key}`)
+      await pressNative(key)
+      await until(() => app.activeWatchedTabStore.get() === expectedTab, `${key} changes tab`)
+      await until(() => nodes().some((node) => node.testId === 'other-tab'), 'Other tab renders')
+      assert(!app.noticeStore.get()?.text.includes('Shortcut failed'), 'No shortcut failure notice')
+      app.activeWatchedTabStore.set(tabId)
+      await until(() => nodes().some((node) => node.testId === 'chat-input'), 'Watched tab returns')
+      currentRenderer().focusElement(find('chat-input').id)
+      await Bun.sleep(100)
+    }
 
     await draft('')
     assert.equal(twirRequests, beforeTwir, 'Slash completion never queries Twir')
@@ -477,6 +514,7 @@ try {
       {
         error: String(error),
         notice: app.noticeStore.get(),
+        activeTab: app.activeWatchedTabStore.get(),
         composer: composerStore.get().get(composerKey),
         painted: renderer?.getPaintedText(),
         tree: renderer ? automationSchema.parse(JSON.parse(renderer.getAutomationTree())) : null,
@@ -488,6 +526,7 @@ try {
   console.error(error)
 } finally {
   if (traffic) clearInterval(traffic)
+  stopHotkeys()
   stopMessages()
   await manager.quit()
   await Bun.sleep(100)
