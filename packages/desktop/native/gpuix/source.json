@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.21",
+  "version": "0.11.0-twirchat.22",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -185,6 +185,11 @@
       "path": "patches/gpuix-cosmic-text-dependency.patch",
       "root": "gpuix",
       "sha256": "aa575ef5f70f89f955969a723321563671906b06bc44e343f9f90cc892e749f2"
+    },
+    {
+      "path": "patches/gpuix-linux-client-titlebar.patch",
+      "root": "gpuix",
+      "sha256": "762bffd3c6a4e995c701298ed390ebf3ce6ddf5ecca991e44a7ef742dc97d831"
     }
   ],
   "cosmicText": {

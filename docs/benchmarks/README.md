@@ -85,6 +85,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-08 Linux window controls](2026-11-08-linux-window-controls/report.md) records the
+title bar cache, the complete development matrix and three production runs per version.
+
 [2026-11-08 Twitch chat notices](2026-11-08-twitch-chat-notices/report.md) records the complete
 development matrix and repeated production measurements for the notices and AutoMod change.
 
