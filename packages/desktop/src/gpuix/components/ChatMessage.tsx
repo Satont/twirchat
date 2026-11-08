@@ -65,6 +65,41 @@ function modernAvatarSize(fontSize: number): number {
   return Math.max(14, Math.round(fontSize * 2))
 }
 
+const MODERN_PADDING_X = 14
+const MODERN_PADDING_Y = 7
+const MODERN_GAP = 10
+
+interface LeadingBox {
+  left: number
+  top: number
+  size: number
+}
+interface ModernLeading {
+  icon?: LeadingBox
+  avatar?: LeadingBox
+  contentLeft: number
+  minHeight: number
+}
+
+/** Absolute placement of the modern row's icon and avatar, matching a gapped flex row. */
+function modernLeading(fontSize: number, showIcon: boolean, showAvatar: boolean): ModernLeading {
+  let left = MODERN_PADDING_X
+  let minHeight = 0
+  let icon: LeadingBox | undefined
+  let avatar: LeadingBox | undefined
+  if (showIcon) {
+    icon = { left, top: MODERN_PADDING_Y + 6, size: platformIconSize(fontSize) }
+    left += icon.size + MODERN_GAP
+    minHeight = Math.max(minHeight, 6 + icon.size)
+  }
+  if (showAvatar) {
+    avatar = { left, top: MODERN_PADDING_Y + 1, size: modernAvatarSize(fontSize) }
+    left += avatar.size + MODERN_GAP
+    minHeight = Math.max(minHeight, 1 + avatar.size)
+  }
+  return { icon, avatar, contentLeft: left, minHeight }
+}
+
 function compactAvatarSize(fontSize: number): number {
   return Math.max(12, Math.round(fontSize * 1.3))
 }
@@ -780,6 +815,14 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   }
 
   // ── Modern (default) ──────────────────────────────────────────────────────
+  // The row is a column and the leading icon/avatar are absolute: the native
+  // renderer reuses message bodies only under column ancestry, so a hover redraw
+  // does not lay out every visible message again.
+  const leading = modernLeading(
+    fontSize,
+    props.showPlatformIcon === true,
+    props.showAvatar !== false,
+  )
   const content = (
     <div
       onMouseDown={(event) => {
@@ -789,13 +832,11 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 10,
-        paddingTop: 7,
-        paddingBottom: 7,
-        paddingLeft: 14,
-        paddingRight: 14,
+        flexDirection: 'column',
+        paddingTop: MODERN_PADDING_Y,
+        paddingBottom: MODERN_PADDING_Y,
+        paddingLeft: leading.contentLeft,
+        paddingRight: MODERN_PADDING_X,
         position: 'relative',
         opacity: rowOpacity,
         backgroundColor: rowBackground,
@@ -805,22 +846,30 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     >
       {platformStripe}
 
-      {props.showPlatformIcon ? (
-        <div style={{ marginTop: 6, flexShrink: 0, opacity: 0.85, display: 'flex' }}>
-          <PlatformIcon platform={message.platform} size={platformIconSize(fontSize)} />
+      {leading.icon ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: leading.icon.left,
+            top: leading.icon.top,
+            opacity: 0.85,
+            display: 'flex',
+          }}
+        >
+          <PlatformIcon platform={message.platform} size={leading.icon.size} />
         </div>
       ) : null}
 
-      {props.showAvatar !== false ? (
-        <div style={{ marginTop: 1, flexShrink: 0 }}>
-          <Avatar message={message} size={modernAvatarSize(fontSize)} visible={props.visible} />
+      {leading.avatar ? (
+        <div style={{ position: 'absolute', left: leading.avatar.left, top: leading.avatar.top }}>
+          <Avatar message={message} size={leading.avatar.size} visible={props.visible} />
         </div>
       ) : null}
 
       <div
         style={{
-          flexGrow: 1,
           minWidth: 0,
+          minHeight: leading.minHeight,
           display: 'flex',
           flexDirection: 'column',
           gap: 2,

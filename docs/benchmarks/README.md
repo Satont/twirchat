@@ -85,6 +85,10 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-07 hover rows](2026-11-07-hover-rows/report.md) measures pointer motion across chat rows.
+The whole-row cache in native `0.11.0-twirchat.18` cut CPU during that motion about 27–29%, in a
+quiet chat and with live messages.
+
 [2026-11-07 split layout](2026-11-07-split-layout/report.md) measures four panes in a 2×2 split,
 where nested split layout made each frame about 105 ms in a live profile.
 

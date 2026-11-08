@@ -1,0 +1,47 @@
+diff --git a/crates/gpui/src/text_system.rs b/crates/gpui/src/text_system.rs
+index d6fdf32..865f0c9 100644
+--- a/crates/gpui/src/text_system.rs
++++ b/crates/gpui/src/text_system.rs
+@@ -51,6 +51,9 @@ pub const SUBPIXEL_VARIANTS_Y: u8 = 1;
+ pub struct TextSystem {
+     platform_text_system: Arc<dyn PlatformTextSystem>,
+     font_ids_by_font: RwLock<FxHashMap<Font, Result<FontId>>>,
++    /// Final answer of `resolve_font`, fallbacks included. A missing family would
++    /// otherwise format its cached error and retry every fallback on each call.
++    resolved_fonts: RwLock<FxHashMap<Font, FontId>>,
+     font_metrics: RwLock<FxHashMap<FontId, FontMetrics>>,
+     raster_bounds: RwLock<FxHashMap<RenderGlyphParams, Bounds<DevicePixels>>>,
+     wrapper_pool: Mutex<FxHashMap<FontIdWithSize, Vec<LineWrapper>>>,
+@@ -66,6 +69,7 @@ impl TextSystem {
+             font_metrics: RwLock::default(),
+             raster_bounds: RwLock::default(),
+             font_ids_by_font: RwLock::default(),
++            resolved_fonts: RwLock::default(),
+             wrapper_pool: Mutex::default(),
+             font_runs_pool: Mutex::default(),
+             fallback_font_stack: smallvec![
+@@ -106,6 +110,8 @@ impl TextSystem {
+         self.font_ids_by_font
+             .write()
+             .retain(|_, font_id| font_id.is_ok());
++        // A font that fell back may now resolve to the new family.
++        self.resolved_fonts.write().clear();
+         Ok(())
+     }
+ 
+@@ -152,6 +158,15 @@ impl TextSystem {
+     ///
+     /// Panics if the font and none of the fallbacks can be resolved.
+     pub fn resolve_font(&self, font: &Font) -> FontId {
++        if let Some(font_id) = self.resolved_fonts.read().get(font) {
++            return *font_id;
++        }
++        let font_id = self.resolve_font_uncached(font);
++        self.resolved_fonts.write().insert(font.clone(), font_id);
++        font_id
++    }
++
++    fn resolve_font_uncached(&self, font: &Font) -> FontId {
+         if let Ok(font_id) = self.font_id(font) {
+             return font_id;
+         }
