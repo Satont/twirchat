@@ -22,7 +22,7 @@ import type {
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react'
 
 import { normalizePrivateCommand } from '../../services/private-commands'
 import {
@@ -505,6 +505,7 @@ export function ChatInput(props: ChatInputProps) {
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
     ),
   })
+  const autocompleteSourceId = `autocomplete:${useId()}`
   const autocompleteActive = editorFocused && autocomplete.isOpen && !historySearch
   const autocompleteKey = useEffectEvent((key: 'up' | 'down' | 'enter' | 'tab' | 'escape') => {
     if (key === 'up') autocomplete.moveUp()
@@ -516,7 +517,7 @@ export function ChatInput(props: ChatInputProps) {
     if (!autocompleteActive) return undefined
     return registerSupplementalHotkeys(
       windowScope,
-      `autocomplete:${inputContextId}`,
+      autocompleteSourceId,
       () =>
         editorFocusedRef.current && textareaRef.current
           ? [
@@ -529,7 +530,7 @@ export function ChatInput(props: ChatInputProps) {
           : [],
       'beforeCustom',
     )
-  }, [autocompleteActive, windowScope, inputContextId])
+  }, [autocompleteActive, windowScope, autocompleteSourceId])
 
   // Validate the complete expansion before executing its first action.
   function privateAction(command: { text: string; recipient: string }): PreparedAction {
