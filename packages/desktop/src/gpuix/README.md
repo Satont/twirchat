@@ -213,6 +213,16 @@ served by `src/overlay-server.ts` (started by the GPUIX backend too).
   does not provide compositor isolation. Use the QA launcher for agent tests.
 - `TWIRCHAT_GPUIX_START_MAIN_TAB=platforms|settings` — boot onto a tab.
 - `TWIRCHAT_GPUIX_START_TAB=<watchedChannelId>` — boot onto a watched tab.
+- `TWIRCHAT_APP_VERSION=<x.y.z>` — override the dev version to exercise update
+  and changelog flows (`dev` builds normally skip both).
+- `TWIRCHAT_CHANGELOG_PREVIEW=1` — development only: always show the changelog
+  modal for `TWIRCHAT_APP_VERSION` and never persist the seen version. The
+  last successful GitHub response is cached in SQLite, so HMR remounts do not
+  consume the unauthenticated GitHub API limit.
+- `TWIRCHAT_RELEASE_NOTES_REFRESH=1` — with the preview flag, ignore the cached
+  release notes and fetch GitHub again.
+- `bun run qa:changelog` — boot the real app with a seeded previous version and
+  a fixture GitHub release; asserts the changelog modal and captures it.
 - `POST http://localhost:55824/dev/inject-chat` with a `NormalizedChatMessage`
   JSON body injects a fake chat message (dev only).
 - GPUIX automation tree queries, bounds, clicks, wheel events, text input and
