@@ -1,30 +1,52 @@
 --- a/crates/gpui/src/elements/list.rs
 +++ b/crates/gpui/src/elements/list.rs
-@@ -492,6 +492,23 @@
-     /// The number of items in this list.
-     pub fn item_count(&self) -> usize {
+@@ -63,6 +63,7 @@
+ 
+ struct StateInner {
+     last_layout_bounds: Option<Bounds<Pixels>>,
++    last_layout_scroll_top: ListOffset,
+     last_padding: Option<Edges<Pixels>>,
+     items: SumTree<ListItem>,
+     logical_scroll_top: Option<ListOffset>,
+@@ -323,6 +324,7 @@
+     pub fn new(item_count: usize, alignment: ListAlignment, overdraw: Pixels) -> Self {
+         let this = Self(Rc::new(RefCell::new(StateInner {
+             last_layout_bounds: None,
++            last_layout_scroll_top: ListOffset::default(),
+             last_padding: None,
+             items: SumTree::default(),
+             logical_scroll_top: None,
+@@ -494,6 +496,19 @@
          self.0.borrow().items.summary().count
-+    }
-+
-+    /// The visible item range using the current logical scroll offset and last
-+    /// laid-out viewport geometry. Returns `None` before layout.
-+    ///
-+    /// This never requests layout. Query after prepaint to observe the range
-+    /// actually laid out after programmatic scrolling or viewport changes.
+     }
+ 
++    /// The visible item range from the last prepaint. Returns `None` before layout.
 +    pub fn visible_range(&self) -> Option<Range<usize>> {
 +        let state = self.0.borrow();
 +        let bounds = state.last_layout_bounds?;
 +        let range = StateInner::visible_range(
 +            &state.items,
 +            bounds.size.height,
-+            &state.logical_scroll_top(),
++            &state.last_layout_scroll_top,
 +        );
 +        let count = state.items.summary().count;
 +        Some(range.start.min(count)..range.end.min(count))
-     }
- 
++    }
++
      /// Whether the list is scrolled to the end, or `None` if the list is
-@@ -2108,6 +2125,33 @@
+     /// not scrollable or the total content height is not yet known.
+     pub fn is_scrolled_to_end(&self) -> Option<bool> {
+@@ -1661,6 +1676,9 @@
+             };
+ 
+         state.last_layout_bounds = Some(bounds);
++        // A bottom-aligned list can keep its logical offset at the end sentinel
++        // even when earlier rows are visible.
++        state.last_layout_scroll_top = layout.scroll_top;
+         state.last_padding = Some(padding);
+         ListPrepaintState { hitbox, layout }
+     }
+@@ -2108,6 +2126,53 @@
      }
  
      #[gpui::test]
@@ -52,6 +74,26 @@
 +            cx.new(|_| TestListView(state.clone())).into_any_element()
 +        });
 +        assert_eq!(state.visible_range(), Some(40..45));
++    }
++
++    #[gpui::test]
++    fn test_bottom_aligned_visible_range_uses_laid_out_rows(cx: &mut TestAppContext) {
++        let cx = cx.add_empty_window();
++        let state = ListState::new(5, crate::ListAlignment::Bottom, px(20.))
++            .with_uniform_item_height(px(20.));
++        state.set_follow_mode(FollowMode::Tail);
++
++        cx.draw(point(px(0.), px(0.)), size(px(100.), px(45.)), |_, cx| {
++            cx.new(|_| TestListView(state.clone())).into_any_element()
++        });
++        assert_eq!(state.visible_range(), Some(2..5));
++        assert_eq!(state.logical_scroll_top().item_ix, 5);
++
++        cx.draw(point(px(0.), px(0.)), size(px(100.), px(125.)), |_, cx| {
++            cx.new(|_| TestListView(state.clone())).into_any_element()
++        });
++        assert_eq!(state.visible_range(), Some(0..5));
++        assert_eq!(state.logical_scroll_top().item_ix, 5);
 +    }
 +
 +    #[gpui::test]

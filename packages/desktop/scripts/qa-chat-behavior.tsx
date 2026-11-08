@@ -7,6 +7,7 @@ const React = await import('react')
 const { useGpuixRequired } = await import('@gpuix/react')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
+const { nativeWindow } = await import('../src/gpuix/native-window')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const app = await import('../src/gpuix/state/app')
 const { layoutStore } = await import('../src/gpuix/state/layout')
@@ -178,6 +179,31 @@ function pause(options) {
     value: { hoverSeconds: 0, modifier: 'none', doubleClickLinks: false, ...options },
   })
 }
+async function assertHistoryScroll(height: number) {
+  const viewport = bounds('chat-messages')
+  const x = viewport.x + viewport.width / 2
+  const y = viewport.y + viewport.height / 2
+  for (let attempt = 0; attempt < 12 && !painted('BEFORE_HOVER'); attempt++) {
+    renderer.simulateScrollWheel(x, y, 0, 3000)
+    // eslint-disable-next-line no-await-in-loop -- Allow the scroll position to repaint.
+    await Bun.sleep(80)
+  }
+  assert.ok(painted('BEFORE_HOVER'), `Oldest message can be reached at height ${height}`)
+
+  const newMessage = `SCROLL_LIVE_${height}`
+  incoming(newMessage)
+  await until(
+    () => nodes().some((node) => node.text === newMessage),
+    'incoming message retained while scrolled up',
+  )
+  assert.ok(painted('BEFORE_HOVER'), 'Incoming chat keeps the history position')
+  assert.equal(painted(newMessage), false, 'Incoming chat stays below the viewport')
+
+  const latest = bounds('scroll-to-latest')
+  renderer.simulateMouseDown(latest.x + latest.width / 2, latest.y + latest.height / 2, 0)
+  renderer.simulateMouseUp(latest.x + latest.width / 2, latest.y + latest.height / 2, 0)
+  await until(() => painted(newMessage), `return to live chat at height ${height}`)
+}
 try {
   await manager.start()
   await until(
@@ -283,11 +309,41 @@ try {
   assert.equal(alerts.length, 1, 'streamer mode mutes mention alerts')
   assert.equal(painted('WHISPER_PRIVATE'), false, 'streamer mode hides inline whisper')
   const screenshot = await captureGuiQaDisplay('chat-behavior')
+  app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
+  messageSimilarityStore.update({
+    value: { ...messageSimilarityStore.get().value, enabled: false, hideSimilar: false },
+  })
+  const native = nativeWindow(renderer)
+  await native.setWindowBounds({ x: 20, y: 20, width: 1600, height: 1380 })
+  await until(() => bounds('chat-messages').height > 1150, 'tall chat viewport')
+  for (let index = 0; index < 80; index++) incoming(`SCROLL_ROW_${String(index).padStart(2, '0')}`)
+  await until(() => painted('SCROLL_ROW_79'), 'tall viewport follows the newest message')
+  await until(() => painted('SCROLL_ROW_55'), 'tall viewport displays more than 24 rows')
+
+  const newest = nodes().find((node) => node.text === 'SCROLL_ROW_79')
+  assert.ok(newest)
+  const beforeAppend = native.getPaintedElementBounds(newest.id)
+  assert.ok(beforeAppend)
+  incoming('SCROLL_TALL_APPEND')
+  await until(
+    () => (native.getPaintedElementBounds(newest.id)?.y ?? beforeAppend.y) < beforeAppend.y,
+    'new messages move existing rows upward in the tall viewport',
+  )
+  const tallScreenshot = await captureGuiQaDisplay('chat-scroll-tall')
+
+  await assertHistoryScroll(1380)
+  await native.setWindowBounds({ width: 620, height: 520 })
+  await until(() => bounds('chat-messages').height < 480, 'small chat viewport')
+  await assertHistoryScroll(520)
   await Bun.write(
     join(process.env.TWIRCHAT_QA_SESSION_DIR!, 'chat-behavior-result.json'),
-    JSON.stringify({ ok: true, alerts: alerts.length, opened, screenshot }, null, 2),
+    JSON.stringify(
+      { ok: true, alerts: alerts.length, opened, screenshot, tallScreenshot },
+      null,
+      2,
+    ),
   )
-  console.log('Native pause, similarity and streamer behavior QA passed.')
+  console.log('Native pause, similarity, streamer behavior and virtual scroll QA passed.')
 } catch (error) {
   await captureGuiQaDisplay('chat-behavior-failure').catch(() => {})
   await Bun.write(

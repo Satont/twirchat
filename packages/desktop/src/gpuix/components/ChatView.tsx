@@ -618,7 +618,7 @@ export function ChatView({
   // Following a flood, rows above the viewport would mount and scroll away unseen.
   const tailRows = Math.max(
     MIN_TAIL_ROWS,
-    (visibleRange ? visibleRange.end - visibleRange.start + 1 : 0) + TAIL_OVERSCAN_ROWS,
+    (visibleRange ? visibleRange.end - visibleRange.start : 0) + TAIL_OVERSCAN_ROWS,
   )
   const renderedTimeline = useMemo(
     () =>
@@ -1792,7 +1792,7 @@ export function ChatView({
               setVisibleRange((current) =>
                 current?.start === start && current.end === end ? current : { start, end },
               )
-              setAtBottom(end >= renderedTimeline.length - 1)
+              setAtBottom(end >= renderedTimeline.length)
             }}
             style={{
               flexGrow: 1,
@@ -1834,7 +1834,7 @@ export function ChatView({
                   }
                   visible={
                     visibleRange
-                      ? index >= visibleRange.start - 4 && index <= visibleRange.end + 4
+                      ? index >= visibleRange.start - 4 && index < visibleRange.end + 4
                       : index >= renderedTimeline.length - 32
                   }
                   message={revealed ? message : classification.message}
