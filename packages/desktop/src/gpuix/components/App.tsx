@@ -415,7 +415,7 @@ export function App() {
           await loadLayout(backend, activeWatchedTab)
         const panel = activePanel()
         if (!panel) throw new Error('The current layout is unavailable.')
-        activeTabStore.set('chat')
+        setMainTab('chat')
         await splitPanel(backend, activeWatchedTab, panel.id, 'vertical', scope)
       },
       newTab: () => createEmptyChatTab(backend),

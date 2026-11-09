@@ -11,7 +11,6 @@ import type {
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import {
-  activeTabStore,
   activeWatchedTabStore,
   tabChannelIdsStore,
   tabChannelNamesStore,
@@ -21,6 +20,7 @@ import { chatRulesPreferences, chatRulesStore } from './chat-rules'
 import { createStore, type Store } from './create-store'
 import { layoutStore, saveLayoutNow } from './layout'
 import { persistentResource } from './persistent-resources'
+import { setMainTab } from './settings-session'
 import { clearTabUnread } from './tab-unread'
 
 const KEY = 'chat_tabs_v1'
@@ -530,7 +530,7 @@ function controller(api: ChatTabApi) {
         activeId: () => activeWatchedTabStore.get(),
         activate: (id) => {
           activeWatchedTabStore.set(id)
-          activeTabStore.set('chat')
+          setMainTab('chat')
         },
         publishIds: (ids) => tabChannelIdsStore.set(ids),
         layout: (id) => layoutStore.get().get(id)?.layout ?? null,

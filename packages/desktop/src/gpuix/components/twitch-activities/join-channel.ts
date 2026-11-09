@@ -1,6 +1,7 @@
 import type { DesktopApi } from '../../backend/api'
-import { activeTabStore, activeWatchedTabStore, watchedChannelsStore } from '../../state/app'
+import { activeWatchedTabStore, watchedChannelsStore } from '../../state/app'
 import { openChannelChatTab, type ChatTabApi } from '../../state/chat-tabs'
+import { setMainTab } from '../../state/settings-session'
 import { clearTabUnread } from '../../state/tab-unread'
 
 type JoinApi = Pick<DesktopApi, 'addWatchedChannel' | 'getWatchedChannels'> & ChatTabApi
@@ -28,7 +29,7 @@ export function joinFollowedChannel(api: JoinApi, login: string): Promise<void> 
       const tabId = await openChannelChatTab({ api }, channel)
       clearTabUnread(tabId)
       activeWatchedTabStore.set(tabId)
-      activeTabStore.set('chat')
+      setMainTab('chat')
     })
     .finally(() => pending.delete(key))
   joins = request

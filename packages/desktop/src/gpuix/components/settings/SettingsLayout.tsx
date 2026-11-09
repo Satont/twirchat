@@ -221,6 +221,11 @@ export function SettingsFooter({
     })
     return () => registry.unregister(controllerKey)
   }, [controllerKey, registry])
+  const hasStatus = Boolean(error) || saving || dirty || Boolean(note)
+  // Inside SettingsPanel a clean section has nothing to report: the panel header
+  // already owns the global save state, so keep the section card free of a
+  // redundant "All changes saved" strip.
+  if (!hasStatus && !children && registry !== null) return null
   return (
     <div
       style={{
@@ -250,9 +255,7 @@ export function SettingsFooter({
           </>
         ) : note ? (
           <Text style={{ fontSize: 11, color: theme.text2 }}>{note}</Text>
-        ) : (
-          <Text style={{ fontSize: 11, color: theme.text2 }}>All changes saved</Text>
-        )}
+        ) : null}
       </div>
       <div
         style={{

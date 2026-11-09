@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test'
 
+import { activeTabStore } from '../src/gpuix/state/app'
 import {
   bindSettingsSession,
   discardSettingsAndLeave,
   requestLeaveSettings,
   saveSettingsAndLeave,
+  setMainTab,
   settingsSessionStore,
   stayInSettings,
   syncSettingsSession,
@@ -16,6 +18,40 @@ test('leaving settings without drafts proceeds immediately', () => {
   expect(requestLeaveSettings(() => (left = true))).toBe(true)
   expect(left).toBe(true)
   unbind()
+})
+
+test('setMainTab defers tab navigation while drafts are unsaved', () => {
+  const previous = activeTabStore.get()
+  const unbind = bindSettingsSession({ save: async () => true, discard() {} })
+  try {
+    activeTabStore.set('settings')
+    syncSettingsSession(true, false)
+    setMainTab('chat')
+    expect(activeTabStore.get()).toBe('settings')
+    expect(settingsSessionStore.get().pending).not.toBeNull()
+    stayInSettings()
+    expect(activeTabStore.get()).toBe('settings')
+    setMainTab('chat')
+    discardSettingsAndLeave()
+    expect(activeTabStore.get()).toBe('chat')
+    expect(settingsSessionStore.get().pending).toBeNull()
+  } finally {
+    unbind()
+    activeTabStore.set(previous)
+  }
+})
+
+test('setMainTab switches tabs immediately when nothing is dirty', () => {
+  const previous = activeTabStore.get()
+  const unbind = bindSettingsSession({ save: async () => true, discard() {} })
+  try {
+    activeTabStore.set('settings')
+    setMainTab('chat')
+    expect(activeTabStore.get()).toBe('chat')
+  } finally {
+    unbind()
+    activeTabStore.set(previous)
+  }
 })
 
 test('unsaved settings defer navigation until the warning is resolved', async () => {
