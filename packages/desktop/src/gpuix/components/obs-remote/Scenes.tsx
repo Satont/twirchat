@@ -6,6 +6,7 @@ import type {
   ObsSceneItem,
 } from '../../../services/obs-remote'
 import type { ObsRemoteConnection } from '../../backend/obs-remote'
+import { useT } from '../../i18n'
 import { useTheme } from '../../theme-context'
 import { ActionButton, FormInput } from '../ui/Form'
 import { Text } from '../ui/Text'
@@ -31,14 +32,15 @@ function PageButtons({
   last: number
   select: (page: number) => void
 }) {
+  const { t } = useT()
   if (!last) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'row', gap: 5 }}>
       <ActionButton disabled={page === 0} onClick={() => select(page - 1)}>
-        Previous
+        {t('obsRemote.scenes.previous')}
       </ActionButton>
       <ActionButton disabled={page === last} onClick={() => select(page + 1)}>
-        Next
+        {t('obsRemote.scenes.next')}
       </ActionButton>
     </div>
   )
@@ -46,6 +48,7 @@ function PageButtons({
 
 function RenameScene({ name, run }: { name: string; run: ScenesProps['run'] }) {
   const [draft, setDraft] = useState(name)
+  const { t } = useT()
   return (
     <div style={{ display: 'flex', flexDirection: 'row', gap: 5 }}>
       <div style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>
@@ -55,7 +58,7 @@ function RenameScene({ name, run }: { name: string; run: ScenesProps['run'] }) {
         disabled={!draft.trim() || draft === name}
         onClick={() => run({ kind: 'rename-scene', scene: name, name: draft.trim() })}
       >
-        Rename
+        {t('obsRemote.scenes.rename')}
       </ActionButton>
     </div>
   )
@@ -98,6 +101,7 @@ function SourceItem({
 }
 
 export function Scenes({ snapshot, connection, active, run, disabled }: ScenesProps) {
+  const { t } = useT()
   const [editing, setEditing] = useState(false)
   const [thumbnails, setThumbnails] = useState(false)
   const [page, setPage] = useState(0)
@@ -128,7 +132,7 @@ export function Scenes({ snapshot, connection, active, run, disabled }: ScenesPr
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
       <Section
-        title="Scenes"
+        title={t('obsRemote.scenes.title')}
         action={
           <div style={{ display: 'flex', flexDirection: 'row', gap: 5 }}>
             <ActionButton
@@ -138,10 +142,10 @@ export function Scenes({ snapshot, connection, active, run, disabled }: ScenesPr
               }}
               disabled={editing}
             >
-              {thumbnails ? 'List' : 'Thumbnails'}
+              {thumbnails ? t('obsRemote.scenes.list') : t('obsRemote.scenes.thumbnails')}
             </ActionButton>
             <ActionButton onClick={() => setEditing(!editing)}>
-              {editing ? 'Done' : 'Edit'}
+              {editing ? t('common.done') : t('common.edit')}
             </ActionButton>
           </div>
         }
@@ -178,7 +182,7 @@ export function Scenes({ snapshot, connection, active, run, disabled }: ScenesPr
                     run({ kind: snapshot.studioMode ? 'preview' : 'program', scene: scene.name })
                   }
                 >
-                  {`${scene.name === snapshot.programScene ? 'PROGRAM · ' : scene.name === snapshot.previewScene && snapshot.studioMode ? 'PREVIEW · ' : ''}${scene.name}`}
+                  {`${scene.name === snapshot.programScene ? t('obsRemote.scenes.programPrefix') : scene.name === snapshot.previewScene && snapshot.studioMode ? t('obsRemote.scenes.previewPrefix') : ''}${scene.name}`}
                 </ActionButton>
               </div>
             ),
@@ -189,28 +193,32 @@ export function Scenes({ snapshot, connection, active, run, disabled }: ScenesPr
         ) : null}
       </Section>
       <Section
-        title="Sources"
+        title={t('obsRemote.scenes.sources')}
         action={
           <div style={{ display: 'flex', flexDirection: 'row', gap: 5 }}>
             {snapshot.studioMode && sourceView !== 'hidden' ? (
               <ActionButton
                 onClick={() => setSourceView(sourceView === 'program' ? 'preview' : 'program')}
               >
-                {sourceView === 'program' ? 'Show preview' : 'Show program'}
+                {sourceView === 'program'
+                  ? t('obsRemote.scenes.showPreview')
+                  : t('obsRemote.scenes.showProgram')}
               </ActionButton>
             ) : null}
             <ActionButton
               testId="obs-toggle-sources"
               onClick={() => setSourceView(sourceView === 'hidden' ? 'preview' : 'hidden')}
             >
-              {sourceView === 'hidden' ? 'Show' : 'Hide'}
+              {sourceView === 'hidden' ? t('obsRemote.scenes.show') : t('obsRemote.scenes.hide')}
             </ActionButton>
           </div>
         }
       >
         {sourceView !== 'hidden' ? (
           <>
-            <Text style={{ color: theme.text2, fontSize: 11 }}>{sourceScene || 'No scene'}</Text>
+            <Text style={{ color: theme.text2, fontSize: 11 }}>
+              {sourceScene || t('obsRemote.preview.noScene')}
+            </Text>
             <div
               style={{
                 display: 'flex',
@@ -229,7 +237,9 @@ export function Scenes({ snapshot, connection, active, run, disabled }: ScenesPr
                 />
               ))}
               {!current?.items.length ? (
-                <Text style={{ color: theme.text2, fontSize: 12 }}>No sources in this scene.</Text>
+                <Text style={{ color: theme.text2, fontSize: 12 }}>
+                  {t('obsRemote.scenes.noSources')}
+                </Text>
               ) : null}
             </div>
           </>
@@ -237,15 +247,17 @@ export function Scenes({ snapshot, connection, active, run, disabled }: ScenesPr
       </Section>
       {switchScenes.length ? (
         <Section
-          title="Source switcher"
+          title={t('obsRemote.scenes.switcher')}
           action={
             switchScene ? (
-              <ActionButton onClick={() => setSwitchName('')}>Hide</ActionButton>
+              <ActionButton onClick={() => setSwitchName('')}>
+                {t('obsRemote.scenes.hide')}
+              </ActionButton>
             ) : undefined
           }
         >
           <Choice
-            label="Scene"
+            label={t('obsRemote.scenes.scene')}
             value={switchScene?.name ?? ''}
             values={switchScenes.map(({ name }) => name)}
             onChange={(name) => {

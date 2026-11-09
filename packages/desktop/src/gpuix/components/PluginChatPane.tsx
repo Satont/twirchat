@@ -11,6 +11,7 @@ import type {
 import { useBackend } from '../backend/context'
 import { parsePluginCommand } from '../commands'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT, type MessageKey } from '../i18n'
 import { settingsStore } from '../state/app'
 import { useComposerFocusRegistration } from '../state/composer-focus'
 import { useStoreSelector } from '../state/create-store'
@@ -21,11 +22,11 @@ import { PluginChatRow } from './PluginChatRow'
 import { ActionButton, FormError } from './ui/Form'
 import { Text } from './ui/Text'
 
-const statusLabels: Record<PluginChannelSnapshot['status']['status'], string> = {
-  connecting: 'Connecting…',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  error: 'Connection failed',
+const statusLabels: Record<PluginChannelSnapshot['status']['status'], MessageKey> = {
+  connecting: 'plugins.status.connecting',
+  connected: 'plugins.status.connected',
+  disconnected: 'plugins.status.disconnected',
+  error: 'plugins.status.error',
 }
 
 interface PluginChatPaneProps {
@@ -86,6 +87,7 @@ export function PluginChatPane({
 }: PluginChatPaneProps) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const renderer = useGpuixRequired()
   const input = useRef<PublicInstance | null>(null)
   const sendingRef = useRef(false)
@@ -112,7 +114,7 @@ export function PluginChatPane({
   const writable = status?.status === 'connected' && snapshot?.canSend
   const statusText = status?.error
     ? sanitizeDisplayText(status.error)
-    : statusLabels[status?.status ?? 'connecting']
+    : t(statusLabels[status?.status ?? 'connecting'])
   const readOnly = status?.status === 'connected' && !snapshot?.canSend
   const command = parsePluginCommand(text.trim())
   const pluginCommand = command && backend.plugins?.hasCommand(command.name) ? command : null
@@ -186,7 +188,7 @@ export function PluginChatPane({
             testId="plugin-chat-status"
             style={{ color: status?.error ? theme.dangerText : theme.text2, fontSize: 11 }}
           >
-            {`${channel.transportName} · ${statusText}${readOnly ? ' · Read-only' : ''}`}
+            {`${channel.transportName} · ${statusText}${readOnly ? ` · ${t('plugins.readOnly')}` : ''}`}
           </Text>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
@@ -195,11 +197,11 @@ export function PluginChatPane({
             disabled={moving}
             onClick={() => runUiTask(moveToHome())}
           >
-            Move to My channels
+            {t('plugins.action.moveToHome')}
           </ActionButton>
-          <ActionButton onClick={onChangeChannel}>Channel</ActionButton>
-          <ActionButton onClick={onSplitRight}>Split</ActionButton>
-          <ActionButton onClick={onClosePanel}>Close</ActionButton>
+          <ActionButton onClick={onChangeChannel}>{t('plugins.action.channel')}</ActionButton>
+          <ActionButton onClick={onSplitRight}>{t('plugins.action.split')}</ActionButton>
+          <ActionButton onClick={onClosePanel}>{t('common.close')}</ActionButton>
         </div>
       </div>
       <PluginChatMessages messages={snapshot?.messages} />
@@ -209,9 +211,11 @@ export function PluginChatPane({
           <input
             ref={input}
             testId="plugin-chat-input"
-            aria-label="Plugin chat message or command"
+            aria-label={t('plugins.input.label')}
             value={text}
-            placeholder={writable ? 'Send a message' : 'Run a plugin command'}
+            placeholder={
+              writable ? t('plugins.input.placeholderSend') : t('plugins.input.placeholderCommand')
+            }
             {...focus}
             onChange={(event) => setText(event.value ?? '')}
             onSubmit={() => void submit()}
@@ -234,7 +238,11 @@ export function PluginChatPane({
             disabled={!canSend || sending}
             onClick={() => void submit()}
           >
-            {sending ? 'Sending…' : pluginCommand ? 'Run' : 'Send'}
+            {sending
+              ? t('plugins.action.sending')
+              : pluginCommand
+                ? t('plugins.action.run')
+                : t('plugins.action.send')}
           </ActionButton>
         </div>
       </div>

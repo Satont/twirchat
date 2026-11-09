@@ -1,5 +1,6 @@
 import type { ModerationPlatform } from '@gpuix/backend/api'
 import { usePopupHotkeys, scrollPopupPage } from '@gpuix/hooks/use-popup-hotkeys'
+import { useT } from '@gpuix/i18n'
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { showNotice } from '@gpuix/state/app'
 import { useStore } from '@gpuix/state/create-store'
@@ -11,6 +12,7 @@ import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { publicChannelURL } from '@views/main/utils/public-channel-url'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { IconName } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import {
   UserCardHeader,
@@ -44,6 +46,7 @@ export function UserCardDialog({
   standalone?: boolean
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const windows = useDesktopWindows()
   const renderer = useGpuixRequired()
   const streamer = useStore(streamerModeStore)
@@ -97,14 +100,31 @@ export function UserCardDialog({
 
   const [tab, setTab] = useState<'profile' | 'actions' | 'notes' | 'history'>('profile')
 
-  const metadataItems: Array<{ label: string; value: string | null }> = metadata.metadata
-    ? [
-        { label: 'Account age', value: accountAgeText(metadata.metadata) },
-        { label: 'Follow age', value: followAgeText(metadata.metadata) },
-        { label: 'Subscription duration', value: subscriptionDurationText(metadata.metadata) },
-        { label: 'Sub age', value: subAgeText(metadata.metadata) },
-      ]
-    : []
+  const metadataItems: Array<{ label: string; value: string | null; icon: IconName }> =
+    metadata.metadata
+      ? [
+          {
+            label: t('userCard.metadata.accountAge'),
+            value: accountAgeText(metadata.metadata),
+            icon: 'calendar',
+          },
+          {
+            label: t('userCard.metadata.followAge'),
+            value: followAgeText(metadata.metadata),
+            icon: 'users',
+          },
+          {
+            label: t('userCard.metadata.subscriptionDuration'),
+            value: subscriptionDurationText(metadata.metadata),
+            icon: 'gift',
+          },
+          {
+            label: t('userCard.metadata.subAge'),
+            value: subAgeText(metadata.metadata),
+            icon: 'clock',
+          },
+        ]
+      : []
 
   const popupContextId = usePopupHotkeys('user-card', {
     delete: onClose,

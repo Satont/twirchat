@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   PAUSE_MODIFIER_KEYS,
@@ -8,6 +8,7 @@ import {
 } from '../../services/chat-pause'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { t as translate, useT } from '../i18n'
 import { chatPausePreferences, chatPauseStore } from '../state/chat-pause'
 import { useStore } from '../state/create-store'
 import { useTheme } from '../theme-context'
@@ -39,11 +40,11 @@ function draftFromSettings(value: ChatPausePreferences): Draft {
 }
 function settingsFromDraft(draft: Draft): ChatPausePreferences {
   if (draft.mode === 'timed' && !draft.seconds.trim())
-    throw new Error('Enter a hover pause duration.')
+    throw new Error(translate('chatPauseSettings.enterDuration'))
   const hoverSeconds =
     draft.mode === 'off' ? 0 : draft.mode === 'inside' ? -1 : Number(draft.seconds)
   if (draft.mode === 'timed' && !(hoverSeconds > 0))
-    throw new Error('Timed hover pause must be greater than 0 and at most 300 seconds.')
+    throw new Error(translate('chatPauseSettings.timedRange'))
   return validateChatPausePreferences({
     hoverSeconds,
     modifier: draft.modifier,
@@ -54,6 +55,7 @@ function settingsFromDraft(draft: Draft): ChatPausePreferences {
 export function ChatPauseSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const state = useStore(chatPauseStore)
   const [draft, setDraft] = useState(() => draftFromSettings(state.value))
   const [dirty, setDirty] = useState(false)
@@ -77,14 +79,14 @@ export function ChatPauseSettings() {
     }
     setDraft(draftFromSettings(state.value))
   }, [state.value, dirty, draft])
-  const validation = useMemo(() => {
+  const validation = (() => {
     try {
       settingsFromDraft(draft)
       return ''
     } catch (error) {
       return error instanceof Error ? error.message : String(error)
     }
-  }, [draft])
+  })()
   async function save(): Promise<boolean> {
     let value: ChatPausePreferences
     try {
@@ -127,25 +129,22 @@ export function ChatPauseSettings() {
   }
   return (
     <div testId="chat-pause-settings" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Pause chat to keep messages still while reading. Each pause reason expires independently;
-        hover and keyboard shortcuts never cancel a manual pause or a search.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('chatPauseSettings.intro')}</Text>
       {!state.loaded && !state.error ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading pause settings…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('chatPauseSettings.loading')}</Text>
       ) : null}
       {state.loaded ? (
         <>
           <FormField
-            label="Pause on mouse movement"
-            hint="Disabled by default. Timed pauses refresh after every mouse movement; leaving the chat releases only its mouse pause."
+            label={t('chatPauseSettings.pauseOnMove')}
+            hint={t('chatPauseSettings.pauseOnMoveHint')}
           >
             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {(
                 [
-                  ['off', 'Disabled'],
-                  ['inside', 'While hovering'],
-                  ['timed', 'For a duration'],
+                  ['off', t('chatPauseSettings.mode.off')],
+                  ['inside', t('chatPauseSettings.mode.inside')],
+                  ['timed', t('chatPauseSettings.mode.timed')],
                 ] satisfies [HoverMode, string][]
               ).map(([mode, label]) => (
                 <ActionButton
@@ -161,8 +160,8 @@ export function ChatPauseSettings() {
           </FormField>
           {draft.mode === 'timed' ? (
             <FormField
-              label="Seconds after the last movement"
-              hint="A duration greater than 0 and at most 300 seconds. Decimals are supported."
+              label={t('chatPauseSettings.secondsAfter')}
+              hint={t('chatPauseSettings.secondsAfterHint')}
             >
               <FormInput
                 testId="pause-hover-seconds"
@@ -172,8 +171,8 @@ export function ChatPauseSettings() {
             </FormField>
           ) : null}
           <FormField
-            label="Pause while these keys are held"
-            hint="The combination must match exactly. Holding an additional modifier resumes the chat. Leave every key off to disable."
+            label={t('chatPauseSettings.pauseKeys')}
+            hint={t('chatPauseSettings.pauseKeysHint')}
           >
             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
               {PAUSE_MODIFIER_KEYS.map((key) => (
@@ -182,7 +181,7 @@ export function ChatPauseSettings() {
                   testId={`pause-modifier-${key}`}
                   tabIndex={0}
                   role="switch"
-                  aria-label={`${labels[key]} pause modifier`}
+                  aria-label={t('chatPauseSettings.modifierAria', { key: labels[key] })}
                   aria-checked={draft.modifier.split('+').includes(key)}
                   onKeyDown={(event) => {
                     if (event.key === 'enter' || event.key === 'space') {
@@ -202,19 +201,19 @@ export function ChatPauseSettings() {
             </div>
             <Text style={{ fontSize: 11, color: theme.text2 }}>
               {draft.modifier === 'none'
-                ? 'Keyboard pause disabled'
-                : `Exact combination: ${draft.modifier}`}
+                ? t('chatPauseSettings.keyboardPauseDisabled')
+                : t('chatPauseSettings.exactCombination', { combination: draft.modifier })}
             </Text>
           </FormField>
           <FormField
-            label="Link clicks"
-            hint="The first left click briefly pauses chat for 200 ms, so the link stays under your pointer. Window deactivation releases this brief pause and the keyboard pause."
+            label={t('chatPauseSettings.linkClicks')}
+            hint={t('chatPauseSettings.linkClicksHint')}
           >
             <div
               testId="pause-double-click"
               tabIndex={0}
               role="switch"
-              aria-label="Require double-click to open links"
+              aria-label={t('chatPauseSettings.requireDoubleClick')}
               aria-checked={draft.doubleClickLinks}
               onKeyDown={(event) => {
                 if (event.key === 'enter' || event.key === 'space') {
@@ -225,7 +224,7 @@ export function ChatPauseSettings() {
               style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}
             >
               <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
-                Require double-click to open links
+                {t('chatPauseSettings.requireDoubleClick')}
               </Text>
               <Switch
                 checked={draft.doubleClickLinks}
@@ -249,7 +248,7 @@ export function ChatPauseSettings() {
       >
         {state.error && !dirty ? (
           <ActionButton onClick={() => void chatPausePreferences.load(backend.api)}>
-            Reload settings
+            {t('chatPauseSettings.reload')}
           </ActionButton>
         ) : null}
       </SettingsFooter>

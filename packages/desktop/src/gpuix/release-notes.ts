@@ -1,3 +1,5 @@
+import { t, type MessageKey } from './i18n'
+
 export type ReleaseNoteKind = 'new' | 'improved' | 'fixed' | 'removed' | 'docs' | 'other'
 
 export interface ReleaseNotesSection {
@@ -6,21 +8,45 @@ export interface ReleaseNotesSection {
 }
 
 export const releaseNoteKindLabels: Record<ReleaseNoteKind, string> = {
-  new: 'New features',
-  improved: 'Improvements',
-  fixed: 'Fixes',
-  removed: 'Removed',
-  docs: 'Documentation',
-  other: 'Other changes',
+  get new() {
+    return t('commands.release.kind.new')
+  },
+  get improved() {
+    return t('commands.release.kind.improved')
+  },
+  get fixed() {
+    return t('commands.release.kind.fixed')
+  },
+  get removed() {
+    return t('commands.release.kind.removed')
+  },
+  get docs() {
+    return t('commands.release.kind.docs')
+  },
+  get other() {
+    return t('commands.release.kind.other')
+  },
 }
 
 export const releaseNoteBadgeLabels: Record<ReleaseNoteKind, string> = {
-  new: 'NEW',
-  improved: 'IMPROVED',
-  fixed: 'FIXED',
-  removed: 'REMOVED',
-  docs: 'DOCS',
-  other: 'OTHER',
+  get new() {
+    return t('commands.release.badge.new')
+  },
+  get improved() {
+    return t('commands.release.badge.improved')
+  },
+  get fixed() {
+    return t('commands.release.badge.fixed')
+  },
+  get removed() {
+    return t('commands.release.badge.removed')
+  },
+  get docs() {
+    return t('commands.release.badge.docs')
+  },
+  get other() {
+    return t('commands.release.badge.other')
+  },
 }
 
 const kindOrder: readonly ReleaseNoteKind[] = [
@@ -32,19 +58,19 @@ const kindOrder: readonly ReleaseNoteKind[] = [
   'other',
 ]
 const hiddenSectionTitles = new Set(['new contributors'])
-const monthNames: readonly string[] = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
+const monthKeys: readonly MessageKey[] = [
+  'commands.release.month.1',
+  'commands.release.month.2',
+  'commands.release.month.3',
+  'commands.release.month.4',
+  'commands.release.month.5',
+  'commands.release.month.6',
+  'commands.release.month.7',
+  'commands.release.month.8',
+  'commands.release.month.9',
+  'commands.release.month.10',
+  'commands.release.month.11',
+  'commands.release.month.12',
 ]
 
 const newVerbs = new Set([
@@ -109,7 +135,7 @@ interface ParsedSection {
 }
 
 export function parseReleaseNotes(notes: string): ReleaseNotesSection[] {
-  if (!notes.trim()) return [{ kind: 'other', items: ['No release notes available.'] }]
+  if (!notes.trim()) return [{ kind: 'other', items: [t('commands.release.noNotes')] }]
 
   const lines = notes
     .split('\n')
@@ -124,7 +150,7 @@ export function parseReleaseNotes(notes: string): ReleaseNotesSection[] {
   const pushItem = (item: string) => {
     const value = cleanMarkdown(item)
     if (!value) return
-    current ??= { title: 'Changes', items: [] }
+    current ??= { title: t('commands.release.changes'), items: [] }
     current.items.push(value)
   }
 
@@ -175,16 +201,20 @@ export function parseReleaseNotes(notes: string): ReleaseNotesSection[] {
 
   return sections.length > 0
     ? sections
-    : [{ kind: 'other', items: ['No release notes available.'] }]
+    : [{ kind: 'other', items: [t('commands.release.noNotes')] }]
 }
 
 export function formatReleaseDate(publishedAt: string): string | null {
   if (!publishedAt) return null
   const date = new Date(publishedAt)
   if (Number.isNaN(date.getTime())) return null
-  const month = monthNames[date.getUTCMonth()]
+  const month = monthKeys[date.getUTCMonth()]
   if (!month) return null
-  return `${month} ${date.getUTCDate()}, ${date.getUTCFullYear()}`
+  return t('commands.release.dateFormat', {
+    month: t(month),
+    day: date.getUTCDate(),
+    year: date.getUTCFullYear(),
+  })
 }
 
 function classifyChange(text: string): ReleaseNoteKind {

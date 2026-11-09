@@ -1,5 +1,12 @@
 /** Modules declare each hot-reload resource's exact type beside its owner. */
-export interface PersistentResources {}
+import type { Language } from '@twirchat/shared/types'
+
+import type { Store } from './create-store'
+
+export interface PersistentResources {
+  /** UI language survives `bun --hot` remounts until settings reload it. */
+  language: Store<Language>
+}
 
 declare global {
   var __twirchatGpuixResources: Partial<PersistentResources> | undefined

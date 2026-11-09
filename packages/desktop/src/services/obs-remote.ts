@@ -2,6 +2,8 @@ import { EventSubscription, OBSWebSocket, OBSWebSocketError } from 'obs-websocke
 import type { OBSRequestTypes, OBSResponseTypes } from 'obs-websocket-js/json'
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
+
 export interface ObsSceneItem {
   id: number
   scene: string
@@ -181,7 +183,10 @@ export class ObsRemoteSession {
     this.obs.on('ConnectionClosed', () => {
       this.cancellation.abort()
       this.stopTimer()
-      this.update({ connected: false, error: this.disposed ? null : 'OBS connection closed' })
+      this.update({
+        connected: false,
+        error: this.disposed ? null : t('notices.obs.connectionClosed'),
+      })
     })
     this.obs.on('ConnectionError', (error) => this.update({ error: error.message }))
     this.obs.on('InputVolumeMeters', ({ inputs }) => {
@@ -288,12 +293,12 @@ export class ObsRemoteSession {
         operation,
         new Promise<never>((_resolve, reject) => {
           if (!closing) {
-            cancel = () => reject(new Error('OBS session is closed'))
+            cancel = () => reject(new Error(t('notices.obs.sessionClosed')))
             if (this.cancellation.signal.aborted) cancel()
             else this.cancellation.signal.addEventListener('abort', cancel, { once: true })
           }
           timer = setTimeout(() => {
-            reject(new Error('OBS request timed out'))
+            reject(new Error(t('notices.obs.requestTimedOut')))
             this.obs.disconnect().catch(() => {})
           }, 10_000)
         }),
@@ -308,12 +313,12 @@ export class ObsRemoteSession {
     name: K,
     data?: OBSRequestTypes[K],
   ): Promise<OBSResponseTypes[K]> {
-    if (this.disposed) throw new Error('OBS session is closed')
+    if (this.disposed) throw new Error(t('notices.obs.sessionClosed'))
     return this.bounded(this.obs.call(name, data))
   }
 
   async connect(): Promise<void> {
-    if (this.disposed) throw new Error('OBS session is closed')
+    if (this.disposed) throw new Error(t('notices.obs.sessionClosed'))
     try {
       await this.bounded(
         this.obs.connect(this.url, this.password, {
@@ -337,7 +342,7 @@ export class ObsRemoteSession {
     } catch (error) {
       this.update({
         connected: false,
-        error: error instanceof Error ? error.message : 'OBS connection failed',
+        error: error instanceof Error ? error.message : t('notices.obs.connectionFailed'),
       })
       await this.obs.disconnect()
       throw error
@@ -355,7 +360,9 @@ export class ObsRemoteSession {
     this.timer = setTimeout(() => {
       this.refresh()
         .catch((error: unknown) => {
-          this.update({ error: error instanceof Error ? error.message : 'OBS refresh failed' })
+          this.update({
+            error: error instanceof Error ? error.message : t('notices.obs.refreshFailed'),
+          })
         })
         .finally(() => this.schedule())
     }, 1000)
@@ -387,16 +394,14 @@ export class ObsRemoteSession {
           if (group) groups.add(name)
           const items = z.array(itemSchema).max(2048).parse(result.sceneItems)
           itemCount += items.length
-          if (itemCount > 8192)
-            throw new Error('OBS scene collection exceeds the remote source limit')
+          if (itemCount > 8192) throw new Error(t('notices.obs.sourceLimit'))
           lists.set(name, items)
           for (const item of items) {
             if (
               (item.isGroup || item.sourceType === 'OBS_SOURCE_TYPE_SCENE') &&
               !queued.has(item.sourceName)
             ) {
-              if (queued.size >= 512)
-                throw new Error('OBS scene collection exceeds the remote scene limit')
+              if (queued.size >= 512) throw new Error(t('notices.obs.sceneLimit'))
               queued.add(item.sourceName)
               pending.push({ name: item.sourceName, group: item.isGroup ?? false })
             }
@@ -410,8 +415,7 @@ export class ObsRemoteSession {
       const next = new Set(ancestors).add(name)
       return (lists.get(name) ?? []).map((item) => {
         expanded++
-        if (expanded > 32768)
-          throw new Error('OBS nested source tree exceeds the remote source limit')
+        if (expanded > 32768) throw new Error(t('notices.obs.nestedLimit'))
         return {
           id: item.sceneItemId,
           scene: name,
@@ -677,7 +681,7 @@ export class ObsRemoteSession {
         )
         const items = z.array(itemSchema).parse(result.sceneItems)
         if (!items.some((item) => item.sceneItemId === command.id))
-          throw new Error('OBS source no longer exists')
+          throw new Error(t('notices.obs.sourceMissing'))
         await this.call('SetSceneItemEnabled', {
           sceneName: command.scene,
           sceneItemId: command.id,

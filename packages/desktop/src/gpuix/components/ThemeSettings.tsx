@@ -1,6 +1,7 @@
 import type { AppSettings, CustomPalette, ThemeMode } from '@twirchat/shared/types'
 import { useState } from 'react'
 
+import { useT, type MessageKey } from '../i18n'
 import { useTextInputFocusTracking } from '../state/focus'
 import { THEME_PRESETS } from '../theme'
 import { useTheme } from '../theme-context'
@@ -9,18 +10,24 @@ import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'
 import { ToggleGroup, type ToggleGroupOption } from './ui/ToggleGroup'
 
-const PALETTE_FIELDS: readonly { key: keyof CustomPalette; label: string }[] = [
-  { key: 'background', label: 'Background' },
-  { key: 'surface', label: 'Surface' },
-  { key: 'text', label: 'Text' },
-  { key: 'muted', label: 'Muted text' },
-  { key: 'accent', label: 'Accent' },
+const PALETTE_FIELDS: readonly { key: keyof CustomPalette; labelKey: MessageKey }[] = [
+  { key: 'background', labelKey: 'themeSettings.palette.background' },
+  { key: 'surface', labelKey: 'themeSettings.palette.surface' },
+  { key: 'text', labelKey: 'themeSettings.palette.text' },
+  { key: 'muted', labelKey: 'themeSettings.palette.muted' },
+  { key: 'accent', labelKey: 'themeSettings.palette.accent' },
 ]
 
-const THEME_MODE_OPTIONS: readonly ToggleGroupOption<ThemeMode>[] = [
-  { value: 'dark', label: 'Dark', testId: 'theme-mode-dark' },
-  { value: 'light', label: 'Light', testId: 'theme-mode-light' },
-]
+const PRESET_LABELS: Partial<Record<string, MessageKey>> = {
+  dark: 'themeSettings.mode.dark',
+  light: 'themeSettings.mode.light',
+  midnight: 'themeSettings.preset.midnight',
+  ocean: 'themeSettings.preset.ocean',
+  forest: 'themeSettings.preset.forest',
+  ember: 'themeSettings.preset.ember',
+  rose: 'themeSettings.preset.rose',
+  paper: 'themeSettings.preset.paper',
+}
 
 interface PaletteInput {
   value: string
@@ -59,14 +66,22 @@ export function ThemeSettings({
   onReset,
 }: ThemeSettingsProps) {
   const theme = useTheme()
+  const { t } = useT()
   const selectedPreset = THEME_PRESETS.find((preset) => preset.id === value)
+  const modeOptions: ToggleGroupOption<ThemeMode>[] = [
+    { value: 'dark', label: t('themeSettings.mode.dark'), testId: 'theme-mode-dark' },
+    { value: 'light', label: t('themeSettings.mode.light'), testId: 'theme-mode-light' },
+  ]
   const options: readonly ThemeChoiceOption[] = [
-    ...THEME_PRESETS.map((preset) => ({
-      id: preset.id,
-      label: preset.label,
-      palette: mode === 'light' ? (preset.lightPalette ?? preset.palette) : preset.palette,
-    })),
-    { id: 'custom', label: 'Custom', palette },
+    ...THEME_PRESETS.map((preset) => {
+      const labelKey = PRESET_LABELS[preset.id]
+      return {
+        id: preset.id,
+        label: labelKey ? t(labelKey) : preset.label,
+        palette: mode === 'light' ? (preset.lightPalette ?? preset.palette) : preset.palette,
+      }
+    }),
+    { id: 'custom', label: t('themeSettings.custom'), palette },
   ]
   return (
     <div
@@ -90,10 +105,10 @@ export function ThemeSettings({
             gap: 8,
           }}
         >
-          <Text style={{ fontSize: 12, color: theme.text2 }}>Color mode</Text>
+          <Text style={{ fontSize: 12, color: theme.text2 }}>{t('themeSettings.colorMode')}</Text>
           <ToggleGroup
-            label="Color mode"
-            options={THEME_MODE_OPTIONS}
+            label={t('themeSettings.colorMode')}
+            options={modeOptions}
             value={mode}
             onChange={onModeChange}
           />
@@ -101,7 +116,7 @@ export function ThemeSettings({
       ) : null}
       <div
         role="group"
-        aria-label="Theme presets"
+        aria-label={t('themeSettings.themePresets')}
         style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
       >
         {options.map((option) => (
@@ -138,18 +153,18 @@ export function ThemeSettings({
             }}
           >
             <Text style={{ fontSize: 12, color: theme.text2, flexShrink: 1, minWidth: 0 }}>
-              Colors preview live and adjust for contrast when needed.
+              {t('themeSettings.colorsPreviewHint')}
             </Text>
             <ActionButton testId="theme-palette-reset" onClick={onReset}>
-              Reset to Dark
+              {t('themeSettings.resetToDark')}
             </ActionButton>
           </div>
           <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {PALETTE_FIELDS.map(({ key, label }) => (
+            {PALETTE_FIELDS.map(({ key, labelKey }) => (
               <PaletteField
                 key={key}
                 name={key}
-                label={label}
+                label={t(labelKey)}
                 color={palette[key]}
                 input={inputs[key]}
                 onEdit={onEdit}
@@ -158,7 +173,7 @@ export function ThemeSettings({
           </div>
           {invalid ? (
             <Text testId="theme-palette-error" style={{ fontSize: 12, color: theme.dangerText }}>
-              Enter a hex color like #a78bfa in each marked field.
+              {t('themeSettings.invalidColor')}
             </Text>
           ) : null}
         </div>
@@ -178,12 +193,13 @@ function ThemeChoice({
   onSelect: ThemeSettingsProps['onSelect']
 }) {
   const theme = useTheme()
+  const { t } = useT()
   return (
     <div
       testId={`theme-preset-${id}`}
       role="button"
       aria-label={label}
-      aria-description={selected ? 'Selected theme' : undefined}
+      aria-description={selected ? t('themeSettings.selectedTheme') : undefined}
       tabIndex={0}
       onClick={() => onSelect(id)}
       onKeyDown={(event) => {
@@ -263,6 +279,7 @@ function PaletteField({
   onEdit: ThemeSettingsProps['onEdit']
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const [focused, setFocused] = useState(false)
   const focus = useTextInputFocusTracking(setFocused)
   return (
@@ -284,8 +301,8 @@ function PaletteField({
             {...focus}
             testId={`theme-color-${name}`}
             role="textbox"
-            aria-label={`${label} color`}
-            aria-description={input?.invalid ? 'Enter a hex color' : undefined}
+            aria-label={t('themeSettings.palette.color', { label })}
+            aria-description={input?.invalid ? t('themeSettings.palette.invalidHint') : undefined}
             tabIndex={0}
             value={input?.value ?? color}
             onChange={(event) => onEdit(name, event.value ?? '')}

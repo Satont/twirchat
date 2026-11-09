@@ -1,6 +1,7 @@
 import type { KickRefreshRequest } from '@twirchat/shared'
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
 import { kickBackendFailure } from '../platforms/kick/retry'
 import { refreshedTokenSchema } from './response-schemas'
 
@@ -87,7 +88,7 @@ function requestProblem(error: unknown): KickRefreshProblem {
   )
     return { message: error.message, kind: error.kind }
   return {
-    message: 'The Kick authentication backend request failed. Check the backend connection.',
+    message: t('misc.kickRefresh.requestFailed'),
     kind: 'transient',
   }
 }
@@ -97,12 +98,7 @@ export function createKickTokenRefresher(dependencies: KickRefreshDependencies) 
     const credentials = dependencies.read(accountId)
     if (!credentials) {
       dependencies.state.delete(accountId)
-      return Promise.reject(
-        new KickTokenRefreshError(
-          'The Kick account is unavailable or has no refresh credentials. Sign in again.',
-          'stale',
-        ),
-      )
+      return Promise.reject(new KickTokenRefreshError(t('misc.kickRefresh.noCredentials'), 'stale'))
     }
     let entry = dependencies.state.get(accountId)
     if (!entry || !sameCredentials(credentials, entry.credentials)) {
@@ -122,10 +118,7 @@ export function createKickTokenRefresher(dependencies: KickRefreshDependencies) 
     }
     if (entry.completedAt !== undefined && now - entry.completedAt < 5000)
       return Promise.reject(
-        new KickTokenRefreshError(
-          'Kick credentials were refreshed recently. Wait a few seconds before retrying.',
-          'transient',
-        ),
+        new KickTokenRefreshError(t('misc.kickRefresh.refreshedRecently'), 'transient'),
       )
     const current = entry
     current.block = undefined
@@ -140,10 +133,7 @@ export function createKickTokenRefresher(dependencies: KickRefreshDependencies) 
         try {
           const reply = await dependencies.request(credentials)
           if (!stillCurrent())
-            throw new KickTokenRefreshError(
-              'The Kick account changed while refreshing. The old result was discarded.',
-              'stale',
-            )
+            throw new KickTokenRefreshError(t('misc.kickRefresh.accountChanged'), 'stale')
           const updated: KickRefreshCredentials = {
             accessToken: reply.accessToken,
             refreshToken: reply.refreshToken ?? credentials.refreshToken,
@@ -156,10 +146,7 @@ export function createKickTokenRefresher(dependencies: KickRefreshDependencies) 
           return updated.accessToken
         } catch (error) {
           if (!stillCurrent())
-            throw new KickTokenRefreshError(
-              'The Kick account changed while refreshing. The old result was discarded.',
-              'stale',
-            )
+            throw new KickTokenRefreshError(t('misc.kickRefresh.accountChanged'), 'stale')
           const failure = requestProblem(error)
           const problem = new KickTokenRefreshError(failure.message, failure.kind)
           current.failures = Math.min(current.failures + 1, 3)
@@ -210,8 +197,8 @@ export async function requestKickRefresh(
       )
     throw new KickRefreshRequestError(
       permanent
-        ? 'Kick refresh credentials were rejected. Sign in to Kick again.'
-        : `Kick authentication backend failed (HTTP ${response.status}).`,
+        ? t('misc.kickRefresh.rejected')
+        : t('misc.kickRefresh.backendHttp', { status: response.status }),
       permanent ? 'reauthorize' : 'transient',
     )
   }
@@ -220,9 +207,7 @@ export async function requestKickRefresh(
     payload = await response.json()
   } catch (error) {
     throw new KickRefreshRequestError(
-      error instanceof SyntaxError
-        ? 'Kick authentication backend returned invalid JSON.'
-        : kickBackendFailure(error),
+      error instanceof SyntaxError ? t('misc.kickRefresh.invalidJson') : kickBackendFailure(error),
     )
   }
   const parsed = refreshedTokenSchema
@@ -232,10 +217,7 @@ export async function requestKickRefresh(
       expiresIn: z.number().int().positive().optional(),
     })
     .safeParse(payload)
-  if (!parsed.success)
-    throw new KickRefreshRequestError(
-      'Kick authentication backend returned an invalid token response.',
-    )
+  if (!parsed.success) throw new KickRefreshRequestError(t('misc.kickRefresh.invalidToken'))
   return {
     accessToken: parsed.data.accessToken,
     refreshToken: parsed.data.refreshToken,

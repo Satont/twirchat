@@ -32,6 +32,7 @@ import type { DesktopApi } from '../backend/api'
 import type { UserAlias } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
 import type { DesktopBackend } from '../backend/server'
+import { setLanguage, t, tPlural } from '../i18n'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
 import { mentionAppearances } from './mention-appearances'
@@ -212,11 +213,6 @@ const moderationState = persistentResource('moderationState', (): ModerationStat
   channelClears: new Map(),
 }))
 const { deletedMessages, userSanctions, channelClears } = moderationState
-const CLEARED_OUTCOME: ResolvedModerationOutcome = {
-  action: 'delete_message',
-  isTombstone: true,
-  label: '(chat cleared)',
-}
 export const moderationRevisionStore = persistentResource('moderationRevision', () =>
   createStore<number>(0),
 )
@@ -242,10 +238,10 @@ function moderationUserKey(platform: string, channelId: string, userId: string):
 }
 
 function formatSanctionDuration(seconds: number): string {
-  if (seconds % 86_400 === 0) return `${seconds / 86_400}d`
-  if (seconds % 3_600 === 0) return `${seconds / 3_600}h`
-  if (seconds % 60 === 0) return `${seconds / 60}m`
-  return `${seconds}s`
+  if (seconds % 86_400 === 0) return tPlural('notices.moderation.durationDays', seconds / 86_400)
+  if (seconds % 3_600 === 0) return tPlural('notices.moderation.durationHours', seconds / 3_600)
+  if (seconds % 60 === 0) return tPlural('notices.moderation.durationMinutes', seconds / 60)
+  return tPlural('notices.moderation.durationSeconds', seconds)
 }
 
 export function applyModerationOutcome(outcome: ModerationOutcome): void {
@@ -259,7 +255,11 @@ export function applyModerationOutcome(outcome: ModerationOutcome): void {
     const key = moderationMessageKey(outcome.platform, outcome.messageId)
     deletedMessages.set(key, {
       expiresAt: now + DELETED_MESSAGE_RETENTION_MS,
-      resolved: { action: 'delete_message', isTombstone: true, label: '(message deleted)' },
+      resolved: {
+        action: 'delete_message',
+        isTombstone: true,
+        label: t('notices.moderation.messageDeleted'),
+      },
     })
     setTimeout(() => {
       const entry = deletedMessages.get(key)
@@ -275,7 +275,7 @@ export function applyModerationOutcome(outcome: ModerationOutcome): void {
   if (!outcome.targetUserId) return
   let resolved: ResolvedModerationOutcome | undefined
   if (outcome.action === 'ban') {
-    resolved = { action: 'ban', label: '(banned)' }
+    resolved = { action: 'ban', label: t('notices.moderation.banned') }
   } else if (
     outcome.action === 'timeout' &&
     outcome.durationSeconds !== undefined &&
@@ -284,7 +284,9 @@ export function applyModerationOutcome(outcome: ModerationOutcome): void {
   ) {
     resolved = {
       action: 'timeout',
-      label: `(timed out for ${formatSanctionDuration(outcome.durationSeconds)})`,
+      label: t('notices.moderation.timedOut', {
+        duration: formatSanctionDuration(outcome.durationSeconds),
+      }),
     }
   }
   if (!resolved) return
@@ -311,7 +313,12 @@ function createModerationView(): ModerationView {
         message.timestamp instanceof Date
           ? message.timestamp.getTime()
           : new Date(message.timestamp).getTime()
-      if (clearedAt !== undefined && timestamp <= clearedAt) return CLEARED_OUTCOME
+      if (clearedAt !== undefined && timestamp <= clearedAt)
+        return {
+          action: 'delete_message',
+          isTombstone: true,
+          label: t('notices.moderation.chatCleared'),
+        }
       const deletion = deletions.get(moderationMessageKey(message.platform, message.id))
       if (deletion && deletion.expiresAt > Date.now()) return deletion.resolved
       const sanction = sanctions.get(
@@ -565,13 +572,15 @@ export function showConnectionNotice(status: PlatformStatusInfo): void {
 
   const label = status.channelLogin ?? status.platform
   if (status.status === 'connected') {
-    showNotice('success', `Connected to ${label}`, 3000)
+    showNotice('success', t('notices.app.connected', { name: label }), 3000)
   } else if (status.status === 'disconnected') {
-    showNotice('info', `${label} disconnected`, 3000)
+    showNotice('info', t('notices.app.disconnected', { name: label }), 3000)
   } else if (status.status === 'error') {
     showNotice(
       'error',
-      status.error ? `${label}: ${status.error}` : `${label}: connection error`,
+      status.error
+        ? t('notices.app.connectionErrorDetail', { name: label, error: status.error })
+        : t('notices.app.connectionError', { name: label }),
       6000,
     )
   }
@@ -593,6 +602,7 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
     savedAccountsStore.set(saved)
     aliasesStore.set(aliases)
     settingsStore.set(setts)
+    setLanguage(setts.language)
     const statusMap: Partial<Record<Platform, PlatformStatusInfo>> = {}
     for (const s of statList) statusMap[s.platform] = s
     channelStatusStore.set(statusMap)
@@ -775,15 +785,15 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   })
   subscribe('channel_emote_added', ({ platform, channelId, emote }) => {
     addSevenTVEmote(platform, channelId, emote)
-    showNotice('info', `7TV: ${emote.alias} added to ${channelId}`)
+    showNotice('info', t('notices.app.emoteAdded', { emote: emote.alias, channel: channelId }))
   })
   subscribe('channel_emote_removed', ({ platform, channelId, emoteId }) => {
     removeSevenTVEmote(platform, channelId, emoteId)
-    showNotice('info', `7TV emote removed from ${channelId}`)
+    showNotice('info', t('notices.app.emoteRemoved', { channel: channelId }))
   })
   subscribe('channel_emote_updated', ({ platform, channelId, emoteId, newAlias }) => {
     updateSevenTVEmote(platform, channelId, emoteId, newAlias)
-    showNotice('info', `7TV emote renamed to ${newAlias} in ${channelId}`)
+    showNotice('info', t('notices.app.emoteRenamed', { emote: newAlias, channel: channelId }))
   })
 
   subscribe('accounts_changed', () => {
@@ -812,12 +822,12 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   }
   subscribe('auth_success', () => {
     refreshAccounts().catch((error) =>
-      showNotice('error', `Could not refresh accounts: ${String(error)}`),
+      showNotice('error', t('notices.app.refreshAccountsFailed', { error: String(error) })),
     )
   })
 
   subscribe('auth_error', ({ platform, error }) => {
-    showNotice('error', `${platform}: ${error}`, 6000)
+    showNotice('error', t('notices.app.authError', { platform, error }), 6000)
   })
 
   const queueWatchedMessage = (channelId: string, message: NormalizedChatMessage) => {
@@ -854,7 +864,9 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
             return next
           })
         })
-        .catch((error) => showNotice('error', `Could not refresh chat history: ${String(error)}`))
+        .catch((error) =>
+          showNotice('error', t('notices.app.refreshHistoryFailed', { error: String(error) })),
+        )
       void backend.api
         .getWatchedChannelStatuses()
         .then((stats) => {
@@ -864,7 +876,9 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
             return next
           })
         })
-        .catch((error) => showNotice('error', `Could not refresh channel status: ${String(error)}`))
+        .catch((error) =>
+          showNotice('error', t('notices.app.refreshStatusFailed', { error: String(error) })),
+        )
     }
   })
 

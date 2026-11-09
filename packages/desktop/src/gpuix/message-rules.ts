@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { createMentionMatcher } from './chat-tools'
 import { compileFilterExpression, compileRuleRegex, type FilterContext } from './filter-expression'
+import { t } from './i18n'
 import type { RuleRegex } from './rule-regex'
 
 export interface TextRule {
@@ -56,7 +57,7 @@ export const DEFAULT_CHAT_RULES: ChatRules = {
 }
 
 function compilePattern(rule: TextRule): RuleRegex {
-  if (!rule.pattern) throw new Error('Enter a phrase, username, badge or regular expression.')
+  if (!rule.pattern) throw new Error(t('commands.rule.enterPattern'))
   const escaped = rule.regex ? rule.pattern : rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = rule.wholeWord ? `(?<![\\p{L}\\p{N}_])(?:${escaped})(?![\\p{L}\\p{N}_])` : escaped
   return compileRuleRegex(pattern, !rule.caseSensitive)
@@ -87,10 +88,9 @@ const ignoreRuleSchema = textRuleSchema
     replacement: z.string().max(1000).optional(),
     action: z.enum(['hide', 'replace', 'suppress-highlights']).optional(),
   })
-  .refine(
-    (rule) => rule.action !== 'replace' || rule.target === 'message',
-    'An ignore rule has invalid fields.',
-  )
+  .refine((rule) => rule.action !== 'replace' || rule.target === 'message', {
+    error: () => t('commands.rule.invalidIgnoreFields'),
+  })
 function booleanSetting(fallback: boolean) {
   return z.preprocess((value) => (typeof value === 'boolean' ? value : fallback), z.boolean())
 }
@@ -119,7 +119,7 @@ export function validateChatRules(value: unknown): ChatRules {
   const result = chatRulesSchema.parse(value)
   const ids = new Set<string>()
   for (const rule of [...result.highlights, ...result.ignores]) {
-    if (ids.has(rule.id)) throw new Error('A rule has invalid or duplicate fields.')
+    if (ids.has(rule.id)) throw new Error(t('commands.rule.duplicateFields'))
     ids.add(rule.id)
     if (rule.target === 'filter') {
       const compiled = compileFilterExpression(rule.pattern)
@@ -127,8 +127,7 @@ export function validateChatRules(value: unknown): ChatRules {
     } else compilePattern(rule)
   }
   for (const filter of result.filters) {
-    if (ids.has(filter.id))
-      throw new Error('A saved filter needs a unique ID, name and expression.')
+    if (ids.has(filter.id)) throw new Error(t('commands.rule.uniqueFilter'))
     ids.add(filter.id)
     const compiled = compileFilterExpression(filter.expression)
     if (compiled.error) throw new Error(`${filter.name}: ${compiled.error}`)

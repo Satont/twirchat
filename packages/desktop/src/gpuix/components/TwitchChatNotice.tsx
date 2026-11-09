@@ -2,6 +2,7 @@ import type { TwitchNoticeKind } from '@twirchat/shared/types'
 import type { ReactNode } from 'react'
 
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
+import { useT, type MessageKey } from '../i18n'
 import type { IconName } from '../icons'
 import { withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
@@ -17,17 +18,17 @@ const palette = {
 }
 
 const notices = {
-  sub: { label: 'Subscription', icon: 'star', tone: 'subscription' },
-  resub: { label: 'Resub', icon: 'star', tone: 'subscription' },
-  gift_sub: { label: 'Gift sub', icon: 'gift', tone: 'gift' },
-  community_gift: { label: 'Community gift', icon: 'gift', tone: 'gift' },
-  raid: { label: 'Raid', icon: 'users', tone: 'raid' },
-  reward_gift: { label: 'Cheer gift', icon: 'gift', tone: 'bits' },
-  cheer: { label: 'Cheer', icon: 'sparkle', tone: 'bits' },
-  moderation: { label: 'Moderation', icon: 'lock', tone: 'moderation' },
+  sub: { label: 'chatMessages.notice.subscription', icon: 'star', tone: 'subscription' },
+  resub: { label: 'chatMessages.notice.resub', icon: 'star', tone: 'subscription' },
+  gift_sub: { label: 'chatMessages.notice.giftSub', icon: 'gift', tone: 'gift' },
+  community_gift: { label: 'chatMessages.notice.communityGift', icon: 'gift', tone: 'gift' },
+  raid: { label: 'chatMessages.notice.raid', icon: 'users', tone: 'raid' },
+  reward_gift: { label: 'chatMessages.notice.cheerGift', icon: 'gift', tone: 'bits' },
+  cheer: { label: 'chatMessages.notice.cheer', icon: 'sparkle', tone: 'bits' },
+  moderation: { label: 'chatMessages.notice.moderation', icon: 'lock', tone: 'moderation' },
 } satisfies Record<
   TwitchNoticeKind | 'cheer',
-  { label: string; icon: IconName; tone: keyof typeof palette }
+  { label: MessageKey; icon: IconName; tone: keyof typeof palette }
 >
 
 export function TwitchChatNotice({
@@ -48,6 +49,7 @@ export function TwitchChatNotice({
   children?: ReactNode
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const { label, icon, tone } = notices[kind]
   const color = palette[tone][theme.isLight ? 'light' : 'dark']
   const iconSize = Math.max(12, Math.round(fontSize * 0.9))
@@ -90,7 +92,7 @@ export function TwitchChatNotice({
               minWidth: 0,
             }}
           >
-            <Text style={{ color, fontWeight: 700, fontSize: labelSize }}>{label}</Text>
+            <Text style={{ color, fontWeight: 700, fontSize: labelSize }}>{t(label)}</Text>
             <Text style={{ color: theme.text, fontSize, minWidth: 0, flexShrink: 1 }}>
               {sanitizeDisplayText(summary)}
             </Text>

@@ -14,6 +14,7 @@ import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
 import { parseHotkeyChoice } from '../hotkey-bindings'
+import { useT } from '../i18n'
 import { dockSideAt, resizedPair, type DockSide } from '../layout-operations'
 import { nativeWindow, type NativePaintedElementBounds } from '../native-window'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
@@ -79,6 +80,7 @@ export function WatchedView({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const layouts = useStore(layoutStore)
   const layoutRevision = useStore(layoutRevisionStore)
   const watchedChannels = useStore(watchedChannelsStore)
@@ -158,21 +160,23 @@ export function WatchedView({
   if (!state || (state.isLoading && !layout)) {
     return (
       <Centered>
-        <Text style={{ color: theme.text2, fontSize: 13 }}>Loading layout...</Text>
+        <Text style={{ color: theme.text2, fontSize: 13 }}>{t('app.watched.loadingLayout')}</Text>
       </Centered>
     )
   }
   if (state.error && !layout) {
     return (
       <Centered>
-        <Text style={{ color: '#ef4444', fontSize: 13 }}>Error: {state.error}</Text>
+        <Text style={{ color: '#ef4444', fontSize: 13 }}>
+          {t('app.watched.error', { error: state.error })}
+        </Text>
       </Centered>
     )
   }
   if (!layout) {
     return (
       <Centered>
-        <Text style={{ color: theme.text2, fontSize: 13 }}>No layout available</Text>
+        <Text style={{ color: theme.text2, fontSize: 13 }}>{t('app.watched.noLayout')}</Text>
       </Centered>
     )
   }
@@ -211,7 +215,7 @@ export function WatchedView({
                 }
                 style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
               >
-                Retry layout
+                {t('app.watched.retry')}
               </Text>
             </div>
           ) : null}
@@ -463,6 +467,7 @@ function Divider({
 function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const watchedChannels = useStore(watchedChannelsStore)
   const [showAddForm, setShowAddForm] = useState(false)
   const docking = useContext(PaneDragContext)
@@ -540,12 +545,11 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
   }
   const moveToHome = async (id: string) => {
     if (!standalone && panels.length === 1 && chatTabsStore.get().value.metadata[tabId]?.locked)
-      throw new Error('Unlock this tab before moving it.')
+      throw new Error(t('app.watched.unlockBeforeMove'))
     if (!layoutStore.get().get('home')?.layout) await loadLayout(backend, 'home')
     const homePanels = allPanels(layoutStore.get().get('home')?.layout ?? null)
     const hasDestination = homePanels.some((candidate) => candidate.content.type === 'main')
-    if (!hasDestination && tabId !== 'home')
-      throw new Error('Open the combined chat pane in My channels before moving a channel there.')
+    if (!hasDestination && tabId !== 'home') throw new Error(t('app.watched.openCombinedPane'))
     await setHomePluginChannel(backend.api, id, true)
     if (hasDestination) {
       const latest = allPanels(layoutStore.get().get(tabId)?.layout ?? null).find(
@@ -597,7 +601,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
     <div
       testId={`pane-drag-${panel.id}`}
       tabIndex={0}
-      aria-label="Drag to move this chat pane"
+      aria-label={t('app.watched.dragPane')}
       onKeyDown={(event) => {
         if (event.key === 'escape') {
           cancelDrag()
@@ -752,7 +756,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
                         await assignChannel(backend, tabId, panel.id, channel.id)
                         setShowAddForm(false)
                       } catch (error) {
-                        showNotice('error', `Could not assign channel: ${String(error)}`)
+                        showNotice('error', t('app.watched.assignFailed', { error: String(error) }))
                       }
                     })(),
                   )

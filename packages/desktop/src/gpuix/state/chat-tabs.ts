@@ -10,6 +10,7 @@ import type {
   WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
+import { t } from '../i18n'
 import {
   activeWatchedTabStore,
   tabChannelIdsStore,
@@ -261,8 +262,7 @@ export function createChatTabController(
           if (raw.length > 1_000_000) throw new Error('Saved tab configuration is too large.')
           value = validateChatTabs(JSON.parse(raw))
         } catch {
-          recoveryError =
-            'Saved tabs could not be read. The previous channel tabs were recovered; tab edits will save a repaired configuration.'
+          recoveryError = t('notices.chatTabs.recovered')
         }
       }
       if (!value) {
@@ -331,7 +331,9 @@ export function createChatTabController(
     try {
       await api.setTabChannelIds({ ids: value.openIds })
     } catch (error) {
-      store.update({ error: `Tab compatibility state could not be saved: ${String(error)}` })
+      store.update({
+        error: t('notices.chatTabs.compatibilitySaveFailed', { error: String(error) }),
+      })
     }
   }
   function change<T>(operation: (value: ChatTabConfiguration) => Promise<T>): Promise<T> {
@@ -353,11 +355,11 @@ export function createChatTabController(
     return next
   }
   const requireOpen = (value: ChatTabConfiguration, id: string) => {
-    if (!value.openIds.includes(id)) throw new Error('This tab is no longer open.')
+    if (!value.openIds.includes(id)) throw new Error(t('notices.chatTabs.tabClosed'))
   }
   async function readLayout(id: string) {
     const layout = environment.layout(id) ?? (await api.getWatchedChannelsLayout({ tabId: id }))
-    if (!layout || !validLayout(layout)) throw new Error('The tab layout could not be loaded.')
+    if (!layout || !validLayout(layout)) throw new Error(t('notices.chatTabs.layoutUnavailable'))
     return structuredClone(layout)
   }
   return {
@@ -366,7 +368,7 @@ export function createChatTabController(
     close: (id: string) =>
       change(async (value) => {
         requireOpen(value, id)
-        if (value.metadata[id]?.locked) throw new Error('Unlock this tab before closing it.')
+        if (value.metadata[id]?.locked) throw new Error(t('notices.chatTabs.unlockBeforeClose'))
         const index = value.openIds.indexOf(id)
         const layout = await readLayout(id)
         value.closed = [
@@ -385,7 +387,7 @@ export function createChatTabController(
         const index = id ? value.closed.findIndex((entry) => entry.id === id) : 0
         const closed = index < 0 ? undefined : value.closed.splice(index, 1)[0]
         if (!closed) return null
-        if (value.openIds.length >= 256) throw new Error('Close a tab before restoring another.')
+        if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeRestore'))
         await api.setWatchedChannelsLayout({ tabId: closed.id, layout: closed.layout })
         value.openIds.splice(Math.min(closed.index, value.openIds.length), 0, closed.id)
         value.metadata[closed.id] = closed.metadata
@@ -396,7 +398,7 @@ export function createChatTabController(
       }),
     createEmpty: () =>
       change(async (value) => {
-        if (value.openIds.length >= 256) throw new Error('Close a tab before opening another.')
+        if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeOpen'))
         const id = `tab:${crypto.randomUUID()}`
         const layout: WatchedChannelsLayout = {
           version: 2,
@@ -426,7 +428,7 @@ export function createChatTabController(
     duplicate: (id: string) =>
       change(async (value) => {
         requireOpen(value, id)
-        if (value.openIds.length >= 256) throw new Error('Close a tab before duplicating another.')
+        if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeDuplicate'))
         const original = await readLayout(id)
         const layout = cloneChatTabLayout(original)
         const copyId = `tab:${crypto.randomUUID()}`
@@ -476,7 +478,7 @@ export function createChatTabController(
       change(async (value) => {
         requireOpen(value, id)
         if (color && !/^#[a-f0-9]{6}$/iu.test(color))
-          throw new Error('Use a color in #RRGGBB format.')
+          throw new Error(t('notices.chatTabs.invalidColor'))
         value.metadata[id] = {
           ...value.metadata[id],
           locked: value.metadata[id]?.locked ?? false,
@@ -493,7 +495,7 @@ export function createChatTabController(
     reorder: (id: string, targetIndex: number) =>
       change(async (value) => {
         requireOpen(value, id)
-        if (value.metadata[id]?.locked) throw new Error('Unlock this tab before moving it.')
+        if (value.metadata[id]?.locked) throw new Error(t('notices.chatTabs.unlockBeforeMove'))
         if (!Number.isSafeInteger(targetIndex)) throw new Error('Invalid tab position.')
         value.openIds.splice(value.openIds.indexOf(id), 1)
         value.openIds.splice(Math.max(0, Math.min(value.openIds.length, targetIndex)), 0, id)
@@ -508,7 +510,7 @@ export function createChatTabController(
           environment.activate(existing)
           return existing
         }
-        if (value.openIds.length >= 256) throw new Error('Close a tab before opening another.')
+        if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeOpen'))
         value.openIds.push(channel.id)
         value.metadata[channel.id] = { channelId: channel.id, locked: false }
         value.closed = value.closed.filter((closed) => closed.id !== channel.id)
@@ -611,7 +613,7 @@ export function tabsForChannels(
             id,
             empty: true,
             channelSlug: '',
-            displayName: entry?.title ?? 'Empty tab',
+            displayName: entry?.title ?? t('notices.chatTabs.emptyTab'),
             sourceChannelId: '',
             createdAt: 0,
           },

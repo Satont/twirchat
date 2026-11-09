@@ -1,0 +1,221 @@
+export const notices = {
+  'notices.app.connected': 'Connected to {name}',
+  'notices.app.disconnected': '{name} disconnected',
+  'notices.app.connectionError': '{name}: connection error',
+  'notices.app.connectionErrorDetail': '{name}: {error}',
+  'notices.app.emoteAdded': '7TV: {emote} added to {channel}',
+  'notices.app.emoteRemoved': '7TV emote removed from {channel}',
+  'notices.app.emoteRenamed': '7TV emote renamed to {emote} in {channel}',
+  'notices.app.refreshAccountsFailed': 'Could not refresh accounts: {error}',
+  'notices.app.authError': '{platform}: {error}',
+  'notices.app.refreshHistoryFailed': 'Could not refresh chat history: {error}',
+  'notices.app.refreshStatusFailed': 'Could not refresh channel status: {error}',
+
+  'notices.moderation.chatCleared': '(chat cleared)',
+  'notices.moderation.messageDeleted': '(message deleted)',
+  'notices.moderation.banned': '(banned)',
+  'notices.moderation.timedOut': '(timed out for {duration})',
+  'notices.moderation.durationDays.one': '{count}d',
+  'notices.moderation.durationDays.few': '{count}d',
+  'notices.moderation.durationDays.many': '{count}d',
+  'notices.moderation.durationDays.other': '{count}d',
+  'notices.moderation.durationHours.one': '{count}h',
+  'notices.moderation.durationHours.few': '{count}h',
+  'notices.moderation.durationHours.many': '{count}h',
+  'notices.moderation.durationHours.other': '{count}h',
+  'notices.moderation.durationMinutes.one': '{count}m',
+  'notices.moderation.durationMinutes.few': '{count}m',
+  'notices.moderation.durationMinutes.many': '{count}m',
+  'notices.moderation.durationMinutes.other': '{count}m',
+  'notices.moderation.durationSeconds.one': '{count}s',
+  'notices.moderation.durationSeconds.few': '{count}s',
+  'notices.moderation.durationSeconds.many': '{count}s',
+  'notices.moderation.durationSeconds.other': '{count}s',
+
+  'notices.customCommands.loadFailed': 'Saved commands could not be loaded: {error}',
+  'notices.customCommands.saveFailed': 'Could not save commands: {error}',
+
+  'notices.watchedSubscriptions.updateFailed': 'Could not update open chat connections: {error}',
+
+  'notices.hotkeys.shortcutFailed': 'Shortcut failed: {error}',
+  'notices.hotkeys.actionUnavailable': 'This action is unavailable in the current window.',
+
+  'notices.autoMod.decisionFailed': 'AutoMod decision failed.',
+
+  'notices.search.messageNotInBuffer':
+    'This message is no longer in an open chat buffer. Refresh search to update the snapshot.',
+  'notices.search.revealFailed':
+    'The message could not be revealed in this pane. It may have left the buffer; refresh search to update the snapshot.',
+
+  'notices.layout.saveFailed': 'Could not save layout: {error}',
+  'notices.layout.splitFailed': 'Could not split pane: {error}',
+  'notices.layout.closePaneFailed': 'Could not close pane: {error}',
+  'notices.layout.assignFailed': 'Could not assign channel: {error}',
+  'notices.layout.updatedLayoutUnavailable': 'The updated layout could not be loaded.',
+  'notices.layout.paneClosed': 'This pane is no longer open.',
+  'notices.layout.homeNeedsPane': 'Home must keep at least one pane.',
+  'notices.layout.chatWindowClosed': 'The chat window is no longer open.',
+  'notices.layout.targetLayoutUnavailable': 'The target tab layout could not be loaded.',
+  'notices.layout.homeLayoutUnavailable': 'My channels layout is unavailable.',
+  'notices.layout.paneChannelMismatch': 'This pane is no longer showing the selected channel.',
+  'notices.layout.sourceLayoutUnavailable': 'The source layout could not be loaded.',
+  'notices.layout.sourcePaneClosed': 'The source pane is no longer open.',
+  'notices.layout.clonedLayoutFailed': 'The cloned layout could not be created.',
+
+  'notices.chatTabs.recovered':
+    'Saved tabs could not be read. The previous channel tabs were recovered; tab edits will save a repaired configuration.',
+  'notices.chatTabs.compatibilitySaveFailed': 'Tab compatibility state could not be saved: {error}',
+  'notices.chatTabs.tabClosed': 'This tab is no longer open.',
+  'notices.chatTabs.layoutUnavailable': 'The tab layout could not be loaded.',
+  'notices.chatTabs.unlockBeforeClose': 'Unlock this tab before closing it.',
+  'notices.chatTabs.closeBeforeRestore': 'Close a tab before restoring another.',
+  'notices.chatTabs.closeBeforeOpen': 'Close a tab before opening another.',
+  'notices.chatTabs.closeBeforeDuplicate': 'Close a tab before duplicating another.',
+  'notices.chatTabs.invalidColor': 'Use a color in #RRGGBB format.',
+  'notices.chatTabs.unlockBeforeMove': 'Unlock this tab before moving it.',
+  'notices.chatTabs.emptyTab': 'Empty tab',
+
+  'notices.homePlugin.sourceLimit':
+    'Remove a plugin source from My channels before adding another.',
+
+  'notices.obs.connectionClosed': 'OBS connection closed',
+  'notices.obs.sessionClosed': 'OBS session is closed',
+  'notices.obs.requestTimedOut': 'OBS request timed out',
+  'notices.obs.connectionFailed': 'OBS connection failed',
+  'notices.obs.refreshFailed': 'OBS refresh failed',
+  'notices.obs.sourceLimit': 'OBS scene collection exceeds the remote source limit',
+  'notices.obs.sceneLimit': 'OBS scene collection exceeds the remote scene limit',
+  'notices.obs.nestedLimit': 'OBS nested source tree exceeds the remote source limit',
+  'notices.obs.sourceMissing': 'OBS source no longer exists',
+
+  'notices.translation.languageCode': 'Enter a language code such as en, ru, de or zh-CN.',
+  'notices.translation.endpoint':
+    'Use an HTTPS provider address without credentials, a query or a fragment. Local LibreTranslate may use HTTP.',
+  'notices.translation.settingsObject': 'Translation settings must contain an object.',
+  'notices.translation.chooseProvider': 'Choose a translation provider.',
+  'notices.translation.chooseLanguages': 'Choose source and target languages.',
+  'notices.translation.invalidMode': 'Invalid translation mode.',
+  'notices.translation.invalidConnection': 'Invalid provider connection settings.',
+  'notices.translation.azureRegion': 'Enter an Azure region such as eastus or westeurope.',
+  'notices.translation.invalidChannelList': 'Invalid per-channel translation list.',
+  'notices.translation.channelInvalid':
+    'A translation channel needs a platform, channel name and valid modes.',
+  'notices.translation.channelDuplicate': 'A translation channel is listed more than once.',
+  'notices.translation.protectedChanged':
+    'The provider changed a protected emote, mention or link. Nothing was sent.',
+  'notices.translation.busy': 'Translation is busy. Try again shortly.',
+  'notices.translation.unreachable':
+    '{provider} could not be reached. Check the connection or choose another provider.',
+  'notices.translation.invalidResponse': '{provider} returned an invalid response ({status}).',
+  'notices.translation.rejected': '{provider} rejected the translation ({status}){detail}',
+  'notices.translation.temporarilyUnavailable': '{provider} is temporarily unavailable.',
+  'notices.translation.apiKeyRequired': 'Set a {provider} API key in Translation settings.',
+  'notices.translation.incompleteGoogle': 'Google returned an incomplete translation.',
+  'notices.translation.noText': '{provider} returned no translated text. Nothing was sent.',
+  'notices.translation.tooLong':
+    '{provider} returned an unexpectedly long translation. Nothing was sent.',
+  'notices.translation.characterLimit': 'Translate between 1 and 5,000 characters at a time.',
+  'notices.translation.invalidMorse': 'The source text is not valid Morse code.',
+  'notices.translation.deeplKey': 'Set a DeepL API key first.',
+  'notices.translation.googleKey': 'Set a Google Cloud API key first.',
+  'notices.translation.noLanguages': '{provider} returned no supported language list.',
+  'notices.translation.autoCommandUsage': 'Usage: {command} <language|off>',
+  'notices.translation.translateCommandUsage': 'Usage: /translate <message>',
+  'notices.translation.commandUsage': 'Usage: /{name} <language> <message>',
+
+  'notices.streamerMode.invalidSettings': 'Invalid streamer privacy settings.',
+  'notices.streamerMode.invalidConfiguration':
+    'Choose Auto, On or Off for streamer mode with valid privacy settings.',
+  'notices.streamerMode.detectionTimeout': 'Streaming process detection timed out.',
+  'notices.streamerMode.detectionExitCode': 'Process detection failed with exit code {code}.',
+  'notices.streamerMode.processListTooLarge': 'Process list is too large.',
+  'notices.streamerMode.detectionTimeoutOverride':
+    'Streaming process detection timed out. Choose On or Off to override.',
+  'notices.streamerMode.detectionFailed': 'Could not detect streaming software: {error}',
+  'notices.streamerMode.invalidMode': 'Choose Auto, On, Off or Toggle for streamer mode.',
+
+  'notices.privateCommands.whisperUsage': 'Usage: /w <username> <message>',
+  'notices.privateCommands.replyUsage': 'Usage: /r <message>',
+  'notices.privateCommands.noRecipient':
+    'No whisper recipient is available yet. Use /w <username> <message> first.',
+  'notices.privateCommands.botUsage': 'Usage: /{command} <message>',
+  'notices.privateCommands.invalidRecipient':
+    'Enter a valid Twitch username for the whisper recipient.',
+  'notices.privateCommands.emptyMessage': 'A whisper message cannot be empty.',
+
+  'notices.channelActions.invalidSettings': 'Invalid player settings.',
+  'notices.channelActions.playerCustom': 'Custom',
+  'notices.channelActions.playerStreamlink': 'Streamlink',
+  'notices.channelActions.invalidCommand': '{name} player command is invalid.',
+  'notices.channelActions.commandHint':
+    '{name}: use an executable path and one nonempty argument per line.',
+  'notices.channelActions.unknownPlaceholder':
+    'Unknown player placeholder {{token}}. Use {url}, {channel} or {platform}.',
+  'notices.channelActions.urlRequired': '{name}: include {url} in the argument list.',
+  'notices.channelActions.channelRequired': 'A channel is required.',
+  'notices.channelActions.invalidChannel':
+    'Use a valid channel login, YouTube channel ID or @handle.',
+  'notices.channelActions.httpsRequired': 'Player URLs must use HTTPS.',
+  'notices.channelActions.httpRequired': 'Player URLs must use HTTP or HTTPS.',
+  'notices.channelActions.reconnectNoAccount':
+    'Connect an account or select a watched channel before reconnecting.',
+  'notices.channelActions.reconnectFailed': 'Some chats could not reconnect: {failures}',
+  'notices.channelActions.chooseEmoteKind': 'Choose channel or subscriber emotes.',
+  'notices.channelActions.subscriberNeedsAccount':
+    'Connect an account before reloading subscriber emotes.',
+  'notices.channelActions.subscriberTwitchOnly':
+    'Subscriber emote reload is supported for Twitch accounts.',
+  'notices.channelActions.subscriberScope':
+    'Sign in to Twitch again with user:read:emotes permission to reload subscriber emotes.',
+  'notices.channelActions.unknownMode': 'Unknown player mode.',
+  'notices.channelActions.configureExecutable':
+    'Configure the {name} executable in Player settings first.',
+  'notices.channelActions.launchFailed':
+    'Could not launch the {name} player “{executable}”. Install it or check Player settings. {error}',
+  'notices.channelActions.playerExited': 'Player exited with code {code}.',
+
+  'notices.twirCommands.channelLookup': 'Twir channel lookup: HTTP {status}.',
+  'notices.twirCommands.commandLookup': 'Twir command lookup: HTTP {status}.',
+  'notices.twirCommands.invalidResponse': 'Twir returned an invalid response.',
+
+  'notices.seventv.setChanged': 'Active emote set changed to «{name}»',
+  'notices.seventv.setRenamed': 'Emote set «{oldName}» renamed to «{newName}»',
+  'notices.seventv.setDeleted': 'Emote set «{name}» was deleted',
+  'notices.seventv.emotePrefix': 'Emote «{alias}» ',
+  'notices.seventv.emoteAdded': '{prefix}{placeholder}{was} added to the channel',
+  'notices.seventv.emoteRemoved': '{prefix}{placeholder}{was} removed from the channel',
+  'notices.seventv.emoteUpdated': '{prefix}{placeholder}{was} renamed in the channel',
+  'notices.seventv.wasAlias': ' (was {alias})',
+
+  'notices.twitchModeration.unbanned': 'unbanned {user}',
+  'notices.twitchModeration.removedTimeout': 'removed the timeout for {user}',
+  'notices.twitchModeration.madeModerator': 'made {user} a moderator',
+  'notices.twitchModeration.removedModerator': 'removed moderator privileges from {user}',
+  'notices.twitchModeration.madeVip': 'made {user} a VIP',
+  'notices.twitchModeration.removedVip': 'removed VIP status from {user}',
+  'notices.twitchModeration.warned': 'warned {user}',
+  'notices.twitchModeration.raidStarted': 'started a raid to {user}',
+  'notices.twitchModeration.raidCanceled': 'canceled the raid to {user}',
+  'notices.twitchModeration.banned': 'banned {user}',
+  'notices.twitchModeration.timedOut': 'timed out {user}',
+  'notices.twitchModeration.messageDeleted': 'deleted a message from {user}',
+  'notices.twitchModeration.unbanApproved': 'approved the unban request from {user}',
+  'notices.twitchModeration.unbanDenied': 'denied the unban request from {user}',
+  'notices.twitchModeration.blockedTermAdded': 'added a blocked term',
+  'notices.twitchModeration.blockedTermRemoved': 'removed a blocked term',
+  'notices.twitchModeration.permittedTermAdded': 'added a permitted term',
+  'notices.twitchModeration.permittedTermRemoved': 'removed a permitted term',
+  'notices.twitchModeration.sharedChat': ' in #{channel} (Shared Chat)',
+
+  'notices.twitchHistory.emptyResponse': 'The history backend returned an empty response.',
+  'notices.twitchHistory.tooLarge': 'The history response is too large.',
+  'notices.twitchHistory.badgesUnavailable': 'Channel badges are unavailable.',
+  'notices.twitchHistory.stopped': 'History loading stopped.',
+  'notices.twitchHistory.tooManyRequests': 'Too many history requests. Retry shortly.',
+  'notices.twitchHistory.backendUnavailable': 'Twitch history backend is unavailable ({status}).',
+
+  'notices.accounts.platformMismatch': 'Choose a saved account belonging to this platform.',
+  'notices.accounts.reconnectFailed':
+    'Account selected, but some chats could not reconnect: {failures}',
+  'notices.accounts.missing': 'This saved account no longer exists.',
+} satisfies Record<string, string>

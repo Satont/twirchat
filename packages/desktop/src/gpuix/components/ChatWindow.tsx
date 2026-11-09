@@ -5,6 +5,7 @@ import type { DesktopWindowDescriptor } from '../../services/window-session'
 import { useBackend } from '../backend/context'
 import { registerBundledFonts } from '../fonts'
 import { parseHotkeyChoice } from '../hotkey-bindings'
+import { useT } from '../i18n'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
 import { getActivePane } from '../state/active-pane'
 import { settingsStore, showNotice } from '../state/app'
@@ -35,6 +36,7 @@ export function ChatWindow({
   descriptor: Exclude<DesktopWindowDescriptor, { kind: 'main' }>
 }) {
   const backend = useBackend()
+  const { t } = useT()
   const scope = useWindowScope()
   const windows = useDesktopWindows()
   const settings = useStore(settingsStore)
@@ -137,7 +139,9 @@ export function ChatWindow({
         >
           {page !== 'chat' ? (
             <div style={{ padding: 8 }}>
-              <ActionButton onClick={() => goToPage('chat')}>Back to chat</ActionButton>
+              <ActionButton onClick={() => goToPage('chat')}>
+                {t('app.window.backToChat')}
+              </ActionButton>
             </div>
           ) : null}
           {page === 'settings' ? (

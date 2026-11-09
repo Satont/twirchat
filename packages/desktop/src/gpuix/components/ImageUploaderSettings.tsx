@@ -7,6 +7,7 @@ import {
   type ImageUploaderSettings as Settings,
 } from '../../services/image-uploader'
 import { useBackend } from '../backend/context'
+import { useT } from '../i18n'
 import { useStore } from '../state/create-store'
 import {
   applyImageUploaderSettings,
@@ -60,6 +61,7 @@ function SettingsSwitch({
 export function ImageUploaderSettings() {
   const { api } = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const saved = useStore(imageUploaderSettingsStore)
   const [manualDraft, setManualDraft] = useState<Settings | null>(null)
   const [twirDraft, setTwirDraft] = useState<Settings | null>(null)
@@ -81,20 +83,20 @@ export function ImageUploaderSettings() {
     () => draft !== null && saved !== null && JSON.stringify(draft) !== JSON.stringify(saved),
     [draft, saved],
   )
-  const validation = useMemo(() => {
+  const validation = (() => {
     if (!draft) return ''
     try {
       validateImageUploaderSettings(draft)
       return ''
     } catch (cause) {
-      return cause instanceof Error ? cause.message : 'Review the uploader settings.'
+      return cause instanceof Error ? cause.message : t('imageUploaderSettings.review')
     }
-  }, [draft])
+  })()
 
   useEffect(() => {
-    loadImageUploaderSettings(api).catch(() => setError('Could not load image uploader settings.'))
+    loadImageUploaderSettings(api).catch(() => setError(t('imageUploaderSettings.loadFailed')))
     return () => connectController.current?.abort()
-  }, [api])
+  }, [api, t])
 
   function change<K extends keyof Settings>(key: K, value: Settings[K]): void {
     setDraft((previous) => {
@@ -116,7 +118,7 @@ export function ImageUploaderSettings() {
       await task()
     } catch (cause) {
       setActionError(
-        cause instanceof Error ? cause.message : 'Image uploader settings could not be updated.',
+        cause instanceof Error ? cause.message : t('imageUploaderSettings.updateFailed'),
       )
     } finally {
       operationRef.current = null
@@ -161,7 +163,7 @@ export function ImageUploaderSettings() {
   async function readImport(settings: Settings): Promise<void> {
     await run('import', async () => {
       const clipboard = await api.readClipboard().catch(() => {
-        throw new Error('Could not read the clipboard. Copy the uploader configuration and retry.')
+        throw new Error(t('imageUploaderSettings.clipboardRead'))
       })
       setConfirmation({
         kind: 'import',
@@ -175,9 +177,9 @@ export function ImageUploaderSettings() {
     await run('export', async () => {
       const exported = exportImageUploaderSettings(settings)
       await api.copyText({ text: exported }).catch(() => {
-        throw new Error('Could not copy the configuration to the clipboard.')
+        throw new Error(t('imageUploaderSettings.clipboardCopy'))
       })
-      setNotice('Uploader configuration copied to the clipboard.')
+      setNotice(t('imageUploaderSettings.copied'))
     })
   }
 
@@ -188,17 +190,17 @@ export function ImageUploaderSettings() {
       style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
     >
       <Text style={{ fontSize: 12, color: theme.text2 }}>
-        {`Paste an image in the chat input with ${PASTE_SHORTCUT}. TwirChat uploads it to your chosen server and inserts the link into your draft.`}
+        {t('imageUploaderSettings.intro', { shortcut: PASTE_SHORTCUT })}
       </Text>
       {current ? (
         <>
-          <FormField label="Twir">
+          <FormField label={t('imageUploaderSettings.twir')}>
             <Text style={{ fontSize: 11, color: theme.text2 }}>
               {operation === 'connect'
-                ? 'Complete sign-in in your browser.'
+                ? t('imageUploaderSettings.signInComplete')
                 : twir
-                  ? 'Twir is connected for image uploads.'
-                  : 'Sign in to upload through Twir without setting up an upload URL or headers.'}
+                  ? t('imageUploaderSettings.connected')
+                  : t('imageUploaderSettings.signInHint')}
             </Text>
             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               <ActionButton
@@ -207,17 +209,17 @@ export function ImageUploaderSettings() {
                 onClick={() => void connectTwir()}
               >
                 {operation === 'connect'
-                  ? 'Waiting for Twir…'
+                  ? t('imageUploaderSettings.waiting')
                   : twir
-                    ? 'Reconnect'
-                    : 'Sign in with Twir'}
+                    ? t('imageUploaderSettings.reconnect')
+                    : t('imageUploaderSettings.signIn')}
               </ActionButton>
               {operation === 'connect' ? (
                 <ActionButton
                   testId="image-uploader-twir-cancel"
                   onClick={() => connectController.current?.abort()}
                 >
-                  Cancel sign-in
+                  {t('imageUploaderSettings.cancelSignIn')}
                 </ActionButton>
               ) : twir ? (
                 <ActionButton
@@ -225,27 +227,32 @@ export function ImageUploaderSettings() {
                   testId="image-uploader-twir-disconnect"
                   onClick={() => void disconnectTwir()}
                 >
-                  {operation === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+                  {operation === 'disconnect'
+                    ? t('imageUploaderSettings.disconnecting')
+                    : t('imageUploaderSettings.disconnect')}
                 </ActionButton>
               ) : null}
             </div>
             <FormError>{twirError}</FormError>
           </FormField>
           <SettingsSwitch
-            label="Upload images from the clipboard"
+            label={t('imageUploaderSettings.uploadFromClipboard')}
             testId="image-uploader-enable"
             checked={current.enabled}
             onChange={(enabled) => change('enabled', enabled)}
           />
           <SettingsSwitch
-            label="Ask before uploading"
+            label={t('imageUploaderSettings.askBefore')}
             testId="image-uploader-confirm"
             checked={current.confirm}
             onChange={(confirm) => change('confirm', confirm)}
           />
           {!twir ? (
             <>
-              <FormField label="Request URL" hint="The endpoint that accepts a multipart POST.">
+              <FormField
+                label={t('imageUploaderSettings.requestUrl')}
+                hint={t('imageUploaderSettings.requestUrlHint')}
+              >
                 <FormInput
                   testId="image-uploader-request-url"
                   value={current.requestUrl}
@@ -254,8 +261,8 @@ export function ImageUploaderSettings() {
                 />
               </FormField>
               <FormField
-                label="Form field"
-                hint="The multipart field that contains the image file."
+                label={t('imageUploaderSettings.formField')}
+                hint={t('imageUploaderSettings.formFieldHint')}
               >
                 <FormInput
                   testId="image-uploader-form-field"
@@ -265,8 +272,8 @@ export function ImageUploaderSettings() {
                 />
               </FormField>
               <FormField
-                label="Extra headers"
-                hint="Use one header per line or separate headers with semicolons. For example, enter Authorization: Bearer TOKEN."
+                label={t('imageUploaderSettings.extraHeaders')}
+                hint={t('imageUploaderSettings.extraHeadersHint')}
               >
                 {headersVisible ? (
                   <FormInput
@@ -282,16 +289,16 @@ export function ImageUploaderSettings() {
                     onClick={() => setHeadersVisible(!headersVisible)}
                   >
                     {headersVisible
-                      ? 'Hide headers'
+                      ? t('imageUploaderSettings.hideHeaders')
                       : current.headers
-                        ? 'Show headers'
-                        : 'Add headers'}
+                        ? t('imageUploaderSettings.showHeaders')
+                        : t('imageUploaderSettings.addHeaders')}
                   </ActionButton>
                 </div>
               </FormField>
               <FormField
-                label="Image link"
-                hint="Leave blank if the response is a plain URL. For JSON, use a template such as {data.images.0.url}."
+                label={t('imageUploaderSettings.imageLink')}
+                hint={t('imageUploaderSettings.imageLinkHint')}
               >
                 <FormInput
                   testId="image-uploader-image-link"
@@ -301,8 +308,8 @@ export function ImageUploaderSettings() {
                 />
               </FormField>
               <FormField
-                label="Deletion link"
-                hint="Optional. Use the same template syntax to keep a private deletion link."
+                label={t('imageUploaderSettings.deletionLink')}
+                hint={t('imageUploaderSettings.deletionLinkHint')}
               >
                 <FormInput
                   testId="image-uploader-deletion-link"
@@ -338,14 +345,18 @@ export function ImageUploaderSettings() {
                   testId="image-uploader-import"
                   onClick={() => void readImport(current)}
                 >
-                  {operation === 'import' ? 'Reading clipboard…' : 'Import from clipboard'}
+                  {operation === 'import'
+                    ? t('imageUploaderSettings.readingClipboard')
+                    : t('imageUploaderSettings.import')}
                 </ActionButton>
                 <ActionButton
                   disabled={busy || confirmation !== null}
                   testId="image-uploader-export"
                   onClick={() => setConfirmation({ kind: 'export' })}
                 >
-                  {operation === 'export' ? 'Copying…' : 'Export to clipboard'}
+                  {operation === 'export'
+                    ? t('imageUploaderSettings.copying')
+                    : t('imageUploaderSettings.export')}
                 </ActionButton>
               </>
             ) : null}
@@ -354,8 +365,8 @@ export function ImageUploaderSettings() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <Text style={{ fontSize: 12, color: theme.text }}>
                 {confirmation.kind === 'import'
-                  ? 'Replace the settings in this form with the clipboard configuration? Save the form to apply it.'
-                  : 'The copied configuration includes any credentials in the request URL and headers.'}
+                  ? t('imageUploaderSettings.importConfirm')
+                  : t('imageUploaderSettings.exportWarning')}
               </Text>
               <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {confirmation.kind === 'import' ? (
@@ -367,10 +378,10 @@ export function ImageUploaderSettings() {
                       setDraft({ ...confirmation.settings, confirm: current.confirm })
                       setConfirmation(null)
                       setHeadersVisible(false)
-                      setNotice('Configuration imported. Save to apply it.')
+                      setNotice(t('imageUploaderSettings.imported'))
                     }}
                   >
-                    Replace settings
+                    {t('imageUploaderSettings.replaceSettings')}
                   </ActionButton>
                 ) : (
                   <ActionButton
@@ -379,14 +390,14 @@ export function ImageUploaderSettings() {
                     testId="image-uploader-copy-export"
                     onClick={() => void copyExport(current)}
                   >
-                    Copy configuration
+                    {t('imageUploaderSettings.copyConfiguration')}
                   </ActionButton>
                 )}
                 <ActionButton
                   testId="image-uploader-cancel-clipboard"
                   onClick={() => setConfirmation(null)}
                 >
-                  Cancel
+                  {t('imageUploaderSettings.cancel')}
                 </ActionButton>
               </div>
             </div>
@@ -399,16 +410,18 @@ export function ImageUploaderSettings() {
             onClick={() =>
               void run('load', async () => {
                 await loadImageUploaderSettings(api).catch(() => {
-                  throw new Error('Could not load image uploader settings.')
+                  throw new Error(t('imageUploaderSettings.loadFailed'))
                 })
               })
             }
           >
-            Try again
+            {t('imageUploaderSettings.tryAgain')}
           </ActionButton>
         </div>
       ) : (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading uploader settings…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>
+          {t('imageUploaderSettings.loading')}
+        </Text>
       )}
       {current ? null : <FormError>{error}</FormError>}
     </div>

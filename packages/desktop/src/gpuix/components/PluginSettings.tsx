@@ -3,23 +3,25 @@ import { useEffect, useRef, useState } from 'react'
 import type { PluginInfo } from '../../plugins/api'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
+import { useT, type MessageKey } from '../i18n'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
 import { Text } from './ui/Text'
 
 const EMPTY_PLUGINS: readonly PluginInfo[] = []
-const STATUS_LABELS: Record<PluginInfo['status'], string> = {
-  disabled: 'Disabled',
-  starting: 'Starting…',
-  running: 'Enabled',
-  incompatible: 'Incompatible',
-  error: 'Failed',
+const STATUS_LABELS: Record<PluginInfo['status'], MessageKey> = {
+  disabled: 'pluginSettings.status.disabled',
+  starting: 'pluginSettings.status.starting',
+  running: 'pluginSettings.status.running',
+  incompatible: 'pluginSettings.status.incompatible',
+  error: 'pluginSettings.status.error',
 }
 
 export function PluginSettings() {
   const { events, plugins } = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [list, setList] = useState(() => plugins?.list() ?? EMPTY_PLUGINS)
   const [path, setPath] = useState('')
   const [pending, setPending] = useState<string | null>(null)
@@ -51,18 +53,14 @@ export function PluginSettings() {
       })
   }
 
-  if (!plugins) return <Text style={{ color: theme.text2 }}>Plugin support is unavailable.</Text>
+  if (!plugins) return <Text style={{ color: theme.text2 }}>{t('pluginSettings.unavailable')}</Text>
 
   const manifest = path.trim()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        New plugins start disabled. Enable plugins from sources you trust. Enabled plugins can read
-        chat, use your connected accounts to send messages, and access files as your user. Plugins
-        installed from a URL update automatically.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('pluginSettings.intro')}</Text>
       {list.length === 0 ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>No plugins installed.</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('pluginSettings.empty')}</Text>
       ) : (
         list.map((plugin) => (
           <div
@@ -85,8 +83,8 @@ export function PluginSettings() {
               style={{ fontSize: 12, color: theme.text2 }}
             >
               {plugin.version
-                ? `${plugin.version} · ${STATUS_LABELS[plugin.status]}`
-                : STATUS_LABELS[plugin.status]}
+                ? `${plugin.version} · ${t(STATUS_LABELS[plugin.status])}`
+                : t(STATUS_LABELS[plugin.status])}
             </Text>
             {plugin.sourceUrl ? (
               <Text
@@ -104,7 +102,10 @@ export function PluginSettings() {
             ) : null}
             <FormError>{plugin.error && sanitizeDisplayText(plugin.error)}</FormError>
             <FormError>
-              {plugin.updateError && `Update failed. ${sanitizeDisplayText(plugin.updateError)}`}
+              {plugin.updateError &&
+                t('pluginSettings.updateFailed', {
+                  error: sanitizeDisplayText(plugin.updateError),
+                })}
             </FormError>
             {notice?.id === plugin.id ? (
               <Text style={{ fontSize: 12, color: theme.text2 }}>{notice.text}</Text>
@@ -115,7 +116,7 @@ export function PluginSettings() {
                   disabled={pending !== null}
                   onClick={() => run(plugin.id, () => plugins.setEnabled(plugin.id, true))}
                 >
-                  Retry
+                  {t('pluginSettings.retry')}
                 </ActionButton>
               ) : null}
               {plugin.status !== 'incompatible' || plugin.enabled ? (
@@ -126,7 +127,7 @@ export function PluginSettings() {
                     run(plugin.id, () => plugins.setEnabled(plugin.id, !plugin.enabled))
                   }
                 >
-                  {plugin.enabled ? 'Disable' : 'Enable'}
+                  {plugin.enabled ? t('pluginSettings.disable') : t('pluginSettings.enable')}
                 </ActionButton>
               ) : null}
               {plugin.sourceUrl ? (
@@ -140,12 +141,16 @@ export function PluginSettings() {
                       const name = sanitizeDisplayText(plugin.name)
                       setNotice({
                         id: plugin.id,
-                        text: updated ? `Updated ${name}.` : `No newer version of ${name}.`,
+                        text: updated
+                          ? t('pluginSettings.updated', { name })
+                          : t('pluginSettings.noNewer', { name }),
                       })
                     })
                   }
                 >
-                  {pending === `check:${plugin.id}` ? 'Checking…' : 'Check for update'}
+                  {pending === `check:${plugin.id}`
+                    ? t('pluginSettings.checking')
+                    : t('pluginSettings.checkForUpdate')}
                 </ActionButton>
               ) : null}
               <ActionButton
@@ -154,16 +159,13 @@ export function PluginSettings() {
                 disabled={pending !== null}
                 onClick={() => run(plugin.id, () => plugins.remove(plugin.id))}
               >
-                Remove
+                {t('pluginSettings.remove')}
               </ActionButton>
             </div>
           </div>
         ))
       )}
-      <FormField
-        label="Install a plugin"
-        hint="Enter a local manifest path or an HTTPS URL. GitHub file links also work."
-      >
+      <FormField label={t('pluginSettings.installLabel')} hint={t('pluginSettings.installHint')}>
         <FormInput
           testId="plugin-manifest-path"
           value={path}
@@ -183,14 +185,14 @@ export function PluginSettings() {
             })
           }
         >
-          {pending === 'install' ? 'Installing…' : 'Install plugin'}
+          {pending === 'install' ? t('pluginSettings.installing') : t('pluginSettings.install')}
         </ActionButton>
       </div>
       <SettingsFooter
         sectionId="plugins"
         error={error}
         errorTestId="plugin-settings-error"
-        note="Plugin actions apply immediately."
+        note={t('pluginSettings.note')}
       />
     </div>
   )

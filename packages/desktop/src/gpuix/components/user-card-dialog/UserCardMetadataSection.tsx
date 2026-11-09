@@ -1,5 +1,6 @@
 import { Icon, type IconName } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
+import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 
 import { InlineButton, MetadataState } from './UserCardUI'
@@ -7,6 +8,7 @@ import { InlineButton, MetadataState } from './UserCardUI'
 interface MetadataItem {
   label: string
   value: string | null
+  icon: IconName
 }
 
 interface UserCardMetadataSectionProps {
@@ -17,21 +19,6 @@ interface UserCardMetadataSectionProps {
   reloadMetadata: () => void
 }
 
-function getIconForLabel(label: string): IconName {
-  switch (label) {
-    case 'Account age':
-      return 'calendar'
-    case 'Follow age':
-      return 'users'
-    case 'Subscription duration':
-      return 'gift'
-    case 'Sub age':
-      return 'clock'
-    default:
-      return 'calendar'
-  }
-}
-
 export function UserCardMetadataSection({
   supportedByCard,
   metadataLoading,
@@ -40,6 +27,7 @@ export function UserCardMetadataSection({
   reloadMetadata,
 }: UserCardMetadataSectionProps) {
   const theme = useTheme()
+  const { t } = useT()
 
   return (
     <div style={{ marginBottom: 18 }}>
@@ -54,15 +42,15 @@ export function UserCardMetadataSection({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>Account metadata</Text>
-          <Text style={{ fontSize: 13, color: theme.text2 }}>
-            Fetched through the backend for this platform.
+          <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
+            {t('userCard.metadata.title')}
           </Text>
+          <Text style={{ fontSize: 13, color: theme.text2 }}>{t('userCard.metadata.hint')}</Text>
         </div>
 
         {supportedByCard ? (
           <InlineButton disabled={metadataLoading} onClick={() => reloadMetadata()}>
-            Refresh
+            {t('common.refresh')}
           </InlineButton>
         ) : null}
       </div>
@@ -70,17 +58,17 @@ export function UserCardMetadataSection({
       {!supportedByCard ? (
         <MetadataState>
           <Text style={{ fontSize: 13, color: theme.text2 }}>
-            Metadata is not supported for this platform yet.
+            {t('userCard.metadata.unsupported')}
           </Text>
         </MetadataState>
       ) : metadataLoading ? (
         <MetadataState>
-          <Text style={{ fontSize: 13, color: theme.text2 }}>Loading metadata…</Text>
+          <Text style={{ fontSize: 13, color: theme.text2 }}>{t('userCard.metadata.loading')}</Text>
         </MetadataState>
       ) : metadataError ? (
         <MetadataState error>
           <Text style={{ fontSize: 13, color: theme.dangerText }}>{metadataError}</Text>
-          <InlineButton onClick={() => reloadMetadata()}>Retry</InlineButton>
+          <InlineButton onClick={() => reloadMetadata()}>{t('common.retry')}</InlineButton>
         </MetadataState>
       ) : metadata ? (
         <div
@@ -106,7 +94,7 @@ export function UserCardMetadataSection({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <Icon name={getIconForLabel(item.label)} size={14} color={theme.text2} />
+                <Icon name={item.icon} size={14} color={theme.text2} />
                 <Text
                   style={{
                     fontSize: 11,

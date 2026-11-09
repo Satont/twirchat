@@ -4,6 +4,8 @@ import { extname, isAbsolute } from 'node:path'
 
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
+
 const settingsSchema = z.object({
   provider: z.literal('twir').optional(),
   enabled: z.boolean(),
@@ -60,7 +62,7 @@ export interface ClipboardImageUpload {
 
 export class ImageUploadHttpError extends Error {
   constructor(readonly status: number) {
-    super(`The image host rejected the upload (HTTP ${status}).`)
+    super(t('misc.imageUploader.rejectedUpload', { status }))
   }
 }
 
@@ -83,16 +85,14 @@ function parseHeaders(input: string): Headers {
   for (const line of input.replace(/;+$/u, '').split(HEADER_SEPARATOR)) {
     if (!line.trim()) continue
     const colon = line.indexOf(':')
-    if (colon < 1) throw new Error('Enter each extra header as Name: value.')
+    if (colon < 1) throw new Error(t('misc.imageUploader.headerFormat'))
     const name = line.slice(0, colon).trim()
     if (MANAGED_HEADERS.has(name.toLowerCase()))
-      throw new Error(
-        'Content-Type, Content-Length, Host and Transfer-Encoding are set by the uploader.',
-      )
+      throw new Error(t('misc.imageUploader.managedHeaders'))
     try {
       headers.set(name, line.slice(colon + 1).trim())
     } catch {
-      throw new Error('One of the extra headers has an invalid name or value.')
+      throw new Error(t('misc.imageUploader.headerInvalid'))
     }
   }
   return headers
@@ -100,13 +100,12 @@ function parseHeaders(input: string): Headers {
 
 export function validateImageUploaderSettings(value: unknown): ImageUploaderSettings {
   const result = settingsSchema.safeParse(value)
-  if (!result.success)
-    throw new Error('Image uploader settings contain an invalid or oversized field.')
+  if (!result.success) throw new Error(t('misc.imageUploader.invalidSettings'))
   const settings = result.data
   if ((settings.enabled || settings.requestUrl) && !httpUrl(settings.requestUrl))
-    throw new Error('Enter an HTTP or HTTPS request URL.')
+    throw new Error(t('misc.imageUploader.requestUrl'))
   if ((settings.enabled && !settings.formField) || /[\p{Cc}"]/u.test(settings.formField))
-    throw new Error('Enter a valid multipart form field name.')
+    throw new Error(t('misc.imageUploader.formField'))
   parseHeaders(settings.headers)
   return settings
 }
@@ -143,10 +142,9 @@ export function importImageUploaderSettings(
   json: string,
   current: ImageUploaderSettings,
 ): ImageUploaderSettings {
-  if (json.length > 64 * 1024) throw new Error('The uploader configuration is too large.')
+  if (json.length > 64 * 1024) throw new Error(t('misc.imageUploader.configTooLarge'))
   const parsed = sharexSchema.safeParse(readJson(json))
-  if (!parsed.success)
-    throw new Error('Copy uploader JSON with Version, RequestURL, FileFormName and URL.')
+  if (!parsed.success) throw new Error(t('misc.imageUploader.invalidJson'))
   const value = parsed.data
   const headers = z.record(z.string(), z.unknown()).safeParse(value.Headers)
   return validateImageUploaderSettings({
@@ -165,7 +163,7 @@ export function importImageUploaderSettings(
 }
 
 export function exportImageUploaderSettings(settings: ImageUploaderSettings): string {
-  if (settings.provider === 'twir') throw new Error('Twir sign-in cannot be exported.')
+  if (settings.provider === 'twir') throw new Error(t('misc.imageUploader.twirExport'))
   const headers = Object.fromEntries(parseHeaders(settings.headers))
   return JSON.stringify(
     {
@@ -247,8 +245,8 @@ const RASTER_FORMATS: RasterFormat[] = [
 ]
 
 function requireImageSize(size: number): void {
-  if (size === 0) throw new Error('The copied image is empty.')
-  if (size > MAX_CLIPBOARD_IMAGE_BYTES) throw new Error('The copied image exceeds 20 MiB.')
+  if (size === 0) throw new Error(t('misc.imageUploader.emptyImage'))
+  if (size > MAX_CLIPBOARD_IMAGE_BYTES) throw new Error(t('misc.imageUploader.imageTooLarge'))
 }
 
 function clipboardImageFormat(path: string): RasterFormat | undefined {
@@ -265,7 +263,7 @@ export async function readClipboardUploadFile(path: string): Promise<ClipboardUp
   const format = clipboardImageFormat(path)
   if (!format) return null
   const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK).catch(() => {
-    throw new Error('Could not open the copied image file.')
+    throw new Error(t('misc.imageUploader.openFailed'))
   })
   try {
     const stat = await file.stat()
@@ -275,7 +273,7 @@ export async function readClipboardUploadFile(path: string): Promise<ClipboardUp
       .slice(0, MAX_CLIPBOARD_IMAGE_BYTES + 1)
       .arrayBuffer()
       .catch(() => {
-        throw new Error('Could not read the copied image file.')
+        throw new Error(t('misc.imageUploader.readFailed'))
       })
     const bytes = new Uint8Array(buffer)
     requireImageSize(bytes.length)
@@ -311,9 +309,7 @@ function responseLinks(body: string, settings: ImageUploaderSettings): ImageUplo
       : undefined
   const imageUrl = settings.imageLink ? renderLink(settings.imageLink, data) : body.trim()
   if (!imageUrl || imageUrl.length > 4096 || !httpUrl(imageUrl))
-    throw new Error(
-      'The upload response did not contain a valid image link. Check the Image link setting.',
-    )
+    throw new Error(t('misc.imageUploader.invalidLink'))
   const deletion = settings.deletionLink && renderLink(settings.deletionLink, data)
   const deletionUrl = deletion && deletion.length <= 4096 && httpUrl(deletion) ? deletion : null
   return { imageUrl, deletionUrl }
@@ -329,12 +325,11 @@ async function readResponse(response: Response): Promise<string> {
     for (;;) {
       // oxlint-disable-next-line no-await-in-loop -- check the size before pulling the next chunk.
       const { value, done } = await reader.read().catch(() => {
-        throw new Error('The connection closed before the image host finished replying.')
+        throw new Error(t('misc.imageUploader.closedEarly'))
       })
       if (done) return content + decoder.decode()
       size += value.byteLength
-      if (size > MAX_RESPONSE_BYTES)
-        throw new Error('The image host returned an oversized response.')
+      if (size > MAX_RESPONSE_BYTES) throw new Error(t('misc.imageUploader.oversizedResponse'))
       content += decoder.decode(value, { stream: true })
     }
   } finally {
@@ -361,12 +356,11 @@ async function uploadImage(
   { image, settings, signal }: ClipboardImageUpload,
   authorization?: string,
 ): Promise<ImageUploadResult> {
-  if (uploading) throw new Error('An image upload is already in progress.')
-  if (!settings.enabled) throw new Error('Enable image uploads in Settings first.')
+  if (uploading) throw new Error(t('misc.imageUploader.inProgress'))
+  if (!settings.enabled) throw new Error(t('misc.imageUploader.disabled'))
   requireImageSize(image.bytes.length)
   const format = RASTER_FORMATS.find((candidate) => candidate.mimeType === image.mimeType)
-  if (!format?.matches(image.bytes))
-    throw new Error('The clipboard does not contain a supported image.')
+  if (!format?.matches(image.bytes)) throw new Error(t('misc.imageUploader.unsupportedImage'))
   const headers = parseHeaders(settings.headers)
   if (authorization) headers.set('Authorization', authorization)
   const data = new FormData()
@@ -391,12 +385,12 @@ async function uploadImage(
       })
     } catch {
       cancellation.throwIfAborted()
-      throw new Error('Could not reach the configured image host.')
+      throw new Error(t('misc.imageUploader.unreachable'))
     }
     if (!response.ok) {
       await response.body?.cancel().catch(() => {})
       if (response.status >= 300 && response.status < 400)
-        throw new Error('The image host redirected the request. Use its final upload URL.')
+        throw new Error(t('misc.imageUploader.redirected'))
       throw new ImageUploadHttpError(response.status)
     }
     const body = await readResponse(response)
@@ -405,7 +399,9 @@ async function uploadImage(
   } catch (error) {
     if (cancellation.aborted)
       // oxlint-disable-next-line preserve-caught-error -- network errors may include the request URL.
-      throw new Error(signal.aborted ? 'Image upload canceled.' : 'The image upload timed out.')
+      throw new Error(
+        signal.aborted ? t('misc.imageUploader.canceled') : t('misc.imageUploader.timedOut'),
+      )
     throw error
   } finally {
     uploading = false

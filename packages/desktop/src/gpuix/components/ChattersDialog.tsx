@@ -12,12 +12,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  *   reka-ui's global dialog Escape handling does not exist here.
  */
 
-import { chatterRoleLabel, filterChatterGroups } from '../../views/main/utils/chatters'
+import { filterChatterGroups } from '../../views/main/utils/chatters'
 import { initialsOf } from '../../views/shared/utils/display-text'
-import type { ChannelChatters, ChattersTarget, ChatterUser } from '../backend/api'
+import type { ChannelChatters, ChattersTarget, ChatterRole, ChatterUser } from '../backend/api'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'
+import { useT } from '../i18n'
 import { nativeWindow } from '../native-window'
 import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor } from '../theme'
@@ -57,6 +58,7 @@ export function ChattersDialog({
 }) {
   const theme = useTheme()
   const backend = useBackend()
+  const { t, tPlural } = useT()
   const renderer = useGpuixRequired()
   const searchRef = useRef<PublicInstance | null>(null)
 
@@ -71,6 +73,23 @@ export function ChattersDialog({
     delete: onClose,
     search: () => focusPopupSearch(nativeWindow(renderer), searchRef),
   })
+
+  const roleLabel = (role: ChatterRole): string => {
+    switch (role) {
+      case 'broadcaster':
+        return t('chat.chatters.role.broadcaster')
+      case 'moderators':
+        return t('chat.chatters.role.moderators')
+      case 'vips':
+        return t('chat.chatters.role.vips')
+      case 'ogs':
+        return t('chat.chatters.role.ogs')
+      case 'bots':
+        return t('chat.chatters.role.bots')
+      case 'chatters':
+        return t('chat.chatters.role.chatters')
+    }
+  }
 
   const targetsKey = serializeTargets(targets)
 
@@ -162,7 +181,9 @@ export function ChattersDialog({
           }}
         >
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Text style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>Chatters</Text>
+            <Text style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>
+              {t('chat.chatters.title')}
+            </Text>
             {chatters ? (
               <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
                 <Text
@@ -172,12 +193,10 @@ export function ChattersDialog({
                     color: theme.text2,
                   }}
                 >
-                  {`${totalChatting} chatting`}
+                  {tPlural('chat.chatters.chatting', totalChatting)}
                 </Text>
                 <Text style={{ fontSize: 13, color: theme.text2 }}>
-                  {`across ${chatters.results.length} ${
-                    chatters.results.length === 1 ? 'channel' : 'channels'
-                  }`}
+                  {tPlural('chat.chatters.across', chatters.results.length)}
                 </Text>
               </div>
             ) : null}
@@ -200,7 +219,7 @@ export function ChattersDialog({
             testId="chatters-search"
             autoFocus
             value={query}
-            placeholder="Search chatters…"
+            placeholder={t('chat.chatters.searchPlaceholder')}
             onChange={(event) => setQuery(event.value ?? '')}
             {...searchFocus}
             onKeyDown={(event) => {
@@ -237,7 +256,9 @@ export function ChattersDialog({
           >
             {loading ? (
               <ChattersState>
-                <Text style={{ fontSize: 13, color: theme.text2 }}>Loading chatters…</Text>
+                <Text style={{ fontSize: 13, color: theme.text2 }}>
+                  {t('chat.chatters.loading')}
+                </Text>
               </ChattersState>
             ) : error ? (
               <ChattersState error>
@@ -248,7 +269,7 @@ export function ChattersDialog({
               visibleResults.length === 0 ? (
                 <ChattersState>
                   <Text style={{ fontSize: 13, color: theme.text2 }}>
-                    No active chatters right now.
+                    {t('chat.chatters.empty')}
                   </Text>
                 </ChattersState>
               ) : (
@@ -290,7 +311,7 @@ export function ChattersDialog({
                           flexShrink: 0,
                         }}
                       >
-                        {`· ${channel.total} chatting`}
+                        {t('chat.chatters.channelCount', { count: channel.total })}
                       </Text>
                     </div>
 
@@ -304,9 +325,7 @@ export function ChattersDialog({
                     ) : channel.groups.length === 0 ? (
                       <ChattersState small>
                         <Text style={{ fontSize: 13, color: theme.text2 }}>
-                          {hasQuery
-                            ? 'No chatters match your search.'
-                            : 'No active chatters right now.'}
+                          {hasQuery ? t('chat.chatters.noMatch') : t('chat.chatters.empty')}
                         </Text>
                       </ChattersState>
                     ) : (
@@ -332,7 +351,7 @@ export function ChattersDialog({
                                   color: theme.text2,
                                 }}
                               >
-                                {chatterRoleLabel(group.role).toUpperCase()}
+                                {roleLabel(group.role).toUpperCase()}
                               </Text>
                               <div
                                 style={{
@@ -481,6 +500,7 @@ function ChattersState({
 
 function RetryButton({ onClick }: { onClick: () => void }) {
   const theme = useTheme()
+  const { t } = useT()
   return (
     <div
       onClick={onClick}
@@ -495,7 +515,7 @@ function RetryButton({ onClick }: { onClick: () => void }) {
         hover: { backgroundColor: theme.fillHover },
       }}
     >
-      <Text style={{ fontSize: 12, color: theme.text }}>Retry</Text>
+      <Text style={{ fontSize: 12, color: theme.text }}>{t('common.retry')}</Text>
     </div>
   )
 }

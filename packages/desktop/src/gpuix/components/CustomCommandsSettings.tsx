@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import type { CustomCommandDefinition } from '../commands'
+import { useT } from '../i18n'
 import { useStore } from '../state/create-store'
 import {
   customCommandsStore,
@@ -19,6 +20,7 @@ import { Text } from './ui/Text'
 export function CustomCommandsSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const state = useStore(customCommandsStore)
   const [draft, setDraft] = useState(state.commands)
   const edited = useRef(false)
@@ -63,27 +65,22 @@ export function CustomCommandsSettings() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        {
-          'Turn /name into a message or command. Use {1}, {1+}, {1;fallback}, {channel.name} and {my.name}. Message actions can use {user.name} and {msg.text}.'
-        }
-      </Text>
-      <Text style={{ fontSize: 11, color: theme.text2 }}>
-        Separate outputs with new lines (up to 5). Messages are paced. Earlier rows win within the
-        same trigger and scope.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('customCommandsSettings.intro')}</Text>
+      <Text style={{ fontSize: 11, color: theme.text2 }}>{t('customCommandsSettings.intro2')}</Text>
       {state.loading ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading commands…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>
+          {t('customCommandsSettings.loading')}
+        </Text>
       ) : null}
       {!state.loaded && !state.loading && state.error ? (
         <CommandButton
-          label="Retry loading"
+          label={t('customCommandsSettings.retry')}
           onClick={() => void loadCustomCommands(backend.api).catch(() => {})}
         />
       ) : null}
       {draft.length === 0 && state.loaded ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>
-          No custom commands yet. Add your first shortcut below.
+          {t('customCommandsSettings.empty')}
         </Text>
       ) : null}
       {draft.map((command, index) => (
@@ -109,27 +106,31 @@ export function CustomCommandsSettings() {
             }}
           >
             <CommandField
-              label="Command name"
-              placeholder="hello or hello chat"
+              label={t('customCommandsSettings.name')}
+              placeholder={t('customCommandsSettings.namePlaceholder')}
               value={command.name}
               onChange={(name) => patch(command.id, { name })}
             />
-            <CommandButton label="Move up" disabled={index === 0} onClick={() => move(index, -1)} />
             <CommandButton
-              label="Move down"
+              label={t('customCommandsSettings.moveUp')}
+              disabled={index === 0}
+              onClick={() => move(index, -1)}
+            />
+            <CommandButton
+              label={t('customCommandsSettings.moveDown')}
               disabled={index === draft.length - 1}
               onClick={() => move(index, 1)}
             />
             <CommandButton
-              label="Delete"
+              label={t('customCommandsSettings.delete')}
               danger
               onClick={() => change(draft.filter((entry) => entry.id !== command.id))}
             />
           </div>
           <CommandField
-            label="Template"
+            label={t('customCommandsSettings.template')}
             multiline
-            placeholder="Hello {1;chat}!"
+            placeholder={t('customCommandsSettings.templatePlaceholder')}
             value={command.template}
             onChange={(template) => patch(command.id, { template })}
           />
@@ -142,14 +143,16 @@ export function CustomCommandsSettings() {
               flexWrap: 'wrap',
             }}
           >
-            <Text style={{ fontSize: 12, color: theme.text2 }}>Platform</Text>
+            <Text style={{ fontSize: 12, color: theme.text2 }}>
+              {t('customCommandsSettings.platform')}
+            </Text>
             {(['all', 'twitch', 'kick', 'youtube'] satisfies ('all' | Platform)[]).map(
               (platform) => (
                 <CommandButton
                   key={platform}
                   label={
                     platform === 'all'
-                      ? 'All'
+                      ? t('customCommandsSettings.platform.all')
                       : platform === 'youtube'
                         ? 'YouTube'
                         : platform === 'twitch'
@@ -176,8 +179,8 @@ export function CustomCommandsSettings() {
             }}
           >
             <CommandField
-              label="Channel scope"
-              placeholder="All channels"
+              label={t('customCommandsSettings.channelScope')}
+              placeholder={t('customCommandsSettings.channelScopePlaceholder')}
               value={command.channel ?? ''}
               onChange={(channel) => patch(command.id, { channel: channel || undefined })}
             />
@@ -190,7 +193,9 @@ export function CustomCommandsSettings() {
                 paddingBottom: 5,
               }}
             >
-              <Text style={{ fontSize: 12, color: theme.text }}>Show in message menu</Text>
+              <Text style={{ fontSize: 12, color: theme.text }}>
+                {t('customCommandsSettings.showInMenu')}
+              </Text>
               <Switch
                 small
                 checked={command.showInMessageMenu}
@@ -202,7 +207,7 @@ export function CustomCommandsSettings() {
       ))}
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
         <CommandButton
-          label="Add command"
+          label={t('customCommandsSettings.add')}
           disabled={!state.loaded || draft.length >= 100}
           onClick={() =>
             change([

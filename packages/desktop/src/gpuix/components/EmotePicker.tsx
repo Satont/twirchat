@@ -16,6 +16,7 @@ import {
   scrollPopupPage,
   usePopupHotkeys,
 } from '../hooks/use-popup-hotkeys'
+import { useT } from '../i18n'
 import { nativeWindow } from '../native-window'
 import { emoteStore, loadEmotes } from '../state/app'
 import { useStore } from '../state/create-store'
@@ -47,6 +48,25 @@ type PickerRow =
 
 const EMPTY_EMOTES: EmoteCatalogEntry[] = []
 
+type Translate = ReturnType<typeof useT>['t']
+
+function emoteGroupLabel(source: PickerSource, fallback: string, t: Translate): string {
+  switch (source) {
+    case 'favorites':
+      return t('composer.emotes.favorites')
+    case 'channel':
+      return t('composer.emotes.channel')
+    case 'global':
+      return t('composer.emotes.global')
+    case 'collectibles':
+      return t('composer.emotes.collectibles')
+    case 'personal':
+      return t('composer.emotes.personal')
+    default:
+      return fallback
+  }
+}
+
 export function EmotePicker({
   platform,
   channelId,
@@ -61,6 +81,7 @@ export function EmotePicker({
   onClose: () => void
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const backend = useBackend()
   const emotes = useStore(emoteStore)
   const preferences = useStore(emotePreferencesStore)
@@ -89,8 +110,7 @@ export function EmotePicker({
     const grouped: Array<{ source: PickerSource; label: string; entries: EmoteCatalogEntry[] }> =
       groupEmoteCatalog(allEmotes)
     const favorites = preferences.value.favorites
-    if (favorites.length)
-      grouped.unshift({ source: 'favorites', label: 'Favorites', entries: favorites })
+    if (favorites.length) grouped.unshift({ source: 'favorites', label: '', entries: favorites })
     return grouped
   }, [allEmotes, preferences.value.favorites])
   const results = useMemo(
@@ -191,7 +211,7 @@ export function EmotePicker({
             testId="emote-popup-search"
             autoFocus
             value={searchQuery}
-            placeholder="Search emotes…"
+            placeholder={t('composer.emotes.search')}
             onChange={(event) => setSearchQuery(event.value ?? '')}
             {...searchFocus}
             onKeyDown={(event) => {
@@ -222,7 +242,7 @@ export function EmotePicker({
               primary={group.source === activeSource}
               onClick={() => setSelectedSource(group.source)}
             >
-              {group.label}
+              {emoteGroupLabel(group.source, group.label, t)}
             </ActionButton>
           ))}
         </div>
@@ -235,7 +255,7 @@ export function EmotePicker({
               padding: 12,
             }}
           >
-            <Text style={{ fontSize: 13, color: theme.text2 }}>Loading…</Text>
+            <Text style={{ fontSize: 13, color: theme.text2 }}>{t('common.loading')}</Text>
           </div>
         ) : pickerRows.length === 0 ? (
           <div
@@ -249,9 +269,9 @@ export function EmotePicker({
             <Text style={{ fontSize: 13, color: theme.text2 }}>
               {query
                 ? firstMatch
-                  ? 'No matches here. Check other tabs.'
-                  : 'No emotes found'
-                : 'No emotes in this tab yet'}
+                  ? t('composer.emotes.noMatches')
+                  : t('composer.emotes.notFound')
+                : t('composer.emotes.emptyTab')}
             </Text>
           </div>
         ) : (
@@ -280,7 +300,7 @@ export function EmotePicker({
                       color: theme.text2,
                     }}
                   >
-                    {row.label.toUpperCase()}
+                    {emoteGroupLabel(row.source, row.label, t).toUpperCase()}
                   </Text>
                 </div>
               ) : (

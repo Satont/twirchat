@@ -1,5 +1,5 @@
 import type { KeyEvent } from '@gpuix/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
@@ -9,9 +9,11 @@ import {
   recordHotkeyStroke,
   parseHotkeyArguments,
   validateHotkeyBindings,
+  type HotkeyAction,
   type HotkeyBinding,
   type HotkeyCategory,
 } from '../hotkey-bindings'
+import { useT, type MessageKey } from '../i18n'
 import {
   actionBindingsPreferences,
   actionBindingsStore,
@@ -27,20 +29,89 @@ import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
 const categories = Object.keys(HOTKEY_ACTIONS).filter(isHotkeyCategory)
-const categoryNames: Record<HotkeyCategory, string> = {
-  window: 'Window',
-  split: 'Split',
-  splitInput: 'Message input',
-  popupWindow: 'Popup',
+const categoryNames: Record<HotkeyCategory, MessageKey> = {
+  window: 'hotkeySettings.category.window',
+  split: 'hotkeySettings.category.split',
+  splitInput: 'hotkeySettings.category.splitInput',
+  popupWindow: 'hotkeySettings.category.popupWindow',
 }
-const actionName = (action: string): string => {
-  const words = action.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/-/g, ' ')
-  return words.charAt(0).toUpperCase() + words.slice(1)
+const actionLabels: Record<HotkeyAction, MessageKey> = {
+  newSplit: 'hotkeySettings.action.newSplit',
+  newTab: 'hotkeySettings.action.newTab',
+  openSettings: 'hotkeySettings.action.openSettings',
+  openAccountSelector: 'hotkeySettings.action.openAccountSelector',
+  openQuickSwitcher: 'hotkeySettings.action.openQuickSwitcher',
+  quit: 'hotkeySettings.action.quit',
+  removeTab: 'hotkeySettings.action.removeTab',
+  reopenSplit: 'hotkeySettings.action.reopenSplit',
+  selectTabHistoryBack: 'hotkeySettings.action.selectTabHistoryBack',
+  selectTabHistoryForward: 'hotkeySettings.action.selectTabHistoryForward',
+  toggleLocalR9K: 'hotkeySettings.action.toggleLocalR9K',
+  openFollowedChannels: 'hotkeySettings.action.openFollowedChannels',
+  moveTab: 'hotkeySettings.action.moveTab',
+  openTab: 'hotkeySettings.action.openTab',
+  popup: 'hotkeySettings.action.popup',
+  setStreamerMode: 'hotkeySettings.action.setStreamerMode',
+  zoom: 'hotkeySettings.action.zoom',
+  setTabVisibility: 'hotkeySettings.action.setTabVisibility',
+  changeChannel: 'hotkeySettings.action.changeChannel',
+  clearMessages: 'hotkeySettings.action.clearMessages',
+  createClip: 'hotkeySettings.action.createClip',
+  delete: 'hotkeySettings.action.delete',
+  openInBrowser: 'hotkeySettings.action.openInBrowser',
+  openPlayerInBrowser: 'hotkeySettings.action.openPlayerInBrowser',
+  openInCustomPlayer: 'hotkeySettings.action.openInCustomPlayer',
+  openInStreamlink: 'hotkeySettings.action.openInStreamlink',
+  openModView: 'hotkeySettings.action.openModView',
+  openUnbanRequests: 'hotkeySettings.action.openUnbanRequests',
+  openRewardQueue: 'hotkeySettings.action.openRewardQueue',
+  openViewerList: 'hotkeySettings.action.openViewerList',
+  pickFilters: 'hotkeySettings.action.pickFilters',
+  reconnect: 'hotkeySettings.action.reconnect',
+  scrollToBottom: 'hotkeySettings.action.scrollToBottom',
+  scrollToTop: 'hotkeySettings.action.scrollToTop',
+  showSearch: 'hotkeySettings.action.showSearch',
+  showGlobalSearch: 'hotkeySettings.action.showGlobalSearch',
+  debug: 'hotkeySettings.action.debug',
+  popupOverlay: 'hotkeySettings.action.popupOverlay',
+  openSubscriptionPage: 'hotkeySettings.action.openSubscriptionPage',
+  focus: 'hotkeySettings.action.focus',
+  reloadEmotes: 'hotkeySettings.action.reloadEmotes',
+  runCommand: 'hotkeySettings.action.runCommand',
+  scrollPage: 'hotkeySettings.action.scrollPage',
+  setChannelNotification: 'hotkeySettings.action.setChannelNotification',
+  setModerationMode: 'hotkeySettings.action.setModerationMode',
+  toggleOverlayInertia: 'hotkeySettings.action.toggleOverlayInertia',
+  setHighlightSounds: 'hotkeySettings.action.setHighlightSounds',
+  changeMultichannelContext: 'hotkeySettings.action.changeMultichannelContext',
+  clear: 'hotkeySettings.action.clear',
+  nextMessage: 'hotkeySettings.action.nextMessage',
+  openEmotesPopup: 'hotkeySettings.action.openEmotesPopup',
+  paste: 'hotkeySettings.action.paste',
+  previousMessage: 'hotkeySettings.action.previousMessage',
+  redo: 'hotkeySettings.action.redo',
+  selectAll: 'hotkeySettings.action.selectAll',
+  selectWord: 'hotkeySettings.action.selectWord',
+  toggleTranslateOnSend: 'hotkeySettings.action.toggleTranslateOnSend',
+  undo: 'hotkeySettings.action.undo',
+  cancelReply: 'hotkeySettings.action.cancelReply',
+  copy: 'hotkeySettings.action.copy',
+  cursorToStart: 'hotkeySettings.action.cursorToStart',
+  cursorToEnd: 'hotkeySettings.action.cursorToEnd',
+  sendMessage: 'hotkeySettings.action.sendMessage',
+  'incremental-search-history': 'hotkeySettings.action.incremental-search-history',
+  reject: 'hotkeySettings.action.reject',
+  accept: 'hotkeySettings.action.accept',
+  search: 'hotkeySettings.action.search',
+  openProfilePictureMenu: 'hotkeySettings.action.openProfilePictureMenu',
+  pin: 'hotkeySettings.action.pin',
+  execModeratorAction: 'hotkeySettings.action.execModeratorAction',
 }
 export function HotkeySettings() {
   const backend = useBackend()
   const scope = useWindowScope()
   const theme = useTheme()
+  const { t } = useT()
   const state = useStore(actionBindingsStore)
   const [draft, setDraft] = useState(() => structuredClone(state.value))
   const [dirty, setDirty] = useState(false)
@@ -77,14 +148,14 @@ export function HotkeySettings() {
       const entry = value.bindings.find((item) => item.id === selected)
       if (entry) update(entry)
     })
-  const validation = useMemo(() => {
+  const validation = (() => {
     try {
       validateHotkeyBindings(draft.bindings)
       return ''
     } catch (cause) {
       return cause instanceof Error ? cause.message : String(cause)
     }
-  }, [draft.bindings])
+  })()
   capture.current = (event) => {
     event.preventDefault()
     event.stopPropagation()
@@ -116,11 +187,10 @@ export function HotkeySettings() {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 12 }}>
-      <Text style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>Action shortcuts</Text>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Choose an action and its context. A shortcut runs only when that context provides the
-        action; unavailable actions leave the key untouched.
+      <Text style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>
+        {t('hotkeySettings.title')}
       </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('hotkeySettings.description')}</Text>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <Switch
           checked={draft.legacyNavigation}
@@ -131,11 +201,11 @@ export function HotkeySettings() {
           }
         />
         <Text style={{ fontSize: 12, color: theme.text }}>
-          Keep the four navigation shortcuts in this section
+          {t('hotkeySettings.legacyNavigation')}
         </Text>
       </div>
       {!state.loaded ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading shortcuts…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('hotkeySettings.loading')}</Text>
       ) : null}
       {state.error && !dirty ? (
         <ActionButton
@@ -143,13 +213,11 @@ export function HotkeySettings() {
             runUiTask(loadActionBindings(backend.api))
           }}
         >
-          Retry loading
+          {t('hotkeySettings.retry')}
         </ActionButton>
       ) : null}
       {draft.bindings.length === 0 ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>
-          No action shortcuts yet. Add one to bind a key or a sequence of up to four keys.
-        </Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('hotkeySettings.empty')}</Text>
       ) : null}
       {draft.bindings.map((entry) => (
         <div key={entry.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -159,11 +227,14 @@ export function HotkeySettings() {
               setRecording(false)
             }}
           >
-            {entry.name || `${categoryNames[entry.category]} · ${actionName(entry.action)}`}
+            {entry.id === 'cancel-reply-default' && entry.name === 'Cancel Reply'
+              ? t('hotkeySettings.cancelReplyDefault')
+              : entry.name ||
+                `${t(categoryNames[entry.category])} · ${t(actionLabels[entry.action])}`}
           </ActionButton>
           <Text style={{ fontSize: 11, color: theme.text2 }}>
-            {entry.keys.join(' → ') || 'No keys'}
-            {entry.enabled ? '' : ' · Disabled'}
+            {entry.keys.join(' → ') || t('hotkeySettings.noKeys')}
+            {entry.enabled ? '' : ` · ${t('hotkeySettings.disabled')}`}
           </Text>
           <ActionButton
             danger
@@ -177,7 +248,7 @@ export function HotkeySettings() {
               }
             }}
           >
-            Remove
+            {t('hotkeySettings.remove')}
           </ActionButton>
         </div>
       ))}
@@ -200,7 +271,7 @@ export function HotkeySettings() {
           setSelected(id)
         }}
       >
-        Add action shortcut
+        {t('hotkeySettings.add')}
       </ActionButton>
       {binding ? (
         <div
@@ -213,7 +284,7 @@ export function HotkeySettings() {
             borderRadius: 6,
           }}
         >
-          <FormField label="Name">
+          <FormField label={t('hotkeySettings.name')}>
             <FormInput
               value={binding.name}
               onChange={(value) =>
@@ -221,7 +292,7 @@ export function HotkeySettings() {
                   entry.name = value
                 })
               }
-              placeholder="Optional shortcut name"
+              placeholder={t('hotkeySettings.namePlaceholder')}
             />
           </FormField>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -233,13 +304,13 @@ export function HotkeySettings() {
                 })
               }
             />
-            <Text style={{ fontSize: 12, color: theme.text }}>Enabled</Text>
+            <Text style={{ fontSize: 12, color: theme.text }}>{t('hotkeySettings.enabled')}</Text>
           </div>
-          <FormField label="Context">
+          <FormField label={t('hotkeySettings.context')}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {categories.map((category) => (
                 <ActionButton
-                  key={categoryNames[category]}
+                  key={category}
                   primary={binding.category === category}
                   onClick={() =>
                     edit((entry) => {
@@ -249,16 +320,16 @@ export function HotkeySettings() {
                     })
                   }
                 >
-                  {categoryNames[category]}
+                  {t(categoryNames[category])}
                 </ActionButton>
               ))}
             </div>
           </FormField>
-          <FormField label="Action">
+          <FormField label={t('hotkeySettings.action')}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {HOTKEY_ACTIONS[binding.category].map((action) => (
                 <ActionButton
-                  key={actionName(action)}
+                  key={action}
                   primary={binding.action === action}
                   onClick={() =>
                     edit((entry) => {
@@ -267,15 +338,12 @@ export function HotkeySettings() {
                     })
                   }
                 >
-                  {actionName(action)}
+                  {t(actionLabels[action])}
                 </ActionButton>
               ))}
             </div>
           </FormField>
-          <FormField
-            label="Arguments"
-            hint="One argument per line. Spaces inside commands are preserved. Blank argument lines are invalid."
-          >
+          <FormField label={t('hotkeySettings.arguments')} hint={t('hotkeySettings.argumentsHint')}>
             <FormInput
               multiline
               value={binding.arguments.join('\n')}
@@ -287,8 +355,8 @@ export function HotkeySettings() {
             />
           </FormField>
           <FormField
-            label="Key sequence"
-            hint="One chord per line, for example Ctrl+K then Ctrl+C. Use Cmd for the system modifier."
+            label={t('hotkeySettings.keySequence')}
+            hint={t('hotkeySettings.keySequenceHint')}
           >
             <FormInput
               multiline
@@ -311,10 +379,12 @@ export function HotkeySettings() {
                 setRecording(true)
               }}
             >
-              Record keys
+              {t('hotkeySettings.recordKeys')}
             </ActionButton>
             {recording ? (
-              <ActionButton onClick={() => setRecording(false)}>Finish recording</ActionButton>
+              <ActionButton onClick={() => setRecording(false)}>
+                {t('hotkeySettings.finishRecording')}
+              </ActionButton>
             ) : null}
           </div>
           {recording ? (
@@ -326,7 +396,7 @@ export function HotkeySettings() {
               style={{ padding: 10, borderWidth: 1, borderColor: theme.border, borderRadius: 5 }}
             >
               <Text style={{ fontSize: 12, color: theme.text }}>
-                Press up to four keys. Enter is recorded; Escape cancels recording.
+                {t('hotkeySettings.recordingHint')}
               </Text>
             </div>
           ) : null}

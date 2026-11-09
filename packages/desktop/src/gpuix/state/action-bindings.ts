@@ -11,6 +11,7 @@ import {
   type HotkeyConfiguration,
   type HotkeyBinding,
 } from '../hotkey-bindings'
+import { t } from '../i18n'
 import { showNotice } from './app'
 import { onTextInputFocusChange } from './focus'
 import { getTopOverlayHotkeyContext, onOverlayStackChange } from './overlays'
@@ -89,7 +90,12 @@ let previousConfiguration = actionBindingsStore.get().value
 const key = (windowId: string, id: string) => JSON.stringify([windowId, id])
 const entryKey = (contextId: string, bindingId: string) => JSON.stringify([contextId, bindingId])
 const reportError = (error: unknown) =>
-  showNotice('error', `Shortcut failed: ${error instanceof Error ? error.message : String(error)}`)
+  showNotice(
+    'error',
+    t('notices.hotkeys.shortcutFailed', {
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  )
 const dispatcher = createHotkeyDispatcher({
   bindings: () => actionBindingsStore.get().value.bindings,
   onError: reportError,

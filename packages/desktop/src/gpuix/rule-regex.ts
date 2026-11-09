@@ -1,5 +1,7 @@
 import { createPCRE2, FLAGS, PCRE2MatchError, type PCRE2Regex } from 'pcre2-wasm'
 
+import { t } from './i18n'
+
 // One engine survives hot reloads. Handles are resolved on use so LRU eviction never
 // invalidates a compiled filter retained by a chat pane.
 declare global {
@@ -24,7 +26,7 @@ export class RuleRegex {
     readonly source: string,
     readonly insensitive = false,
   ) {
-    if (source.length > 512) throw new Error('Regular expressions are limited to 512 characters.')
+    if (source.length > 512) throw new Error(t('commands.rule.regexTooLong'))
     this.handle()
   }
 

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { StreamerMode, StreamerModeSettings as Settings } from '../../services/streamer-mode'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT, type MessageKey } from '../i18n'
 import { useStore } from '../state/create-store'
 import {
   loadStreamerMode,
@@ -16,20 +17,21 @@ import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
-const privacy: [keyof Settings, string][] = [
-  ['hideUsercardAvatars', 'Hide user card avatars'],
-  ['hideLinkThumbnails', 'Hide link thumbnails'],
-  ['hideModActions', 'Hide moderation actions'],
-  ['hideRestrictedUsers', 'Hide restricted users'],
-  ['muteMentions', 'Mute mention sounds'],
-  ['suppressInlineWhispers', 'Hide inline whispers'],
-  ['hideBlockedTermText', 'Hide blocked-term text'],
-  ['hideViewerCountAndDuration', 'Hide viewer counts and stream duration'],
-  ['suppressLiveNotifications', 'Suppress live notifications'],
+const privacy: [keyof Settings, MessageKey][] = [
+  ['hideUsercardAvatars', 'streamerModeSettings.privacy.hideUsercardAvatars'],
+  ['hideLinkThumbnails', 'streamerModeSettings.privacy.hideLinkThumbnails'],
+  ['hideModActions', 'streamerModeSettings.privacy.hideModActions'],
+  ['hideRestrictedUsers', 'streamerModeSettings.privacy.hideRestrictedUsers'],
+  ['muteMentions', 'streamerModeSettings.privacy.muteMentions'],
+  ['suppressInlineWhispers', 'streamerModeSettings.privacy.suppressInlineWhispers'],
+  ['hideBlockedTermText', 'streamerModeSettings.privacy.hideBlockedTermText'],
+  ['hideViewerCountAndDuration', 'streamerModeSettings.privacy.hideViewerCountAndDuration'],
+  ['suppressLiveNotifications', 'streamerModeSettings.privacy.suppressLiveNotifications'],
 ]
 export function StreamerModeSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const status = useStore(streamerModeStore)
   const requests = useStore(streamerModeRequestStore)
   const [draft, setDraft] = useState(() => structuredClone(status.settings))
@@ -61,7 +63,10 @@ export function StreamerModeSettings() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <Text style={{ color: theme.text, fontSize: 12 }}>
-        {`Streamer privacy is ${status.effectiveEnabled ? 'on' : 'off'}${status.checking ? ' · Checking streaming software…' : ''}`}
+        {status.effectiveEnabled
+          ? t('streamerModeSettings.status.on')
+          : t('streamerModeSettings.status.off')}
+        {status.checking ? t('streamerModeSettings.status.checking') : ''}
       </Text>
       <div style={{ display: 'flex', gap: 6 }}>
         {(['auto', 'on', 'off'] satisfies StreamerMode[]).map((mode) => (
@@ -76,14 +81,16 @@ export function StreamerModeSettings() {
               setNotice('')
             }}
           >
-            {mode === 'auto' ? 'Auto' : mode === 'on' ? 'On' : 'Off'}
+            {mode === 'auto'
+              ? t('streamerModeSettings.mode.auto')
+              : mode === 'on'
+                ? t('streamerModeSettings.mode.on')
+                : t('streamerModeSettings.mode.off')}
           </ActionButton>
         ))}
       </div>
       <Text style={{ color: theme.text2, fontSize: 12 }}>
-        Auto checks for streaming software immediately and every 20 seconds. On and Off stop
-        automatic detection. Privacy options below apply only while streamer mode is active. Mode
-        and privacy options save together.
+        {t('streamerModeSettings.description')}
       </Text>
       {requests.error ? (
         <ActionButton
@@ -91,10 +98,10 @@ export function StreamerModeSettings() {
             runUiTask(loadStreamerMode(backend))
           }}
         >
-          Retry loading streamer mode
+          {t('streamerModeSettings.retry')}
         </ActionButton>
       ) : null}
-      {privacy.map(([key, label]) => (
+      {privacy.map(([key, labelKey]) => (
         <div key={key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Switch
             checked={draft[key]}
@@ -105,7 +112,7 @@ export function StreamerModeSettings() {
               setDraft((current) => ({ ...current, [key]: value }))
             }}
           />
-          <Text style={{ color: theme.text, fontSize: 12 }}>{label}</Text>
+          <Text style={{ color: theme.text, fontSize: 12 }}>{t(labelKey)}</Text>
         </div>
       ))}
       <SettingsFooter

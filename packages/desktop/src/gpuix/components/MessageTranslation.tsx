@@ -5,6 +5,7 @@ import { translatedMessage } from '../../services/translation'
 import { useBackend } from '../backend/context'
 import { chatMessageKey } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { useStoreSelector } from '../state/create-store'
 import { messageTranslationsStore, requestMessageTranslation } from '../state/translation'
 import { useTheme } from '../theme-context'
@@ -24,6 +25,7 @@ export function MessageTranslation({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const key = chatMessageKey(message)
   const translation = useStoreSelector(messageTranslationsStore, (values) => values.get(key))
   const translate = useEffectEvent(() =>
@@ -48,7 +50,9 @@ export function MessageTranslation({
       }}
     >
       {translation.status === 'loading' ? (
-        <Text style={{ fontSize: 11, color: theme.text2 }}>Translating…</Text>
+        <Text style={{ fontSize: 11, color: theme.text2 }}>
+          {t('chatMessages.translation.translating')}
+        </Text>
       ) : translation.status === 'error' ? (
         <div
           style={{
@@ -70,14 +74,19 @@ export function MessageTranslation({
             }
             style={{ cursor: 'pointer' }}
           >
-            <Text style={{ fontSize: 11, color: theme.link }}>Retry translation</Text>
+            <Text style={{ fontSize: 11, color: theme.link }}>
+              {t('chatMessages.translation.retry')}
+            </Text>
           </div>
         </div>
       ) : translation.result ? (
         <>
-          <Text
-            style={{ fontSize: 10, color: theme.text2 }}
-          >{`Translated ${translation.result.sourceLanguage ?? 'auto'} → ${translation.result.targetLanguage}`}</Text>
+          <Text style={{ fontSize: 10, color: theme.text2 }}>
+            {t('chatMessages.translation.translated', {
+              source: translation.result.sourceLanguage ?? 'auto',
+              target: translation.result.targetLanguage,
+            })}
+          </Text>
           <MessageText
             message={translatedMessage(message, translation.result.text)}
             fontSize={fontSize}

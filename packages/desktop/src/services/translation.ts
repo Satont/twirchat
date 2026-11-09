@@ -1,6 +1,7 @@
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { t, type MessageKey } from '../gpuix/i18n'
 import { runInBackground } from './background-task'
 import { deleteOldestEntry } from './bounded-cache'
 
@@ -15,6 +16,15 @@ const translationProviderSchema = z.enum([
 export const TRANSLATION_PROVIDERS = translationProviderSchema.options
 export type TranslationProvider = z.infer<typeof translationProviderSchema>
 export type OutgoingTranslationMode = 'off' | 'preview' | 'send'
+const PROVIDER_LABELS: Record<TranslationProvider, MessageKey> = {
+  'google-free': 'translationSettings.provider.googleFree',
+  'microsoft-free': 'translationSettings.provider.microsoftFree',
+  deepl: 'translationSettings.provider.deepl',
+  libretranslate: 'translationSettings.provider.libretranslate',
+  'google-cloud': 'translationSettings.provider.googleCloud',
+  azure: 'translationSettings.provider.azure',
+}
+const providerLabel = (provider: TranslationProvider): string => t(PROVIDER_LABELS[provider])
 export interface TranslationChannelSettings {
   platform: Platform
   channelId: string
@@ -89,8 +99,7 @@ export function normalizeTranslationLanguage(value: string, source = false): str
     (language) => language.name.toLowerCase() === trimmed.toLowerCase(),
   )
   if (byName) return byName.code
-  if (!codePattern.test(trimmed))
-    throw new Error('Enter a language code such as en, ru, de or zh-CN.')
+  if (!codePattern.test(trimmed)) throw new Error(t('notices.translation.languageCode'))
   return trimmed.replace('_', '-')
 }
 export function translationEndpoint(value: string, libre = false): string {
@@ -103,17 +112,14 @@ export function translationEndpoint(value: string, libre = false): string {
     url.hash ||
     (url.protocol !== 'https:' && !(libre && loopback && url.protocol === 'http:'))
   )
-    throw new Error(
-      'Use an HTTPS provider address without credentials, a query or a fragment. Local LibreTranslate may use HTTP.',
-    )
+    throw new Error(t('notices.translation.endpoint'))
   return url
     .toString()
     .replace(/\/+$/u, '')
     .replace(/\/translate$/iu, '')
 }
 export function validateTranslationSettings(value: unknown): TranslationSettings {
-  if (!value || typeof value !== 'object')
-    throw new Error('Translation settings must contain an object.')
+  if (!value || typeof value !== 'object') throw new Error(t('notices.translation.settingsObject'))
   const settings = z
     .object({
       provider: translationProviderSchema,
@@ -138,9 +144,9 @@ export function validateTranslationSettings(value: unknown): TranslationSettings
     })
     .parse(value)
   if (!TRANSLATION_PROVIDERS.includes(settings.provider))
-    throw new Error('Choose a translation provider.')
+    throw new Error(t('notices.translation.chooseProvider'))
   if (typeof settings.sourceLanguage !== 'string' || typeof settings.targetLanguage !== 'string')
-    throw new Error('Choose source and target languages.')
+    throw new Error(t('notices.translation.chooseLanguages'))
   settings.sourceLanguage = normalizeTranslationLanguage(settings.sourceLanguage, true)
   settings.targetLanguage = normalizeTranslationLanguage(settings.targetLanguage)
   if (
@@ -148,19 +154,19 @@ export function validateTranslationSettings(value: unknown): TranslationSettings
     typeof settings.decodeMorse !== 'boolean' ||
     !['off', 'preview', 'send'].includes(settings.outgoingMode)
   )
-    throw new Error('Invalid translation mode.')
+    throw new Error(t('notices.translation.invalidMode'))
   if (
     typeof settings.libreEndpoint !== 'string' ||
     typeof settings.azureEndpoint !== 'string' ||
     typeof settings.azureRegion !== 'string'
   )
-    throw new Error('Invalid provider connection settings.')
+    throw new Error(t('notices.translation.invalidConnection'))
   settings.libreEndpoint = translationEndpoint(settings.libreEndpoint, true)
   settings.azureEndpoint = translationEndpoint(settings.azureEndpoint)
   if (settings.azureRegion && !/^[a-z][a-z0-9-]{0,63}$/iu.test(settings.azureRegion))
-    throw new Error('Enter an Azure region such as eastus or westeurope.')
+    throw new Error(t('notices.translation.azureRegion'))
   if (!Array.isArray(settings.channels) || settings.channels.length > 1000)
-    throw new Error('Invalid per-channel translation list.')
+    throw new Error(t('notices.translation.invalidChannelList'))
   const seen = new Set<string>()
   for (const channel of settings.channels) {
     if (
@@ -173,10 +179,10 @@ export function validateTranslationSettings(value: unknown): TranslationSettings
       (channel.outgoingMode !== undefined &&
         !['off', 'preview', 'send'].includes(channel.outgoingMode))
     )
-      throw new Error('A translation channel needs a platform, channel name and valid modes.')
+      throw new Error(t('notices.translation.channelInvalid'))
     channel.channelId = channel.channelId.trim()
     const key = `${channel.platform}:${channel.channelId.toLowerCase()}`
-    if (seen.has(key)) throw new Error('A translation channel is listed more than once.')
+    if (seen.has(key)) throw new Error(t('notices.translation.channelDuplicate'))
     seen.add(key)
     if (channel.sourceLanguage)
       channel.sourceLanguage = normalizeTranslationLanguage(channel.sourceLanguage, true)
@@ -358,10 +364,7 @@ export function protectTranslationText(text: string, terms: readonly string[] = 
       let output = translated
       for (const entry of placeholders) {
         const marker = new RegExp(escapeRegex(entry.marker), 'giu')
-        if (!marker.test(output))
-          throw new Error(
-            'The provider changed a protected emote, mention or link. Nothing was sent.',
-          )
+        if (!marker.test(output)) throw new Error(t('notices.translation.protectedChanged'))
         marker.lastIndex = 0
         output = output.replace(marker, () => entry.text)
       }
@@ -463,7 +466,7 @@ export function createTranslationService(options: {
   const run = <T>(action: () => Promise<T>): Promise<T> =>
     new Promise((resolve, reject) => {
       if (queue.length >= (options.maxQueued ?? 128)) {
-        reject(new Error('Translation is busy. Try again shortly.'))
+        reject(new Error(t('notices.translation.busy')))
         return
       }
       const start = () => {
@@ -492,9 +495,7 @@ export function createTranslationService(options: {
       try {
         response = await request(url, { ...init, signal: AbortSignal.timeout(12000) })
       } catch {
-        throw new Error(
-          `${provider} could not be reached. Check the connection or choose another provider.`,
-        )
+        throw new Error(t('notices.translation.unreachable', { provider: providerLabel(provider) }))
       }
       if ((response.status === 429 || response.status >= 500) && attempt === 0) {
         await response.body?.cancel()
@@ -520,7 +521,12 @@ export function createTranslationService(options: {
         const body = Buffer.concat(parts).toString('utf8')
         value = JSON.parse(body)
       } catch {
-        throw new Error(`${provider} returned an invalid response (${response.status}).`)
+        throw new Error(
+          t('notices.translation.invalidResponse', {
+            provider: providerLabel(provider),
+            status: response.status,
+          }),
+        )
       }
       if (!response.ok) {
         const error = object(value).error
@@ -535,12 +541,18 @@ export function createTranslationService(options: {
             .replaceAll(encodeURIComponent(secret), '[redacted]')
         safe = safe.slice(0, 250)
         throw new Error(
-          `${provider} rejected the translation (${response.status})${safe ? `: ${safe}` : '.'}`,
+          t('notices.translation.rejected', {
+            provider: providerLabel(provider),
+            status: response.status,
+            detail: safe ? `: ${safe}` : '.',
+          }),
         )
       }
       return value
     }
-    throw new Error(`${provider} is temporarily unavailable.`)
+    throw new Error(
+      t('notices.translation.temporarilyUnavailable', { provider: providerLabel(provider) }),
+    )
   }
   async function providerTranslate(
     text: string,
@@ -551,7 +563,9 @@ export function createTranslationService(options: {
   ): Promise<{ text: string; source?: string }> {
     const key = (await options.credential(provider)) ?? ''
     if (['deepl', 'google-cloud', 'azure'].includes(provider) && !key)
-      throw new Error(`Set a ${provider} API key in Translation settings.`)
+      throw new Error(
+        t('notices.translation.apiKeyRequired', { provider: providerLabel(provider) }),
+      )
     const language = providerLanguage(provider, target)
     const from = source === 'auto' ? undefined : providerLanguage(provider, source, true)
     let url: URL
@@ -642,7 +656,7 @@ export function createTranslationService(options: {
       const root = list(value)
       const segments = list(root[0])
       if (segments.some((segment) => typeof list(segment)[0] !== 'string'))
-        throw new Error('Google returned an incomplete translation.')
+        throw new Error(t('notices.translation.incompleteGoogle'))
       output = segments.map((segment) => string(list(segment)[0])).join('')
       detected = string(root[2]) || undefined
     } else if (provider === 'microsoft-free' || provider === 'azure') {
@@ -663,9 +677,9 @@ export function createTranslationService(options: {
       detected = string(object(object(value).detectedLanguage).language) || undefined
     }
     if (!output.trim())
-      throw new Error(`${provider} returned no translated text. Nothing was sent.`)
+      throw new Error(t('notices.translation.noText', { provider: providerLabel(provider) }))
     if (output.length > 20000)
-      throw new Error(`${provider} returned an unexpectedly long translation. Nothing was sent.`)
+      throw new Error(t('notices.translation.tooLong', { provider: providerLabel(provider) }))
     return { text: output, source: detected }
   }
   return {
@@ -680,10 +694,10 @@ export function createTranslationService(options: {
     ): Promise<TranslationResult> {
       const provider = input.provider ?? settings.provider
       if (!TRANSLATION_PROVIDERS.includes(provider))
-        return Promise.reject(new Error('Choose a translation provider.'))
+        return Promise.reject(new Error(t('notices.translation.chooseProvider')))
       const originalText = input.text.trim()
       if (!originalText || Array.from(originalText).length > 5000)
-        return Promise.reject(new Error('Translate between 1 and 5,000 characters at a time.'))
+        return Promise.reject(new Error(t('notices.translation.characterLimit')))
       const source = normalizeTranslationLanguage(
         input.sourceLanguage ?? settings.sourceLanguage,
         true,
@@ -715,8 +729,7 @@ export function createTranslationService(options: {
           (input.decodeMorse ?? settings.decodeMorse) || source === 'morse'
             ? decodeMorseText(protectedText.text, source === 'morse')
             : null
-        if (source === 'morse' && !decode)
-          throw new Error('The source text is not valid Morse code.')
+        if (source === 'morse' && !decode) throw new Error(t('notices.translation.invalidMorse'))
         let translated: { text: string; source?: string }
         if (target === 'morse')
           translated = {
@@ -765,11 +778,11 @@ export function createTranslationService(options: {
       if (provider === 'libretranslate')
         url = `${translationEndpoint(settings.libreEndpoint, true)}/languages`
       else if (provider === 'deepl') {
-        if (!key) throw new Error('Set a DeepL API key first.')
+        if (!key) throw new Error(t('notices.translation.deeplKey'))
         url = `https://${key.toLowerCase().endsWith(':fx') ? 'api-free' : 'api'}.deepl.com/v3/languages?resource=translate_text`
         headers.Authorization = `DeepL-Auth-Key ${key}`
       } else if (provider === 'google-cloud') {
-        if (!key) throw new Error('Set a Google Cloud API key first.')
+        if (!key) throw new Error(t('notices.translation.googleKey'))
         url = 'https://translation.googleapis.com/language/translate/v2/languages?target=en'
         headers['X-Goog-Api-Key'] = key
       } else
@@ -793,7 +806,7 @@ export function createTranslationService(options: {
             return { code, name: string(entry.name) || code }
           })
       if (!values.length || values.some((value) => !value.code))
-        throw new Error(`${provider} returned no supported language list.`)
+        throw new Error(t('notices.translation.noLanguages', { provider: providerLabel(provider) }))
       return [...values, { code: 'morse', name: 'Morse' }]
     },
   }
@@ -812,7 +825,10 @@ export function parseAutoTranslationCommand(
   const input = text.trim()
   if (!isAutoTranslationCommand(input)) return null
   const argument = input.slice(AUTO_TRANSLATION_COMMAND.length).trim()
-  if (!argument) throw new Error(`Usage: ${AUTO_TRANSLATION_COMMAND} <language|off>`)
+  if (!argument)
+    throw new Error(
+      t('notices.translation.autoCommandUsage', { command: AUTO_TRANSLATION_COMMAND }),
+    )
   return {
     targetLanguage:
       argument.toLowerCase() === 'off' ? null : normalizeTranslationLanguage(argument),
@@ -828,11 +844,11 @@ export function parseTranslationCommand(text: string): TranslationCommand | null
   const name = match[1] ?? ''.toLowerCase()
   const argument = match[2]?.trim() ?? ''
   if (name === 'translate') {
-    if (!argument) throw new Error('Usage: /translate <message>')
+    if (!argument) throw new Error(t('notices.translation.translateCommandUsage'))
     return { mode: 'preview', text: argument }
   }
   const parts = argument.match(/^(\S+)\s+([\s\S]+)$/u)
-  if (!parts) throw new Error(`Usage: /${name} <language> <message>`)
+  if (!parts) throw new Error(t('notices.translation.commandUsage', { name }))
   return {
     mode: name === 'translateto' ? 'preview' : 'send',
     targetLanguage: normalizeTranslationLanguage(parts[1] ?? ''),

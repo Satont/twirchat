@@ -1,3 +1,5 @@
+import { t } from '../../gpuix/i18n'
+
 export interface KickRetryClock {
   now(): number
   schedule(callback: () => void, delayMs: number): () => void
@@ -22,8 +24,8 @@ export function kickBackendFailure(error: unknown): string {
     'code' in error &&
     (error.code === 'ECONNREFUSED' || error.code === 'ConnectionRefused')
   )
-    return 'The Kick backend is unavailable (connection refused).'
+    return t('misc.kick.backendRefused')
   if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError'))
-    return 'The Kick backend request timed out.'
-  return 'The Kick backend request failed. Check the backend connection.'
+    return t('misc.kick.backendTimeout')
+  return t('misc.kick.backendFailed')
 }

@@ -2,6 +2,7 @@ import { deleteOldestEntry } from '../../services/bounded-cache'
 import type { TwitchAutoModEvent, TwitchAutoModHold } from '../../services/twitch-automod'
 import type { DesktopApi } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
+import { t } from '../i18n'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 
@@ -105,7 +106,7 @@ export async function decideTwitchAutoModMessage(
             ...queue,
             held: new Map(queue.held).set(messageId, {
               ...message,
-              error: error instanceof Error ? error.message : 'AutoMod decision failed.',
+              error: error instanceof Error ? error.message : t('notices.autoMod.decisionFailed'),
             }),
           }
         : queue,

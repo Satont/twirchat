@@ -40,6 +40,7 @@ import { mergeChatTimeline, pluginChatSearchMessage, timelineRowKey } from '../c
 import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
+import { useT } from '../i18n'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { compileMessageRules } from '../message-rules'
 import { nativeWindow } from '../native-window'
@@ -136,6 +137,7 @@ function platformName(platform: string): string {
 function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
   const theme = useTheme()
   const font = useFont()
+  const { t } = useT()
   const color = platformColor(ch.platform)
   const hideViewerCount = useStoreSelector(
     streamerModeStore,
@@ -224,7 +226,7 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
                 fontFamily: font,
               }}
             >
-              {ch.isLive ? 'LIVE' : 'Offline'}
+              {ch.isLive ? t('chat.header.live') : t('chat.header.offline')}
             </text>
           </div>
           {ch.title ? (
@@ -232,12 +234,12 @@ function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
           ) : null}
           {ch.categoryName ? (
             <text style={{ fontSize: 11, color: '#8b8b99', fontFamily: font }}>
-              {`Category  ${ch.categoryName}`}
+              {t('chat.header.category', { name: ch.categoryName })}
             </text>
           ) : null}
           {ch.isLive && ch.viewerCount !== undefined && !hideViewerCount ? (
             <text style={{ fontSize: 11, color: '#8b8b99', fontFamily: font }}>
-              {`Viewers  ${ch.viewerCount.toLocaleString()}`}
+              {t('chat.header.viewers', { count: ch.viewerCount.toLocaleString() })}
             </text>
           ) : null}
         </div>
@@ -279,6 +281,7 @@ export function ChatView({
 }: ChatViewProps) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const renderer = useGpuixRequired()
   const scope = useWindowScope()
   const windows = useDesktopWindows()
@@ -627,8 +630,10 @@ export function ChatView({
     )
     void backend.api
       .copyText({ text: formatChatTranscript(transcript) })
-      .then(() => showNotice('success', `Copied ${displayedTimeline.length} messages`))
-      .catch(() => showNotice('error', 'Could not copy messages to the clipboard.'))
+      .then(() =>
+        showNotice('success', tPlural('chat.notice.copiedMessages', displayedTimeline.length)),
+      )
+      .catch(() => showNotice('error', t('chat.notice.copyFailed')))
   }
 
   // ── Virtual list + scroll pill ─────────────────────────────────────────────
@@ -764,7 +769,7 @@ export function ChatView({
       const channelSlug =
         watchedChannel?.channelSlug ?? getChannelSlugForPlatform(platform) ?? message.channelId
       if (!channelSlug) {
-        showNotice('error', 'Could not determine the channel for this moderation action.', 3500)
+        showNotice('error', t('chat.notice.moderationChannelUnknown'), 3500)
         return
       }
 
@@ -802,7 +807,7 @@ export function ChatView({
         })
       }
     },
-    [backend, watchedChannel?.channelSlug, getChannelSlugForPlatform],
+    [backend, watchedChannel?.channelSlug, getChannelSlugForPlatform, t],
   )
   const handleModeration = useCallback(
     (...args: Parameters<typeof onModerate>) => runUiTask(onModerate(...args)),
@@ -976,7 +981,7 @@ export function ChatView({
   const setEnabledArgument = (argument: string | undefined, enabled: boolean) =>
     argument === 'on' ? true : argument === 'off' ? false : !enabled
   const openTargetUrl = (url: string | undefined) => {
-    if (!url) throw new Error('This channel does not have a public URL.')
+    if (!url) throw new Error(t('chat.error.noPublicUrl'))
     return backend.api.openExternalUrl({ url })
   }
   useHotkeyContext({
@@ -1080,7 +1085,7 @@ export function ChatView({
             })
         : null,
       runCommand: async ([text]) => {
-        if (!commandRunner.current) throw new Error('The message composer is not ready.')
+        if (!commandRunner.current) throw new Error(t('chat.error.composerNotReady'))
         await commandRunner.current(text!)
       },
       scrollPage: ([direction]) => {
@@ -1291,7 +1296,9 @@ export function ChatView({
                   borderColor: theme.border,
                 }}
               >
-                <Text style={{ fontSize: 11, color: theme.text2 }}>read-only</Text>
+                <Text style={{ fontSize: 11, color: theme.text2 }}>
+                  {t('chat.header.readOnly')}
+                </Text>
               </div>
             ) : null}
           </>
@@ -1305,7 +1312,7 @@ export function ChatView({
                 flexShrink: 0,
               }}
             >
-              {'Live Chat'.toUpperCase()}
+              {t('chat.header.liveChat').toUpperCase()}
             </Text>
             {displayedChannels.length > 0 || pluginFeed.channels.length > 0 ? (
               <div
@@ -1343,7 +1350,9 @@ export function ChatView({
                     </Text>
                     <HeaderButton
                       testId={`home-plugin-remove-${channel.id}`}
-                      title={`Remove ${channel.displayName} from My channels`}
+                      title={t('chat.header.removePluginChannel', {
+                        name: channel.displayName,
+                      })}
                       onClick={() =>
                         runUiTask(setHomePluginChannel(backend.api, channel.id, false))
                       }
@@ -1374,7 +1383,7 @@ export function ChatView({
           <MessageRate activityKey={activityKey} />
           <HeaderButton
             testId="chat-history-button"
-            title="Search saved chat history"
+            title={t('chat.tooltip.searchHistory')}
             onClick={() => setHistoryOpen(true)}
           >
             <Icon name="clock" size={14} color={theme.text2} />
@@ -1382,7 +1391,7 @@ export function ChatView({
           {twitchChannel ? (
             <HeaderButton
               testId="twitch-activities-button"
-              title="Polls, predictions, rewards, pins & whispers"
+              title={t('chat.tooltip.activities')}
               onClick={() => setActivitiesOpen(true)}
             >
               <Icon name="globe" size={14} color={theme.text2} />
@@ -1390,7 +1399,7 @@ export function ChatView({
           ) : null}
           <HeaderButton
             testId="chat-filters-button"
-            title="Apply saved message filters"
+            title={t('chat.tooltip.filters')}
             onClick={() => setFiltersOpen((value) => !value)}
           >
             <Icon
@@ -1401,21 +1410,21 @@ export function ChatView({
           </HeaderButton>
           <HeaderButton
             testId="chat-search-button"
-            title="Search messages · Ctrl+F"
+            title={t('chat.tooltip.searchMessages')}
             onClick={() => openSearch()}
           >
             <Icon name="search" size={14} color={searchOpen ? theme.accent.primary : theme.text2} />
           </HeaderButton>
           <HeaderButton
             testId="chat-mentions-button"
-            title="Show mentions and replies to you"
+            title={t('chat.tooltip.mentions')}
             onClick={() => setMentionsOnly((value) => !value)}
           >
             <Icon name="bell" size={14} color={mentionsOnly ? theme.accent.primary : theme.text2} />
           </HeaderButton>
           <HeaderButton
             testId="chat-pause-button"
-            title={paused ? 'Resume live chat' : 'Pause chat to read'}
+            title={paused ? t('chat.tooltip.resume') : t('chat.tooltip.pause')}
             onClick={() => changePause(!paused)}
           >
             <Icon
@@ -1475,7 +1484,7 @@ export function ChatView({
                     {onChangeChannel ? (
                       <MenuItem
                         icon="refresh"
-                        label="Change channel"
+                        label={t('chat.menu.changeChannel')}
                         onClick={() => {
                           setMenuOpen(false)
                           onChangeChannel?.()
@@ -1486,7 +1495,7 @@ export function ChatView({
                       <>
                         <MenuItem
                           icon="externalLink"
-                          label="Open chat in a new window"
+                          label={t('chat.menu.openWindow')}
                           onClick={() => {
                             setMenuOpen(false)
                             void windows
@@ -1496,7 +1505,7 @@ export function ChatView({
                         />
                         <MenuItem
                           icon="externalLink"
-                          label="Open chat overlay"
+                          label={t('chat.menu.openOverlay')}
                           onClick={() => {
                             setMenuOpen(false)
                             void windows
@@ -1519,7 +1528,7 @@ export function ChatView({
                     {layoutTabId !== 'home' || (paneLayout && allPanels(paneLayout).length > 1) ? (
                       <MenuItem
                         icon="close"
-                        label="Close panel"
+                        label={t('chat.menu.closePanel')}
                         danger
                         onClick={() => {
                           setMenuOpen(false)
@@ -1565,21 +1574,25 @@ export function ChatView({
           }}
         >
           {room.slowSeconds ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>{`Slow ${room.slowSeconds}s`}</Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>
+              {t('chat.room.slow', { seconds: room.slowSeconds })}
+            </Text>
           ) : null}
           {room.followersOnlyMinutes !== undefined && room.followersOnlyMinutes !== null ? (
-            <Text
-              style={{ fontSize: 11, color: theme.text2 }}
-            >{`Followers ${room.followersOnlyMinutes}m`}</Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>
+              {t('chat.room.followers', { minutes: room.followersOnlyMinutes })}
+            </Text>
           ) : null}
           {room.subscribersOnly ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>Subscribers only</Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>
+              {t('chat.room.subscribersOnly')}
+            </Text>
           ) : null}
           {room.emoteOnly ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>Emote only</Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>{t('chat.room.emoteOnly')}</Text>
           ) : null}
           {room.uniqueChat ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>Unique chat</Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>{t('chat.room.uniqueChat')}</Text>
           ) : null}
         </div>
       ) : null}
@@ -1608,9 +1621,12 @@ export function ChatView({
                 onClick={() => setActivitiesOpen(true)}
                 style={{ padding: 8, cursor: 'pointer' }}
               >
-                <Text
-                  style={{ fontSize: 12, color: theme.text }}
-                >{`Pinned · ${pinnedMessage.authorName ?? ''}: ${pinnedMessage.text}`}</Text>
+                <Text style={{ fontSize: 12, color: theme.text }}>
+                  {t('chat.banner.pinned', {
+                    author: pinnedMessage.authorName ?? '',
+                    text: pinnedMessage.text,
+                  })}
+                </Text>
               </div>
             ) : null}
             {activePolls?.map((poll) => (
@@ -1619,9 +1635,15 @@ export function ChatView({
                 onClick={() => setActivitiesOpen(true)}
                 style={{ padding: 8, cursor: 'pointer' }}
               >
-                <Text
-                  style={{ fontSize: 12, color: theme.text }}
-                >{`Poll · ${poll.title} · ${poll.choices.reduce((total, choice) => total + choice.votes, 0)} votes`}</Text>
+                <Text style={{ fontSize: 12, color: theme.text }}>
+                  {tPlural(
+                    'chat.banner.poll',
+                    poll.choices.reduce((total, choice) => total + choice.votes, 0),
+                    {
+                      title: poll.title,
+                    },
+                  )}
+                </Text>
               </div>
             ))}
             {visiblePredictions?.map((prediction) => (
@@ -1630,15 +1652,18 @@ export function ChatView({
                 onClick={() => setActivitiesOpen(true)}
                 style={{ padding: 8, cursor: 'pointer' }}
               >
-                <Text
-                  style={{ fontSize: 12, color: theme.text }}
-                >{`Prediction · ${prediction.title} · ${prediction.status}`}</Text>
+                <Text style={{ fontSize: 12, color: theme.text }}>
+                  {t('chat.banner.prediction', {
+                    title: prediction.title,
+                    status: prediction.status,
+                  })}
+                </Text>
               </div>
             ))}
           </div>
           <div style={{ paddingTop: 4, paddingRight: 4, flexShrink: 0 }}>
             <HeaderButton
-              title="Hide activity banners"
+              title={t('chat.banner.hide')}
               testId="hide-activity-banners"
               onClick={() => setBannersHidden(true)}
             >
@@ -1652,7 +1677,7 @@ export function ChatView({
           onClick={() => setBannersHidden(false)}
           style={{ fontSize: 11, color: theme.link, padding: 6, cursor: 'pointer' }}
         >
-          Restore activity banners
+          {t('chat.banner.restore')}
         </Text>
       ) : null}
       {filtersOpen ? (
@@ -1672,9 +1697,9 @@ export function ChatView({
         >
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
-              Message filters · all selected rules must match
+              {t('chat.filters.title')}
             </Text>
-            <HeaderButton title="Close filters" onClick={() => setFiltersOpen(false)}>
+            <HeaderButton title={t('chat.filters.close')} onClick={() => setFiltersOpen(false)}>
               <Icon name="close" size={13} color={theme.text2} />
             </HeaderButton>
           </div>
@@ -1694,9 +1719,7 @@ export function ChatView({
             onClick={() => activeTabStore.set('settings')}
             style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
           >
-            {rules.filters.length
-              ? 'Edit filters in Settings'
-              : 'Create your first filter in Settings'}
+            {rules.filters.length ? t('chat.filters.edit') : t('chat.filters.create')}
           </Text>
         </div>
       ) : null}
@@ -1719,7 +1742,7 @@ export function ChatView({
               testId="chat-search"
               autoFocus
               value={searchQuery}
-              placeholder="Search · from:user has:link !is:reply"
+              placeholder={t('chat.search.placeholder')}
               {...searchFocus}
               onChange={(event) => setSearchQuery(event.value ?? '')}
               onKeyDown={(event) => {
@@ -1747,15 +1770,14 @@ export function ChatView({
             </Text>
             <HeaderButton
               testId="chat-search-close"
-              title="Close search · Esc"
+              title={t('chat.search.close')}
               onClick={closeSearch}
             >
               <Icon name="close" size={14} color={theme.text2} />
             </HeaderButton>
           </div>
           <Text style={{ fontSize: 11, color: search.error ? theme.warningText : theme.text2 }}>
-            {search.error ??
-              'from: · in: · platform: · badge: · has:link/emote · is:reply/highlighted/deleted · ! excludes'}
+            {search.error ?? t('chat.search.help')}
           </Text>
         </div>
       ) : null}
@@ -1773,10 +1795,10 @@ export function ChatView({
             flexShrink: 0,
           }}
         >
-          <Text
-            style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}
-          >{`Mentions & replies · ${mentionsCount}`}</Text>
-          <HeaderButton title="Show all messages" onClick={() => setMentionsOnly(false)}>
+          <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
+            {t('chat.mentions.title', { count: mentionsCount })}
+          </Text>
+          <HeaderButton title={t('chat.mentions.showAll')} onClick={() => setMentionsOnly(false)}>
             <Icon name="close" size={13} color={theme.text2} />
           </HeaderButton>
         </div>
@@ -1797,13 +1819,13 @@ export function ChatView({
           }}
         >
           <Text style={{ fontSize: 12, color: theme.text2, flexGrow: 1 }}>
-            Search result · chat paused to keep its context
+            {t('chat.reveal.title')}
           </Text>
           <Text
             onClick={() => changePause(false)}
             style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
           >
-            Return to live chat
+            {t('chat.reveal.return')}
           </Text>
         </div>
       ) : null}
@@ -1883,9 +1905,7 @@ export function ChatView({
                   }
                   message={revealed ? message : classification.message}
                   hiddenLabel={
-                    classification.hidden && !revealed
-                      ? 'Message from an ignored user or phrase · click to reveal'
-                      : undefined
+                    classification.hidden && !revealed ? t('chat.message.hidden') : undefined
                   }
                   channelSlug={getChannelSlugForPlatform(message.platform)}
                   alias={aliasMap.get(`${message.platform}:${message.author.id}`)}
@@ -1936,10 +1956,10 @@ export function ChatView({
           >
             <Text style={{ fontSize: 13, color: theme.text2 }}>
               {filtered
-                ? 'No matching messages. Try a different search or filter.'
+                ? t('chat.empty.noMatch')
                 : paused
-                  ? 'Chat is paused. Resume to see new messages.'
-                  : 'Messages cleared locally. Waiting for new messages…'}
+                  ? t('chat.empty.paused')
+                  : t('chat.empty.cleared')}
             </Text>
           </div>
         ) : (
@@ -1990,8 +2010,10 @@ export function ChatView({
               <Icon name="chevronDown" size={14} color={theme.text} />
               <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
                 {paused
-                  ? `Resume live chat${pendingCount ? ` · ${pendingCount} new` : ''}`
-                  : 'Scroll to latest'}
+                  ? pendingCount
+                    ? t('chat.pill.resumeNew', { count: pendingCount })
+                    : t('chat.pill.resume')
+                  : t('chat.pill.scrollLatest')}
               </Text>
             </div>
           </div>
@@ -2055,7 +2077,9 @@ export function ChatView({
               gap: 12,
             }}
           >
-            <Text style={{ color: theme.text, fontWeight: 600 }}>Chat diagnostics</Text>
+            <Text style={{ color: theme.text, fontWeight: 600 }}>
+              {t('chat.diagnostics.title')}
+            </Text>
             <Text style={{ color: theme.text2, fontSize: 12 }}>
               {JSON.stringify(
                 {
@@ -2172,6 +2196,7 @@ function HeaderButton({
 /** The one-second clock only repaints the tiny rate indicator. */
 const MessageRate = memo(function MessageRate({ activityKey }: { activityKey: string }) {
   const theme = useTheme()
+  const { t } = useT()
   const activity = useStoreSelector(chatActivityStore, (entries) => entries.get(activityKey))
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
@@ -2180,7 +2205,7 @@ const MessageRate = memo(function MessageRate({ activityKey }: { activityKey: st
   }, [])
   return (
     <Text testId="chat-message-rate" style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}>
-      {`${chatMessageRate(activity, now).toFixed(1)} msg/s`}
+      {t('chat.rate', { rate: chatMessageRate(activity, now).toFixed(1) })}
     </Text>
   )
 })
@@ -2235,6 +2260,7 @@ function EmptyState({
   onGoToPlatforms?: () => void
 }) {
   const theme = useTheme()
+  const { t } = useT()
 
   return (
     <div
@@ -2256,12 +2282,12 @@ function EmptyState({
         <>
           <Text style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>
             {watchedChannelStatus?.status === 'connecting'
-              ? 'Connecting…'
+              ? t('chat.empty.connecting')
               : watchedChannelStatus?.status === 'connected'
-                ? 'No messages yet'
+                ? t('chat.empty.noMessages')
                 : watchedChannelStatus?.status === 'error'
-                  ? 'Connection failed'
-                  : 'Waiting for connection…'}
+                  ? t('chat.empty.connectionFailed')
+                  : t('chat.empty.waitingConnection')}
           </Text>
           <Text
             style={{
@@ -2273,14 +2299,14 @@ function EmptyState({
             }}
           >
             {watchedChannelStatus?.status === 'error'
-              ? watchedChannelStatus.error || 'The chat transport returned an unknown error.'
-              : `Messages from ${watchedChannel.displayName} will appear here.`}
+              ? watchedChannelStatus.error || t('chat.empty.unknownError')
+              : t('chat.empty.channelMessages', { name: watchedChannel.displayName })}
           </Text>
         </>
       ) : accounts.length === 0 && !hasAnyConnection ? (
         <>
           <Text style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>
-            No accounts connected
+            {t('chat.empty.noAccounts')}
           </Text>
           <Text
             style={{
@@ -2291,7 +2317,7 @@ function EmptyState({
               lineHeight: 20,
             }}
           >
-            Connect your streaming accounts to start reading chat.
+            {t('chat.empty.connectAccounts')}
           </Text>
           <div
             testId="go-to-platforms"
@@ -2311,14 +2337,14 @@ function EmptyState({
             }}
           >
             <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.primary }}>
-              Go to Platforms →
+              {t('chat.empty.goToPlatforms')}
             </Text>
           </div>
         </>
       ) : !hasAnyConnection ? (
         <>
           <Text style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>
-            Waiting for connection…
+            {t('chat.empty.waitingConnection')}
           </Text>
           <div
             style={{
@@ -2402,12 +2428,14 @@ function EmptyState({
               lineHeight: 20,
             }}
           >
-            Join a channel in Platforms to see chat.
+            {t('chat.empty.joinChannel')}
           </Text>
         </>
       ) : (
         <>
-          <Text style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>No messages yet</Text>
+          <Text style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>
+            {t('chat.empty.noMessages')}
+          </Text>
           <Text
             style={{
               fontSize: 13,
@@ -2417,7 +2445,7 @@ function EmptyState({
               lineHeight: 20,
             }}
           >
-            Chat messages will appear here in real time.
+            {t('chat.empty.realtime')}
           </Text>
         </>
       )}

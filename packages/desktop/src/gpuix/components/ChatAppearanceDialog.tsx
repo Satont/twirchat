@@ -11,6 +11,7 @@ import type { AppSettings } from '@twirchat/shared/types'
 import { useEffect, useState } from 'react'
 
 import { useBackend } from '../backend/context'
+import { useT } from '../i18n'
 import { settingsStore } from '../state/app'
 import { useTheme } from '../theme-context'
 import { ChatAppearancePreview } from './ChatAppearancePreview'
@@ -23,6 +24,7 @@ import { Text } from './ui/Text'
 export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
   const theme = useTheme()
   const backend = useBackend()
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
   const renderer = useGpuixRequired()
@@ -44,13 +46,13 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
   }
 
   const toggles: { key: keyof AppSettings; label: string }[] = [
-    { key: 'showPlatformColorStripe', label: 'Color stripe' },
-    { key: 'showPlatformIcon', label: 'Platform icon' },
-    { key: 'showAvatars', label: 'Avatars' },
-    { key: 'showBadges', label: 'Badges' },
-    { key: 'showTimestamp', label: 'Timestamp' },
-    { key: 'showChannelLabel', label: 'Channel label' },
-    { key: 'emoteSessionCache', label: 'Session emote cache' },
+    { key: 'showPlatformColorStripe', label: t('chat.appearance.toggle.stripe') },
+    { key: 'showPlatformIcon', label: t('chat.appearance.toggle.platformIcon') },
+    { key: 'showAvatars', label: t('chat.appearance.toggle.avatars') },
+    { key: 'showBadges', label: t('chat.appearance.toggle.badges') },
+    { key: 'showTimestamp', label: t('chat.appearance.toggle.timestamp') },
+    { key: 'showChannelLabel', label: t('chat.appearance.toggle.channelLabel') },
+    { key: 'emoteSessionCache', label: t('chat.appearance.toggle.emoteCache') },
   ]
 
   return (
@@ -98,16 +100,16 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Text style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>
-                  Chat appearance
+                  {t('chat.appearance.title')}
                 </Text>
                 <Text style={{ fontSize: 11, color: theme.text2 }}>
-                  Preview updates as you change the options.
+                  {t('chat.appearance.subtitle')}
                 </Text>
               </div>
               <div
                 testId="appearance-close"
                 role="button"
-                aria-label="Close chat appearance"
+                aria-label={t('chat.appearance.closeLabel')}
                 tabIndex={0}
                 onClick={() => setOpen(false)}
                 onKeyDown={(event) => {
@@ -166,13 +168,15 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
                   }}
                 >
                   <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text2 }}>
-                    {'Preview'.toUpperCase()}
+                    {t('chat.appearance.preview').toUpperCase()}
                   </Text>
-                  <Text style={{ fontSize: 10, color: theme.text2 }}>Live</Text>
+                  <Text style={{ fontSize: 10, color: theme.text2 }}>
+                    {t('chat.appearance.live')}
+                  </Text>
                 </div>
                 <ChatAppearancePreview settings={settings} height={narrow ? 240 : 360} />
                 <Text style={{ fontSize: 10, color: theme.text2 }}>
-                  Sample messages use your current theme, font and chat layout.
+                  {t('chat.appearance.sampleHint')}
                 </Text>
               </div>
 
@@ -196,7 +200,7 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
                     }}
                   >
                     <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text2 }}>
-                      {'Font size'.toUpperCase()}
+                      {t('chat.appearance.fontSize').toUpperCase()}
                     </Text>
                     <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
                       {`${settings.fontSize}px`}
@@ -227,7 +231,7 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
                   <Text
                     style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}
                   >
-                    {'Display'.toUpperCase()}
+                    {t('chat.appearance.display').toUpperCase()}
                   </Text>
                   {toggles.map((toggle, index) => (
                     <div
@@ -258,17 +262,17 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
                   <Text
                     style={{ fontSize: 12, fontWeight: 600, color: theme.text2, marginBottom: 10 }}
                   >
-                    {'Layout'.toUpperCase()}
+                    {t('chat.appearance.layout').toUpperCase()}
                   </Text>
                   <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
                     <ThemeCard
-                      label="Modern"
+                      label={t('chat.appearance.modern')}
                       active={settings.chatTheme === 'modern'}
                       onClick={() => patch({ chatTheme: 'modern' })}
                       preview="modern"
                     />
                     <ThemeCard
-                      label="Compact"
+                      label={t('chat.appearance.compact')}
                       active={settings.chatTheme === 'compact'}
                       onClick={() => patch({ chatTheme: 'compact' })}
                       preview="compact"

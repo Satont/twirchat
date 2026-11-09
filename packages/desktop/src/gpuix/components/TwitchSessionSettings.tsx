@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useBackend, useBackendEvent } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton } from './ui/Form'
@@ -11,6 +12,7 @@ import { Text } from './ui/Text'
 export function TwitchSessionSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [status, setStatus] = useState<TwitchWebSessionStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -48,7 +50,7 @@ export function TwitchSessionSettings() {
     try {
       const token = (await backend.api.readClipboard()).trim()
       if (!lifetime.mounted || revision !== lifetime.actionRevision) return
-      if (!token) throw new Error('The clipboard is empty. Copy your Twitch session token first.')
+      if (!token) throw new Error(t('twitchSessionSettings.clipboardEmpty'))
       await backend.api.setTwitchWebSession({ token })
       if (lifetime.mounted && revision === lifetime.actionRevision) await loadStatus()
     } catch (cause) {
@@ -73,23 +75,21 @@ export function TwitchSessionSettings() {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Voting, predictions, reward redemption and following use a separate Twitch web session. Copy
-        its token, then connect below. Encrypted sessions are saved separately for each Twitch
-        account and never displayed.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('twitchSessionSettings.intro')}</Text>
       <Text style={{ fontSize: 12, color: theme.text }}>
         {status?.configured
-          ? `Connected${status.username ? ` as ${status.username}` : ''}`
-          : 'No additional Twitch session connected.'}
+          ? status.username
+            ? t('twitchSessionSettings.connectedAs', { username: status.username })
+            : t('twitchSessionSettings.connected')
+          : t('twitchSessionSettings.notConnected')}
       </Text>
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         <ActionButton primary disabled={busy} onClick={() => void connect()}>
-          {busy ? 'Connecting…' : 'Connect token from clipboard'}
+          {busy ? t('twitchSessionSettings.connecting') : t('twitchSessionSettings.connect')}
         </ActionButton>
         {status?.configured ? (
           <ActionButton danger disabled={busy} onClick={() => void disconnect()}>
-            Disconnect session
+            {t('twitchSessionSettings.disconnect')}
           </ActionButton>
         ) : null}
       </div>
@@ -97,7 +97,7 @@ export function TwitchSessionSettings() {
         sectionId="twitch-session"
         error={error}
         errorTestId="twitch-session-error"
-        note="Connect and disconnect apply immediately."
+        note={t('twitchSessionSettings.note')}
       />
     </div>
   )

@@ -4,6 +4,7 @@ import { StaticAuthProvider } from '@twurple/auth'
 import { ChatClient, LogLevel, UserState } from '@twurple/chat'
 
 import { refreshTwitchToken } from '../../auth/twitch'
+import { t } from '../../gpuix/i18n'
 import { runInBackground } from '../../services/background-task'
 import { AccountStore } from '../../store/account-store'
 import { hasPrivilegedChatRole, twitchSendLimiter } from './send-limiter'
@@ -76,7 +77,7 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
     }
     const connected = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new Error('Twitch chat did not accept the connection in time.')),
+        () => reject(new Error(t('misc.twitchSender.connectionTimeout'))),
         connectTimeoutMs,
       )
       client.onConnect(() => {
@@ -85,7 +86,7 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       })
       client.onAuthenticationFailure(() => {
         clearTimeout(timer)
-        reject(new TwitchAuthenticationError('Twitch rejected the account credentials.'))
+        reject(new TwitchAuthenticationError(t('misc.twitchSender.credentialsRejected')))
       })
     })
     client.onUserState((channel, tags) => {
@@ -158,19 +159,22 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       const current = await sessionFor(account)
       await join(current, name)
       const state = current.channels.get(name)
-      if (!state) throw new Error('The Twitch chat was closed before sending.')
+      if (!state) throw new Error(t('misc.twitchSender.closedBeforeSending'))
       await dependencies.acquire(account.id, name, hasPrivilegedChatRole(state.tags))
       if (current.channels.get(name) !== state)
-        throw new Error('The Twitch chat was closed before sending.')
+        throw new Error(t('misc.twitchSender.closedBeforeSending'))
       const outcome = await current.outcomes.send(name, () =>
         current.client.say(name, text, replyTo),
       )
       if (outcome.kind === 'held') return { channelId: name, held: true }
       if (outcome.kind === 'disconnected')
-        throw new Error('The Twitch chat disconnected before delivery could be confirmed.')
+        throw new Error(t('misc.twitchSender.disconnectedBeforeDelivery'))
       if (outcome.kind === 'rejected')
         throw new Error(
-          `Twitch did not send the message from @${account.username}: ${twitchSendRejection(outcome.reason)}.`,
+          t('misc.twitchSender.notSent', {
+            name: account.username,
+            reason: twitchSendRejection(outcome.reason),
+          }),
         )
     },
 
@@ -203,7 +207,7 @@ export type TwitchSenderPool = ReturnType<typeof createTwitchSenderPool>
 
 async function storedToken(accountId: string): Promise<string> {
   const tokens = AccountStore.getTokens(accountId)
-  if (!tokens?.accessToken) throw new Error('Sign in to this Twitch account again.')
+  if (!tokens?.accessToken) throw new Error(t('misc.twitchSender.signInAgain'))
   if (tokens.expiresAt && tokens.expiresAt < Math.floor(Date.now() / 1000) + 300)
     return refreshTwitchToken(accountId)
   return tokens.accessToken

@@ -2,6 +2,7 @@ import { useBackend } from '@gpuix/backend/context'
 import { SettingsFooter } from '@gpuix/components/settings/SettingsLayout'
 import { FormField, FormInput } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
+import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 import {
   DEFAULT_MODERATION_SETTINGS,
@@ -13,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 export function ModerationSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [settings, setSettings] = useState<Settings>(structuredClone(DEFAULT_MODERATION_SETTINGS))
   const [persisted, setPersisted] = useState<Settings | null>(null)
   const [reasonsText, setReasonsText] = useState(DEFAULT_MODERATION_SETTINGS.reasons.join('\n'))
@@ -84,10 +86,7 @@ export function ModerationSettings() {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Text style={{ color: theme.text2, fontSize: 12 }}>
-        Eight timeout buttons. Durations use seconds; Twitch allows 1–1209600. Kick requires at
-        least 60 seconds.
-      </Text>
+      <Text style={{ color: theme.text2, fontSize: 12 }}>{t('moderationSettings.intro')}</Text>
       {settings.timeouts.map((item, index) => (
         <div key={index} style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
           <div style={{ flexGrow: 1 }}>
@@ -101,7 +100,7 @@ export function ModerationSettings() {
                   ),
                 }))
               }
-              placeholder="Label"
+              placeholder={t('moderationSettings.labelPlaceholder')}
             />
           </div>
           <div style={{ width: 130 }}>
@@ -115,12 +114,12 @@ export function ModerationSettings() {
                   ),
                 }))
               }
-              placeholder="Seconds"
+              placeholder={t('moderationSettings.secondsPlaceholder')}
             />
           </div>
         </div>
       ))}
-      <FormField label="Quick reasons (one per line)">
+      <FormField label={t('moderationSettings.quickReasons')}>
         <FormInput
           multiline
           value={reasonsText}
@@ -131,7 +130,7 @@ export function ModerationSettings() {
           }}
         />
       </FormField>
-      <FormField label="Default reason">
+      <FormField label={t('moderationSettings.defaultReason')}>
         <FormInput
           value={settings.defaultReason}
           onChange={(defaultReason) => edit((current) => ({ ...current, defaultReason }))}

@@ -6,14 +6,14 @@ import {
   HISTORY_DISPLAY_LIMIT,
   formatHistoryTimestamp,
   historyRowVisible,
-  historySourceNotice,
   mergeHistoryMessages,
   type HistoryVisibleRange,
 } from '../../views/main/utils/history-display'
-import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
+import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
 import type { ChatHistoryQuery } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
 import { chatMessageKey, formatChatTranscript } from '../chat-tools'
+import { useT } from '../i18n'
 import { useTheme } from '../theme-context'
 import {
   HistoryButton as Button,
@@ -44,6 +44,7 @@ export function ChatHistoryPanel({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const [platform, setPlatform] = useState<Platform | 'all'>(channel?.platform ?? 'all')
   const [channelId, setChannelId] = useState(channel?.channelId ?? '')
   const [author, setAuthor] = useState('')
@@ -75,16 +76,28 @@ export function ChatHistoryPanel({
     if (until.trim()) result.until = historyDate(until, true)
     return result
   }, [platform, channelId, author, text, since, until])
-  const queryError = useMemo(() => {
+  // Recompute on every render so the message follows the UI language.
+  const queryError = (() => {
     if (
       (query.since !== undefined && !Number.isFinite(query.since)) ||
       (query.until !== undefined && !Number.isFinite(query.until))
     )
-      return 'Enter dates as YYYY-MM-DD or a full date and time.'
+      return t('chat.history.invalidDate')
     if (query.since !== undefined && query.until !== undefined && query.since > query.until)
-      return 'The start date must be before the end date.'
+      return t('chat.history.dateOrder')
     return null
-  }, [query])
+  })()
+  const historyNotice = (pageHistory: UserChatHistoryPage['history']): string | null => {
+    if (!pageHistory) return null
+    if (pageHistory.error)
+      return t('chat.history.source.error', {
+        error: truncateGraphemes(sanitizeDisplayText(pageHistory.error), 240),
+      })
+    if (pageHistory.sources.length && pageHistory.sources.every((source) => source.status !== 'ok'))
+      return t('chat.history.source.unavailable')
+    if (pageHistory.partial) return t('chat.history.source.partial')
+    return t('chat.history.source.covered')
+  }
   const load = useCallback(
     async (
       append: boolean,
@@ -142,7 +155,7 @@ export function ChatHistoryPanel({
     const token = generation.current
     try {
       await backend.api.copyText({ text: formatChatTranscript(messages) })
-      if (generation.current === token) setNotice('Loaded messages copied.')
+      if (generation.current === token) setNotice(t('chat.history.copied'))
     } catch (failure) {
       if (generation.current === token)
         setError(failure instanceof Error ? failure.message : String(failure))
@@ -157,8 +170,8 @@ export function ChatHistoryPanel({
     try {
       const result = await backend.api.exportChatHistory({ query, path: exportPath.trim() })
       if (generation.current === token) {
-        setNotice(`Exported ${result.count} messages to ${result.path}`)
-        setExportHistoryNotice(historySourceNotice(result.history))
+        setNotice(tPlural('chat.history.exported', result.count, { path: result.path }))
+        setExportHistoryNotice(historyNotice(result.history))
       }
     } catch (failure) {
       if (generation.current === token)
@@ -167,7 +180,7 @@ export function ChatHistoryPanel({
       if (generation.current === token) setExporting(false)
     }
   }
-  const sourceNotice = historySourceNotice(history)
+  const sourceNotice = historyNotice(history)
   return (
     <Modal width={820} onClose={onClose}>
       <div
@@ -200,15 +213,17 @@ export function ChatHistoryPanel({
         >
           <Text style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>
             {channel?.displayName
-              ? `Chat history · ${sanitizeDisplayText(channel.displayName)}`
-              : 'Chat history'}
+              ? t('chat.history.titleChannel', {
+                  name: sanitizeDisplayText(channel.displayName),
+                })
+              : t('chat.history.title')}
           </Text>
-          <Button label="Close" onClick={onClose} />
+          <Button label={t('common.close')} onClick={onClose} />
         </div>
         <Choices
           value={platform}
           options={[
-            { value: 'all', label: 'All platforms' },
+            { value: 'all', label: t('chat.history.allPlatforms') },
             { value: 'twitch', label: 'Twitch' },
             { value: 'kick', label: 'Kick' },
             { value: 'youtube', label: 'YouTube' },
@@ -216,36 +231,36 @@ export function ChatHistoryPanel({
           onChange={setPlatform}
         />
         <div style={{ display: 'flex', flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-          <Field label="Channel name or ID">
+          <Field label={t('chat.history.channelLabel')}>
             <Input
               testId="history-channel"
               value={channelId}
               onChange={setChannelId}
-              placeholder="All channels"
+              placeholder={t('chat.history.allChannels')}
             />
           </Field>
-          <Field label="Author name or ID">
+          <Field label={t('chat.history.authorLabel')}>
             <Input
               testId="history-author"
               value={author}
               onChange={setAuthor}
-              placeholder="All authors"
+              placeholder={t('chat.history.allAuthors')}
             />
           </Field>
         </div>
-        <Field label="Message contains">
+        <Field label={t('chat.history.messageContains')}>
           <Input
             testId="history-search"
             value={text}
             onChange={setText}
-            placeholder="Search message history"
+            placeholder={t('chat.history.searchPlaceholder')}
           />
         </Field>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-          <Field label="From · YYYY-MM-DD or date and time">
+          <Field label={t('chat.history.fromLabel')}>
             <Input testId="history-since" value={since} onChange={setSince} />
           </Field>
-          <Field label="Until · YYYY-MM-DD or date and time">
+          <Field label={t('chat.history.untilLabel')}>
             <Input testId="history-until" value={until} onChange={setUntil} />
           </Field>
         </div>
@@ -259,28 +274,25 @@ export function ChatHistoryPanel({
           }}
         >
           <Button
-            label={loading ? 'Loading…' : 'Refresh'}
+            label={loading ? t('common.loading') : t('common.refresh')}
             disabled={loading || !!queryError}
             onClick={() => void load(false)}
           />
           <Button
-            label="Load older"
+            label={t('chat.history.loadOlder')}
             disabled={loading || !hasMore || messages.length >= HISTORY_DISPLAY_LIMIT}
             onClick={() => void load(true, generation.current, cursor ?? undefined)}
           />
           <Button
-            label="Copy loaded messages"
+            label={t('chat.history.copyLoaded')}
             disabled={!messages.length}
             onClick={() => void copy()}
           />
-          <Text
-            style={{ fontSize: 11, color: theme.text2 }}
-          >{`${messages.length} messages loaded`}</Text>
+          <Text style={{ fontSize: 11, color: theme.text2 }}>
+            {tPlural('chat.history.loaded', messages.length)}
+          </Text>
         </div>
-        <Text style={{ fontSize: 10, color: theme.text2 }}>
-          The list keeps up to 2,000 messages visible. Export includes matching history available to
-          this app. Date-only filters include the whole local day.
-        </Text>
+        <Text style={{ fontSize: 10, color: theme.text2 }}>{t('chat.history.description')}</Text>
         {sourceNotice ? (
           <Text testId="history-source-status" style={{ fontSize: 11, color: theme.text2 }}>
             {sourceNotice}
@@ -319,11 +331,11 @@ export function ChatHistoryPanel({
             </virtual-list>
           ) : (
             <Text style={{ padding: 12, fontSize: 12, color: theme.text2 }}>
-              {loading ? 'Loading history…' : 'No messages match these filters.'}
+              {loading ? t('chat.history.loading') : t('chat.history.noMatches')}
             </Text>
           )}
         </div>
-        <Field label="Export all matching messages to a new file · absolute path">
+        <Field label={t('chat.history.exportLabel')}>
           <Input
             testId="history-export-path"
             value={exportPath}
@@ -333,7 +345,7 @@ export function ChatHistoryPanel({
         </Field>
         <Button
           testId="history-export"
-          label={exporting ? 'Exporting…' : 'Export matching history'}
+          label={exporting ? t('chat.history.exporting') : t('chat.history.exportButton')}
           disabled={exporting || !!queryError || !exportPath.trim()}
           onClick={() => void exportTranscript()}
         />

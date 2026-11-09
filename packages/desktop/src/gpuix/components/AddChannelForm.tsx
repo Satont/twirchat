@@ -11,6 +11,7 @@ import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { isPluginPlatform, type WatchedPlatform } from '../../watched-channels/plugin-channel-types'
 import { useBackend, useBackendEvent } from '../backend/context'
 import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
+import { useT } from '../i18n'
 import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
@@ -40,6 +41,7 @@ export function AddChannelForm({
   onCancel?: () => void
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const { api, plugins } = useBackend()
   const readTransports = () => (plugins ? api.getPluginTransports() : noPluginTransports)
   const [transports, setTransports] = useState(readTransports)
@@ -53,14 +55,14 @@ export function AddChannelForm({
 
   const canConfirm = !unavailable && Boolean(slug.trim())
   const placeholder = unavailable
-    ? 'Select an available platform'
+    ? t('app.addChannel.selectPlatform')
     : transport
-      ? `${sanitizeDisplayText(transport.name)} channel identifier`
+      ? t('app.addChannel.pluginPlaceholder', { name: sanitizeDisplayText(transport.name) })
       : platform === 'twitch'
-        ? 'Twitch channel name'
+        ? t('app.addChannel.twitchPlaceholder')
         : platform === 'kick'
-          ? 'Kick channel name'
-          : 'YouTube channel handle or ID'
+          ? t('app.addChannel.kickPlaceholder')
+          : t('app.addChannel.youtubePlaceholder')
 
   const confirm = () => {
     if (!canConfirm) return
@@ -124,7 +126,9 @@ export function AddChannelForm({
       </div>
       {transports.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <Text style={{ fontSize: 11, color: theme.text2 }}>Plugin platforms</Text>
+          <Text style={{ fontSize: 11, color: theme.text2 }}>
+            {t('app.addChannel.pluginPlatforms')}
+          </Text>
           <div
             style={{
               display: 'flex',
@@ -141,7 +145,9 @@ export function AddChannelForm({
                   key={item.platform}
                   testId={`add-platform-${item.platform}`}
                   tabIndex={0}
-                  aria-label={`Use ${sanitizeDisplayText(item.name)}`}
+                  aria-label={t('app.addChannel.usePlugin', {
+                    name: sanitizeDisplayText(item.name),
+                  })}
                   onClick={() => setPlatform(item.platform)}
                   onKeyDown={(event) => {
                     if (event.key === 'enter' || event.key === 'space') {
@@ -204,9 +210,7 @@ export function AddChannelForm({
       </div>
 
       {platform === 'youtube' ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>
-          Enter an @handle or a case-sensitive UC channel ID.
-        </Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('app.addChannel.youtubeHint')}</Text>
       ) : null}
       <div
         style={{
@@ -231,7 +235,9 @@ export function AddChannelForm({
               hover: { backgroundColor: theme.fillHover },
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text2 }}>Cancel</Text>
+            <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text2 }}>
+              {t('common.cancel')}
+            </Text>
           </div>
         ) : null}
         <div
@@ -249,7 +255,9 @@ export function AddChannelForm({
             hover: { backgroundColor: canConfirm ? theme.accent.deepHover : theme.accent.deep },
           }}
         >
-          <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onDeep }}>Add</Text>
+          <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onDeep }}>
+            {t('common.add')}
+          </Text>
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { useT } from '../../i18n'
 import { useTheme } from '../../theme-context'
 import { Text } from './Text'
 
@@ -22,6 +23,7 @@ export function ToggleGroup<T extends string>({
   onChange,
 }: ToggleGroupProps<T>) {
   const theme = useTheme()
+  const { t } = useT()
   return (
     <div
       role="group"
@@ -47,7 +49,7 @@ export function ToggleGroup<T extends string>({
             testId={option.testId}
             role="button"
             aria-label={option.label}
-            aria-description={active ? 'Selected' : undefined}
+            aria-description={active ? t('misc.toggle.selected') : undefined}
             tabIndex={0}
             onKeyDown={(event) => {
               if (event.key === 'enter' || event.key === 'space') {

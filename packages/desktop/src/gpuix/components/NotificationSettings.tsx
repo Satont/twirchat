@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT, type MessageKey } from '../i18n'
 import { useStore } from '../state/create-store'
 import { notificationErrorStore, notificationPreferences } from '../state/highlight-notifications'
 import { useTheme } from '../theme-context'
@@ -18,18 +19,19 @@ type NotificationToggle =
   | 'backgroundOnly'
   | 'excludeBotBadges'
 
-const toggleLabels: Record<NotificationToggle, string> = {
-  enabled: 'Enable notifications',
-  mentionsEnabled: 'Notify about mentions and replies',
-  soundEnabled: 'Play notification sounds',
-  desktopEnabled: 'Show desktop alerts',
-  backgroundOnly: 'Only when the app is not visible',
-  excludeBotBadges: 'Exclude accounts with a bot badge',
+const toggleLabels: Record<NotificationToggle, MessageKey> = {
+  enabled: 'notificationSettings.enabled',
+  mentionsEnabled: 'notificationSettings.mentionsEnabled',
+  soundEnabled: 'notificationSettings.soundEnabled',
+  desktopEnabled: 'notificationSettings.desktopEnabled',
+  backgroundOnly: 'notificationSettings.backgroundOnly',
+  excludeBotBadges: 'notificationSettings.excludeBotBadges',
 }
 
 export function NotificationSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const state = useStore(notificationPreferences.store)
   const error = useStore(notificationErrorStore)
   const [draft, setDraft] = useState(state.value)
@@ -47,7 +49,7 @@ export function NotificationSettings() {
   }, [dirty, state.value])
   const toggle = (key: NotificationToggle) => (
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>{toggleLabels[key]}</Text>
+      <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>{t(toggleLabels[key])}</Text>
       <Switch
         checked={draft[key]}
         onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))}
@@ -73,8 +75,8 @@ export function NotificationSettings() {
       {toggle('backgroundOnly')}
       {toggle('excludeBotBadges')}
       <FormField
-        label="Excluded users"
-        hint="One username per line; optionally prefix with twitch:, kick: or youtube:. Known chat bots are excluded by default."
+        label={t('notificationSettings.excludedUsers')}
+        hint={t('notificationSettings.excludedUsersHint')}
       >
         <FormInput
           multiline
@@ -84,15 +86,18 @@ export function NotificationSettings() {
           }
         />
       </FormField>
-      <FormField label="Custom sound file" hint="Leave blank for the system message sound">
+      <FormField
+        label={t('notificationSettings.soundFile')}
+        hint={t('notificationSettings.soundFileHint')}
+      >
         <FormInput
           value={draft.soundPath}
           onChange={(soundPath) => setDraft((current) => ({ ...current, soundPath }))}
         />
       </FormField>
       <FormField
-        label="Muted channels"
-        hint="One channel per line; optionally prefix with twitch:, kick: or youtube:"
+        label={t('notificationSettings.mutedChannels')}
+        hint={t('notificationSettings.mutedChannelsHint')}
       >
         <FormInput
           multiline

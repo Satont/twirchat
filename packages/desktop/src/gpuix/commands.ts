@@ -2,6 +2,7 @@ import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { isAutoTranslationCommand } from '../services/translation'
+import { t } from './i18n'
 
 export interface CustomCommandDefinition {
   id: string
@@ -130,7 +131,7 @@ function expandTemplate(template: string, args: string[], context: CommandContex
       output += placeholderValue(key, args, context)
       index = end
     } else output += char
-    if (output.length > MAX_EXPANDED_LENGTH) throw new Error('Expanded command is too long.')
+    if (output.length > MAX_EXPANDED_LENGTH) throw new Error(t('commands.error.expandedTooLong'))
   }
   return output
 }
@@ -139,34 +140,34 @@ const customCommandRecord = z.record(z.string(), z.unknown())
 
 export function validateCustomCommands(value: unknown): CustomCommandDefinition[] {
   if (!Array.isArray(value) || value.length > 100)
-    throw new Error('Use a list of at most 100 commands.')
+    throw new Error(t('commands.error.tooManyCommands'))
   const seenIds = new Set<string>()
   const seenScopes = new Set<string>()
   return value.map((entry: unknown, index) => {
     const decoded = customCommandRecord.safeParse(entry)
-    if (!decoded.success) throw new Error(`Command ${index + 1} is invalid.`)
+    if (!decoded.success) throw new Error(t('commands.error.invalidCommand', { index: index + 1 }))
     const row = decoded.data
     if (typeof row.id !== 'string' || !row.id || row.id.length > 100 || seenIds.has(row.id))
-      throw new Error(`Command ${index + 1} needs a unique ID.`)
+      throw new Error(t('commands.error.uniqueId', { index: index + 1 }))
     seenIds.add(row.id)
-    if (typeof row.name !== 'string') throw new Error(`Command ${index + 1} needs a name.`)
+    if (typeof row.name !== 'string')
+      throw new Error(t('commands.error.needsName', { index: index + 1 }))
     const name = row.name.trim().replace(/^\//, '').toLowerCase().replace(/\s+/g, ' ')
     if (name.length > 64 || !/^[a-z][a-z0-9_-]*(?: [a-z0-9_-]+)*$/.test(name))
-      throw new Error(
-        'Command names use up to 64 letters, numbers, spaces, _ or -, starting with a letter.',
-      )
-    if (LOCAL_NAMES.has(name))
-      throw new Error(`/${name} is a built-in local command. Choose another name.`)
+      throw new Error(t('commands.error.invalidName'))
+    if (LOCAL_NAMES.has(name)) throw new Error(t('commands.error.builtInLocal', { name }))
     if (
       typeof row.template !== 'string' ||
       !row.template.trim() ||
       row.template.length > MAX_TEMPLATE_LENGTH
     )
-      throw new Error(`/${name} needs a template of 1–${MAX_TEMPLATE_LENGTH} characters.`)
+      throw new Error(t('commands.error.templateLength', { name, limit: MAX_TEMPLATE_LENGTH }))
     if (
       row.template.split(/\r?\n/).filter((line) => line.trim()).length > CUSTOM_COMMAND_OUTPUT_LIMIT
     ) {
-      throw new Error(`/${name} may produce at most ${CUSTOM_COMMAND_OUTPUT_LIMIT} messages.`)
+      throw new Error(
+        t('commands.error.tooManyMessages', { name, limit: CUSTOM_COMMAND_OUTPUT_LIMIT }),
+      )
     }
     const platform = row.platform
     if (
@@ -175,18 +176,18 @@ export function validateCustomCommands(value: unknown): CustomCommandDefinition[
       platform !== 'youtube' &&
       platform !== 'kick'
     )
-      throw new Error(`/${name} has an invalid platform.`)
+      throw new Error(t('commands.error.invalidPlatform', { name }))
     if (
       row.channel !== undefined &&
       (typeof row.channel !== 'string' || row.channel.length > 100 || /\s/.test(row.channel.trim()))
     )
-      throw new Error(`/${name} has an invalid channel name.`)
+      throw new Error(t('commands.error.invalidChannel', { name }))
     if (typeof row.showInMessageMenu !== 'boolean')
-      throw new Error(`/${name} needs a message-menu setting.`)
+      throw new Error(t('commands.error.messageMenuSetting', { name }))
     const channel =
       typeof row.channel === 'string' ? row.channel.trim().replace(/^#/, '').toLowerCase() : ''
     const scope = `${name}:${platform ?? ''}:${channel}`
-    if (seenScopes.has(scope)) throw new Error(`/${name} is defined twice in the same scope.`)
+    if (seenScopes.has(scope)) throw new Error(t('commands.error.duplicateScope', { name }))
     seenScopes.add(scope)
     return {
       id: row.id,
@@ -222,7 +223,7 @@ function splitArguments(input: string): string[] {
       started = true
     }
   }
-  if (quoted) throw new Error('Close the quotation mark in the command arguments.')
+  if (quoted) throw new Error(t('commands.error.unclosedQuote'))
   if (started) args.push(value)
   return args
 }
@@ -240,9 +241,8 @@ export function expandCustomCommand(
   const outputs: string[] = []
   let visits = 0
   const visit = (text: string, path: string[]): void => {
-    if (++visits > 100)
-      throw new Error('Command expansion is too complex (more than 100 alias steps).')
-    if (text.length > MAX_EXPANDED_LENGTH) throw new Error('Expanded command is too long.')
+    if (++visits > 100) throw new Error(t('commands.error.expansionComplex'))
+    if (text.length > MAX_EXPANDED_LENGTH) throw new Error(t('commands.error.expandedTooLong'))
     const invocationText = text.trim()
     const candidates = (
       isAutoTranslationCommand(invocationText) || isTwirReloadCommand(invocationText)
@@ -263,18 +263,20 @@ export function expandCustomCommand(
     const named = candidates.filter((candidate) => candidate.command.name === trigger)
     if (named.length === 0) {
       if (outputs.length >= CUSTOM_COMMAND_OUTPUT_LIMIT)
-        throw new Error(`A command may produce at most ${CUSTOM_COMMAND_OUTPUT_LIMIT} messages.`)
-      if (text.length > MAX_EXPANDED_LENGTH) throw new Error('Expanded command is too long.')
+        throw new Error(
+          t('commands.error.tooManyMessagesGeneric', { limit: CUSTOM_COMMAND_OUTPUT_LIMIT }),
+        )
+      if (text.length > MAX_EXPANDED_LENGTH) throw new Error(t('commands.error.expandedTooLong'))
       if (text.trim()) outputs.push(text.trim())
       return
     }
     const selected = named.find((candidate) => commandApplies(candidate.command, context))
-    if (!selected) throw new Error(`/${trigger} is unavailable in this platform/channel scope.`)
+    if (!selected) throw new Error(t('commands.error.unavailableScope', { trigger }))
     const { command, match } = selected
     if (path.includes(command.id))
-      throw new Error(`Command alias cycle: ${[...path, command.id].join(' → ')}.`)
+      throw new Error(t('commands.error.aliasCycle', { path: [...path, command.id].join(' → ') }))
     if (path.length >= MAX_DEPTH)
-      throw new Error(`Command aliases may nest at most ${MAX_DEPTH} levels.`)
+      throw new Error(t('commands.error.aliasDepth', { depth: MAX_DEPTH }))
     matched = true
     const args = splitArguments(invocationText.slice(match![0].length).trimStart())
     const expanded = expandTemplate(command.template, args, context)
@@ -284,8 +286,7 @@ export function expandCustomCommand(
   }
   try {
     visit(input, [])
-    if (matched && outputs.length === 0)
-      return { ok: false, error: 'The command produced no messages.' }
+    if (matched && outputs.length === 0) return { ok: false, error: t('commands.error.noMessages') }
     return { ok: true, outputs, matched }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -297,7 +298,9 @@ export async function runCommandActions(
   options: { signal?: AbortSignal; wait?: (milliseconds: number) => Promise<void> } = {},
 ): Promise<void> {
   if (actions.length > CUSTOM_COMMAND_OUTPUT_LIMIT)
-    throw new Error(`A command may produce at most ${CUSTOM_COMMAND_OUTPUT_LIMIT} messages.`)
+    throw new Error(
+      t('commands.error.tooManyMessagesGeneric', { limit: CUSTOM_COMMAND_OUTPUT_LIMIT }),
+    )
   const wait =
     options.wait ??
     ((milliseconds: number) =>
@@ -306,7 +309,7 @@ export async function runCommandActions(
         const cancel = () => {
           clearTimeout(timer)
           signal?.removeEventListener('abort', cancel)
-          reject(new Error('Command cancelled.'))
+          reject(new Error(t('commands.error.cancelled')))
         }
         const timer = setTimeout(() => {
           signal?.removeEventListener('abort', cancel)

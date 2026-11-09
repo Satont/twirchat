@@ -9,6 +9,7 @@ import {
   runCommandActions,
   type CommandContext,
 } from '../commands'
+import { useT } from '../i18n'
 import type { IgnoreRule } from '../message-rules'
 import { accountsStore, showNotice, streamStatusStore } from '../state/app'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
@@ -39,6 +40,7 @@ export function MessageActionsMenu({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
   const commands = useStoreSelector(customCommandsStore, (state) => state.commands)
@@ -120,7 +122,7 @@ export function MessageActionsMenu({
         ...current.highlights,
         {
           id: crypto.randomUUID(),
-          name: `${message.author.displayName} messages`,
+          name: t('chatMessages.actions.highlightRuleName', { name: message.author.displayName }),
           pattern: `author.user_id == ${JSON.stringify(message.author.id)} && platform.name == ${JSON.stringify(message.platform)}`,
           enabled: true,
           regex: false,
@@ -138,7 +140,7 @@ export function MessageActionsMenu({
   async function runCustom(name: string) {
     const result = expandCustomCommand(`/${name}`, commands, context)
     if (!result.ok) throw new Error(result.error)
-    if (!result.matched) throw new Error('This command is unavailable in the current channel.')
+    if (!result.matched) throw new Error(t('chatMessages.actions.commandUnavailable'))
     abort.current?.abort()
     abort.current = new AbortController()
     await runCommandActions(
@@ -164,7 +166,8 @@ export function MessageActionsMenu({
           })
           if (response.message) showNotice('info', response.message, 6000)
         } else {
-          if (name && name !== 'me') throw new Error(`Unsupported message action /${name}.`)
+          if (name && name !== 'me')
+            throw new Error(t('chatMessages.actions.unsupportedAction', { name }))
           await backend.api.sendMessage({ platform: message.platform, channelId: channel, text })
         }
       }),
@@ -232,35 +235,44 @@ export function MessageActionsMenu({
               },
             }}
           >
-            {onReply ? item('Reply', onReply) : null}
-            {onOpenUserCard ? item('Open user card', onOpenUserCard) : null}
-            {item('Copy message', () => copy(message.text))}
-            {item('Copy full message', () =>
+            {onReply ? item(t('chatMessages.actions.reply'), onReply) : null}
+            {onOpenUserCard ? item(t('chatMessages.actions.openUserCard'), onOpenUserCard) : null}
+            {item(t('chatMessages.actions.copyMessage'), () => copy(message.text))}
+            {item(t('chatMessages.actions.copyFullMessage'), () =>
               copy(
                 `[${new Date(message.timestamp).toISOString()}] ${channel} ${message.author.displayName}: ${message.text}`,
               ),
             )}
-            {item('Copy message JSON', () => copy(JSON.stringify(message, null, 2)))}
-            {item('Translate message', () =>
+            {item(t('chatMessages.actions.copyMessageJson'), () =>
+              copy(JSON.stringify(message, null, 2)),
+            )}
+            {item(t('chatMessages.actions.translateMessage'), () =>
               requestMessageTranslation(backend, message, { channelId: channel, force: true }),
             )}
-            {item('Copy username', () =>
+            {item(t('chatMessages.actions.copyUsername'), () =>
               copy(message.author.username ?? message.author.displayName),
             )}
-            {item('Copy user ID', () => copy(message.author.id))}
-            {item('Copy message ID', () => copy(message.id))}
-            {item('Copy timestamp', () => copy(new Date(message.timestamp).toISOString()))}
+            {item(t('chatMessages.actions.copyUserId'), () => copy(message.author.id))}
+            {item(t('chatMessages.actions.copyMessageId'), () => copy(message.id))}
+            {item(t('chatMessages.actions.copyTimestamp'), () =>
+              copy(new Date(message.timestamp).toISOString()),
+            )}
             {onSearch
-              ? item('Find messages from this user', () =>
+              ? item(t('chatMessages.actions.findFromUser'), () =>
                   onSearch(
                     `from:${JSON.stringify(message.author.username ?? message.author.displayName)}`,
                   ),
                 )
               : null}
-            {item(ignored ? 'Stop ignoring this user' : 'Ignore this user locally', ignore)}
-            {item('Highlight this user', highlight)}
+            {item(
+              ignored
+                ? t('chatMessages.actions.stopIgnoringUser')
+                : t('chatMessages.actions.ignoreUser'),
+              ignore,
+            )}
+            {item(t('chatMessages.actions.highlightUser'), highlight)}
             {message.platform === 'twitch'
-              ? item('Block user on Twitch', async () => {
+              ? item(t('chatMessages.actions.blockOnTwitch'), async () => {
                   await backend.api.executePlatformCommand({
                     platform: 'twitch',
                     channelSlug: channel,
@@ -270,7 +282,7 @@ export function MessageActionsMenu({
                 })
               : null}
             {message.platform === 'twitch'
-              ? item('Unblock user on Twitch', async () => {
+              ? item(t('chatMessages.actions.unblockOnTwitch'), async () => {
                   await backend.api.executePlatformCommand({
                     platform: 'twitch',
                     channelSlug: channel,
@@ -280,7 +292,7 @@ export function MessageActionsMenu({
                 })
               : null}
             {message.platform === 'twitch' && !message.delivery
-              ? item('Pin this message', () =>
+              ? item(t('chatMessages.actions.pinMessage'), () =>
                   backend.api.executeTwitchActivityAction({
                     action: 'pin_message',
                     channelSlug: channel,

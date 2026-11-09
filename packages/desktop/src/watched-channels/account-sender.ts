@@ -1,5 +1,6 @@
 import type { Account, ChatSendReceipt, WatchedChannel } from '@twirchat/shared/types'
 
+import { t } from '../gpuix/i18n'
 import type { ChatReplyTarget, IPlatformAdapter } from '../platforms/base-adapter'
 import { KickAdapter } from '../platforms/kick/adapter'
 import type { TwitchSenderPool } from '../platforms/twitch/sender-pool'
@@ -27,7 +28,9 @@ export function createChatAccountSender(twitch: TwitchSenderPool): ChatAccountSe
       if (channel.platform === 'twitch')
         return twitch.send(account, channel.channelSlug, text, replyId)
       if (adapter instanceof KickAdapter) return adapter.sendMessageAs(account, text, replyTo)
-      throw new Error(`Sending as another account is not available for ${channel.platform}.`)
+      throw new Error(
+        t('misc.accountSender.otherAccountUnavailable', { platform: channel.platform }),
+      )
     },
     release: (accountId, channel) => {
       if (channel.platform === 'twitch') twitch.release(accountId, channel.channelSlug)

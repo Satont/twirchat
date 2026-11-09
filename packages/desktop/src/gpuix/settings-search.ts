@@ -1,3 +1,4 @@
+import { t, type MessageKey } from './i18n'
 import { THEME_PRESETS } from './theme'
 
 interface SettingsCategoryMetadata {
@@ -81,6 +82,42 @@ export const SETTINGS_CATEGORIES = defineSettingsCategories([
 ])
 export type SettingsCategoryId = (typeof SETTINGS_CATEGORIES)[number]['id']
 export type SettingsSaveMode = 'section' | 'action'
+
+const CATEGORY_LABEL_KEYS: Record<SettingsCategoryId, MessageKey> = {
+  general: 'settings.category.general',
+  chat: 'settings.category.chat',
+  emotes: 'settings.category.emotes',
+  privacy: 'settings.category.privacy',
+  translation: 'settings.category.translation',
+  moderation: 'settings.category.moderation',
+  commands: 'settings.category.commands',
+  plugins: 'settings.category.plugins',
+  overlay: 'settings.category.overlay',
+  shortcuts: 'settings.category.shortcuts',
+  'twitch-session': 'settings.category.twitch-session',
+}
+
+const CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategoryId, MessageKey> = {
+  general: 'settings.category.general.desc',
+  chat: 'settings.category.chat.desc',
+  emotes: 'settings.category.emotes.desc',
+  privacy: 'settings.category.privacy.desc',
+  translation: 'settings.category.translation.desc',
+  moderation: 'settings.category.moderation.desc',
+  commands: 'settings.category.commands.desc',
+  plugins: 'settings.category.plugins.desc',
+  overlay: 'settings.category.overlay.desc',
+  shortcuts: 'settings.category.shortcuts.desc',
+  'twitch-session': 'settings.category.twitch-session.desc',
+}
+
+export function settingsCategoryLabel(id: SettingsCategoryId): string {
+  return t(CATEGORY_LABEL_KEYS[id])
+}
+
+export function settingsCategoryDescription(id: SettingsCategoryId): string {
+  return t(CATEGORY_DESCRIPTION_KEYS[id])
+}
 export interface SettingsSectionMetadata {
   id: SettingsSectionId
   category: SettingsCategoryId
@@ -149,7 +186,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'general',
     title: 'Appearance',
     saveMode: 'section',
-    keywords: `${THEME_PRESETS.map((preset) => preset.label).join(' ')} theme custom palette color mode variant hex accent font fontFamily Inter Manrope system appearance typography шрифт тема темная светлая палитра цвет акцент`,
+    keywords: `${THEME_PRESETS.map((preset) => preset.label).join(' ')} theme custom palette color mode variant hex accent font fontFamily Inter Manrope system appearance typography language locale English Russian язык локаль английский русский шрифт тема темная светлая палитра цвет акцент`,
   },
   {
     id: 'updates',

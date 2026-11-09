@@ -1,5 +1,6 @@
 import type { DesktopApi } from '../backend/api'
 import { validateCustomCommands, type CustomCommandDefinition } from '../commands'
+import { t } from '../i18n'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 
@@ -54,7 +55,7 @@ export function createCustomCommandsController(
         store.update({
           loaded: true,
           loading: false,
-          error: `Saved commands could not be loaded: ${errorText(error)}`,
+          error: t('notices.customCommands.loadFailed', { error: errorText(error) }),
         })
       }
     })().finally(() => {
@@ -81,7 +82,9 @@ export function createCustomCommandsController(
         store.update({ commands: validated, error: null })
       })
       .catch((error: unknown) => {
-        store.update({ error: `Could not save commands: ${errorText(error)}` })
+        store.update({
+          error: t('notices.customCommands.saveFailed', { error: errorText(error) }),
+        })
         throw error
       })
       .finally(() => {

@@ -3,6 +3,7 @@ import { PlatformIcon, Icon } from '@gpuix/components/ui/Icon'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { hexMix } from '@gpuix/components/user-card/format'
+import { useT } from '@gpuix/i18n'
 import { platformColor } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
 import type { Badge as BadgeData } from '@twirchat/shared/types'
@@ -45,6 +46,7 @@ export function UserCardHeader({
   effectiveAlias,
 }: UserCardHeaderProps) {
   const theme = useTheme()
+  const { t } = useT()
   const titleHandle = target.username ?? target.platformUserId
 
   return (
@@ -262,7 +264,11 @@ export function UserCardHeader({
             </div>
           </div>
 
-          {effectiveAlias ? <HeaderPillUI accent>{`Alias: ${effectiveAlias}`}</HeaderPillUI> : null}
+          {effectiveAlias ? (
+            <HeaderPillUI accent>
+              {t('userCard.alias.pill', { alias: effectiveAlias })}
+            </HeaderPillUI>
+          ) : null}
         </div>
       </div>
       <div>
@@ -280,7 +286,7 @@ export function UserCardHeader({
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-              {openingPublicChannel ? 'Opening…' : 'Open channel'}
+              {openingPublicChannel ? t('userCard.opening') : t('userCard.openChannel')}
               <Icon name="externalLink" size={12} color="#fff" />
             </div>
           </GhostButton>

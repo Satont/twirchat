@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path'
 
+import { t } from '../gpuix/i18n'
 import {
   MAX_CONNECTIONS,
   MAX_PENDING_REQUESTS,
@@ -94,13 +95,16 @@ export function startPluginProcess(options: PluginProcessOptions): PluginProcess
       windowsHide: true,
       ipc: receive,
       onDisconnect() {
-        fail('Plugin process disconnected.')
+        fail(t('runtime.plugins.processDisconnected'))
       },
     },
   )
-  const activation = setTimeout(() => fail('Plugin activation timed out.'), REQUEST_TIMEOUT_MS)
+  const activation = setTimeout(
+    () => fail(t('runtime.plugins.activationTimedOut')),
+    REQUEST_TIMEOUT_MS,
+  )
   void child.exited
-    .then((code) => fail(`Plugin process exited (${code}).`))
+    .then((code) => fail(t('runtime.plugins.processExited', { code })))
     .catch((error: unknown) => fail(pluginError(error)))
 
   function kill(): void {
@@ -142,14 +146,17 @@ export function startPluginProcess(options: PluginProcessOptions): PluginProcess
   }
 
   async function request(value: WorkerAction): Promise<void> {
-    if (stopped) throw new Error('Plugin is no longer running.')
+    if (stopped) throw new Error(t('runtime.plugins.noLongerRunning'))
     // Channel teardown has reserved capacity even when ordinary plugin requests saturate IPC.
     const limit =
       value.action === 'disconnect' ? MAX_PENDING_REQUESTS + MAX_CONNECTIONS : MAX_PENDING_REQUESTS
-    if (pending.size >= limit) throw new Error('Too many pending plugin requests.')
+    if (pending.size >= limit) throw new Error(t('runtime.plugins.tooManyRequests'))
     const id = ++requestSequence
     const result = Promise.withResolvers<void>()
-    const timer = setTimeout(() => fail(`Plugin ${value.action} timed out.`), REQUEST_TIMEOUT_MS)
+    const timer = setTimeout(
+      () => fail(t('runtime.plugins.requestTimedOut', { action: value.action })),
+      REQUEST_TIMEOUT_MS,
+    )
     try {
       send({ kind: 'request', id, value })
     } catch (error) {
@@ -166,7 +173,7 @@ export function startPluginProcess(options: PluginProcessOptions): PluginProcess
       send({
         kind: 'hostResult',
         id,
-        reply: { ok: false, error: 'Too many pending desktop requests.' },
+        reply: { ok: false, error: t('runtime.plugins.tooManyDesktopRequests') },
       })
       return
     }
@@ -185,14 +192,14 @@ export function startPluginProcess(options: PluginProcessOptions): PluginProcess
     if (stopped) return
     const parsed = workerOutboundSchema.safeParse(data)
     if (!parsed.success) {
-      fail('Invalid plugin IPC message.')
+      fail(t('runtime.plugins.invalidIpcMessage'))
       return
     }
     const message = parsed.data
     try {
       switch (message.kind) {
         case 'ready':
-          if (registered) throw new Error('Plugin sent duplicate registration.')
+          if (registered) throw new Error(t('runtime.plugins.duplicateRegistration'))
           registered = true
           clearTimeout(activation)
           ready.resolve(message.registration)
@@ -232,7 +239,7 @@ export function startPluginProcess(options: PluginProcessOptions): PluginProcess
     ready: ready.promise,
     request,
     async close() {
-      stop('Plugin was disabled.', true)
+      stop(t('runtime.plugins.wasDisabled'), true)
       await child.exited
     },
     kill,

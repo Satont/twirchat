@@ -1,5 +1,6 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
+import { t } from './i18n'
 import { compileRuleRegex, RuleRegex } from './rule-regex'
 
 type Value =
@@ -86,11 +87,11 @@ const VARIABLES = new Set([
 ])
 
 function tokenize(source: string): Token[] {
-  if (source.length > 8192) throw new Error('Filter expressions are limited to 8192 characters.')
+  if (source.length > 8192) throw new Error(t('commands.filter.tooLong'))
   const tokens: Token[] = []
   let i = 0
   while (i < source.length) {
-    if (tokens.length >= 1024) throw new Error('This expression contains too many terms.')
+    if (tokens.length >= 1024) throw new Error(t('commands.filter.tooManyTerms'))
     const char = source[i]!
     if (/\s/u.test(char)) {
       i++
@@ -116,7 +117,7 @@ function tokenize(source: string): Token[] {
               escaped === 'n' ? '\n' : escaped === 't' ? '\t' : escaped === 'r' ? '\r' : escaped
         } else text += next
       }
-      if (!closed) throw new Error(`Unclosed string at character ${at + 1}.`)
+      if (!closed) throw new Error(t('commands.filter.unclosedString', { position: at + 1 }))
       tokens.push({
         kind: 'value',
         text,
@@ -129,7 +130,7 @@ function tokenize(source: string): Token[] {
     if (number) {
       const value = Number(number)
       if (!Number.isSafeInteger(value))
-        throw new Error(`Integer is too large at character ${i + 1}.`)
+        throw new Error(t('commands.filter.integerTooLarge', { position: i + 1 }))
       tokens.push({ kind: 'value', text: number, value, at })
       i += number.length
       continue
@@ -164,7 +165,7 @@ function tokenize(source: string): Token[] {
       '}',
       ',',
     ].find((op) => source.startsWith(op, i))
-    if (!operator) throw new Error(`Unexpected '${char}' at character ${i + 1}.`)
+    if (!operator) throw new Error(t('commands.filter.unexpectedChar', { char, position: i + 1 }))
     tokens.push({ kind: 'operator', text: operator, at })
     i += operator.length
   }
@@ -189,10 +190,11 @@ function parse(source: string): Node {
     right,
   })
   const expect = (text: string) => {
-    if (!take(text)) throw new Error(`Expected '${text}' at character ${peek().at + 1}.`)
+    if (!take(text))
+      throw new Error(t('commands.filter.expected', { text, position: peek().at + 1 }))
   }
   function primary(): Node {
-    if (++depth > 64) throw new Error('Expression nesting is too deep.')
+    if (++depth > 64) throw new Error(t('commands.filter.tooDeep'))
     try {
       if (take('(')) {
         const result = or()
@@ -212,10 +214,11 @@ function parse(source: string): Node {
       const token = tokens[index++]!
       if (token.kind === 'value') return { kind: 'value', value: token.value ?? null }
       if (token.kind === 'identifier') {
-        if (!VARIABLES.has(token.text)) throw new Error(`Unknown filter variable '${token.text}'.`)
+        if (!VARIABLES.has(token.text))
+          throw new Error(t('commands.filter.unknownVariable', { name: token.text }))
         return { kind: 'identifier', name: token.text }
       }
-      throw new Error(`Expected a value at character ${token.at + 1}.`)
+      throw new Error(t('commands.filter.expectedValue', { position: token.at + 1 }))
     } finally {
       depth--
     }
@@ -243,7 +246,7 @@ function parse(source: string): Node {
   }
   function unary(): Node {
     if (!take('!')) return condition()
-    if (++depth > 64) throw new Error('Expression nesting is too deep.')
+    if (++depth > 64) throw new Error(t('commands.filter.tooDeep'))
     try {
       return { kind: 'unary', value: unary() }
     } finally {
@@ -262,7 +265,9 @@ function parse(source: string): Node {
   }
   const result = or()
   if (peek().kind !== 'end')
-    throw new Error(`Unexpected '${peek().text}' at character ${peek().at + 1}.`)
+    throw new Error(
+      t('commands.filter.unexpectedToken', { text: peek().text, position: peek().at + 1 }),
+    )
   return result
 }
 
@@ -465,30 +470,29 @@ function returnType(node: Node): ValueType {
     return node.name === 'author.color' ? 'color' : 'string'
   }
   if (node.kind === 'unary') {
-    if (returnType(node.value) !== 'boolean')
-      throw new Error('Logical negation requires a boolean condition.')
+    if (returnType(node.value) !== 'boolean') throw new Error(t('commands.filter.negationBoolean'))
     return 'boolean'
   }
   const left = returnType(node.left)
   const right = returnType(node.right)
   if (['&&', '||'].includes(node.operator)) {
     if (left !== 'boolean' || right !== 'boolean')
-      throw new Error('Logical operators require boolean conditions on both sides.')
+      throw new Error(t('commands.filter.logicalBoolean'))
     return 'boolean'
   }
   if (['==', '!='].includes(node.operator)) return 'boolean'
   if (['<', '<=', '>', '>='].includes(node.operator)) {
     if (left !== 'number' || right !== 'number')
-      throw new Error('Ordered comparisons require integers on both sides.')
+      throw new Error(t('commands.filter.orderedIntegers'))
     return 'boolean'
   }
   if (['contains', 'startswith', 'endswith'].includes(node.operator)) {
     if (left !== 'list' && !(left === 'string' && right === 'string'))
-      throw new Error('Text comparisons require strings or a list on the left.')
+      throw new Error(t('commands.filter.textComparison'))
     return 'boolean'
   }
   if (node.operator === 'match') {
-    if (left !== 'string') throw new Error('Regular expressions match text values.')
+    if (left !== 'string') throw new Error(t('commands.filter.regexText'))
     if (right === 'regex') return 'boolean'
     if (
       node.right.kind === 'list' &&
@@ -497,11 +501,11 @@ function returnType(node: Node): ValueType {
       returnType(node.right.values[1]!) === 'number'
     )
       return 'string'
-    throw new Error('Use a regular expression or {regex, capture number} after match.')
+    throw new Error(t('commands.filter.regexAfterMatch'))
   }
   if (node.operator === '+' && left === 'string') return 'string'
   if (left !== 'number' || right !== 'number')
-    throw new Error('Arithmetic requires integer values.')
+    throw new Error(t('commands.filter.arithmeticIntegers'))
   return 'number'
 }
 
@@ -511,8 +515,7 @@ export function compileFilterExpression(source: string): {
 } {
   try {
     const node = parse(source)
-    if (returnType(node) !== 'boolean')
-      throw new Error('A filter expression must return a boolean condition.')
+    if (returnType(node) !== 'boolean') throw new Error(t('commands.filter.mustReturnBoolean'))
     return { matches: (message, context = {}) => evaluate(node, message, context) === true }
   } catch (error) {
     return { matches: () => false, error: error instanceof Error ? error.message : String(error) }

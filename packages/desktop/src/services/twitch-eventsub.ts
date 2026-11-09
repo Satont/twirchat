@@ -7,6 +7,7 @@ import type {
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
 import { runInBackground } from './background-task'
 import { deleteOldestEntry } from './bounded-cache'
 import {
@@ -121,7 +122,16 @@ export class TwitchEventSubClient {
       this.dependencies.autoMod({ type: 'clear', channelSlug: key })
       const ids = this.subscriptions.get(key) ?? []
       this.subscriptions.delete(key)
-      await this.removeSubscriptions(key, ids)
+      if (ids.length) {
+        try {
+          await this.dependencies.unsubscribe(ids)
+        } catch {
+          this.dependencies.status({
+            status: 'error',
+            message: t('misc.twitchEventSub.removeFailed'),
+          })
+        }
+      }
     }
   }
 
@@ -155,7 +165,7 @@ export class TwitchEventSubClient {
     if (parsed.protocol !== 'wss:' || parsed.hostname !== 'eventsub.wss.twitch.tv') {
       this.dependencies.status({
         status: 'error',
-        message: 'Twitch supplied an invalid reconnect URL.',
+        message: t('misc.twitchEventSub.invalidReconnectUrl'),
       })
       return
     }
@@ -254,7 +264,9 @@ export class TwitchEventSubClient {
         }
         this.dependencies.status({
           status: 'error',
-          message: `Twitch subscription revoked: ${revoked?.status ?? 'unknown reason'}. Reconnect Twitch if authorization was revoked.`,
+          message: t('misc.twitchEventSub.revoked', {
+            reason: revoked?.status ?? t('misc.twitchEventSub.unknownReason'),
+          }),
         })
       } else if (type === 'notification') this.deliver(envelope)
     }
@@ -264,7 +276,7 @@ export class TwitchEventSubClient {
         this.replacement = null
         this.dependencies.status({
           status: 'error',
-          message: 'Twitch connection migration failed.',
+          message: t('misc.twitchEventSub.migrationFailed'),
         })
         return
       }
@@ -283,7 +295,7 @@ export class TwitchEventSubClient {
       if (!this.stopped && (socket === this.socket || socket === this.replacement))
         this.dependencies.status({
           status: 'error',
-          message: 'The Twitch events connection failed.',
+          message: t('misc.twitchEventSub.connectionFailed'),
         })
     }
   }
@@ -296,7 +308,7 @@ export class TwitchEventSubClient {
       () => {
         this.dependencies.status({
           status: 'error',
-          message: 'Twitch events connection timed out; reconnecting.',
+          message: t('misc.twitchEventSub.timedOut'),
         })
         this.socket?.close()
       },
@@ -351,7 +363,7 @@ export class TwitchEventSubClient {
       if (generation === this.generation)
         this.dependencies.status({
           status: 'error',
-          message: 'Could not subscribe to Twitch events. Reconnect Twitch to update permissions.',
+          message: t('misc.twitchEventSub.subscribeFailed'),
         })
     } finally {
       if (this.registering.get(key) === registration) this.registering.delete(key)

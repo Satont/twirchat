@@ -7,6 +7,7 @@ import {
 import type { EmotePreferences, EmoteProvider } from '../../services/provider-emotes'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT, type MessageKey } from '../i18n'
 import { emoteStore, loadEmotes } from '../state/app'
 import { useStore } from '../state/create-store'
 import {
@@ -20,24 +21,24 @@ import { ActionButton } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
-const PROVIDER_LABELS: Record<EmoteProvider, string> = {
-  twitch: 'Platform emotes',
+const PROVIDER_LABELS: Record<Exclude<EmoteProvider, 'twitch'>, string> = {
   seventv: '7TV',
   bttv: 'BetterTTV',
   ffz: 'FrankerFaceZ',
 }
-const COMMUNITY_BADGE_LABELS: Record<CommunityBadgeProvider, string> = {
-  ffzap: 'FFZ:AP badges',
-  dankchat: 'DankChat badges',
-  chatsen: 'Chatsen badges',
-  homies: 'Homies Custom badges',
-  twir: 'Twir badges',
+const COMMUNITY_BADGE_LABELS: Record<CommunityBadgeProvider, MessageKey> = {
+  ffzap: 'emoteProviderSettings.communityBadge.ffzap',
+  dankchat: 'emoteProviderSettings.communityBadge.dankchat',
+  chatsen: 'emoteProviderSettings.communityBadge.chatsen',
+  homies: 'emoteProviderSettings.communityBadge.homies',
+  twir: 'emoteProviderSettings.communityBadge.twir',
 }
 
 /** Section body: edits stay local until the section is saved. */
 export function EmoteProviderSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const state = useStore(emotePreferencesStore)
   const [draft, setDraft] = useState(() => structuredClone(state.value))
   const draftRef = useRef(draft)
@@ -105,10 +106,7 @@ export function EmoteProviderSettings() {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Enabled providers are checked from top to bottom when names collide. Channel emotes win over
-        globals within each provider.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('emoteProviderSettings.intro')}</Text>
       {draft.precedence.map((provider, index) => (
         <div
           key={provider}
@@ -121,16 +119,18 @@ export function EmoteProviderSettings() {
           }}
         >
           <Text style={{ fontSize: 13, color: theme.text, flexGrow: 1 }}>
-            {PROVIDER_LABELS[provider]}
+            {provider === 'twitch'
+              ? t('emoteProviderSettings.provider.twitch')
+              : PROVIDER_LABELS[provider]}
           </Text>
           <ActionButton disabled={index === 0} onClick={() => move(index, -1)}>
-            Move up
+            {t('emoteProviderSettings.moveUp')}
           </ActionButton>
           <ActionButton
             disabled={index === draft.precedence.length - 1}
             onClick={() => move(index, 1)}
           >
-            Move down
+            {t('emoteProviderSettings.moveDown')}
           </ActionButton>
           <Switch
             small
@@ -143,20 +143,20 @@ export function EmoteProviderSettings() {
       ))}
       {(
         [
-          ['zeroWidth', 'Layer zero-width emotes'],
-          ['modifiers', 'BTTV / FFZ emote modifiers'],
-          ['personal', '7TV personal emotes'],
-          ['badges', 'Provider badges'],
-          ['paints', '7TV name paints'],
-          ['emojiCompletion', 'Emoji shortcode completion'],
+          ['zeroWidth', 'emoteProviderSettings.zeroWidth'],
+          ['modifiers', 'emoteProviderSettings.modifiers'],
+          ['personal', 'emoteProviderSettings.personal'],
+          ['badges', 'emoteProviderSettings.badges'],
+          ['paints', 'emoteProviderSettings.paints'],
+          ['emojiCompletion', 'emoteProviderSettings.emojiCompletion'],
         ] satisfies [
           keyof Pick<
             EmotePreferences,
             'zeroWidth' | 'modifiers' | 'personal' | 'badges' | 'paints' | 'emojiCompletion'
           >,
-          string,
+          MessageKey,
         ][]
-      ).map(([key, label]) => (
+      ).map(([key, labelKey]) => (
         <div
           key={key}
           style={{
@@ -167,7 +167,7 @@ export function EmoteProviderSettings() {
             gap: 12,
           }}
         >
-          <Text style={{ fontSize: 13, color: theme.text }}>{label}</Text>
+          <Text style={{ fontSize: 13, color: theme.text }}>{t(labelKey)}</Text>
           <Switch
             small
             testId={`emote-preference-${key}`}
@@ -177,9 +177,11 @@ export function EmoteProviderSettings() {
         </div>
       ))}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <Text style={{ fontSize: 13, color: theme.text }}>Community badge sources</Text>
+        <Text style={{ fontSize: 13, color: theme.text }}>
+          {t('emoteProviderSettings.communityBadges')}
+        </Text>
         <Text style={{ fontSize: 11, color: theme.text2 }}>
-          Individual sources are used while Provider badges is enabled.
+          {t('emoteProviderSettings.communityBadgesHint')}
         </Text>
       </div>
       {COMMUNITY_BADGE_PROVIDERS.map((provider) => (
@@ -194,7 +196,7 @@ export function EmoteProviderSettings() {
           }}
         >
           <Text style={{ fontSize: 13, color: theme.text }}>
-            {COMMUNITY_BADGE_LABELS[provider]}
+            {t(COMMUNITY_BADGE_LABELS[provider])}
           </Text>
           <Switch
             small
@@ -219,9 +221,11 @@ export function EmoteProviderSettings() {
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 13, color: theme.text }}>Share active channel with 7TV</Text>
+          <Text style={{ fontSize: 13, color: theme.text }}>
+            {t('emoteProviderSettings.sharePresence')}
+          </Text>
           <Text style={{ fontSize: 11, color: theme.text2 }}>
-            Sends your 7TV presence while viewing a channel. Disabled by default.
+            {t('emoteProviderSettings.sharePresenceHint')}
           </Text>
         </div>
         <Switch
@@ -231,21 +235,20 @@ export function EmoteProviderSettings() {
         />
       </div>
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text
-          style={{ fontSize: 12, color: theme.text2, flexGrow: 1 }}
-        >{`${draft.favorites.length}/250 favorite emotes`}</Text>
+        <Text style={{ fontSize: 12, color: theme.text2, flexGrow: 1 }}>
+          {t('emoteProviderSettings.favorites', { count: draft.favorites.length })}
+        </Text>
         <ActionButton
           disabled={draft.favorites.length === 0}
           onClick={() => change({ ...draft, favorites: [] })}
         >
-          Clear favorites
+          {t('emoteProviderSettings.clearFavorites')}
         </ActionButton>
       </div>
       {providerErrors.slice(0, 3).map(({ url, error }) => (
-        <Text
-          key={url}
-          style={{ fontSize: 11, color: theme.warningText }}
-        >{`${new URL(url).hostname}: ${error}. Other providers remain available.`}</Text>
+        <Text key={url} style={{ fontSize: 11, color: theme.warningText }}>
+          {t('emoteProviderSettings.providerError', { host: new URL(url).hostname, error })}
+        </Text>
       ))}
       <SettingsFooter
         sectionId="emotes"

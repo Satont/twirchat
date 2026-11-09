@@ -11,6 +11,7 @@ import type {
 import { z } from 'zod'
 
 import { refreshKickToken } from '../../auth/kick'
+import { t } from '../../gpuix/i18n'
 import { backendFetch } from '../../runtime-config'
 import { AccountStore } from '../../store/account-store'
 import { BasePlatformAdapter, type ChatReplyTarget } from '../base-adapter'
@@ -108,7 +109,6 @@ export interface KickAdapterDependencies extends KickRealtimeDependencies {
 const kickSendAcknowledgementSchema = z.object({
   data: z.object({ is_sent: z.boolean().optional(), message_id: z.string().min(1).optional() }),
 })
-const KICK_UNCONFIRMED = 'Kick message delivery could not be confirmed. Check chat before retrying.'
 
 function kickSendBody(
   broadcasterUserId: number,
@@ -126,10 +126,10 @@ function kickSendBody(
 
 function kickSendReceipt(payload: unknown, body: KickSendBody): ChatSendReceipt {
   const acknowledgement = kickSendAcknowledgementSchema.safeParse(payload)
-  if (!acknowledgement.success) throw new Error(KICK_UNCONFIRMED)
-  if (acknowledgement.data.data.is_sent === false) throw new Error('Kick did not send the message.')
+  if (!acknowledgement.success) throw new Error(t('misc.kickAdapter.deliveryUnconfirmed'))
+  if (acknowledgement.data.data.is_sent === false) throw new Error(t('misc.kickAdapter.notSent'))
   if (acknowledgement.data.data.is_sent !== true && !acknowledgement.data.data.message_id)
-    throw new Error(KICK_UNCONFIRMED)
+    throw new Error(t('misc.kickAdapter.deliveryUnconfirmed'))
   return {
     channelId: String(body.broadcaster_user_id),
     messageId: acknowledgement.data.data.message_id,
@@ -146,7 +146,7 @@ const defaultDependencies: KickAdapterDependencies = {
       kickBadgeCatalog.load(channel),
     ])
     if (!response.ok)
-      throw new KickConnectionError(`Kick chatroom backend failed (HTTP ${response.status}).`)
+      throw new KickConnectionError(t('misc.kickAdapter.chatroomHttp', { status: response.status }))
     const parsed = z
       .object({
         chatroomId: z.number().int().positive().optional(),
@@ -160,9 +160,7 @@ const defaultDependencies: KickAdapterDependencies = {
       !parsed.data.chatroomId ||
       !parsed.data.broadcasterUserId
     )
-      throw new KickConnectionError(
-        'Kick chatroom backend returned an invalid or unavailable channel.',
-      )
+      throw new KickConnectionError(t('misc.kickAdapter.chatroomInvalid'))
     return {
       chatroomId: parsed.data.chatroomId,
       broadcasterUserId: parsed.data.broadcasterUserId,
@@ -277,8 +275,8 @@ export class KickAdapter extends BasePlatformAdapter {
     if (!this.current(revision) || !this.selected())
       throw new Error(
         delivered
-          ? 'The Kick account changed while sending. Delivery could not be confirmed; check chat before retrying.'
-          : 'The Kick account changed. Review the draft and send again.',
+          ? t('misc.kickAdapter.accountChangedDelivered')
+          : t('misc.kickAdapter.accountChanged'),
       )
   }
   private usable(tokens: { accessToken: string; expiresAt?: number } | null): boolean {
@@ -325,8 +323,7 @@ export class KickAdapter extends BasePlatformAdapter {
       .then(() => {
         if (!this.current(revision) || !this.selected()) return
         const tokens = this.dependencies.tokens(accountId)
-        if (!this.usable(tokens))
-          throw new Error('Kick credentials remain unavailable after refresh. Sign in again.')
+        if (!this.usable(tokens)) throw new Error(t('misc.kickAdapter.credentialsAfterRefresh'))
         this.applyTokens(tokens)
         this.authenticationError = undefined
         this.publishStatus()
@@ -335,16 +332,14 @@ export class KickAdapter extends BasePlatformAdapter {
         if (!this.current(revision) || !this.selected()) return
         this.applyTokens(this.dependencies.tokens(accountId))
         this.authenticationError =
-          error instanceof Error
-            ? error.message
-            : 'Kick authentication is unavailable. Sign in again.'
+          error instanceof Error ? error.message : t('misc.kickAdapter.authUnavailableSignIn')
         this.publishStatus()
       })
   }
   private async sendToken(revision: number, force: boolean): Promise<string> {
     this.assertIdentity(revision)
     const accountId = this.accountId
-    if (!accountId) throw new Error('Sign in to Kick before sending messages.')
+    if (!accountId) throw new Error(t('misc.kickAdapter.signInBeforeSending'))
     let tokens = this.dependencies.tokens(accountId)
     if (!force && this.usable(tokens) && tokens && !this.expiring(tokens)) {
       this.applyTokens(tokens)
@@ -355,7 +350,7 @@ export class KickAdapter extends BasePlatformAdapter {
       this.assertIdentity(revision)
       tokens = this.dependencies.tokens(accountId)
       if (!this.usable(tokens) || !tokens)
-        throw new Error('Kick credentials are unavailable after refresh. Sign in again.')
+        throw new Error(t('misc.kickAdapter.credentialsUnavailable'))
       this.applyTokens(tokens)
       this.authenticationError = undefined
       this.publishStatus()
@@ -365,7 +360,7 @@ export class KickAdapter extends BasePlatformAdapter {
       tokens = this.dependencies.tokens(accountId)
       this.applyTokens(tokens)
       this.authenticationError =
-        error instanceof Error ? error.message : 'Kick authentication is unavailable.'
+        error instanceof Error ? error.message : t('misc.kickAdapter.authUnavailable')
       this.publishStatus()
       if (!force && tokens && this.usable(tokens)) return tokens.accessToken
       throw error
@@ -375,7 +370,7 @@ export class KickAdapter extends BasePlatformAdapter {
   private rejectToken(token: string): void {
     if (this.accountId) this.rejectedToken = { accountId: this.accountId, accessToken: token }
     this.accessToken = null
-    this.authenticationError = 'Kick rejected the current credentials. Refresh or sign in again.'
+    this.authenticationError = t('misc.kickAdapter.credentialsRejected')
     this.publishStatus()
   }
 
@@ -385,7 +380,7 @@ export class KickAdapter extends BasePlatformAdapter {
       return await this.dependencies.send(body, token, signal)
     } catch {
       this.assertIdentity(revision, true)
-      throw new Error(KICK_UNCONFIRMED)
+      throw new Error(t('misc.kickAdapter.deliveryUnconfirmed'))
     }
   }
 
@@ -395,8 +390,7 @@ export class KickAdapter extends BasePlatformAdapter {
     replyTo?: ChatReplyTarget,
   ): Promise<ChatSendReceipt> {
     const revision = this.identityRevision
-    if (!this.broadcasterUserId)
-      throw new Error('Kick channel is not ready. Reconnect chat before sending.')
+    if (!this.broadcasterUserId) throw new Error(t('misc.kickAdapter.channelNotReady'))
     const body = kickSendBody(this.broadcasterUserId, text, replyTo)
     let token = await this.sendToken(revision, false)
     this.assertIdentity(revision)
@@ -410,13 +404,14 @@ export class KickAdapter extends BasePlatformAdapter {
       this.assertIdentity(revision, true)
     }
     if (response.status === 401) this.rejectToken(token)
-    if (!response.ok) throw new Error(`Kick message was rejected (HTTP ${response.status}).`)
+    if (!response.ok)
+      throw new Error(t('misc.kickAdapter.messageRejectedHttp', { status: response.status }))
     let payload: unknown
     try {
       payload = await response.json()
     } catch {
       this.assertIdentity(revision, true)
-      throw new Error(KICK_UNCONFIRMED)
+      throw new Error(t('misc.kickAdapter.deliveryUnconfirmed'))
     }
     this.assertIdentity(revision, true)
     return kickSendReceipt(payload, body)
@@ -431,8 +426,7 @@ export class KickAdapter extends BasePlatformAdapter {
     text: string,
     replyTo?: ChatReplyTarget,
   ): Promise<ChatSendReceipt> {
-    if (!this.broadcasterUserId)
-      throw new Error('Kick channel is not ready. Reconnect chat before sending.')
+    if (!this.broadcasterUserId) throw new Error(t('misc.kickAdapter.channelNotReady'))
     const body = kickSendBody(this.broadcasterUserId, text, replyTo)
     const deliver = async (refresh: boolean): Promise<Response> => {
       let tokens = this.dependencies.tokens(account.id)
@@ -440,24 +434,28 @@ export class KickAdapter extends BasePlatformAdapter {
         await this.dependencies.refreshToken(account.id, { channelSlug: this.channelSlug })
         tokens = this.dependencies.tokens(account.id)
       }
-      if (!tokens?.accessToken) throw new Error(`Sign in to Kick as @${account.username} again.`)
+      if (!tokens?.accessToken)
+        throw new Error(t('misc.kickAdapter.signInAsAgain', { name: account.username }))
       try {
         return await this.dependencies.send(body, tokens.accessToken, AbortSignal.timeout(15000))
       } catch {
-        throw new Error(KICK_UNCONFIRMED)
+        throw new Error(t('misc.kickAdapter.deliveryUnconfirmed'))
       }
     }
     let response = await deliver(false)
     if (response.status === 401) response = await deliver(true)
     if (!response.ok)
       throw new Error(
-        `Kick rejected the message from @${account.username} (HTTP ${response.status}).`,
+        t('misc.kickAdapter.messageRejectedFrom', {
+          name: account.username,
+          status: response.status,
+        }),
       )
     let payload: unknown
     try {
       payload = await response.json()
     } catch {
-      throw new Error(KICK_UNCONFIRMED)
+      throw new Error(t('misc.kickAdapter.deliveryUnconfirmed'))
     }
     return kickSendReceipt(payload, body)
   }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useBackend, useBackendEvent } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { accountsStore } from '../state/app'
 import { useStore } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'
@@ -20,6 +21,7 @@ const platformName = (platform: Platform) =>
 export function SavedAccounts() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const active = useStore(accountsStore)
   const [saved, setSaved] = useState<Account[]>([])
   const [busy, setBusy] = useState<Platform | null>(null)
@@ -93,14 +95,13 @@ export function SavedAccounts() {
         backgroundColor: theme.surface,
       }}
     >
-      <Text style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>Saved accounts</Text>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Choose one active identity per platform. Switching keeps watched channels, messages and tab
-        layouts. Anonymous mode keeps saved credentials for later.
+      <Text style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>
+        {t('app.accounts.title')}
       </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('app.accounts.description')}</Text>
       <FormError>{error}</FormError>
       {loading ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading saved accounts…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('app.accounts.loading')}</Text>
       ) : null}
       {platforms.map((platform) => {
         const selected = active.find((account) => account.platform === platform)
@@ -127,7 +128,7 @@ export function SavedAccounts() {
               }}
             >
               <Text style={{ fontSize: 13, fontWeight: 700, color: theme.text, flexGrow: 1 }}>
-                {`${platformName(platform)} · ${selected ? `@${selected.username}` : 'Anonymous'}`}
+                {`${platformName(platform)} · ${selected ? `@${selected.username}` : t('app.accounts.anonymous')}`}
               </Text>
               <ActionButton
                 disabled={!!busy || !selected}
@@ -137,7 +138,7 @@ export function SavedAccounts() {
                   )
                 }
               >
-                Use anonymously
+                {t('app.accounts.useAnonymously')}
               </ActionButton>
               <AddAccountButton
                 platform={platform}
@@ -160,7 +161,7 @@ export function SavedAccounts() {
             </div>
             {copied === platform ? (
               <Text style={{ fontSize: 12, color: theme.text2 }}>
-                {`${platformName(platform)} sign-in link copied. Open it in another browser or a private window on this computer within 10 minutes.`}
+                {t('app.accounts.linkCopied', { platform: platformName(platform) })}
               </Text>
             ) : null}
             {accounts.map((account) => (
@@ -187,10 +188,10 @@ export function SavedAccounts() {
                   }
                 >
                   {selected?.id === account.id
-                    ? 'Active'
+                    ? t('app.accounts.active')
                     : busy === platform
-                      ? 'Switching…'
-                      : 'Switch'}
+                      ? t('app.accounts.switching')
+                      : t('app.accounts.switch')}
                 </ActionButton>
                 <ActionButton
                   disabled={!!busy}
@@ -198,13 +199,13 @@ export function SavedAccounts() {
                     void run(platform, () => backend.api.forgetAccount({ accountId: account.id }))
                   }
                 >
-                  Forget
+                  {t('app.accounts.forget')}
                 </ActionButton>
               </div>
             ))}
             {!accounts.length ? (
               <Text style={{ fontSize: 12, color: theme.text2 }}>
-                {`No saved ${platformName(platform)} accounts.`}
+                {t('app.accounts.none', { platform: platformName(platform) })}
               </Text>
             ) : null}
           </div>
@@ -224,6 +225,7 @@ interface AddAccountButtonProps {
 /** Opens sign-in in the default browser; the arrow also offers the link for another browser. */
 function AddAccountButton({ platform, disabled, onOpen, onCopyLink }: AddAccountButtonProps) {
   const theme = useTheme()
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   // The mousedown that dismisses the menu ends in a click on the arrow; ignore that click.
   const dismissedAt = useRef(0)
@@ -296,12 +298,12 @@ function AddAccountButton({ platform, disabled, onOpen, onCopyLink }: AddAccount
           }}
           style={{ ...segment, paddingLeft: 10, paddingRight: 10 }}
         >
-          <Text style={{ fontSize: 12, color: theme.text }}>Add account</Text>
+          <Text style={{ fontSize: 12, color: theme.text }}>{t('app.accounts.add')}</Text>
         </div>
         <div
           testId={`add-account-${platform}-more`}
           role="button"
-          aria-label="More ways to add an account"
+          aria-label={t('app.accounts.moreWays')}
           tabIndex={disabled ? undefined : 0}
           onClick={() => {
             if (disabled || Date.now() - dismissedAt.current < 250) return
@@ -354,14 +356,14 @@ function AddAccountButton({ platform, disabled, onOpen, onCopyLink }: AddAccount
             }}
           >
             {item(
-              'Open in default browser',
-              'Signs in with the account open there',
+              t('app.accounts.openInBrowser'),
+              t('app.accounts.openInBrowserDetail'),
               onOpen,
               `add-account-${platform}-open`,
             )}
             {item(
-              'Copy sign-in link',
-              'For another browser or a private window on this computer',
+              t('app.accounts.copyLink'),
+              t('app.accounts.copyLinkDetail'),
               onCopyLink,
               `add-account-${platform}-copy`,
             )}

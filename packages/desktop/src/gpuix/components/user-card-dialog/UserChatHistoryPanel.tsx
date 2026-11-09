@@ -5,6 +5,7 @@ import { ChatMessage } from '@gpuix/components/ChatMessage'
 import { Text } from '@gpuix/components/ui/Text'
 import { errorText } from '@gpuix/components/user-card/format'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
+import { useT } from '@gpuix/i18n'
 import type { PublicInstance } from '@gpuix/react'
 import { platformColor } from '@gpuix/theme'
 import { useTheme } from '@gpuix/theme-context'
@@ -45,6 +46,7 @@ function UserChatHistoryContent({
   onViewport,
 }: UserChatHistoryProps) {
   const theme = useTheme()
+  const { t, language } = useT()
   const backend = useBackend()
   const [messages, setMessages] = useState<NormalizedChatMessage[]>([])
   const [loadingInitial, setLoadingInitial] = useState(false)
@@ -175,9 +177,13 @@ function UserChatHistoryContent({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>Chat logs</Text>
+          <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
+            {t('userCard.history.title')}
+          </Text>
           <Text style={{ fontSize: 12, color: theme.text2, marginTop: 4 }}>
-            {channelId ? `Messages from this user in ${channelId}` : 'Messages from this user'}
+            {channelId
+              ? t('userCard.history.subtitleIn', { channel: channelId })
+              : t('userCard.history.subtitle')}
           </Text>
         </div>
 
@@ -203,7 +209,7 @@ function UserChatHistoryContent({
             hover: loadingInitial ? {} : { backgroundColor: theme.fillHover },
           }}
         >
-          <Text style={{ fontSize: 12, color: theme.text }}>Refresh</Text>
+          <Text style={{ fontSize: 12, color: theme.text }}>{t('common.refresh')}</Text>
         </div>
       </div>
 
@@ -220,13 +226,14 @@ function UserChatHistoryContent({
       ) : null}
       {messages.length >= HISTORY_DISPLAY_LIMIT ? (
         <Text style={{ fontSize: 11, color: theme.text2, marginBottom: 8 }}>
-          Showing the newest 2,000 loaded messages. Use channel history to filter or export older
-          logs.
+          {t('userCard.history.limitNotice', {
+            limit: HISTORY_DISPLAY_LIMIT.toLocaleString(language),
+          })}
         </Text>
       ) : null}
       {loadingInitial && !messages.length ? (
         <HistoryState minHeight={160}>
-          <Text style={{ fontSize: 13, color: theme.text2 }}>Loading messages…</Text>
+          <Text style={{ fontSize: 13, color: theme.text2 }}>{t('userCard.history.loading')}</Text>
         </HistoryState>
       ) : error && !messages.length ? (
         <HistoryState minHeight={160} error>
@@ -235,9 +242,7 @@ function UserChatHistoryContent({
         </HistoryState>
       ) : isEmpty ? (
         <HistoryState minHeight={160}>
-          <Text style={{ fontSize: 13, color: theme.text2 }}>
-            No messages are available for this user in the selected history.
-          </Text>
+          <Text style={{ fontSize: 13, color: theme.text2 }}>{t('userCard.history.empty')}</Text>
         </HistoryState>
       ) : (
         <div
@@ -294,7 +299,9 @@ function UserChatHistoryContent({
                 }}
               >
                 <Text style={{ fontSize: 11, color: theme.text2 }}>
-                  {loadingOlder ? 'Loading older messages…' : 'Load older messages'}
+                  {loadingOlder
+                    ? t('userCard.history.loadingOlder')
+                    : t('userCard.history.loadOlder')}
                 </Text>
               </div>
             ) : null}
@@ -350,6 +357,7 @@ function HistoryState({
 
 function HistoryRetryButton({ onClick }: { onClick: () => void }) {
   const theme = useTheme()
+  const { t } = useT()
   return (
     <div
       tabIndex={0}
@@ -371,7 +379,7 @@ function HistoryRetryButton({ onClick }: { onClick: () => void }) {
         hover: { backgroundColor: theme.fillHover },
       }}
     >
-      <Text style={{ fontSize: 12, color: theme.text }}>Retry</Text>
+      <Text style={{ fontSize: 12, color: theme.text }}>{t('common.retry')}</Text>
     </div>
   )
 }

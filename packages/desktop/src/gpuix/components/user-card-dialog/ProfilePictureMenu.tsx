@@ -4,12 +4,14 @@ import { Modal } from '@gpuix/components/ui/Modal'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { usePopupHotkeys } from '@gpuix/hooks/use-popup-hotkeys'
+import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 import { useState } from 'react'
 
 export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () => void }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const popupContextId = usePopupHotkeys('profile-picture', { delete: onClose })
@@ -31,7 +33,9 @@ export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () 
         testId="profile-picture-menu"
         style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}
       >
-        <Text style={{ color: theme.text, fontSize: 16, fontWeight: 700 }}>Profile picture</Text>
+        <Text style={{ color: theme.text, fontSize: 16, fontWeight: 700 }}>
+          {t('userCard.picture.title')}
+        </Text>
         <RemoteImage url={url} objectFit="contain" style={{ width: '100%', height: 300 }} />
         <FormError>{error}</FormError>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -39,15 +43,15 @@ export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () 
             disabled={busy}
             onClick={() => void run(() => backend.api.openExternalUrl({ url }))}
           >
-            Open full size
+            {t('userCard.picture.openFull')}
           </ActionButton>
           <ActionButton
             disabled={busy}
             onClick={() => void run(() => backend.api.copyText({ text: url }))}
           >
-            Copy image URL
+            {t('userCard.picture.copyUrl')}
           </ActionButton>
-          <ActionButton onClick={onClose}>Close</ActionButton>
+          <ActionButton onClick={onClose}>{t('common.close')}</ActionButton>
         </div>
       </div>
     </Modal>

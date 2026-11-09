@@ -1,5 +1,7 @@
 import type { LayoutNode, SplitNode, PanelNode } from '@twirchat/shared/types'
 
+import { t } from '../../../gpuix/i18n'
+
 const MIN_FLEX = 0
 const MAX_FLEX = 100
 const TOTAL_FLEX = 100
@@ -120,7 +122,7 @@ export function validateTree(root: LayoutNode): { valid: boolean; error?: string
   }
 
   if (!checkDuplicates(root)) {
-    return { valid: false, error: 'Duplicate node IDs found' }
+    return { valid: false, error: t('misc.layoutTree.duplicateIds') }
   }
 
   const checkFlex = (node: LayoutNode): boolean => {
@@ -134,7 +136,7 @@ export function validateTree(root: LayoutNode): { valid: boolean; error?: string
   }
 
   if (!checkFlex(root)) {
-    return { valid: false, error: 'Invalid flex values (must be 0-100)' }
+    return { valid: false, error: t('misc.layoutTree.invalidFlex') }
   }
 
   return { valid: true }

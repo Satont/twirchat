@@ -1,14 +1,20 @@
 import { Tooltip, TooltipContent, TooltipTrigger, type StyleDesc } from '@gpuix/react'
 
 import type { StreamerModeStatus } from '../../../services/streamer-mode'
+import { t, useT } from '../../i18n'
 import { useStoreSelector } from '../../state/create-store'
 import { streamerModeStore } from '../../state/streamer-mode'
 import { semantic } from '../../theme'
 import { useTheme } from '../../theme-context'
 import { Text } from './Text'
 
-export function describeStreamerMode({ effectiveEnabled, mode }: StreamerModeStatus): string {
-  return `Streamer mode ${effectiveEnabled ? 'enabled' : 'disabled'}${mode === 'auto' ? ' (automatic)' : ''}`
+export function describeStreamerMode(
+  { effectiveEnabled, mode }: StreamerModeStatus,
+  translate: typeof t = t,
+): string {
+  return `${translate(
+    effectiveEnabled ? 'misc.streamerMode.enabled' : 'misc.streamerMode.disabled',
+  )}${mode === 'auto' ? translate('misc.streamerMode.automaticSuffix') : ''}`
 }
 
 export function StreamerModeDot({ style }: { style?: StyleDesc }) {
@@ -30,9 +36,9 @@ export function StreamerModeDot({ style }: { style?: StyleDesc }) {
 
 export function StreamerModeIndicator() {
   const theme = useTheme()
-  const label = useStoreSelector(streamerModeStore, (status) =>
-    status.effectiveEnabled ? describeStreamerMode(status) : null,
-  )
+  const { t: translate } = useT()
+  const status = useStoreSelector(streamerModeStore, (state) => state)
+  const label = status.effectiveEnabled ? describeStreamerMode(status, translate) : null
   if (!label) return null
 
   return (

@@ -5,6 +5,7 @@ import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils
 import { useBackend } from '../backend/context'
 import { compileChatSearch } from '../chat-tools'
 import { focusPopupSearch, usePopupHotkeys } from '../hooks/use-popup-hotkeys'
+import { useT } from '../i18n'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { nativeWindow } from '../native-window'
 import {
@@ -27,6 +28,7 @@ export function SearchAllChatsDialog({ onClose }: { onClose: () => void }) {
   const scope = useWindowScope()
   const privacy = useStore(streamerModeStore)
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const size = useWindowSize()
   const renderer = useGpuixRequired()
   const focus = useTextInputFocusTracking()
@@ -132,25 +134,25 @@ export function SearchAllChatsDialog({ onClose }: { onClose: () => void }) {
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <div style={{ flexGrow: 1 }}>
             <Text style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>
-              Search all open chats
+              {t('app.search.title')}
             </Text>
             <Text style={{ fontSize: 12, color: theme.text2 }}>
               {snapshot
-                ? `${snapshot.sourceCount} chats · snapshot at ${new Date(snapshot.capturedAt).toLocaleTimeString()}`
-                : 'Capturing open chats…'}
+                ? `${tPlural('app.search.chats', snapshot.sourceCount)} · ${t('app.search.snapshotAt', { time: new Date(snapshot.capturedAt).toLocaleTimeString() })}`
+                : t('app.search.capturing')}
             </Text>
           </div>
           <ActionButton onClick={() => setRevision((value) => value + 1)} disabled={loading}>
-            Refresh
+            {t('common.refresh')}
           </ActionButton>
-          <ActionButton onClick={onClose}>Close</ActionButton>
+          <ActionButton onClick={onClose}>{t('common.close')}</ActionButton>
         </div>
         <input
           ref={searchRef}
           testId="search-all-chats-input"
           autoFocus
           value={query}
-          placeholder={'Search text or from:alice regex:"hello\\s+chat" is:reply'}
+          placeholder={t('app.search.placeholder')}
           {...focus}
           onChange={(event) => setQuery(event.value ?? '')}
           onKeyDown={(event) => {
@@ -185,19 +187,17 @@ export function SearchAllChatsDialog({ onClose }: { onClose: () => void }) {
         <Text style={{ fontSize: 12, color: error ? theme.dangerText : theme.text2 }}>
           {error ??
             (loading
-              ? 'Capturing chat history…'
+              ? t('app.search.capturingHistory')
               : searching
-                ? 'Searching…'
-                : `${results.length} results · ↑/↓ select · Enter to jump`)}
+                ? t('app.search.searching')
+                : `${tPlural('app.search.results', results.length)} · ${t('app.search.resultHint')}`)}
         </Text>
         {snapshot?.unavailableTabs.length ? (
-          <Text
-            style={{ fontSize: 12, color: theme.dangerText }}
-          >{`${snapshot.unavailableTabs.length} open tab layouts could not be loaded. Refresh to try again.`}</Text>
+          <Text style={{ fontSize: 12, color: theme.dangerText }}>
+            {tPlural('app.search.unavailableTabs', snapshot.unavailableTabs.length)}
+          </Text>
         ) : null}
-        <Text style={{ fontSize: 11, color: theme.text2 }}>
-          Results stay frozen until Refresh. Search retained messages in open panes and My channels.
-        </Text>
+        <Text style={{ fontSize: 11, color: theme.text2 }}>{t('app.search.frozenHint')}</Text>
         {results.length ? (
           <virtual-list
             testId="search-all-chats-results"
@@ -250,7 +250,7 @@ export function SearchAllChatsDialog({ onClose }: { onClose: () => void }) {
             style={{ flexGrow: 1, minHeight: 100, justifyContent: 'center', alignItems: 'center' }}
           >
             <Text style={{ color: theme.text2, fontSize: 13 }}>
-              {loading || searching ? 'Preparing results…' : 'No messages match this search.'}
+              {loading || searching ? t('app.search.preparing') : t('app.search.noMatches')}
             </Text>
           </div>
         )}

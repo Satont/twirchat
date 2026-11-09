@@ -1,5 +1,6 @@
 import { logger } from '@twirchat/shared/logger'
 
+import { t } from '../gpuix/i18n'
 import type {
   PluginTransportCallbacks,
   PluginTransportConnection,
@@ -161,7 +162,7 @@ export function createPluginChannels({ manager, onMessage, onStatus }: PluginCha
       if (entry.status.status !== 'error')
         setStatus(entry, {
           status: 'disconnected',
-          error: `Enable the plugin for ${channel.transportName} to connect.`,
+          error: t('misc.pluginChannels.enablePlugin', { name: channel.transportName }),
         })
       return
     }
@@ -236,9 +237,9 @@ export function createPluginChannels({ manager, onMessage, onStatus }: PluginCha
     list: () => PluginWatchedChannelsStore.findAll(),
     add(platform: PluginPlatform, channelSlug: string): PluginWatchedChannel {
       const transport = transports.get(platform)
-      if (!transport) throw new Error('This plugin transport is unavailable.')
+      if (!transport) throw new Error(t('misc.pluginChannels.transportUnavailable'))
       if (!channelSlug.trim() || channelSlug.length > 256)
-        throw new Error('Enter a channel identifier of up to 256 characters.')
+        throw new Error(t('misc.pluginChannels.channelIdentifier'))
       return PluginWatchedChannelsStore.upsert({
         platform,
         channelSlug,
@@ -291,15 +292,15 @@ export function createPluginChannels({ manager, onMessage, onStatus }: PluginCha
       const entry = active.get(id)
       const binding = entry?.binding
       if (!binding?.connection || entry?.status.status !== 'connected')
-        throw new Error('This channel is not connected.')
-      if (!binding.info.canSend) throw new Error('This plugin transport is read-only.')
+        throw new Error(t('misc.pluginChannels.notConnected'))
+      if (!binding.info.canSend) throw new Error(t('misc.pluginChannels.readOnly'))
       if (!text.trim() || text.length > 4000)
-        throw new Error('Enter a message of up to 4000 characters.')
+        throw new Error(t('misc.pluginChannels.messageLength'))
       await binding.connection.sendMessage(text)
     },
     addSystemMessage(id: string, text: string): void {
       const entry = active.get(id)
-      if (!entry) throw new Error('This channel is not open.')
+      if (!entry) throw new Error(t('misc.pluginChannels.notOpen'))
       append(entry, {
         id: crypto.randomUUID(),
         author: { id: 'system', name: 'TwirChat' },

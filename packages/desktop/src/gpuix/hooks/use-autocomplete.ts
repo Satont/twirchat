@@ -31,6 +31,7 @@ import {
   TWIR_RELOAD_COMMAND_NAME,
   type CustomCommandDefinition,
 } from '../commands'
+import { translatorFor, useT } from '../i18n'
 import { emoteStore, loadEmotes } from '../state/app'
 import { useStore, useStoreSelector } from '../state/create-store'
 import {
@@ -56,11 +57,15 @@ const EMPTY_EMOTE_SUGGESTIONS: EmoteSuggestion[] = []
 const EMPTY_TWIR_SUGGESTIONS: CommandSuggestion[] = []
 const EMPTY_PLUGIN_COMMANDS: readonly string[] = []
 
-const TWIR_RELOAD_SUGGESTION: CommandSuggestion = {
-  type: 'command',
-  label: `/${TWIR_RELOAD_COMMAND_NAME}`,
-  insertText: `/${TWIR_RELOAD_COMMAND_NAME}`,
-  description: 'Reload Twir commands for this chat',
+type Translate = ReturnType<typeof useT>['t']
+
+function twirReloadSuggestion(t: Translate): CommandSuggestion {
+  return {
+    type: 'command',
+    label: `/${TWIR_RELOAD_COMMAND_NAME}`,
+    insertText: `/${TWIR_RELOAD_COMMAND_NAME}`,
+    description: t('commands.autocomplete.twirReload'),
+  }
 }
 
 function isComposerOnlyCommand(name: string): boolean {
@@ -68,79 +73,106 @@ function isComposerOnlyCommand(name: string): boolean {
   return isAutoTranslationCommand(invocation) || isTwirReloadCommand(invocation)
 }
 
-const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
-  {
-    type: 'command',
-    label: AUTO_TRANSLATION_COMMAND,
-    insertText: AUTO_TRANSLATION_COMMAND,
-    description: 'Translate outgoing chat in this channel: <language|off>',
-  },
-  {
-    type: 'command',
-    label: '/translate',
-    insertText: '/translate',
-    description: 'Preview a translation of text locally',
-  },
-  {
-    type: 'command',
-    label: '/translateto',
-    insertText: '/translateto',
-    description: 'Preview a translation: <language> <text>',
-  },
-  {
-    type: 'command',
-    label: '/saytranslate',
-    insertText: '/saytranslate',
-    description: 'Translate and send: <language> <text>',
-  },
-  {
-    type: 'command',
-    label: '/tl',
-    insertText: '/tl',
-    description: 'Translate and send: <language> <text>',
-  },
-  {
-    type: 'command',
-    label: '.w',
-    insertText: '.w',
-    description: 'Whisper privately: <username> <message>',
-  },
-  {
-    type: 'command',
-    label: '/r',
-    insertText: '/r',
-    description: 'Whisper to the last recipient: <message>',
-  },
-  { type: 'command', label: '/$', insertText: '/$', description: 'Whisper a $ command to Supibot' },
-  {
-    type: 'command',
-    label: '/_',
-    insertText: '/_',
-    description: 'Whisper an _ command to mm_sutilitybot',
-  },
-  { type: 'command', label: '/user', insertText: '/user', description: 'Open user card' },
-  { type: 'command', label: '/search', insertText: '/search', description: 'Search this chat' },
-  {
-    type: 'command',
-    label: '/mentions',
-    insertText: '/mentions',
-    description: 'Toggle mentions only',
-  },
-  { type: 'command', label: '/pause', insertText: '/pause', description: 'Pause this chat view' },
-  { type: 'command', label: '/resume', insertText: '/resume', description: 'Resume live messages' },
-  {
-    type: 'command',
-    label: '/copy',
-    insertText: '/copy',
-    description: 'Copy visible chat messages',
-  },
-  {
-    type: 'command',
-    label: '/clearmessages',
-    insertText: '/clearmessages',
-    description: 'Clear this view locally',
-  },
-]
+function commandSuggestions(t: Translate): CommandSuggestion[] {
+  return [
+    {
+      type: 'command',
+      label: AUTO_TRANSLATION_COMMAND,
+      insertText: AUTO_TRANSLATION_COMMAND,
+      description: t('commands.autocomplete.translateChannel'),
+    },
+    {
+      type: 'command',
+      label: '/translate',
+      insertText: '/translate',
+      description: t('commands.autocomplete.translatePreview'),
+    },
+    {
+      type: 'command',
+      label: '/translateto',
+      insertText: '/translateto',
+      description: t('commands.autocomplete.translateTo'),
+    },
+    {
+      type: 'command',
+      label: '/saytranslate',
+      insertText: '/saytranslate',
+      description: t('commands.autocomplete.sayTranslate'),
+    },
+    {
+      type: 'command',
+      label: '/tl',
+      insertText: '/tl',
+      description: t('commands.autocomplete.sayTranslate'),
+    },
+    {
+      type: 'command',
+      label: '.w',
+      insertText: '.w',
+      description: t('commands.autocomplete.whisper'),
+    },
+    {
+      type: 'command',
+      label: '/r',
+      insertText: '/r',
+      description: t('commands.autocomplete.whisperLast'),
+    },
+    {
+      type: 'command',
+      label: '/$',
+      insertText: '/$',
+      description: t('commands.autocomplete.supibot'),
+    },
+    {
+      type: 'command',
+      label: '/_',
+      insertText: '/_',
+      description: t('commands.autocomplete.sutilitybot'),
+    },
+    {
+      type: 'command',
+      label: '/user',
+      insertText: '/user',
+      description: t('commands.autocomplete.userCard'),
+    },
+    {
+      type: 'command',
+      label: '/search',
+      insertText: '/search',
+      description: t('commands.autocomplete.search'),
+    },
+    {
+      type: 'command',
+      label: '/mentions',
+      insertText: '/mentions',
+      description: t('commands.autocomplete.mentions'),
+    },
+    {
+      type: 'command',
+      label: '/pause',
+      insertText: '/pause',
+      description: t('commands.autocomplete.pause'),
+    },
+    {
+      type: 'command',
+      label: '/resume',
+      insertText: '/resume',
+      description: t('commands.autocomplete.resume'),
+    },
+    {
+      type: 'command',
+      label: '/copy',
+      insertText: '/copy',
+      description: t('commands.autocomplete.copy'),
+    },
+    {
+      type: 'command',
+      label: '/clearmessages',
+      insertText: '/clearmessages',
+      description: t('commands.autocomplete.clear'),
+    },
+  ]
+}
 
 export function useAutocomplete(params: {
   text: string
@@ -155,6 +187,8 @@ export function useAutocomplete(params: {
 }) {
   const { text, setText, messages, watchedChannel, statuses, aliasMap } = params
   const backend = useBackend()
+  const { language } = useT()
+  const t = useMemo(() => translatorFor(language), [language])
   const emotes = useStore(emoteStore)
   const emotePreferences = useStoreSelector(emotePreferencesStore, (state) => state.value)
   useEffect(() => {
@@ -312,8 +346,8 @@ export function useAutocomplete(params: {
           insertText: `/${command.name}`,
           description: command.template.replace(/\n/g, ' · '),
         }))
-      const commands = [...custom, ...COMMAND_SUGGESTIONS]
-      if (params.twirEnabled) commands.push(TWIR_RELOAD_SUGGESTION)
+      const commands = [...custom, ...commandSuggestions(t)]
+      if (params.twirEnabled) commands.push(twirReloadSuggestion(t))
       if (pluginCommands.length) {
         const reserved = new Set<string>([
           ...commands.map((command) => command.label.slice(1)),
@@ -328,7 +362,7 @@ export function useAutocomplete(params: {
             type: 'command',
             label: `/${name}`,
             insertText: `/${name}`,
-            description: 'Plugin command',
+            description: t('commands.autocomplete.plugin'),
           })
         }
       }
@@ -356,6 +390,7 @@ export function useAutocomplete(params: {
     params.twirEnabled,
     pluginCommands,
     emotePreferences.emojiCompletion,
+    t,
   ])
 
   const isOpen = suggestions.length > 0 && queryKey !== closedQuery

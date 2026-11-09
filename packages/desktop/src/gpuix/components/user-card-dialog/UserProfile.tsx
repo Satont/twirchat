@@ -5,6 +5,7 @@ import { ActionButton } from '@gpuix/components/ui/Form'
 import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
 import { Text } from '@gpuix/components/ui/Text'
 import { runUiTask } from '@gpuix/hooks/run-ui-task'
+import { useT } from '@gpuix/i18n'
 import { useStoreSelector } from '@gpuix/state/create-store'
 import { emotePreferencesStore } from '@gpuix/state/emote-preferences'
 import { useTheme } from '@gpuix/theme-context'
@@ -23,6 +24,7 @@ export function UserProfile({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t, tPlural, language } = useT()
   const badgesEnabled = useStoreSelector(emotePreferencesStore, (state) => state.value.badges)
   const paintsEnabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
   const communityBadges = useStoreSelector(
@@ -109,35 +111,41 @@ export function UserProfile({
   const entries: [string, string | undefined][] = profile
     ? [
         [
-          'Live',
+          t('userCard.profile.live'),
           profile.live
-            ? `${profile.live.title} · ${profile.live.category} · ${profile.live.viewers} viewers`
+            ? t('userCard.profile.liveValue', {
+                title: profile.live.title,
+                category: profile.live.category,
+                viewers: tPlural('userCard.profile.viewers', profile.live.viewers),
+              })
             : profile.errors.some((item) => item.section === 'live')
               ? undefined
-              : 'Offline',
+              : t('userCard.profile.offline'),
         ],
-        ['Followers', profile.followers?.toLocaleString()],
+        [t('userCard.profile.followers'), profile.followers?.toLocaleString(language)],
         [
-          'Latest archived stream',
-          profile.lastLive ? new Date(profile.lastLive).toLocaleString() : undefined,
+          t('userCard.profile.lastLive'),
+          profile.lastLive ? new Date(profile.lastLive).toLocaleString(language) : undefined,
         ],
-        ['Pronouns', profile.pronouns],
-        ['Chat color', profile.color || undefined],
-        ['Broadcaster', profile.broadcasterType || undefined],
+        [t('userCard.profile.pronouns'), profile.pronouns],
+        [t('userCard.profile.chatColor'), profile.color || undefined],
+        [t('userCard.profile.broadcaster'), profile.broadcasterType || undefined],
         [
-          'Channel roles',
+          t('userCard.profile.roles'),
           profile.roles
             ? Object.entries(profile.roles)
                 .filter(([, enabled]) => enabled)
                 .map(([name]) => name)
-                .join(', ') || 'No confirmed channel role'
+                .join(', ') || t('userCard.profile.noRole')
             : undefined,
         ],
       ]
     : []
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-      {loading ? <Text style={{ fontSize: 12, color: theme.text2 }}>Loading profile…</Text> : null}
+      {loading ? (
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('userCard.profile.loading')}</Text>
+      ) : null}
       {error ? <Text style={{ fontSize: 12, color: theme.dangerText }}>{error}</Text> : null}
       {!hideAvatar && profile?.avatarUrl ? (
         <ActionButton
@@ -147,7 +155,7 @@ export function UserProfile({
               .catch((cause: unknown) => setError(String(cause)))
           }
         >
-          Copy profile avatar URL
+          {t('userCard.profile.copyAvatar')}
         </ActionButton>
       ) : null}
       {profile?.description ? (
@@ -163,11 +171,11 @@ export function UserProfile({
       {profile?.nameHistory?.length ? (
         <>
           <Text style={{ color: theme.text2, fontSize: 12 }}>
-            Name history · logs.zonian.dev (observed names)
+            {t('userCard.profile.nameHistory')}
           </Text>
           {profile.nameHistory.map((entry, index) => (
             <Text key={index} style={{ color: theme.text, fontSize: 12 }}>
-              {`${entry.login} · ${entry.firstSeen ? new Date(entry.firstSeen).toLocaleDateString() : '?'} – ${entry.lastSeen ? new Date(entry.lastSeen).toLocaleDateString() : '?'}`}
+              {`${entry.login} · ${entry.firstSeen ? new Date(entry.firstSeen).toLocaleDateString(language) : '?'} – ${entry.lastSeen ? new Date(entry.lastSeen).toLocaleDateString(language) : '?'}`}
             </Text>
           ))}
         </>
@@ -207,7 +215,7 @@ export function UserProfile({
           </div>
           {paintsEnabled && cosmetics.paint ? (
             <Text style={{ color: theme.text2, fontSize: 12 }}>
-              7TV paint: {cosmetics.paint.name}
+              {t('userCard.profile.paint', { name: cosmetics.paint.name })}
             </Text>
           ) : null}
           <ActionButton
@@ -217,11 +225,13 @@ export function UserProfile({
                 .catch((cause: unknown) => setError(String(cause)))
             }
           >
-            Open 7TV profile
+            {t('userCard.profile.openSevenTv')}
           </ActionButton>
         </>
       ) : cosmetics?.lookupStatus === 'unavailable' ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>7TV cosmetics are unavailable.</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>
+          {t('userCard.profile.cosmeticsUnavailable')}
+        </Text>
       ) : null}
       {profile?.errors.map((item) => (
         <Text key={item.section} style={{ fontSize: 11, color: theme.text2 }}>

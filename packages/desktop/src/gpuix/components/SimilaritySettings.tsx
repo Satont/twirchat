@@ -6,6 +6,7 @@ import {
 } from '../../services/message-similarity'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT, type MessageKey } from '../i18n'
 import { useStore } from '../state/create-store'
 import {
   loadMessageSimilaritySettings,
@@ -17,17 +18,18 @@ import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
-const toggles: [keyof MessageSimilaritySettings, string][] = [
-  ['enabled', 'Check incoming messages for similarity'],
-  ['hideSimilar', 'Hide messages marked similar'],
-  ['sameUserOnly', 'Compare messages from the same user only'],
-  ['excludeOwn', 'Exclude my own messages'],
-  ['graySimilar', 'Gray out similar messages'],
-  ['shownSimilarTriggerHighlights', 'Allow shown similar messages to trigger highlights'],
+const toggles: [keyof MessageSimilaritySettings, MessageKey][] = [
+  ['enabled', 'similaritySettings.enabled'],
+  ['hideSimilar', 'similaritySettings.hideSimilar'],
+  ['sameUserOnly', 'similaritySettings.sameUserOnly'],
+  ['excludeOwn', 'similaritySettings.excludeOwn'],
+  ['graySimilar', 'similaritySettings.graySimilar'],
+  ['shownSimilarTriggerHighlights', 'similaritySettings.shownSimilarTriggerHighlights'],
 ]
 export function SimilaritySettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const state = useStore(messageSimilarityStore)
   const [draft, setDraft] = useState(() => structuredClone(state.value))
   const [numeric, setNumeric] = useState(() => ({
@@ -85,54 +87,44 @@ export function SimilaritySettings() {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Text style={{ color: theme.text2, fontSize: 12 }}>
-        Compare incoming Twitch and Kick messages using their longest shared contiguous text. Checks
-        are case-sensitive. Existing message flags stay fixed when settings change; hiding, gray and
-        highlight options update their presentation.
-      </Text>
+      <Text style={{ color: theme.text2, fontSize: 12 }}>{t('similaritySettings.intro')}</Text>
       {state.error && !dirty ? (
         <ActionButton
           onClick={() => {
             runUiTask(loadMessageSimilaritySettings(backend))
           }}
         >
-          Retry loading similarity settings
+          {t('similaritySettings.retry')}
         </ActionButton>
       ) : null}
-      {toggles.map(([key, label]) => (
+      {toggles.map(([key, labelKey]) => (
         <div key={key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Switch checked={Boolean(draft[key])} onChange={(value) => edit(key, value)} />
-          <Text style={{ color: theme.text, fontSize: 12 }}>{label}</Text>
+          <Text style={{ color: theme.text, fontSize: 12 }}>{t(labelKey)}</Text>
         </div>
       ))}
       <FormField
-        label="Similarity threshold"
-        hint="0–1. A message must score strictly above this value; 1 never matches."
+        label={t('similaritySettings.threshold')}
+        hint={t('similaritySettings.thresholdHint')}
       >
         <FormInput value={numeric.threshold} onChange={(value) => editNumber('threshold', value)} />
       </FormField>
       <FormField
-        label="Preceding messages"
-        hint="Compare the last 0–100 messages before applying the same-user condition."
+        label={t('similaritySettings.preceding')}
+        hint={t('similaritySettings.precedingHint')}
       >
         <FormInput
           value={numeric.maxMessages}
           onChange={(value) => editNumber('maxMessages', value)}
         />
       </FormField>
-      <FormField
-        label="Maximum age in seconds"
-        hint="0–3600 whole seconds. A message at this age or older ends the search."
-      >
+      <FormField label={t('similaritySettings.maxAge')} hint={t('similaritySettings.maxAgeHint')}>
         <FormInput
           value={numeric.delaySeconds}
           onChange={(value) => editNumber('delaySeconds', value)}
         />
       </FormField>
-      <Text style={{ color: theme.text2, fontSize: 11 }}>
-        Local R9K changes visibility only. It does not enable similarity checking. Hidden similar
-        messages never trigger highlights.
-      </Text>
+      <Text style={{ color: theme.text2, fontSize: 11 }}>{t('similaritySettings.note')}</Text>
       <SettingsFooter
         sectionId="similarity"
         dirty={dirty}

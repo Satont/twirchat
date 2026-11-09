@@ -1,6 +1,7 @@
 import { ActionButton } from '@gpuix/components/ui/Form'
 import { Icon } from '@gpuix/components/ui/Icon'
 import { Text } from '@gpuix/components/ui/Text'
+import { useT } from '@gpuix/i18n'
 import type { DesktopWindows } from '@gpuix/state/desktop-windows'
 import type { useTextInputFocusTracking } from '@gpuix/state/focus'
 import { useTheme } from '@gpuix/theme-context'
@@ -50,6 +51,7 @@ export function UserCardAliasSection({
   openPublicChannel,
 }: UserCardAliasSectionProps) {
   const theme = useTheme()
+  const { t } = useT()
 
   return (
     <div
@@ -85,11 +87,9 @@ export function UserCardAliasSection({
               color: theme.text,
             }}
           >
-            Display alias
+            {t('userCard.alias.title')}
           </Text>
-          <Text style={{ fontSize: 11, color: theme.text2 }}>
-            Replaces the displayed name in chat. Leave empty to remove alias.
-          </Text>
+          <Text style={{ fontSize: 11, color: theme.text2 }}>{t('userCard.alias.hint')}</Text>
         </div>
       </div>
 
@@ -145,7 +145,9 @@ export function UserCardAliasSection({
             hover: { opacity: 0.9 },
           }}
         >
-          <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onPrimary }}>Save</Text>
+          <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onPrimary }}>
+            {t('common.save')}
+          </Text>
           <Icon name="check" size={14} color={theme.accent.onPrimary} />
         </div>
       </div>
@@ -200,7 +202,7 @@ export function UserCardAliasSection({
                 color: pinned ? theme.accent.primary : theme.text,
               }}
             >
-              {pinned ? 'Unpin card' : 'Pin card'}
+              {pinned ? t('userCard.unpin') : t('userCard.pin')}
             </Text>
           </div>
           {effectiveAlias ? (
@@ -214,7 +216,7 @@ export function UserCardAliasSection({
                 justifyContent: 'center',
               }}
             >
-              Remove alias
+              {t('userCard.alias.remove')}
             </ActionButton>
           ) : null}
         </div>
@@ -233,7 +235,7 @@ export function UserCardAliasSection({
                   })
               }}
             >
-              {openingWindow ? 'Opening…' : 'Open in window'}
+              {openingWindow ? t('userCard.opening') : t('userCard.openInWindow')}
             </GhostButton>
           ) : null}
         </div>
@@ -255,7 +257,7 @@ export function UserCardAliasSection({
           }}
         >
           <Text style={{ fontSize: 12, color: theme.dangerText }}>{publicChannelError}</Text>
-          <InlineButton onClick={() => openPublicChannel()}>Retry</InlineButton>
+          <InlineButton onClick={() => openPublicChannel()}>{t('common.retry')}</InlineButton>
         </div>
       ) : null}
     </div>

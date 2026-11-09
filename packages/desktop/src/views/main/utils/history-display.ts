@@ -1,20 +1,31 @@
 import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
+import { getLanguage, t } from '../../../gpuix/i18n'
 import type { UserChatHistoryPage } from '../../../shared/rpc'
 import { sanitizeDisplayText, truncateGraphemes } from '../../shared/utils/display-text'
 import { mergeChatMessageSnapshot } from './chat-message-buffer'
 
 export const HISTORY_DISPLAY_LIMIT = 2000
 const liveIndexes = new WeakMap<NormalizedChatMessage[], Map<string, NormalizedChatMessage>>()
-const historyTimestampFormatter = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-})
+const historyTimestampFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function historyTimestampFormatter(): Intl.DateTimeFormat {
+  const language = getLanguage()
+  let formatter = historyTimestampFormatters.get(language)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(language, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+    historyTimestampFormatters.set(language, formatter)
+  }
+  return formatter
+}
 
 export interface HistoryUserTarget {
   platform: Platform
@@ -93,18 +104,19 @@ export function matchesHistoryUser(
 }
 
 export function formatHistoryTimestamp(timestamp: Date): string {
-  return historyTimestampFormatter.format(timestamp)
+  return historyTimestampFormatter().format(timestamp)
 }
 
 export function historySourceNotice(history: UserChatHistoryPage['history']): string | null {
   if (!history) return null
   if (history.error)
-    return `External Twitch history: ${truncateGraphemes(sanitizeDisplayText(history.error), 240)} Local messages remain available.`
+    return t('commands.history.externalError', {
+      error: truncateGraphemes(sanitizeDisplayText(history.error), 240),
+    })
   if (history.sources.length && history.sources.every((source) => source.status !== 'ok'))
-    return 'External Twitch history is unavailable for this request. Showing stored local messages.'
-  if (history.partial)
-    return 'Some history sources are unavailable. Showing local messages and available external history.'
-  return 'External history covers only channels and dates retained by its providers.'
+    return t('commands.history.unavailable')
+  if (history.partial) return t('commands.history.partial')
+  return t('commands.history.limited')
 }
 
 export function historyRowVisible(

@@ -13,6 +13,7 @@ import type {
   PluginChannelSnapshot,
 } from '../../watched-channels/plugin-channels'
 import type { DesktopApi } from '../backend/api'
+import { t } from '../i18n'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 import { createPreferenceStore, type PreferenceApi, type PreferenceStore } from './preferences'
@@ -48,7 +49,7 @@ export function setHomePluginChannel(
     if (error) throw new Error(error)
     if (previous.includes(id) === included) return undefined
     if (included && previous.length >= MAX_HOME_PLUGIN_CHANNELS)
-      throw new Error('Remove a plugin source from My channels before adding another.')
+      throw new Error(t('notices.homePlugin.sourceLimit'))
     const next = included ? [...previous, id] : previous.filter((source) => source !== id)
     try {
       await sourceState.preferences.save(api, next)

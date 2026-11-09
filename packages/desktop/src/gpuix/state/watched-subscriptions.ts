@@ -4,6 +4,7 @@ import { runInBackground } from '../../services/background-task'
 import { getAllPanels } from '../../views/main/utils/layout-tree'
 import type { DesktopWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
+import { t } from '../i18n'
 import { showNotice, watchedChannelsStore } from './app'
 import { chatTabsStore } from './chat-tabs'
 import { chatWindowsStore } from './chat-windows'
@@ -135,7 +136,7 @@ export function wireActiveWatchedChannels(backend: {
     load: (id) => loadLayout(backend, id),
     publish: (ids) => backend.api.setActiveWatchedChannels({ ids }),
     failed: (error) =>
-      showNotice('error', `Could not update open chat connections: ${String(error)}`),
+      showNotice('error', t('notices.watchedSubscriptions.updateFailed', { error: String(error) })),
   })
   const refresh = () =>
     runInBackground(controller.refresh(), 'Could not update watched chat connections')

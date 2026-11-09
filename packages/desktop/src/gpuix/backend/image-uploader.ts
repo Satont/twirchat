@@ -21,6 +21,7 @@ import {
 } from '../../services/image-uploader'
 import { decryptAsync, encryptAsync } from '../../store/crypto'
 import { getDb } from '../../store/db'
+import { t } from '../i18n'
 import { browserCommand } from './open-url'
 
 const SETTINGS_KEY = 'secret:image-uploader'
@@ -58,8 +59,7 @@ async function getCustomSettings(): Promise<ImageUploaderSettings> {
     .then((json) => validateImageUploaderSettings(JSON.parse(json)))
     .catch(() => null)
   if (value !== read(SETTINGS_KEY)) return getCustomSettings()
-  if (!settings)
-    throw new Error('Image uploader settings could not be opened. Save the configuration again.')
+  if (!settings) throw new Error(t('runtime.imageUploader.settingsOpenFailed'))
   return settings
 }
 
@@ -90,7 +90,7 @@ export async function saveImageUploaderSettings(
   }
   const settings = validateImageUploaderSettings(value)
   const encrypted = await encryptAsync(JSON.stringify(settings))
-  if (read(TWIR_TOKENS_KEY)) throw new Error('The image uploader changed. Reload its settings.')
+  if (read(TWIR_TOKENS_KEY)) throw new Error(t('runtime.imageUploader.uploaderChanged'))
   write(SETTINGS_KEY, encrypted)
   return settings
 }
@@ -105,7 +105,7 @@ async function readTwirTokens(encrypted: string) {
 
 async function openTwirBrowser(url: string): Promise<void> {
   const process = Bun.spawn(browserCommand(url), { stdout: 'ignore', stderr: 'ignore' })
-  if ((await process.exited) !== 0) throw new Error('Could not open the browser.')
+  if ((await process.exited) !== 0) throw new Error(t('runtime.imageUploader.browserOpenFailed'))
 }
 
 function revokeStoredTwirSession(encrypted: string): void {
@@ -119,7 +119,7 @@ export async function connectTwirImageUploader(
   { signal }: { signal: AbortSignal },
   openBrowser = openTwirBrowser,
 ): Promise<ImageUploaderSettings> {
-  if (signIn) throw new Error('Twir sign-in is already in progress.')
+  if (signIn) throw new Error(t('runtime.imageUploader.signInInProgress'))
   signIn = new AbortController()
   const cancellation = AbortSignal.any([signal, signIn.signal])
   try {
@@ -202,12 +202,12 @@ export async function uploadClipboardImage({
     settings.imageLink !== saved.imageLink ||
     settings.deletionLink !== saved.deletionLink
   )
-    throw new Error('The image uploader settings changed. Paste the image again.')
+    throw new Error(t('runtime.imageUploader.settingsChanged'))
   if (saved.provider !== 'twir') return uploadImage({ image, settings: saved, signal })
 
   const { encrypted, accessToken } = await getTwirAccessToken()
   if (encrypted !== read(TWIR_TOKENS_KEY) || !getTwirSettings()?.enabled)
-    throw new Error('The image uploader settings changed. Paste the image again.')
+    throw new Error(t('runtime.imageUploader.settingsChanged'))
   try {
     return await uploadTwirClipboardImage({ image, signal }, accessToken)
   } catch (error) {

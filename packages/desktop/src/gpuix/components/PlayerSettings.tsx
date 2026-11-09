@@ -7,6 +7,7 @@ import {
 } from '../../services/channel-actions'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { useTheme } from '../theme-context'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormField, FormInput } from './ui/Form'
@@ -15,6 +16,7 @@ import { Text } from './ui/Text'
 export function PlayerSettings() {
   const { api } = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [draft, setDraft] = useState<Settings>(() => structuredClone(DEFAULT_PLAYER_SETTINGS))
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -91,12 +93,9 @@ export function PlayerSettings() {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Open channel streams in your browser, a custom player or Streamlink. Install the player
-        separately and enter its executable path here.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('playerSettings.description')}</Text>
       {!loaded && !error ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading player settings…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('playerSettings.loading')}</Text>
       ) : null}
       {error && !dirty ? (
         <ActionButton
@@ -104,7 +103,7 @@ export function PlayerSettings() {
             runUiTask(load())
           }}
         >
-          Retry loading player settings
+          {t('playerSettings.retry')}
         </ActionButton>
       ) : null}
       {loaded
@@ -113,7 +112,11 @@ export function PlayerSettings() {
           ).map((kind) => (
             <div key={kind} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <FormField
-                label={kind === 'custom' ? 'Custom player executable' : 'Streamlink executable'}
+                label={
+                  kind === 'custom'
+                    ? t('playerSettings.customExecutable')
+                    : t('playerSettings.streamlinkExecutable')
+                }
               >
                 <FormInput
                   testId={`player-${kind}-executable`}
@@ -123,8 +126,8 @@ export function PlayerSettings() {
                 />
               </FormField>
               <FormField
-                label="Arguments"
-                hint="One argument per line. Use {url}, {channel} and {platform}. Spaces within a line stay in that single argument; do not add shell quotes."
+                label={t('playerSettings.arguments')}
+                hint={t('playerSettings.argumentsHint')}
               >
                 <FormInput
                   multiline

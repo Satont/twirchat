@@ -1,6 +1,7 @@
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 
+import { t } from './i18n'
 import { compileRuleRegex } from './rule-regex'
 
 export function chatMessageKey(message: NormalizedChatMessage): string {
@@ -225,11 +226,7 @@ export function compileChatSearch(query: string): {
   })
   return {
     matches: (message, details) => predicates.every((predicate) => predicate(message, details)),
-    ...(quoted
-      ? { error: 'Close the quotation mark to finish the phrase.' }
-      : error
-        ? { error }
-        : {}),
+    ...(quoted ? { error: t('misc.chatSearch.closeQuote') } : error ? { error } : {}),
   }
 }
 

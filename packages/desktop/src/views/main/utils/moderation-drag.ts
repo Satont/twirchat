@@ -1,4 +1,5 @@
 import type { ModerationAction, ModerationPlatform } from '../../../gpuix/backend/api'
+import { t } from '../../../gpuix/i18n'
 
 const activationDistance = 32
 const deleteDistance = 80
@@ -17,7 +18,7 @@ export function moderationActionForDrag(
   const clampedDistance = Math.max(0, distance)
   if (clampedDistance < activationDistance) return null
   if (clampedDistance < deleteDistance) {
-    return { action: 'delete_message', label: 'Delete message' }
+    return { action: 'delete_message', label: t('commands.moderation.delete') }
   }
 
   // Kick caps timeouts at seven days; Twitch accepts a larger maximum. All
@@ -31,12 +32,12 @@ export function moderationActionForDrag(
       return {
         action: 'timeout',
         durationSeconds,
-        label: `Timeout ${formatTimeout(durationSeconds)}`,
+        label: t('commands.moderation.timeout', { duration: formatTimeout(durationSeconds) }),
       }
     }
   }
 
-  return { action: 'ban', label: 'Ban permanently' }
+  return { action: 'ban', label: t('commands.moderation.ban') }
 }
 
 export function moderationActionColor(action: ModerationAction | null): string {
@@ -53,7 +54,7 @@ export function moderationActionColor(action: ModerationAction | null): string {
 }
 
 function formatTimeout(seconds: number): string {
-  if (seconds >= 86_400) return `${seconds / 86_400}d`
-  if (seconds >= 3600) return `${seconds / 3600}h`
-  return `${seconds / 60}m`
+  if (seconds >= 86_400) return t('commands.moderation.days', { count: seconds / 86_400 })
+  if (seconds >= 3600) return t('commands.moderation.hours', { count: seconds / 3600 })
+  return t('commands.moderation.minutes', { count: seconds / 60 })
 }

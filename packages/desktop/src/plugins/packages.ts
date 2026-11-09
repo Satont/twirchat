@@ -15,6 +15,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
 import { PLUGIN_API_VERSION, type PluginInfo } from './api'
 import {
   MANIFEST_FILENAME,
@@ -50,12 +51,16 @@ export interface InstalledPlugin {
 async function readManifest(path: string): Promise<Manifest> {
   const stats = await lstat(path)
   if (!stats.isFile() || stats.size > MAX_MANIFEST_BYTES)
-    throw new Error('Expected a regular plugin manifest of at most 32 KiB.')
+    throw new Error(t('runtime.plugins.manifestNotRegular'))
   const value: unknown = await Bun.file(path).json()
   const parsed = manifestSchema.safeParse(value)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
-    throw new Error(`Invalid plugin manifest${issue ? ` (${issue.path.join('.')})` : ''}.`)
+    throw new Error(
+      t('runtime.plugins.invalidManifest', {
+        detail: issue ? ` (${issue.path.join('.')})` : '',
+      }),
+    )
   }
   return parsed.data
 }
@@ -68,12 +73,12 @@ async function readRemotePointer(directory: string): Promise<RemotePointer | und
   })
   if (!stat) return undefined
   if (!stat.isFile() || stat.size > MAX_MANIFEST_BYTES)
-    throw new Error('Invalid installed plugin remote pointer.')
+    throw new Error(t('runtime.plugins.invalidRemotePointer'))
   const value: unknown = await Bun.file(path).json()
   const parsed = remoteSchema.safeParse(value)
-  if (!parsed.success) throw new Error('Invalid installed plugin remote pointer.')
+  if (!parsed.success) throw new Error(t('runtime.plugins.invalidRemotePointer'))
   const sourceUrl = remoteManifestUrl(parsed.data.sourceUrl)
-  if (!sourceUrl) throw new Error('Invalid installed plugin remote source.')
+  if (!sourceUrl) throw new Error(t('runtime.plugins.invalidRemoteSource'))
   return { sourceUrl, release: parsed.data.release }
 }
 
@@ -85,7 +90,7 @@ async function entryPath(source: string, path: string): Promise<string> {
     // eslint-disable-next-line no-await-in-loop
     const stat = await lstat(entry)
     if (index === segments.length - 1 ? !stat.isFile() : !stat.isDirectory())
-      throw new Error('Plugin entry must be a regular file inside its package.')
+      throw new Error(t('runtime.plugins.entryNotRegularFile'))
   }
   return entry
 }
@@ -97,9 +102,10 @@ async function readInstalledPackage(
   remote?: RemotePointer,
 ): Promise<InstalledPlugin> {
   const source = join(directory, remote?.release ?? 'package')
-  if (!(await lstat(source)).isDirectory()) throw new Error('Invalid installed package directory.')
+  if (!(await lstat(source)).isDirectory())
+    throw new Error(t('runtime.plugins.invalidPackageDirectory'))
   const manifest = await readManifest(join(source, MANIFEST_FILENAME))
-  if (manifest.id !== id) throw new Error('Installed plugin ID does not match its directory.')
+  if (manifest.id !== id) throw new Error(t('runtime.plugins.idMismatch'))
   const { name, version, apiVersion } = manifest
   const provenance = remote ? { remote } : {}
   const info = { id, name, version, enabled, ...(remote && { sourceUrl: remote.sourceUrl }) }
@@ -112,7 +118,10 @@ async function readInstalledPackage(
       info: {
         ...info,
         status: 'incompatible',
-        error: `Plugin API ${apiVersion} is incompatible with TwirChat API ${PLUGIN_API_VERSION}.`,
+        error: t('runtime.plugins.incompatibleApi', {
+          apiVersion,
+          currentApi: PLUGIN_API_VERSION,
+        }),
       },
     }
   return { entry, ...provenance, info: { ...info, status: 'disabled' } }
@@ -157,10 +166,10 @@ async function copyPackage(source: string, destination: string): Promise<void> {
   let count = 0
   let bytes = 0
   async function copyDirectory(from: string, to: string, depth: number): Promise<void> {
-    if (depth > MAX_PACKAGE_DEPTH) throw new Error('Plugin package is nested too deeply.')
+    if (depth > MAX_PACKAGE_DEPTH) throw new Error(t('runtime.plugins.packageTooDeep'))
     await mkdir(to)
     for await (const entry of await opendir(from)) {
-      if (++count > MAX_PACKAGE_ENTRIES) throw new Error('Plugin package contains too many files.')
+      if (++count > MAX_PACKAGE_ENTRIES) throw new Error(t('runtime.plugins.packageTooManyFiles'))
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
       const input = join(from, entry.name)
       const output = join(to, entry.name)
@@ -168,9 +177,9 @@ async function copyPackage(source: string, destination: string): Promise<void> {
         await copyDirectory(input, output, depth + 1)
       } else {
         const stat = await lstat(input)
-        if (!stat.isFile()) throw new Error('Plugin packages may contain regular files only.')
+        if (!stat.isFile()) throw new Error(t('runtime.plugins.packageRegularFilesOnly'))
         bytes += stat.size
-        if (bytes > MAX_PACKAGE_BYTES) throw new Error('Plugin package exceeds 16 MiB.')
+        if (bytes > MAX_PACKAGE_BYTES) throw new Error(t('runtime.plugins.packageTooLarge'))
         await copyFile(input, output, constants.COPYFILE_EXCL)
       }
     }
@@ -189,19 +198,19 @@ export async function installPluginPackage(
   manifestPath: string,
   installedIds: ReadonlyMap<string, InstalledPlugin>,
 ): Promise<InstalledPlugin> {
-  if (installedIds.size >= MAX_PLUGINS) throw new Error('The installed plugin limit was reached.')
+  if (installedIds.size >= MAX_PLUGINS) throw new Error(t('runtime.plugins.limitReached'))
   const path = resolve(manifestPath)
-  if (basename(path) !== MANIFEST_FILENAME) throw new Error('Select the plugin manifest.json file.')
+  if (basename(path) !== MANIFEST_FILENAME) throw new Error(t('runtime.plugins.selectManifest'))
   const source = await realpath(dirname(path))
   const { id } = await readManifest(join(source, MANIFEST_FILENAME))
-  if (installedIds.has(id)) throw new Error(`Plugin ${id} is already installed.`)
+  if (installedIds.has(id)) throw new Error(t('runtime.plugins.alreadyInstalled', { id }))
   // Do not let a package copy its own staging directory when the selected folder contains root.
   const installedPath = relative(source, await realpath(root))
   if (
     !installedPath ||
     (!isAbsolute(installedPath) && installedPath !== '..' && !installedPath.startsWith(`..${sep}`))
   )
-    throw new Error('Select a plugin package outside the installed plugin directory.')
+    throw new Error(t('runtime.plugins.packageOutsideInstallDir'))
   const staging = await mkdtemp(join(root, '.install-'))
   const candidate = join(staging, id)
   try {
@@ -257,9 +266,9 @@ export async function installRemotePluginPackage(
   download: RemotePluginDownload,
   installedIds: ReadonlyMap<string, InstalledPlugin>,
 ): Promise<InstalledPlugin> {
-  if (installedIds.size >= MAX_PLUGINS) throw new Error('The installed plugin limit was reached.')
+  if (installedIds.size >= MAX_PLUGINS) throw new Error(t('runtime.plugins.limitReached'))
   const { id } = download.manifest
-  if (installedIds.has(id)) throw new Error(`Plugin ${id} is already installed.`)
+  if (installedIds.has(id)) throw new Error(t('runtime.plugins.alreadyInstalled', { id }))
   const remote = remotePointer(download)
   const staging = await mkdtemp(join(root, '.install-'))
   const candidate = join(staging, id)
@@ -292,10 +301,10 @@ export async function stageRemotePluginUpdate(
   const { id } = download.manifest
   const old = previous.remote
   if (!old || previous.info.id !== id || old.sourceUrl !== download.sourceUrl)
-    throw new Error('The update does not match the installed remote plugin.')
+    throw new Error(t('runtime.plugins.updateMismatch'))
   const directory = join(root, id)
   if (!(await lstat(directory)).isDirectory())
-    throw new Error('Invalid installed plugin directory.')
+    throw new Error(t('runtime.plugins.invalidInstalledDirectory'))
   const remote = remotePointer(download)
   const release = join(directory, remote.release)
   let record: InstalledPlugin
@@ -320,10 +329,10 @@ export async function stageRemotePluginUpdate(
         return undefined
       }
       if (state === 'committed') return undefined
-      if (state === 'discarded') throw new Error('The remote plugin update was discarded.')
+      if (state === 'discarded') throw new Error(t('runtime.plugins.updateDiscarded'))
       const current = await readRemotePointer(directory)
       if (current?.release !== old.release || current.sourceUrl !== old.sourceUrl)
-        throw new Error('The installed remote plugin changed during the update.')
+        throw new Error(t('runtime.plugins.remoteChangedDuringUpdate'))
       await writeRemotePointer(directory, remote)
       state = 'committed'
       return cleanStaging(join(directory, old.release))
