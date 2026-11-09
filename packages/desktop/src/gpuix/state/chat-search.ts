@@ -11,7 +11,6 @@ import { chatMessageKey, compileChatSearch, type SearchDetails } from '../chat-t
 import { compileMessageRules } from '../message-rules'
 import {
   accountsStore,
-  activeTabStore,
   activeWatchedTabStore,
   aliasesStore,
   channelStatusStore,
@@ -29,6 +28,7 @@ import { createStore } from './create-store'
 import { allPanels, layoutStore } from './layout'
 import { getMessageSimilarity } from './message-similarity'
 import { persistentResource } from './persistent-resources'
+import { requestLeaveSettings, setMainTab } from './settings-session'
 
 export interface ChatSearchLocation {
   tabId: string
@@ -270,24 +270,29 @@ export function requestChatSearchJump(
   }
   if (jumpTimeout) clearTimeout(jumpTimeout)
   const requestId = crypto.randomUUID()
-  if (target.windowId && target.windowId !== 'main') activateChatSearchWindow(target.windowId)
-  else {
-    activeTabStore.set('chat')
-    activeWatchedTabStore.set(target.tabId)
-    activateChatSearchWindow('main')
+  /** Navigation away from Settings waits for the unsaved-changes warning. */
+  const applyJump = () => {
+    if (target.windowId && target.windowId !== 'main') activateChatSearchWindow(target.windowId)
+    else {
+      setMainTab('chat')
+      activeWatchedTabStore.set(target.tabId)
+      activateChatSearchWindow('main')
+    }
+    chatSearchJumpStore.set({
+      requestId,
+      messageKey: result.key,
+      messageId: result.message.id,
+      platform: result.message.platform,
+      channelId: result.message.channelId,
+      target,
+    })
+    jumpTimeout = setTimeout(() => {
+      if (chatSearchJumpStore.get()?.requestId === requestId) finishChatSearchJump(requestId, false)
+    }, 5000)
+    jumpTimeout.unref?.()
   }
-  chatSearchJumpStore.set({
-    requestId,
-    messageKey: result.key,
-    messageId: result.message.id,
-    platform: result.message.platform,
-    channelId: result.message.channelId,
-    target,
-  })
-  jumpTimeout = setTimeout(() => {
-    if (chatSearchJumpStore.get()?.requestId === requestId) finishChatSearchJump(requestId, false)
-  }, 5000)
-  jumpTimeout.unref?.()
+  if (target.windowId && target.windowId !== 'main') applyJump()
+  else requestLeaveSettings(applyJump)
   return true
 }
 

@@ -16,6 +16,7 @@ import {
 import { activeTabStore, activeWatchedTabStore, settingsStore, tabChannelIdsStore } from './app'
 import { isTextInputFocused } from './focus'
 import { closeTopOverlay, hasOpenOverlay } from './overlays'
+import { setMainTab } from './settings-session'
 export {
   registerHotkeyContext,
   setHotkeyRoute,
@@ -146,7 +147,7 @@ function cycleTab(direction: 1 | -1): void {
   const next = ids[(index + direction + ids.length) % ids.length]
   if (next) {
     activeWatchedTabStore.set(next)
-    activeTabStore.set('chat')
+    setMainTab('chat')
   }
 }
 

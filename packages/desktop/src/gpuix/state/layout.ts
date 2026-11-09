@@ -30,7 +30,7 @@ import {
   type FocusDirection,
   type DockSide,
 } from '../layout-operations'
-import { showNotice, activeWatchedTabStore, activeTabStore } from './app'
+import { showNotice, activeWatchedTabStore } from './app'
 import { chatRulesPreferences, chatRulesStore } from './chat-rules'
 import {
   initializeChatTabs,
@@ -43,6 +43,7 @@ import {
   type ClosedSplit,
   type ChatTabApi,
 } from './chat-tabs'
+import { setMainTab } from './settings-session'
 
 const SAVE_DEBOUNCE_MS = 500
 
@@ -475,7 +476,7 @@ export function reopenClosedSplit(
     await consumeClosedSplit(backend, entry.id)
     if (windowId === 'main') {
       activeWatchedTabStore.set(tabId)
-      activeTabStore.set('chat')
+      setMainTab('chat')
     }
     activateChatSearchWindow(windowId)
     requestLayoutPanelFocus(tabId, restoredId, windowId)
