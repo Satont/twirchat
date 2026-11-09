@@ -17,6 +17,7 @@ import { establishLinuxSingleInstance } from '../services/linux-single-instance'
 import { getDesktopBackend } from './backend/server'
 import { App } from './components/App'
 import { ChatWindow } from './components/ChatWindow'
+import { ObsRemoteController } from './components/obs-remote/ObsRemoteController'
 import { loadActionBindings } from './state/action-bindings'
 import { wireProviderChannelFocus } from './state/active-pane'
 import {
@@ -130,7 +131,11 @@ if (!g.__twirchatWatchedSubscriptionsWired) {
 
 const windows = mountDesktopWindows(
   backend,
-  (descriptor) => (descriptor.kind === 'main' ? <App /> : <ChatWindow descriptor={descriptor} />),
+  (descriptor) => {
+    if (descriptor.kind === 'main') return <App />
+    if (descriptor.kind === 'obs-remote') return <ObsRemoteController />
+    return <ChatWindow descriptor={descriptor} />
+  },
   () => {
     const exit = () => {
       backend.dispose?.()

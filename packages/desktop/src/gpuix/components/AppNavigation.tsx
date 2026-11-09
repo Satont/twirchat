@@ -1,16 +1,17 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 
 import type { StreamerModeStatus } from '../../services/streamer-mode'
-import { accountsStore, activeTabStore, type MainTab } from '../state/app'
+import { accountsStore, activeTabStore, showNotice, type MainTab } from '../state/app'
 import { useStore, useStoreSelector } from '../state/create-store'
+import { useDesktopWindows } from '../state/desktop-windows'
 import { streamerModeStore } from '../state/streamer-mode'
 import { useTheme } from '../theme-context'
 import { Icon, type IconName } from './ui/Icon'
 import { describeStreamerMode, StreamerModeDot } from './ui/StreamerModeIndicator'
 import { Text } from './ui/Text'
 
-interface NavItem {
-  id: MainTab
+interface NavItem<Id extends string = MainTab> {
+  id: Id
   label: string
   icon: IconName
 }
@@ -20,24 +21,30 @@ const ITEMS: readonly NavItem[] = [
   { id: 'platforms', label: 'Platforms', icon: 'globe' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ]
+const OBS_REMOTE_ITEM: NavItem<'obs-remote'> = {
+  id: 'obs-remote',
+  label: 'OBS Remote',
+  icon: 'monitor',
+}
 
 function NavItemButton({
   item,
   active,
   badge,
   streamerMode,
+  select,
 }: {
-  item: NavItem
+  item: NavItem<MainTab | 'obs-remote'>
   active: boolean
   badge?: number
   streamerMode?: StreamerModeStatus
+  select: () => void
 }) {
   const theme = useTheme()
   const label =
     badge === undefined
       ? item.label
       : `${item.label} (${badge} ${badge === 1 ? 'account' : 'accounts'})`
-  const select = () => activeTabStore.set(item.id)
   const status = streamerMode ? describeStreamerMode(streamerMode) : undefined
 
   return (
@@ -129,6 +136,7 @@ export function AppNavigation() {
   const activeTab = useStore(activeTabStore)
   const accountCount = useStoreSelector(accountsStore, (accounts) => accounts.length)
   const streamerMode = useStore(streamerModeStore)
+  const windows = useDesktopWindows()
 
   return (
     <div
@@ -154,8 +162,20 @@ export function AppNavigation() {
           active={activeTab === item.id}
           badge={item.id === 'platforms' ? accountCount : undefined}
           streamerMode={item.id === 'settings' ? streamerMode : undefined}
+          select={() => activeTabStore.set(item.id)}
         />
       ))}
+      {windows ? (
+        <NavItemButton
+          item={OBS_REMOTE_ITEM}
+          active={false}
+          select={() => {
+            void windows
+              .openObsRemote()
+              .catch((error: unknown) => showNotice('error', String(error)))
+          }}
+        />
+      ) : null}
     </div>
   )
 }

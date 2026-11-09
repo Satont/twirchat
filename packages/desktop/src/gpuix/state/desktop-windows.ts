@@ -9,6 +9,7 @@ export interface DesktopWindows {
   setPinned(pinned: boolean): void
   openChat(sourceTabId: string, sourcePanelId?: string, overlay?: boolean): Promise<string>
   openUser(target: UserCardTarget): Promise<string>
+  openObsRemote(): Promise<string>
   close(): Promise<void>
   quit(): Promise<void>
   toggleOverlayInertia(target: 'this' | 'thisOrAll' | 'all'): Promise<void>

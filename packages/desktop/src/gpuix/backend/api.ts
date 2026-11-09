@@ -149,6 +149,7 @@ import {
 import type { DesktopEvents } from './events'
 import * as imageUploader from './image-uploader'
 import { createLayoutApi } from './layout-api'
+import { obsRemoteApi } from './obs-remote'
 import { readCachedReleaseNotes, writeCachedReleaseNotes } from './release-notes-cache'
 import { createStreamerModeApi } from './streamer-mode-api'
 import * as translation from './translation'
@@ -217,6 +218,7 @@ export interface ChannelChatters {
 }
 
 export interface DesktopApi {
+  obsRemote: typeof obsRemoteApi
   getStreamerMode(): Promise<StreamerModeStatus>
   setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
   getStreamerModeSettings(): Promise<StreamerModeSettings>
@@ -808,6 +810,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   }
 
   return {
+    obsRemote: obsRemoteApi,
     getTwirCommands: createTwirCommandsClient(),
     getTwitchActivities: async (params) => {
       const snapshot = await requestTwitchActivitiesSnapshot(params)

@@ -7,6 +7,7 @@ export type DesktopWindowDescriptor = {
   bounds?: NativeWindowBounds
 } & (
   | { kind: 'main' }
+  | { kind: 'obs-remote' }
   | { kind: 'chat' | 'overlay'; tabId: string; clickThrough: boolean }
   | { kind: 'user'; target: UserCardTarget; pinned?: boolean }
 )
@@ -107,7 +108,7 @@ export function createWindowSessionController(options: {
     for (const { descriptor, handle } of windows.values()) {
       const bounds = validateWindowBounds(handle.getWindowBounds()) ?? descriptor.bounds
       if (descriptor.kind === 'main') mainBounds = bounds ?? mainBounds
-      else if (descriptor.kind !== 'user') restored.push({ ...descriptor, bounds })
+      else if ('tabId' in descriptor) restored.push({ ...descriptor, bounds })
     }
     return { version: 1, mainBounds, windows: restored }
   }
