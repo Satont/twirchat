@@ -70,7 +70,7 @@ import {
 } from '../../watched-channels/home-plugin-preference'
 import { WatchedChannelManager } from '../../watched-channels/manager'
 import { createPluginChannels } from '../../watched-channels/plugin-channels'
-import { t } from '../i18n'
+import { setLanguage, t } from '../i18n'
 import {
   createDesktopApi,
   subscribeTwitchActivities,
@@ -131,6 +131,8 @@ function boot(): DesktopBackend {
 
   initDb()
   log.info('Database ready')
+  // Before any window, adapter or notice produces text: everything after this speaks the saved language.
+  setLanguage(SettingsStore.get().language)
 
   const clientSecret = getClientSecret()
   setRuntimeConfig({ clientSecret })

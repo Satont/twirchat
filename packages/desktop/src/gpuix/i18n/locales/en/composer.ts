@@ -4,6 +4,7 @@ export const composer = {
   'composer.connection.error': 'Could not connect to {channel}',
 
   'composer.placeholder.message': 'Message {channel}…',
+  'composer.placeholder.messageAs': 'Message {channel} as @{username}…',
   'composer.placeholder.send': 'Send a message…',
   'composer.placeholder.login': 'Log in to send messages…',
   'composer.placeholder.connectAccount': 'Connect an account…',

@@ -878,7 +878,7 @@ export function ChatView({
       if (receipt?.held) {
         setDeliveryMessages((current) => current.filter((entry) => entry.id !== message.id))
         if (!account.scopes.includes('user:read:chat'))
-          showNotice('info', 'AutoMod held your Twitch message for moderator review.', 6000)
+          showNotice('info', t('chatMessages.autoMod.heldLocal'), 6000)
         return
       }
       setDeliveryMessages((current) => confirmDelivery(current, message.id, receipt))

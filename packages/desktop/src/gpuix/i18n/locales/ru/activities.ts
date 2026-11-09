@@ -48,7 +48,7 @@ export const ruActivities = {
   'activities.predictions.predictors.other': '{count} прогнозиста',
   'activities.predictions.predict': 'Сделать прогноз',
   'activities.predictions.winning': 'Победный исход',
-  'activities.predictions.lock': 'Заблокировать',
+  'activities.predictions.lock': 'Закрыть ставки',
   'activities.predictions.resolve': 'Подтвердить выбранный исход',
   'activities.predictions.cancelRefund': 'Отменить и вернуть баллы',
   'activities.predictions.empty': 'Прогнозы не найдены.',

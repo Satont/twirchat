@@ -23,7 +23,7 @@ export const ruChat = {
   'chat.menu.closePanel': 'Закрыть панель',
 
   'chat.room.slow': 'Медленный режим {seconds} с',
-  'chat.room.followers': 'Фолловеры: {minutes} мин',
+  'chat.room.followers': 'Только фолловеры ({minutes} мин)',
   'chat.room.subscribersOnly': 'Только для подписчиков',
   'chat.room.emoteOnly': 'Только эмоуты',
   'chat.room.uniqueChat': 'Уникальные сообщения',
@@ -37,7 +37,7 @@ export const ruChat = {
   'chat.banner.hide': 'Скрыть баннеры активности',
   'chat.banner.restore': 'Показать баннеры активности',
 
-  'chat.filters.title': 'Фильтры сообщений · должны совпасть все выбранные правила',
+  'chat.filters.title': 'Фильтры сообщений · сообщение должно подходить под все выбранные правила',
   'chat.filters.close': 'Закрыть фильтры',
   'chat.filters.edit': 'Изменить фильтры в настройках',
   'chat.filters.create': 'Создайте первый фильтр в настройках',

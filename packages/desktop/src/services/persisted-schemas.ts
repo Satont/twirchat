@@ -125,6 +125,7 @@ export const normalizedChatMessageSchema = z.toZod<NormalizedChatMessage>()(
             detail: z.string().optional(),
           })
           .optional(),
+        sevenTvAction: z.enum(['added', 'removed', 'changed']).optional(),
         subscriptionMonths: z.number().optional(),
         rewardCost: z.number().optional(),
         flags: z.record(z.string(), z.boolean()).optional(),

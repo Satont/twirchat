@@ -15,7 +15,7 @@ import { Text } from './ui/Text'
 
 const SECTION_GAP = 20
 const ITEM_GAP = 8
-const BADGE_WIDTH = 40
+const BADGE_WIDTH = 72
 
 const kindLabelKeys: Record<ReleaseNoteKind, MessageKey> = {
   new: 'app.changelog.kind.new',

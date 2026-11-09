@@ -22,6 +22,7 @@ import {
 import { BackendContext } from './backend/context'
 import type { DesktopBackend } from './backend/server'
 import { registerBundledFonts } from './fonts'
+import { t } from './i18n'
 import { initializeManagedRenderer } from './managed-renderer'
 import { nativeWindow, type NativeWindowOptions, type NativeWindowControls } from './native-window'
 import { observeNativeHotkeyPlan } from './state/action-bindings'
@@ -76,7 +77,7 @@ const currentUiRuntime: WindowUiRuntime = {
       onKeyUp: (event) => updateWindowActivity(id, renderer.isWindowActive(), event.modifiers),
       onUncaughtError: (error) => {
         console.error(`[windows] React render failed in ${id}:`, error)
-        showNotice('error', `Window error: ${String(error)}`)
+        showNotice('error', t('notices.window.error', { error: String(error) }))
       },
     })
   },
@@ -150,7 +151,8 @@ export class DesktopWindowManager {
         })
       },
       quit: () => this.quit(),
-      failed: (error) => showNotice('error', `System tray is unavailable: ${String(error)}`),
+      failed: (error) =>
+        showNotice('error', t('notices.window.trayUnavailable', { error: String(error) })),
     })
     this.stopWindowsNotifications =
       process.platform === 'win32'
@@ -184,7 +186,8 @@ export class DesktopWindowManager {
           .catch((error) => console.error('[windows] final save:', error))
           .finally(this.onEmpty)
       },
-      onError: (error) => showNotice('error', `Could not save windows: ${String(error)}`),
+      onError: (error) =>
+        showNotice('error', t('notices.window.saveFailed', { error: String(error) })),
     })
     this.poller = setInterval(() => {
       for (const window of this.mounted.values()) {
@@ -212,7 +215,7 @@ export class DesktopWindowManager {
       const raw = await this.backend.api.getUiState({ key: WINDOW_SESSION_KEY })
       if (raw) saved = { mainBounds: undefined, ...validateWindowSession(JSON.parse(raw)) }
     } catch (error) {
-      showNotice('error', `Could not restore windows: ${String(error)}`)
+      showNotice('error', t('notices.window.restoreFailed', { error: String(error) }))
     }
     this.session.restore(saved)
     await this.open({ id: 'main', kind: 'main', title: 'TwirChat', bounds: saved.mainBounds })
@@ -223,7 +226,10 @@ export class DesktopWindowManager {
       try {
         await this.open(descriptor)
       } catch (error) {
-        showNotice('error', `Could not restore ${descriptor.title}: ${String(error)}`)
+        showNotice(
+          'error',
+          t('notices.window.restoreOneFailed', { title: descriptor.title, error: String(error) }),
+        )
       }
     }
     await this.session.persist().catch(() => {})
@@ -287,7 +293,7 @@ export class DesktopWindowManager {
 
   private async open(descriptor: DesktopWindowDescriptor): Promise<string> {
     if (this.mounted.size + this.opening >= MAX_DESKTOP_WINDOWS)
-      throw new Error('Close a window before opening another.')
+      throw new Error(t('notices.window.closeOneFirst'))
     this.opening++
     let renderer: Renderer | undefined
     let window: MountedWindow | undefined
@@ -367,7 +373,7 @@ export class DesktopWindowManager {
               .persist()
               .then(() => this.cleanupLayout(descriptor.tabId))
               .catch((error) => {
-                showNotice('error', `Could not remove closed window data: ${String(error)}`)
+                showNotice('error', t('notices.window.cleanupFailed', { error: String(error) }))
               })
               .finally(() => this.cleanupTasks.delete(cleanup))
             this.cleanupTasks.add(cleanup)
@@ -382,7 +388,7 @@ export class DesktopWindowManager {
       if (descriptor.kind === 'overlay' && descriptor.clickThrough) {
         if (!renderer.getWindowCapabilities().clickThrough) {
           descriptor.clickThrough = false
-          showNotice('error', 'This compositor does not support overlay click-through.')
+          showNotice('error', t('notices.window.clickThroughUnsupported'))
         } else await renderer.setClickThrough(true)
       }
       return descriptor.id
@@ -397,7 +403,7 @@ export class DesktopWindowManager {
 
   async openChat(sourceTabId: string, sourcePanelId?: string, overlay = false): Promise<string> {
     if (this.mounted.size + this.opening >= MAX_DESKTOP_WINDOWS)
-      throw new Error('Close a window before opening another.')
+      throw new Error(t('notices.window.closeOneFirst'))
     const { tabId } = await cloneLayoutForWindow(this.backend, sourceTabId, sourcePanelId)
     let id: string
     try {
@@ -472,14 +478,14 @@ export class DesktopWindowManager {
           ? [own]
           : []
         : [...this.mounted.values()].filter((window) => window.descriptor.kind === 'overlay')
-    if (!targets.length) throw new Error('There is no overlay window to change.')
+    if (!targets.length) throw new Error(t('notices.window.noOverlay'))
     const enabled = !targets.every(
       ({ descriptor }) => 'clickThrough' in descriptor && descriptor.clickThrough,
     )
     const unsupported = targets.find(
       ({ renderer }) => !renderer.getWindowCapabilities().clickThrough,
     )
-    if (unsupported) throw new Error('This compositor does not support overlay click-through.')
+    if (unsupported) throw new Error(t('notices.window.clickThroughUnsupported'))
     const changed: MountedWindow[] = []
     try {
       for (const window of targets) {

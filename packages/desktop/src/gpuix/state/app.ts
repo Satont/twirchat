@@ -32,7 +32,7 @@ import type { DesktopApi } from '../backend/api'
 import type { UserAlias } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
 import type { DesktopBackend } from '../backend/server'
-import { setLanguage, t, tPlural } from '../i18n'
+import { getLanguage, setLanguage, t, tPlural, type Language } from '../i18n'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
 import { mentionAppearances } from './mention-appearances'
@@ -213,6 +213,21 @@ const moderationState = persistentResource('moderationState', (): ModerationStat
   channelClears: new Map(),
 }))
 const { deletedMessages, userSanctions, channelClears } = moderationState
+const clearedOutcomes = new Map<Language, ResolvedModerationOutcome>()
+/** One object per language: memoized rows compare outcomes by identity. */
+function clearedOutcome(): ResolvedModerationOutcome {
+  const language = getLanguage()
+  let outcome = clearedOutcomes.get(language)
+  if (!outcome) {
+    outcome = {
+      action: 'delete_message',
+      isTombstone: true,
+      label: t('notices.moderation.chatCleared'),
+    }
+    clearedOutcomes.set(language, outcome)
+  }
+  return outcome
+}
 export const moderationRevisionStore = persistentResource('moderationRevision', () =>
   createStore<number>(0),
 )
@@ -313,12 +328,7 @@ function createModerationView(): ModerationView {
         message.timestamp instanceof Date
           ? message.timestamp.getTime()
           : new Date(message.timestamp).getTime()
-      if (clearedAt !== undefined && timestamp <= clearedAt)
-        return {
-          action: 'delete_message',
-          isTombstone: true,
-          label: t('notices.moderation.chatCleared'),
-        }
+      if (clearedAt !== undefined && timestamp <= clearedAt) return clearedOutcome()
       const deletion = deletions.get(moderationMessageKey(message.platform, message.id))
       if (deletion && deletion.expiresAt > Date.now()) return deletion.resolved
       const sanction = sanctions.get(

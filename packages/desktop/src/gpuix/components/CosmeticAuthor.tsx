@@ -2,7 +2,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import type { CosmeticPaint, UserCosmetics } from '../../services/cosmetics'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
-import { useT } from '../i18n'
+import { t } from '../i18n'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
 import { useFont } from '../theme-context'
@@ -39,7 +39,6 @@ export function CosmeticAuthorName({
   onClick: () => void
 }) {
   const font = useFont()
-  const { t } = useT()
   const enabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
   const image = usePaintImage(name, enabled ? paint : undefined, fontSize, font)
   return (

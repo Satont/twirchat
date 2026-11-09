@@ -20,6 +20,10 @@ export function buildSevenTvSystemMessage(
     },
     channelId: message.channelId,
     emotes: [],
+    metadata: {
+      sevenTvAction:
+        message.action === 'added' || message.action === 'removed' ? message.action : 'changed',
+    },
     platform: message.platform,
     type: 'system',
   }

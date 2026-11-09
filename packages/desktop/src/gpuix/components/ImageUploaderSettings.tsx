@@ -61,7 +61,7 @@ function SettingsSwitch({
 export function ImageUploaderSettings() {
   const { api } = useBackend()
   const theme = useTheme()
-  const { t } = useT()
+  const { t, language } = useT()
   const saved = useStore(imageUploaderSettingsStore)
   const [manualDraft, setManualDraft] = useState<Settings | null>(null)
   const [twirDraft, setTwirDraft] = useState<Settings | null>(null)
@@ -83,7 +83,7 @@ export function ImageUploaderSettings() {
     () => draft !== null && saved !== null && JSON.stringify(draft) !== JSON.stringify(saved),
     [draft, saved],
   )
-  const validation = (() => {
+  const validation = useMemo(() => {
     if (!draft) return ''
     try {
       validateImageUploaderSettings(draft)
@@ -91,7 +91,9 @@ export function ImageUploaderSettings() {
     } catch (cause) {
       return cause instanceof Error ? cause.message : t('imageUploaderSettings.review')
     }
-  })()
+    // Validation errors are translated: recompute them when the UI language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, t, language])
 
   useEffect(() => {
     loadImageUploaderSettings(api).catch(() => setError(t('imageUploaderSettings.loadFailed')))

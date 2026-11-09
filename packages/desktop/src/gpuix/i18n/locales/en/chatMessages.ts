@@ -53,4 +53,6 @@ export const chatMessages = {
   'chatMessages.autoMod.senderNotice.denied': 'The moderators did not approve your message.',
   'chatMessages.autoMod.senderNotice.invalid':
     'Your held message was removed from the review queue without being sent.',
+  'chatMessages.firstMessage': 'First message',
+  'chatMessages.autoMod.heldLocal': 'AutoMod held your Twitch message for moderator review.',
 } satisfies Record<string, string>

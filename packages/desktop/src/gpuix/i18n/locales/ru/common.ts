@@ -45,6 +45,6 @@ export const ruCommon = {
   'common.yes': 'Да',
   'common.no': 'Нет',
   'common.error': 'Ошибка',
-  'common.language.en': 'Английский',
+  'common.language.en': 'English',
   'common.language.ru': 'Русский',
 } satisfies Record<keyof typeof common, string>

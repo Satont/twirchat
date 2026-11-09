@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test'
 
 import type { BackendToDesktopMessage } from '@twirchat/shared/protocol'
+import type { SevenTvSystemAction } from '@twirchat/shared/types'
 
+import { setLanguage } from '../src/gpuix/i18n'
 import { buildMessageTokens } from '../src/gpuix/message-tokens'
 import { backendToDesktopMessageSchema } from '../src/services/persisted-schemas'
 import { enrichProviderEmotes } from '../src/services/provider-emotes'
@@ -95,4 +97,25 @@ test('7TV set notifications preserve their text without artwork', () => {
   ])
   for (const change of changes)
     expect(buildSevenTvSystemMessage(change, identity).emotes).toEqual([])
+})
+
+test('7TV notices carry their action so translated text keeps its styling', () => {
+  setLanguage('ru')
+  try {
+    const expected: Record<(typeof actions)[number], SevenTvSystemAction> = {
+      added: 'added',
+      removed: 'removed',
+      updated: 'changed',
+    }
+    for (const action of actions) {
+      const message = buildSevenTvSystemMessage(
+        { type: 'seventv_system_message', platform: 'twitch', channelId: 'satont', action, emote },
+        identity,
+      )
+      expect(message.text).not.toContain(' added ')
+      expect(message.metadata?.sevenTvAction).toBe(expected[action])
+    }
+  } finally {
+    setLanguage('en')
+  }
 })
