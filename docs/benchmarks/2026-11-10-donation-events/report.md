@@ -65,3 +65,8 @@ The parent runtime input hash matched the saved baseline above.
 
 The paired runs reversed the original CPU increases and the 50-channel peak RSS increase.
 The 50-channel median RSS moved in opposite directions between the full matrix and the paired run.
+
+The PR was subsequently rebased over the Twitch AutoMod change and moved the
+cross-package OAuth fixture to the monorepo test suite. These changes affect
+Twitch AutoMod and test orchestration, while this workload feeds anonymous Kick
+messages with a fresh profile.

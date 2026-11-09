@@ -15,7 +15,7 @@
     "dev:desktop": "bun run --cwd packages/desktop dev",
     "dev:backend": "bun run --cwd packages/backend dev",
     "dev": "bun run --workspaces --if-present dev",
-    "test": "bun run test:quality && bun run --workspaces --if-present test",
+    "test": "bun run test:quality && bun test scripts/donation-oauth.test.ts && bun run --workspaces --if-present test",
     "typecheck": "bun run --workspaces typecheck",
     "build": "bun run --workspaces --if-present build",
     "generate-icons": "bun scripts/generate-icons.ts",
