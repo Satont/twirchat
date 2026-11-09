@@ -1,0 +1,165 @@
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -5824,6 +5824,9 @@
+     pub text_cache_safe: bool,
+     /// Selection wash colour for this subtree.
+     pub selection_wash: gpui::Hsla,
++    /// Outermost horizontal flex container around this subtree. Its text runs
++    /// form one logical copied line, even when nested hosts wrap words or names.
++    pub selection_group: Option<u64>,
+     /// The nearest ancestor's `highlight`, resolved. `None` in every app that
+     /// does not use search. It carries the declaring element id, which is what
+     /// a virtual-list row re-resolves against: that row is built after the root
+@@ -5873,16 +5876,24 @@
+             selectable: true,
+             text_cache_safe: true,
+             selection_wash: wash,
++            selection_group: None,
+             highlight: None,
+         }
+     }
+ 
+     /// Apply the inheritable parts of `style` for the subtree below it.
+-    pub(crate) fn descend(mut self, style: Option<&StyleDesc>) -> Self {
++    pub(crate) fn descend(mut self, id: u64, style: Option<&StyleDesc>) -> Self {
+         let Some(style) = style else { return self };
+         self.text_cache_safe &= !style.has_dynamic_opacity()
+             && style.text_overflow.is_none()
+             && style.line_clamp.is_none();
++        match (style.display.as_deref(), style.flex_direction.as_deref()) {
++            (Some("flex"), Some("row")) if self.selection_group.is_none() => {
++                self.selection_group = Some(id);
++            }
++            (Some("flex"), Some("column")) => self.selection_group = None,
++            _ => {}
++        }
+         match style.user_select.as_deref() {
+             Some("none") => self.selectable = false,
+             Some("text") | Some("auto") => self.selectable = true,
+@@ -5899,6 +5910,36 @@
+     }
+ }
+ 
++#[cfg(test)]
++mod inherited_selection_group_tests {
++    use super::{Inherited, Theme};
++    use crate::style::StyleDesc;
++
++    fn flex(direction: &str) -> StyleDesc {
++        StyleDesc {
++            display: Some("flex".into()),
++            flex_direction: Some(direction.into()),
++            ..Default::default()
++        }
++    }
++
++    #[test]
++    fn outer_horizontal_runs_share_a_group_and_columns_separate_them() {
++        let row = Inherited::root(&Theme::dark()).descend(10, Some(&flex("row")));
++        assert_eq!(row.selection_group, Some(10));
++
++        let nested = row.clone().descend(11, Some(&flex("row")));
++        assert_eq!(nested.selection_group, Some(10));
++        let raw_leaf = nested.descend(12, None);
++        assert_eq!(raw_leaf.selection_group, Some(10));
++
++        let column = row.descend(20, Some(&flex("column")));
++        assert_eq!(column.selection_group, None);
++        let next_row = column.descend(21, Some(&flex("row")));
++        assert_eq!(next_row.selection_group, Some(21));
++    }
++}
++
+ fn json_usize(value: &serde_json::Value) -> Option<usize> {
+     value
+         .as_u64()
+@@ -7040,7 +7081,7 @@
+     // Inheritable style resolves once here so both built-ins and custom
+     // elements see the same cascade.
+     let parent_inherited = ctx.inherited.clone();
+-    ctx.inherited = parent_inherited.clone().descend(style);
++    ctx.inherited = parent_inherited.clone().descend(id, style);
+ 
+     // A `highlight` here replaces any ancestor's: the nearest declaration wins,
+     // and `GroupList::collect` skips nested declarations so an ancestor never
+@@ -8643,7 +8684,10 @@
+     ctx: &BuildCtx,
+ ) -> crate::text::SelectableText {
+     crate::text::SelectableText {
+-        group: crate::text::search::group_id(ctx.tree, element.id),
++        group: ctx
++            .inherited
++            .selection_group
++            .or_else(|| crate::text::search::group_id(ctx.tree, element.id)),
+         selectable: ctx.inherited.selectable,
+         highlight: ctx
+             .inherited
+--- a/packages/native/src/cached_flow.rs
++++ b/packages/native/src/cached_flow.rs
+@@ -166,6 +166,7 @@
+     overlay: Option<Overlay>,
+     available: Size<AvailableSpace>,
+     selectable: bool,
++    selection_group: Option<u64>,
+     wash: gpui::Hsla,
+ }
+ 
+@@ -181,6 +182,7 @@
+             && self.overlay == other.overlay
+             && self.available == other.available
+             && self.selectable == other.selectable
++            && self.selection_group == other.selection_group
+             && self.wash == other.wash
+     }
+     fn current(
+@@ -582,6 +584,7 @@
+             overlay,
+             available: self.available,
+             selectable: inherited.selectable,
++            selection_group: inherited.selection_group,
+             wash: inherited.selection_wash,
+         };
+         let epoch = cache.epoch;
+@@ -1092,6 +1095,7 @@
+                 AvailableSpace::MinContent,
+             ),
+             selectable: true,
++            selection_group: None,
+             wash: gpui::hsla(0., 0., 0., 0.3),
+         }
+     }
+--- a/packages/native/src/plain_text_cache.rs
++++ b/packages/native/src/plain_text_cache.rs
+@@ -140,6 +140,7 @@
+     list_id: u64,
+     row_id: u64,
+     selectable: bool,
++    selection_group: Option<u64>,
+     wash: Hsla,
+ }
+ 
+@@ -210,6 +211,7 @@
+             list_id: self.list_id,
+             row_id: self.row_id,
+             selectable: inherited.selectable,
++            selection_group: inherited.selection_group,
+             wash: inherited.selection_wash,
+         };
+         if let Some(entry) = cache.entries.get(&element.id) {
+@@ -432,6 +434,7 @@
+             selectable: true,
+             text_cache_safe: true,
+             selection_wash: gpui::hsla(0., 0., 0., 0.35),
++            selection_group: None,
+             highlight: None,
+         };
+         (tree, inherited, context)
+@@ -633,7 +636,7 @@
+                 ..Default::default()
+             },
+         ] {
+-            let inherited = inherited.clone().descend(Some(&style));
++            let inherited = inherited.clone().descend(2, Some(&style));
+             assert!(
+                 context
+                     .prepare(&tree, &tree.elements[&3], &inherited, true)
