@@ -71,7 +71,6 @@ describe('inline 7TV image resolution', () => {
 
   test('leaves unrecognized providers, paths, proxy origins and malformed values intact', () => {
     for (const url of [
-      'https://cdn.betterttv.net/emote/id/3x.webp',
       'https://cdn.frankerfacez.com/animated/123/4',
       'https://static-cdn.jtvnw.net/emoticons/v2/id/default/dark/3.0',
       'https://cdn.7tv.app/badge/id/4x.webp',
@@ -87,6 +86,80 @@ describe('inline 7TV image resolution', () => {
       'not a URL',
     ])
       expect(inlineEmoteImageSource(url, { height: 28, scale: 1, backendUrl })).toBe(url)
+    for (const height of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
+      expect(inlineEmoteImageSource(source, { height, scale: 1 })).toBe(source)
+  })
+})
+
+describe('inline BetterTTV image resolution', () => {
+  const source = 'https://cdn.betterttv.net/emote/5e76d338d6581c3724c0f0b2/3x.webp'
+
+  test('selects the physical raster at standard, fractional and high display scale', () => {
+    const cases: [number, number, string][] = [
+      [28, 1, '1x'],
+      [28.01, 1, '2x'],
+      [28, 1.25, '2x'],
+      [28, 2, '2x'],
+      [56, 1, '2x'],
+      [56.01, 1, '3x'],
+      [28, 3, '3x'],
+      [500, 4, '3x'],
+    ]
+    for (const [height, scale, expected] of cases)
+      expect(inlineEmoteImageSource(source, { height, scale })).toBe(
+        source.replace('3x.webp', `${expected}.webp`),
+      )
+    expect(inlineEmoteImageSource(source.replace('3x', '1x'), { height: 28, scale: 2 })).toBe(
+      source.replace('3x', '2x'),
+    )
+  })
+
+  test('preserves animated/static paths, queries, fragments and protocol-relative URLs', () => {
+    for (const prefix of ['https:', 'http:', '']) {
+      for (const path of ['', 'static/']) {
+        const url = `${prefix}//cdn.betterttv.net/emote/id/${path}3x.webp?v=2#artwork`
+        expect(inlineEmoteImageSource(url, { height: 28, scale: 1 })).toBe(
+          url.replace('3x.webp', '1x.webp'),
+        )
+      }
+    }
+  })
+
+  test('sizes only the encoded source inside trusted provider-image proxies', () => {
+    const original = source.replace('3x.webp', 'static/3x.webp?v=2#artwork')
+    for (const prefix of [backendUrl, '/base']) {
+      const url = `${prefix}/proxy/provider-image?url=${encodeURIComponent(original)}&v=3#proxy`
+      const result = new URL(
+        inlineEmoteImageSource(url, { height: 28, scale: 2, backendUrl }),
+        backendUrl,
+      )
+      expect(result.searchParams.get('url')).toBe(original.replace('3x.webp', '2x.webp'))
+      expect(result.searchParams.get('v')).toBe('3')
+      expect(result.hash).toBe('#proxy')
+    }
+  })
+
+  test('leaves unrecognized paths, hosts, credentials, ports and proxy routes unchanged', () => {
+    const unsupported = [
+      'https://cdn.betterttv.net/emote/id/4x.webp',
+      'https://cdn.betterttv.net/emote/id/3x.gif',
+      'https://cdn.betterttv.net/emote/id/3x_static.webp',
+      'https://cdn.betterttv.net/emote/id/other/3x.webp',
+      'https://cdn.betterttv.net/badge/id/3x.webp',
+      'https://cdn.betterttv.net.attacker.example/emote/id/3x.webp',
+      'https://user:password@cdn.betterttv.net/emote/id/3x.webp',
+      'https://cdn.betterttv.net:8080/emote/id/3x.webp',
+      'ftp://cdn.betterttv.net/emote/id/3x.webp',
+    ]
+    for (const url of unsupported) {
+      expect(inlineEmoteImageSource(url, { height: 28, scale: 1 })).toBe(url)
+      const proxy = `${backendUrl}/proxy/provider-image?url=${encodeURIComponent(url)}`
+      expect(inlineEmoteImageSource(proxy, { height: 28, scale: 1, backendUrl })).toBe(proxy)
+    }
+    for (const prefix of ['https://elsewhere.example/base', `${backendUrl}/other`]) {
+      const url = `${prefix}/proxy/provider-image?url=${encodeURIComponent(source)}`
+      expect(inlineEmoteImageSource(url, { height: 28, scale: 1, backendUrl })).toBe(url)
+    }
     for (const height of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
       expect(inlineEmoteImageSource(source, { height, scale: 1 })).toBe(source)
   })

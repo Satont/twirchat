@@ -1,15 +1,12 @@
 import { logger } from '@twirchat/shared/logger'
-import {
-  createYouTubeChatNormalizer,
-  createYouTubeGrpcSession,
-  resolveYouTubeLiveChat,
-  YouTubeDiscoveryError,
-} from '@twirchat/shared/youtube'
 import type {
   YouTubeChatBatch,
   YouTubeChatRelayEvent,
   YouTubeChatCredentials,
 } from '@twirchat/shared/youtube-chat'
+import { resolveYouTubeLiveChat, YouTubeDiscoveryError } from '@twirchat/shared/youtube/discovery'
+import { createYouTubeChatNormalizer } from '@twirchat/shared/youtube/normalizer'
+import type { createYouTubeGrpcSession } from '@twirchat/shared/youtube/session'
 
 import { AccountStore } from '../../store/account-store'
 import { BasePlatformAdapter } from '../base-adapter'
@@ -114,9 +111,13 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         resolved = await discover(true)
       }
       if (!current()) return
+      const createSession =
+        this.transport.createSession ??
+        (await import('@twirchat/shared/youtube/session')).createYouTubeGrpcSession
+      if (!current()) return
       this.liveChatId = resolved.liveChatId
       const normalizer = createYouTubeChatNormalizer({ channelId })
-      this.session = (this.transport.createSession ?? createYouTubeGrpcSession)({
+      this.session = createSession({
         liveChatId: resolved.liveChatId,
         getCredentials,
         onBatch: (batch) => {
