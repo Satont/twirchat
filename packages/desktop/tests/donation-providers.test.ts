@@ -17,6 +17,7 @@ const donationAlerts = {
   message: 'Hello!',
   created_at: '2026-11-09 12:00:00',
 }
+const donationAlertsPublication = { ...donationAlerts, name: 'Donations' }
 const donatePay = {
   notification: {
     id: 42,
@@ -96,7 +97,7 @@ const fixtures: ProtocolFixture[] = [
   {
     provider: 'donationalerts',
     channel: '$alerts:donation_9',
-    payload: donationAlerts,
+    payload: donationAlertsPublication,
     connect: { id: 1, params: { token: 'connection-token' } },
     connected: { id: 1, result: { client: 'client-id', version: '2.2.1' } },
     subscribe: {
@@ -105,7 +106,9 @@ const fixtures: ProtocolFixture[] = [
       params: { channel: '$alerts:donation_9', token: 'subscription-token' },
     },
     subscribed: { id: 2, result: { recoverable: true } },
-    publication: (channel) => ({ result: { channel, data: { data: donationAlerts } } }),
+    publication: (channel) => ({
+      result: { channel, type: 0, data: { data: donationAlertsPublication } },
+    }),
   },
   {
     provider: 'donatepay',

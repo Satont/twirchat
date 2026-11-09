@@ -73,7 +73,6 @@ const currencySchema = z
   .transform((value) => value.toUpperCase())
 const donationAlertsEvent = z.object({
   id: providerId,
-  name: z.literal('donation'),
   username: donor,
   amount: amountSchema,
   currency: currencySchema,
