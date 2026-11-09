@@ -305,6 +305,8 @@ export interface DesktopApi {
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
   getChannels(): Promise<Partial<Record<Platform, string[]>>>
   authStart(params: { platform: Platform }): Promise<void>
+  /** Prepares a sign-in like `authStart` and returns its link instead of opening a browser. */
+  authLink(params: { platform: Platform }): Promise<{ url: string }>
   authLogout(params: { platform: Platform }): Promise<void>
   joinChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
   leaveChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
@@ -458,6 +460,20 @@ export interface DesktopApiContext {
 }
 
 const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
+
+/** Starts a pending PKCE sign-in and returns the provider link that completes it. */
+async function createAuthUrl(platform: Platform): Promise<string> {
+  if (platform === 'twitch') {
+    const { codeChallenge, state } = prepareTwitchAuth()
+    return getTwitchAuthUrl(codeChallenge, state)
+  }
+  if (platform === 'kick') {
+    const { codeChallenge, state } = prepareKickAuth()
+    return getKickAuthUrl(codeChallenge, state)
+  }
+  const { codeChallenge, state } = prepareYouTubeAuth()
+  return getYouTubeAuthUrl(codeChallenge, state)
+}
 
 async function prepareTwitchActivitiesRequest(
   operation: string,
@@ -753,7 +769,7 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 // ── API factory ─────────────────────────────────────────────────────────────
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
-  const { aggregator, backendConn, watchedChannelManager, currentStatuses } = ctx
+  const { aggregator, watchedChannelManager, currentStatuses } = ctx
   const updater = createUpdater(ctx.events)
 
   const getSevenTvTwitchPlatformUserId = (channelSlug: string): string | undefined => {
@@ -914,22 +930,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getChannels: async () => ChannelStore.findAll(),
 
     authStart: async ({ platform }) => {
-      if (platform === 'twitch') {
-        const { codeChallenge, state } = prepareTwitchAuth()
-        const url = await getTwitchAuthUrl(codeChallenge, state)
-        ctx.openBrowser(url)
-      } else if (platform === 'kick') {
-        const { codeChallenge, state } = prepareKickAuth()
-        const url = await getKickAuthUrl(codeChallenge, state)
-        ctx.openBrowser(url)
-      } else if (platform === 'youtube') {
-        const { codeChallenge, state } = prepareYouTubeAuth()
-        const url = await getYouTubeAuthUrl(codeChallenge, state)
-        ctx.openBrowser(url)
-      } else {
-        backendConn.send({ type: 'auth_start', platform })
-      }
+      ctx.openBrowser(await createAuthUrl(platform))
     },
+
+    authLink: async ({ platform }) => ({ url: await createAuthUrl(platform) }),
 
     authLogout: async ({ platform }) => {
       if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
