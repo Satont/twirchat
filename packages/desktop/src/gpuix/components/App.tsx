@@ -124,7 +124,7 @@ export function ChatNotice() {
  * Update notification toast (port of App.vue's update-toast). Driven by the
  * backend's `update_status` events: 'checking' / 'update-available' /
  * 'downloading' (progress) / 'download-complete' / 'applying' /
- * 'no-update' / 'update-error'.
+ * 'no-update' / 'update-error' / 'idle' (dismiss).
  */
 export function UpdateToast() {
   const backend = useBackend()
@@ -138,7 +138,7 @@ export function UpdateToast() {
   const [dismissed, setDismissed] = useState(false)
 
   useBackendEvent('update_status', (status) => {
-    setUpdate(status)
+    setUpdate(status.status === 'idle' ? null : status)
     setDismissed(false)
   })
 

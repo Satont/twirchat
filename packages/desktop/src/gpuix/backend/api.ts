@@ -161,7 +161,7 @@ import type {
   TranslationLanguage,
 } from './translation'
 import type { TwitchHistoryRuntime } from './twitch-history'
-import { createUpdater } from './updater'
+import { createUpdater, type Updater } from './updater'
 import {
   getUserNotes,
   setUserNotes,
@@ -442,6 +442,7 @@ export interface DesktopApi {
 }
 
 export interface DesktopApiContext {
+  updater?: Updater
   twitchHistory?: TwitchHistoryRuntime
   streamerMode?: StreamerModeService
   channelActions?: ChannelActions
@@ -770,7 +771,7 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   const { aggregator, watchedChannelManager, currentStatuses } = ctx
-  const updater = createUpdater(ctx.events)
+  const updater = ctx.updater ?? createUpdater(ctx.events)
 
   const getSevenTvTwitchPlatformUserId = (channelSlug: string): string | undefined => {
     const twitchAccount = AccountStore.findByPlatform('twitch')

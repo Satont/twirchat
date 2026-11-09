@@ -768,7 +768,11 @@ export function SettingsPanel() {
                     <Text style={{ fontSize: 13, color: theme.text }}>Check for updates</Text>
                   </div>
                 </FormRow>
-                <FormRow last label="Auto-check for updates" hint="Check on app startup">
+                <FormRow
+                  last
+                  label="Auto-check for updates"
+                  hint="Check at startup and hourly in the background"
+                >
                   <Switch
                     checked={local.autoCheckUpdates ?? false}
                     onChange={(value) =>
