@@ -38,7 +38,15 @@ class FakeSocket implements EventSubSocket {
     )
   }
   welcome(id = 'session') {
-    this.message('session_welcome', { session: { id, keepalive_timeout_seconds: 30 } })
+    this.message('session_welcome', {
+      session: {
+        id,
+        status: 'connected',
+        keepalive_timeout_seconds: 30,
+        reconnect_url: null,
+        connected_at: '2026-11-02T00:00:00Z',
+      },
+    })
   }
 }
 const clients: TwitchEventSubClient[] = []
@@ -291,6 +299,23 @@ describe('Twitch EventSub lifecycle', () => {
     expect(required(f.sockets[0]).closed).toBe(true)
   })
 
+  test('waits for the previous subscription to be deleted before rewatching a channel', async () => {
+    const removal = Promise.withResolvers<void>()
+    const f = fixture({ receiveWhispers: false, unsubscribe: () => removal.promise })
+    await f.client.watch('creator', true)
+    required(f.sockets[0]).welcome()
+    await settle()
+
+    const unwatch = f.client.watch('creator', false)
+    const rewatch = f.client.watch('creator', true)
+    expect(f.removed).toEqual([['session:creator']])
+    expect(f.registrations).toEqual(['session:creator'])
+
+    removal.resolve()
+    await Promise.all([unwatch, rewatch])
+    expect(f.registrations).toEqual(['session:creator', 'session:creator'])
+  })
+
   test('deduplicates notifications and delivers typed activity and whisper data', async () => {
     const f = fixture()
     f.client.start()
@@ -348,7 +373,13 @@ describe('Twitch EventSub lifecycle', () => {
     original.welcome()
     await settle()
     original.message('session_reconnect', {
-      session: { reconnect_url: 'wss://eventsub.wss.twitch.tv/ws?reconnect=secret' },
+      session: {
+        id: 'session',
+        status: 'reconnecting',
+        keepalive_timeout_seconds: null,
+        reconnect_url: 'wss://eventsub.wss.twitch.tv/ws?reconnect=secret',
+        connected_at: '2026-11-02T00:00:00Z',
+      },
     })
     expect(original.closed).toBe(false)
     expect(f.sockets).toHaveLength(2)

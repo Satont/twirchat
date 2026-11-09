@@ -43,6 +43,12 @@ export interface TwitchEventSubDependencies {
   reconnectDelayMs?: number
 }
 
+const sessionSchema = z.object({
+  id: z.string().optional(),
+  keepalive_timeout_seconds: z.number().nullish(),
+  reconnect_url: z.string().nullish(),
+})
+
 type Envelope = {
   metadata?: {
     message_type?: string
@@ -51,7 +57,7 @@ type Envelope = {
     subscription_type?: string
   }
   payload?: {
-    session?: { id?: string; keepalive_timeout_seconds?: number; reconnect_url?: string }
+    session?: z.infer<typeof sessionSchema>
     subscription?: { id?: string; type?: string; status?: string }
     event?: Record<string, unknown>
   }
@@ -122,16 +128,7 @@ export class TwitchEventSubClient {
       this.dependencies.autoMod({ type: 'clear', channelSlug: key })
       const ids = this.subscriptions.get(key) ?? []
       this.subscriptions.delete(key)
-      if (ids.length) {
-        try {
-          await this.dependencies.unsubscribe(ids)
-        } catch {
-          this.dependencies.status({
-            status: 'error',
-            message: t('misc.twitchEventSub.removeFailed'),
-          })
-        }
-      }
+      await this.removeSubscriptions(key, ids)
     }
   }
 
@@ -142,8 +139,7 @@ export class TwitchEventSubClient {
       if (generation === this.generation)
         this.dependencies.status({
           status: 'error',
-          message:
-            'Could not remove the Twitch event subscription. It will be discarded when the connection closes.',
+          message: t('misc.twitchEventSub.removeFailed'),
         })
     })
     this.unregistering.set(key, removing)
@@ -189,13 +185,7 @@ export class TwitchEventSubClient {
               .optional(),
             payload: z
               .object({
-                session: z
-                  .object({
-                    id: z.string().optional(),
-                    keepalive_timeout_seconds: z.number().optional(),
-                    reconnect_url: z.string().optional(),
-                  })
-                  .optional(),
+                session: sessionSchema.optional(),
                 subscription: z
                   .object({
                     id: z.string().optional(),
