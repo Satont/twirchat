@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { logger } from '@twirchat/shared/logger'
 
 import { APP_VERSION } from '../build-info'
+import { t } from '../gpuix/i18n'
 import {
   PLUGIN_API_VERSION,
   type PluginChannel,
@@ -51,7 +52,10 @@ const REMOTE_REQUEST_TIMEOUT_MS = 60_000
 function requireCompatible(apiVersion: number): void {
   if (apiVersion !== PLUGIN_API_VERSION)
     throw new Error(
-      `Plugin API ${apiVersion} is incompatible with TwirChat API ${PLUGIN_API_VERSION}.`,
+      t('runtime.plugins.incompatibleApi', {
+        apiVersion,
+        currentApi: PLUGIN_API_VERSION,
+      }),
     )
 }
 
@@ -204,7 +208,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
         plugin.droppedEvents = false
         if (!plugin.installed.info.error)
           setInfo(plugin.installed, {
-            error: 'Some chat events were dropped while this plugin was busy.',
+            error: t('runtime.plugins.eventsDropped'),
           })
       }
       void plugin.child
@@ -371,7 +375,12 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
       for (const name of registration.commands) {
         const owner = commands.get(name)
         if (owner)
-          throw new Error(`/${name} is already registered by ${owner.installed.info.name}.`)
+          throw new Error(
+            t('runtime.plugins.commandAlreadyRegistered', {
+              name,
+              owner: owner.installed.info.name,
+            }),
+          )
         commands.set(name, plugin)
         plugin.commands.push(name)
       }
@@ -407,7 +416,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
   function mutate<Result>(action: () => Promise<Result>): Promise<Result> {
     const task = mutations.then(async () => {
       await load()
-      if (disposed) throw new Error('The plugin manager is shutting down.')
+      if (disposed) throw new Error(t('runtime.plugins.shuttingDown'))
       return action()
     })
     mutations = task.then(
@@ -440,9 +449,9 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     signal.throwIfAborted()
     const manifest = await readRemotePluginManifest(sourceUrl, signal, options.remoteFetch)
     requireCompatible(manifest.manifest.apiVersion)
-    if (installed.size >= MAX_PLUGINS) throw new Error('The installed plugin limit was reached.')
+    if (installed.size >= MAX_PLUGINS) throw new Error(t('runtime.plugins.limitReached'))
     if (installed.has(manifest.manifest.id))
-      throw new Error(`Plugin ${manifest.manifest.id} is already installed.`)
+      throw new Error(t('runtime.plugins.alreadyInstalled', { id: manifest.manifest.id }))
     const download = await downloadRemotePlugin(manifest, signal, options.remoteFetch)
     await mutate(async () => {
       signal.throwIfAborted()
@@ -468,7 +477,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
         if (candidate.info.enabled) {
           await activate(candidate)
           if (candidate.info.status !== 'running')
-            throw new Error(candidate.info.error ?? 'Updated plugin did not activate.')
+            throw new Error(candidate.info.error ?? t('runtime.plugins.updatedPluginNotActivated'))
         }
         signal.throwIfAborted()
         await stage.commit()
@@ -502,7 +511,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
       signal.throwIfAborted()
       const manifest = await readRemotePluginManifest(sourceUrl, signal, options.remoteFetch)
       if (manifest.manifest.id !== id)
-        throw new Error('The remote manifest belongs to a different plugin.')
+        throw new Error(t('runtime.plugins.remoteManifestDifferentPlugin'))
       if (Bun.semver.order(version, manifest.manifest.version) >= 0) {
         if (installed.get(id) === record && record.info.updateError)
           setInfo(record, { updateError: undefined })
@@ -523,8 +532,8 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     await load()
     remoteLifetime.signal.throwIfAborted()
     const record = installed.get(id)
-    if (!record) throw new Error('This plugin is no longer installed.')
-    if (!record.remote) throw new Error('This plugin has no remote update source.')
+    if (!record) throw new Error(t('runtime.plugins.noLongerInstalled'))
+    if (!record.remote) throw new Error(t('runtime.plugins.noRemoteSource'))
     const pending = remoteUpdates.get(id)
     if (pending?.record === record) return pending.task
     const abort = new AbortController()
@@ -579,7 +588,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     async install(manifestPath) {
       const sourceUrl = remoteManifestUrl(manifestPath)
       if (sourceUrl) {
-        if (remoteInstall) throw new Error('Another remote plugin installation is in progress.')
+        if (remoteInstall) throw new Error(t('runtime.plugins.remoteInstallInProgress'))
         remoteInstall = installRemote(sourceUrl).finally(() => {
           remoteInstall = undefined
         })
@@ -593,9 +602,9 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     async setEnabled(id, enabled) {
       const result = await mutate(async () => {
         const record = installed.get(id)
-        if (!record) throw new Error('This plugin is no longer installed.')
+        if (!record) throw new Error(t('runtime.plugins.noLongerInstalled'))
         if (!record.entry && enabled)
-          throw new Error(record.info.error ?? 'Plugin is incompatible.')
+          throw new Error(record.info.error ?? t('runtime.plugins.pluginIncompatible'))
         if (record.info.enabled !== enabled) await writePluginEnabled(directory, id, enabled)
         if (enabled) {
           if (active.has(id)) return null
@@ -616,7 +625,7 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     remove(id) {
       return mutate(async () => {
         const record = installed.get(id)
-        if (!record) throw new Error('This plugin is no longer installed.')
+        if (!record) throw new Error(t('runtime.plugins.noLongerInstalled'))
         await stop(record)
         try {
           await removePluginPackage(directory, id)
@@ -659,16 +668,16 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
     commandNames: () => commandsSnapshot,
     async runCommand(name, input) {
       const plugin = commands.get(name)
-      if (!plugin) throw new Error(`Plugin command /${name} is unavailable.`)
+      if (!plugin) throw new Error(t('runtime.plugins.commandUnavailable', { name }))
       await plugin.child.request({ action: 'command', name, input })
     },
     transports: () => transportsSnapshot,
     async openTransport(platform, channelId, callbacks) {
       const registration = transports.get(platform)
-      if (!registration) throw new Error('This plugin transport is unavailable.')
+      if (!registration) throw new Error(t('runtime.plugins.transportUnavailable'))
       const { owner, transportId, info } = registration
       if (owner.connections.size >= MAX_CONNECTIONS)
-        throw new Error('Plugin channel limit reached.')
+        throw new Error(t('runtime.plugins.channelLimitReached'))
       const connectionId = ++owner.nextConnectionId
       owner.connections.set(connectionId, callbacks)
       try {
@@ -683,9 +692,9 @@ export function createPluginManager(options: PluginManagerOptions): PluginManage
           await owner.child.request({ action: 'disconnect', connectionId })
         },
         async sendMessage(text) {
-          if (!info.canSend) throw new Error('This plugin channel is read-only.')
+          if (!info.canSend) throw new Error(t('runtime.plugins.channelReadOnly'))
           if (!owner.connections.has(connectionId))
-            throw new Error('This plugin channel is closed.')
+            throw new Error(t('runtime.plugins.channelClosed'))
           await owner.child.request({ action: 'send', connectionId, text })
         },
       }

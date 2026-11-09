@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatLoggingSettings as LoggingSettings } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { useTheme } from '../theme-context'
 import {
   HistoryButton as Button,
@@ -18,6 +19,7 @@ import { Text } from './ui/Text'
 export function ChatLoggingSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const [settings, setSettings] = useState<LoggingSettings | null>(null)
   const [retention, setRetention] = useState('100000')
   const [days, setDays] = useState('0')
@@ -106,7 +108,7 @@ export function ChatLoggingSettings() {
     try {
       await backend.api.flushChatLogs()
       setStatus(await backend.api.getChatLoggingStatus())
-      setNotice('Pending history and file logs saved.')
+      setNotice(t('chatLoggingSettings.flushed'))
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
       setStatus(await backend.api.getChatLoggingStatus())
@@ -119,39 +121,34 @@ export function ChatLoggingSettings() {
       testId="chat-logging-settings"
       style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
     >
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Local history includes watched channels. File logging is optional and starts after you
-        enable it and save.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('chatLoggingSettings.intro')}</Text>
       {settings ? (
         <>
           <Toggle
-            label="Load Twitch history through backend"
+            label={t('chatLoggingSettings.twitchHistory')}
             checked={settings.twitchHistoryEnabled}
             onChange={(twitchHistoryEnabled) => change({ twitchHistoryEnabled })}
           />
           <Text style={{ fontSize: 11, color: theme.text2 }}>
-            Fetch available messages from third-party history services through the backend. Coverage
-            depends on the channels and dates they retain. Disable this to use only locally stored
-            history; providers are configured on the backend.
+            {t('chatLoggingSettings.twitchHistoryHint')}
           </Text>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-            <Field label="Keep at most this many history messages">
+            <Field label={t('chatLoggingSettings.retention')}>
               <Input testId="chat-history-retention" value={retention} onChange={setRetention} />
             </Field>
-            <Field label="Keep history for days · 0 means no age limit">
+            <Field label={t('chatLoggingSettings.days')}>
               <Input testId="chat-history-days" value={days} onChange={setDays} />
             </Field>
           </div>
           <Text style={{ fontSize: 11, color: theme.text2 }}>
-            Saving a shorter retention period permanently removes older local history.
+            {t('chatLoggingSettings.retentionWarning')}
           </Text>
           <Toggle
-            label="Write chat logs to files"
+            label={t('chatLoggingSettings.writeLogs')}
             checked={settings.enabled}
             onChange={(enabled) => change({ enabled })}
           />
-          <Field label="Absolute folder path">
+          <Field label={t('chatLoggingSettings.directory')}>
             <Input
               testId="chat-log-directory"
               value={settings.directory}
@@ -160,27 +157,27 @@ export function ChatLoggingSettings() {
             />
           </Field>
           <Toggle
-            label="Include timestamps"
+            label={t('chatLoggingSettings.timestamps')}
             checked={settings.timestamps}
             onChange={(timestamps) => change({ timestamps })}
           />
-          <Field label="Start a new log">
+          <Field label={t('chatLoggingSettings.startNewLog')}>
             <Choices
               value={settings.rotation}
               options={[
-                { value: 'daily', label: 'Every day' },
-                { value: 'session', label: 'Every app session' },
+                { value: 'daily', label: t('chatLoggingSettings.rotation.daily') },
+                { value: 'session', label: t('chatLoggingSettings.rotation.session') },
               ]}
               onChange={(rotation) => change({ rotation })}
             />
           </Field>
-          <Field label="Maximum file size in MiB · larger logs rotate automatically">
+          <Field label={t('chatLoggingSettings.maxFileSize')}>
             <Input testId="chat-log-max-size" value={size} onChange={setSize} />
           </Field>
           <Text style={{ fontSize: 12, color: theme.text2 }}>
             {settings.channels.length
-              ? 'Log only these channels:'
-              : 'All channels are logged while file logging is enabled.'}
+              ? t('chatLoggingSettings.logOnlyChannels')
+              : t('chatLoggingSettings.allChannels')}
           </Text>
           {settings.channels.map((channel, index) => (
             <div
@@ -197,7 +194,7 @@ export function ChatLoggingSettings() {
                 style={{ fontSize: 12, color: theme.text }}
               >{`${channel.platform} / ${channel.channelId}`}</Text>
               <Button
-                label="Remove"
+                label={t('chatLoggingSettings.remove')}
                 onClick={() =>
                   change({ channels: settings.channels.filter((_, item) => item !== index) })
                 }
@@ -219,11 +216,11 @@ export function ChatLoggingSettings() {
                 testId="chat-log-add-channel"
                 value={channelId}
                 onChange={setChannelId}
-                placeholder="Channel name or ID, matching its chat source"
+                placeholder={t('chatLoggingSettings.addChannelPlaceholder')}
               />
             </div>
             <Button
-              label="Add channel"
+              label={t('chatLoggingSettings.addChannel')}
               disabled={!channelId.trim()}
               onClick={() => {
                 if (
@@ -245,7 +242,7 @@ export function ChatLoggingSettings() {
           </div>
           {status ? (
             <Text style={{ fontSize: 11, color: status.error ? theme.dangerText : theme.text2 }}>
-              {status.error ?? `${status.queued} messages waiting to be saved.`}
+              {status.error ?? tPlural('chatLoggingSettings.queued', status.queued)}
             </Text>
           ) : null}
           <SettingsFooter
@@ -267,12 +264,16 @@ export function ChatLoggingSettings() {
               setNotice('')
             }}
           >
-            <Button label="Flush pending logs" disabled={busy} onClick={() => void flush()} />
+            <Button
+              label={t('chatLoggingSettings.flush')}
+              disabled={busy}
+              onClick={() => void flush()}
+            />
           </SettingsFooter>
         </>
       ) : (
         <Button
-          label={busy ? 'Loading…' : 'Retry loading settings'}
+          label={busy ? t('chatLoggingSettings.loading') : t('chatLoggingSettings.retry')}
           disabled={busy}
           onClick={() => void load()}
         />

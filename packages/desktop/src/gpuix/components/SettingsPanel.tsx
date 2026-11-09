@@ -20,10 +20,13 @@ import type { ComponentType } from 'react'
 
 import { useBackend } from '../backend/context'
 import { focusPopupSearch } from '../hooks/use-popup-hotkeys'
+import { setLanguage, useT, type MessageKey } from '../i18n'
 import { nativeWindow } from '../native-window'
 import {
   searchSettings,
   resolveSettingsCategory,
+  settingsCategoryDescription,
+  settingsCategoryLabel,
   visibleSettingsSections,
   retainMountedSettingsSections,
   stepSettingsCategory,
@@ -113,6 +116,7 @@ function appSectionFields(
   switch (section) {
     case 'appearance':
       return {
+        language: source.language,
         theme: source.theme,
         themeMode: source.themeMode,
         customPalette: source.customPalette,
@@ -154,14 +158,30 @@ function customPaletteFor(settings: AppSettings): CustomPalette {
   )
 }
 
-const HOTKEYS_CONFIG: { action: keyof HotkeySettings; label: string; description: string }[] = [
-  { action: 'newTab', label: 'Open new tab', description: 'Add a watched channel tab' },
-  { action: 'nextTab', label: 'Next tab', description: 'Cycle to the next tab' },
-  { action: 'prevTab', label: 'Previous tab', description: 'Cycle to the previous tab' },
+const HOTKEYS_CONFIG: {
+  action: keyof HotkeySettings
+  labelKey: MessageKey
+  descriptionKey: MessageKey
+}[] = [
+  {
+    action: 'newTab',
+    labelKey: 'settings.shortcuts.newTab',
+    descriptionKey: 'settings.shortcuts.newTabDesc',
+  },
+  {
+    action: 'nextTab',
+    labelKey: 'settings.shortcuts.nextTab',
+    descriptionKey: 'settings.shortcuts.nextTabDesc',
+  },
+  {
+    action: 'prevTab',
+    labelKey: 'settings.shortcuts.prevTab',
+    descriptionKey: 'settings.shortcuts.prevTabDesc',
+  },
   {
     action: 'tabSelector',
-    label: 'Tab selector',
-    description: 'Open fuzzy tab search (Ctrl+K always works)',
+    labelKey: 'settings.shortcuts.tabSelector',
+    descriptionKey: 'settings.shortcuts.tabSelectorDesc',
   },
 ]
 
@@ -189,6 +209,7 @@ const RetainedSettingsEditor = memo(function RetainedSettingsEditor({
 export function SettingsPanel() {
   const theme = useTheme()
   const backend = useBackend()
+  const { t, tPlural } = useT()
   const settings = useStore(settingsStore)
   const renderer = useGpuixRequired()
   const windowSize = useWindowSize()
@@ -313,12 +334,12 @@ export function SettingsPanel() {
         if (active) setAppVersion(version)
       })
       .catch(() => {
-        if (active) setAppVersion('Unavailable')
+        if (active) setAppVersion(t('common.unavailable'))
       })
     return () => {
       active = false
     }
-  }, [backend, selectedCategory, appVersion])
+  }, [backend, selectedCategory, appVersion, t])
 
   useEffect(() => {
     let active = true
@@ -330,20 +351,18 @@ export function SettingsPanel() {
         if (revision === baselineRevision.current) {
           const next = makeLocal(stored)
           persistedRef.current = next
+          setLanguage(next.language)
           setPersisted(() => next)
         }
         setBaselineLoaded(true)
       })
       .catch((error) => {
-        if (active)
-          setActionError(
-            `Could not read saved app settings: ${String(error)}. You can still save your current edits.`,
-          )
+        if (active) setActionError(t('settings.error.read', { error: String(error) }))
       })
     return () => {
       active = false
     }
-  }, [backend])
+  }, [backend, t])
 
   // Feedback-loop guard (Vue ignorePropSync): our own live-preview pushes into
   // the store must not reset local, external store changes do.
@@ -351,6 +370,7 @@ export function SettingsPanel() {
     if (!settings || settings === ownPreview.current) return
     const next = makeLocal(settings)
     localRef.current = next
+    setLanguage(next.language)
     setLocal(next)
     persistedRef.current = next
     setPersisted(next)
@@ -363,6 +383,7 @@ export function SettingsPanel() {
     mutate(draft)
     localRef.current = draft
     setLocal(draft)
+    setLanguage(draft.language)
     const preview = makeLocal(draft)
     ownPreview.current = preview
     settingsStore.set(preview)
@@ -397,12 +418,9 @@ export function SettingsPanel() {
       globalSavingRef.current = false
       setGlobalSaving(false)
     }
-    if (!savedEverything)
-      setSaveError(
-        (current) => current || 'Some settings could not be saved. Your drafts are kept.',
-      )
+    if (!savedEverything) setSaveError((current) => current || t('settings.error.save'))
     return savedEverything
-  }, [appDirty, backend, baselineLoaded, invalidPalette])
+  }, [appDirty, backend, baselineLoaded, invalidPalette, t])
 
   const selectTheme = (value: AppSettings['theme']) => {
     const current = localRef.current
@@ -441,6 +459,7 @@ export function SettingsPanel() {
     const next = makeLocal(persistedRef.current)
     localRef.current = next
     setLocal(next)
+    setLanguage(next.language)
     ownPreview.current = next
     settingsStore.set(next)
     setSaveError('')
@@ -490,7 +509,7 @@ export function SettingsPanel() {
   const copyOverlayUrl = () => {
     setActionError('')
     void backend.api.copyText({ text: overlayUrl }).catch((error) => {
-      setActionError(`Could not copy the overlay URL: ${String(error)}`)
+      setActionError(t('settings.error.copyOverlayUrl', { error: String(error) }))
     })
   }
 
@@ -539,10 +558,10 @@ export function SettingsPanel() {
           <div
             style={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1, minWidth: 160 }}
           >
-            <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>Settings</Text>
-            <Text style={{ fontSize: 12, color: theme.text2 }}>
-              Find an option or choose a category. Save everything with one button.
+            <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>
+              {t('settings.title')}
             </Text>
+            <Text style={{ fontSize: 12, color: theme.text2 }}>{t('settings.subtitle')}</Text>
           </div>
           <div
             style={{
@@ -555,7 +574,7 @@ export function SettingsPanel() {
           >
             {dirtySections.size ? (
               <ActionButton disabled={globalSaving} onClick={discardAll}>
-                Discard
+                {t('common.discard')}
               </ActionButton>
             ) : null}
             <ActionButton
@@ -564,7 +583,11 @@ export function SettingsPanel() {
               disabled={!baselineLoaded || !dirtySections.size || globalSaving || invalidPalette}
               onClick={() => void saveAll()}
             >
-              {globalSaving ? 'Saving…' : saveError ? 'Retry save' : 'Save changes'}
+              {globalSaving
+                ? t('common.saving')
+                : saveError
+                  ? t('common.retrySave')
+                  : t('common.saveChanges')}
             </ActionButton>
           </div>
         </div>
@@ -575,10 +598,10 @@ export function SettingsPanel() {
           }}
         >
           {invalidPalette
-            ? 'Fix the marked colors in Appearance → Custom to save.'
+            ? t('settings.status.invalidPalette')
             : dirtySections.size
-              ? `Unsaved changes in ${dirtySections.size} ${dirtySections.size === 1 ? 'section' : 'sections'}.`
-              : 'All changes are saved.'}
+              ? tPlural('settings.status.unsaved', dirtySections.size)
+              : t('settings.status.saved')}
         </Text>
         {saveError ? (
           <Text testId="settings-save-error" style={{ color: theme.dangerText, fontSize: 12 }}>
@@ -594,7 +617,7 @@ export function SettingsPanel() {
             ref={searchRef}
             testId="settings-search"
             value={query}
-            placeholder="Search all settings…"
+            placeholder={t('settings.search.placeholder')}
             {...searchFocus}
             onChange={(event) => setQuery(event.value ?? '')}
             onKeyDown={(event) => {
@@ -622,7 +645,7 @@ export function SettingsPanel() {
           />
           {query ? (
             <ActionButton testId="settings-search-clear" onClick={clearQuery}>
-              Clear
+              {t('settings.search.clear')}
             </ActionButton>
           ) : null}
         </div>
@@ -715,7 +738,7 @@ export function SettingsPanel() {
                       fontWeight: active ? 700 : 500,
                     }}
                   >
-                    {`${item.label}${query ? ` (${count})` : ''}`}
+                    {`${settingsCategoryLabel(item.id)}${query ? ` (${count})` : ''}`}
                   </Text>
                   {categoryDirty ? (
                     <div
@@ -730,7 +753,9 @@ export function SettingsPanel() {
                   ) : null}
                 </div>
                 {!narrow ? (
-                  <Text style={{ color: theme.text2, fontSize: 10 }}>{item.description}</Text>
+                  <Text style={{ color: theme.text2, fontSize: 10 }}>
+                    {settingsCategoryDescription(item.id)}
+                  </Text>
                 ) : null}
               </div>
             )
@@ -774,20 +799,39 @@ export function SettingsPanel() {
                 }}
               >
                 <Text style={{ color: theme.text, fontSize: 16, fontWeight: 600 }}>
-                  No settings found
+                  {t('settings.search.emptyTitle')}
                 </Text>
                 <Text style={{ color: theme.text2, fontSize: 12 }}>
-                  Try a field name, provider, or a shorter phrase.
+                  {t('settings.search.emptyHint')}
                 </Text>
-                <ActionButton onClick={clearQuery}>Clear search</ActionButton>
+                <ActionButton onClick={clearQuery}>{t('settings.search.clear')}</ActionButton>
               </div>
             ) : null}
             <SettingsSectionContext.Provider value={visibility}>
               <SettingsSaveRegistryContext.Provider value={saveRegistry}>
                 <SettingsDirtyReporterContext.Provider value={reportDirty}>
                   {/* Appearance */}
-                  <SettingsSection id="appearance" title="Appearance">
-                    <SettingsRow first alignTop label="Theme">
+                  <SettingsSection id="appearance" title={t('settings.section.appearance')}>
+                    <SettingsRow
+                      first
+                      label={t('settings.appearance.language')}
+                      hint={t('settings.appearance.languageHint')}
+                    >
+                      <ToggleGroup
+                        label={t('settings.appearance.language')}
+                        value={local.language}
+                        options={[
+                          { value: 'en', label: t('common.language.en') },
+                          { value: 'ru', label: t('common.language.ru') },
+                        ]}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.language = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    <SettingsRow label={t('settings.appearance.theme')}>
                       <ThemeSettings
                         value={local.theme}
                         mode={local.themeMode}
@@ -800,14 +844,14 @@ export function SettingsPanel() {
                         onReset={resetPalette}
                       />
                     </SettingsRow>
-                    <SettingsRow last label="Font">
+                    <SettingsRow last label={t('settings.appearance.font')}>
                       <ToggleGroup
-                        label="Font family"
+                        label={t('settings.appearance.fontFamily')}
                         value={local.fontFamily}
                         options={[
-                          { value: 'inter', label: 'Inter' },
-                          { value: 'manrope', label: 'Manrope' },
-                          { value: 'system', label: 'System' },
+                          { value: 'inter', label: t('settings.appearance.font.inter') },
+                          { value: 'manrope', label: t('settings.appearance.font.manrope') },
+                          { value: 'system', label: t('settings.appearance.font.system') },
                         ]}
                         onChange={(value) =>
                           patch((draft) => {
@@ -821,17 +865,20 @@ export function SettingsPanel() {
 
                   <SettingsSection
                     id="commands"
-                    title="Custom Commands"
-                    desc="Create reusable commands and message actions"
+                    title={t('settings.section.commands')}
+                    desc={t('settings.section.commands.desc')}
                   >
                     <RetainedSettingsEditor component={CustomCommandsSettings} />
                   </SettingsSection>
-                  <SettingsSection id="twir-integration" title="Twir Integration">
+                  <SettingsSection
+                    id="twir-integration"
+                    title={t('settings.section.twir-integration')}
+                  >
                     <SettingsRow
                       first
                       last
-                      label="Suggest Twir commands"
-                      hint="Show public commands for the selected chat when you type !"
+                      label={t('settings.twir.suggest')}
+                      hint={t('settings.twir.suggestHint')}
                     >
                       <Switch
                         checked={local.twirIntegrationEnabled !== false}
@@ -846,70 +893,70 @@ export function SettingsPanel() {
                   </SettingsSection>
                   <SettingsSection
                     id="players"
-                    title="Stream Players"
-                    desc="Open streams in a browser, external player or Streamlink"
+                    title={t('settings.section.players')}
+                    desc={t('settings.section.players.desc')}
                   >
                     <RetainedSettingsEditor component={PlayerSettings} />
                   </SettingsSection>
-                  <SettingsSection id="plugins" title="Plugins">
+                  <SettingsSection id="plugins" title={t('settings.section.plugins')}>
                     <RetainedSettingsEditor component={PluginSettings} />
                   </SettingsSection>
                   <SettingsSection
                     id="streamer-mode"
-                    title="Streamer Mode"
-                    desc="Protect private details while streaming"
+                    title={t('settings.section.streamer-mode')}
+                    desc={t('settings.section.streamer-mode.desc')}
                   >
                     <RetainedSettingsEditor component={StreamerModeSettings} />
                   </SettingsSection>
                   <SettingsSection
                     id="similarity"
-                    title="Similar Messages"
-                    desc="Control repeated and almost identical messages"
+                    title={t('settings.section.similarity')}
+                    desc={t('settings.section.similarity.desc')}
                   >
                     <RetainedSettingsEditor component={SimilaritySettings} />
                   </SettingsSection>
                   <SettingsSection
                     id="pause"
-                    title="Chat Pausing"
-                    desc="Keep chat still while reading or opening links"
+                    title={t('settings.section.pause')}
+                    desc={t('settings.section.pause.desc')}
                   >
                     <RetainedSettingsEditor component={ChatPauseSettings} />
                   </SettingsSection>
-                  <SettingsSection id="twitch-session" title="Additional Twitch Session">
+                  <SettingsSection id="twitch-session" title={t('settings.section.twitch-session')}>
                     <RetainedSettingsEditor component={TwitchSessionSettings} />
                   </SettingsSection>
                   <SettingsSection
                     id="notifications"
-                    title="Notifications"
-                    desc="Choose sounds and desktop alerts for your highlight rules"
+                    title={t('settings.section.notifications')}
+                    desc={t('settings.section.notifications.desc')}
                   >
                     <RetainedSettingsEditor component={NotificationSettings} />
                   </SettingsSection>
                   <SettingsSection
                     id="rules"
-                    title="Highlights, Ignores & Filters"
-                    desc="Control what appears in each chat and which messages need your attention"
+                    title={t('settings.section.rules')}
+                    desc={t('settings.section.rules.desc')}
                   >
                     <RetainedSettingsEditor component={ChatRulesSettings} />
                   </SettingsSection>
 
-                  <SettingsSection id="emotes" title="Emotes & Cosmetics">
+                  <SettingsSection id="emotes" title={t('settings.section.emotes')}>
                     <RetainedSettingsEditor component={EmoteProviderSettings} />
                   </SettingsSection>
-                  <SettingsSection id="history" title="History & Logging">
+                  <SettingsSection id="history" title={t('settings.section.history')}>
                     <RetainedSettingsEditor component={ChatLoggingSettings} />
                   </SettingsSection>
-                  <SettingsSection id="image-uploader" title="Image Uploader">
+                  <SettingsSection id="image-uploader" title={t('settings.section.image-uploader')}>
                     <RetainedSettingsEditor component={ImageUploaderSettings} />
                   </SettingsSection>
-                  <SettingsSection id="translation" title="Translation">
+                  <SettingsSection id="translation" title={t('settings.section.translation')}>
                     <RetainedSettingsEditor component={TranslationSettings} />
                   </SettingsSection>
-                  <SettingsSection id="moderation" title="Moderation">
+                  <SettingsSection id="moderation" title={t('settings.section.moderation')}>
                     <SettingsRow
                       first
-                      label="Show chat moderation slider"
-                      hint="Drag from the left edge of a message to delete it, time out its author or ban them"
+                      label={t('settings.moderation.showRail')}
+                      hint={t('settings.moderation.showRailHint')}
                     >
                       <Switch
                         testId="settings-show-moderation-rail"
@@ -927,13 +974,13 @@ export function SettingsPanel() {
                   {/* Self-Ping Highlight */}
                   <SettingsSection
                     id="self-ping"
-                    title="Self-Ping Highlight"
-                    desc="Highlight messages that mention your own nickname"
+                    title={t('settings.section.self-ping')}
+                    desc={t('settings.section.self-ping.desc')}
                   >
                     <SettingsRow
                       first
-                      label="Enable highlights"
-                      hint="Highlight messages mentioning you"
+                      label={t('settings.selfPing.enable')}
+                      hint={t('settings.selfPing.enableHint')}
                     >
                       <Switch
                         checked={local.selfPing.enabled}
@@ -944,7 +991,7 @@ export function SettingsPanel() {
                         }
                       />
                     </SettingsRow>
-                    <SettingsRow label="Highlight color">
+                    <SettingsRow label={t('settings.selfPing.color')}>
                       <div
                         style={{
                           display: 'flex',
@@ -966,7 +1013,12 @@ export function SettingsPanel() {
                         <ColorSwatch color={local.selfPing.color} />
                       </div>
                     </SettingsRow>
-                    <SettingsRow last alignTop label="Preview" hint="How a pinged message looks">
+                    <SettingsRow
+                      last
+                      alignTop
+                      label={t('settings.selfPing.preview')}
+                      hint={t('settings.selfPing.previewHint')}
+                    >
                       <div
                         style={{
                           display: 'flex',
@@ -996,33 +1048,42 @@ export function SettingsPanel() {
                             flexShrink: 0,
                           }}
                         >
-                          StreamerName:
+                          {t('settings.selfPing.previewAuthor')}
                         </Text>
-                        <Text style={{ fontSize: 13, color: theme.text }}>Hey</Text>
-                        <Text
-                          style={{ fontSize: 13, fontWeight: 600, color: theme.accent.primary }}
-                        >
-                          @YourName
+                        <Text style={{ fontSize: 13, color: theme.text }}>
+                          {t('settings.selfPing.previewMessage', { name: '@YourName' })}
                         </Text>
-                        <Text style={{ fontSize: 13, color: theme.text }}>what do you think?</Text>
                       </div>
                     </SettingsRow>
                     {appFooter('self-ping')}
                   </SettingsSection>
 
                   {/* Updates */}
-                  <SettingsSection id="updates" title="Updates" desc="Automatic update settings">
-                    <SettingsRow first label="Version" hint="Currently installed version">
+                  <SettingsSection
+                    id="updates"
+                    title={t('settings.section.updates')}
+                    desc={t('settings.section.updates.desc')}
+                  >
+                    <SettingsRow
+                      first
+                      label={t('settings.updates.version')}
+                      hint={t('settings.updates.versionHint')}
+                    >
                       <Text style={{ fontSize: 13, color: theme.text2 }}>{appVersion}</Text>
                     </SettingsRow>
-                    <SettingsRow label="Check now" hint="Look for updates on the release feed">
+                    <SettingsRow
+                      label={t('settings.updates.checkNow')}
+                      hint={t('settings.updates.checkNowHint')}
+                    >
                       <div
                         onClick={() => {
                           setActionError('')
                           void backend.api
                             .checkForUpdate()
                             .catch((error) =>
-                              setActionError(`Could not check for updates: ${String(error)}`),
+                              setActionError(
+                                t('settings.error.checkUpdates', { error: String(error) }),
+                              ),
                             )
                         }}
                         style={{
@@ -1037,13 +1098,15 @@ export function SettingsPanel() {
                           cursor: 'pointer',
                         }}
                       >
-                        <Text style={{ fontSize: 13, color: theme.text }}>Check for updates</Text>
+                        <Text style={{ fontSize: 13, color: theme.text }}>
+                          {t('settings.updates.check')}
+                        </Text>
                       </div>
                     </SettingsRow>
                     <SettingsRow
                       last
-                      label="Auto-check for updates"
-                      hint="Check at startup and every 10 minutes"
+                      label={t('settings.updates.auto')}
+                      hint={t('settings.updates.autoHint')}
                     >
                       <Switch
                         checked={local.autoCheckUpdates ?? false}
@@ -1060,8 +1123,8 @@ export function SettingsPanel() {
                   {/* OBS Overlay */}
                   <SettingsSection
                     id="overlay"
-                    title="OBS Overlay"
-                    desc="Add a Browser Source in OBS with the URL below"
+                    title={t('settings.section.overlay')}
+                    desc={t('settings.section.overlay.desc')}
                   >
                     <div
                       style={{
@@ -1124,12 +1187,12 @@ export function SettingsPanel() {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          Copy
+                          {t('common.copy')}
                         </Text>
                       </div>
                     </div>
 
-                    <SettingsRow label="Port">
+                    <SettingsRow label={t('settings.overlay.port')}>
                       <SmallInput
                         value={String(local.overlay.port)}
                         onChange={(value) => {
@@ -1141,7 +1204,10 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
 
-                    <SettingsRow label="Background" hint='Use "transparent" for chroma key'>
+                    <SettingsRow
+                      label={t('settings.overlay.background')}
+                      hint={t('settings.overlay.backgroundHint')}
+                    >
                       <div
                         style={{
                           display: 'flex',
@@ -1165,7 +1231,7 @@ export function SettingsPanel() {
                       </div>
                     </SettingsRow>
 
-                    <SettingsRow label="Text colour">
+                    <SettingsRow label={t('settings.overlay.textColor')}>
                       <div
                         style={{
                           display: 'flex',
@@ -1186,7 +1252,7 @@ export function SettingsPanel() {
                       </div>
                     </SettingsRow>
 
-                    <SettingsRow label="Font size">
+                    <SettingsRow label={t('settings.overlay.fontSize')}>
                       <div
                         style={{
                           display: 'flex',
@@ -1220,7 +1286,7 @@ export function SettingsPanel() {
                       </div>
                     </SettingsRow>
 
-                    <SettingsRow label="Max messages">
+                    <SettingsRow label={t('settings.overlay.maxMessages')}>
                       <div
                         style={{
                           display: 'flex',
@@ -1254,14 +1320,14 @@ export function SettingsPanel() {
                       </div>
                     </SettingsRow>
 
-                    <SettingsRow label="Animation">
+                    <SettingsRow label={t('settings.overlay.animation')}>
                       <ToggleGroup
-                        label="Overlay animation"
+                        label={t('settings.overlay.animationLabel')}
                         value={local.overlay.animation}
                         options={[
-                          { value: 'slide', label: 'Slide' },
-                          { value: 'fade', label: 'Fade' },
-                          { value: 'none', label: 'None' },
+                          { value: 'slide', label: t('settings.overlay.animation.slide') },
+                          { value: 'fade', label: t('settings.overlay.animation.fade') },
+                          { value: 'none', label: t('settings.overlay.animation.none') },
                         ]}
                         onChange={(value) =>
                           patch((draft) => {
@@ -1271,13 +1337,13 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
 
-                    <SettingsRow label="Position">
+                    <SettingsRow label={t('settings.overlay.position')}>
                       <ToggleGroup
-                        label="Overlay position"
+                        label={t('settings.overlay.positionLabel')}
                         value={local.overlay.position}
                         options={[
-                          { value: 'bottom', label: 'Bottom' },
-                          { value: 'top', label: 'Top' },
+                          { value: 'bottom', label: t('settings.overlay.position.bottom') },
+                          { value: 'top', label: t('settings.overlay.position.top') },
                         ]}
                         onChange={(value) =>
                           patch((draft) => {
@@ -1287,7 +1353,7 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
 
-                    <SettingsRow label="Show platform icon">
+                    <SettingsRow label={t('settings.overlay.showPlatformIcon')}>
                       <Switch
                         checked={local.overlay.showPlatformIcon}
                         onChange={(value) =>
@@ -1298,7 +1364,7 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
 
-                    <SettingsRow last label="Show avatars">
+                    <SettingsRow last label={t('settings.overlay.showAvatars')}>
                       <Switch
                         checked={local.overlay.showAvatar}
                         onChange={(value) =>
@@ -1312,15 +1378,15 @@ export function SettingsPanel() {
                   </SettingsSection>
 
                   {/* Keyboard Shortcuts */}
-                  <SettingsSection id="shortcuts" title="Keyboard Shortcuts">
+                  <SettingsSection id="shortcuts" title={t('settings.section.shortcuts')}>
                     <ActionHotkeySettings />
                     <Text
                       style={{ fontSize: 12, fontWeight: 600, color: theme.text, marginTop: 8 }}
                     >
-                      Navigation shortcuts
+                      {t('settings.shortcuts.navigation')}
                     </Text>
                     <Text style={{ fontSize: 11, color: theme.text2 }}>
-                      These four shortcuts use the app settings save at the bottom of this section.
+                      {t('settings.shortcuts.navigationHint')}
                     </Text>
                     {HOTKEYS_CONFIG.map((config, index) => {
                       const recording = recordingAction === config.action
@@ -1329,8 +1395,8 @@ export function SettingsPanel() {
                           key={config.action}
                           first={index === 0}
                           last={index === HOTKEYS_CONFIG.length - 1}
-                          label={config.label}
-                          hint={config.description}
+                          label={t(config.labelKey)}
+                          hint={t(config.descriptionKey)}
                         >
                           <div
                             onClick={() => setRecordingAction(config.action)}
@@ -1362,7 +1428,7 @@ export function SettingsPanel() {
                                   whiteSpace: 'nowrap',
                                 }}
                               >
-                                Press a key…
+                                {t('settings.shortcuts.pressKey')}
                               </Text>
                             ) : (
                               <Text

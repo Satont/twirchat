@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { ObsAudioInput, ObsRemoteCommand } from '../../../services/obs-remote'
+import { useT } from '../../i18n'
 import { useTheme } from '../../theme-context'
 import { ActionButton, FormInput } from '../ui/Form'
 import { Text } from '../ui/Text'
@@ -61,6 +62,7 @@ function Channel({
   disabled: boolean
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const [draft, setDraft] = useState<string | null>(null)
   const db = Number(draft)
   return (
@@ -78,7 +80,7 @@ function Channel({
     >
       <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text }}>{input.name}</Text>
       <Text style={{ fontSize: 10, color: theme.text2 }}>
-        {`${input.global ? 'Global' : input.active ? 'Active' : 'Inactive'} · ${input.monitoring === 'OBS_MONITORING_TYPE_MONITOR_ONLY' ? 'Monitor only · no output' : input.monitoring === 'OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT' ? 'Monitor + output' : 'Output'}`}
+        {`${input.global ? t('obsRemote.mixer.global') : input.active ? t('obsRemote.mixer.active') : t('obsRemote.mixer.inactive')} · ${input.monitoring === 'OBS_MONITORING_TYPE_MONITOR_ONLY' ? t('obsRemote.mixer.monitorOnly') : input.monitoring === 'OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT' ? t('obsRemote.mixer.monitorAndOutput') : t('obsRemote.mixer.output')}`}
       </Text>
       <Meter levels={input.levels} muted={input.muted} />
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -104,7 +106,7 @@ function Channel({
             setDraft(null)
           }}
         >
-          Set
+          {t('obsRemote.mixer.set')}
         </ActionButton>
       </div>
       <Fader
@@ -121,7 +123,7 @@ function Channel({
           danger={input.muted}
           onClick={() => run({ kind: 'mute', input: input.name, muted: !input.muted })}
         >
-          {input.muted ? 'Unmute' : 'Mute'}
+          {input.muted ? t('obsRemote.mixer.unmute') : t('obsRemote.mixer.mute')}
         </ActionButton>
         <ActionButton
           disabled={disabled}
@@ -137,7 +139,7 @@ function Channel({
             })
           }
         >
-          Monitor
+          {t('obsRemote.mixer.monitor')}
         </ActionButton>
         <ActionButton
           testId={`obs-reset-volume-${input.name}`}
@@ -150,7 +152,7 @@ function Channel({
           0 dB
         </ActionButton>
         <ActionButton testId={`obs-hide-${input.name}`} onClick={hide}>
-          Hide
+          {t('obsRemote.mixer.hide')}
         </ActionButton>
       </div>
     </div>
@@ -159,6 +161,7 @@ function Channel({
 
 export function Mixer({ inputs, panicActive, run, disabled }: MixerProps) {
   const theme = useTheme()
+  const { t } = useT()
   const [hidden, setHidden] = useState<string[]>([])
   const mix = [0, 1].map((channel) =>
     Math.sqrt(
@@ -172,12 +175,12 @@ export function Mixer({ inputs, panicActive, run, disabled }: MixerProps) {
   )
   return (
     <Section
-      title="Audio mixer"
+      title={t('obsRemote.mixer.title')}
       action={
         <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
           {hidden.length ? (
             <ActionButton testId="obs-restore-channels" onClick={() => setHidden([])}>
-              {`Restore hidden (${hidden.length})`}
+              {t('obsRemote.mixer.restoreHidden', { count: hidden.length })}
             </ActionButton>
           ) : null}
           <ActionButton
@@ -186,19 +189,17 @@ export function Mixer({ inputs, panicActive, run, disabled }: MixerProps) {
             danger
             onClick={() => run({ kind: panicActive ? 'undo-panic' : 'panic' })}
           >
-            {panicActive ? 'Undo panic mute' : 'Panic mute'}
+            {panicActive ? t('obsRemote.mixer.undoPanic') : t('obsRemote.mixer.panic')}
           </ActionButton>
         </div>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Text style={{ color: theme.text2, fontSize: 11 }}>Estimated mix</Text>
+        <Text style={{ color: theme.text2, fontSize: 11 }}>{t('obsRemote.mixer.estimated')}</Text>
         <div style={{ width: 180 }}>
           <Meter levels={mix} />
         </div>
-        <Text style={{ color: theme.text2, fontSize: 10 }}>
-          −60 · −20 · −9 · 0 dBFS · approximate, track routing excluded
-        </Text>
+        <Text style={{ color: theme.text2, fontSize: 10 }}>{t('obsRemote.mixer.scale')}</Text>
       </div>
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {inputs
@@ -218,9 +219,7 @@ export function Mixer({ inputs, panicActive, run, disabled }: MixerProps) {
             />
           ))}
         {!inputs.length ? (
-          <Text style={{ color: theme.text2, fontSize: 12 }}>
-            Audio inputs appear when OBS is connected.
-          </Text>
+          <Text style={{ color: theme.text2, fontSize: 12 }}>{t('obsRemote.mixer.empty')}</Text>
         ) : null}
       </div>
     </Section>

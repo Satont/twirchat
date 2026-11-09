@@ -8,6 +8,7 @@ import {
   type ImageUploadResult,
 } from '../../services/image-uploader'
 import { useBackend } from '../backend/context'
+import { t as translate, tPlural as translatePlural, useT } from '../i18n'
 import { nativeWindow, type NativeImagePaste } from '../native-window'
 import { showNotice } from '../state/app'
 import { useStoreSelector } from '../state/create-store'
@@ -42,17 +43,17 @@ type UploadView =
 function uploadTitle(view: UploadView): string {
   switch (view.kind) {
     case 'preparing':
-      return 'Preparing image…'
+      return translate('composer.image.preparing')
     case 'confirm':
-      return view.count === 1 ? 'Upload this image?' : `Upload ${view.count} images?`
+      return translatePlural('composer.image.confirm', view.count)
     case 'uploading':
       return view.count === 1
-        ? 'Uploading image…'
-        : `Uploading image ${view.index} of ${view.count}…`
+        ? translate('composer.image.uploadingSingle')
+        : translate('composer.image.uploading', { index: view.index, count: view.count })
     case 'failed':
       return view.message
     case 'complete':
-      return view.count === 1 ? 'Image uploaded' : `${view.count} images uploaded`
+      return translatePlural('composer.image.uploaded', view.count)
     default: {
       const exhaustive: never = view
       return exhaustive
@@ -92,6 +93,7 @@ export function ComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
 function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstance | null> }) {
   const renderer = useGpuixRequired()
   const { api } = useBackend()
+  const { t, tPlural } = useT()
   const theme = useTheme()
   const sessionRef = useRef<UploadSession | null>(null)
   const busy = useRef(false)
@@ -146,7 +148,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
     )
     if (!inserted && !session.controller.signal.aborted) {
       await api.copyText({ text: result.imageUrl })
-      showNotice('success', 'Image uploaded. Link copied to the clipboard.')
+      showNotice('success', t('composer.image.uploadedLinkCopied'))
     }
   }
 
@@ -168,7 +170,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
     const { signal } = session.controller
     try {
       if (imageUploaderSettingsStore.get() !== session.settings)
-        throw new Error('Image uploader settings changed. Paste the image again.')
+        throw new Error(t('composer.image.error.settingsChanged'))
       if (remember) {
         session.settings = await api.saveImageUploaderSettings({
           ...session.settings,
@@ -182,7 +184,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
         /* Advance until the batch ends. */
       }
       if (!signal.aborted) {
-        if (!session.next) throw new Error('The clipboard has no supported images.')
+        if (!session.next) throw new Error(t('composer.image.error.noSupportedImages'))
         finish(session)
       }
     } catch (error) {
@@ -193,7 +195,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
         if (!retry) sessionRef.current = null
         setView({
           kind: 'failed',
-          message: error instanceof Error ? error.message : 'Could not upload the image.',
+          message: error instanceof Error ? error.message : t('composer.image.error.upload'),
           retry,
         })
       }
@@ -215,7 +217,11 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
         ? paste.paths.filter(isClipboardImagePath).map((path) => ({ kind: 'file', path }))
         : [{ kind: 'image', image: paste }]
     if (!sources.length) {
-      setView({ kind: 'failed', message: 'The clipboard has no supported images.', retry: false })
+      setView({
+        kind: 'failed',
+        message: t('composer.image.error.noSupportedImages'),
+        retry: false,
+      })
       return
     }
     const session: UploadSession = {
@@ -236,7 +242,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
     try {
       const image = await nextImage(session)
       if (session.controller.signal.aborted) return
-      if (!image) throw new Error('The clipboard has no supported images.')
+      if (!image) throw new Error(t('composer.image.error.noSupportedImages'))
       const preview = await previewImage(image)
       if (session.controller.signal.aborted) return
       setView({
@@ -250,7 +256,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
         sessionRef.current = null
         setView({
           kind: 'failed',
-          message: error instanceof Error ? error.message : 'Could not read the image.',
+          message: error instanceof Error ? error.message : t('composer.image.error.read'),
           retry: false,
         })
       }
@@ -265,7 +271,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
     native.setImagePasteHandler(editorId, (paste) => {
       if (!active) return
       void receive(paste, editorId).catch(() => {
-        showNotice('error', 'Could not paste the image.')
+        showNotice('error', t('composer.image.error.paste'))
       })
     })
     return () => {
@@ -274,13 +280,15 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
       sessionRef.current?.controller.abort()
       sessionRef.current = null
     }
-  }, [editor, renderer])
+  }, [editor, renderer, t])
 
   if (!view) return null
   const start = (remember: boolean) => {
     const session = sessionRef.current
     if (session) {
-      void upload(session, remember).catch(() => showNotice('error', 'Could not upload the image.'))
+      void upload(session, remember).catch(() =>
+        showNotice('error', t('composer.image.error.upload')),
+      )
     }
   }
 
@@ -317,7 +325,7 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
             />
           ) : null}
           <Text style={{ fontSize: 11, color: theme.text2 }}>
-            {`To ${view.host}. The link will be inserted into your draft.`}
+            {t('composer.image.confirmHint', { host: view.host })}
           </Text>
         </>
       ) : null}
@@ -325,16 +333,16 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
         {view.kind === 'confirm' ? (
           <>
             <ActionButton primary testId="composer-image-upload" onClick={() => start(false)}>
-              Upload
+              {t('common.upload')}
             </ActionButton>
             <ActionButton testId="composer-image-upload-remember" onClick={() => start(true)}>
-              Upload and don’t ask again
+              {t('composer.image.uploadAndDontAsk')}
             </ActionButton>
           </>
         ) : null}
         {view.kind === 'failed' && view.retry ? (
           <ActionButton primary testId="composer-image-retry" onClick={() => start(false)}>
-            Retry
+            {t('common.retry')}
           </ActionButton>
         ) : null}
         {deletionUrls.length ? (
@@ -342,12 +350,12 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
             testId="composer-image-copy-deletion"
             onClick={() => {
               void api.copyText({ text: deletionUrls.join('\n') }).then(
-                () => showNotice('success', 'Deletion link copied.'),
-                () => showNotice('error', 'Could not copy the deletion link.'),
+                () => showNotice('success', t('composer.image.deletionCopied')),
+                () => showNotice('error', t('composer.image.error.copyDeletion')),
               )
             }}
           >
-            {deletionUrls.length === 1 ? 'Copy deletion link' : 'Copy deletion links'}
+            {tPlural('composer.image.copyDeletionLink', deletionUrls.length)}
           </ActionButton>
         ) : null}
         <ActionButton
@@ -357,7 +365,9 @@ function EnabledComposerImageUpload({ editor }: { editor: RefObject<PublicInstan
             if (editor.current) renderer.focusElement?.(editor.current.id)
           }}
         >
-          {view.kind === 'complete' || view.kind === 'failed' ? 'Dismiss' : 'Cancel'}
+          {view.kind === 'complete' || view.kind === 'failed'
+            ? t('composer.dismiss')
+            : t('common.cancel')}
         </ActionButton>
       </div>
     </div>

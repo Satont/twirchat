@@ -1,6 +1,8 @@
 import type { BackendToDesktopMessage } from '@twirchat/shared/protocol'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
+import { t } from '../gpuix/i18n'
+
 type SevenTvSystemMessage = Extract<BackendToDesktopMessage, { type: 'seventv_system_message' }>
 
 export function buildSevenTvSystemMessage(
@@ -23,26 +25,38 @@ export function buildSevenTvSystemMessage(
   }
   switch (message.action) {
     case 'set_changed':
-      return { ...base, text: `Active emote set changed to «${message.setName}»` }
+      return {
+        ...base,
+        text: t('notices.seventv.setChanged', { name: message.setName }),
+      }
     case 'set_renamed':
-      return { ...base, text: `Emote set «${message.oldName}» renamed to «${message.newName}»` }
+      return {
+        ...base,
+        text: t('notices.seventv.setRenamed', {
+          oldName: message.oldName,
+          newName: message.newName,
+        }),
+      }
     case 'set_deleted':
-      return { ...base, text: `Emote set «${message.setName}» was deleted` }
+      return {
+        ...base,
+        text: t('notices.seventv.setDeleted', { name: message.setName }),
+      }
     case 'added':
     case 'removed':
     case 'updated': {
-      const actionText =
+      const actionKey =
         message.action === 'added'
-          ? 'added to'
+          ? 'notices.seventv.emoteAdded'
           : message.action === 'removed'
-            ? 'removed from'
-            : 'renamed in'
-      const oldAliasText = message.oldAlias ? ` (was ${message.oldAlias})` : ''
-      const prefix = `Emote «${message.emote.alias}» `
+            ? 'notices.seventv.emoteRemoved'
+            : 'notices.seventv.emoteUpdated'
+      const was = message.oldAlias ? t('notices.seventv.wasAlias', { alias: message.oldAlias }) : ''
+      const prefix = t('notices.seventv.emotePrefix', { alias: message.emote.alias })
       const placeholder = `:${message.emote.alias}:`
       return {
         ...base,
-        text: `${prefix}${placeholder}${oldAliasText} ${actionText} the channel`,
+        text: t(actionKey, { prefix, placeholder, was }),
         emotes: [
           {
             id: message.emote.id,

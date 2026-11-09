@@ -23,6 +23,7 @@ type LayoutIOBackend = {
 type LayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removePanel'> }
 type CloneLayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removeWatchedChannelsLayout'> }
 import { findNodeById, findParentOfNode } from '../../views/main/utils/layout-tree'
+import { t } from '../i18n'
 import {
   dockPanel,
   directionalFocusTarget,
@@ -166,7 +167,7 @@ async function readLayout(
   const previous = layoutStore.get().get(tabId)?.layout
   const saved = await backend.api.getWatchedChannelsLayout({ tabId })
   if (state.needsRefresh) {
-    if (!saved) throw new Error('The updated layout could not be loaded.')
+    if (!saved) throw new Error(t('notices.layout.updatedLayoutUnavailable'))
     publish(tabId, rebaseResizes(saved, state.patches))
     state.needsRefresh = false
   } else if (state.revision === revision && layoutStore.get().get(tabId)?.layout === previous) {
@@ -250,7 +251,7 @@ function debouncedSave(backend: LayoutIOBackend, tabId: string): void {
       saveTimers.delete(tabId)
       runInBackground(
         saveLayoutNow(backend, tabId).catch((error) =>
-          showNotice('error', `Could not save layout: ${String(error)}`),
+          showNotice('error', t('notices.layout.saveFailed', { error: String(error) })),
         ),
         'layout background operation failed',
       )
@@ -291,7 +292,7 @@ export async function splitPanel(
     if (newPanelId) requestLayoutPanelFocus(tabId, newPanelId, scope)
     return newPanelId
   } catch (error) {
-    showNotice('error', `Could not split pane: ${String(error)}`)
+    showNotice('error', t('notices.layout.splitFailed', { error: String(error) }))
   }
 }
 
@@ -314,9 +315,9 @@ export function removePanel(backend: LayoutBackend, tabId: string, panelId: stri
           layout = layoutStore.get().get(tabId)?.layout
         }
         const panel = layout && findNodeById(layout.root, panelId)
-        if (!layout || panel?.type !== 'panel') throw new Error('This pane is no longer open.')
+        if (!layout || panel?.type !== 'panel') throw new Error(t('notices.layout.paneClosed'))
         const parent = findParentOfNode(layout.root, panelId)
-        if (!parent && tabId === 'home') throw new Error('Home must keep at least one pane.')
+        if (!parent && tabId === 'home') throw new Error(t('notices.layout.homeNeedsPane'))
         const prefix = `${tabId}:${panelId}`
         const entry: ClosedSplit = {
           id: crypto.randomUUID(),
@@ -366,7 +367,7 @@ export function removePanel(backend: LayoutBackend, tabId: string, panelId: stri
         }
       })
     } catch (error) {
-      showNotice('error', `Could not close pane: ${String(error)}`)
+      showNotice('error', t('notices.layout.closePaneFailed', { error: String(error) }))
     }
   })
 }
@@ -403,7 +404,7 @@ export function reopenClosedSplit(
         tabId = callerTab
         windowId = callerScope
       } else {
-        if (callerScope !== 'main') throw new Error('The chat window is no longer open.')
+        if (callerScope !== 'main') throw new Error(t('notices.layout.chatWindowClosed'))
         if (!(await restoreClosedChatTab(backend, tabId))) tabId = await createEmptyChatTab(backend)
         windowId = 'main'
       }
@@ -412,7 +413,7 @@ export function reopenClosedSplit(
     await mutateLayout(backend, tabId, async () => {
       let layout = layoutStore.get().get(tabId)?.layout
       if (!layout) layout = await backend.api.getWatchedChannelsLayout({ tabId })
-      if (!layout) throw new Error('The target tab layout could not be loaded.')
+      if (!layout) throw new Error(t('notices.layout.targetLayoutUnavailable'))
       const existing =
         findNodeById(layout.root, entry.restorePanelId) ?? findNodeById(layout.root, entry.panel.id)
       if (existing?.type === 'panel') {
@@ -499,7 +500,7 @@ export async function assignChannel(
       backend.api.assignChannelToPanel({ tabId, panelId, channelId }),
     )
   } catch (error) {
-    showNotice('error', `Could not assign channel: ${String(error)}`)
+    showNotice('error', t('notices.layout.assignFailed', { error: String(error) }))
     throw error
   }
 }
@@ -511,7 +512,7 @@ export function restoreHomePanel(
 ): Promise<void> {
   return mutateLayout(backend, 'home', async () => {
     const current = layoutStore.get().get('home')?.layout
-    if (!current) throw new Error('My channels layout is unavailable.')
+    if (!current) throw new Error(t('notices.layout.homeLayoutUnavailable'))
     const layout = structuredClone(current)
     const panel = findNodeById(layout.root, panelId)
     if (
@@ -519,7 +520,7 @@ export function restoreHomePanel(
       panel.content.type !== 'watched' ||
       panel.content.channelId !== channelId
     )
-      throw new Error('This pane is no longer showing the selected channel.')
+      throw new Error(t('notices.layout.paneChannelMismatch'))
     panel.content = { type: 'main' }
     await backend.api.setWatchedChannelsLayout({ tabId: 'home', layout })
   })
@@ -677,9 +678,9 @@ export async function cloneLayoutForWindow(
     const source =
       layoutStore.get().get(sourceTabId)?.layout ??
       (await backend.api.getWatchedChannelsLayout({ tabId: sourceTabId }))
-    if (!source) throw new Error('The source layout could not be loaded.')
+    if (!source) throw new Error(t('notices.layout.sourceLayoutUnavailable'))
     const subtree = sourcePanelId ? findNodeById(source.root, sourcePanelId) : source.root
-    if (!subtree) throw new Error('The source pane is no longer open.')
+    if (!subtree) throw new Error(t('notices.layout.sourcePaneClosed'))
     const root = structuredClone(subtree)
     const mapping = new Map<string, string>()
     const clone = (node: LayoutNode) => {
@@ -725,7 +726,7 @@ export async function cloneLayoutForWindow(
     publish(tabId, layout)
     result = { tabId, layout }
   })
-  if (!result) throw new Error('The cloned layout could not be created.')
+  if (!result) throw new Error(t('notices.layout.clonedLayoutFailed'))
   return result
 }
 

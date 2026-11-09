@@ -2,6 +2,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import type { CosmeticPaint, UserCosmetics } from '../../services/cosmetics'
 import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
+import { useT } from '../i18n'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
 import { useFont } from '../theme-context'
@@ -38,12 +39,13 @@ export function CosmeticAuthorName({
   onClick: () => void
 }) {
   const font = useFont()
+  const { t } = useT()
   const enabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
   const image = usePaintImage(name, enabled ? paint : undefined, fontSize, font)
   return (
     <div
       role="button"
-      aria-label={`Open ${name}'s user card`}
+      aria-label={t('misc.userCard.openFor', { name })}
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(event) => {

@@ -16,6 +16,7 @@ import type {
   SelfPingConfig,
   AppSettings,
   CustomPalette,
+  Language,
   SplitDirection,
   SplitNode,
   PanelContent,
@@ -34,6 +35,7 @@ import type {
 } from '@twirchat/shared/youtube-chat'
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
 import { normalizePaletteColor } from '../shared/theme-palette'
 
 export const platformSchema = z.toZod<Platform>()(
@@ -234,10 +236,11 @@ const themeSchema = z.enum([
   'custom',
 ])
 const themeModeSchema = z.enum(['dark', 'light'])
+const languageSchema = z.toZod<Language>()(z.union([z.literal('en'), z.literal('ru')]))
 const paletteColorSchema = z.string().transform((input, ctx) => {
   const color = normalizePaletteColor(input)
   if (color) return color
-  ctx.addIssue({ code: 'custom', message: 'Expected a hexadecimal color.' })
+  ctx.addIssue({ code: 'custom', message: t('misc.persisted.paletteColor') })
   return z.NEVER
 })
 const customPaletteSchema = z.toZod<CustomPalette>()(
@@ -253,6 +256,7 @@ const customPaletteSchema = z.toZod<CustomPalette>()(
 )
 export const appSettingsSchema = z.toZod<AppSettings>()(
   z.object({
+    language: languageSchema,
     theme: themeSchema,
     themeMode: themeModeSchema,
     customPalette: customPaletteSchema.optional(),
@@ -511,6 +515,7 @@ export const emoteCatalogEntrySchema = z.toZod<EmoteCatalogEntry>()(
 )
 
 export const partialAppSettingsSchema = appSettingsSchema.partial().extend({
+  language: languageSchema.optional().catch(DEFAULT_SETTINGS.language),
   theme: themeSchema.optional().catch(DEFAULT_SETTINGS.theme),
   themeMode: themeModeSchema.optional().catch(DEFAULT_SETTINGS.themeMode),
   customPalette: customPaletteSchema.optional().catch(undefined),

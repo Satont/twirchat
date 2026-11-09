@@ -1,5 +1,6 @@
 import type {
   TwitchActivityCapability,
+  TwitchActivitySnapshotPart,
   TwitchFollowingPage,
   TwitchRedemption,
   TwitchRewardQueueSummary,
@@ -7,23 +8,46 @@ import type {
 
 import type { DesktopApi } from '../../backend/api'
 import { runUiTask } from '../../hooks/run-ui-task'
+import { t, tPlural } from '../../i18n'
 import { createStore } from '../../state/create-store'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 export const MAX_QUEUE_ITEMS = 10000
 
+function snapshotSectionText(section: TwitchActivitySnapshotPart): string {
+  switch (section) {
+    case 'pinnedMessage':
+      return t('misc.twitchActivities.capability.pins')
+    case 'pointsBalance':
+      return t('misc.twitchActivities.capability.points')
+    case 'polls':
+      return t('misc.twitchActivities.capability.polls')
+    case 'predictions':
+      return t('misc.twitchActivities.capability.predictions')
+    case 'rewards':
+      return t('misc.twitchActivities.capability.rewards')
+    default:
+      return section
+  }
+}
+
 export function activityCapabilityText(capability?: TwitchActivityCapability): string {
-  if (!capability) return 'Checking live update availability…'
-  if (capability.mode === 'unavailable') return 'Live updates unavailable'
-  const sections = capability.snapshotSections
-    .map((section) =>
-      section === 'pinnedMessage' ? 'pins' : section === 'pointsBalance' ? 'points' : section,
-    )
-    .join(', ')
-  const interval = capability.intervalMs ? ` every ${Math.ceil(capability.intervalMs / 1000)}s` : ''
-  return capability.mode === 'eventsub'
-    ? `Live via EventSub${sections ? ` · snapshot refresh${interval}: ${sections}` : ''}`
-    : `Snapshot refresh${interval}${sections ? `: ${sections}` : ''}`
+  if (!capability) return t('misc.twitchActivities.capability.checking')
+  if (capability.mode === 'unavailable') return t('misc.twitchActivities.capability.unavailable')
+  const sections = capability.snapshotSections.map(snapshotSectionText).join(', ')
+  const interval = capability.intervalMs
+    ? t('misc.twitchActivities.capability.interval', {
+        seconds: Math.ceil(capability.intervalMs / 1000),
+      })
+    : ''
+  if (capability.mode === 'eventsub')
+    return sections
+      ? t('misc.twitchActivities.capability.eventsub', { interval, sections })
+      : t('misc.twitchActivities.capability.eventsubPlain')
+  return t('misc.twitchActivities.capability.snapshot', {
+    interval,
+    sections: sections ? `: ${sections}` : '',
+  })
 }
 
 export function mergeRedemptions(
@@ -103,8 +127,7 @@ export function createRewardQueueController(api: QueueApi, channelSlug: string) 
     })
     try {
       do {
-        if (++pages > 200)
-          throw new Error('Loaded 200 queue pages. Process these redemptions before continuing.')
+        if (++pages > 200) throw new Error(t('misc.twitchActivities.queue.pageLimit'))
         const page = await api.getTwitchRewardRedemptions({
           ...query,
           ...(cursor ? { cursor } : {}),
@@ -112,22 +135,18 @@ export function createRewardQueueController(api: QueueApi, channelSlug: string) 
         if (!valid()) return
         items = mergeRedemptions(items, page.redemptions)
         if (items.length > MAX_QUEUE_ITEMS)
-          throw new Error(
-            `Queue limit reached (${MAX_QUEUE_ITEMS} loaded). Process these redemptions before loading more.`,
-          )
+          throw new Error(t('misc.twitchActivities.queue.limitReached', { max: MAX_QUEUE_ITEMS }))
         const next = page.cursor
         store.update({ items, cursor: next })
         if (next && (next === cursor || seen.has(next))) {
           store.update({ cursor: undefined })
-          throw new Error('Twitch repeated the queue cursor. Refresh the queue to continue.')
+          throw new Error(t('misc.twitchActivities.queue.repeatedCursor'))
         }
         if (next) seen.add(next)
         cursor = next
         if (mode !== 'all') break
         if (cursor && items.length >= MAX_QUEUE_ITEMS)
-          throw new Error(
-            `Loaded ${MAX_QUEUE_ITEMS} redemptions. Process these before loading more.`,
-          )
+          throw new Error(t('misc.twitchActivities.queue.loadedLimit', { max: MAX_QUEUE_ITEMS }))
       } while (cursor)
     } catch (cause) {
       if (valid()) store.update({ error: errorText(cause) })
@@ -186,13 +205,24 @@ export function createRewardQueueController(api: QueueApi, channelSlug: string) 
               selected: new Set([...value.selected].filter((id) => !confirmed.has(id))),
             }))
           } catch (cause) {
-            failures.push(`${batch.length} redemptions: ${errorText(cause)}`)
+            failures.push(
+              tPlural('misc.twitchActivities.queue.failure', batch.length, {
+                error: errorText(cause),
+              }),
+            )
           }
         }
       }
       if (!disposed) {
+        const outcome = tPlural(
+          status === 'CANCELED'
+            ? 'misc.twitchActivities.queue.feedback.rejected'
+            : 'misc.twitchActivities.queue.feedback.completed',
+          completed,
+        )
+        const retry = failures.length ? t('misc.twitchActivities.queue.feedback.retrySuffix') : ''
         store.update({
-          feedback: `${completed} ${status === 'CANCELED' ? 'rejected and refunded' : 'completed'}${failures.length ? '; failed items remain selected for retry' : ''}.`,
+          feedback: `${outcome}${retry}.`,
           error: failures.join('\n'),
         })
         await summary()

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
+import { useT } from '../../i18n'
 import { useStore } from '../../state/create-store'
 import { useTheme } from '../../theme-context'
 import { ActionButton, FormError } from '../ui/Form'
@@ -18,6 +19,7 @@ export function RewardQueue({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const [queue] = useState(() => createRewardQueueController(backend.api, channel))
   const state = useStore(queue.store)
   const [confirm, setConfirm] = useState<'FULFILLED' | 'CANCELED' | null>(null)
@@ -32,19 +34,19 @@ export function RewardQueue({
   }, [state.rewardId, state.order])
   const rewards = state.summary?.rewards ?? snapshot?.rewards ?? []
   const total = state.summary?.rewards.reduce((sum, reward) => sum + reward.pendingCount, 0)
-  const selectedTitle = confirm === 'CANCELED' ? 'Reject and refund' : 'Complete'
+  const selectedTitle =
+    confirm === 'CANCELED' ? t('activities.queue.rejectRefund') : t('activities.queue.complete')
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Text style={{ color: theme.text2, fontSize: 12 }}>
-        Review unfulfilled redemptions. The all-rewards queue requires a saved Twitch web session
-        with moderation access.
-      </Text>
+      <Text style={{ color: theme.text2, fontSize: 12 }}>{t('activities.queue.description')}</Text>
       <FormError>{state.error}</FormError>
       {state.feedback ? (
         <Text style={{ color: theme.text, fontSize: 12 }}>{state.feedback}</Text>
       ) : null}
       {state.summaryError ? (
-        <Text style={{ color: theme.text2, fontSize: 12 }}>Queue counts: {state.summaryError}</Text>
+        <Text style={{ color: theme.text2, fontSize: 12 }}>
+          {t('activities.queue.counts', { error: state.summaryError })}
+        </Text>
       ) : null}
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
         <ActionButton
@@ -52,7 +54,8 @@ export function RewardQueue({
           disabled={state.mutating}
           onClick={() => queue.selectReward('')}
         >
-          All rewards{total === undefined ? '' : ` (${total})`}
+          {t('activities.queue.allRewards')}
+          {total === undefined ? '' : ` (${total})`}
         </ActionButton>
         {rewards.map((reward) => (
           <ActionButton
@@ -72,14 +75,14 @@ export function RewardQueue({
           disabled={state.mutating}
           onClick={() => queue.setOrder('NEWEST')}
         >
-          Newest first
+          {t('activities.queue.newest')}
         </ActionButton>
         <ActionButton
           primary={state.order === 'OLDEST'}
           disabled={state.mutating}
           onClick={() => queue.setOrder('OLDEST')}
         >
-          Oldest first
+          {t('activities.queue.oldest')}
         </ActionButton>
         <ActionButton
           disabled={busy}
@@ -88,21 +91,26 @@ export function RewardQueue({
             runUiTask(queue.load())
           }}
         >
-          Refresh
+          {t('activities.queue.refresh')}
         </ActionButton>
         <ActionButton disabled={busy || !state.items.length} onClick={() => queue.selectLoaded()}>
-          Select loaded
+          {t('activities.queue.selectLoaded')}
         </ActionButton>
         <ActionButton
           disabled={busy || !state.selected.size}
           onClick={() => queue.clearSelection()}
         >
-          Clear selection
+          {t('activities.queue.clearSelection')}
         </ActionButton>
       </div>
       <Text style={{ color: theme.text2, fontSize: 12 }}>
-        {state.items.length} loaded · {state.selected.size} selected
-        {state.loading ? ' · Loading…' : state.mutating ? ' · Applying changes…' : ''}
+        {tPlural('activities.queue.loaded', state.items.length)} ·{' '}
+        {tPlural('activities.queue.selected', state.selected.size)}
+        {state.loading
+          ? ` · ${t('activities.queue.loading')}`
+          : state.mutating
+            ? ` · ${t('activities.queue.applying')}`
+            : ''}
       </Text>
       {state.items.length ? (
         <virtual-list
@@ -142,13 +150,15 @@ export function RewardQueue({
                   {rewards.find((reward) => reward.id === item.rewardId)?.title ?? item.rewardId}
                 </Text>
               ) : null}
-              <Text style={{ color: theme.text2, fontSize: 12 }}>{item.input || 'No message'}</Text>
+              <Text style={{ color: theme.text2, fontSize: 12 }}>
+                {item.input || t('activities.queue.noMessage')}
+              </Text>
             </div>
           ))}
         </virtual-list>
       ) : null}
       {!state.items.length && !busy && !state.error ? (
-        <Text style={{ color: theme.text2, fontSize: 12 }}>No unfulfilled redemptions.</Text>
+        <Text style={{ color: theme.text2, fontSize: 12 }}>{t('activities.queue.empty')}</Text>
       ) : null}
       {state.cursor ? (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
@@ -156,13 +166,13 @@ export function RewardQueue({
             disabled={busy || state.items.length >= MAX_QUEUE_ITEMS}
             onClick={() => void queue.load('more')}
           >
-            Load more
+            {t('activities.queue.loadMore')}
           </ActionButton>
           <ActionButton
             disabled={busy || state.items.length >= MAX_QUEUE_ITEMS}
             onClick={() => void queue.load('all')}
           >
-            Load all remaining
+            {t('activities.queue.loadAll')}
           </ActionButton>
         </div>
       ) : null}
@@ -171,14 +181,14 @@ export function RewardQueue({
           disabled={busy || !state.selected.size}
           onClick={() => setConfirm('FULFILLED')}
         >
-          Complete selected
+          {t('activities.queue.completeSelected')}
         </ActionButton>
         <ActionButton
           danger
           disabled={busy || !state.selected.size}
           onClick={() => setConfirm('CANCELED')}
         >
-          Reject & refund selected
+          {t('activities.queue.rejectSelected')}
         </ActionButton>
       </div>
       {confirm ? (
@@ -194,8 +204,9 @@ export function RewardQueue({
           }}
         >
           <Text style={{ color: theme.text, fontSize: 13 }}>
-            {selectedTitle} {state.selected.size} selected redemptions? Confirmed batches are
-            removed; failed batches remain selected for retry.
+            {tPlural('activities.queue.confirm', state.selected.size, {
+              action: selectedTitle,
+            })}
           </Text>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
             <ActionButton
@@ -207,10 +218,10 @@ export function RewardQueue({
                 runUiTask(queue.update(status))
               }}
             >
-              Confirm
+              {t('activities.queue.confirmAction')}
             </ActionButton>
             <ActionButton disabled={busy} onClick={() => setConfirm(null)}>
-              Back
+              {t('activities.queue.back')}
             </ActionButton>
           </div>
         </div>

@@ -1,29 +1,32 @@
 import type { ChatClient } from '@twurple/chat'
 
+import { t, type MessageKey } from '../../gpuix/i18n'
+
 type Outcome = { kind: 'sent' | 'held' | 'disconnected' } | { kind: 'rejected'; reason: string }
 
 type Settle = (outcome: Outcome) => void
 
-const REJECTIONS: Record<string, string> = {
-  msg_ratelimit: 'you are sending messages too quickly',
-  msg_duplicate: 'the same message was sent less than 30 seconds ago',
-  msg_subsonly: 'the chat is in subscribers-only mode',
-  msg_followersonly: 'the chat is in followers-only mode',
-  msg_followersonly_followed: 'the chat is in followers-only mode',
-  msg_followersonly_zero: 'the chat is in followers-only mode',
-  msg_emoteonly: 'the chat is in emote-only mode',
-  msg_slowmode: 'the chat is in slow mode, wait before sending again',
-  msg_r9k: 'the chat is in unique-chat mode and the message is not unique',
-  msg_timedout: 'the account is timed out in this chat',
-  msg_banned: 'the account is banned in this chat',
-  msg_verified_email: 'the chat requires a verified email',
-  msg_channel_blocked: 'Twitch blocked the message',
-  msg_rejected_mandatory: 'Twitch blocked the message',
-  no_permission: 'the account lacks permission for this action',
+const REJECTIONS: Record<string, MessageKey> = {
+  msg_ratelimit: 'misc.twitchSender.reject.ratelimit',
+  msg_duplicate: 'misc.twitchSender.reject.duplicate',
+  msg_subsonly: 'misc.twitchSender.reject.subsonly',
+  msg_followersonly: 'misc.twitchSender.reject.followersonly',
+  msg_followersonly_followed: 'misc.twitchSender.reject.followersonly',
+  msg_followersonly_zero: 'misc.twitchSender.reject.followersonly',
+  msg_emoteonly: 'misc.twitchSender.reject.emoteonly',
+  msg_slowmode: 'misc.twitchSender.reject.slowmode',
+  msg_r9k: 'misc.twitchSender.reject.r9k',
+  msg_timedout: 'misc.twitchSender.reject.timedout',
+  msg_banned: 'misc.twitchSender.reject.banned',
+  msg_verified_email: 'misc.twitchSender.reject.verifiedEmail',
+  msg_channel_blocked: 'misc.twitchSender.blocked',
+  msg_rejected_mandatory: 'misc.twitchSender.blocked',
+  no_permission: 'misc.twitchSender.reject.noPermission',
 }
 
 export function twitchSendRejection(reason: string): string {
-  return Object.hasOwn(REJECTIONS, reason) ? (REJECTIONS[reason] ?? reason) : reason
+  const key = REJECTIONS[reason]
+  return key ? t(key) : reason
 }
 
 export function twitchIrcChannelName(channel: string): string {

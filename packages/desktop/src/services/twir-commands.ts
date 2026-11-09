@@ -2,6 +2,7 @@ import { logger } from '@twirchat/shared/logger'
 import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
 import { backendFetch } from '../runtime-config'
 import { deleteOldestEntry } from './bounded-cache'
 import { resolveMentionUser } from './mention-user'
@@ -78,11 +79,13 @@ export function createTwirCommandsClient({
       `/v1/channels/by-platform/${target.platform}/${encodeURIComponent(id)}`,
     )
     if (channel.status === 404) return []
-    if (!channel.ok) throw new Error(`Twir channel lookup: HTTP ${channel.status}.`)
+    if (!channel.ok)
+      throw new Error(t('notices.twirCommands.channelLookup', { status: channel.status }))
     const { channel_id: uuid } = channelSchema.parse(await channel.json())
 
     const commands = await request(`/v2/channels/${uuid}/commands`)
-    if (!commands.ok) throw new Error(`Twir command lookup: HTTP ${commands.status}.`)
+    if (!commands.ok)
+      throw new Error(t('notices.twirCommands.commandLookup', { status: commands.status }))
     return commandsSchema
       .parse(await commands.json())
       .filter(({ name }) => name.isWellFormed() && COMMAND_NAME.test(name))
@@ -112,7 +115,7 @@ export function createTwirCommandsClient({
         entry.expiresAt = now() + RETRY_MS
         entry.pending = undefined
         log.debug('Twir commands unavailable', { target: key, error: String(error) })
-        if (error instanceof z.ZodError) throw new Error('Twir returned an invalid response.')
+        if (error instanceof z.ZodError) throw new Error(t('notices.twirCommands.invalidResponse'))
         throw error
       },
     )

@@ -1,6 +1,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 
 import type { StreamerModeStatus } from '../../services/streamer-mode'
+import { useT, type MessageKey } from '../i18n'
 import { accountsStore, activeTabStore, type MainTab } from '../state/app'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { setMainTab } from '../state/settings-session'
@@ -12,15 +13,15 @@ import { Text } from './ui/Text'
 
 interface NavItem {
   id: MainTab
-  label: string
+  labelKey: MessageKey
   icon: IconName
 }
 
 const ITEMS: readonly NavItem[] = [
-  { id: 'chat', label: 'Chat', icon: 'chat' },
-  { id: 'platforms', label: 'Platforms', icon: 'globe' },
-  { id: 'settings', label: 'Settings', icon: 'settings' },
-  { id: 'obs-remote', label: 'OBS Remote', icon: 'monitor' },
+  { id: 'chat', labelKey: 'app.nav.chat', icon: 'chat' },
+  { id: 'platforms', labelKey: 'app.nav.platforms', icon: 'globe' },
+  { id: 'settings', labelKey: 'app.nav.settings', icon: 'settings' },
+  { id: 'obs-remote', labelKey: 'app.nav.obsRemote', icon: 'monitor' },
 ]
 
 function NavItemButton({
@@ -37,10 +38,11 @@ function NavItemButton({
   select: () => void
 }) {
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const label =
     badge === undefined
-      ? item.label
-      : `${item.label} (${badge} ${badge === 1 ? 'account' : 'accounts'})`
+      ? t(item.labelKey)
+      : `${t(item.labelKey)} (${tPlural('app.nav.accountBadge', badge)})`
   const status = streamerMode ? describeStreamerMode(streamerMode) : undefined
 
   return (
@@ -51,7 +53,7 @@ function NavItemButton({
           role="button"
           aria-label={label}
           aria-description={
-            [active ? 'Current view' : '', status].filter(Boolean).join('. ') || undefined
+            [active ? t('app.nav.currentView') : '', status].filter(Boolean).join('. ') || undefined
           }
           tabIndex={0}
           onClick={select}
@@ -129,6 +131,7 @@ function NavItemButton({
 }
 
 export function AppNavigation() {
+  const { t } = useT()
   const activeTab = useStore(activeTabStore)
   const accountCount = useStoreSelector(accountsStore, (accounts) => accounts.length)
   const streamerMode = useStore(streamerModeStore)
@@ -137,7 +140,7 @@ export function AppNavigation() {
     <div
       testId="app-navigation"
       role="navigation"
-      aria-label="Main navigation"
+      aria-label={t('app.nav.mainNavigation')}
       style={{
         display: 'flex',
         flexDirection: 'row',

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { initialsOf } from '../../views/shared/utils/display-text'
 import { useBackend, useBackendEvent } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT, type MessageKey } from '../i18n'
 import { accountsStore, channelStatusStore, showNotice } from '../state/app'
 import { useStore } from '../state/create-store'
 import { platformColor } from '../theme'
@@ -20,17 +21,19 @@ function platformName(platform: Platform): string {
   return platform === 'twitch' ? 'Twitch' : platform === 'youtube' ? 'YouTube' : 'Kick'
 }
 
-function statusLabel(s?: PlatformStatusInfo): string {
-  if (!s) return 'Not connected'
+function statusLabel(s: PlatformStatusInfo | undefined, t: (key: MessageKey) => string): string {
+  if (!s) return t('app.platforms.status.notConnected')
   switch (s.status) {
     case 'connected':
-      return s.mode === 'authenticated' ? 'Connected' : 'Connected (anonymous)'
+      return s.mode === 'authenticated'
+        ? t('app.platforms.status.connected')
+        : t('app.platforms.status.connectedAnonymous')
     case 'connecting':
-      return 'Connecting…'
+      return t('app.platforms.status.connecting')
     case 'error':
-      return s.error ?? 'Error'
+      return s.error ?? t('app.platforms.status.error')
     default:
-      return 'Disconnected'
+      return t('app.platforms.status.disconnected')
   }
 }
 
@@ -51,6 +54,7 @@ function statusDotColor(s?: PlatformStatusInfo): string {
 /** Ghost "Disconnect" button — hover recolors the label, so it needs state. */
 function DisconnectButton({ onClick }: { onClick: () => void }) {
   const theme = useTheme()
+  const { t } = useT()
   const [hovered, setHovered] = useState(false)
   return (
     <div
@@ -77,7 +81,7 @@ function DisconnectButton({ onClick }: { onClick: () => void }) {
           whiteSpace: 'nowrap',
         }}
       >
-        Disconnect
+        {t('common.disconnect')}
       </Text>
     </div>
   )
@@ -101,6 +105,7 @@ function PlatformCard({
   onLogout,
 }: PlatformCardProps) {
   const theme = useTheme()
+  const { t } = useT()
   const pColor = platformColor(platform)
 
   return (
@@ -171,7 +176,7 @@ function PlatformCard({
                     : undefined,
               }}
             />
-            <Text style={{ fontSize: 12, color: theme.text2 }}>{statusLabel(status)}</Text>
+            <Text style={{ fontSize: 12, color: theme.text2 }}>{statusLabel(status, t)}</Text>
           </div>
         </div>
 
@@ -277,7 +282,7 @@ function PlatformCard({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {authLoading ? 'Opening…' : 'Connect account'}
+                {authLoading ? t('app.platforms.opening') : t('app.platforms.connect')}
               </Text>
             </div>
           )}
@@ -295,6 +300,7 @@ function PlatformCard({
 export function PlatformsPanel() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const accounts = useStore(accountsStore)
   const statuses = useStore(channelStatusStore)
 
@@ -302,7 +308,7 @@ export function PlatformsPanel() {
 
   useBackendEvent('auth_success', ({ displayName }) => {
     runUiTask(backend.api.getAccounts().then((updated) => accountsStore.set(updated)))
-    showNotice('success', `Connected as ${displayName}`, 4000)
+    showNotice('success', t('app.platforms.connectedAs', { name: displayName }), 4000)
   })
   useBackendEvent('auth_error', ({ error }) => {
     showNotice('error', error, 4000)
@@ -347,8 +353,10 @@ export function PlatformsPanel() {
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>Platforms</Text>
-        <Text style={{ fontSize: 13, color: theme.text2 }}>Manage your streaming accounts</Text>
+        <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>
+          {t('app.platforms.title')}
+        </Text>
+        <Text style={{ fontSize: 13, color: theme.text2 }}>{t('app.platforms.subtitle')}</Text>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

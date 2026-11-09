@@ -7,6 +7,7 @@ import type { Badge, NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatMessage, extractMessageText, parseTwitchMessage } from '@twurple/chat'
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
 import { parseTwitchBadgeCatalog } from '../platforms/twitch/badge-data'
 import { normalizeTwitchChatMessage } from '../platforms/twitch/normalize-message'
 import { backendFetch } from '../runtime-config'
@@ -87,7 +88,7 @@ export function parseTwitchHistoryLine(
 }
 
 async function readResponse(response: Response): Promise<unknown> {
-  if (!response.body) throw new Error('The history backend returned an empty response.')
+  if (!response.body) throw new Error(t('notices.twitchHistory.emptyResponse'))
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
   let length = 0
@@ -96,7 +97,7 @@ async function readResponse(response: Response): Promise<unknown> {
       const { value, done } = await reader.read()
       if (done) break
       length += value.byteLength
-      if (length > 6 * 1024 * 1024) throw new Error('The history response is too large.')
+      if (length > 6 * 1024 * 1024) throw new Error(t('notices.twitchHistory.tooLarge'))
       chunks.push(value)
     }
   } finally {
@@ -125,7 +126,7 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
           signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(3000)]),
         },
       )
-      if (!response.ok) throw new Error('Channel badges are unavailable.')
+      if (!response.ok) throw new Error(t('notices.twitchHistory.badgesUnavailable'))
       const badges = parseTwitchBadgeCatalog(await response.json())
       badgeCache.delete(channel)
       badgeCache.set(channel, { badges, expiresAt: now() + 30 * 60 * 1000 })
@@ -153,7 +154,8 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
   }
   return {
     load(input: TwitchHistoryRequest): Promise<TwitchHistoryBatch> {
-      if (lifetime.signal.aborted) return Promise.reject(new Error('History loading stopped.'))
+      if (lifetime.signal.aborted)
+        return Promise.reject(new Error(t('notices.twitchHistory.stopped')))
       const query = { ...input, channel: input.channel.trim().replace(/^#/u, '').toLowerCase() }
       const key = JSON.stringify(query)
       const cached = cache.get(key)
@@ -165,7 +167,7 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
       const existing = pending.get(key)
       if (existing) return existing
       if (pending.size >= 128)
-        return Promise.reject(new Error('Too many history requests. Retry shortly.'))
+        return Promise.reject(new Error(t('notices.twitchHistory.tooManyRequests')))
       const result = new Promise<TwitchHistoryBatch>((resolve, reject) => {
         queue.push({
           reject,
@@ -188,7 +190,9 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
                 throw new TwitchHistoryFailure(
                   failure.success
                     ? failure.data.error
-                    : `Twitch history backend is unavailable (${response.status}).`,
+                    : t('notices.twitchHistory.backendUnavailable', {
+                        status: response.status,
+                      }),
                   failure.success ? failure.data.sources : undefined,
                 )
               }
@@ -200,7 +204,7 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
                   return parsed ? [parsed] : []
                 }),
               }
-              if (lifetime.signal.aborted) throw new Error('History loading stopped.')
+              if (lifetime.signal.aborted) throw new Error(t('notices.twitchHistory.stopped'))
               remember(key, batch)
               return batch
             }
@@ -221,7 +225,8 @@ export function createTwitchHistoryClient(options: TwitchHistoryClientOptions = 
     },
     dispose() {
       lifetime.abort()
-      for (const entry of queue.splice(0)) entry.reject(new Error('History loading stopped.'))
+      for (const entry of queue.splice(0))
+        entry.reject(new Error(t('notices.twitchHistory.stopped')))
       pending.clear()
       cache.clear()
       badgeCache.clear()

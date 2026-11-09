@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
+import { useT } from '../../i18n'
 import { useStore } from '../../state/create-store'
 import { useTheme } from '../../theme-context'
 import { ActionButton, FormError } from '../ui/Form'
@@ -12,6 +13,7 @@ import { joinFollowedChannel } from './join-channel'
 export function Following({ onJoined }: { onJoined: () => void }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const [controller] = useState(() => createFollowingController(backend.api))
   const state = useStore(controller.store)
   const [joining, setJoining] = useState('')
@@ -41,18 +43,20 @@ export function Following({ onJoined }: { onJoined: () => void }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
         <ActionButton primary={state.liveOnly} onClick={() => void controller.load(true)}>
-          Live
+          {t('activities.following.live')}
         </ActionButton>
         <ActionButton primary={!state.liveOnly} onClick={() => void controller.load(false)}>
-          All followed
+          {t('activities.following.all')}
         </ActionButton>
         <ActionButton disabled={state.loading} onClick={() => void controller.load(state.liveOnly)}>
-          Refresh
+          {t('activities.following.refresh')}
         </ActionButton>
       </div>
       <FormError>{error || state.error}</FormError>
       {state.loading ? (
-        <Text style={{ color: theme.text2, fontSize: 12 }}>Loading followed channels…</Text>
+        <Text style={{ color: theme.text2, fontSize: 12 }}>
+          {t('activities.following.loading')}
+        </Text>
       ) : null}
       {state.page?.channels.length ? (
         <virtual-list
@@ -75,9 +79,11 @@ export function Following({ onJoined }: { onJoined: () => void }) {
               }}
             >
               <Text style={{ color: theme.text, fontSize: 13, fontWeight: 600 }}>
-                {channel.isLive ? 'LIVE · ' : ''}
+                {channel.isLive ? t('activities.following.liveBadge') : ''}
                 {channel.displayName}
-                {channel.viewerCount === undefined ? '' : ` · ${channel.viewerCount} viewers`}
+                {channel.viewerCount === undefined
+                  ? ''
+                  : ` · ${tPlural('activities.following.viewers', channel.viewerCount)}`}
               </Text>
               {channel.title ? (
                 <Text style={{ color: theme.text2, fontSize: 12 }}>{channel.title}</Text>
@@ -87,7 +93,9 @@ export function Following({ onJoined }: { onJoined: () => void }) {
               ) : null}
               <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
                 <ActionButton disabled={!!joining} onClick={() => void join(channel.login)}>
-                  {joining === channel.login ? 'Joining…' : 'Join chat'}
+                  {joining === channel.login
+                    ? t('activities.following.joining')
+                    : t('activities.following.join')}
                 </ActionButton>
                 <ActionButton
                   onClick={() =>
@@ -98,7 +106,7 @@ export function Following({ onJoined }: { onJoined: () => void }) {
                       .catch((cause: unknown) => setError(String(cause)))
                   }
                 >
-                  Open stream
+                  {t('activities.following.openStream')}
                 </ActionButton>
               </div>
             </div>
@@ -110,11 +118,11 @@ export function Following({ onJoined }: { onJoined: () => void }) {
           disabled={state.loading}
           onClick={() => void controller.load(state.liveOnly, true)}
         >
-          Load more
+          {t('activities.following.loadMore')}
         </ActionButton>
       ) : null}
       {!state.page?.channels.length && !state.loading && !state.error ? (
-        <Text style={{ color: theme.text2, fontSize: 12 }}>No channels found.</Text>
+        <Text style={{ color: theme.text2, fontSize: 12 }}>{t('activities.following.empty')}</Text>
       ) : null}
     </div>
   )

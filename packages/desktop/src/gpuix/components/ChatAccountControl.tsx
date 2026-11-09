@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { accountsStore, savedAccountsStore, showNotice, watchedChannelsStore } from '../state/app'
 import { useStore } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'
@@ -78,6 +79,7 @@ export function ChatAccountControl({
   onChosen,
 }: ChatAccountControlProps) {
   const theme = useTheme()
+  const { t } = useT()
   const backend = useBackend()
   const saved = useStore(savedAccountsStore)
   const active = useStore(accountsStore)
@@ -115,7 +117,7 @@ export function ChatAccountControl({
   }
   const description = [
     `${platformName(channel.platform)} · ${channel.displayName}`,
-    account ? `Sending as @${account.username}` : 'Read only · choose an account to send',
+    account ? t('chat.account.sendingAs', { name: account.username }) : t('chat.account.readOnly'),
     statusText,
   ]
     .filter(Boolean)
@@ -128,7 +130,7 @@ export function ChatAccountControl({
           <div
             testId={`chat-account-${channel.id}`}
             role="button"
-            aria-label={`Choose the account for ${channel.displayName}`}
+            aria-label={t('chat.account.chooseFor', { channel: channel.displayName })}
             aria-expanded={open}
             tabIndex={0}
             onClick={toggle}
@@ -237,7 +239,7 @@ export function ChatAccountControl({
                 paddingRight: 8,
               }}
             >
-              {`Send in ${channel.displayName} as`}
+              {t('chat.account.sendInAs', { channel: channel.displayName })}
             </Text>
             {choices.map((choice) => {
               const selected = choice.id === account?.id
@@ -278,7 +280,9 @@ export function ChatAccountControl({
                   >
                     <Text style={{ fontSize: 12, color: theme.text }}>{`@${choice.username}`}</Text>
                     {choice.id === fallback?.id ? (
-                      <Text style={{ fontSize: 11, color: theme.text2 }}>Default account</Text>
+                      <Text style={{ fontSize: 11, color: theme.text2 }}>
+                        {t('chat.account.default')}
+                      </Text>
                     ) : null}
                   </div>
                   {selected ? <Icon name="check" size={12} color={color} /> : null}
@@ -296,7 +300,7 @@ export function ChatAccountControl({
                   paddingRight: 8,
                 }}
               >
-                {`No saved ${platformName(channel.platform)} accounts. Add one in Accounts.`}
+                {t('chat.account.noSaved', { platform: platformName(channel.platform) })}
               </Text>
             ) : null}
           </div>

@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 
 import { z } from 'zod'
 
+import { t } from '../gpuix/i18n'
 import { runInBackground } from './background-task'
 
 export type StreamerMode = 'auto' | 'on' | 'off'
@@ -53,15 +54,14 @@ const streamerSettingsSchema = z.toZod<StreamerModeSettings>()(
 )
 export function validateStreamerModeSettings(value: unknown): StreamerModeSettings {
   const parsed = streamerSettingsSchema.safeParse(value)
-  if (!parsed.success) throw new Error('Invalid streamer privacy settings.')
+  if (!parsed.success) throw new Error(t('notices.streamerMode.invalidSettings'))
   return parsed.data
 }
 export function validateStreamerModeConfiguration(value: unknown): StreamerModeConfiguration {
   const parsed = z
     .object({ mode: z.enum(['auto', 'on', 'off']), settings: streamerSettingsSchema })
     .safeParse(value)
-  if (!parsed.success)
-    throw new Error('Choose Auto, On or Off for streamer mode with valid privacy settings.')
+  if (!parsed.success) throw new Error(t('notices.streamerMode.invalidConfiguration'))
   return parsed.data
 }
 const UNIX_PROCESSES = new Set(['obs', 'twitch studio', 'streamlabs desktop'])
@@ -112,9 +112,9 @@ export async function listStreamingProcesses(
   if (signal.aborted) abort()
   try {
     const [output, code] = await Promise.all([new Response(child.stdout).text(), child.exited])
-    if (signal.aborted) throw new Error('Streaming process detection timed out.')
-    if (code !== 0) throw new Error(`Process detection failed with exit code ${code}.`)
-    if (output.length > 8_000_000) throw new Error('Process list is too large.')
+    if (signal.aborted) throw new Error(t('notices.streamerMode.detectionTimeout'))
+    if (code !== 0) throw new Error(t('notices.streamerMode.detectionExitCode', { code }))
+    if (output.length > 8_000_000) throw new Error(t('notices.streamerMode.processListTooLarge'))
     return parseStreamingProcessOutput(output, platform)
   } finally {
     signal.removeEventListener('abort', abort)
@@ -193,7 +193,7 @@ export function createStreamerModeService(dependencies: StreamerModeDependencies
       timedOut = true
       controller.abort()
       if (started && revision === generation && configuration.mode === 'auto') {
-        error = 'Streaming process detection timed out. Choose On or Off to override.'
+        error = t('notices.streamerMode.detectionTimeoutOverride')
         checking = false
         publish()
       }
@@ -212,7 +212,9 @@ export function createStreamerModeService(dependencies: StreamerModeDependencies
       })
       .catch((cause) => {
         if (started && revision === generation && !timedOut)
-          error = `Could not detect streaming software: ${cause instanceof Error ? cause.message : String(cause)}`
+          error = t('notices.streamerMode.detectionFailed', {
+            error: cause instanceof Error ? cause.message : String(cause),
+          })
       })
       .finally(() => {
         clearAfter(limit)
@@ -273,7 +275,7 @@ export function createStreamerModeService(dependencies: StreamerModeDependencies
     setMode(mode: StreamerMode | 'toggle'): Promise<StreamerModeStatus> {
       return change(async () => {
         if (!['auto', 'on', 'off', 'toggle'].includes(mode))
-          throw new Error('Choose Auto, On, Off or Toggle for streamer mode.')
+          throw new Error(t('notices.streamerMode.invalidMode'))
         const next = mode === 'toggle' ? (effective ? 'off' : 'on') : mode
         await dependencies.write({ ...configuration, mode: next })
         stopDetector()

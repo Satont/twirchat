@@ -9,6 +9,7 @@ import type {
 } from '../../services/translation'
 import { TRANSLATION_PROVIDERS, validateTranslationSettings } from '../../services/translation'
 import { useBackend } from '../backend/context'
+import { useT, type MessageKey } from '../i18n'
 import { useStore } from '../state/create-store'
 import {
   applyTranslationSettings,
@@ -21,17 +22,18 @@ import { ActionButton, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
-const LABELS: Record<TranslationProvider, string> = {
-  'google-free': 'Google (free)',
-  'microsoft-free': 'Microsoft (free)',
-  deepl: 'DeepL',
-  libretranslate: 'LibreTranslate',
-  'google-cloud': 'Google Cloud',
-  azure: 'Microsoft Azure',
+const LABELS: Record<TranslationProvider, MessageKey> = {
+  'google-free': 'translationSettings.provider.googleFree',
+  'microsoft-free': 'translationSettings.provider.microsoftFree',
+  deepl: 'translationSettings.provider.deepl',
+  libretranslate: 'translationSettings.provider.libretranslate',
+  'google-cloud': 'translationSettings.provider.googleCloud',
+  azure: 'translationSettings.provider.azure',
 }
 export function TranslationSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const state = useStore(translationSettingsStore)
   const [draft, setDraft] = useState<Settings>(() => structuredClone(state.value.settings))
   const [dirty, setDirty] = useState(false)
@@ -104,14 +106,12 @@ export function TranslationSettings() {
         )
       else {
         const key = (await backend.api.readClipboard()).trim()
-        if (!key) throw new Error('Copy the API key to the clipboard first.')
+        if (!key) throw new Error(t('translationSettings.keyEmpty'))
         applyTranslationSettings(
           await backend.api.setTranslationCredential({ provider: draft.provider, key }),
         )
       }
-      setNotice(
-        remove ? 'API key removed.' : 'API key stored encrypted. Its value is never displayed.',
-      )
+      setNotice(remove ? t('translationSettings.keyRemoved') : t('translationSettings.keyStored'))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -134,11 +134,8 @@ export function TranslationSettings() {
       testId="translation-settings"
       style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
     >
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Translate selected messages, automatically translate incoming chat, or preview a translation
-        before sending. Requests go directly to the provider you choose.
-      </Text>
-      <FormField label="Translation provider">
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('translationSettings.intro')}</Text>
+      <FormField label={t('translationSettings.providerLabel')}>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {TRANSLATION_PROVIDERS.map((provider) => (
             <ActionButton
@@ -151,15 +148,15 @@ export function TranslationSettings() {
                 setLanguages([])
               }}
             >
-              {LABELS[provider]}
+              {t(LABELS[provider])}
             </ActionButton>
           ))}
         </div>
       </FormField>
       {draft.provider === 'libretranslate' ? (
         <FormField
-          label="LibreTranslate server"
-          hint="Use HTTPS, or HTTP for a local server on localhost."
+          label={t('translationSettings.libreServer')}
+          hint={t('translationSettings.libreServerHint')}
         >
           <FormInput
             testId="translation-libre-endpoint"
@@ -174,7 +171,7 @@ export function TranslationSettings() {
       ) : null}
       {draft.provider === 'azure' ? (
         <>
-          <FormField label="Azure endpoint">
+          <FormField label={t('translationSettings.azureEndpoint')}>
             <FormInput
               testId="translation-azure-endpoint"
               value={draft.azureEndpoint}
@@ -186,8 +183,8 @@ export function TranslationSettings() {
             />
           </FormField>
           <FormField
-            label="Azure region"
-            hint="Use the resource region, for example eastus. Global resources may leave it blank."
+            label={t('translationSettings.azureRegion')}
+            hint={t('translationSettings.azureRegionHint')}
           >
             <FormInput
               value={draft.azureRegion}
@@ -204,33 +201,33 @@ export function TranslationSettings() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Text style={{ fontSize: 12, color: theme.text }}>
             {state.value.credentials.includes(draft.provider)
-              ? 'An encrypted API key is configured for this provider.'
+              ? t('translationSettings.keyConfigured')
               : draft.provider === 'libretranslate'
-                ? 'No API key configured. Self-hosted servers may not require one.'
-                : 'No API key configured for this provider.'}
+                ? t('translationSettings.noKeySelfHosted')
+                : t('translationSettings.noKey')}
           </Text>
           {draft.provider === 'deepl' ? (
             <Text style={{ fontSize: 11, color: theme.text2 }}>
-              DeepL Free keys ending in :fx use the free API endpoint automatically.
+              {t('translationSettings.deeplFreeNote')}
             </Text>
           ) : null}
           <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             <ActionButton disabled={busy} onClick={() => void credential(false)}>
               {state.value.credentials.includes(draft.provider)
-                ? 'Replace key from clipboard'
-                : 'Paste key from clipboard'}
+                ? t('translationSettings.replaceKey')
+                : t('translationSettings.pasteKey')}
             </ActionButton>
             {state.value.credentials.includes(draft.provider) ? (
               <ActionButton disabled={busy} danger onClick={() => void credential(true)}>
-                Remove API key
+                {t('translationSettings.removeKey')}
               </ActionButton>
             ) : null}
           </div>
         </div>
       ) : null}
       <FormField
-        label="Source language"
-        hint="Use auto for detection, a language code or name, or morse."
+        label={t('translationSettings.sourceLanguage')}
+        hint={t('translationSettings.sourceLanguageHint')}
       >
         <FormInput
           testId="translation-source-language"
@@ -242,7 +239,10 @@ export function TranslationSettings() {
           }
         />
       </FormField>
-      <FormField label="Target language" hint="For example en, ru, German or morse.">
+      <FormField
+        label={t('translationSettings.targetLanguage')}
+        hint={t('translationSettings.targetLanguageHint')}
+      >
         <FormInput
           testId="translation-target-language"
           value={draft.targetLanguage}
@@ -255,12 +255,12 @@ export function TranslationSettings() {
       </FormField>
       <ActionButton disabled={busy || dirty} onClick={() => void fetchLanguages()}>
         {draft.provider === 'google-free'
-          ? 'Show language suggestions'
-          : 'Load supported languages'}
+          ? t('translationSettings.showSuggestions')
+          : t('translationSettings.loadLanguages')}
       </ActionButton>
       {dirty ? (
         <Text style={{ fontSize: 11, color: theme.text2 }}>
-          Save the connection settings before loading its language list.
+          {t('translationSettings.saveBeforeLanguages')}
         </Text>
       ) : null}
       {languages.length ? (
@@ -268,7 +268,7 @@ export function TranslationSettings() {
           <FormInput
             value={languageQuery}
             onChange={setLanguageQuery}
-            placeholder="Find a supported language"
+            placeholder={t('translationSettings.findLanguage')}
           />
           <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
             {displayedLanguages.map((language) => (
@@ -285,7 +285,7 @@ export function TranslationSettings() {
         </>
       ) : null}
       <Toggle
-        label="Automatically translate incoming messages"
+        label={t('translationSettings.autoIncoming')}
         value={draft.autoIncoming}
         onChange={(value) =>
           change((next) => {
@@ -294,7 +294,7 @@ export function TranslationSettings() {
         }
       />
       <Toggle
-        label="Recognize Morse before translating"
+        label={t('translationSettings.decodeMorse')}
         value={draft.decodeMorse}
         onChange={(value) =>
           change((next) => {
@@ -302,7 +302,7 @@ export function TranslationSettings() {
           })
         }
       />
-      <FormField label="Outgoing messages">
+      <FormField label={t('translationSettings.outgoing')}>
         <Mode
           value={draft.outgoingMode}
           onChange={(value) =>
@@ -313,11 +313,10 @@ export function TranslationSettings() {
         />
       </FormField>
       <Text style={{ fontSize: 12, fontWeight: 600, color: theme.text }}>
-        Per-channel overrides
+        {t('translationSettings.perChannel')}
       </Text>
       <Text style={{ fontSize: 11, color: theme.text2 }}>
-        Use the channel name or ID shown by its chat source. Blank language fields inherit the
-        defaults.
+        {t('translationSettings.perChannelHint')}
       </Text>
       {draft.channels.map((channel, index) => (
         <div
@@ -350,7 +349,7 @@ export function TranslationSettings() {
                 })
               }
             >
-              Remove
+              {t('translationSettings.remove')}
             </ActionButton>
           </div>
           <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
@@ -368,11 +367,15 @@ export function TranslationSettings() {
                   })
                 }
               >
-                {value === 'inherit' ? 'Incoming: default' : `Incoming: ${value}`}
+                {value === 'inherit'
+                  ? t('translationSettings.incoming.inherit')
+                  : value === 'on'
+                    ? t('translationSettings.incoming.on')
+                    : t('translationSettings.incoming.off')}
               </ActionButton>
             ))}
           </div>
-          <FormField label="Outgoing mode">
+          <FormField label={t('translationSettings.outgoingMode')}>
             <Mode
               value={channel.outgoingMode ?? 'inherit'}
               inherited
@@ -383,7 +386,7 @@ export function TranslationSettings() {
               }
             />
           </FormField>
-          <FormField label="Source language override">
+          <FormField label={t('translationSettings.sourceOverride')}>
             <FormInput
               value={channel.sourceLanguage ?? ''}
               onChange={(value) =>
@@ -391,10 +394,10 @@ export function TranslationSettings() {
                   next.channels[index]!.sourceLanguage = value
                 })
               }
-              placeholder="Default source language"
+              placeholder={t('translationSettings.sourcePlaceholder')}
             />
           </FormField>
-          <FormField label="Target language override">
+          <FormField label={t('translationSettings.targetOverride')}>
             <FormInput
               value={channel.targetLanguage ?? ''}
               onChange={(value) =>
@@ -402,7 +405,7 @@ export function TranslationSettings() {
                   next.channels[index]!.targetLanguage = value
                 })
               }
-              placeholder="Default target language"
+              placeholder={t('translationSettings.targetPlaceholder')}
             />
           </FormField>
         </div>
@@ -422,7 +425,7 @@ export function TranslationSettings() {
         testId="translation-channel-name"
         value={channelId}
         onChange={setChannelId}
-        placeholder="Channel name or ID"
+        placeholder={t('translationSettings.channelName')}
       />
       <ActionButton
         disabled={!channelId.trim()}
@@ -433,7 +436,7 @@ export function TranslationSettings() {
           setChannelId('')
         }}
       >
-        Add channel override
+        {t('translationSettings.addOverride')}
       </ActionButton>
       <SettingsFooter
         sectionId="translation"
@@ -458,7 +461,7 @@ export function TranslationSettings() {
             disabled={busy}
             onClick={() => void loadTranslationSettings(backend, true).catch(() => {})}
           >
-            Retry loading settings
+            {t('translationSettings.retry')}
           </ActionButton>
         ) : null}
       </SettingsFooter>
@@ -477,6 +480,7 @@ type TranslationModeProps =
       inherited: true
     }
 function Mode(props: TranslationModeProps) {
+  const { t } = useT()
   const { value, inherited } = props
   const onChange = (mode: OutgoingTranslationMode | 'inherit') => {
     if (props.inherited) props.onChange(mode)
@@ -490,12 +494,12 @@ function Mode(props: TranslationModeProps) {
       {modes.map((mode) => (
         <ActionButton key={mode} primary={value === mode} onClick={() => onChange(mode)}>
           {mode === 'inherit'
-            ? 'Default'
+            ? t('translationSettings.mode.default')
             : mode === 'off'
-              ? 'Off'
+              ? t('translationSettings.mode.off')
               : mode === 'preview'
-                ? 'Preview before sending'
-                : 'Translate and send'}
+                ? t('translationSettings.mode.preview')
+                : t('translationSettings.mode.send')}
         </ActionButton>
       ))}
     </div>

@@ -3,15 +3,20 @@ import { z } from 'zod'
 import { ObsRemoteSession, type ObsRemoteSnapshot } from '../../services/obs-remote'
 import { decryptAsync, encryptAsync } from '../../store/crypto'
 import { getDb } from '../../store/db'
+import { t } from '../i18n'
 
 const CONNECTIONS_KEY = 'secret:obs-remote-connections'
 const MAX_CONNECTIONS = 32
 
-const profileName = z.string().trim().min(1, 'Enter a connection name.').max(80)
+const profileName = z
+  .string()
+  .trim()
+  .min(1, { error: () => t('misc.obsRemoteProfiles.nameRequired') })
+  .max(80)
 const endpoint = z
   .string()
   .trim()
-  .min(1, 'Enter the OBS WebSocket address.')
+  .min(1, { error: () => t('misc.obsRemoteProfiles.addressRequired') })
   .max(2048)
   .transform((value, ctx) => {
     const url = URL.parse(value)
@@ -25,7 +30,7 @@ const endpoint = z
     ) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Enter a ws:// or wss:// address without credentials.',
+        message: t('misc.obsRemoteProfiles.addressInvalid'),
       })
       return z.NEVER
     }
@@ -46,7 +51,7 @@ function parseAddress(address: string): { url: string; password?: string } {
   if (/^obswss?:\/\//iu.test(value)) {
     const link = URL.parse(value)
     if (!link?.host || link.username || link.password || link.search || link.hash)
-      throw new Error('Invalid OBS connection link.')
+      throw new Error(t('misc.obsRemoteProfiles.invalidLink'))
     try {
       const protocol = link.protocol === 'obswss:' ? 'wss:' : 'ws:'
       return {
@@ -54,14 +59,14 @@ function parseAddress(address: string): { url: string; password?: string } {
         password: link.pathname.length > 1 ? decodeURIComponent(link.pathname.slice(1)) : undefined,
       }
     } catch {
-      throw new Error('Invalid OBS connection link.')
+      throw new Error(t('misc.obsRemoteProfiles.invalidLink'))
     }
   }
   const candidate =
     value && !value.includes('://') ? `ws${value.endsWith(':443') ? 's' : ''}://${value}` : value
   const parsed = endpoint.safeParse(candidate)
   if (!parsed.success)
-    throw new Error(parsed.error.issues[0]?.message ?? 'Invalid WebSocket address.')
+    throw new Error(parsed.error.issues[0]?.message ?? t('misc.obsRemoteProfiles.invalidAddress'))
   return { url: parsed.data }
 }
 
@@ -92,7 +97,7 @@ function readProfiles(): StoredProfile[] {
   try {
     return profileList.parse(JSON.parse(row.value))
   } catch {
-    throw new Error('Could not read the saved OBS connections.')
+    throw new Error(t('misc.obsRemoteProfiles.readFailed'))
   }
 }
 
@@ -117,17 +122,18 @@ export const obsRemoteApi = {
 
   async save(draft: ObsRemoteProfileDraft): Promise<ObsRemoteProfile[]> {
     const name = profileName.safeParse(draft.name)
-    if (!name.success) throw new Error(name.error.issues[0]?.message ?? 'Invalid connection name.')
+    if (!name.success)
+      throw new Error(name.error.issues[0]?.message ?? t('misc.obsRemoteProfiles.invalidName'))
     const address = parseAddress(draft.url)
     const password = address.password ?? draft.password
     if (password !== undefined && password.length > 4096)
-      throw new Error('The OBS password is too long.')
+      throw new Error(t('misc.obsRemoteProfiles.passwordTooLong'))
     const secret = password ? await encryptAsync(password) : undefined
     const profiles = readProfiles()
     const index = profiles.findIndex((profile) => profile.id === draft.id)
-    if (draft.id !== undefined && index === -1) throw new Error('This connection was removed.')
+    if (draft.id !== undefined && index === -1) throw new Error(t('misc.obsRemoteProfiles.removed'))
     if (index === -1 && profiles.length >= MAX_CONNECTIONS)
-      throw new Error(`You can save up to ${MAX_CONNECTIONS} OBS connections.`)
+      throw new Error(t('misc.obsRemoteProfiles.maxConnections', { max: MAX_CONNECTIONS }))
     const profile = {
       id: draft.id ?? crypto.randomUUID(),
       name: name.data,
@@ -148,10 +154,10 @@ export const obsRemoteApi = {
     publish: (snapshot: ObsRemoteSnapshot) => void,
   ): Promise<ObsRemoteConnection> {
     const profile = readProfiles().find((entry) => entry.id === id)
-    if (!profile) throw new Error('This connection was removed.')
+    if (!profile) throw new Error(t('misc.obsRemoteProfiles.removed'))
     const password = profile.secret
       ? await decryptAsync(profile.secret).catch(() => {
-          throw new Error('Could not read the OBS password. Edit the connection and save it again.')
+          throw new Error(t('misc.obsRemoteProfiles.readPasswordFailed'))
         })
       : ''
     return new ObsRemoteSession(profile.url, password, publish)

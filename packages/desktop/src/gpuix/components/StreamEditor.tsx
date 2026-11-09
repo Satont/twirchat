@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useOverlayClose } from '../state/overlays'
 import { withAlpha } from '../theme'
@@ -28,6 +29,7 @@ export interface StreamEditorProps {
 export function StreamEditor({ platform, channelId }: StreamEditorProps) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t, tPlural } = useT()
 
   // ── Stream status state ────────────────────────────────────────────────
   const [isLive, setIsLive] = useState(false)
@@ -209,7 +211,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
     >
       {/* Loading / error */}
       {loading && !title ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading stream info…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('app.stream.loading')}</Text>
       ) : loadError ? (
         <Text style={{ fontSize: 12, color: '#ef4444' }}>{loadError}</Text>
       ) : !editing ? (
@@ -235,12 +237,14 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
               <Text
                 style={{ fontSize: 10, fontWeight: 800, color: isLive ? '#ef4444' : theme.text2 }}
               >
-                {isLive ? 'LIVE' : 'OFFLINE'}
+                {isLive ? t('app.stream.live') : t('app.stream.offline')}
               </Text>
             </div>
             {isLive && viewerCount !== undefined ? (
               <Text style={{ fontSize: 12, color: theme.text2 }}>
-                {`${viewerCount.toLocaleString()} viewers`}
+                {tPlural('app.stream.viewers', viewerCount, {
+                  count: viewerCount.toLocaleString(),
+                })}
               </Text>
             ) : null}
             <div style={{ flexGrow: 1 }} />
@@ -266,7 +270,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
             >
               <Icon name="edit" size={14} color={theme.accent.primary} />
               <Text style={{ fontSize: 12, fontWeight: 600, color: theme.accent.primary }}>
-                Edit
+                {t('app.stream.edit')}
               </Text>
             </div>
           </div>
@@ -291,21 +295,21 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
       ) : (
         /* Edit form */
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <Text style={labelStyle}>{'Title'.toUpperCase()}</Text>
+          <Text style={labelStyle}>{t('app.stream.titleLabel').toUpperCase()}</Text>
           <input
             value={editTitle}
-            placeholder="Stream title…"
+            placeholder={t('app.stream.titlePlaceholder')}
             onChange={(event) => setEditTitle((event.value ?? '').slice(0, 140))}
             {...titleFocus}
             theme={{ caret: theme.accent.primary, textMuted: placeholderColor }}
             style={inputStyle(focusedField === 'title')}
           />
 
-          <Text style={labelStyle}>{'Category / Game'.toUpperCase()}</Text>
+          <Text style={labelStyle}>{t('app.stream.categoryLabel').toUpperCase()}</Text>
           <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
             <input
               value={categoryQuery}
-              placeholder="Search categories…"
+              placeholder={t('app.stream.categoryPlaceholder')}
               onChange={(event) => onCategoryInput(event.value ?? '')}
               {...categoryFocus}
               theme={{ caret: theme.accent.primary, textMuted: placeholderColor }}
@@ -380,7 +384,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
           </div>
           {searchLoading ? (
             <Text style={{ fontSize: 12, color: theme.text2, paddingTop: 4, paddingLeft: 2 }}>
-              Searching…
+              {t('app.stream.searching')}
             </Text>
           ) : null}
 
@@ -412,7 +416,9 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                 hover: saving ? undefined : { backgroundColor: theme.fillHover },
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: 600, color: theme.text2 }}>Cancel</Text>
+              <Text style={{ fontSize: 13, fontWeight: 600, color: theme.text2 }}>
+                {t('common.cancel')}
+              </Text>
             </div>
             <div
               testId="stream-save"
@@ -435,7 +441,11 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
             >
               {saveSuccess ? <Icon name="check" size={13} color={theme.accent.onPrimary} /> : null}
               <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onPrimary }}>
-                {saveSuccess ? 'Saved!' : saving ? 'Saving…' : 'Save'}
+                {saveSuccess
+                  ? t('app.stream.saved')
+                  : saving
+                    ? t('common.saving')
+                    : t('common.save')}
               </Text>
             </div>
           </div>

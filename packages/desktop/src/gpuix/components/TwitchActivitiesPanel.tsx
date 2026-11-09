@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useBackend, useBackendEvent } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT, type MessageKey } from '../i18n'
 import { accountsStore } from '../state/app'
 import { useStore, useStoreSelector } from '../state/create-store'
 import {
@@ -28,14 +29,14 @@ import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
 type ActivityTab = 'polls' | 'predictions' | 'pins' | 'rewards' | 'queue' | 'following' | 'whispers'
-const TABS: { id: ActivityTab; label: string }[] = [
-  { id: 'polls', label: 'Polls' },
-  { id: 'predictions', label: 'Predictions' },
-  { id: 'pins', label: 'Pinned' },
-  { id: 'rewards', label: 'Rewards' },
-  { id: 'queue', label: 'Reward queue' },
-  { id: 'following', label: 'Following' },
-  { id: 'whispers', label: 'Whispers' },
+const TABS: { id: ActivityTab; labelKey: MessageKey }[] = [
+  { id: 'polls', labelKey: 'activities.tab.polls' },
+  { id: 'predictions', labelKey: 'activities.tab.predictions' },
+  { id: 'pins', labelKey: 'activities.tab.pins' },
+  { id: 'rewards', labelKey: 'activities.tab.rewards' },
+  { id: 'queue', labelKey: 'activities.tab.queue' },
+  { id: 'following', labelKey: 'activities.tab.following' },
+  { id: 'whispers', labelKey: 'activities.tab.whispers' },
 ]
 
 export function TwitchActivitiesPanel({
@@ -52,6 +53,7 @@ export function TwitchActivitiesPanel({
     if (platform === 'twitch' && identityChanged) onClose()
   })
   const theme = useTheme()
+  const { t } = useT()
   const [tab, setTab] = useState<ActivityTab>(initialTab)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -113,7 +115,7 @@ export function TwitchActivitiesPanel({
     setFeedback('')
     try {
       await runTwitchActivity(backend, action)
-      if (generation === actionGeneration.value) setFeedback('Completed.')
+      if (generation === actionGeneration.value) setFeedback(t('activities.feedback.completed'))
       return true
     } catch (cause) {
       if (generation === actionGeneration.value)
@@ -139,16 +141,16 @@ export function TwitchActivitiesPanel({
           borderColor: theme.border,
         }}
       >
-        <Text
-          style={{ fontSize: 17, fontWeight: 700, color: theme.text, flexGrow: 1 }}
-        >{`${channelSlug} · Channel activity`}</Text>
+        <Text style={{ fontSize: 17, fontWeight: 700, color: theme.text, flexGrow: 1 }}>
+          {t('activities.header.title', { channel: channelSlug })}
+        </Text>
         <ActionButton
           disabled={state.loading || busy}
           onClick={() => void loadTwitchActivities(backend, channelSlug)}
         >
-          Refresh
+          {t('activities.action.refresh')}
         </ActionButton>
-        <ActionButton onClick={onClose}>Close</ActionButton>
+        <ActionButton onClick={onClose}>{t('activities.action.close')}</ActionButton>
       </div>
       <div
         style={{
@@ -171,7 +173,7 @@ export function TwitchActivitiesPanel({
               setFeedback('')
             }}
           >
-            {entry.label}
+            {t(entry.labelKey)}
           </ActionButton>
         ))}
       </div>
@@ -194,7 +196,7 @@ export function TwitchActivitiesPanel({
         <FormError>{error || state.error}</FormError>
         {feedback ? <Text style={{ fontSize: 12, color: theme.text2 }}>{feedback}</Text> : null}
         {state.loading && !state.snapshot ? (
-          <Text style={{ fontSize: 12, color: theme.text2 }}>Loading channel activity…</Text>
+          <Text style={{ fontSize: 12, color: theme.text2 }}>{t('activities.loading')}</Text>
         ) : null}
         {tab === 'polls' ? (
           <Polls
@@ -275,8 +277,9 @@ function Row({ children }: { children: React.ReactNode }) {
 }
 
 function Polls({ channel, snapshot, busy, perform }: SectionProps) {
+  const { t, tPlural } = useT()
   const [title, setTitle] = useState('')
-  const [choices, setChoices] = useState('Yes\nNo')
+  const [choices, setChoices] = useState(() => t('activities.form.defaultChoices'))
   const [duration, setDuration] = useState('60')
   const [extra, setExtra] = useState('0')
   return (
@@ -290,7 +293,7 @@ function Polls({ channel, snapshot, busy, perform }: SectionProps) {
           <Heading>{`${poll.title} · ${poll.status}`}</Heading>
           {poll.choices.map((choice) => (
             <Row key={choice.id}>
-              <Empty>{`${choice.title} · ${choice.votes} votes`}</Empty>
+              <Empty>{`${choice.title} · ${tPlural('activities.polls.votes', choice.votes)}`}</Empty>
               <ActionButton
                 disabled={busy || poll.status !== 'ACTIVE'}
                 onClick={() =>
@@ -302,7 +305,7 @@ function Polls({ channel, snapshot, busy, perform }: SectionProps) {
                   })
                 }
               >
-                Vote
+                {t('activities.polls.vote')}
               </ActionButton>
             </Row>
           ))}
@@ -313,7 +316,7 @@ function Polls({ channel, snapshot, busy, perform }: SectionProps) {
                 void perform({ action: 'end_poll', channelSlug: channel, pollId: poll.id })
               }
             >
-              End poll
+              {t('activities.polls.end')}
             </ActionButton>
             <ActionButton
               disabled={busy || poll.status === 'ACTIVE'}
@@ -321,24 +324,24 @@ function Polls({ channel, snapshot, busy, perform }: SectionProps) {
                 void perform({ action: 'archive_poll', channelSlug: channel, pollId: poll.id })
               }
             >
-              Archive
+              {t('activities.polls.archive')}
             </ActionButton>
           </Row>
         </div>
       ))}
-      {!snapshot?.polls.length ? <Empty>No polls found.</Empty> : null}
-      <Heading>Create a poll</Heading>
-      <FormField label="Question">
+      {!snapshot?.polls.length ? <Empty>{t('activities.polls.empty')}</Empty> : null}
+      <Heading>{t('activities.polls.createHeading')}</Heading>
+      <FormField label={t('activities.form.question')}>
         <FormInput value={title} onChange={setTitle} />
       </FormField>
-      <FormField label="Choices" hint="One choice per line, 2–5 choices">
+      <FormField label={t('activities.form.choices')} hint={t('activities.form.choicesHint')}>
         <FormInput value={choices} onChange={setChoices} multiline />
       </FormField>
       <Row>
-        <FormField label="Duration, seconds">
+        <FormField label={t('activities.form.duration')}>
           <FormInput value={duration} onChange={setDuration} />
         </FormField>
-        <FormField label="Points per extra vote">
+        <FormField label={t('activities.form.pointsPerExtraVote')}>
           <FormInput value={extra} onChange={setExtra} />
         </FormField>
       </Row>
@@ -359,15 +362,16 @@ function Polls({ channel, snapshot, busy, perform }: SectionProps) {
           })
         }
       >
-        Create poll
+        {t('activities.form.createPoll')}
       </ActionButton>
     </>
   )
 }
 
 function Predictions({ channel, snapshot, busy, perform }: SectionProps) {
+  const { t, tPlural } = useT()
   const [title, setTitle] = useState('')
-  const [outcomes, setOutcomes] = useState('Yes\nNo')
+  const [outcomes, setOutcomes] = useState(() => t('activities.form.defaultChoices'))
   const [duration, setDuration] = useState('120')
   const [points, setPoints] = useState('10')
   const [winner, setWinner] = useState<string | null>(null)
@@ -380,12 +384,12 @@ function Predictions({ channel, snapshot, busy, perform }: SectionProps) {
           style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 14 }}
         >
           <Heading>{`${prediction.title} · ${prediction.status}`}</Heading>
-          <FormField label="Points to predict">
+          <FormField label={t('activities.predictions.pointsToPredict')}>
             <FormInput value={points} onChange={setPoints} />
           </FormField>
           {prediction.outcomes.map((outcome) => (
             <Row key={outcome.id}>
-              <Empty>{`${outcome.title} · ${outcome.points ?? 0} points · ${outcome.users ?? 0} predictors`}</Empty>
+              <Empty>{`${outcome.title} · ${tPlural('activities.predictions.points', outcome.points ?? 0)} · ${tPlural('activities.predictions.predictors', outcome.users ?? 0)}`}</Empty>
               <ActionButton
                 disabled={busy || prediction.status !== 'ACTIVE'}
                 onClick={() =>
@@ -398,14 +402,14 @@ function Predictions({ channel, snapshot, busy, perform }: SectionProps) {
                   })
                 }
               >
-                Predict
+                {t('activities.predictions.predict')}
               </ActionButton>
               <ActionButton
                 disabled={busy || !['ACTIVE', 'LOCKED'].includes(prediction.status)}
                 primary={winner === outcome.id}
                 onClick={() => setWinner(outcome.id)}
               >
-                Winning outcome
+                {t('activities.predictions.winning')}
               </ActionButton>
             </Row>
           ))}
@@ -420,7 +424,7 @@ function Predictions({ channel, snapshot, busy, perform }: SectionProps) {
                 })
               }
             >
-              Lock
+              {t('activities.predictions.lock')}
             </ActionButton>
             <ActionButton
               disabled={
@@ -441,7 +445,7 @@ function Predictions({ channel, snapshot, busy, perform }: SectionProps) {
                   )
               }}
             >
-              Resolve selected outcome
+              {t('activities.predictions.resolve')}
             </ActionButton>
             <ActionButton
               danger
@@ -454,20 +458,20 @@ function Predictions({ channel, snapshot, busy, perform }: SectionProps) {
                 })
               }
             >
-              Cancel & refund
+              {t('activities.predictions.cancelRefund')}
             </ActionButton>
           </Row>
         </div>
       ))}
-      {!snapshot?.predictions.length ? <Empty>No predictions found.</Empty> : null}
-      <Heading>Create a prediction</Heading>
-      <FormField label="Question">
+      {!snapshot?.predictions.length ? <Empty>{t('activities.predictions.empty')}</Empty> : null}
+      <Heading>{t('activities.predictions.createHeading')}</Heading>
+      <FormField label={t('activities.form.question')}>
         <FormInput value={title} onChange={setTitle} />
       </FormField>
-      <FormField label="Outcomes" hint="One outcome per line">
+      <FormField label={t('activities.form.outcomes')} hint={t('activities.form.outcomesHint')}>
         <FormInput multiline value={outcomes} onChange={setOutcomes} />
       </FormField>
-      <FormField label="Prediction window, seconds">
+      <FormField label={t('activities.form.predictionWindow')}>
         <FormInput value={duration} onChange={setDuration} />
       </FormField>
       <ActionButton
@@ -486,13 +490,14 @@ function Predictions({ channel, snapshot, busy, perform }: SectionProps) {
           })
         }
       >
-        Create prediction
+        {t('activities.form.createPrediction')}
       </ActionButton>
     </>
   )
 }
 
 function Pins({ channel, snapshot, busy, perform }: SectionProps) {
+  const { t } = useT()
   const [messageId, setMessageId] = useState('')
   const [duration, setDuration] = useState('1200')
   const validDuration =
@@ -502,20 +507,24 @@ function Pins({ channel, snapshot, busy, perform }: SectionProps) {
     <>
       <FormError>{snapshot?.errors.pinnedMessage}</FormError>
       <FormField
-        label="Pin duration, seconds"
-        hint="30–1800; applies from now. Leave blank for the end of the stream."
+        label={t('activities.pins.durationLabel')}
+        hint={t('activities.pins.durationHint')}
       >
         <FormInput value={duration} onChange={setDuration} />
       </FormField>
-      <FormError>
-        {validDuration ? '' : 'Enter a whole number from 30 to 1800, or leave blank.'}
-      </FormError>
+      <FormError>{validDuration ? '' : t('activities.pins.invalidDuration')}</FormError>
       {snapshot?.pinnedMessage ? (
         <>
-          <Heading>{snapshot.pinnedMessage.authorName ?? 'Pinned message'}</Heading>
+          <Heading>
+            {snapshot.pinnedMessage.authorName ?? t('activities.pins.pinnedMessage')}
+          </Heading>
           <Empty>{snapshot.pinnedMessage.text}</Empty>
           {snapshot.pinnedMessage.expiresAt ? (
-            <Empty>{`Expires ${new Date(snapshot.pinnedMessage.expiresAt).toLocaleString()}`}</Empty>
+            <Empty>
+              {t('activities.pins.expires', {
+                date: new Date(snapshot.pinnedMessage.expiresAt).toLocaleString(),
+              })}
+            </Empty>
           ) : null}
           <ActionButton
             disabled={busy}
@@ -527,7 +536,7 @@ function Pins({ channel, snapshot, busy, perform }: SectionProps) {
               })
             }
           >
-            Unpin message
+            {t('activities.pins.unpin')}
           </ActionButton>
           <ActionButton
             disabled={busy || !validDuration}
@@ -540,13 +549,13 @@ function Pins({ channel, snapshot, busy, perform }: SectionProps) {
               })
             }
           >
-            Update pinned duration from now
+            {t('activities.pins.updateDuration')}
           </ActionButton>
         </>
       ) : (
-        <Empty>No pinned message.</Empty>
+        <Empty>{t('activities.pins.empty')}</Empty>
       )}
-      <FormField label="Message ID">
+      <FormField label={t('activities.pins.messageId')}>
         <FormInput value={messageId} onChange={setMessageId} />
       </FormField>
 
@@ -562,7 +571,7 @@ function Pins({ channel, snapshot, busy, perform }: SectionProps) {
           })
         }
       >
-        Pin message
+        {t('activities.pins.pin')}
       </ActionButton>
     </>
   )
@@ -570,15 +579,23 @@ function Pins({ channel, snapshot, busy, perform }: SectionProps) {
 
 function Rewards({ channel, snapshot, busy, perform }: SectionProps) {
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const [input, setInput] = useState('')
   return (
     <>
       <FormError>{snapshot?.errors.rewards}</FormError>
       <FormError>{snapshot?.errors.pointsBalance}</FormError>
       {snapshot?.pointsBalance !== undefined ? (
-        <Heading>{`${snapshot.pointsBalance.toLocaleString()} channel points`}</Heading>
+        <Heading>
+          {tPlural('activities.rewards.channelPoints', snapshot.pointsBalance, {
+            count: snapshot.pointsBalance.toLocaleString(),
+          })}
+        </Heading>
       ) : null}
-      <FormField label="Redemption message" hint="Used by rewards that require text">
+      <FormField
+        label={t('activities.rewards.redemptionMessage')}
+        hint={t('activities.rewards.redemptionHint')}
+      >
         <FormInput multiline value={input} onChange={setInput} />
       </FormField>
       {snapshot?.rewards.map((reward) => (
@@ -597,7 +614,11 @@ function Rewards({ channel, snapshot, busy, perform }: SectionProps) {
             {reward.imageUrl ? (
               <RemoteImage url={reward.imageUrl} style={{ width: 32, height: 32 }} />
             ) : null}
-            <Heading>{`${reward.title} · ${reward.cost.toLocaleString()} points`}</Heading>
+            <Heading>
+              {`${reward.title} · ${tPlural('activities.rewards.points', reward.cost, {
+                count: reward.cost.toLocaleString(),
+              })}`}
+            </Heading>
           </Row>
           {reward.prompt ? <Empty>{reward.prompt}</Empty> : null}
           <Row>
@@ -620,7 +641,7 @@ function Rewards({ channel, snapshot, busy, perform }: SectionProps) {
                 })
               }
             >
-              Redeem
+              {t('activities.rewards.redeem')}
             </ActionButton>
             {reward.manageable ? (
               <ActionButton
@@ -634,18 +655,19 @@ function Rewards({ channel, snapshot, busy, perform }: SectionProps) {
                   })
                 }
               >
-                {reward.isPaused ? 'Resume reward' : 'Pause reward'}
+                {reward.isPaused ? t('activities.rewards.resume') : t('activities.rewards.pause')}
               </ActionButton>
             ) : null}
           </Row>
         </div>
       ))}
-      {!snapshot?.rewards.length ? <Empty>No rewards available.</Empty> : null}
+      {!snapshot?.rewards.length ? <Empty>{t('activities.rewards.empty')}</Empty> : null}
     </>
   )
 }
 
 function Whispers({ channel, busy, perform }: Omit<SectionProps, 'snapshot'>) {
+  const { t } = useT()
   const messages = useStore(whispersStore)
   const ownUserId = useStoreSelector(
     accountsStore,
@@ -656,7 +678,7 @@ function Whispers({ channel, busy, perform }: Omit<SectionProps, 'snapshot'>) {
   const [text, setText] = useState('')
   return (
     <>
-      <Empty>Private messages received during this session.</Empty>
+      <Empty>{t('activities.whispers.description')}</Empty>
       <div
         style={{
           display: 'flex',
@@ -673,7 +695,7 @@ function Whispers({ channel, busy, perform }: Omit<SectionProps, 'snapshot'>) {
           >
             <Heading>
               {message.fromUserId === ownUserId
-                ? `To user ${message.toUserId}`
+                ? t('activities.whispers.toUser', { user: message.toUserId })
                 : message.fromDisplayName || message.fromLogin}
             </Heading>
             <Empty>{message.text}</Empty>
@@ -687,15 +709,19 @@ function Whispers({ channel, busy, perform }: Omit<SectionProps, 'snapshot'>) {
                 rememberWhisperRecipient(username)
               }}
             >
-              Reply
+              {t('activities.whispers.reply')}
             </ActionButton>
           </div>
         ))}
       </div>
-      <FormField label="Recipient">
-        <FormInput value={recipient} onChange={setRecipient} placeholder="Twitch username" />
+      <FormField label={t('activities.whispers.recipient')}>
+        <FormInput
+          value={recipient}
+          onChange={setRecipient}
+          placeholder={t('activities.whispers.recipientPlaceholder')}
+        />
       </FormField>
-      <FormField label="Message">
+      <FormField label={t('activities.whispers.message')}>
         <FormInput multiline value={text} onChange={setText} />
       </FormField>
       <ActionButton
@@ -715,7 +741,7 @@ function Whispers({ channel, busy, perform }: Omit<SectionProps, 'snapshot'>) {
           })
         }
       >
-        Send whisper
+        {t('activities.whispers.send')}
       </ActionButton>
     </>
   )

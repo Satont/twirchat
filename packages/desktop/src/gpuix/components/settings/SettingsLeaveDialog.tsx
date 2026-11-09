@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { useT } from '../../i18n'
 import { useStore } from '../../state/create-store'
 import {
   discardSettingsAndLeave,
@@ -15,6 +16,7 @@ import { Text } from '../ui/Text'
 /** Warning shown when a navigation tries to leave Settings with unsaved drafts. */
 export function SettingsLeaveDialog() {
   const theme = useTheme()
+  const { t } = useT()
   const session = useStore(settingsSessionStore)
   const [saving, setSaving] = useState(false)
   if (!session.pending) return null
@@ -36,11 +38,9 @@ export function SettingsLeaveDialog() {
         }}
       >
         <Text style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>
-          Leave settings without saving?
+          {t('settings.leave.title')}
         </Text>
-        <Text style={{ fontSize: 12, color: theme.text2 }}>
-          You have unsaved changes. Save them before leaving, discard them, or stay in settings.
-        </Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('settings.leave.body')}</Text>
         <div
           style={{
             display: 'flex',
@@ -52,7 +52,7 @@ export function SettingsLeaveDialog() {
           }}
         >
           <ActionButton testId="settings-leave-stay" disabled={saving} onClick={stayInSettings}>
-            Stay
+            {t('settings.leave.stay')}
           </ActionButton>
           <ActionButton
             testId="settings-leave-discard"
@@ -60,7 +60,7 @@ export function SettingsLeaveDialog() {
             disabled={saving}
             onClick={discardSettingsAndLeave}
           >
-            Discard and leave
+            {t('settings.leave.discard')}
           </ActionButton>
           <ActionButton
             testId="settings-leave-save"
@@ -68,7 +68,7 @@ export function SettingsLeaveDialog() {
             disabled={saving}
             onClick={() => void saveAndLeave()}
           >
-            {saving ? 'Saving…' : 'Save and leave'}
+            {saving ? t('common.saving') : t('settings.leave.save')}
           </ActionButton>
         </div>
       </div>

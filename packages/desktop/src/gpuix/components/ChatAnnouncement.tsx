@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { useT } from '../i18n'
 import { readableOn, withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
@@ -33,6 +34,7 @@ export function ChatAnnouncement({
   children: ReactNode
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const accent = announcementColor(color)
   const foreground = readableOn(accent, theme.bg)
   return (
@@ -61,7 +63,9 @@ export function ChatAnnouncement({
         }}
       >
         <Icon name="twitch" size={Math.max(10, Math.round(fontSize * 0.85))} color={foreground} />
-        <Text style={{ fontSize, fontWeight: 700, color: theme.text }}>Announcement</Text>
+        <Text style={{ fontSize, fontWeight: 700, color: theme.text }}>
+          {t('chatMessages.announcement')}
+        </Text>
       </div>
       {children}
     </div>

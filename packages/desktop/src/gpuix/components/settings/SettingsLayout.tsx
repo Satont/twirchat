@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useId, useRef, type ReactNode } from 'react'
 
+import { useT } from '../../i18n'
 import type { SettingsSectionId } from '../../settings-search'
 import { useTheme } from '../../theme-context'
 import { ActionButton } from '../ui/Form'
@@ -64,6 +65,7 @@ export function SettingsSection({
   children: ReactNode
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const visibility = useContext(SettingsSectionContext)
   if (!visibility.mounted.has(id)) return null
   const visible = visibility.visible.has(id)
@@ -109,7 +111,7 @@ export function SettingsSection({
               }}
             />
             <Text style={{ fontSize: 10, fontWeight: 700, color: theme.accent.primary }}>
-              UNSAVED
+              {t('common.unsaved')}
             </Text>
           </div>
         ) : null}
@@ -176,7 +178,7 @@ export function SettingsFooter({
   saving = false,
   error = '',
   note,
-  saveLabel = 'Save changes',
+  saveLabel,
   saveTestId,
   errorTestId,
   disabled = false,
@@ -198,6 +200,7 @@ export function SettingsFooter({
   children?: ReactNode
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const registry = useContext(SettingsSaveRegistryContext)
   const controllerKey = useId()
   const saveRef = useRef(onSave)
@@ -247,10 +250,10 @@ export function SettingsFooter({
             {error}
           </Text>
         ) : saving ? (
-          <Text style={{ fontSize: 11, color: theme.text2 }}>Saving…</Text>
+          <Text style={{ fontSize: 11, color: theme.text2 }}>{t('settings.footer.saving')}</Text>
         ) : dirty ? (
           <>
-            <Text style={{ fontSize: 11, color: theme.text }}>Unsaved changes</Text>
+            <Text style={{ fontSize: 11, color: theme.text }}>{t('settings.footer.unsaved')}</Text>
             {note ? <Text style={{ fontSize: 11, color: theme.text2 }}>{note}</Text> : null}
           </>
         ) : note ? (
@@ -272,7 +275,7 @@ export function SettingsFooter({
           ? [
               dirty && onDiscard ? (
                 <ActionButton key="discard" disabled={saving} onClick={onDiscard}>
-                  Discard
+                  {t('common.discard')}
                 </ActionButton>
               ) : null,
               onSave ? (
@@ -283,7 +286,11 @@ export function SettingsFooter({
                   disabled={saving || disabled || !dirty}
                   onClick={() => void onSave()}
                 >
-                  {saving ? 'Saving…' : error ? 'Retry save' : saveLabel}
+                  {saving
+                    ? t('common.saving')
+                    : error
+                      ? t('common.retrySave')
+                      : (saveLabel ?? t('common.saveChanges'))}
                 </ActionButton>
               ) : null,
             ]

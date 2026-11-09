@@ -19,6 +19,7 @@ import type { UpdateInfo } from 'velopack'
 import { APP_VERSION } from '../../build-info'
 import { getDbPath } from '../../runtime-config'
 import { getDb } from '../../store/db'
+import { t } from '../i18n'
 import { prepareLinuxUpdateLocator } from '../linux-update-runtime'
 import type { DesktopEvents } from './events'
 
@@ -88,7 +89,7 @@ const defaultRuntime: UpdaterRuntime = {
   prepareApplyManager: async (manager) => {
     if (process.platform !== 'linux') return manager
     const appImage = process.env.APPIMAGE
-    if (!appImage) throw new Error('Cannot update on Linux without the AppImage path (APPIMAGE).')
+    if (!appImage) throw new Error(t('runtime.updater.appImageRequired'))
     const locator = await prepareLinuxUpdateLocator({
       appImage,
       currentBinaryDir: dirname(process.execPath),
@@ -144,13 +145,13 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
 
     const visibility = { manual }
     const result = Promise.resolve().then(async () => {
-      if (visibility.manual) emit('checking', 'Checking for updates')
+      if (visibility.manual) emit('checking', t('runtime.updater.checking'))
       try {
         const info = await mgr.checkForUpdatesAsync()
         if (!info || runtime.getSkippedHash() === info.TargetFullRelease.SHA256) {
           const hadAvailableUpdate = state.kind === 'available'
           state = { kind: 'idle' }
-          if (visibility.manual) emit('no-update', 'You are up to date')
+          if (visibility.manual) emit('no-update', t('runtime.updater.upToDate'))
           else if (hadAvailableUpdate) emit('idle', '')
           return { updateAvailable: false, currentVersion }
         }
@@ -162,13 +163,14 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
           emit(
             ready ? 'download-complete' : 'update-available',
             ready
-              ? 'Update downloaded — restart to apply'
-              : `Update ${target.Version} is available`,
+              ? t('runtime.updater.downloaded')
+              : t('runtime.updater.available', { version: target.Version }),
             { hash: target.SHA256 },
           )
         return { updateAvailable: true, version: target.Version, currentVersion }
       } catch (error) {
-        if (visibility.manual) emit('update-error', `Update check failed: ${String(error)}`)
+        if (visibility.manual)
+          emit('update-error', t('runtime.updater.checkFailed', { error: String(error) }))
         else log.warn('Automatic update check failed', { error: String(error) })
         return { updateAvailable: false, currentVersion }
       } finally {
@@ -220,23 +222,23 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
       if (state.kind === 'ready' || state.kind === 'applying') return { success: true }
       const mgr = getManager()
       if (!mgr || state.kind !== 'available')
-        return { success: false, error: 'No checked update to download' }
+        return { success: false, error: t('runtime.updater.noUpdateToDownload') }
       const info = state.info
       const result = Promise.resolve().then(async (): Promise<DownloadResult> => {
-        emit('downloading', 'Downloading update', { progress: 0 })
+        emit('downloading', t('runtime.updater.downloading'), { progress: 0 })
         try {
           await mgr.downloadUpdateAsync(info, (perc) => {
             if (state.kind === 'downloading' && state.info === info && state.result === result)
-              emit('downloading', 'Downloading update', { progress: perc })
+              emit('downloading', t('runtime.updater.downloading'), { progress: perc })
           })
           state = { kind: 'ready', info }
-          emit('download-complete', 'Update downloaded — restart to apply', {
+          emit('download-complete', t('runtime.updater.downloaded'), {
             hash: info.TargetFullRelease.SHA256,
           })
           return { success: true }
         } catch (error) {
           state = { kind: 'available', info }
-          emit('update-error', `Update download failed: ${String(error)}`)
+          emit('update-error', t('runtime.updater.downloadFailed', { error: String(error) }))
           return { success: false, error: String(error) }
         }
       })
@@ -253,13 +255,13 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
       const result = Promise.resolve().then(async (): Promise<void> => {
         try {
           const applyManager = await runtime.prepareApplyManager(mgr)
-          emit('applying', 'Restarting to apply update')
+          emit('applying', t('runtime.updater.applying'))
           // Updater waits for this process to exit (up to 60s), applies, restarts.
           applyManager.waitExitThenApplyUpdate(info, false, true)
           runtime.scheduleExit()
         } catch (error) {
           state = { kind: 'ready', info }
-          emit('update-error', `Update install failed: ${String(error)}`)
+          emit('update-error', t('runtime.updater.installFailed', { error: String(error) }))
         }
       })
       state = { kind: 'applying', info, result }

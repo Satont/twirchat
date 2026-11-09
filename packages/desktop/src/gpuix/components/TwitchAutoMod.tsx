@@ -3,6 +3,7 @@ import { memo } from 'react'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { useStoreSelector } from '../state/create-store'
 import { decideTwitchAutoModMessage, twitchAutoModStore } from '../state/twitch-automod'
 import { semantic, withAlpha } from '../theme'
@@ -20,6 +21,7 @@ export const TwitchAutoMod = memo(function TwitchAutoMod({
 }) {
   const { api } = useBackend()
   const theme = useTheme()
+  const { t, tPlural } = useT()
   const channel = channelSlug.toLowerCase()
   const held = useStoreSelector(twitchAutoModStore, (queues) => queues.get(channel)?.held)
   if (!held) return null
@@ -62,7 +64,9 @@ export const TwitchAutoMod = memo(function TwitchAutoMod({
           <Icon name="alert" size={13} color={theme.warningText} />
           <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text }}>AutoMod</Text>
           <Text style={{ fontSize: 11, color: theme.warningText }}>
-            {pending ? 'Submitting…' : `${held.size} held`}
+            {pending
+              ? t('chatMessages.autoMod.submitting')
+              : tPlural('chatMessages.autoMod.held', held.size)}
           </Text>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 5 }}>
@@ -79,7 +83,7 @@ export const TwitchAutoMod = memo(function TwitchAutoMod({
               )
             }
           >
-            Approve
+            {t('chatMessages.autoMod.approve')}
           </ActionButton>
           <ActionButton
             testId="twitch-automod-deny"
@@ -95,7 +99,7 @@ export const TwitchAutoMod = memo(function TwitchAutoMod({
               )
             }
           >
-            Deny
+            {t('chatMessages.autoMod.deny')}
           </ActionButton>
         </div>
       </div>

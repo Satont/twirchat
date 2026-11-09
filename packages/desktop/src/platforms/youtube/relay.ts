@@ -1,6 +1,7 @@
 import type { YouTubeChatBatch } from '@twirchat/shared/youtube-chat'
 
 import type { BackendConnection } from '../../backend-connection'
+import { t } from '../../gpuix/i18n'
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import type { YouTubeChatRelay } from './adapter'
 
@@ -71,7 +72,7 @@ export function createYouTubeChatRelay(
             type: 'status',
             subscriptionId,
             status: 'connecting',
-            error: 'Backend disconnected. Waiting to resume YouTube chat…',
+            error: t('misc.youtubeRelay.backendDisconnected'),
           })
       })
       if (connection.isConnected) subscribe()
@@ -80,7 +81,7 @@ export function createYouTubeChatRelay(
           type: 'status',
           subscriptionId,
           status: 'connecting',
-          error: 'Waiting for backend connection for anonymous YouTube chat…',
+          error: t('misc.youtubeRelay.waitingForBackend'),
         })
       return () => {
         if (!stopped) connection.send({ type: 'youtube_chat_unsubscribe', subscriptionId })

@@ -1,16 +1,11 @@
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
-import { useMemo, useRef } from 'react'
+import { useRef } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { usePopupHotkeys, scrollPopupPage } from '../hooks/use-popup-hotkeys'
-import {
-  formatReleaseDate,
-  parseReleaseNotes,
-  releaseNoteBadgeLabels,
-  releaseNoteKindLabels,
-  type ReleaseNoteKind,
-} from '../release-notes'
+import { useT, type MessageKey } from '../i18n'
+import { formatReleaseDate, parseReleaseNotes, type ReleaseNoteKind } from '../release-notes'
 import { type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { Badge } from './ui/Badge'
@@ -22,7 +17,23 @@ const SECTION_GAP = 20
 const ITEM_GAP = 8
 const BADGE_WIDTH = 40
 
-const DEFAULT_GREET = "Here's what's new in this update"
+const kindLabelKeys: Record<ReleaseNoteKind, MessageKey> = {
+  new: 'app.changelog.kind.new',
+  improved: 'app.changelog.kind.improved',
+  fixed: 'app.changelog.kind.fixed',
+  removed: 'app.changelog.kind.removed',
+  docs: 'app.changelog.kind.docs',
+  other: 'app.changelog.kind.other',
+}
+
+const badgeLabelKeys: Record<ReleaseNoteKind, MessageKey> = {
+  new: 'app.changelog.badge.new',
+  improved: 'app.changelog.badge.improved',
+  fixed: 'app.changelog.badge.fixed',
+  removed: 'app.changelog.badge.removed',
+  docs: 'app.changelog.badge.docs',
+  other: 'app.changelog.badge.other',
+}
 
 interface KindPalette {
   background: string
@@ -63,6 +74,7 @@ export function UpdateChangelogModal({
 }) {
   const theme = useTheme()
   const backend = useBackend()
+  const { t } = useT()
   const renderer = useGpuixRequired()
   const viewportRef = useRef<PublicInstance | null>(null)
 
@@ -71,8 +83,8 @@ export function UpdateChangelogModal({
     scrollPage: ([direction]) => scrollPopupPage(renderer, viewportRef, direction ?? 'down'),
   })
 
-  const sections = useMemo(() => parseReleaseNotes(releaseNotes), [releaseNotes])
-  const releaseDate = useMemo(() => formatReleaseDate(publishedAt), [publishedAt])
+  const sections = parseReleaseNotes(releaseNotes)
+  const releaseDate = formatReleaseDate(publishedAt)
   const versionLabel = `v${version.replace(/^v/u, '')}`
 
   return (
@@ -135,7 +147,7 @@ export function UpdateChangelogModal({
               }}
             >
               <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>
-                What news in TwirChat
+                {t('app.changelog.title')}
               </Text>
               <div
                 testId="update-changelog-version"
@@ -158,7 +170,9 @@ export function UpdateChangelogModal({
               testId="update-changelog-date"
               style={{ fontSize: 13, color: theme.text2, marginTop: 4 }}
             >
-              {releaseDate ? `Released ${releaseDate}` : DEFAULT_GREET}
+              {releaseDate
+                ? t('app.changelog.released', { date: releaseDate })
+                : t('app.changelog.defaultGreet')}
             </Text>
           </div>
         </div>
@@ -196,7 +210,7 @@ export function UpdateChangelogModal({
                     paddingLeft: 3,
                   }}
                 >
-                  {releaseNoteKindLabels[section.kind]}
+                  {t(kindLabelKeys[section.kind])}
                 </Text>
                 {section.items.map((item) => (
                   <div
@@ -234,7 +248,7 @@ export function UpdateChangelogModal({
                           textTransform: 'uppercase',
                         }}
                       >
-                        {releaseNoteBadgeLabels[section.kind]}
+                        {t(badgeLabelKeys[section.kind])}
                       </Badge>
                     </div>
                     <Text
@@ -290,7 +304,9 @@ export function UpdateChangelogModal({
               hover: { backgroundColor: theme.fillHover },
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text }}>View on GitHub</Text>
+            <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text }}>
+              {t('app.changelog.viewOnGitHub')}
+            </Text>
           </div>
           <div
             testId="update-changelog-continue"
@@ -306,7 +322,9 @@ export function UpdateChangelogModal({
               hover: { opacity: 0.9 },
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: 500, color: theme.accent.onDeep }}>Close</Text>
+            <Text style={{ fontSize: 13, fontWeight: 500, color: theme.accent.onDeep }}>
+              {t('common.close')}
+            </Text>
           </div>
         </div>
       </div>

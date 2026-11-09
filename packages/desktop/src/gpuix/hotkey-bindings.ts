@@ -1,6 +1,8 @@
 import type { KeyEvent } from '@gpuix/react'
 import { z } from 'zod'
 
+import { t } from './i18n'
+
 function defineHotkeyActions<const Actions extends Record<string, readonly string[]>>(
   actions: Actions,
 ): Actions {
@@ -127,7 +129,12 @@ export function parseHotkeyChoice<const Choices extends readonly string[]>(
   choices: Choices,
 ): Choices[number] {
   const match = choices.find((choice) => choice === value)
-  if (match === undefined) throw new Error(`Invalid shortcut argument: ${value ?? '(missing)'}.`)
+  if (match === undefined)
+    throw new Error(
+      t('commands.hotkey.invalidArgument', {
+        value: value ?? t('commands.hotkey.missingArgument'),
+      }),
+    )
   return match
 }
 
@@ -143,7 +150,7 @@ export function normalizeKeyChord(value: string): string {
     /[\s\r\n]/u.test(keys[0]) ||
     new Set(parts).size !== parts.length
   )
-    throw new Error('Use one key with optional Ctrl, Cmd, Alt and Shift modifiers.')
+    throw new Error(t('commands.hotkey.oneKey'))
   return [...modifiers.filter((modifier) => parts.includes(modifier)), keys[0]].join('+')
 }
 
@@ -220,7 +227,7 @@ export function validateHotkeyArguments(
   args: string[],
 ): void {
   if (!HOTKEY_ACTIONS[category].some((candidate) => candidate === action))
-    throw new Error('Unknown shortcut action in this category.')
+    throw new Error(t('commands.hotkey.unknownAction'))
   const spec = argsSpec[`${category}.${action}`] ?? { min: 0, max: 0 }
   if (
     args.length < spec.min ||
@@ -228,11 +235,14 @@ export function validateHotkeyArguments(
     args.some((argument) => typeof argument !== 'string' || argument.length > 4096)
   )
     throw new Error(
-      `${action} expects ${spec.min === spec.max ? spec.min : `${spec.min}–${spec.max}`} argument(s), one per line.`,
+      t('commands.hotkey.expectsArguments', {
+        action,
+        count: spec.min === spec.max ? spec.min : `${spec.min}–${spec.max}`,
+      }),
     )
   args.forEach((argument, index) => {
     if (!argument.trim() || /[\r\n]/u.test(argument))
-      throw new Error('Each argument must be a nonempty single line.')
+      throw new Error(t('commands.hotkey.nonemptyLine'))
     const choices = spec.choices?.[index]
     const numeric =
       index === 0 &&
@@ -241,7 +251,14 @@ export function validateHotkeyArguments(
       Number(argument) >= spec.index
     if (choices && !choices.includes(argument) && !numeric)
       throw new Error(
-        `Argument ${index + 1}: choose ${choices.join(', ')}${spec.index !== undefined && index === 0 ? `, or an index starting at ${spec.index}` : ''}.`,
+        t('commands.hotkey.chooseArgument', {
+          index: index + 1,
+          choices: choices.join(', '),
+          extra:
+            spec.index !== undefined && index === 0
+              ? t('commands.hotkey.chooseIndex', { index: spec.index })
+              : '',
+        }),
       )
   })
 }
@@ -264,14 +281,14 @@ export function isHotkeyAction(value: string): value is HotkeyAction {
 }
 
 export function validateHotkeyBindings(value: unknown): HotkeyBinding[] {
-  if (!Array.isArray(value) || value.length > 512) throw new Error('Save at most 512 shortcuts.')
+  if (!Array.isArray(value) || value.length > 512) throw new Error(t('commands.hotkey.tooMany'))
   const ids = new Set<string>()
   const bindings = value.map((item: unknown): HotkeyBinding => {
     const decoded = shortcutInput.safeParse(item)
-    if (!decoded.success) throw new Error('Invalid shortcut name, category or key sequence.')
+    if (!decoded.success) throw new Error(t('commands.hotkey.invalidShortcut'))
     const input = decoded.data
     if (typeof input.id !== 'string' || !input.id || input.id.length > 128 || ids.has(input.id))
-      throw new Error('Shortcut IDs must be unique.')
+      throw new Error(t('commands.hotkey.uniqueIds'))
     ids.add(input.id)
     if (
       typeof input.name !== 'string' ||
@@ -283,9 +300,9 @@ export function validateHotkeyBindings(value: unknown): HotkeyBinding[] {
       !Array.isArray(input.keys) ||
       input.keys.some((key) => typeof key !== 'string' || key.length > 128)
     )
-      throw new Error('Invalid shortcut name, category or key sequence.')
-    if (!input.keys.length) throw new Error('Record or enter at least one key for this shortcut.')
-    if (input.keys.length > 4) throw new Error('Use at most four chords in one key sequence.')
+      throw new Error(t('commands.hotkey.invalidShortcut'))
+    if (!input.keys.length) throw new Error(t('commands.hotkey.atLeastOneKey'))
+    if (input.keys.length > 4) throw new Error(t('commands.hotkey.maxFourChords'))
     const category = input.category
     const action = input.action
     const args = input.arguments
@@ -308,7 +325,11 @@ export function validateHotkeyBindings(value: unknown): HotkeyBinding[] {
       const length = Math.min(binding.keys.length, other.keys.length)
       if (binding.keys.slice(0, length).every((key, part) => key === other.keys[part]))
         throw new Error(
-          `“${binding.name || binding.action}” conflicts with “${other.name || other.action}” in ${binding.category}.`,
+          t('commands.hotkey.conflict', {
+            name: binding.name || binding.action,
+            other: other.name || other.action,
+            category: binding.category,
+          }),
         )
     }
   }

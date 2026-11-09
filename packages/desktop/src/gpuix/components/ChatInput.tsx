@@ -52,6 +52,7 @@ import {
   type CommandContext,
 } from '../commands'
 import { useAutocomplete, parseToken, replaceToken } from '../hooks/use-autocomplete'
+import { t as translate, useT } from '../i18n'
 import { nativeWindow, type NativeTextAction } from '../native-window'
 import {
   registerSupplementalHotkeys,
@@ -199,11 +200,11 @@ export interface ChatInputProps {
 function connectionStatusText(status: string | undefined, channel: string, error?: string): string {
   switch (status) {
     case 'connecting':
-      return `Connecting to ${channel}…`
+      return translate('composer.connection.connecting', { channel })
     case 'disconnected':
-      return `${channel} disconnected`
+      return translate('composer.connection.disconnected', { channel })
     case 'error':
-      return error || `Could not connect to ${channel}`
+      return error || translate('composer.connection.error', { channel })
     default:
       return ''
   }
@@ -211,6 +212,7 @@ function connectionStatusText(status: string | undefined, channel: string, error
 
 export function ChatInput(props: ChatInputProps) {
   const theme = useTheme()
+  const { t } = useT()
   const backend = useBackend()
   const customCommands = useStore(customCommandsStore)
   const [executing, setExecuting] = useState(false)
@@ -550,9 +552,9 @@ export function ChatInput(props: ChatInputProps) {
   // Validate the complete expansion before executing its first action.
   function privateAction(command: { text: string; recipient: string }): PreparedAction {
     const account = props.accounts.find((candidate) => candidate.platform === 'twitch')
-    if (!account) throw new Error('Connect a Twitch account before sending a whisper.')
+    if (!account) throw new Error(t('composer.error.whisperNoAccount'))
     const onPlatformCommand = props.onPlatformCommand
-    if (!onPlatformCommand) throw new Error('Whispers are unavailable in this chat.')
+    if (!onPlatformCommand) throw new Error(t('composer.error.whispersUnavailable'))
     return async () => {
       await onPlatformCommand(command.text, {
         platform: 'twitch',
@@ -571,7 +573,7 @@ export function ChatInput(props: ChatInputProps) {
     output: string,
     override: OutgoingTranslationOverride,
   ): Promise<PreparedAction> {
-    if (isDisabled) throw new Error('Connect to chat and log in before sending a message.')
+    if (isDisabled) throw new Error(t('composer.error.notConnected'))
     const targets = props.watchedChannel
       ? [
           {
@@ -582,7 +584,7 @@ export function ChatInput(props: ChatInputProps) {
           },
         ]
       : createChatMessageTargets(sendablePlatforms, output, isEnabled, props.replyTarget)
-    if (!targets.length) throw new Error('Select a connected platform before sending a message.')
+    if (!targets.length) throw new Error(t('composer.error.noPlatform'))
     const settings = (await loadTranslationSettings(backend)).settings
     const isSlashCommand = output.trim().startsWith('/')
     let previewRequired = false
@@ -611,17 +613,17 @@ export function ChatInput(props: ChatInputProps) {
               })
         const text = result ? result.text.replace(/[\r\n]+/gu, ' ').trim() : output
         const limit = messageLengthLimit([target.platform])
-        if (!text.trim()) throw new Error('The translated message is empty. Nothing was sent.')
+        if (!text.trim()) throw new Error(t('composer.error.translatedEmpty'))
         if (limit !== null && messageLength(text.trim()) > limit)
           throw new Error(
-            `The ${target.platform} message is too long after translation: ${limit} characters max. Nothing was sent.`,
+            t('composer.error.translatedTooLong', { platform: target.platform, limit }),
           )
         return { ...target, text, language: result?.targetLanguage }
       }),
     )
     const watchedChannel = props.watchedChannel
     const watchedTarget = translated[0]
-    if (watchedChannel && !watchedTarget) throw new Error('No watched chat target is available.')
+    if (watchedChannel && !watchedTarget) throw new Error(t('composer.error.noWatchedTarget'))
     const action: PreparedAction =
       watchedChannel && watchedTarget
         ? () =>
@@ -743,8 +745,7 @@ export function ChatInput(props: ChatInputProps) {
   )
 
   function prepareTwirReload(): PreparedAction {
-    if (!twirEnabled)
-      throw new Error('Twir integration is disabled. Enable it in Settings → Commands.')
+    if (!twirEnabled) throw new Error(t('composer.error.twirDisabled'))
     const targets = resolveTwirTargets({
       watchedPlatform: props.watchedChannel?.platform,
       watchedSlug: props.watchedChannel?.channelSlug,
@@ -752,10 +753,7 @@ export function ChatInput(props: ChatInputProps) {
       homeTwitchId: twirHomeId('twitch'),
       homeKickId: twirHomeId('kick'),
     })
-    if (!targets.length)
-      throw new Error(
-        'Open a watched channel or select a connected chat target to reload Twir commands.',
-      )
+    if (!targets.length) throw new Error(t('composer.error.twirNoTarget'))
     return async () => {
       const results = await Promise.allSettled(
         targets.map((target) => backend.api.getTwirCommands(target, { refresh: true })),
@@ -770,12 +768,10 @@ export function ChatInput(props: ChatInputProps) {
       const succeeded = results.length > failures.length
       if (succeeded) autocomplete.invalidateTwirSuggestions()
       if (failures.length) {
-        if (succeeded) showNotice('info', 'Twir commands reloaded for some channels.')
-        throw new Error(
-          `Could not reload Twir commands (${failures.join(', ')}). Try /twirreload again.`,
-        )
+        if (succeeded) showNotice('info', t('composer.notice.twirPartial'))
+        throw new Error(t('composer.error.twirReload', { failures: failures.join(', ') }))
       }
-      showNotice('success', 'Twir commands reloaded.')
+      showNotice('success', t('composer.notice.twirReloaded'))
     }
   }
 
@@ -789,7 +785,7 @@ export function ChatInput(props: ChatInputProps) {
     if (autoTranslation) {
       const target = commandTargets[0]
       if (commandTargets.length !== 1 || !target)
-        throw new Error('Select one platform before configuring auto-translation.')
+        throw new Error(t('composer.error.autoTranslateOnePlatform'))
       const key = chatChannelKey(target.platform, target.channelSlug)
       return Object.assign(() => setAutoTranslationLanguage(key, autoTranslation.targetLanguage), {
         localOnly: true,
@@ -832,7 +828,8 @@ export function ChatInput(props: ChatInputProps) {
     }
     const local = parseComposerCommand(output)
     if (local) {
-      if (local.name !== 'search' && local.argument) throw new Error(`Usage: /${local.name}`)
+      if (local.name !== 'search' && local.argument)
+        throw new Error(t('composer.error.usage', { command: local.name }))
       const onPauseChange = props.onPauseChange
       const onSearch = props.onSearch
       const action = (() => {
@@ -853,7 +850,7 @@ export function ChatInput(props: ChatInputProps) {
             return prepareTwirReload()
         }
       })()
-      if (!action) throw new Error('This command is unavailable in this chat.')
+      if (!action) throw new Error(t('composer.error.commandUnavailable'))
       return Object.assign(action, { localOnly: true })
     }
     const userCard = resolveUserCardCommand(output, props.messages ?? [], aliasMap)
@@ -861,10 +858,10 @@ export function ChatInput(props: ChatInputProps) {
       if (!userCard.ok)
         throw new Error(
           userCard.error === 'missing-query'
-            ? 'Usage: /user @nickname'
+            ? t('composer.error.userCardUsage')
             : userCard.error === 'ambiguous'
-              ? 'Multiple users match that nickname.'
-              : 'No user found for that nickname.',
+              ? t('composer.error.userCardAmbiguous')
+              : t('composer.error.userCardNotFound'),
         )
       return Object.assign(() => props.onOpenUserCard(userCard.target), { localOnly: true })
     }
@@ -872,9 +869,9 @@ export function ChatInput(props: ChatInputProps) {
     if (commandName && PLATFORM_COMMAND_NAMES.some((name) => name === commandName)) {
       const target = commandTargets[0]
       if (commandTargets.length !== 1 || !target)
-        throw new Error('Select one platform before running a platform command.')
+        throw new Error(t('composer.error.platformCommandOnePlatform'))
       const onPlatformCommand = props.onPlatformCommand
-      if (!onPlatformCommand) throw new Error('Platform commands are unavailable in this chat.')
+      if (!onPlatformCommand) throw new Error(t('composer.error.platformCommandsUnavailable'))
       return () => onPlatformCommand(output, target)
     }
     if (commandName && backend.plugins?.hasCommand(commandName)) {
@@ -918,7 +915,7 @@ export function ChatInput(props: ChatInputProps) {
     if (!trimmed) return
     const languages = autoTranslationLanguagesStore.get()
     if (executingRef.current) {
-      const error = new Error('A message or command is already being prepared.')
+      const error = new Error(t('composer.error.busy'))
       setCommandError(error.message)
       if (options.propagateError) throw error
       return
@@ -939,12 +936,11 @@ export function ChatInput(props: ChatInputProps) {
         : expandCustomCommand(trimmed, customCommandsStore.get().commands, commandContext(input))
       if (!expansion.ok) throw new Error(expansion.error)
       if (expansion.matched && commandTargets.length > 1)
-        throw new Error('Select one platform before running a custom command.')
+        throw new Error(t('composer.error.customCommandOnePlatform'))
       const actions = await Promise.all(
         expansion.outputs.map((output) => prepareOutput(output, languages)),
       )
-      if (cancellation.signal.aborted)
-        throw new Error('The composer closed before the command completed.')
+      if (cancellation.signal.aborted) throw new Error(t('composer.error.composerClosed'))
       const items = actions.flatMap((action) => action.previewItems ?? [])
       const signature = previewSignature(input, items, languages)
       const previewRequired = actions.some((action) => action.previewRequired)
@@ -955,8 +951,7 @@ export function ChatInput(props: ChatInputProps) {
       if (previewRequired && (!confirmTranslation || outgoingPreview?.signature !== signature)) {
         if (keepInput || (composerStore.get().get(composerKey)?.text ?? '') === input)
           setOutgoingPreview({ input, signature, items, status: 'ready', keepInput })
-        if (options.requireComplete)
-          throw new Error('Review the translation preview before sending this command.')
+        if (options.requireComplete) throw new Error(t('composer.error.reviewPreview'))
         return
       }
       await runCommandActions(actions, { signal: cancellation.signal })
@@ -980,17 +975,19 @@ export function ChatInput(props: ChatInputProps) {
 
   const commandRunner = useRef<ComposerCommandRunner | null>(null)
   commandRunner.current = (input) => {
-    if (!mounted.current) return Promise.reject(new Error('The composer is closed.'))
+    if (!mounted.current) return Promise.reject(new Error(t('composer.error.composerIsClosed')))
     return send(false, { input, keepInput: true, propagateError: true, requireComplete: true })
   }
   const onCommandRunnerReady = props.onCommandRunnerReady
   useEffect(() => {
     onCommandRunnerReady?.((input) => {
       const runner = commandRunner.current
-      return runner ? runner(input) : Promise.reject(new Error('The composer is closed.'))
+      return runner
+        ? runner(input)
+        : Promise.reject(new Error(t('composer.error.composerIsClosed')))
     })
     return () => onCommandRunnerReady?.(null)
-  }, [onCommandRunnerReady, composerKey])
+  }, [onCommandRunnerReady, composerKey, t])
 
   function finishHistorySearch(): void {
     setHistorySearch(null)
@@ -1042,7 +1039,7 @@ export function ChatInput(props: ChatInputProps) {
   }
   async function editorAction(action: NativeTextAction): Promise<void> {
     if (!(await nativeWindow(renderer).runTextInputAction(action)))
-      throw new Error('This action is unavailable in the focused text editor.')
+      throw new Error(t('composer.error.editorActionUnavailable'))
   }
   async function copyText(source: string): Promise<void> {
     const selectedChatText = renderer.getSelectedText?.() ?? ''
@@ -1052,11 +1049,11 @@ export function ChatInput(props: ChatInputProps) {
     }
     if (source !== 'split') {
       if (await nativeWindow(renderer).runTextInputAction('copy')) return
-      if (source === 'splitInput') throw new Error('Select text in the input before copying.')
+      if (source === 'splitInput') throw new Error(t('composer.error.selectTextBeforeCopy'))
     }
     if (selectedChatText) await backend.api.copyText({ text: selectedChatText })
     else if (props.onCopyMessages) props.onCopyMessages()
-    else throw new Error('There is no chat text available to copy.')
+    else throw new Error(t('composer.error.noTextToCopy'))
   }
   useHotkeyContext({
     id: inputContextId,
@@ -1088,7 +1085,7 @@ export function ChatInput(props: ChatInputProps) {
             )
             if (active) {
               if (commandTargets.length !== 1)
-                throw new Error('Select one platform before turning off auto-translation.')
+                throw new Error(t('composer.error.autoTranslateOffOnePlatform'))
               setAutoTranslationLanguage(chatChannelKey(active.platform, active.channelSlug), null)
               return
             }
@@ -1109,7 +1106,7 @@ export function ChatInput(props: ChatInputProps) {
       undo: () => editorAction('undo'),
       cancelReply: props.replyTarget ? props.onCancelReply : null,
       copy: ([source]) => {
-        if (!source) throw new Error('Choose a copy source before running this shortcut.')
+        if (!source) throw new Error(t('composer.error.copySourceRequired'))
         return copyText(source)
       },
       cursorToStart: ([selection]) =>
@@ -1133,14 +1130,13 @@ export function ChatInput(props: ChatInputProps) {
 
   function placeholderText(): string {
     if (props.watchedChannel) {
-      if (!watchedAccount) return 'Log in to send messages…'
-      return props.watchedChannel.platform === 'youtube'
-        ? `Message ${props.watchedChannel.displayName}…`
-        : `Message ${props.watchedChannel.displayName} as @${watchedAccount.username}…`
+      if (props.watchedChannelStatus?.mode !== 'authenticated')
+        return t('composer.placeholder.login')
+      return t('composer.placeholder.message', { channel: props.watchedChannel.displayName })
     }
-    if (!hasAnything) return 'Connect an account…'
-    if (isDisabled) return 'Log in to send messages…'
-    return 'Send a message…'
+    if (!hasAnything) return t('composer.placeholder.connectAccount')
+    if (isDisabled) return t('composer.placeholder.login')
+    return t('composer.placeholder.send')
   }
 
   const ownChannelTarget = ownChatSendTargets(props.accounts).find(
@@ -1176,14 +1172,12 @@ export function ChatInput(props: ChatInputProps) {
           testId="composer-history-search"
           style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
         >
-          <Text style={{ fontSize: 10, color: theme.text2 }}>
-            Search sent messages · Enter or Esc keeps the result
-          </Text>
+          <Text style={{ fontSize: 10, color: theme.text2 }}>{t('composer.history.hint')}</Text>
           <input
             ref={historySearchRef}
             testId="composer-history-query"
             value={historySearch.query}
-            placeholder="Search message history…"
+            placeholder={t('composer.history.placeholder')}
             {...searchFocus}
             onBlur={() => {
               searchFocus.onBlur()
@@ -1232,10 +1226,10 @@ export function ChatInput(props: ChatInputProps) {
             }}
           >
             {!historySearch.query
-              ? 'Type to search your sent messages'
+              ? t('composer.history.typeToSearch')
               : historyMatches[historySearch.index]
                 ? `${historySearch.index + 1}/${historyMatches.length}`
-                : 'No match'}
+                : t('composer.history.noMatch')}
           </Text>
         </div>
       ) : null}
@@ -1255,7 +1249,10 @@ export function ChatInput(props: ChatInputProps) {
                 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}
               >
                 <Text style={{ fontSize: 10, color: theme.text2 }}>
-                  {`Auto-translate${multiple ? ` ${platform}/${channelSlug}` : ''} → ${language}`}
+                  {t('composer.autoTranslate.status', {
+                    target: multiple ? ` ${platform}/${channelSlug}` : '',
+                    language,
+                  })}
                 </Text>
                 <ActionButton
                   testId={multiple ? `auto-translation-off-${platform}` : 'auto-translation-off'}
@@ -1265,16 +1262,18 @@ export function ChatInput(props: ChatInputProps) {
                     if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
                   }}
                 >
-                  Turn off
+                  {t('composer.autoTranslate.turnOff')}
                 </ActionButton>
               </div>
             )
           })}
         </div>
       ) : composer.translateOnSend !== undefined ? (
-        <Text
-          style={{ fontSize: 10, color: theme.text2 }}
-        >{`Translate on send: ${composer.translateOnSend ? 'on' : 'off'}`}</Text>
+        <Text style={{ fontSize: 10, color: theme.text2 }}>
+          {t('composer.translateOnSend', {
+            state: composer.translateOnSend ? t('common.on') : t('common.off'),
+          })}
+        </Text>
       ) : null}
       {commandTranslation ? (
         <div
@@ -1292,9 +1291,12 @@ export function ChatInput(props: ChatInputProps) {
             scrollbarWidth: 4,
           }}
         >
-          <Text
-            style={{ fontSize: 10, color: theme.text2 }}
-          >{`Translation preview · ${commandTranslation.sourceLanguage ?? 'auto'} → ${commandTranslation.targetLanguage}`}</Text>
+          <Text style={{ fontSize: 10, color: theme.text2 }}>
+            {t('composer.translationPreview.title', {
+              source: commandTranslation.sourceLanguage ?? t('composer.language.auto'),
+              target: commandTranslation.targetLanguage,
+            })}
+          </Text>
           <Text style={{ fontSize: 12, color: theme.text }}>
             {truncateGraphemes(sanitizeDisplayText(commandTranslation.text), 5000)}
           </Text>
@@ -1306,18 +1308,20 @@ export function ChatInput(props: ChatInputProps) {
                 if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
               }}
             >
-              Insert translation
+              {t('composer.translationPreview.insert')}
             </ActionButton>
             <ActionButton
               onClick={() =>
                 void backend.api
                   .copyText({ text: commandTranslation.text })
-                  .catch(() => setCommandError('Could not copy the translation.'))
+                  .catch(() => setCommandError(t('composer.error.copyTranslation')))
               }
             >
-              Copy translation
+              {t('composer.translationPreview.copy')}
             </ActionButton>
-            <ActionButton onClick={() => setCommandTranslation(null)}>Dismiss</ActionButton>
+            <ActionButton onClick={() => setCommandTranslation(null)}>
+              {t('composer.translationPreview.dismiss')}
+            </ActionButton>
           </div>
         </div>
       ) : null}
@@ -1339,8 +1343,8 @@ export function ChatInput(props: ChatInputProps) {
         >
           <Text style={{ fontSize: 10, color: theme.text2 }}>
             {outgoingPreview.status === 'loading'
-              ? 'Preparing translation preview…'
-              : 'Review the translated message before sending'}
+              ? t('composer.preview.preparing')
+              : t('composer.preview.review')}
           </Text>
           {outgoingPreview.items.map((item, index) => (
             <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -1368,7 +1372,7 @@ export function ChatInput(props: ChatInputProps) {
                   })
                 }
               >
-                Send translated message
+                {t('composer.preview.send')}
               </ActionButton>
             ) : outgoingPreview.status === 'error' ? (
               <ActionButton
@@ -1384,7 +1388,7 @@ export function ChatInput(props: ChatInputProps) {
                   })
                 }
               >
-                Retry translation
+                {t('composer.preview.retry')}
               </ActionButton>
             ) : null}
           </div>
@@ -1418,10 +1422,10 @@ export function ChatInput(props: ChatInputProps) {
               minWidth: 0,
             }}
           >
-            {`Replying to ${sanitizeDisplayText(props.replyTarget.author.displayName)}: ${truncateGraphemes(
-              sanitizeDisplayText(props.replyTarget.text),
-              80,
-            )}`}
+            {t('composer.reply.replyingTo', {
+              author: sanitizeDisplayText(props.replyTarget.author.displayName),
+              text: truncateGraphemes(sanitizeDisplayText(props.replyTarget.text), 80),
+            })}
           </Text>
           <div
             testId="cancel-reply"
@@ -1781,7 +1785,9 @@ export function ChatInput(props: ChatInputProps) {
           </div>
         </div>
         {executing ? (
-          <Text style={{ fontSize: 10, color: theme.text2, marginTop: 4 }}>Running command…</Text>
+          <Text style={{ fontSize: 10, color: theme.text2, marginTop: 4 }}>
+            {t('composer.runningCommand')}
+          </Text>
         ) : null}
 
         {/* Emote picker overlay */}
@@ -1843,6 +1849,7 @@ function TargetControl({
   onClick?: () => void
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const color = platformColor(platform)
   const [hovered, setHovered] = useState(false)
   const effectiveHover = hovered && !anonymous && !active
@@ -1902,7 +1909,14 @@ function TargetControl({
       ) : null}
     </div>
   )
-  const description = `${platform[0]?.toUpperCase()}${platform.slice(1)} · ${label}${anonymous ? ' · Log in to send' : onClick ? (active ? ' · Sending here' : ' · Click to enable') : ''}${statusText ? ` · ${statusText}` : ''}`
+  const stateSuffix = anonymous
+    ? t('composer.target.loginToSend')
+    : onClick
+      ? active
+        ? t('composer.target.sendingHere')
+        : t('composer.target.clickToEnable')
+      : ''
+  const description = `${platform[0]?.toUpperCase()}${platform.slice(1)} · ${label}${stateSuffix ? ` · ${stateSuffix}` : ''}${statusText ? ` · ${statusText}` : ''}`
 
   return (
     <Tooltip delayDuration={200}>

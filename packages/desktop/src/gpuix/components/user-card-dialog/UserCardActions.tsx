@@ -2,6 +2,7 @@ import { useBackend } from '@gpuix/backend/context'
 import { ActionButton, FormInput, FormField } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
 import { resolveModeratorHotkey } from '@gpuix/components/user-card/moderation-hotkeys'
+import { useT } from '@gpuix/i18n'
 import { applyModerationOutcome } from '@gpuix/state/app'
 import { chatRulesPreferences, chatRulesStore } from '@gpuix/state/chat-rules'
 import { useStore } from '@gpuix/state/create-store'
@@ -12,6 +13,7 @@ import { useEffect, useRef, useState } from 'react'
 
 export function useUserCardModeration(target: UserCardTarget) {
   const backend = useBackend()
+  const { t } = useT()
   const channel = target.channelSlug
   const identity = target.platformUserId
   const available = (target.platform === 'twitch' || target.platform === 'kick') && !!channel
@@ -59,7 +61,7 @@ export function useUserCardModeration(target: UserCardTarget) {
   }
   async function command(text: string) {
     if (target.platform !== 'twitch' && target.platform !== 'kick')
-      throw new Error('This platform does not support moderation commands.')
+      throw new Error(t('userCard.error.platformUnsupported'))
     return backend.api.executePlatformCommand({
       platform: target.platform,
       channelSlug: channel || target.username || identity,
@@ -67,14 +69,14 @@ export function useUserCardModeration(target: UserCardTarget) {
     })
   }
   async function moderate(action: 'ban' | 'timeout' | 'unban', duration?: number) {
-    if (!channel) throw new Error('Open this card in a channel to moderate.')
+    if (!channel) throw new Error(t('userCard.error.noChannel'))
     if (
       action === 'timeout' &&
       (!Number.isSafeInteger(duration) ||
         duration! < (target.platform === 'kick' ? 60 : 1) ||
         duration! > (target.platform === 'kick' ? 604800 : 1209600))
     )
-      throw new Error('Invalid timeout duration for this platform.')
+      throw new Error(t('userCard.error.invalidTimeout'))
     await command(
       `/${action} ${identity}${duration === undefined ? '' : ` ${duration}`}${action === 'unban' || !reason.trim() ? '' : ` ${reason.trim()}`}`,
     )
@@ -122,6 +124,7 @@ export function UserCardActions({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const { settings, reason, setReason, busy, feedback, run, command, moderate } = moderation
   const [seconds, setSeconds] = useState('600')
   const [whisper, setWhisper] = useState('')
@@ -171,14 +174,19 @@ export function UserCardActions({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
         {[
-          ['Copy user ID', identity],
-          ['Copy name', target.username || target.displayName],
-          ['Copy avatar URL', hideAvatar ? undefined : avatarUrl || target.avatarUrl],
+          [t('userCard.actions.copyUserId'), identity],
+          [t('userCard.actions.copyName'), target.username || target.displayName],
+          [
+            t('userCard.actions.copyAvatarUrl'),
+            hideAvatar ? undefined : avatarUrl || target.avatarUrl,
+          ],
         ].map(([label, text]) => (
           <ActionButton
             key={label}
             disabled={!text || busy}
-            onClick={() => void run(() => backend.api.copyText({ text: text! }), 'Copied.')}
+            onClick={() =>
+              void run(() => backend.api.copyText({ text: text! }), t('userCard.feedback.copied'))
+            }
           >
             {label}
           </ActionButton>
@@ -186,10 +194,15 @@ export function UserCardActions({
         <ActionButton
           disabled={busy || !rules.loaded}
           onClick={() =>
-            void run(toggleHighlights, muted ? 'Highlights restored.' : 'Highlights ignored.')
+            void run(
+              toggleHighlights,
+              muted
+                ? t('userCard.feedback.highlightsRestored')
+                : t('userCard.feedback.highlightsIgnored'),
+            )
           }
         >
-          {muted ? 'Restore highlights' : 'Ignore highlights'}
+          {muted ? t('userCard.actions.restoreHighlights') : t('userCard.actions.ignoreHighlights')}
         </ActionButton>
       </div>
       {target.platform === 'twitch' ? (
@@ -197,15 +210,19 @@ export function UserCardActions({
           <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             <ActionButton
               disabled={busy}
-              onClick={() => void run(() => command(`/block ${identity}`), 'User blocked.')}
+              onClick={() =>
+                void run(() => command(`/block ${identity}`), t('userCard.feedback.blocked'))
+              }
             >
-              Block
+              {t('userCard.actions.block')}
             </ActionButton>
             <ActionButton
               disabled={busy}
-              onClick={() => void run(() => command(`/unblock ${identity}`), 'User unblocked.')}
+              onClick={() =>
+                void run(() => command(`/unblock ${identity}`), t('userCard.feedback.unblocked'))
+              }
             >
-              Unblock
+              {t('userCard.actions.unblock')}
             </ActionButton>
             <ActionButton
               disabled={busy || !target.username}
@@ -216,11 +233,11 @@ export function UserCardActions({
                       action: 'follow',
                       channelSlug: target.username!,
                     }),
-                  'Following.',
+                  t('userCard.feedback.following'),
                 )
               }
             >
-              Follow
+              {t('userCard.actions.follow')}
             </ActionButton>
             <ActionButton
               disabled={busy || !target.username}
@@ -231,15 +248,19 @@ export function UserCardActions({
                       action: 'unfollow',
                       channelSlug: target.username!,
                     }),
-                  'Unfollowed.',
+                  t('userCard.feedback.unfollowed'),
                 )
               }
             >
-              Unfollow
+              {t('userCard.actions.unfollow')}
             </ActionButton>
           </div>
-          <FormField label={`Whisper to ${target.displayName}`}>
-            <FormInput value={whisper} onChange={setWhisper} placeholder="Private message…" />
+          <FormField label={t('userCard.actions.whisperTo', { name: target.displayName })}>
+            <FormInput
+              value={whisper}
+              onChange={setWhisper}
+              placeholder={t('userCard.actions.whisperPlaceholder')}
+            />
           </FormField>
           <ActionButton
             disabled={busy || !whisper.trim()}
@@ -247,23 +268,23 @@ export function UserCardActions({
               void run(async () => {
                 await command(`/w ${identity} ${whisper.trim()}`)
                 setWhisper('')
-              }, 'Whisper submitted to Twitch.')
+              }, t('userCard.feedback.whisperSent'))
             }
           >
-            Send whisper
+            {t('userCard.actions.sendWhisper')}
           </ActionButton>
         </>
       ) : null}
       {(target.platform === 'twitch' || target.platform === 'kick') && channel ? (
         <>
           <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
-            {`Moderate in #${channel}`}
+            {t('userCard.actions.moderateIn', { channel })}
           </Text>
-          <FormField label="Reason">
+          <FormField label={t('userCard.actions.reason')}>
             <FormInput
               value={reason}
               onChange={setReason}
-              placeholder="Optional reason (required for warnings)"
+              placeholder={t('userCard.actions.reasonPlaceholder')}
             />
           </FormField>
           <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -279,7 +300,10 @@ export function UserCardActions({
                 key={index}
                 disabled={busy || (target.platform === 'kick' && item.seconds < 60)}
                 onClick={() =>
-                  void run(() => moderate('timeout', item.seconds), `Timed out for ${item.label}.`)
+                  void run(
+                    () => moderate('timeout', item.seconds),
+                    t('userCard.feedback.timedOut', { duration: item.label }),
+                  )
                 }
               >
                 {item.label}
@@ -288,28 +312,35 @@ export function UserCardActions({
           </div>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
             <div style={{ width: 140 }}>
-              <FormInput value={seconds} onChange={setSeconds} placeholder="Timeout seconds" />
+              <FormInput
+                value={seconds}
+                onChange={setSeconds}
+                placeholder={t('userCard.actions.timeoutSeconds')}
+              />
             </div>
             <ActionButton
               disabled={busy}
               onClick={() =>
-                void run(() => moderate('timeout', Number(seconds)), 'Timeout applied.')
+                void run(
+                  () => moderate('timeout', Number(seconds)),
+                  t('userCard.feedback.timeoutApplied'),
+                )
               }
             >
-              Custom timeout
+              {t('userCard.actions.customTimeout')}
             </ActionButton>
             <ActionButton
               danger
               disabled={busy}
-              onClick={() => void run(() => moderate('ban'), 'User banned.')}
+              onClick={() => void run(() => moderate('ban'), t('userCard.feedback.banned'))}
             >
-              Ban
+              {t('userCard.actions.ban')}
             </ActionButton>
             <ActionButton
               disabled={busy}
-              onClick={() => void run(() => moderate('unban'), 'Ban or timeout removed.')}
+              onClick={() => void run(() => moderate('unban'), t('userCard.feedback.unbanned'))}
             >
-              Unban / untimeout
+              {t('userCard.actions.unban')}
             </ActionButton>
           </div>
           {target.platform === 'twitch' ? (
@@ -317,25 +348,28 @@ export function UserCardActions({
               <ActionButton
                 disabled={busy || !reason.trim()}
                 onClick={() =>
-                  void run(() => command(`/warn ${identity} ${reason.trim()}`), 'Warning issued.')
+                  void run(
+                    () => command(`/warn ${identity} ${reason.trim()}`),
+                    t('userCard.feedback.warningIssued'),
+                  )
                 }
               >
-                Warn
+                {t('userCard.actions.warn')}
               </ActionButton>
               <ActionButton onClick={() => setAdvanced(!advanced)}>
-                {advanced ? 'Hide advanced actions' : 'Roles & suspicious users'}
+                {advanced ? t('userCard.actions.hideAdvanced') : t('userCard.actions.advanced')}
               </ActionButton>
               {advanced ? (
                 <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                   {[
-                    ['mod', 'Make moderator'],
-                    ['unmod', 'Remove moderator'],
-                    ['vip', 'Make VIP'],
-                    ['unvip', 'Remove VIP'],
-                    ['restrict', 'Restrict'],
-                    ['monitor', 'Monitor'],
-                    ['unrestrict', 'Remove restriction'],
-                    ['unmonitor', 'Stop monitoring'],
+                    ['mod', t('userCard.role.mod')],
+                    ['unmod', t('userCard.role.unmod')],
+                    ['vip', t('userCard.role.vip')],
+                    ['unvip', t('userCard.role.unvip')],
+                    ['restrict', t('userCard.role.restrict')],
+                    ['monitor', t('userCard.role.monitor')],
+                    ['unrestrict', t('userCard.role.unrestrict')],
+                    ['unmonitor', t('userCard.role.unmonitor')],
                   ].map(([name, label]) => (
                     <ActionButton
                       key={name}
@@ -343,7 +377,7 @@ export function UserCardActions({
                       onClick={() =>
                         void run(
                           () => command(`/${name} ${identity}`),
-                          `${label} accepted by Twitch.`,
+                          t('userCard.feedback.accepted', { action: label }),
                         )
                       }
                     >
@@ -378,16 +412,16 @@ export function UserCardActions({
                                 ? { action, channelSlug: channel, username: target.username! }
                                 : { action, channelSlug: channel, userId: identity },
                             ),
-                          'Role change accepted by Twitch.',
+                          t('userCard.feedback.roleChangeAccepted'),
                         )
                       }
                     >
                       {
                         {
-                          add_editor: 'Make editor',
-                          remove_editor: 'Remove editor',
-                          assign_lead_moderator: 'Make lead moderator',
-                          unassign_lead_moderator: 'Remove lead moderator',
+                          add_editor: t('userCard.role.addEditor'),
+                          remove_editor: t('userCard.role.removeEditor'),
+                          assign_lead_moderator: t('userCard.role.assignLead'),
+                          unassign_lead_moderator: t('userCard.role.unassignLead'),
                         }[action]
                       }
                     </ActionButton>

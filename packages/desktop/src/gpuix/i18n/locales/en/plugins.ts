@@ -1,0 +1,16 @@
+export const plugins = {
+  'plugins.status.connecting': 'Connecting…',
+  'plugins.status.connected': 'Connected',
+  'plugins.status.disconnected': 'Disconnected',
+  'plugins.status.error': 'Connection failed',
+  'plugins.readOnly': 'Read-only',
+  'plugins.action.moveToHome': 'Move to My channels',
+  'plugins.action.channel': 'Channel',
+  'plugins.action.split': 'Split',
+  'plugins.input.label': 'Plugin chat message or command',
+  'plugins.input.placeholderSend': 'Send a message',
+  'plugins.input.placeholderCommand': 'Run a plugin command',
+  'plugins.action.sending': 'Sending…',
+  'plugins.action.run': 'Run',
+  'plugins.action.send': 'Send',
+} satisfies Record<string, string>

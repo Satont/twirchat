@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObjec
 
 import { useBackend } from '../backend/context'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
+import { useT } from '../i18n'
 import { nativeWindow } from '../native-window'
 import { showNotice } from '../state/app'
 import type { ChatTabView } from '../state/chat-tabs'
@@ -26,7 +27,6 @@ import { useStore, useStoreSelector } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'
 import { tabUnreadStore, type TabUnread } from '../state/tab-unread'
 import {
-  describeTabCounts,
   formatTabUnread,
   formatTabViewers,
   TAB_UNREAD_WIDTH,
@@ -106,6 +106,7 @@ function ChannelTabs({
   onSearchAll,
 }: ChannelTabsProps & { barElement: RefObject<number | null> }) {
   const theme = useTheme()
+  const { t } = useT()
   const backend = useBackend()
   const renderer = useGpuixRequired()
   const native = nativeWindow(renderer)
@@ -207,7 +208,7 @@ function ChannelTabs({
     <>
       <Tab
         testId="tab-home"
-        label="My channels"
+        label={t('app.tabs.home')}
         icon={
           <Icon name="home" size={13} color={activeTabId === 'home' ? theme.text : theme.text2} />
         }
@@ -234,7 +235,7 @@ function ChannelTabs({
         ) => (
           <div
             role="menuitem"
-            aria-description={disabled ? 'Unavailable' : undefined}
+            aria-description={disabled ? t('common.unavailable') : undefined}
             autoFocus={autoFocus}
             tabIndex={disabled ? undefined : 0}
             onClick={() => {
@@ -434,7 +435,7 @@ function ChannelTabs({
                     }}
                   >
                     {menuItem(
-                      'Rename / tab color…',
+                      t('app.tab.menu.rename'),
                       () => {
                         setMenuId(null)
                         setEditError('')
@@ -446,24 +447,24 @@ function ChannelTabs({
                       },
                       { autoFocus: true },
                     )}
-                    {menuItem('Duplicate tab', () =>
+                    {menuItem(t('app.tab.menu.duplicate'), () =>
                       action(() => duplicateChatTab(backend, channel.id)),
                     )}
-                    {menuItem(locked ? 'Unlock tab' : 'Lock tab', () =>
+                    {menuItem(locked ? t('app.tab.menu.unlock') : t('app.tab.menu.lock'), () =>
                       action(() => setChatTabLocked(backend, channel.id, !locked)),
                     )}
                     {menuItem(
-                      'Move left',
+                      t('app.tab.menu.moveLeft'),
                       () => action(() => reorderChatTab(backend, channel.id, index - 1)),
                       { disabled: locked || index === 0 },
                     )}
                     {menuItem(
-                      'Move right',
+                      t('app.tab.menu.moveRight'),
                       () => action(() => reorderChatTab(backend, channel.id, index + 1)),
                       { disabled: locked || index === watchedChannels.length - 1 },
                     )}
                     {menuItem(
-                      'Close tab',
+                      t('app.tab.menu.close'),
                       () => {
                         setMenuId(null)
                         onRemoveChannel(channel.id)
@@ -478,9 +479,11 @@ function ChannelTabs({
         )
       })}
       {toolbar('tab-add', '', 'plus', onAddChannel)}
-      {onSearchAll ? toolbar('tab-search-all', 'Search all', 'search', onSearchAll) : null}
+      {onSearchAll
+        ? toolbar('tab-search-all', t('app.tab.searchAll'), 'search', onSearchAll)
+        : null}
       {state.value.closed.length
-        ? toolbar('tab-restore', 'Restore tab', 'refresh', () =>
+        ? toolbar('tab-restore', t('app.tab.restore'), 'refresh', () =>
             action(() => restoreClosedChatTab(backend)),
           )
         : null}
@@ -510,15 +513,23 @@ function ChannelTabs({
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 20 }}>
-            <Text style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>Tab appearance</Text>
-            <FormField label="Tab name" hint="Leave blank to use the assigned channel names.">
+            <Text style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>
+              {t('app.tab.appearance.title')}
+            </Text>
+            <FormField
+              label={t('app.tab.appearance.nameLabel')}
+              hint={t('app.tab.appearance.nameHint')}
+            >
               <FormInput
                 value={edit.title}
                 onChange={(title) => setEdit({ ...edit, title })}
                 testId="tab-title-input"
               />
             </FormField>
-            <FormField label="Tab color" hint="Use #RRGGBB, or leave blank for the platform color.">
+            <FormField
+              label={t('app.tab.appearance.colorLabel')}
+              hint={t('app.tab.appearance.colorHint')}
+            >
               <FormInput
                 value={edit.color}
                 onChange={(color) => setEdit({ ...edit, color })}
@@ -530,14 +541,14 @@ function ChannelTabs({
               style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}
             >
               <ActionButton disabled={saving} onClick={() => setEdit(null)}>
-                Cancel
+                {t('common.cancel')}
               </ActionButton>
               <ActionButton
                 primary
                 disabled={saving}
                 onClick={() => {
                   if (edit.color.trim() && !/^#[a-f0-9]{6}$/iu.test(edit.color.trim())) {
-                    setEditError('Use a color in #RRGGBB format.')
+                    setEditError(t('app.tab.appearance.invalidColor'))
                     return
                   }
                   setSaving(true)
@@ -548,7 +559,7 @@ function ChannelTabs({
                     .finally(() => setSaving(false))
                 }}
               >
-                Save
+                {t('common.save')}
               </ActionButton>
             </div>
           </div>
@@ -660,8 +671,24 @@ function TabCounts({
   testId?: string
 }) {
   const theme = useTheme()
+  const { tPlural } = useT()
   const label = formatTabUnread(unread)
-  const description = describeTabCounts(viewers, unread)
+  const counts: string[] = []
+  if (viewers !== undefined)
+    counts.push(tPlural('app.tab.counts.viewers', viewers, { count: viewers.toLocaleString() }))
+  if (unread && unread.unread > 0)
+    counts.push(
+      tPlural('app.tab.counts.unread', unread.unread, {
+        count: unread.unread.toLocaleString(),
+      }),
+    )
+  if (unread && unread.mentions > 0)
+    counts.push(
+      tPlural('app.tab.counts.mentions', unread.mentions, {
+        count: unread.mentions.toLocaleString(),
+      }),
+    )
+  const description = counts.join(' · ')
   if (viewers === undefined && !label) return null
   return (
     <Tooltip delayDuration={250}>

@@ -29,6 +29,7 @@ import type {
 import { LogLevel } from '@twurple/chat'
 
 import { refreshTwitchToken } from '../../auth/twitch'
+import { t, tPlural } from '../../gpuix/i18n'
 import { getBackendUrl } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
 import { buildTwitchSystemMessage } from '../../services/twitch-system-message'
@@ -50,11 +51,27 @@ const log = logger('twitch')
 
 type RoomMode = keyof Omit<RoomState, 'platform' | 'channelId'>
 type BooleanRoomMode = 'subscribersOnly' | 'emoteOnly' | 'uniqueChat'
-const booleanRoomModes: ReadonlyArray<[tag: string, mode: BooleanRoomMode, label: string]> = [
-  ['subs-only', 'subscribersOnly', 'Subscribers-only'],
-  ['emote-only', 'emoteOnly', 'Emote-only'],
-  ['r9k', 'uniqueChat', 'Unique chat'],
+const booleanRoomModes: ReadonlyArray<[tag: string, mode: BooleanRoomMode]> = [
+  ['subs-only', 'subscribersOnly'],
+  ['emote-only', 'emoteOnly'],
+  ['r9k', 'uniqueChat'],
 ]
+
+function booleanRoomModeText(mode: BooleanRoomMode, enabled: boolean): string {
+  if (mode === 'subscribersOnly')
+    return t(
+      enabled
+        ? 'misc.twitchAdapter.subscribersOnlyEnabled'
+        : 'misc.twitchAdapter.subscribersOnlyDisabled',
+    )
+  if (mode === 'emoteOnly')
+    return t(
+      enabled ? 'misc.twitchAdapter.emoteOnlyEnabled' : 'misc.twitchAdapter.emoteOnlyDisabled',
+    )
+  return t(
+    enabled ? 'misc.twitchAdapter.uniqueChatEnabled' : 'misc.twitchAdapter.uniqueChatDisabled',
+  )
+}
 
 function roomDuration(tag: string | undefined): number | undefined {
   if (!tag) return undefined
@@ -275,19 +292,19 @@ export class TwitchAdapter extends BasePlatformAdapter {
   ): Promise<void | ChatSendReceipt> {
     const revision = this.identityRevision
     if (this.anonymous) {
-      throw new Error('Cannot send messages in anonymous mode. Please log in to Twitch.')
+      throw new Error(t('misc.twitchAdapter.anonymousSend'))
     }
     if (!this.chatClient) {
-      throw new Error('Twitch chat client not initialized')
+      throw new Error(t('misc.twitchAdapter.clientNotInitialized'))
     }
     if (!this.isConnected) {
-      throw new Error('Twitch chat not connected')
+      throw new Error(t('misc.twitchAdapter.notConnected'))
     }
 
     // Ensure token is fresh before sending
     await this.refreshTokenIfNeeded()
     if (revision !== this.identityRevision)
-      throw new Error('The Twitch account changed before sending. Review the draft and send again.')
+      throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
 
     const parentMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
     const attributes = parentMessageId ? { replyTo: parentMessageId } : undefined
@@ -297,7 +314,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
         hasPrivilegedChatRole(this.selfTags),
       )
     if (revision !== this.identityRevision || !this.chatClient)
-      throw new Error('The Twitch account changed before sending. Review the draft and send again.')
+      if (revision !== this.identityRevision || !this.chatClient)
+        throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
     const client = this.chatClient
     let outcome
     try {
@@ -309,25 +327,24 @@ export class TwitchAdapter extends BasePlatformAdapter {
       log.info('[Twitch] Auth error on send, attempting refresh...')
       const refreshed = await this.refreshTokenIfNeeded()
       if (revision !== this.identityRevision)
-        throw new Error(
-          'The Twitch account changed while sending. Delivery could not be confirmed.',
-          { cause: error },
-        )
+        throw new Error(t('misc.twitchAdapter.accountChangedWhileSending'), { cause: error })
       if (!refreshed || !this.chatClient) throw error
       await this.reconnectWithNewToken()
       const retryClient = this.chatClient
       if (revision !== this.identityRevision || !retryClient)
-        throw new Error('The Twitch account changed while reconnecting.', { cause: error })
+        throw new Error(t('misc.twitchAdapter.accountChangedWhileReconnecting'), { cause: error })
       outcome = await this.sendOutcomes.send(channelId, () =>
         retryClient.say(channelId, text, attributes),
       )
     }
     if (outcome.kind === 'disconnected')
-      throw new Error('The Twitch chat disconnected before delivery could be confirmed.')
+      throw new Error(t('misc.twitchAdapter.disconnectedBeforeDelivery'))
     if (revision !== this.identityRevision)
-      throw new Error('The Twitch account changed while sending. Delivery could not be confirmed.')
+      throw new Error(t('misc.twitchAdapter.accountChangedDeliveryUnconfirmed'))
     if (outcome.kind === 'rejected')
-      throw new Error(`Twitch did not send the message: ${twitchSendRejection(outcome.reason)}.`)
+      throw new Error(
+        t('misc.twitchAdapter.notSent', { reason: twitchSendRejection(outcome.reason) }),
+      )
     if (outcome.kind === 'held') return { channelId: twitchIrcChannelName(channelId), held: true }
     return this.emitLocalSentMessage(channelId, text, replyTo || undefined)
   }
@@ -523,25 +540,25 @@ export class TwitchAdapter extends BasePlatformAdapter {
     })
     client.onCommunitySub((channel, user, info, msg) => {
       if (!current()) return
-      const displayName = info.gifterDisplayName || info.gifter || 'Anonymous'
+      const displayName = info.gifterDisplayName || info.gifter || t('misc.twitchAdapter.anonymous')
       this.emitUserNotice(msg, {
         author: { displayName, username: info.gifter, id: info.gifterUserId ?? '' },
         text:
           Number.isSafeInteger(info.count) && info.count > 0
-            ? `${displayName} gifted ${info.count} ${info.count === 1 ? 'subscription' : 'subscriptions'} to the community.`
-            : `${displayName} gifted subscriptions to the community.`,
+            ? tPlural('misc.twitchAdapter.communityGift', info.count, { name: displayName })
+            : t('misc.twitchAdapter.communityGiftUnknown', { name: displayName }),
         notice: { kind: 'community_gift' },
       })
     })
     client.onRewardGift((channel, user, info, msg) => {
       if (!current() || info.triggerType !== 'CHEER') return
-      const displayName = info.gifterDisplayName || user || 'Anonymous'
+      const displayName = info.gifterDisplayName || user || t('misc.twitchAdapter.anonymous')
       this.emitUserNotice(msg, {
         author: { displayName, username: user, id: info.gifterId ?? '' },
         text:
           Number.isSafeInteger(info.count) && info.count > 0
-            ? `${displayName} shared ${info.count} ${info.count === 1 ? 'reward' : 'rewards'} with a Cheer.`
-            : `${displayName} shared rewards with a Cheer.`,
+            ? tPlural('misc.twitchAdapter.rewardGift', info.count, { name: displayName })
+            : t('misc.twitchAdapter.rewardGiftUnknown', { name: displayName }),
         notice: { kind: 'reward_gift' },
       })
     })
@@ -565,7 +582,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       this.emitModerationNotice({
         channelId,
         id: at ? `ban:${channelId}:${user}:${at}` : undefined,
-        text: `@${user} was banned`,
+        text: t('misc.twitchAdapter.banned', { user }),
         timestamp: msg.date,
       })
     })
@@ -586,8 +603,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
         id: at ? `timeout:${channelId}:${user}:${at}` : undefined,
         text:
           Number.isSafeInteger(duration) && duration > 0
-            ? `@${user} was timed out for ${duration}s`
-            : `@${user} was timed out`,
+            ? t('misc.twitchAdapter.timedOut', { user, seconds: duration })
+            : t('misc.twitchAdapter.timedOutNoDuration', { user }),
         timestamp: msg.date,
       })
     })
@@ -604,7 +621,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
       this.emitModerationNotice({
         channelId,
         id: messageId ? `delete:${channelId}:${messageId}` : undefined,
-        text: user ? `Deleted a message from @${user}` : 'Deleted a chat message',
+        text: user
+          ? t('misc.twitchAdapter.messageDeletedFrom', { user })
+          : t('misc.twitchAdapter.messageDeleted'),
         timestamp: msg.date,
       })
     })
@@ -616,7 +635,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
       this.emitModerationNotice({
         channelId,
         id: at ? `clear:${channelId}:${at}` : undefined,
-        text: 'Chat was cleared',
+        text: t('misc.twitchAdapter.chatCleared'),
         timestamp: msg.date,
       })
     })
@@ -630,7 +649,9 @@ export class TwitchAdapter extends BasePlatformAdapter {
           channel,
           'slowSeconds',
           slow,
-          slow ? `Slow mode enabled (${slow}s)` : 'Slow mode disabled',
+          slow
+            ? t('misc.twitchAdapter.slowModeEnabled', { seconds: slow })
+            : t('misc.twitchAdapter.slowModeDisabled'),
           announce,
         )
       const followers = roomDuration(tags.get('followers-only'))
@@ -638,20 +659,20 @@ export class TwitchAdapter extends BasePlatformAdapter {
         const duration = followers < 0 ? null : followers
         const summary =
           duration === null
-            ? 'Followers-only mode disabled'
+            ? t('misc.twitchAdapter.followersOnlyDisabled')
             : duration
-              ? `Followers-only mode enabled (${duration}m minimum)`
-              : 'Followers-only mode enabled'
+              ? t('misc.twitchAdapter.followersOnlyEnabledMinutes', { minutes: duration })
+              : t('misc.twitchAdapter.followersOnlyEnabled')
         this.updateRoomMode(channel, 'followersOnlyMinutes', duration, summary, announce)
       }
-      for (const [tag, mode, label] of booleanRoomModes) {
+      for (const [tag, mode] of booleanRoomModes) {
         const value = tags.get(tag)
         if (value === '0' || value === '1')
           this.updateRoomMode(
             channel,
             mode,
             value === '1',
-            `${label} mode ${value === '1' ? 'enabled' : 'disabled'}`,
+            booleanRoomModeText(mode, value === '1'),
             announce,
           )
       }
@@ -662,7 +683,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
             channel,
             'subscribersOnly',
             enabled,
-            `Subscribers-only mode ${enabled ? 'enabled' : 'disabled'}`,
+            booleanRoomModeText('subscribersOnly', enabled),
           )
         : undefined,
     )
@@ -672,7 +693,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
             channel,
             'emoteOnly',
             enabled,
-            `Emote-only mode ${enabled ? 'enabled' : 'disabled'}`,
+            booleanRoomModeText('emoteOnly', enabled),
           )
         : undefined,
     )
@@ -682,7 +703,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
             channel,
             'uniqueChat',
             enabled,
-            `Unique chat mode ${enabled ? 'enabled' : 'disabled'}`,
+            booleanRoomModeText('uniqueChat', enabled),
           )
         : undefined,
     )
@@ -901,7 +922,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     const { tags } = msg
     const userId = tags.get('user-id') ?? ''
     const username = tags.get('login')
-    const displayName = tags.get('display-name') || username || 'unknown'
+    const displayName = tags.get('display-name') || username || t('misc.twitchAdapter.unknownName')
     const channelId = msg.channelId ?? ''
 
     const event: NormalizedEvent = {
@@ -923,14 +944,15 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     this.emit('event', event)
     const hasMonths = Number.isSafeInteger(subInfo.months) && subInfo.months > 0
-    const months = `${subInfo.months} ${subInfo.months === 1 ? 'month' : 'months'}`
-    const subscription = subInfo.isPrime ? ' with Prime' : ''
+    const months = tPlural('misc.twitchAdapter.months', subInfo.months)
+    const subscription = subInfo.isPrime ? t('misc.twitchAdapter.withPrime') : ''
+    const duration = hasMonths ? t('misc.twitchAdapter.forMonths', { months }) : ''
     this.emitUserNotice(msg, {
       author: { id: userId, username, displayName },
       text:
         type === 'resub'
-          ? `${displayName} resubscribed${subscription}${hasMonths ? ` for ${months}` : ''}.`
-          : `${displayName} subscribed${subscription}.`,
+          ? t('misc.twitchAdapter.resubscribed', { name: displayName, subscription, duration })
+          : t('misc.twitchAdapter.subscribed', { name: displayName, subscription }),
       notice: { kind: type, detail: subInfo.message || undefined },
     })
   }
@@ -938,7 +960,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private handleSubGiftEvent(msg: UserNotice, recipient: string, subInfo: ChatSubGiftInfo): void {
     const { tags } = msg
     const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? 'unknown'
+    const displayName = tags.get('display-name') ?? t('misc.twitchAdapter.unknownName')
     const channelId = msg.channelId ?? ''
 
     const event: NormalizedEvent = {
@@ -961,13 +983,14 @@ export class TwitchAdapter extends BasePlatformAdapter {
     }
 
     this.emit('event', event)
-    const gifterName = subInfo.gifterDisplayName || subInfo.gifter || 'Anonymous'
+    const gifterName =
+      subInfo.gifterDisplayName || subInfo.gifter || t('misc.twitchAdapter.anonymous')
     const recipientName = subInfo.displayName || recipient
     this.emitUserNotice(msg, {
       author: { id: subInfo.gifterUserId ?? '', username: subInfo.gifter, displayName: gifterName },
       text: recipientName
-        ? `${gifterName} gifted a subscription to ${recipientName}.`
-        : `${gifterName} gifted a subscription.`,
+        ? t('misc.twitchAdapter.giftSubTo', { gifter: gifterName, recipient: recipientName })
+        : t('misc.twitchAdapter.giftSub', { gifter: gifterName }),
       notice: { kind: 'gift_sub' },
     })
   }
@@ -975,7 +998,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private handleRaidEvent(msg: UserNotice, raidInfo: ChatRaidInfo): void {
     const { tags } = msg
     const userId = tags.get('user-id') ?? ''
-    const displayName = tags.get('display-name') ?? 'unknown'
+    const displayName = tags.get('display-name') ?? t('misc.twitchAdapter.unknownName')
     const channelId = msg.channelId ?? ''
 
     const event: NormalizedEvent = {
@@ -996,13 +1019,17 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     this.emit('event', event)
     const username = tags.get('msg-param-login') || tags.get('login')
-    const raiderName = raidInfo.displayName || tags.get('display-name') || username || 'Someone'
+    const raiderName =
+      raidInfo.displayName ||
+      tags.get('display-name') ||
+      username ||
+      t('misc.twitchAdapter.someone')
     this.emitUserNotice(msg, {
       author: { id: userId, username, displayName: raiderName },
       text:
         Number.isSafeInteger(raidInfo.viewerCount) && raidInfo.viewerCount > 0
-          ? `${raiderName} raided with ${raidInfo.viewerCount} ${raidInfo.viewerCount === 1 ? 'viewer' : 'viewers'}.`
-          : `${raiderName} raided the channel.`,
+          ? tPlural('misc.twitchAdapter.raidedWith', raidInfo.viewerCount, { name: raiderName })
+          : t('misc.twitchAdapter.raided', { name: raiderName }),
       notice: { kind: 'raid' },
     })
   }

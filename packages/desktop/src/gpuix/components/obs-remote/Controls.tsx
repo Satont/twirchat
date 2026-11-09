@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
+import { useT } from '../../i18n'
 import { useTheme } from '../../theme-context'
 import { ActionButton } from '../ui/Form'
 import { Text } from '../ui/Text'
@@ -48,10 +49,11 @@ export function Choice({
 }) {
   const [open, setOpen] = useState(false)
   const theme = useTheme()
+  const { t } = useT()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140 }}>
       <ActionButton disabled={disabled} onClick={() => setOpen(!open)}>
-        {`${label}: ${value || 'Select'} ▾`}
+        {`${label}: ${value || t('obsRemote.choice.select')} ▾`}
       </ActionButton>
       {open && !disabled ? (
         <div

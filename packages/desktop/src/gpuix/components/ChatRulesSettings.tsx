@@ -5,6 +5,7 @@ import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils
 import { useBackend } from '../backend/context'
 import { compileFilterExpression } from '../filter-expression'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import {
   compileMessageRules,
   validateChatRules,
@@ -29,6 +30,7 @@ type Section = 'highlights' | 'ignores' | 'filters'
 export function ChatRulesSettings() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const persisted = useStore(chatRulesStore)
   const accounts = useStore(accountsStore)
   const home = useStore(homeMessagesStore)
@@ -51,13 +53,13 @@ export function ChatRulesSettings() {
     () => [...home, ...[...watched.values()].flat()].slice(-1000),
     [home, watched],
   )
-  const validation = useMemo(() => {
+  const validation = (() => {
     try {
       return { value: validateChatRules(draft), error: null }
     } catch (error) {
       return { value: null, error: error instanceof Error ? error.message : String(error) }
     }
-  }, [draft])
+  })()
   const preview = useMemo(() => {
     if (!validation.value) return null
     const compiled = compileMessageRules(validation.value, accounts)
@@ -146,19 +148,26 @@ export function ChatRulesSettings() {
 
   return (
     <div testId="chat-rules-settings" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Text style={{ fontSize: 12, color: theme.text2 }}>
-        Highlight messages, hide unwanted chatter, and save filters for individual panes.
-      </Text>
+      <Text style={{ fontSize: 12, color: theme.text2 }}>{t('chatRulesSettings.intro')}</Text>
       {!persisted.loaded ? (
-        <Text style={{ fontSize: 12, color: theme.text2 }}>Loading chat rules…</Text>
+        <Text style={{ fontSize: 12, color: theme.text2 }}>{t('chatRulesSettings.loading')}</Text>
       ) : (
         <>
           <Choices
             value={section}
             options={[
-              { value: 'highlights', label: `Highlights (${draft.highlights.length})` },
-              { value: 'ignores', label: `Ignores (${draft.ignores.length})` },
-              { value: 'filters', label: `Filters (${draft.filters.length})` },
+              {
+                value: 'highlights',
+                label: t('chatRulesSettings.tab.highlights', { count: draft.highlights.length }),
+              },
+              {
+                value: 'ignores',
+                label: t('chatRulesSettings.tab.ignores', { count: draft.ignores.length }),
+              },
+              {
+                value: 'filters',
+                label: t('chatRulesSettings.tab.filters', { count: draft.filters.length }),
+              },
             ]}
             onChange={(value) => {
               setSection(value)
@@ -167,7 +176,7 @@ export function ChatRulesSettings() {
           />
           {section === 'filters' ? (
             <Toggle
-              label="Apply saved filters to my own messages"
+              label={t('chatRulesSettings.applyOwn')}
               value={draft.filterOwnMessages !== false}
               onChange={(value) =>
                 change((next) => {
@@ -179,7 +188,7 @@ export function ChatRulesSettings() {
           {section === 'highlights' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Toggle
-                label="Highlight my own messages"
+                label={t('chatRulesSettings.highlightOwn')}
                 value={draft.highlightOwnMessages}
                 onChange={(value) =>
                   change((next) => {
@@ -188,7 +197,7 @@ export function ChatRulesSettings() {
                 }
               />
               <Toggle
-                label="Highlight replies to me"
+                label={t('chatRulesSettings.highlightReplies')}
                 value={draft.highlightReplies}
                 onChange={(value) =>
                   change((next) => {
@@ -197,7 +206,7 @@ export function ChatRulesSettings() {
                 }
               />
               <Toggle
-                label="Show platform highlights"
+                label={t('chatRulesSettings.platformHighlights')}
                 value={draft.providerHighlights}
                 onChange={(value) =>
                   change((next) => {
@@ -218,12 +227,18 @@ export function ChatRulesSettings() {
           >
             <Text style={{ fontSize: 11, color: theme.text2 }}>
               {section === 'filters'
-                ? 'All filters assigned to a pane must match.'
-                : 'Rules run in this order.'}
+                ? t('chatRulesSettings.allFiltersMatch')
+                : t('chatRulesSettings.rulesOrder')}
             </Text>
             <Button
               testId={`chat-rules-add-${section}`}
-              label={`Add ${section === 'highlights' ? 'highlight' : section === 'ignores' ? 'ignore' : 'filter'}`}
+              label={
+                section === 'highlights'
+                  ? t('chatRulesSettings.add.highlight')
+                  : section === 'ignores'
+                    ? t('chatRulesSettings.add.ignore')
+                    : t('chatRulesSettings.add.filter')
+              }
               onClick={add}
               disabled={draft[section].length >= 1000}
             />
@@ -231,10 +246,10 @@ export function ChatRulesSettings() {
           {draft[section].length === 0 ? (
             <Text style={{ fontSize: 12, color: theme.text2, paddingTop: 4, paddingBottom: 8 }}>
               {section === 'highlights'
-                ? 'No custom highlights. Add a phrase, username or badge to watch for.'
+                ? t('chatRulesSettings.empty.highlights')
                 : section === 'ignores'
-                  ? 'No ignored users or phrases. Ignores affect this app only.'
-                  : 'No saved filters. Create one, then assign it from a chat pane.'}
+                  ? t('chatRulesSettings.empty.ignores')
+                  : t('chatRulesSettings.empty.filters')}
             </Text>
           ) : null}
           {section === 'highlights'
@@ -242,7 +257,7 @@ export function ChatRulesSettings() {
                 <RuleItem
                   key={rule.id}
                   id={rule.id}
-                  label={rule.name || rule.pattern || 'New highlight'}
+                  label={rule.name || rule.pattern || t('chatRulesSettings.newHighlight')}
                   index={index}
                   count={draft.highlights.length}
                   expanded={editingId === rule.id}
@@ -268,7 +283,9 @@ export function ChatRulesSettings() {
                   <RuleItem
                     key={rule.id}
                     id={rule.id}
-                    label={rule.name || rule.pattern || rule.userId || 'New ignore'}
+                    label={
+                      rule.name || rule.pattern || rule.userId || t('chatRulesSettings.newIgnore')
+                    }
                     index={index}
                     count={draft.ignores.length}
                     expanded={editingId === rule.id}
@@ -293,7 +310,7 @@ export function ChatRulesSettings() {
                   <RuleItem
                     key={filter.id}
                     id={filter.id}
-                    label={filter.name || 'New filter'}
+                    label={filter.name || t('chatRulesSettings.newFilter')}
                     index={index}
                     count={draft.filters.length}
                     expanded={editingId === filter.id}
@@ -316,9 +333,14 @@ export function ChatRulesSettings() {
                   </RuleItem>
                 ))}
           {preview && section !== 'filters' ? (
-            <Text
-              style={{ fontSize: 11, color: theme.text2 }}
-            >{`Preview across ${samples.length} buffered messages: ${preview.highlighted} highlighted, ${preview.hidden} hidden, ${preview.replaced} replaced.`}</Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>
+              {t('chatRulesSettings.preview', {
+                count: samples.length,
+                highlighted: preview.highlighted,
+                hidden: preview.hidden,
+                replaced: preview.replaced,
+              })}
+            </Text>
           ) : null}
           <SettingsFooter
             sectionId="rules"
@@ -337,7 +359,7 @@ export function ChatRulesSettings() {
           >
             {persisted.error && !dirty ? (
               <Button
-                label="Retry loading rules"
+                label={t('chatRulesSettings.retry')}
                 onClick={() => void chatRulesPreferences.load(backend.api)}
               />
             ) : null}
@@ -355,23 +377,24 @@ function HighlightEditor({
   rule: HighlightRule
   onChange: (patch: Partial<HighlightRule>) => void
 }) {
+  const { t } = useT()
   return (
     <>
-      <Field label="Rule name · optional">
+      <Field label={t('chatRulesSettings.ruleName')}>
         <Input
           id={`rule-${rule.id}-name`}
           value={rule.name ?? ''}
           onChange={(name) => onChange({ name })}
         />
       </Field>
-      <Field label="Match against">
+      <Field label={t('chatRulesSettings.matchAgainst')}>
         <Choices
           value={rule.target}
           options={[
-            { value: 'message', label: 'Message text' },
-            { value: 'user', label: 'Username' },
-            { value: 'badge', label: 'Badge' },
-            { value: 'filter', label: 'Filter expression' },
+            { value: 'message', label: t('chatRulesSettings.target.message') },
+            { value: 'user', label: t('chatRulesSettings.target.user') },
+            { value: 'badge', label: t('chatRulesSettings.target.badge') },
+            { value: 'filter', label: t('chatRulesSettings.target.filter') },
           ]}
           onChange={(target) =>
             onChange({
@@ -386,11 +409,11 @@ function HighlightEditor({
       {rule.target === 'filter' ? (
         <>
           <Toggle
-            label="Enabled"
+            label={t('chatRulesSettings.enabled')}
             value={rule.enabled}
             onChange={(enabled) => onChange({ enabled })}
           />
-          <Field label="Filter expression">
+          <Field label={t('chatRulesSettings.filterExpression')}>
             <Input
               id={`rule-${rule.id}-pattern`}
               value={rule.pattern}
@@ -400,14 +423,14 @@ function HighlightEditor({
           </Field>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 5, flexWrap: 'wrap' }}>
             {[
-              ['First message', 'flags.first_message'],
-              ['Subscription', 'flags.sub_message'],
-              ['Reward', 'flags.reward_message'],
-              ['Whisper', 'flags.whisper'],
-              ['Announcement', 'flags.announcement'],
-              ['Restricted', 'flags.restricted'],
-              ['Watch streak', 'flags.watch_streak'],
-              ['Follow', 'flags.follow_message'],
+              [t('chatRulesSettings.chip.firstMessage'), 'flags.first_message'],
+              [t('chatRulesSettings.chip.subscription'), 'flags.sub_message'],
+              [t('chatRulesSettings.chip.reward'), 'flags.reward_message'],
+              [t('chatRulesSettings.chip.whisper'), 'flags.whisper'],
+              [t('chatRulesSettings.chip.announcement'), 'flags.announcement'],
+              [t('chatRulesSettings.chip.restricted'), 'flags.restricted'],
+              [t('chatRulesSettings.chip.watchStreak'), 'flags.watch_streak'],
+              [t('chatRulesSettings.chip.follow'), 'flags.follow_message'],
             ].map(([label, pattern]) => (
               <Button
                 key={pattern}
@@ -423,7 +446,7 @@ function HighlightEditor({
       ) : (
         <PatternEditor rule={rule} onChange={onChange} />
       )}
-      <Field label="Highlight color · #RRGGBB or #RRGGBBAA">
+      <Field label={t('chatRulesSettings.highlightColor')}>
         <Input
           id={`rule-${rule.id}-color`}
           value={rule.color}
@@ -432,17 +455,17 @@ function HighlightEditor({
         />
       </Field>
       <Toggle
-        label="Count matching messages as mentions"
+        label={t('chatRulesSettings.mentions')}
         value={rule.mentions}
         onChange={(mentions) => onChange({ mentions })}
       />
       <Toggle
-        label="Play highlight sound"
+        label={t('chatRulesSettings.sound')}
         value={rule.sound}
         onChange={(sound) => onChange({ sound })}
       />
       <Toggle
-        label="Flash the window for a highlight"
+        label={t('chatRulesSettings.flash')}
         value={rule.flash}
         onChange={(flash) => onChange({ flash })}
       />
@@ -457,9 +480,10 @@ function IgnoreEditor({
   rule: IgnoreRule
   onChange: (patch: Partial<IgnoreRule>) => void
 }) {
+  const { t } = useT()
   return (
     <>
-      <Field label="Rule name · optional">
+      <Field label={t('chatRulesSettings.ruleName')}>
         <Input
           id={`rule-${rule.id}-name`}
           value={rule.name ?? ''}
@@ -467,12 +491,12 @@ function IgnoreEditor({
         />
       </Field>
       <PatternEditor rule={rule} onChange={onChange} />
-      <Field label="Match against">
+      <Field label={t('chatRulesSettings.matchAgainst')}>
         <Choices
           value={rule.target}
           options={[
-            { value: 'message', label: 'Message text' },
-            { value: 'user', label: 'Username' },
+            { value: 'message', label: t('chatRulesSettings.target.message') },
+            { value: 'user', label: t('chatRulesSettings.target.user') },
           ]}
           onChange={(target) =>
             onChange({
@@ -487,11 +511,11 @@ function IgnoreEditor({
           }
         />
       </Field>
-      <Field label="Platform">
+      <Field label={t('chatRulesSettings.platform')}>
         <Choices
           value={rule.platform ?? 'all'}
           options={[
-            { value: 'all', label: 'All' },
+            { value: 'all', label: t('chatRulesSettings.platform.all') },
             { value: 'twitch', label: 'Twitch' },
             { value: 'kick', label: 'Kick' },
             { value: 'youtube', label: 'YouTube' },
@@ -500,7 +524,7 @@ function IgnoreEditor({
         />
       </Field>
       {rule.target === 'user' ? (
-        <Field label="Exact platform user ID · optional">
+        <Field label={t('chatRulesSettings.exactUserId')}>
           <Input
             id={`rule-${rule.id}-user-id`}
             value={rule.userId ?? ''}
@@ -513,18 +537,18 @@ function IgnoreEditor({
           />
         </Field>
       ) : null}
-      <Field label="Action">
+      <Field label={t('chatRulesSettings.action')}>
         <Choices
           value={rule.action ?? (rule.replacement !== undefined ? 'replace' : 'hide')}
           options={[
-            { value: 'hide', label: 'Hide message' },
+            { value: 'hide', label: t('chatRulesSettings.action.hide') },
             ...(rule.target === 'message'
-              ? ([{ value: 'replace', label: 'Replace matching text' }] satisfies {
+              ? ([{ value: 'replace', label: t('chatRulesSettings.action.replace') }] satisfies {
                   value: NonNullable<IgnoreRule['action']>
                   label: string
                 }[])
               : []),
-            { value: 'suppress-highlights', label: 'Suppress highlights' },
+            { value: 'suppress-highlights', label: t('chatRulesSettings.action.suppress') },
           ]}
           onChange={(action) =>
             onChange({ action, replacement: action === 'replace' ? '' : undefined })
@@ -532,7 +556,7 @@ function IgnoreEditor({
         />
       </Field>
       {(rule.action ?? (rule.replacement !== undefined ? 'replace' : 'hide')) === 'replace' ? (
-        <Field label="Literal replacement · leave empty to remove matching text">
+        <Field label={t('chatRulesSettings.replacement')}>
           <Input
             id={`rule-${rule.id}-replacement`}
             value={rule.replacement ?? ''}
@@ -541,7 +565,7 @@ function IgnoreEditor({
         </Field>
       ) : rule.action !== 'suppress-highlights' ? (
         <Toggle
-          label="Show an ignored-message placeholder"
+          label={t('chatRulesSettings.placeholder')}
           value={rule.placeholder}
           onChange={(placeholder) => onChange({ placeholder })}
         />
@@ -557,7 +581,8 @@ function PatternEditor({
   rule: TextRule
   onChange: (patch: Partial<TextRule>) => void
 }) {
-  const error = useMemo(() => {
+  const { t } = useT()
+  const error = (() => {
     try {
       validateChatRules({
         highlights: [],
@@ -569,33 +594,41 @@ function PatternEditor({
     } catch (failure) {
       return failure instanceof Error ? failure.message : String(failure)
     }
-  }, [rule])
+  })()
   return (
     <>
-      <Toggle label="Enabled" value={rule.enabled} onChange={(enabled) => onChange({ enabled })} />
-      <Field label={rule.regex ? 'Regular expression' : 'Phrase or username'}>
+      <Toggle
+        label={t('chatRulesSettings.enabled')}
+        value={rule.enabled}
+        onChange={(enabled) => onChange({ enabled })}
+      />
+      <Field label={rule.regex ? t('chatRulesSettings.regex') : t('chatRulesSettings.phrase')}>
         <Input
           id={`rule-${rule.id}-pattern`}
           value={rule.pattern}
           onChange={(pattern) => onChange({ pattern })}
-          placeholder={rule.regex ? 'hello|welcome' : 'Enter text to match'}
+          placeholder={
+            rule.regex
+              ? t('chatRulesSettings.patternPlaceholderRegex')
+              : t('chatRulesSettings.patternPlaceholder')
+          }
         />
       </Field>
       <Choices
         value={rule.regex ? 'regex' : 'literal'}
         options={[
-          { value: 'literal', label: 'Literal text' },
-          { value: 'regex', label: 'Regular expression' },
+          { value: 'literal', label: t('chatRulesSettings.literalText') },
+          { value: 'regex', label: t('chatRulesSettings.regex') },
         ]}
         onChange={(mode) => onChange({ regex: mode === 'regex' })}
       />
       <Toggle
-        label="Case sensitive"
+        label={t('chatRulesSettings.caseSensitive')}
         value={rule.caseSensitive}
         onChange={(caseSensitive) => onChange({ caseSensitive })}
       />
       <Toggle
-        label="Whole words only"
+        label={t('chatRulesSettings.wholeWords')}
         value={rule.wholeWord}
         onChange={(wholeWord) => onChange({ wholeWord })}
       />
@@ -614,6 +647,7 @@ function FilterEditor({
   samples: NormalizedChatMessage[]
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const compiled = useMemo(() => compileFilterExpression(filter.expression), [filter.expression])
   const matches = useMemo(
     () => samples.filter((message) => compiled.matches(message)),
@@ -621,15 +655,15 @@ function FilterEditor({
   )
   return (
     <>
-      <Field label="Filter name">
+      <Field label={t('chatRulesSettings.filterName')}>
         <Input
           id={`filter-${filter.id}-name`}
           value={filter.name}
           onChange={(name) => onChange({ name })}
-          placeholder="Moderators and mentions"
+          placeholder={t('chatRulesSettings.filterNamePlaceholder')}
         />
       </Field>
-      <Field label="Filter expression">
+      <Field label={t('chatRulesSettings.filterExpression')}>
         <Input
           id={`filter-${filter.id}-expression`}
           value={filter.expression}
@@ -638,21 +672,17 @@ function FilterEditor({
           multiline
         />
       </Field>
+      <Text style={{ fontSize: 11, color: theme.text2 }}>{t('chatRulesSettings.filterHelp')}</Text>
       <Text style={{ fontSize: 11, color: theme.text2 }}>
-        Use author.name, author.badges, message.content, message.length, channel.name and
-        flags.highlighted. Combine conditions with &amp;&amp;, || and !. Strings use double quotes;
-        regex uses r"pattern" or ri"pattern".
-      </Text>
-      <Text style={{ fontSize: 11, color: theme.text2 }}>
-        Arithmetic runs left to right. For example, 2 + 3 * 4 is 20. Parentheses control grouping.
+        {t('chatRulesSettings.filterArithmetic')}
       </Text>
       <div style={{ display: 'flex', flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
         <Button
-          label="Moderator example"
+          label={t('chatRulesSettings.moderatorExample')}
           onClick={() => onChange({ expression: 'author.badges contains "moderator"' })}
         />
         <Button
-          label="Mention example"
+          label={t('chatRulesSettings.mentionExample')}
           onClick={() => onChange({ expression: 'flags.highlighted || flags.reply' })}
         />
       </div>
@@ -660,10 +690,12 @@ function FilterEditor({
         <ErrorText>{compiled.error}</ErrorText>
       ) : (
         <>
-          <Text
-            testId={`filter-${filter.id}-preview`}
-            style={{ fontSize: 12, color: theme.text2 }}
-          >{`${matches.length} of ${samples.length} buffered messages match.`}</Text>
+          <Text testId={`filter-${filter.id}-preview`} style={{ fontSize: 12, color: theme.text2 }}>
+            {t('chatRulesSettings.matchSummary', {
+              matched: matches.length,
+              total: samples.length,
+            })}
+          </Text>
           {matches.slice(-3).map((message) => (
             <Text
               key={`${message.platform}:${message.channelId}:${message.id}`}
@@ -703,6 +735,7 @@ function RuleItem({
   children: ReactNode
 }) {
   const theme = useTheme()
+  const { t } = useT()
   return (
     <div
       style={{
@@ -749,9 +782,21 @@ function RuleItem({
             {truncateGraphemes(sanitizeDisplayText(label), 60)}
           </Text>
         </div>
-        <Button label="Earlier" disabled={index === 0} onClick={() => onMove(-1)} />
-        <Button label="Later" disabled={index === count - 1} onClick={() => onMove(1)} />
-        <Button testId={`rule-${id}-delete`} label="Delete" onClick={onRemove} />
+        <Button
+          label={t('chatRulesSettings.earlier')}
+          disabled={index === 0}
+          onClick={() => onMove(-1)}
+        />
+        <Button
+          label={t('chatRulesSettings.later')}
+          disabled={index === count - 1}
+          onClick={() => onMove(1)}
+        />
+        <Button
+          testId={`rule-${id}-delete`}
+          label={t('chatRulesSettings.delete')}
+          onClick={onRemove}
+        />
       </div>
       {expanded ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>{children}</div>

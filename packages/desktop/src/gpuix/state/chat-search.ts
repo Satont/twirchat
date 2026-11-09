@@ -8,6 +8,7 @@ import type {
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { chatMessageKey, compileChatSearch, type SearchDetails } from '../chat-tools'
+import { t } from '../i18n'
 import { compileMessageRules } from '../message-rules'
 import {
   accountsStore,
@@ -262,10 +263,7 @@ export function requestChatSearchJump(
 ): boolean {
   const target = resolveChatSearchJump(result, currentInput(), preferredWindowId)
   if (!target) {
-    showNotice(
-      'info',
-      'This message is no longer in an open chat buffer. Refresh search to update the snapshot.',
-    )
+    showNotice('info', t('notices.search.messageNotInBuffer'))
     return false
   }
   if (jumpTimeout) clearTimeout(jumpTimeout)
@@ -301,11 +299,7 @@ export function finishChatSearchJump(requestId: string, found: boolean): void {
   if (jumpTimeout) clearTimeout(jumpTimeout)
   jumpTimeout = undefined
   chatSearchJumpStore.set(null)
-  if (!found)
-    showNotice(
-      'info',
-      'The message could not be revealed in this pane. It may have left the buffer; refresh search to update the snapshot.',
-    )
+  if (!found) showNotice('info', t('notices.search.revealFailed'))
 }
 
 declare module './persistent-resources' {

@@ -1,5 +1,6 @@
 import type { Account, Platform } from '@twirchat/shared/types'
 
+import { t } from '../gpuix/i18n'
 import { runInBackground } from './background-task'
 
 export interface AccountSessionDependencies {
@@ -34,7 +35,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
   function resolve(platform: Platform, accountId: string | null): Account | null {
     const account = accountId === null ? null : dependencies.find(accountId)
     if (accountId !== null && (!account || account.platform !== platform))
-      throw new Error('Choose a saved account belonging to this platform.')
+      throw new Error(t('notices.accounts.platformMismatch'))
     return account
   }
   async function transition(
@@ -63,9 +64,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
       dependencies.changed(platform, true)
     }
     if (failures.length)
-      throw new Error(
-        `Account selected, but some chats could not reconnect: ${failures.join('; ')}`,
-      )
+      throw new Error(t('notices.accounts.reconnectFailed', { failures: failures.join('; ') }))
   }
   return {
     select(platform: Platform, accountId: string | null, force = false): Promise<void> {
@@ -85,7 +84,7 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
     },
     forget(accountId: string): Promise<void> {
       const requested = dependencies.find(accountId)
-      if (!requested) return Promise.reject(new Error('This saved account no longer exists.'))
+      if (!requested) return Promise.reject(new Error(t('notices.accounts.missing')))
       return enqueue(requested.platform, async () => {
         const account = dependencies.find(accountId)
         if (!account) return

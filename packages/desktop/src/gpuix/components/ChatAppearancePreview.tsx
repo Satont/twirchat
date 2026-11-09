@@ -8,6 +8,7 @@ import type { AppSettings, Platform } from '@twirchat/shared/types'
 import { useMemo } from 'react'
 
 import { initialsOf } from '../../views/shared/utils/display-text'
+import { useT, type MessageKey } from '../i18n'
 import { platformColor, readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { PlatformIcon } from './ui/Icon'
@@ -28,7 +29,7 @@ interface PreviewMessage {
   author: PreviewAuthor
   badges: readonly PreviewBadge[]
   time: string
-  text: string
+  textKey: MessageKey
   highlighted?: boolean
 }
 
@@ -45,7 +46,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     author: { name: 'nightbot', color: '#7dd3fc' },
     badges: [{ text: 'MOD' }],
     time: '21:41:02',
-    text: 'Welcome in everyone!',
+    textKey: 'chat.preview.welcome',
   },
   {
     id: 'layout',
@@ -53,7 +54,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     author: { name: 'pixelpanda', color: '#53fc18' },
     badges: [{ text: 'SUB' }],
     time: '21:41:18',
-    text: 'The new layout looks clean',
+    textKey: 'chat.preview.layout',
   },
   {
     id: 'mention',
@@ -61,7 +62,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     author: { name: 'mod_maya', color: '#fca5a5' },
     badges: [{ text: 'MOD' }],
     time: '21:42:03',
-    text: 'Looks good @chat',
+    textKey: 'chat.preview.mention',
   },
   {
     id: 'self-ping',
@@ -69,7 +70,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     author: { name: 'StreamerName', color: '#a78bfa' },
     badges: [],
     time: '21:42:11',
-    text: 'Hey @chat, the preview updates live!',
+    textKey: 'chat.preview.selfPing',
     highlighted: true,
   },
   {
@@ -78,7 +79,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     author: { name: 'pixelpanda', color: '#53fc18' },
     badges: [{ text: 'SUB' }],
     time: '21:42:24',
-    text: 'Guide at https://twir.app',
+    textKey: 'chat.preview.guide',
   },
   {
     id: 'viewer',
@@ -86,7 +87,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     author: { name: 'viewer42', color: '#fcd34d' },
     badges: [],
     time: '21:42:31',
-    text: 'The preview looks great!',
+    textKey: 'chat.preview.viewer',
   },
 ]
 
@@ -225,6 +226,8 @@ function PreviewTokens({ text, fontSize }: { text: string; fontSize: number }) {
 
 function PreviewRow({ message, settings }: { message: PreviewMessage; settings: AppSettings }) {
   const theme = useTheme()
+  const { t } = useT()
+  const text = t(message.textKey)
   const fontSize = settings.fontSize
   const authorColor = readableOn(message.author.color, theme.bg)
   const showStripe = settings.showPlatformColorStripe
@@ -301,7 +304,7 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
           {message.author.name}
         </Text>
         <Text style={{ fontSize, color: theme.text }}>: </Text>
-        <PreviewTokens text={message.text} fontSize={fontSize} />
+        <PreviewTokens text={text} fontSize={fontSize} />
       </div>
     )
   }
@@ -387,7 +390,7 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
             minWidth: 0,
           }}
         >
-          <PreviewTokens text={message.text} fontSize={fontSize} />
+          <PreviewTokens text={text} fontSize={fontSize} />
         </div>
       </div>
     </div>

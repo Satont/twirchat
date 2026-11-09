@@ -9,6 +9,7 @@ import { useEffect, type ReactNode } from 'react'
 import { emoteProvider } from '../../../services/provider-emotes'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
+import { useT } from '../../i18n'
 import { showNotice } from '../../state/app'
 import { useStoreSelector } from '../../state/create-store'
 import {
@@ -34,6 +35,7 @@ export function EmoteTooltip({
 }) {
   const backend = useBackend()
   const font = useFont()
+  const { t } = useT()
   const entry = favoriteEntry(emote)
   const provider = emoteProvider(entry)
   const url =
@@ -111,7 +113,9 @@ export function EmoteTooltip({
             >
               <Icon name="externalLink" size={12} color={theme.link} />
               <text style={{ fontSize: 12, color: theme.link, fontFamily: font }}>
-                {provider === 'twitch' ? 'Open image' : `View on ${label}`}
+                {provider === 'twitch'
+                  ? t('misc.emote.openImage')
+                  : t('misc.emote.viewOn', { provider: label })}
               </text>
             </div>
             <div
@@ -140,7 +144,7 @@ export function EmoteTooltip({
             >
               <Icon name="star" size={12} color={favorite ? theme.warningText : theme.link} />
               <text style={{ fontSize: 12, color: theme.link, fontFamily: font }}>
-                {favorite ? 'Remove favorite' : 'Add to favorites'}
+                {favorite ? t('misc.emote.removeFavorite') : t('misc.emote.addFavorite')}
               </text>
             </div>
           </div>

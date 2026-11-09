@@ -2,6 +2,7 @@ import { useBackend } from '@gpuix/backend/context'
 import { ActionButton, FormInput } from '@gpuix/components/ui/Form'
 import { Text } from '@gpuix/components/ui/Text'
 import { parseNoteMarkdown } from '@gpuix/components/user-card/note-markdown'
+import { useT } from '@gpuix/i18n'
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
@@ -10,6 +11,7 @@ import { useEffect, useState } from 'react'
 export function UserNotes({ target }: { target: UserCardTarget }) {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [text, setText] = useState('')
   const [saved, setSaved] = useState('')
   const [loading, setLoading] = useState(true)
@@ -54,23 +56,24 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Text style={{ fontSize: 13, color: theme.text2 }}>
-        Private notes saved on this device. Supports Markdown headings, lists, quotes and code
-        blocks.
-      </Text>
+      <Text style={{ fontSize: 13, color: theme.text2 }}>{t('userCard.notes.hint')}</Text>
       <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
         <ActionButton onClick={() => setPreview(!preview)}>
-          {preview ? 'Edit notes' : 'Preview'}
+          {preview ? t('userCard.notes.edit') : t('userCard.notes.preview')}
         </ActionButton>
         <ActionButton
           primary
           disabled={loading || saving || text === saved}
           onClick={() => void save()}
         >
-          {saving ? 'Saving…' : 'Save notes'}
+          {saving ? t('common.saving') : t('userCard.notes.save')}
         </ActionButton>
         <Text style={{ fontSize: 12, color: theme.text2 }}>
-          {loading ? 'Loading…' : text === saved ? 'Saved' : 'Unsaved changes'}
+          {loading
+            ? t('common.loading')
+            : text === saved
+              ? t('userCard.notes.saved')
+              : t('common.unsavedChanges')}
         </Text>
       </div>
       {error ? <Text style={{ color: theme.dangerText, fontSize: 12 }}>{error}</Text> : null}
@@ -129,7 +132,7 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
               </div>
             ))
           ) : (
-            <Text style={{ color: theme.text2, fontSize: 13 }}>No notes yet.</Text>
+            <Text style={{ color: theme.text2, fontSize: 13 }}>{t('userCard.notes.empty')}</Text>
           )}
         </div>
       ) : (
@@ -137,7 +140,7 @@ export function UserNotes({ target }: { target: UserCardTarget }) {
           multiline
           value={text}
           onChange={setText}
-          placeholder="Write a private note…"
+          placeholder={t('userCard.notes.placeholder')}
           testId="user-notes-editor"
         />
       )}

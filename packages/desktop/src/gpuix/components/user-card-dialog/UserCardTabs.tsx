@@ -1,17 +1,18 @@
 import { ActionButton } from '@gpuix/components/ui/Form'
+import { useT, type MessageKey } from '@gpuix/i18n'
 
 type TabName = 'profile' | 'actions' | 'notes' | 'history'
 
 interface TabConfig {
   id: TabName
-  label: string
+  labelKey: MessageKey
 }
 
 const TABS: TabConfig[] = [
-  { id: 'profile', label: 'Profile' },
-  { id: 'actions', label: 'Actions & moderation' },
-  { id: 'notes', label: 'Notes' },
-  { id: 'history', label: 'History' },
+  { id: 'profile', labelKey: 'userCard.tab.profile' },
+  { id: 'actions', labelKey: 'userCard.tab.actions' },
+  { id: 'notes', labelKey: 'userCard.tab.notes' },
+  { id: 'history', labelKey: 'userCard.tab.history' },
 ]
 
 interface UserCardTabsProps {
@@ -20,6 +21,7 @@ interface UserCardTabsProps {
 }
 
 export function UserCardTabs({ tab, setTab }: UserCardTabsProps) {
+  const { t } = useT()
   return (
     <div
       style={{
@@ -32,7 +34,7 @@ export function UserCardTabs({ tab, setTab }: UserCardTabsProps) {
         borderWidth: 1,
       }}
     >
-      {TABS.map(({ id, label }) => (
+      {TABS.map(({ id, labelKey }) => (
         <ActionButton
           key={id}
           primary={tab === id}
@@ -48,7 +50,7 @@ export function UserCardTabs({ tab, setTab }: UserCardTabsProps) {
           }}
           textStyle={{ fontSize: 13, fontWeight: 500 }}
         >
-          {label}
+          {t(labelKey)}
         </ActionButton>
       ))}
     </div>

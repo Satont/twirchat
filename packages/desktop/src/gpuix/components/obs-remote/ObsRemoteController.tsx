@@ -12,6 +12,7 @@ import type {
   ObsRemoteProfile,
   ObsRemoteProfileDraft,
 } from '../../backend/obs-remote'
+import { useT } from '../../i18n'
 import { useStoreSelector } from '../../state/create-store'
 import { useWindowScope } from '../../state/window-scope'
 import { windowVisibilityStore } from '../../state/window-visibility'
@@ -33,6 +34,7 @@ interface Confirmation {
 export function ObsRemoteController({ active }: { active: boolean }) {
   const { api } = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const size = useWindowSize()
   const scope = useWindowScope()
   const visible = useStoreSelector(
@@ -155,8 +157,8 @@ export function ObsRemoteController({ active }: { active: boolean }) {
     if (id === selected) return
     if (connection)
       setConfirmation({
-        title: 'Switch OBS connection?',
-        description: 'This disconnects the controller. OBS keeps streaming and recording.',
+        title: t('obsRemote.confirm.switchConnectionTitle'),
+        description: t('obsRemote.confirm.switchConnectionBody'),
         action: () => selectProfile(id),
       })
     else task(() => selectProfile(id)).catch(report)
@@ -203,7 +205,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
             <Text
               style={{ color: snapshot.connected ? theme.successText : theme.text2, fontSize: 11 }}
             >
-              {`${busy ? 'Working…' : snapshot.connected ? `Connected · OBS ${snapshot.version}` : 'Disconnected'}${profile ? ` · ${profile.name}` : ''}`}
+              {`${busy ? t('obsRemote.status.working') : snapshot.connected ? t('obsRemote.status.connected', { version: snapshot.version }) : t('obsRemote.status.disconnected')}${profile ? ` · ${profile.name}` : ''}`}
             </Text>
           </div>
           <ActionButton
@@ -214,7 +216,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
               setEditor({ name: '', url: 'ws://localhost:4455', password: '' })
             }}
           >
-            Add connection
+            {t('obsRemote.action.addConnection')}
           </ActionButton>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -237,7 +239,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
               task(snapshot.connected ? disconnect : connect).catch(report)
             }}
           >
-            {snapshot.connected ? 'Disconnect' : 'Connect'}
+            {snapshot.connected ? t('common.disconnect') : t('common.connect')}
           </ActionButton>
           {profile ? (
             <>
@@ -249,7 +251,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                   setEditor({ id: profile.id, name: profile.name, url: profile.url })
                 }}
               >
-                Edit
+                {t('common.edit')}
               </ActionButton>
               <ActionButton
                 testId="obs-remove-profile"
@@ -257,8 +259,8 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                 danger
                 onClick={() =>
                   setConfirmation({
-                    title: `Remove ${profile.name}?`,
-                    description: 'The saved address and password will be removed.',
+                    title: t('obsRemote.confirm.removeTitle', { name: profile.name }),
+                    description: t('obsRemote.confirm.removeBody'),
                     action: async () => {
                       await disconnect()
                       const items = await api.obsRemote.remove(profile.id)
@@ -268,7 +270,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                   })
                 }
               >
-                Remove
+                {t('common.remove')}
               </ActionButton>
             </>
           ) : null}
@@ -293,11 +295,10 @@ export function ObsRemoteController({ active }: { active: boolean }) {
       >
         {!profiles.length ? (
           <div style={{ padding: 24, backgroundColor: theme.surface, borderRadius: 8, gap: 8 }}>
-            <Text style={{ color: theme.text, fontSize: 18, fontWeight: 600 }}>Connect to OBS</Text>
-            <Text style={{ color: theme.text2, fontSize: 12 }}>
-              Enable WebSocket Server in OBS under Tools → WebSocket Server Settings, then add a
-              connection.
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: 600 }}>
+              {t('obsRemote.empty.title')}
             </Text>
+            <Text style={{ color: theme.text2, fontSize: 12 }}>{t('obsRemote.empty.body')}</Text>
           </div>
         ) : null}
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -308,17 +309,19 @@ export function ObsRemoteController({ active }: { active: boolean }) {
             primary={!snapshot.stream.active}
             onClick={() =>
               confirmCommand(
-                snapshot.stream.active ? 'Stop streaming?' : 'Start streaming?',
                 snapshot.stream.active
-                  ? 'The live broadcast will end.'
-                  : 'OBS will go live with the current program scene.',
+                  ? t('obsRemote.confirm.stopStreamTitle')
+                  : t('obsRemote.confirm.startStreamTitle'),
+                snapshot.stream.active
+                  ? t('obsRemote.confirm.stopStreamBody')
+                  : t('obsRemote.confirm.startStreamBody'),
                 { kind: 'stream', active: !snapshot.stream.active },
               )
             }
           >
             {snapshot.stream.active
-              ? `Stop live · ${timecode(snapshot.stream.duration)}`
-              : 'Go live'}
+              ? t('obsRemote.stream.stopLive', { time: timecode(snapshot.stream.duration) })
+              : t('obsRemote.stream.goLive')}
           </ActionButton>
           <ActionButton
             testId="obs-record"
@@ -326,17 +329,19 @@ export function ObsRemoteController({ active }: { active: boolean }) {
             danger={snapshot.record.active}
             onClick={() =>
               confirmCommand(
-                snapshot.record.active ? 'Stop recording?' : 'Start recording?',
                 snapshot.record.active
-                  ? 'OBS will finalize the current recording.'
-                  : 'OBS will record to its configured output folder.',
+                  ? t('obsRemote.confirm.stopRecordTitle')
+                  : t('obsRemote.confirm.startRecordTitle'),
+                snapshot.record.active
+                  ? t('obsRemote.confirm.stopRecordBody')
+                  : t('obsRemote.confirm.startRecordBody'),
                 { kind: 'record', action: snapshot.record.active ? 'stop' : 'start' },
               )
             }
           >
             {snapshot.record.active
-              ? `Stop recording · ${timecode(snapshot.record.duration)}`
-              : 'Record'}
+              ? t('obsRemote.record.stop', { time: timecode(snapshot.record.duration) })
+              : t('obsRemote.record.start')}
           </ActionButton>
           <ActionButton
             testId="obs-record-pause"
@@ -345,7 +350,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
               run({ kind: 'record', action: snapshot.record.paused ? 'resume' : 'pause' })
             }
           >
-            {snapshot.record.paused ? 'Resume' : 'Pause'}
+            {snapshot.record.paused ? t('obsRemote.record.resume') : t('obsRemote.record.pause')}
           </ActionButton>
           <ActionButton
             disabled={disabled || !snapshot.virtualCameraAvailable}
@@ -353,8 +358,8 @@ export function ObsRemoteController({ active }: { active: boolean }) {
             onClick={() => run({ kind: 'virtual-camera', active: !snapshot.virtualCamera })}
           >
             {snapshot.connected && !snapshot.virtualCameraAvailable
-              ? 'Virtual camera unavailable'
-              : 'Virtual camera'}
+              ? t('obsRemote.virtualCamera.unavailable')
+              : t('obsRemote.virtualCamera.label')}
           </ActionButton>
           <ActionButton
             testId="obs-replay-buffer"
@@ -363,15 +368,15 @@ export function ObsRemoteController({ active }: { active: boolean }) {
             onClick={() => run({ kind: 'replay-buffer', active: !replayActive })}
           >
             {snapshot.connected && replayUnavailable
-              ? 'Replay buffer unavailable'
-              : 'Replay buffer'}
+              ? t('obsRemote.replay.unavailable')
+              : t('obsRemote.replay.label')}
           </ActionButton>
           <ActionButton
             testId="obs-save-replay"
             disabled={disabled || !replayActive}
             onClick={() => run({ kind: 'save-replay' })}
           >
-            Save replay
+            {t('obsRemote.replay.save')}
           </ActionButton>
           <ActionButton
             testId="obs-studio-mode"
@@ -379,33 +384,37 @@ export function ObsRemoteController({ active }: { active: boolean }) {
             primary={snapshot.studioMode}
             onClick={() => run({ kind: 'studio-mode', enabled: !snapshot.studioMode })}
           >
-            Studio mode
+            {t('obsRemote.studioMode')}
           </ActionButton>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <Choice
-            label="Profile"
+            label={t('obsRemote.choice.profile')}
             value={snapshot.profile}
             values={snapshot.profiles}
             disabled={disabled}
             onChange={(name) =>
               confirmCommand(
-                'Switch OBS profile?',
-                `OBS will load the output settings from ${name}.`,
+                t('obsRemote.confirm.switchProfileTitle'),
+                t('obsRemote.confirm.switchProfileBody', { name }),
                 { kind: 'profile', name },
               )
             }
           />
           <Choice
-            label="Collection"
+            label={t('obsRemote.choice.collection')}
             value={snapshot.collection}
             values={snapshot.collections}
             disabled={disabled}
             onChange={(name) =>
-              confirmCommand('Switch scene collection?', `OBS will load the scenes from ${name}.`, {
-                kind: 'collection',
-                name,
-              })
+              confirmCommand(
+                t('obsRemote.confirm.switchCollectionTitle'),
+                t('obsRemote.confirm.switchCollectionBody', { name }),
+                {
+                  kind: 'collection',
+                  name,
+                },
+              )
             }
           />
         </div>
@@ -435,7 +444,8 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                       source={snapshot.previewScene}
                       active={visible}
                       width={frameWidth}
-                      label="PREVIEW"
+                      label={t('obsRemote.preview.previewLabel')}
+                      tone="preview"
                       testId="obs-preview-preview"
                     />
                   ) : null}
@@ -445,12 +455,13 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                     source={snapshot.programScene}
                     active={visible}
                     width={frameWidth}
-                    label="PROGRAM"
+                    label={t('obsRemote.preview.programLabel')}
+                    tone="program"
                     testId="obs-program-preview"
                   />
                 </div>
                 {snapshot.studioMode ? (
-                  <Section title="Transition">
+                  <Section title={t('obsRemote.transition.title')}>
                     <div
                       style={{
                         display: 'flex',
@@ -460,7 +471,9 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                         gap: 6,
                       }}
                     >
-                      <Text style={{ color: theme.text2, fontSize: 11 }}>Duration (ms)</Text>
+                      <Text style={{ color: theme.text2, fontSize: 11 }}>
+                        {t('obsRemote.transition.duration')}
+                      </Text>
                       <div style={{ width: 64 }}>
                         <FormInput
                           testId="obs-transition-duration"
@@ -483,7 +496,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                               milliseconds < 50 ||
                               milliseconds > 20000
                             ) {
-                              setError('Transition duration must be between 50 and 20000 ms.')
+                              setError(t('obsRemote.transition.invalid'))
                               return
                             }
                             run({
@@ -493,7 +506,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                             })
                           }}
                         >
-                          {`${transition.name} → Program`}
+                          {t('obsRemote.transition.toProgram', { name: transition.name })}
                         </ActionButton>
                       ))}
                     </div>
@@ -512,20 +525,33 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                   gap: 8,
                 }}
               >
-                <Text style={{ color: theme.text, fontSize: 17 }}>Program preview</Text>
+                <Text style={{ color: theme.text, fontSize: 17 }}>
+                  {t('obsRemote.programPreview.title')}
+                </Text>
                 <Text style={{ color: theme.text2, fontSize: 12 }}>
-                  Connect to OBS to see your production.
+                  {t('obsRemote.programPreview.body')}
                 </Text>
               </div>
             )}
             {snapshot.stats ? (
               <Text style={{ fontSize: 11, color: theme.text2 }}>
-                {`${snapshot.stats.activeFps.toFixed(1)} FPS · CPU ${snapshot.stats.cpuUsage.toFixed(1)}% · ${snapshot.stats.renderSkippedFrames} skipped frames · ${(snapshot.stats.availableDiskSpace / 1024).toFixed(1)} GB free`}
+                {t('obsRemote.stats.line', {
+                  fps: snapshot.stats.activeFps.toFixed(1),
+                  cpu: snapshot.stats.cpuUsage.toFixed(1),
+                  skipped: snapshot.stats.renderSkippedFrames,
+                  free: (snapshot.stats.availableDiskSpace / 1024).toFixed(1),
+                })}
               </Text>
             ) : null}
             {snapshot.stream.active ? (
               <Text style={{ fontSize: 11, color: theme.text2 }}>
-                {`${Math.round(snapshot.stream.bitrate)} kb/s · ${snapshot.stream.frames ? ((100 * snapshot.stream.skippedFrames) / snapshot.stream.frames).toFixed(1) : '0.0'}% dropped · ${(100 * snapshot.stream.congestion).toFixed(0)}% congestion`}
+                {t('obsRemote.stream.stats', {
+                  bitrate: Math.round(snapshot.stream.bitrate),
+                  dropped: snapshot.stream.frames
+                    ? ((100 * snapshot.stream.skippedFrames) / snapshot.stream.frames).toFixed(1)
+                    : '0.0',
+                  congestion: (100 * snapshot.stream.congestion).toFixed(0),
+                })}
               </Text>
             ) : null}
           </div>
@@ -539,9 +565,9 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                 disabled={disabled}
               />
             ) : (
-              <Section title="Scenes">
+              <Section title={t('obsRemote.scenes.title')}>
                 <Text style={{ color: theme.text2, fontSize: 12 }}>
-                  Scenes and sources appear after connecting.
+                  {t('obsRemote.scenes.connectHint')}
                 </Text>
               </Section>
             )}
@@ -576,17 +602,17 @@ export function ObsRemoteController({ active }: { active: boolean }) {
             }}
           >
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: 600 }}>
-              {editor.id ? 'Edit connection' : 'Add connection'}
+              {editor.id ? t('obsRemote.editor.editTitle') : t('obsRemote.editor.addTitle')}
             </Text>
-            <FormField label="Name">
+            <FormField label={t('obsRemote.editor.name')}>
               <FormInput
                 testId="obs-profile-name"
                 value={editor.name}
                 onChange={(name) => setEditor({ ...editor, name })}
-                placeholder="Streaming PC"
+                placeholder={t('obsRemote.editor.namePlaceholder')}
               />
             </FormField>
-            <FormField label="WebSocket address">
+            <FormField label={t('obsRemote.editor.address')}>
               <FormInput
                 testId="obs-profile-url"
                 value={editor.url}
@@ -605,22 +631,22 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                 }).catch(report)
               }}
             >
-              Paste OBS connection link
+              {t('obsRemote.editor.pasteLink')}
             </ActionButton>
             <FormField
-              label="Password"
+              label={t('obsRemote.editor.password')}
               hint={
                 editor.id
-                  ? 'Leave untouched to keep the saved password. Clear to remove it.'
-                  : 'Use the password from OBS WebSocket Server Settings.'
+                  ? t('obsRemote.editor.passwordHintEdit')
+                  : t('obsRemote.editor.passwordHintAdd')
               }
             >
               <Text style={{ color: theme.text2, fontSize: 12 }}>
                 {editor.password === undefined
-                  ? 'Saved password unchanged'
+                  ? t('obsRemote.editor.passwordUnchanged')
                   : editor.password
-                    ? 'Password set'
-                    : 'No password'}
+                    ? t('obsRemote.editor.passwordSet')
+                    : t('obsRemote.editor.passwordNone')}
               </Text>
               <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 <ActionButton
@@ -634,13 +660,15 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                     }).catch(report)
                   }}
                 >
-                  Paste password
+                  {t('obsRemote.editor.pastePassword')}
                 </ActionButton>
                 <ActionButton
                   testId="obs-type-password"
                   onClick={() => setShowPassword(!showPassword)}
                 >
-                  {showPassword ? 'Hide password' : 'Type password (visible)'}
+                  {showPassword
+                    ? t('obsRemote.editor.hidePassword')
+                    : t('obsRemote.editor.showPassword')}
                 </ActionButton>
               </div>
               {showPassword ? (
@@ -648,13 +676,13 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                   testId="obs-profile-password"
                   value={editor.password ?? ''}
                   onChange={(password) => setEditor({ ...editor, password })}
-                  placeholder="WebSocket password"
+                  placeholder={t('obsRemote.editor.passwordPlaceholder')}
                 />
               ) : null}
             </FormField>
             {editor.id ? (
               <ActionButton onClick={() => setEditor({ ...editor, password: '' })}>
-                Remove saved password
+                {t('obsRemote.editor.removePassword')}
               </ActionButton>
             ) : null}
             <FormError>{error}</FormError>
@@ -662,7 +690,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
               style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}
             >
               <ActionButton disabled={busy} onClick={() => setEditor(null)}>
-                Cancel
+                {t('common.cancel')}
               </ActionButton>
               <ActionButton
                 testId="obs-save-profile"
@@ -681,15 +709,14 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                   }
                   if (draft.id && connection)
                     setConfirmation({
-                      title: 'Save connection changes?',
-                      description:
-                        'The controller will disconnect. OBS keeps streaming and recording.',
+                      title: t('obsRemote.confirm.saveChangesTitle'),
+                      description: t('obsRemote.confirm.saveChangesBody'),
                       action: save,
                     })
                   else task(save).catch(report)
                 }}
               >
-                Save connection
+                {t('obsRemote.editor.save')}
               </ActionButton>
             </div>
           </div>
@@ -713,7 +740,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
               style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}
             >
               <ActionButton disabled={busy} onClick={() => setConfirmation(null)}>
-                Cancel
+                {t('common.cancel')}
               </ActionButton>
               <ActionButton
                 testId="obs-confirm"
@@ -726,7 +753,7 @@ export function ObsRemoteController({ active }: { active: boolean }) {
                   }).catch(report)
                 }}
               >
-                Confirm
+                {t('obsRemote.confirm.confirm')}
               </ActionButton>
             </div>
           </div>

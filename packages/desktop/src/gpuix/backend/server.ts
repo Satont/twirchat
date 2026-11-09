@@ -66,6 +66,7 @@ import {
 } from '../../watched-channels/home-plugin-preference'
 import { WatchedChannelManager } from '../../watched-channels/manager'
 import { createPluginChannels } from '../../watched-channels/plugin-channels'
+import { t } from '../i18n'
 import {
   createDesktopApi,
   twitchActivitiesRequest,
@@ -246,7 +247,7 @@ function boot(): DesktopBackend {
         return {
           mode: 'unavailable',
           snapshotSections: [],
-          error: 'Connect Twitch to load channel activities.',
+          error: t('runtime.server.connectTwitchActivities'),
         }
       const own = channelSlug.toLowerCase() === account.username.toLowerCase()
       const web = await TwitchWebSessionStore.status()
@@ -267,8 +268,7 @@ function boot(): DesktopBackend {
         intervalMs: 15000,
         ...(!hasWeb && !(polls && predictions && rewards)
           ? {
-              error:
-                'Save a Twitch web session for viewer polls, predictions, rewards and points. Pin snapshots remain available.',
+              error: t('runtime.server.saveTwitchWebSession'),
             }
           : {}),
       }
@@ -311,7 +311,7 @@ function boot(): DesktopBackend {
       await adapter.connect(account.username)
       const status = currentStatuses.get(platform)
       if (status?.status === 'error')
-        throw new Error(status.error ?? 'The account chat could not connect.')
+        throw new Error(status.error ?? t('runtime.server.accountChatConnectFailed'))
       subscribeSevenTvFor(platform, account.username, aggregator)
     },
     reconnectWatched: (platform) => watchedChannelManager.reconnectByPlatform(platform),

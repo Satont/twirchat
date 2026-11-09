@@ -6,6 +6,7 @@ import type {
   ChatterRole,
   ChatterUser,
 } from '../../../gpuix/backend/api'
+import { t } from '../../../gpuix/i18n'
 import type { ChatSendTarget } from './chat-send-targets'
 
 export function supportsChatters(platform: Platform | undefined): platform is 'twitch' | 'kick' {
@@ -29,22 +30,22 @@ export function buildChattersTargets(
 export function chatterRoleLabel(role: ChatterRole): string {
   switch (role) {
     case 'broadcaster': {
-      return 'Broadcaster'
+      return t('chat.chatters.role.broadcaster')
     }
     case 'moderators': {
-      return 'Moderators'
+      return t('chat.chatters.role.moderators')
     }
     case 'vips': {
-      return 'VIPs'
+      return t('chat.chatters.role.vips')
     }
     case 'ogs': {
-      return 'OGs'
+      return t('chat.chatters.role.ogs')
     }
     case 'bots': {
-      return 'Bots'
+      return t('chat.chatters.role.bots')
     }
     case 'chatters': {
-      return 'Chatters'
+      return t('chat.chatters.role.chatters')
     }
   }
 }

@@ -22,6 +22,7 @@ import {
 } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { createMentionMatcher } from '../chat-tools'
+import { t, tPlural, useT } from '../i18n'
 import { icons } from '../icons'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
@@ -113,7 +114,7 @@ function compactAvatarSize(fontSize: number): number {
 }
 
 export function formatMessageTime(ts: Date): string {
-  return Number.isNaN(ts.getTime()) ? 'Invalid Date' : timeFormatter.format(ts)
+  return Number.isNaN(ts.getTime()) ? t('chatMessages.invalidDate') : timeFormatter.format(ts)
 }
 
 // ── Avatar (fallback circle with the image layered on top once decoded) ─────
@@ -492,7 +493,7 @@ function wrapTwitchMessage(
         id={id}
         kind="cheer"
         fontSize={fontSize}
-        summary={`${bits.toLocaleString()} ${bits === 1 ? 'Bit' : 'Bits'}`}
+        summary={tPlural('chatMessages.bits', bits, { count: bits.toLocaleString() })}
       >
         {content}
       </TwitchChatNotice>
@@ -505,6 +506,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const theme = useTheme()
   const font = useFont()
   const backend = useBackend()
+  const { t } = useT()
   const [hovered, setHovered] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [ignoredRevealed, setIgnoredRevealed] = useState(false)
@@ -606,8 +608,12 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         />
       )
 
-    const t = message.text
-    const action = t.includes(' added ') ? 'added' : t.includes(' removed ') ? 'removed' : 'renamed'
+    const text = message.text
+    const action = text.includes(' added ')
+      ? 'added'
+      : text.includes(' removed ')
+        ? 'removed'
+        : 'renamed'
     const palette =
       action === 'added'
         ? {
@@ -854,7 +860,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           />
           {message.delivery?.state === 'failed' ? (
             <Text style={{ fontSize: Math.round(fontSize * 0.82), color: theme.dangerText }}>
-              {`Not sent: ${message.delivery.error ?? ''}`}
+              {t('chatMessages.notSent', { error: message.delivery.error ?? '' })}
             </Text>
           ) : null}
           {props.moderationOutcome ? (
@@ -1040,7 +1046,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               marginTop: 2,
             }}
           >
-            {`Not sent: ${message.delivery.error ?? ''}`}
+            {t('chatMessages.notSent', { error: message.delivery.error ?? '' })}
           </Text>
         ) : null}
         {props.moderationOutcome ? (

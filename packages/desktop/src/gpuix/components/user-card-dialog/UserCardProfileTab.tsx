@@ -1,6 +1,7 @@
 import { useTheme } from '@gpuix/theme-context'
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 
+import type { IconName } from '../ui/Icon'
 import { UserCardMetadataSection } from './UserCardMetadataSection'
 import { UserProfile } from './UserProfile'
 
@@ -11,7 +12,7 @@ interface UserCardProfileTabProps {
   supportedByCard: boolean
   metadataLoading: boolean
   metadataError: string | null
-  metadata: Array<{ label: string; value: string | null }> | null
+  metadata: Array<{ label: string; value: string | null; icon: IconName }> | null
   reloadMetadata: () => void
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import type { ObsRemoteConnection } from '../../backend/obs-remote'
+import { useT } from '../../i18n'
 import { useTheme } from '../../theme-context'
 import { Text } from '../ui/Text'
 
@@ -10,6 +11,7 @@ export function Preview({
   active,
   width,
   label,
+  tone,
   testId,
   thumbnail = false,
 }: {
@@ -18,12 +20,14 @@ export function Preview({
   active: boolean
   width: number
   label?: string
+  tone?: 'program' | 'preview'
   testId?: string
   thumbnail?: boolean
 }) {
   const [image, setImage] = useState('')
   const [error, setError] = useState('')
   const theme = useTheme()
+  const { t } = useT()
   useEffect(() => {
     if (!active || !source) return undefined
     let cancelled = false
@@ -36,23 +40,26 @@ export function Preview({
           setError('')
         }
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Preview unavailable')
+        if (!cancelled)
+          setError(cause instanceof Error ? cause.message : t('obsRemote.preview.unavailable'))
       }
       if (!cancelled && !thumbnail)
         timer = setTimeout(() => {
           refresh().catch((cause) => {
-            if (!cancelled) setError(cause instanceof Error ? cause.message : 'Preview unavailable')
+            if (!cancelled)
+              setError(cause instanceof Error ? cause.message : t('obsRemote.preview.unavailable'))
           })
         }, 1000)
     }
     refresh().catch((cause) => {
-      if (!cancelled) setError(cause instanceof Error ? cause.message : 'Preview unavailable')
+      if (!cancelled)
+        setError(cause instanceof Error ? cause.message : t('obsRemote.preview.unavailable'))
     })
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [connection, source, active, thumbnail])
+  }, [connection, source, active, thumbnail, t])
   return (
     <div
       testId={testId}
@@ -61,12 +68,12 @@ export function Preview({
       {label ? (
         <Text
           style={{
-            color: label === 'PROGRAM' ? theme.dangerText : theme.successText,
+            color: tone === 'program' ? theme.dangerText : theme.successText,
             fontWeight: 600,
             fontSize: 11,
           }}
         >
-          {`${label} · ${source || 'No scene'}`}
+          {`${label} · ${source || t('obsRemote.preview.noScene')}`}
         </Text>
       ) : null}
       <div
@@ -88,7 +95,7 @@ export function Preview({
           />
         ) : (
           <Text style={{ color: theme.text2, fontSize: 11 }}>
-            {error || (active ? 'Loading preview…' : 'Preview paused')}
+            {error || (active ? t('obsRemote.preview.loading') : t('obsRemote.preview.paused'))}
           </Text>
         )}
       </div>

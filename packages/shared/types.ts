@@ -240,7 +240,12 @@ export interface CustomPalette {
   readonly accent: string
 }
 
+/** Supported UI languages. */
+export type Language = 'en' | 'ru'
+
 export interface AppSettings {
+  /** UI language; new installs start in English. */
+  language: Language
   theme: ThemePreset | 'custom'
   themeMode: ThemeMode
   customPalette?: CustomPalette
@@ -285,6 +290,7 @@ export interface OverlayConfig {
 export const DEFAULT_SETTINGS: AppSettings = {
   autoCheckUpdates: true,
   chatTheme: 'modern',
+  language: 'en',
   fontFamily: 'inter',
   fontSize: 14,
   hotkeys: {

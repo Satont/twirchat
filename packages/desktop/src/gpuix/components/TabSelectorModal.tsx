@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
 import { usePopupHotkeys } from '../hooks/use-popup-hotkeys'
+import { useT } from '../i18n'
 import { useTextInputFocusTracking } from '../state/focus'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
@@ -33,6 +34,7 @@ export function TabSelectorModal({
   onClose: () => void
 }) {
   const theme = useTheme()
+  const { t } = useT()
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const queryFocus = useTextInputFocusTracking()
@@ -70,7 +72,7 @@ export function TabSelectorModal({
           <input
             autoFocus
             value={query}
-            placeholder="Jump to tab…"
+            placeholder={t('app.tabSelector.placeholder')}
             onChange={(event) => {
               setQuery(event.value ?? '')
               setSelectedIndex(0)
@@ -160,7 +162,7 @@ export function TabSelectorModal({
           })}
           {filtered.length === 0 ? (
             <div style={{ padding: 16, display: 'flex', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 13, color: theme.text2 }}>No tabs match</Text>
+              <Text style={{ fontSize: 13, color: theme.text2 }}>{t('app.tabSelector.empty')}</Text>
             </div>
           ) : null}
         </div>

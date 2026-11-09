@@ -8,6 +8,8 @@
 
 import type { UserCardMetadataResponse } from '@twirchat/shared/protocol'
 
+import { t, tPlural } from '../../i18n'
+
 /** Channel-wise sRGB mix: `pctA` (0..1) of `a` blended with the rest of `b`. */
 export function hexMix(a: string, b: string, pctA: number): string {
   const parse = (hex: string): [number, number, number] => {
@@ -63,8 +65,10 @@ function addCalendarMonths(date: Date, months: number): Date {
   return result
 }
 
-function formatDurationPart(value: number, unit: string): string {
-  return `${value} ${unit}${value === 1 ? '' : 's'}`
+type DurationUnit = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second'
+
+function formatDurationPart(value: number, unit: DurationUnit): string {
+  return tPlural(`misc.userCard.duration.${unit}`, value)
 }
 
 export function formatElapsedDuration(value: string | null | undefined): string | null {
@@ -77,7 +81,7 @@ export function formatElapsedDuration(value: string | null | undefined): string 
 
   const end = new Date()
   if (start > end) {
-    return '0 seconds'
+    return t('misc.userCard.duration.zero')
   }
 
   const totalMonths = Math.max(
@@ -121,7 +125,7 @@ export function formatElapsedDuration(value: string | null | undefined): string 
     seconds > 0 ? formatDurationPart(seconds, 'second') : null,
   ].filter((part): part is string => part !== null)
 
-  return parts.join(' ') || '0 seconds'
+  return parts.join(' ') || t('misc.userCard.duration.zero')
 }
 
 // ── Metadata card texts (ported from UserCardDialog.vue) ────────────────────
@@ -131,10 +135,12 @@ export function accountAgeText(metadata: UserCardMetadataResponse | null): strin
   if (!field) return null
 
   if (field.status === 'available') {
-    return `Created ${formatAbsoluteDate(field.createdAt) ?? field.createdAt}`
+    return t('misc.userCard.created', {
+      date: formatAbsoluteDate(field.createdAt) ?? field.createdAt,
+    })
   }
 
-  return field.message ?? 'Unavailable'
+  return field.message ?? t('misc.userCard.unavailable')
 }
 
 export function followAgeText(metadata: UserCardMetadataResponse | null): string | null {
@@ -146,11 +152,14 @@ export function followAgeText(metadata: UserCardMetadataResponse | null): string
     const elapsedDuration = formatElapsedDuration(field.followedAt)
 
     return elapsedDuration
-      ? `Following since ${absoluteDate} · ${elapsedDuration}`
-      : `Following since ${absoluteDate}`
+      ? t('misc.userCard.followingSinceWithDuration', {
+          date: absoluteDate,
+          duration: elapsedDuration,
+        })
+      : t('misc.userCard.followingSince', { date: absoluteDate })
   }
 
-  return field.message ?? 'Unavailable'
+  return field.message ?? t('misc.userCard.unavailable')
 }
 
 export function subscriptionDurationText(metadata: UserCardMetadataResponse | null): string | null {
@@ -159,14 +168,18 @@ export function subscriptionDurationText(metadata: UserCardMetadataResponse | nu
 
   if (field.status === 'available') {
     if (field.currentlySubscribed === true) {
-      const parts = ['Currently subscribed']
+      const parts = [t('misc.userCard.currentlySubscribed')]
 
       if (field.tier) {
-        parts.push(`Tier ${field.tier}`)
+        parts.push(t('misc.userCard.tier', { tier: field.tier }))
       }
 
       if (field.isGift) {
-        parts.push(field.gifterDisplayName ? `Gifted by ${field.gifterDisplayName}` : 'Gifted sub')
+        parts.push(
+          field.gifterDisplayName
+            ? t('misc.userCard.giftedBy', { name: field.gifterDisplayName })
+            : t('misc.userCard.giftedSub'),
+        )
       }
 
       if (field.message) {
@@ -176,10 +189,10 @@ export function subscriptionDurationText(metadata: UserCardMetadataResponse | nu
       return parts.join(' · ')
     }
 
-    return field.message ?? 'Not currently subscribed'
+    return field.message ?? t('misc.userCard.notCurrentlySubscribed')
   }
 
-  return field.message ?? 'Unavailable'
+  return field.message ?? t('misc.userCard.unavailable')
 }
 
 export function subAgeText(metadata: UserCardMetadataResponse | null): string | null {
@@ -187,8 +200,8 @@ export function subAgeText(metadata: UserCardMetadataResponse | null): string | 
   if (!field) return null
 
   if (field.status === 'available' && field.months !== null) {
-    return `${field.months} month${field.months === 1 ? '' : 's'}`
+    return tPlural('misc.userCard.subMonths', field.months)
   }
 
-  return field.message ?? 'Unavailable'
+  return field.message ?? t('misc.userCard.unavailable')
 }

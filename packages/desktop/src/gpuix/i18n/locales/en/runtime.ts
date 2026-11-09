@@ -1,0 +1,136 @@
+export const runtime = {
+  // Backend API errors (api.ts)
+  'runtime.api.activeTwitchAccountChanged':
+    'The active Twitch account changed. Retry this action in the selected account.',
+  'runtime.api.connectTwitchFirst': 'Connect your Twitch account on the Platforms tab first.',
+  'runtime.api.chatNoLongerSaved': 'This chat is no longer saved.',
+  'runtime.api.youtubeDefaultAccount': 'YouTube chats always send with the default account.',
+  'runtime.api.accountPlatformMismatch':
+    "Choose a saved account belonging to this chat's platform.",
+  'runtime.api.authExpired':
+    '{action}: authorization expired — reconnect the account on the Platforms tab',
+  'runtime.api.httpStatus': '{action} (HTTP {status})',
+  'runtime.api.action.twitchActivityFailed': 'Twitch activity failed',
+  'runtime.api.action.platformCommandFailed': 'Platform command failed',
+  'runtime.api.action.loadChatSettings': 'Could not load chat settings',
+  'runtime.api.action.checkModerationPermissions': "Couldn't check moderation permissions",
+  'runtime.api.action.moderationFailed': 'Moderation action failed',
+  'runtime.api.action.loadStreamInfo': "Couldn't load stream info",
+  'runtime.api.action.updateStream': "Couldn't update the stream",
+  'runtime.api.action.categorySearchFailed': 'Category search failed',
+  'runtime.api.action.loadChannelStatus': "Couldn't load channel status",
+  'runtime.api.action.loadUserProfile': 'Could not load user profile',
+  'runtime.api.action.loadAccountDetails': "Couldn't load account details",
+  'runtime.api.moderationUnsupportedPlatform': 'moderation: unsupported platform "{platform}"',
+  'runtime.api.moderationChannelRequired': 'moderation: channel slug is required',
+  'runtime.api.moderationAuthenticate':
+    'moderation: authenticate with {platform} before moderating',
+  'runtime.api.moderationCredentialsUnavailable':
+    'moderation: {platform} credentials are unavailable',
+  'runtime.api.chattersConnectTwitch':
+    'Connect a Twitch account with moderator access to see the chatters list.',
+  'runtime.api.chattersTwitchRejected': 'Twitch rejected the credentials. Reconnect the account.',
+  'runtime.api.chattersModeratorRequired': 'Moderator access is required to see the chatters list.',
+  'runtime.api.chattersChannelNotFound': 'Channel not found on Twitch.',
+  'runtime.api.chattersTwitchUnavailable': 'Twitch chatters are currently unavailable.',
+  'runtime.api.chattersKickUnavailable': 'Kick chatters are currently unavailable.',
+  'runtime.api.twitchActivitiesNotInitialized': 'Twitch activities are not initialized.',
+  'runtime.api.twitchWebSessionMismatch':
+    'Use a web session belonging to your connected Twitch account.',
+  'runtime.api.twitchEventsNotInitialized': 'Twitch events are not initialized.',
+  'runtime.api.twitchEventsUpdateFailed': 'Could not update Twitch event subscriptions.',
+  'runtime.api.reconnectUnavailable': 'Chat reconnection is unavailable.',
+  'runtime.api.emoteReloadUnavailable': 'Emote reload is unavailable.',
+  'runtime.api.channelPlayersUnavailable': 'Channel players are unavailable.',
+  'runtime.api.playerSettingsUnavailable': 'Player settings are unavailable.',
+  'runtime.api.accountSwitchingUnavailable': 'Account switching is not initialized.',
+  'runtime.api.slashCommandHandler': 'Use the platform command handler for slash commands.',
+  'runtime.api.noChatAdapter': 'No {platform} chat adapter is connected.',
+  'runtime.api.platformCommandsUnavailable': 'Platform commands are unavailable for {platform}.',
+  'runtime.api.roomSettingsUnavailable': 'Room settings are unavailable for {platform}.',
+  'runtime.api.moderationRejected': 'moderation action was rejected',
+  'runtime.api.noAccountFound': 'No {platform} account found',
+  'runtime.api.noAccessToken': 'No access token for {platform}',
+  'runtime.api.pluginTransportsUnavailable': 'Plugin transports are unavailable.',
+  'runtime.api.chattersUnsupportedPlatform': 'get chatters: platform "{platform}" is not supported',
+  'runtime.api.clipboardUnavailable': 'clipboard unavailable: {error}',
+
+  // Backend bootstrap (server.ts)
+  'runtime.server.connectTwitchActivities': 'Connect Twitch to load channel activities.',
+  'runtime.server.saveTwitchWebSession':
+    'Save a Twitch web session for viewer polls, predictions, rewards and points. Pin snapshots remain available.',
+  'runtime.server.accountChatConnectFailed': 'The account chat could not connect.',
+
+  // Auto-updater (updater.ts)
+  'runtime.updater.checking': 'Checking for updates',
+  'runtime.updater.upToDate': 'You are up to date',
+  'runtime.updater.downloaded': 'Update downloaded — restart to apply',
+  'runtime.updater.available': 'Update {version} is available',
+  'runtime.updater.checkFailed': 'Update check failed: {error}',
+  'runtime.updater.noUpdateToDownload': 'No checked update to download',
+  'runtime.updater.downloading': 'Downloading update',
+  'runtime.updater.downloadFailed': 'Update download failed: {error}',
+  'runtime.updater.applying': 'Restarting to apply update',
+  'runtime.updater.installFailed': 'Update install failed: {error}',
+  'runtime.updater.appImageRequired':
+    'Cannot update on Linux without the AppImage path (APPIMAGE).',
+
+  // Image uploader (image-uploader.ts)
+  'runtime.imageUploader.settingsOpenFailed':
+    'Image uploader settings could not be opened. Save the configuration again.',
+  'runtime.imageUploader.uploaderChanged': 'The image uploader changed. Reload its settings.',
+  'runtime.imageUploader.browserOpenFailed': 'Could not open the browser.',
+  'runtime.imageUploader.signInInProgress': 'Twir sign-in is already in progress.',
+  'runtime.imageUploader.settingsChanged':
+    'The image uploader settings changed. Paste the image again.',
+
+  // Plugins (packages.ts, manager.ts, process.ts)
+  'runtime.plugins.manifestNotRegular': 'Expected a regular plugin manifest of at most 32 KiB.',
+  'runtime.plugins.invalidManifest': 'Invalid plugin manifest{detail}.',
+  'runtime.plugins.invalidRemotePointer': 'Invalid installed plugin remote pointer.',
+  'runtime.plugins.invalidRemoteSource': 'Invalid installed plugin remote source.',
+  'runtime.plugins.entryNotRegularFile': 'Plugin entry must be a regular file inside its package.',
+  'runtime.plugins.invalidPackageDirectory': 'Invalid installed package directory.',
+  'runtime.plugins.idMismatch': 'Installed plugin ID does not match its directory.',
+  'runtime.plugins.incompatibleApi':
+    'Plugin API {apiVersion} is incompatible with TwirChat API {currentApi}.',
+  'runtime.plugins.packageTooDeep': 'Plugin package is nested too deeply.',
+  'runtime.plugins.packageTooManyFiles': 'Plugin package contains too many files.',
+  'runtime.plugins.packageRegularFilesOnly': 'Plugin packages may contain regular files only.',
+  'runtime.plugins.packageTooLarge': 'Plugin package exceeds 16 MiB.',
+  'runtime.plugins.limitReached': 'The installed plugin limit was reached.',
+  'runtime.plugins.selectManifest': 'Select the plugin manifest.json file.',
+  'runtime.plugins.alreadyInstalled': 'Plugin {id} is already installed.',
+  'runtime.plugins.packageOutsideInstallDir':
+    'Select a plugin package outside the installed plugin directory.',
+  'runtime.plugins.updateMismatch': 'The update does not match the installed remote plugin.',
+  'runtime.plugins.invalidInstalledDirectory': 'Invalid installed plugin directory.',
+  'runtime.plugins.updateDiscarded': 'The remote plugin update was discarded.',
+  'runtime.plugins.remoteChangedDuringUpdate':
+    'The installed remote plugin changed during the update.',
+  'runtime.plugins.eventsDropped': 'Some chat events were dropped while this plugin was busy.',
+  'runtime.plugins.shuttingDown': 'The plugin manager is shutting down.',
+  'runtime.plugins.updatedPluginNotActivated': 'Updated plugin did not activate.',
+  'runtime.plugins.remoteManifestDifferentPlugin':
+    'The remote manifest belongs to a different plugin.',
+  'runtime.plugins.noLongerInstalled': 'This plugin is no longer installed.',
+  'runtime.plugins.noRemoteSource': 'This plugin has no remote update source.',
+  'runtime.plugins.remoteInstallInProgress': 'Another remote plugin installation is in progress.',
+  'runtime.plugins.pluginIncompatible': 'Plugin is incompatible.',
+  'runtime.plugins.commandUnavailable': 'Plugin command /{name} is unavailable.',
+  'runtime.plugins.commandAlreadyRegistered': '/{name} is already registered by {owner}.',
+  'runtime.plugins.transportUnavailable': 'This plugin transport is unavailable.',
+  'runtime.plugins.channelLimitReached': 'Plugin channel limit reached.',
+  'runtime.plugins.channelReadOnly': 'This plugin channel is read-only.',
+  'runtime.plugins.channelClosed': 'This plugin channel is closed.',
+  'runtime.plugins.processDisconnected': 'Plugin process disconnected.',
+  'runtime.plugins.activationTimedOut': 'Plugin activation timed out.',
+  'runtime.plugins.processExited': 'Plugin process exited ({code}).',
+  'runtime.plugins.noLongerRunning': 'Plugin is no longer running.',
+  'runtime.plugins.tooManyRequests': 'Too many pending plugin requests.',
+  'runtime.plugins.requestTimedOut': 'Plugin {action} timed out.',
+  'runtime.plugins.tooManyDesktopRequests': 'Too many pending desktop requests.',
+  'runtime.plugins.invalidIpcMessage': 'Invalid plugin IPC message.',
+  'runtime.plugins.duplicateRegistration': 'Plugin sent duplicate registration.',
+  'runtime.plugins.wasDisabled': 'Plugin was disabled.',
+} satisfies Record<string, string>

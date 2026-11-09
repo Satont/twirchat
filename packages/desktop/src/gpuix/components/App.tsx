@@ -14,6 +14,7 @@ import { useBackend, useBackendEvent } from '../backend/context'
 import { registerBundledFonts } from '../fonts'
 import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
+import { useT } from '../i18n'
 import { useHotkeyContext, useHotkeyRoute } from '../state/action-bindings'
 import { getActivePane } from '../state/active-pane'
 import {
@@ -132,6 +133,7 @@ export function ChatNotice() {
 export function UpdateToast() {
   const backend = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [update, setUpdate] = useState<{
     status: string
     message: string
@@ -219,7 +221,9 @@ export function UpdateToast() {
       {update.status === 'update-available' ? (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
           <div style={buttonStyle} onClick={() => runUiTask(backend.api.downloadUpdate())}>
-            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>Download</Text>
+            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>
+              {t('app.update.download')}
+            </Text>
           </div>
           <div
             style={secondaryButtonStyle}
@@ -228,14 +232,16 @@ export function UpdateToast() {
               setDismissed(true)
             }}
           >
-            <Text style={{ fontSize: 13, color: theme.text }}>Skip</Text>
+            <Text style={{ fontSize: 13, color: theme.text }}>{t('app.update.skip')}</Text>
           </div>
         </div>
       ) : null}
       {update.status === 'download-complete' ? (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
           <div style={buttonStyle} onClick={() => runUiTask(backend.api.applyUpdate())}>
-            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>Restart to apply</Text>
+            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>
+              {t('app.update.restartToApply')}
+            </Text>
           </div>
         </div>
       ) : null}
@@ -245,6 +251,7 @@ export function UpdateToast() {
 
 export function App() {
   const backend = useBackend()
+  const { t } = useT()
   const windows = useDesktopWindows()
   const scope = useWindowScope()
   const presentation = useWindowPresentation()
@@ -348,21 +355,18 @@ export function App() {
     return anyLive ? total : undefined
   }, [accounts, streamStatuses, streamerMode])
 
-  const tabSelectorItems = useMemo<TabItem[]>(() => {
-    const items: TabItem[] = [{ id: 'home', label: 'My channels' }]
-    for (const ch of tabWatchedChannels) {
-      items.push({
-        id: ch.id,
-        label:
-          chatTabs.value.metadata[ch.id]?.title ??
-          tabChannelNames.get(ch.id)?.join(', ') ??
-          ch.displayName,
-        platform: ch.platform,
-        isLive: watchedLiveStatuses.get(ch.id)?.isLive ?? false,
-      })
-    }
-    return items
-  }, [tabWatchedChannels, tabChannelNames, watchedLiveStatuses, chatTabs.value.metadata])
+  const tabSelectorItems: TabItem[] = [{ id: 'home', label: t('app.tabs.home') }]
+  for (const ch of tabWatchedChannels) {
+    tabSelectorItems.push({
+      id: ch.id,
+      label:
+        chatTabs.value.metadata[ch.id]?.title ??
+        tabChannelNames.get(ch.id)?.join(', ') ??
+        ch.displayName,
+      platform: ch.platform,
+      isLive: watchedLiveStatuses.get(ch.id)?.isLive ?? false,
+    })
+  }
 
   const selectWatchedTab = (id: string) => {
     clearTabUnread(id)
@@ -376,10 +380,10 @@ export function App() {
       watchedChannelsStore.set(await backend.api.getWatchedChannels())
       await openChannelChatTab(backend, channel)
       setShowAddModal(false)
-      showNotice('success', `Watching ${channel.displayName}`)
+      showNotice('success', t('app.notice.watching', { name: channel.displayName }))
     } catch (error) {
       console.error('[App] addWatchedChannel failed:', error)
-      showNotice('error', `Failed to add channel: ${String(error)}`)
+      showNotice('error', t('app.notice.addChannelFailed', { error: String(error) }))
     }
   }
 
@@ -387,7 +391,7 @@ export function App() {
     try {
       await closeChatTab(backend, id)
     } catch (error) {
-      showNotice('error', `Could not close tab: ${String(error)}`)
+      showNotice('error', t('app.notice.closeTabFailed', { error: String(error) }))
     }
   }
 
@@ -414,7 +418,7 @@ export function App() {
         if (!layoutStore.get().get(activeWatchedTab)?.layout)
           await loadLayout(backend, activeWatchedTab)
         const panel = activePanel()
-        if (!panel) throw new Error('The current layout is unavailable.')
+        if (!panel) throw new Error(t('app.error.layoutUnavailable'))
         setMainTab('chat')
         await splitPanel(backend, activeWatchedTab, panel.id, 'vertical', scope)
       },

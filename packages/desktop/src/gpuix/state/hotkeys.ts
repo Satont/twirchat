@@ -6,6 +6,7 @@ import type { EventPayload, KeyEvent } from '@gpuix/react'
 
 import { runInBackground } from '../../services/background-task'
 import { normalizeKeyChord, eventKeyChord } from '../hotkey-bindings'
+import { t } from '../i18n'
 import {
   dispatchCustomHotkey,
   actionBindingsStore,
@@ -101,7 +102,7 @@ export function invokeHotkeyUiAction(
   scope = 'main',
 ): void {
   const handler = windowActions.get(scope)?.[action]
-  if (!handler) throw new Error('This action is unavailable in the current window.')
+  if (!handler) throw new Error(t('notices.hotkeys.actionUnavailable'))
   handler()
 }
 

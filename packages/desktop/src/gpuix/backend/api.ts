@@ -118,6 +118,7 @@ import {
   type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { PluginChannels } from '../../watched-channels/plugin-channels'
+import { t } from '../i18n'
 import {
   twitchActivitiesSnapshotSchema,
   twitchRewardQueueSummarySchema,
@@ -496,15 +497,13 @@ async function prepareTwitchActivitiesRequest(
       : AccountStore.findByPlatform('twitch')
   const checkIdentity = () => {
     if (selectedAccountId && getAccount()?.id !== selectedAccountId)
-      throw new Error(
-        'The active Twitch account changed. Retry this action in the selected account.',
-      )
+      throw new Error(t('runtime.api.activeTwitchAccountChanged'))
   }
   if (operation !== 'validate_session') {
     const account = getAccount()
     const tokens = account ? AccountStore.getTokens(account.id) : null
     if (account?.platform !== 'twitch' || !tokens?.accessToken)
-      throw new Error('Connect your Twitch account on the Platforms tab first.')
+      throw new Error(t('runtime.api.connectTwitchFirst'))
     selectedAccountId = account.id
     const accessToken =
       eventSubAccountId &&
@@ -527,7 +526,8 @@ async function prepareTwitchActivitiesRequest(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...credentials, ...params, operation }),
     })
-    if (!response.ok) throw await backendFailure('Twitch activity failed', response)
+    if (!response.ok)
+      throw await backendFailure(t('runtime.api.action.twitchActivityFailed'), response)
     const result: unknown = await response.json()
     checkIdentity()
     return result
@@ -652,26 +652,26 @@ async function backendFailure(action: string, res: Response): Promise<Error> {
     // Non-JSON body — fall back to the status code.
   }
   if (res.status === 401 || /\b401\b|Invalid OAuth token|Unauthorized/i.test(detail)) {
-    return new Error(
-      `${action}: authorization expired — reconnect the account on the Platforms tab`,
-    )
+    return new Error(t('runtime.api.authExpired', { action }))
   }
-  return new Error(detail ? `${action}: ${detail}` : `${action} (HTTP ${res.status})`)
+  return new Error(
+    detail ? `${action}: ${detail}` : t('runtime.api.httpStatus', { action, status: res.status }),
+  )
 }
 
 async function moderationBody(platform: ModerationPlatform, channelSlug: string) {
   if (platform !== 'twitch' && platform !== 'kick') {
-    throw new Error(`moderation: unsupported platform "${platform}"`)
+    throw new Error(t('runtime.api.moderationUnsupportedPlatform', { platform }))
   }
-  if (!channelSlug) throw new Error('moderation: channel slug is required')
+  if (!channelSlug) throw new Error(t('runtime.api.moderationChannelRequired'))
 
   const account = channelAccount(platform, channelSlug)
   if (!account) {
-    throw new Error(`moderation: authenticate with ${platform} before moderating`)
+    throw new Error(t('runtime.api.moderationAuthenticate', { platform }))
   }
   const tokens = AccountStore.getTokens(account.id)
   if (!tokens?.accessToken) {
-    throw new Error(`moderation: ${platform} credentials are unavailable`)
+    throw new Error(t('runtime.api.moderationCredentialsUnavailable', { platform }))
   }
   return {
     platform,
@@ -690,7 +690,7 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
   const account = channelAccount('twitch', channelSlug)
   const tokens = account ? AccountStore.getTokens(account.id) : null
   if (!account || !tokens?.accessToken) {
-    throw new Error('Connect a Twitch account with moderator access to see the chatters list.')
+    throw new Error(t('runtime.api.chattersConnectTwitch'))
   }
   const res = await backendFetch('/api/twitch/chatters', {
     method: 'POST',
@@ -702,12 +702,10 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
     }),
   })
   if (!res.ok) {
-    if (res.status === 401)
-      throw new Error('Twitch rejected the credentials. Reconnect the account.')
-    if (res.status === 403)
-      throw new Error('Moderator access is required to see the chatters list.')
-    if (res.status === 404) throw new Error('Channel not found on Twitch.')
-    throw new Error('Twitch chatters are currently unavailable.')
+    if (res.status === 401) throw new Error(t('runtime.api.chattersTwitchRejected'))
+    if (res.status === 403) throw new Error(t('runtime.api.chattersModeratorRequired'))
+    if (res.status === 404) throw new Error(t('runtime.api.chattersChannelNotFound'))
+    throw new Error(t('runtime.api.chattersTwitchUnavailable'))
   }
   const data = twitchChattersSchema.parse(await res.json())
 
@@ -740,10 +738,10 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
 async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> {
   // 1. Resolve the broadcaster id via the backend chatroom proxy.
   const roomRes = await backendFetch(`/api/kick/chatroom?slug=${encodeURIComponent(channelSlug)}`)
-  if (!roomRes.ok) throw new Error('Kick chatters are currently unavailable.')
+  if (!roomRes.ok) throw new Error(t('runtime.api.chattersKickUnavailable'))
   const room = kickChatroomSchema.parse(await roomRes.json())
   const broadcasterId = room.broadcasterUserId ?? 0
-  if (broadcasterId <= 0) throw new Error('Kick chatters are currently unavailable.')
+  if (broadcasterId <= 0) throw new Error(t('runtime.api.chattersKickUnavailable'))
 
   // 2. Hit Kick's web internal API directly (mirrors the Go service).
   const endpoint = `${KICK_ACTIVE_CHATTERS_URL}/${broadcasterId}/chat/active-chatters`
@@ -757,10 +755,10 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
       Referer: `https://kick.com/${channelSlug}`,
     },
   })
-  if (!res.ok) throw new Error('Kick chatters are currently unavailable.')
+  if (!res.ok) throw new Error(t('runtime.api.chattersKickUnavailable'))
   const body = kickChattersSchema.parse(await res.json())
   const data = body.data
-  if (!data) throw new Error('Kick chatters are currently unavailable.')
+  if (!data) throw new Error(t('runtime.api.chattersKickUnavailable'))
 
   const roles: ChatterRole[] = ['moderators', 'vips', 'ogs', 'bots', 'chatters']
   const lists = [data.moderators, data.vips, data.ogs, data.bots, data.chatters]
@@ -838,7 +836,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getTwitchRewardQueueSummary: (params) =>
       twitchActivitiesRequest('reward_queue_summary', params, twitchRewardQueueSummarySchema),
     getTwitchActivityCapability: async ({ channelSlug }) => {
-      if (!ctx.twitchActivityRefresh) throw new Error('Twitch activities are not initialized.')
+      if (!ctx.twitchActivityRefresh)
+        throw new Error(t('runtime.api.twitchActivitiesNotInitialized'))
       return ctx.twitchActivityRefresh.capability(channelSlug)
     },
     executeTwitchActivityAction: (action) =>
@@ -856,7 +855,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       )
       const account = AccountStore.findByPlatform('twitch')
       if (account && account.platformUserId !== session.userId)
-        throw new Error('Use a web session belonging to your connected Twitch account.')
+        throw new Error(t('runtime.api.twitchWebSessionMismatch'))
       await TwitchWebSessionStore.set(session)
       ctx.twitchActivityRefresh?.restart()
       return TwitchWebSessionStore.status()
@@ -866,39 +865,39 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.twitchActivityRefresh?.restart()
     },
     watchTwitchActivities: async ({ channelSlug, watch }) => {
-      if (!ctx.twitchEventSub) throw new Error('Twitch events are not initialized.')
+      if (!ctx.twitchEventSub) throw new Error(t('runtime.api.twitchEventsNotInitialized'))
       ctx.twitchEventSub.watch(channelSlug, watch)
       await ctx.twitchActivityRefresh?.watch(channelSlug, watch)
     },
     ...createStreamerModeApi(ctx.streamerMode),
     reconnectChat: async (params) => {
-      if (!ctx.channelActions) throw new Error('Chat reconnection is unavailable.')
+      if (!ctx.channelActions) throw new Error(t('runtime.api.reconnectUnavailable'))
       return ctx.channelActions.reconnectChat(params)
     },
     reloadChatEmotes: async (params) => {
-      if (!ctx.channelActions) throw new Error('Emote reload is unavailable.')
+      if (!ctx.channelActions) throw new Error(t('runtime.api.emoteReloadUnavailable'))
       return ctx.channelActions.reloadChatEmotes(params)
     },
     openChannelPlayer: async (params) => {
-      if (!ctx.channelActions) throw new Error('Channel players are unavailable.')
+      if (!ctx.channelActions) throw new Error(t('runtime.api.channelPlayersUnavailable'))
       return ctx.channelActions.openChannelPlayer(params)
     },
     getPlayerSettings: async () => {
-      if (!ctx.channelActions) throw new Error('Player settings are unavailable.')
+      if (!ctx.channelActions) throw new Error(t('runtime.api.playerSettingsUnavailable'))
       return ctx.channelActions.getPlayerSettings()
     },
     savePlayerSettings: async ({ settings }) => {
-      if (!ctx.channelActions) throw new Error('Player settings are unavailable.')
+      if (!ctx.channelActions) throw new Error(t('runtime.api.playerSettingsUnavailable'))
       return ctx.channelActions.savePlayerSettings(settings)
     },
     getAccounts: async () => AccountStore.findAllActive(),
     getSavedAccounts: async () => AccountStore.findAllSaved(),
     setActiveAccount: async ({ platform, accountId }) => {
-      if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
+      if (!ctx.accountSessions) throw new Error(t('runtime.api.accountSwitchingUnavailable'))
       await ctx.accountSessions.select(platform, accountId)
     },
     forgetAccount: async ({ accountId }) => {
-      if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
+      if (!ctx.accountSessions) throw new Error(t('runtime.api.accountSwitchingUnavailable'))
       await ctx.accountSessions.forget(accountId)
       watchedChannelManager.releaseAccount(accountId)
       ctx.twitchEventSub?.refresh()
@@ -956,7 +955,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     authLink: async ({ platform }) => ({ url: await createAuthUrl(platform) }),
 
     authLogout: async ({ platform }) => {
-      if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
+      if (!ctx.accountSessions) throw new Error(t('runtime.api.accountSwitchingUnavailable'))
       await ctx.accountSessions.select(platform, null)
     },
 
@@ -997,10 +996,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         .match(/^\/([a-z]+)/i)?.[1]
         ?.toLowerCase()
       if (command && platformCommands.has(command)) {
-        throw new Error('Use the platform command handler for slash commands.')
+        throw new Error(t('runtime.api.slashCommandHandler'))
       }
       const adapter = aggregator.getAdapter(platform)
-      if (!adapter) throw new Error(`No ${platform} chat adapter is connected.`)
+      if (!adapter) throw new Error(t('runtime.api.noChatAdapter', { platform }))
       return adapter.sendMessage(channelId, text, replyTo).catch((err) => {
         log.error('Failed to send message', { platform, error: String(err) })
         throw err
@@ -1011,14 +1010,14 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     executePlatformCommand: async ({ platform, channelSlug, text }) => {
       if (platform !== 'twitch' && platform !== 'kick')
-        throw new Error(`Platform commands are unavailable for ${platform}.`)
+        throw new Error(t('runtime.api.platformCommandsUnavailable', { platform }))
       const body = await moderationBody(platform, channelSlug)
       const res = await backendFetch('/api/chat-tools/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, text }),
       })
-      if (!res.ok) throw await backendFailure('Platform command failed', res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.platformCommandFailed'), res)
       return platformCommandResultSchema.parse(await res.json())
     },
 
@@ -1029,14 +1028,15 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           ? own
           : watchedChannelManager.getRoomState(platform, channelSlug)
       if (current) return current
-      if (platform !== 'twitch') throw new Error(`Room settings are unavailable for ${platform}.`)
+      if (platform !== 'twitch')
+        throw new Error(t('runtime.api.roomSettingsUnavailable', { platform }))
       const body = await moderationBody(platform, channelSlug)
       const res = await backendFetch('/api/chat-tools/room-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw await backendFailure('Could not load chat settings', res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadChatSettings'), res)
       return roomStateSchema.parse(await res.json())
     },
 
@@ -1047,7 +1047,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw await backendFailure("Couldn't check moderation permissions", res)
+      if (!res.ok)
+        throw await backendFailure(t('runtime.api.action.checkModerationPermissions'), res)
       return z.object({ canModerate: z.boolean() }).parse(await res.json())
     },
 
@@ -1064,7 +1065,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           durationSeconds: params.durationSeconds,
         }),
       })
-      if (!res.ok) throw await backendFailure('Moderation action failed', res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.moderationFailed'), res)
       const result = z
         .object({
           success: z.boolean(),
@@ -1072,7 +1073,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         })
         .parse(await res.json())
       if (!result.success) {
-        throw new Error(result.error?.message || 'moderation action was rejected')
+        throw new Error(result.error?.message || t('runtime.api.moderationRejected'))
       }
       return { success: true }
     },
@@ -1081,15 +1082,16 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/stream-status?platform=${platform}&channelId=${encodeURIComponent(channelId)}`,
       )
-      if (!res.ok) throw await backendFailure("Couldn't load stream info", res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadStreamInfo'), res)
       return streamStatusResponseSchema.parse(await res.json())
     },
 
     updateStream: async (params) => {
       const account = AccountStore.findByPlatform(params.platform)
-      if (!account) throw new Error(`No ${params.platform} account found`)
+      if (!account) throw new Error(t('runtime.api.noAccountFound', { platform: params.platform }))
       const tokens = AccountStore.getTokens(account.id)
-      if (!tokens?.accessToken) throw new Error(`No access token for ${params.platform}`)
+      if (!tokens?.accessToken)
+        throw new Error(t('runtime.api.noAccessToken', { platform: params.platform }))
 
       const body: UpdateStreamRequest = { ...params, userAccessToken: tokens.accessToken }
       const res = await backendFetch(`/api/update-stream`, {
@@ -1097,7 +1099,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw await backendFailure("Couldn't update the stream", res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.updateStream'), res)
       return updateStreamResponseSchema.parse(await res.json())
     },
 
@@ -1105,7 +1107,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const res = await backendFetch(
         `/api/search-categories?platform=${platform}&query=${encodeURIComponent(query)}`,
       )
-      if (!res.ok) throw await backendFailure('Category search failed', res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.categorySearchFailed'), res)
       return searchCategoriesResponseSchema.parse(await res.json())
     },
 
@@ -1126,7 +1128,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channels: enriched }),
       })
-      if (!res.ok) throw await backendFailure("Couldn't load channel status", res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadChannelStatus'), res)
       return channelsStatusResponseSchema.parse(await res.json())
     },
 
@@ -1167,7 +1169,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...params, twitchAuth }),
       })
-      if (!response.ok) throw await backendFailure('Could not load user profile', response)
+      if (!response.ok)
+        throw await backendFailure(t('runtime.api.action.loadUserProfile'), response)
       return userProfileSnapshotSchema.parse(await response.json())
     },
     getUserNotes: async (params) => getUserNotes(params),
@@ -1199,7 +1202,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) throw await backendFailure("Couldn't load account details", res)
+      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadAccountDetails'), res)
       return userCardMetadataResponseSchema.parse(await res.json())
     },
 
@@ -1283,7 +1286,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     addWatchedChannel: async ({ platform, channelSlug }) => {
       if (isPluginPlatform(platform)) {
-        if (!ctx.pluginChannels) throw new Error('Plugin transports are unavailable.')
+        if (!ctx.pluginChannels) throw new Error(t('runtime.api.pluginTransportsUnavailable'))
         return ctx.pluginChannels.add(platform, channelSlug)
       }
       void ctx.providerRuntime?.warm(platform, channelSlug).catch((error) =>
@@ -1309,11 +1312,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (accountId !== null) {
         const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === id)
         const account = AccountStore.findById(accountId)
-        if (!channel) throw new Error('This chat is no longer saved.')
-        if (channel.platform === 'youtube')
-          throw new Error('YouTube chats always send with the default account.')
+        if (!channel) throw new Error(t('runtime.api.chatNoLongerSaved'))
+        if (channel.platform === 'youtube') throw new Error(t('runtime.api.youtubeDefaultAccount'))
         if (account?.platform !== channel.platform)
-          throw new Error("Choose a saved account belonging to this chat's platform.")
+          throw new Error(t('runtime.api.accountPlatformMismatch'))
       }
       const channel = watchedChannelManager.setChannelAccount(id, accountId)
       if (channel.platform === 'twitch') ctx.twitchEventSub?.refresh()
@@ -1341,7 +1343,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         .match(/^\/([a-z]+)/i)?.[1]
         ?.toLowerCase()
       if (command && platformCommands.has(command)) {
-        throw new Error('Use the platform command handler for slash commands.')
+        throw new Error(t('runtime.api.slashCommandHandler'))
       }
       return watchedChannelManager.sendMessage(id, text, replyTo)
     },
@@ -1353,7 +1355,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getPluginTransports: () => ctx.pluginChannels?.transports() ?? [],
     observePluginChannel: (id, listener) => ctx.pluginChannels?.observe(id, listener) ?? (() => {}),
     sendPluginChannelMessage: async ({ id, text }) => {
-      if (!ctx.pluginChannels) throw new Error('Plugin transports are unavailable.')
+      if (!ctx.pluginChannels) throw new Error(t('runtime.api.pluginTransportsUnavailable'))
       await ctx.pluginChannels.sendMessage(id, text)
     },
 
@@ -1370,7 +1372,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
               ...target,
               total: 0,
               groups: [],
-              error: `get chatters: platform "${target.platform}" is not supported`,
+              error: t('runtime.api.chattersUnsupportedPlatform', { platform: target.platform }),
             })
           }
         } catch (error) {
@@ -1415,7 +1417,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
           lastError = error
         }
       }
-      throw new Error(`clipboard unavailable: ${String(lastError)}`)
+      throw new Error(t('runtime.api.clipboardUnavailable', { error: String(lastError) }))
     },
     readClipboard: () => systemIntegration.readClipboard(),
     notify: (params) => systemIntegration.notify(params),

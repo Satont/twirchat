@@ -1,5 +1,6 @@
 import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
 
+import { t } from '../../../gpuix/i18n'
 import { emoteProvider } from '../../../services/provider-emotes'
 import { fuzzyFilter } from './fuzzyFilter'
 
@@ -15,14 +16,25 @@ const EMOTE_SOURCES: EmoteSource[] = [
 
 const ALWAYS_VISIBLE = new Set<EmoteSource>(['global', 'seventv', 'ffz', 'bttv'])
 
-const SOURCE_LABELS: Record<EmoteSource, string> = {
-  channel: 'Channel',
+const PROVIDER_LABELS: Partial<Record<EmoteSource, string>> = {
   seventv: '7TV',
-  collectibles: 'Collectibles',
-  global: 'Global',
   bttv: 'BTTV',
   ffz: 'FFZ',
-  personal: 'Personal',
+}
+
+function sourceLabel(source: EmoteSource): string {
+  switch (source) {
+    case 'channel':
+      return t('composer.emotes.channel')
+    case 'global':
+      return t('composer.emotes.global')
+    case 'collectibles':
+      return t('composer.emotes.collectibles')
+    case 'personal':
+      return t('composer.emotes.personal')
+    default:
+      return PROVIDER_LABELS[source] ?? source
+  }
 }
 
 export interface EmoteGroup {
@@ -64,5 +76,5 @@ export function groupEmoteCatalog(entries: EmoteCatalogEntry[]): EmoteGroup[] {
   }
   return EMOTE_SOURCES.filter(
     (source) => ALWAYS_VISIBLE.has(source) || groups[source].length > 0,
-  ).map((source) => ({ source, label: SOURCE_LABELS[source], entries: groups[source] }))
+  ).map((source) => ({ source, label: sourceLabel(source), entries: groups[source] }))
 }
