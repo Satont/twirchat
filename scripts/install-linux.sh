@@ -70,7 +70,7 @@ if (cd "$temporary" && "$app_path" --appimage-extract '*.png' > /dev/null 2>&1) 
   fi
 fi
 
-cat > "$HOME/.local/share/applications/twirchat.desktop" <<EOF
+cat > "$HOME/.local/share/applications/$APP_ID.desktop" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -79,9 +79,17 @@ Comment=Multi-platform chat manager for streamers
 Exec="$app_path" %u
 Icon=$icon_path
 Terminal=false
-StartupWMClass=TwirChat
+StartupWMClass=$APP_ID
 Categories=Network;InstantMessaging;
 EOF
+
+legacy_desktop="$HOME/.local/share/applications/twirchat.desktop"
+if [[ -f "$legacy_desktop" && ! -L "$legacy_desktop" ]] \
+  && grep -Fxq "Exec=\"$app_path\" %u" "$legacy_desktop" \
+  && grep -Fxq 'Name=TwirChat' "$legacy_desktop" \
+  && grep -Fxq 'StartupWMClass=TwirChat' "$legacy_desktop"; then
+  rm "$legacy_desktop"
+fi
 
 ln -sf "$app_path" "$HOME/.local/bin/twirchat"
 if command -v update-desktop-database > /dev/null; then

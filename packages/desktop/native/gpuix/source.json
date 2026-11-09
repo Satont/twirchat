@@ -19,7 +19,7 @@
     {
       "path": "patches/gpui-close-to-tray.patch",
       "root": "gpui",
-      "sha256": "450d2028e0f5703fc9249d2348586adae9550eab49c4af29975c0668468cd972"
+      "sha256": "769b87cdade5b103bc5ac351dde014c4cdbf48e32ad79df4fafeb900ea5338cb"
     },
     {
       "path": "patches/gpuix-close-to-tray.patch",

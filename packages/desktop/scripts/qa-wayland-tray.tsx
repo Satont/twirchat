@@ -13,7 +13,21 @@ assert(
 )
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
 const runtime = process.env.TWIRCHAT_QA_RUNTIME
-assert(session && runtime)
+const appId = process.env.TWIRCHAT_QA_APP_ID
+assert(session && runtime && appId)
+const protocolLog = join(session, 'tray-wayland.log')
+if (!process.argv.includes('--native-child')) {
+  const child = Bun.spawn(
+    [process.execPath, import.meta.path, ...process.argv.slice(2), '--native-child'],
+    {
+      env: { ...process.env, WAYLAND_DEBUG: 'client' },
+      stdout: 'inherit',
+      stderr: Bun.file(protocolLog),
+    },
+  )
+  process.exit(await child.exited)
+}
+
 await import('../src/gpuix/native-bootstrap')
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop } = await import('@gpuix/react')
@@ -21,7 +35,7 @@ const { initializeManagedRenderer } = await import('../src/gpuix/managed-rendere
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const renderer = nativeWindow(createRenderer())
 const title = 'TwirChat Wayland tray QA'
-initializeManagedRenderer(renderer, { title, width: 620, height: 360 })
+initializeManagedRenderer(renderer, { title, appId, width: 620, height: 360 })
 const root = createRoot(renderer)
 const loop = startFrameLoop(renderer)
 let mounted = true
@@ -81,8 +95,20 @@ try {
     return item.length > 0
   }, 'native Wayland tray')
   for (let cycle = 0; cycle < cycles; cycle++) {
+    const protocolOffset = (await Bun.file(protocolLog).text()).length
     assert(await compositor('close'), 'Weston must send a real xdg_toplevel.close event.')
     await until(async () => !(await compositor('mapped')), 'Wayland surface unmaps on close')
+    await until(async () => {
+      const trace = (await Bun.file(protocolLog).text()).slice(protocolOffset)
+      const unmap = trace.match(/(wl_surface[@#]\d+)\.attach\(nil, 0, 0\)/u)
+      if (!unmap) return false
+      const commit = trace.indexOf(`${unmap[1]}.commit()`, unmap.index)
+      if (commit < 0) return false
+      return (
+        trace.indexOf(`.set_title("${title}")`, commit) > commit &&
+        trace.indexOf(`.set_app_id("${appId}")`, commit) > commit
+      )
+    }, 'hidden Wayland window restores title and app ID after unmap')
     assert(renderer.isWindowOpen(), 'Closing to tray must retain the Wayland renderer.')
     for (let update = 0; update < 10; update++) {
       render(`Wayland hidden update ${cycle}:${update}`)
@@ -127,6 +153,7 @@ try {
         passed: true,
         backend: 'wayland',
         genuineCompositorClose: true,
+        hiddenIdentityRestored: true,
         closeRestoreCycles: cycles,
         hiddenUpdates: cycles * 10,
         programmaticClose: true,
