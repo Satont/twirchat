@@ -75,6 +75,7 @@ import { readUiState } from './layout-api'
 import { browserCommand } from './open-url'
 import { createPluginHost } from './plugin-host'
 import { createTwitchHistoryRuntime } from './twitch-history'
+import { createUpdater } from './updater'
 
 const log = logger('gpuix-backend')
 
@@ -413,7 +414,9 @@ function boot(): DesktopBackend {
     },
     onStatus: (channel, status) => events.emit('plugin_channel_status', { channel, status }),
   })
+  const updater = createUpdater(events)
   const api: DesktopApi = createDesktopApi({
+    updater,
     twitchHistory,
     streamerMode,
     channelActions,
@@ -445,15 +448,9 @@ function boot(): DesktopBackend {
     }))
   }
 
-  // Auto-check on startup (auto-downloads; the toast offers “restart to apply”).
-  if (SettingsStore.get().autoCheckUpdates) {
-    void api
-      .checkForUpdate()
-      .then(async (result) => {
-        if (result.updateAvailable) await api.downloadUpdate()
-      })
-      .catch((error) => log.warn('Automatic update failed', { error: String(error) }))
-  }
+  const stopAutoChecks = updater.startAutoChecks(
+    () => SettingsStore.get().autoCheckUpdates === true,
+  )
 
   // ── Adapter events → stores / overlay / UI ────────────────────────────────
 
@@ -679,6 +676,7 @@ function boot(): DesktopBackend {
     plugins,
     shutdownPlugins,
     dispose: () => {
+      stopAutoChecks()
       void shutdownPlugins().catch((error) => {
         log.warn('Plugin shutdown failed', { error: String(error) })
       })

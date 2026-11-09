@@ -25,6 +25,7 @@ import type { DesktopEvents } from './events'
 const log = logger('updater')
 
 const GITHUB_REPO_URL = 'https://github.com/Satont/twirchat'
+const AUTO_CHECK_INTERVAL_MS = 60 * 60 * 1000
 const SKIPPED_UPDATE_KEY = 'gpuix_ui_skipped_update_sha256'
 
 export interface CheckForUpdateResult {
@@ -35,6 +36,7 @@ export interface CheckForUpdateResult {
 
 export interface Updater {
   check(): Promise<CheckForUpdateResult>
+  startAutoChecks(isEnabled: () => boolean, intervalMs?: number): () => void
   download(): Promise<{ success: boolean; error?: string }>
   apply(): Promise<void>
   skip(hash: string): Promise<void>
@@ -103,7 +105,8 @@ const defaultRuntime: UpdaterRuntime = {
 export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): Updater {
   let manager: UpdaterManager | null | undefined
   let state: UpdateState = { kind: 'idle' }
-  let checking: Promise<CheckForUpdateResult> | null = null
+  let checking: { result: Promise<CheckForUpdateResult>; visibility: { manual: boolean } } | null =
+    null
 
   const getManager = (): UpdaterManager | null => {
     if (runtime.version === 'dev') return null
@@ -128,28 +131,34 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
       ? { updateAvailable: false, currentVersion }
       : { updateAvailable: true, version: state.info.TargetFullRelease.Version, currentVersion }
 
-  return {
-    check() {
-      const mgr = getManager()
-      const currentVersion = mgr?.getCurrentVersion() ?? runtime.version
-      if (!mgr) return Promise.resolve({ updateAvailable: false, currentVersion })
-      if (state.kind === 'downloading' || state.kind === 'applying')
-        return Promise.resolve(currentResult(currentVersion))
-      if (checking) return checking
+  const check = (manual: boolean): Promise<CheckForUpdateResult> => {
+    const mgr = getManager()
+    const currentVersion = mgr?.getCurrentVersion() ?? runtime.version
+    if (!mgr) return Promise.resolve({ updateAvailable: false, currentVersion })
+    if (state.kind === 'downloading' || state.kind === 'applying')
+      return Promise.resolve(currentResult(currentVersion))
+    if (checking) {
+      if (manual) checking.visibility.manual = true
+      return checking.result
+    }
 
-      checking = Promise.resolve().then(async () => {
-        emit('checking', 'Checking for updates')
-        try {
-          const info = await mgr.checkForUpdatesAsync()
-          if (!info || runtime.getSkippedHash() === info.TargetFullRelease.SHA256) {
-            state = { kind: 'idle' }
-            emit('no-update', 'You are up to date')
-            return { updateAvailable: false, currentVersion }
-          }
-          const target = info.TargetFullRelease
-          const ready =
-            state.kind === 'ready' && state.info.TargetFullRelease.SHA256 === target.SHA256
-          state = { kind: ready ? 'ready' : 'available', info }
+    const visibility = { manual }
+    const result = Promise.resolve().then(async () => {
+      if (visibility.manual) emit('checking', 'Checking for updates')
+      try {
+        const info = await mgr.checkForUpdatesAsync()
+        if (!info || runtime.getSkippedHash() === info.TargetFullRelease.SHA256) {
+          const hadAvailableUpdate = state.kind === 'available'
+          state = { kind: 'idle' }
+          if (visibility.manual) emit('no-update', 'You are up to date')
+          else if (hadAvailableUpdate) emit('idle', '')
+          return { updateAvailable: false, currentVersion }
+        }
+        const target = info.TargetFullRelease
+        const ready =
+          state.kind === 'ready' && state.info.TargetFullRelease.SHA256 === target.SHA256
+        state = { kind: ready ? 'ready' : 'available', info }
+        if (visibility.manual)
           emit(
             ready ? 'download-complete' : 'update-available',
             ready
@@ -157,19 +166,56 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
               : `Update ${target.Version} is available`,
             { hash: target.SHA256 },
           )
-          return { updateAvailable: true, version: target.Version, currentVersion }
-        } catch (error) {
-          emit('update-error', `Update check failed: ${String(error)}`)
-          return { updateAvailable: false, currentVersion }
-        } finally {
-          checking = null
+        return { updateAvailable: true, version: target.Version, currentVersion }
+      } catch (error) {
+        if (visibility.manual) emit('update-error', `Update check failed: ${String(error)}`)
+        else log.warn('Automatic update check failed', { error: String(error) })
+        return { updateAvailable: false, currentVersion }
+      } finally {
+        checking = null
+      }
+    })
+    checking = { result, visibility }
+    return result
+  }
+
+  const updater: Updater = {
+    check: () => check(true),
+
+    startAutoChecks(isEnabled, intervalMs = AUTO_CHECK_INTERVAL_MS) {
+      if (runtime.version === 'dev' || manager === null) return () => {}
+      let stopped = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const run = async () => {
+        if (
+          state.kind !== 'ready' &&
+          state.kind !== 'downloading' &&
+          state.kind !== 'applying' &&
+          isEnabled()
+        ) {
+          const result = await check(false)
+          if (!stopped && result.updateAvailable && isEnabled()) await updater.download()
         }
-      })
-      return checking
+      }
+      const tick = () => {
+        void run()
+          .finally(() => {
+            if (!stopped && manager !== null) {
+              timer = setTimeout(tick, intervalMs)
+              timer.unref()
+            }
+          })
+          .catch((error) => log.warn('Automatic update failed', { error: String(error) }))
+      }
+      tick()
+      return () => {
+        stopped = true
+        if (timer) clearTimeout(timer)
+      }
     },
 
     async download() {
-      if (checking) await checking
+      if (checking) await checking.result
       if (state.kind === 'downloading') return state.result
       if (state.kind === 'ready' || state.kind === 'applying') return { success: true }
       const mgr = getManager()
@@ -227,4 +273,5 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
         state = { kind: 'idle' }
     },
   }
+  return updater
 }

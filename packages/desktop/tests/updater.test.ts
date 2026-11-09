@@ -298,3 +298,102 @@ test('late progress cannot replace ready status or interfere with a newer downlo
   expect(harness.statuses.at(-1)).toBe('download-complete')
   expect(harness.hashes.at(-1)).toBe('sha256-1.3.0')
 })
+
+async function waitFor(predicate: () => boolean, attempts = 100): Promise<void> {
+  if (predicate()) return
+  if (attempts === 0) throw new Error('Timed out waiting for updater')
+  await Bun.sleep(5)
+  return waitFor(predicate, attempts - 1)
+}
+
+test('automatic checks retry silently and stop checking once an update is ready', async () => {
+  const harness = createHarness()
+  harness.checks.splice(0, 1, null, updateInfo())
+  const stop = harness.updater.startAutoChecks(() => true, 10)
+  try {
+    await waitFor(() => harness.statuses.includes('download-complete'))
+    expect(harness.checkCount).toBe(2)
+    expect(harness.statuses).not.toContain('checking')
+    expect(harness.statuses).not.toContain('no-update')
+    await Bun.sleep(35)
+    expect(harness.checkCount).toBe(2)
+    expect(harness.statuses.filter((status) => status === 'download-complete')).toHaveLength(1)
+  } finally {
+    stop()
+  }
+})
+
+test('automatic checks retry a failed feed without a failure status', async () => {
+  const harness = createHarness()
+  const failure = Promise.withResolvers<UpdateInfo | null>()
+  harness.setCheckResult(failure.promise)
+  const stop = harness.updater.startAutoChecks(() => true, 10)
+  try {
+    await waitFor(() => harness.checkCount === 1)
+    failure.reject(new Error('feed unavailable'))
+    harness.setCheckResult(Promise.resolve(updateInfo()))
+    await waitFor(() => harness.statuses.includes('download-complete'))
+    expect(harness.checkCount).toBe(2)
+    expect(harness.statuses).not.toContain('update-error')
+  } finally {
+    stop()
+  }
+})
+
+test.each(['disable', 'stop'])(
+  'automatic checks suppress downloads after %s during a request',
+  async (action) => {
+    const harness = createHarness()
+    const request = Promise.withResolvers<UpdateInfo | null>()
+    harness.setCheckResult(request.promise)
+    let enabled = false
+    const stop = harness.updater.startAutoChecks(() => enabled, 10)
+    try {
+      await Bun.sleep(15)
+      expect(harness.checkCount).toBe(0)
+      enabled = true
+      await waitFor(() => harness.checkCount === 1)
+      if (action === 'disable') enabled = false
+      else stop()
+      request.resolve(updateInfo())
+      await Bun.sleep(25)
+      expect(harness.downloads).toHaveLength(0)
+      expect(harness.checkCount).toBe(1)
+      expect(harness.statuses).toEqual([])
+    } finally {
+      stop()
+    }
+  },
+)
+
+test('manual checks share an automatic request and receive its visible outcome', async () => {
+  const harness = createHarness()
+  const request = Promise.withResolvers<UpdateInfo | null>()
+  harness.setCheckResult(request.promise)
+  const stop = harness.updater.startAutoChecks(() => true, 1000)
+  try {
+    await waitFor(() => harness.checkCount === 1)
+    const manual = harness.updater.check()
+    request.resolve(null)
+    expect(await manual).toEqual({ updateAvailable: false, currentVersion: '1.1.0' })
+    expect(harness.checkCount).toBe(1)
+    expect(harness.statuses).toContain('no-update')
+    expect(harness.statuses).not.toContain('checking')
+  } finally {
+    stop()
+  }
+})
+
+test('automatic checks silently dismiss a previously offered release removed from the feed', async () => {
+  const harness = createHarness()
+  await harness.updater.check()
+  expect(harness.statuses.at(-1)).toBe('update-available')
+  const stop = harness.updater.startAutoChecks(() => true, 1000)
+  try {
+    await waitFor(() => harness.statuses.at(-1) === 'idle')
+    expect(harness.statuses).not.toContain('no-update')
+    expect((await harness.updater.download()).success).toBe(false)
+  } finally {
+    stop()
+  }
+})
