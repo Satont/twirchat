@@ -11,6 +11,7 @@
     "qa:settings": "bun scripts/qa-gui.ts --timeout 45 -- bun scripts/qa-settings.tsx",
     "qa:windows": "bun scripts/qa-gui.ts --dbus --timeout 60 -- bun scripts/qa-windows.tsx",
     "qa:app": "bun scripts/qa-gui.ts --dbus --timeout 45 -- bun scripts/qa-app.tsx",
+    "qa:changelog": "bun scripts/qa-gui.ts --timeout 45 -- bun scripts/qa-changelog.tsx",
     "qa:chat": "bun scripts/qa-gui.ts --dbus --display-width 1800 --display-height 1500 --timeout 45 -- bun scripts/qa-chat-behavior.tsx",
     "build": "bun scripts/build-desktop.ts",
     "build:release": "bun scripts/build-release.ts",

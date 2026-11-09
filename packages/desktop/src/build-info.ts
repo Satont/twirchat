@@ -20,7 +20,9 @@ export function backendWebSocketUrl(backendUrl: string, override?: string): stri
 }
 
 export const APP_VERSION: string =
-  typeof __APP_VERSION__ === 'string' && __APP_VERSION__.length > 0 ? __APP_VERSION__ : 'dev'
+  typeof __APP_VERSION__ === 'string' && __APP_VERSION__.length > 0
+    ? __APP_VERSION__
+    : (process.env.TWIRCHAT_APP_VERSION ?? 'dev')
 
 export const BACKEND_URL: string =
   typeof __BACKEND_URL__ === 'string' && __BACKEND_URL__.length > 0
