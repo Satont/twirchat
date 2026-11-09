@@ -1,0 +1,365 @@
+diff --git a/packages/native/src/lib.rs b/packages/native/src/lib.rs
+index 221e9e3..3284c51 100644
+--- a/packages/native/src/lib.rs
++++ b/packages/native/src/lib.rs
+@@ -27,6 +27,8 @@ mod hotkey_capture;
+ mod image_resources;
+ #[cfg(target_os = "linux")]
+ mod linux_titlebar;
++#[cfg(target_os = "linux")]
++mod linux_window_frame;
+ mod markdown;
+ mod motion;
+ mod plain_text_cache;
+diff --git a/packages/native/src/linux_titlebar.rs b/packages/native/src/linux_titlebar.rs
+index 974bf7f..a026e84 100644
+--- a/packages/native/src/linux_titlebar.rs
++++ b/packages/native/src/linux_titlebar.rs
+@@ -1,12 +1,12 @@
+ use std::{cell::Cell, rc::Rc};
+ 
+ use gpui::{
+-    div, prelude::*, px, svg, App, Context, Decorations, Entity, FontWeight, Hsla, MouseButton,
+-    Pixels, Render, Role, SharedString, StyleRefinement, Window, WindowAppearance, WindowButton,
+-    WindowButtonLayout,
++    div, prelude::*, px, svg, AnyElement, App, Context, Decorations, Entity, FontWeight, Hsla,
++    MouseButton, Pixels, Render, Role, SharedString, StyleRefinement, Tiling, Window,
++    WindowAppearance, WindowButton, WindowButtonLayout,
+ };
+ 
+-use crate::theme::grey;
++use crate::{linux_window_frame::ResizeHandles, theme::grey};
+ 
+ const TITLEBAR_HEIGHT: Pixels = px(44.);
+ 
+@@ -44,31 +44,35 @@ pub(crate) struct ClientTitlebar {
+     title: SharedString,
+     state: TitlebarState,
+     version: u64,
++    resize_handles: Entity<ResizeHandles>,
+ }
+ 
+ impl ClientTitlebar {
+-    pub(crate) fn new(can_close: CloseRequest, title: &str, window: &Window, cx: &App) -> Self {
++    pub(crate) fn new(can_close: CloseRequest, title: &str, window: &Window, cx: &mut App) -> Self {
+         Self {
+             can_close,
+             drag_pending: Rc::new(Cell::new(false)),
+             title: SharedString::new(title),
+             state: TitlebarState::read(window, cx),
+             version: 0,
++            resize_handles: cx.new(|_| ResizeHandles::default()),
+         }
+     }
+ 
+-    pub(crate) fn element(
++    pub(crate) fn frame(
+         view: &Entity<Self>,
+         title: &str,
++        content: AnyElement,
+         window: &Window,
+         cx: &mut App,
+-    ) -> Option<impl IntoElement> {
+-        if !matches!(window.window_decorations(), Decorations::Client { .. })
+-            || window.is_fullscreen()
+-        {
+-            view.read(cx).drag_pending.set(false);
+-            return None;
+-        }
++    ) -> AnyElement {
++        let tiling = match window.window_decorations() {
++            Decorations::Client { tiling } if !window.is_fullscreen() => tiling,
++            _ => {
++                view.read(cx).drag_pending.set(false);
++                return content;
++            }
++        };
+ 
+         let state = TitlebarState::read(window, cx);
+         let previous = view.read(cx);
+@@ -87,16 +91,33 @@ impl ClientTitlebar {
+             previous.version
+         };
+ 
+-        Some(
+-            view.clone()
+-                .cached(
+-                    StyleRefinement::default()
+-                        .w_full()
+-                        .h(TITLEBAR_HEIGHT)
+-                        .flex_none(),
+-                )
+-                .cache_version(version),
++        let titlebar = view
++            .clone()
++            .cached(
++                StyleRefinement::default()
++                    .w_full()
++                    .h(TITLEBAR_HEIGHT)
++                    .flex_none(),
++            )
++            .cache_version(version);
++        let frame = div()
++            .flex()
++            .flex_col()
++            .size_full()
++            .child(titlebar)
++            .child(div().flex_1().min_h(px(0.)).w_full().child(content));
++        if state.maximized || !window.is_resizable() || tiling == Tiling::tiled() {
++            return frame.into_any_element();
++        }
++        let resize_handles = view.read(cx).resize_handles.clone();
++        ResizeHandles::frame(
++            resize_handles,
++            frame,
++            tiling,
++            titlebar_colors(state.appearance).0,
++            cx,
+         )
++        .into_any_element()
+     }
+ }
+ 
+@@ -110,15 +131,7 @@ impl Render for ClientTitlebar {
+             window_menu,
+             maximized,
+         } = self.state;
+-        let dark = matches!(
+-            appearance,
+-            WindowAppearance::Dark | WindowAppearance::VibrantDark
+-        );
+-        let (background, foreground) = if dark {
+-            (grey(0x30), grey(0xff))
+-        } else {
+-            (grey(0xeb), grey(0x2e))
+-        };
++        let (background, foreground) = titlebar_colors(appearance);
+         let buttons = |side: [Option<WindowButton>; gpui::MAX_BUTTONS_PER_SIDE]| {
+             div().flex().flex_none().gap(px(6.)).children(
+                 side.into_iter()
+@@ -194,6 +207,13 @@ impl Render for ClientTitlebar {
+     }
+ }
+ 
++fn titlebar_colors(appearance: WindowAppearance) -> (Hsla, Hsla) {
++    match appearance {
++        WindowAppearance::Dark | WindowAppearance::VibrantDark => (grey(0x30), grey(0xff)),
++        WindowAppearance::Light | WindowAppearance::VibrantLight => (grey(0xeb), grey(0x2e)),
++    }
++}
++
+ fn render_button(
+     button: WindowButton,
+     maximized: bool,
+diff --git a/packages/native/src/linux_window_frame.rs b/packages/native/src/linux_window_frame.rs
+new file mode 100644
+index 0000000..7edc6c8
+--- /dev/null
++++ b/packages/native/src/linux_window_frame.rs
+@@ -0,0 +1,168 @@
++use gpui::{
++    canvas, fill, point, prelude::*, px, size, App, Bounds, Context, CursorStyle, Decorations,
++    DispatchPhase, Div, Entity, HitboxBehavior, Hsla, MouseButton, MouseDownEvent, Pixels, Render,
++    ResizeEdge, StyleRefinement, Tiling, Window,
++};
++
++const RESIZE_GUTTER: Pixels = px(6.);
++
++#[derive(Default)]
++pub(crate) struct ResizeHandles {
++    tiling: Tiling,
++    background: Hsla,
++    version: u64,
++}
++
++impl ResizeHandles {
++    pub(crate) fn frame(
++        view: Entity<Self>,
++        frame: Div,
++        tiling: Tiling,
++        background: Hsla,
++        cx: &mut App,
++    ) -> Div {
++        let previous = view.read(cx);
++        let version = if previous.tiling == tiling && previous.background == background {
++            previous.version
++        } else {
++            view.update(cx, |handles, _| {
++                handles.tiling = tiling;
++                handles.background = background;
++                handles.version = handles.version.wrapping_add(1);
++                handles.version
++            })
++        };
++
++        frame
++            .relative()
++            .pt(gutter(tiling.top))
++            .pr(gutter(tiling.right))
++            .pb(gutter(tiling.bottom))
++            .pl(gutter(tiling.left))
++            .child(
++                view.cached(
++                    StyleRefinement::default()
++                        .absolute()
++                        .top_0()
++                        .left_0()
++                        .size_full(),
++                )
++                .cache_version(version),
++            )
++    }
++}
++
++impl Render for ResizeHandles {
++    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
++        resize_handles(self.tiling, self.background)
++    }
++}
++
++fn gutter(tiled: bool) -> Pixels {
++    if tiled {
++        px(0.)
++    } else {
++        RESIZE_GUTTER
++    }
++}
++
++fn resize_handles(tiling: Tiling, background: Hsla) -> impl IntoElement {
++    use ResizeEdge::*;
++
++    canvas(
++        move |bounds: Bounds<Pixels>, window, _| {
++            // Split the painted surface into a 3×3 grid. The center is app
++            // content. A tiled edge collapses its strip and both corners.
++            let left = gutter(tiling.left).min(bounds.size.width / 2.);
++            let right = gutter(tiling.right).min(bounds.size.width / 2.);
++            let top = gutter(tiling.top).min(bounds.size.height / 2.);
++            let bottom = gutter(tiling.bottom).min(bounds.size.height / 2.);
++            let columns = [
++                bounds.left(),
++                bounds.left() + left,
++                bounds.right() - right,
++                bounds.right(),
++            ];
++            let rows = [
++                bounds.top(),
++                bounds.top() + top,
++                bounds.bottom() - bottom,
++                bounds.bottom(),
++            ];
++            let rect = |left: usize, top: usize, right: usize, bottom: usize| {
++                Bounds::new(
++                    point(columns[left], rows[top]),
++                    size(columns[right] - columns[left], rows[bottom] - rows[top]),
++                )
++            };
++            let strips = [
++                rect(0, 0, 3, 1),
++                rect(0, 2, 3, 3),
++                rect(0, 1, 1, 2),
++                rect(2, 1, 3, 2),
++            ];
++            let handles = [
++                (0, 0, TopLeft),
++                (1, 0, Top),
++                (2, 0, TopRight),
++                (2, 1, Right),
++                (2, 2, BottomRight),
++                (1, 2, Bottom),
++                (0, 2, BottomLeft),
++                (0, 1, Left),
++            ]
++            .map(|(column, row, edge)| {
++                let bounds = rect(column, row, column + 1, row + 1);
++                (!bounds.is_empty()).then(|| {
++                    (
++                        edge,
++                        window.insert_hitbox(bounds, HitboxBehavior::BlockMouse),
++                    )
++                })
++            });
++            (strips, handles)
++        },
++        move |_, (strips, handles), window, _| {
++            for strip in strips.into_iter().filter(|strip| !strip.is_empty()) {
++                window.paint_quad(fill(strip, background));
++            }
++            for (edge, hitbox) in handles.iter().flatten() {
++                let cursor = match edge {
++                    Top => CursorStyle::ResizeUp,
++                    Right => CursorStyle::ResizeRight,
++                    Bottom => CursorStyle::ResizeDown,
++                    Left => CursorStyle::ResizeLeft,
++                    TopLeft | BottomRight => CursorStyle::ResizeUpLeftDownRight,
++                    TopRight | BottomLeft => CursorStyle::ResizeUpRightDownLeft,
++                };
++                window.set_cursor_style(cursor, hitbox);
++            }
++
++            window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
++                if phase != DispatchPhase::Bubble || event.button != MouseButton::Left {
++                    return;
++                }
++                let Some((edge, _)) = handles
++                    .iter()
++                    .flatten()
++                    .find(|(_, hitbox)| hitbox.is_hovered(window))
++                else {
++                    return;
++                };
++                if window.is_fullscreen()
++                    || window.is_maximized()
++                    || window.window_decorations() != (Decorations::Client { tiling })
++                {
++                    return;
++                }
++                // Wayland needs the serial of this button press.
++                window.start_window_resize(*edge);
++                cx.stop_propagation();
++            });
++        },
++    )
++    .absolute()
++    .top_0()
++    .left_0()
++    .size_full()
++}
+diff --git a/packages/native/src/renderer.rs b/packages/native/src/renderer.rs
+index 7b956db..a7e8020 100644
+--- a/packages/native/src/renderer.rs
++++ b/packages/native/src/renderer.rs
+@@ -6864,25 +6864,14 @@ impl gpui::Render for GpuixView {
+             let drag_end_view = drag_move_view.clone();
+             let root = gpui::div().size_full();
+             #[cfg(target_os = "linux")]
+-            let result = match self
+-                .client_titlebar
+-                .as_ref()
+-                .and_then(|titlebar| {
+-                    crate::linux_titlebar::ClientTitlebar::element(
+-                        titlebar,
+-                        &self.window_title,
+-                        window,
+-                        cx,
+-                    )
+-                })
+-            {
+-                Some(titlebar) => gpui::div()
+-                    .flex()
+-                    .flex_col()
+-                    .size_full()
+-                    .child(titlebar)
+-                    .child(gpui::div().flex_1().min_h(gpui::px(0.)).w_full().child(result))
+-                    .into_any_element(),
++            let result = match &self.client_titlebar {
++                Some(titlebar) => crate::linux_titlebar::ClientTitlebar::frame(
++                    titlebar,
++                    &self.window_title,
++                    result,
++                    window,
++                    cx,
++                ),
+                 None => result,
+             };
+             with_window_menu_actions(root)
