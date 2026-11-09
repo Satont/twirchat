@@ -14,6 +14,40 @@
 - The `PR title` check must pass to merge into `main`. Squash the PR and keep its title
   as the squash commit subject so git-cliff can include it in the changelog.
 
+## Agent skills
+
+- Project-local skills live in `.agents/skills/<name>/SKILL.md`. When a task matches one of
+  them, read the skill before starting and apply it together with this file. Rules in this
+  file take precedence over a skill if they conflict.
+- [typescript-best-practices](.agents/skills/typescript-best-practices/SKILL.md) — any `.ts`
+  or `.tsx` change: type discipline, boundary parsing, API shape.
+- [react-best-practices](.agents/skills/react-best-practices/SKILL.md) — React components,
+  hooks, subscriptions, derived state, and rendering performance. GPUIX is not a browser:
+  DOM, storage, SSR, RSC, and Next.js examples from upstream do not apply.
+- [vue3-typescript-best-practices](.agents/skills/vue3-typescript-best-practices/SKILL.md) —
+  the OBS overlay in `packages/desktop/src/views/overlay`.
+- [gpui](.agents/skills/gpui/SKILL.md),
+  [rust-best-practices](.agents/skills/rust-best-practices/SKILL.md), and
+  [rust-async-patterns](.agents/skills/rust-async-patterns/SKILL.md) — Rust/GPUI work,
+  including the native parity track.
+- [7tv-events-api](.agents/skills/7tv-events-api/SKILL.md) — 7TV EventAPI v3 WebSocket/SSE
+  integration, subscriptions, and payload handling.
+- [type discipline](.agents/skills/principle-type-system-discipline/SKILL.md),
+  [boundary discipline](.agents/skills/principle-boundary-discipline/SKILL.md), and
+  [structural safeguards](.agents/skills/principle-encode-lessons-in-structure/SKILL.md)
+  — apply when designing types, wiring validation, or turning a repeated correction into
+  structure.
+- [open-pr](.agents/skills/open-pr/SKILL.md) — before opening or updating a pull request:
+  sync the base remote, rebase, rerun checks, push with lease, then create or update the PR.
+- [deslop](.agents/skills/deslop/SKILL.md) — review the final diff for AI-generated slop
+  before declaring a change complete.
+- [find-skills](.agents/skills/find-skills/SKILL.md) — only when the user asks to discover,
+  install, or extend agent skills.
+- Skills marked `disable-model-invocation: true` must be opened explicitly; do not rely on
+  automatic selection. Keep vendored upstream skill text unchanged and put project policy
+  here. Sources and hashes are pinned in `.agents/skills/upstream-lock.json` and
+  `skills-lock.json`.
+
 ## Agent GUI testing
 
 - Run native GUI tests only through `bun run qa:gui` or `bun run qa:native` from `packages/desktop`.
