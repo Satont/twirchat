@@ -1,14 +1,13 @@
-import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
+import { useGpuixRequired, useWindowSize, type PublicInstance } from '@gpuix/react'
 import type { EmoteCatalogEntry, EmoteSource } from '@twirchat/shared/protocol'
 import type { Platform } from '@twirchat/shared/types'
 /**
  * Emote picker — port of EmotePicker.vue onto GPUIX: native search input +
- * a <virtual-list> of heading / 7-cell grid rows inside an anchored overlay.
+ * a <virtual-list> of heading and grid rows inside an anchored overlay.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { groupEmoteCatalog } from '../../views/main/utils/emote-catalog'
-import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
+import { filterEmoteEntries, groupEmoteCatalog } from '../../views/main/utils/emote-catalog'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import {
@@ -32,8 +31,15 @@ import { Text } from './ui/Text'
 
 type PickerSource = EmoteSource | 'favorites'
 
-const ITEMS_PER_ROW = 7
-const CELL_WIDTH = 41
+const POPUP_WIDTH = 300
+const POPUP_MARGIN = 8
+const POPUP_BORDER = 1
+const COMPOSER_CLEARANCE = 48
+const CELL_WIDTH = 38
+const GRID_PADDING = 6
+const GRID_GAP = 2
+const SCROLLBAR_WIDTH = 4
+const ROW_HEIGHT = CELL_WIDTH + 4
 
 type PickerRow =
   | { kind: 'heading'; source: PickerSource; label: string }
@@ -59,6 +65,7 @@ export function EmotePicker({
   const emotes = useStore(emoteStore)
   const preferences = useStore(emotePreferencesStore)
   const renderer = useGpuixRequired()
+  const windowSize = useWindowSize()
   const searchRef = useRef<PublicInstance | null>(null)
   const listRef = useRef<PublicInstance | null>(null)
   const [selectedSource, setSelectedSource] = useState<PickerSource | null>(null)
@@ -68,6 +75,10 @@ export function EmotePicker({
   const cacheKey = `${platform}:${channelId}`
   const allEmotes = emotes.get(cacheKey) ?? EMPTY_EMOTES
   const isLoading = allEmotes.length === 0 && !emotes.has(cacheKey)
+  const popupWidth = Math.max(1, Math.min(POPUP_WIDTH, windowSize.width - 2 * POPUP_MARGIN))
+  const gridWidth = popupWidth - 2 * (POPUP_BORDER + GRID_PADDING) - SCROLLBAR_WIDTH
+  const itemsPerRow = Math.max(1, Math.floor((gridWidth + GRID_GAP) / (CELL_WIDTH + GRID_GAP)))
+  const query = searchQuery.trim()
 
   useEffect(() => {
     runUiTask(loadEmotes(backend, platform, channelId, useSessionCache))
@@ -76,65 +87,76 @@ export function EmotePicker({
 
   const groups = useMemo(() => {
     const grouped: Array<{ source: PickerSource; label: string; entries: EmoteCatalogEntry[] }> =
-      groupEmoteCatalog(allEmotes, searchQuery)
-    const favorites = fuzzyFilter(
-      preferences.value.favorites.map((entry) => ({ label: entry.alias, entry })),
-      searchQuery,
-    ).map(({ entry }) => entry)
+      groupEmoteCatalog(allEmotes)
+    const favorites = preferences.value.favorites
     if (favorites.length)
       grouped.unshift({ source: 'favorites', label: 'Favorites', entries: favorites })
     return grouped
-  }, [allEmotes, searchQuery, preferences.value.favorites])
-  const activeSource = groups.some((group) => group.source === selectedSource)
-    ? selectedSource
-    : groups[0]?.source
-  const activeIndex = Math.max(
-    0,
-    groups.findIndex((group) => group.source === activeSource),
+  }, [allEmotes, preferences.value.favorites])
+  const results = useMemo(
+    () =>
+      query
+        ? groups.map((group) => ({ ...group, entries: filterEmoteEntries(group.entries, query) }))
+        : groups,
+    [groups, query],
   )
+  const firstMatch = results.find((group) => group.entries.length > 0)
+  const activeGroup =
+    results.find((group) => group.source === selectedSource) ??
+    (query ? firstMatch : undefined) ??
+    results[0]
+  const activeSource = activeGroup?.source
+  const activeIndex = results.findIndex((group) => group === activeGroup)
   const pickerRows = useMemo((): PickerRow[] => {
-    const rows: PickerRow[] = []
-    for (const group of groups.filter((group) => group.source === activeSource)) {
-      rows.push({ kind: 'heading', source: group.source, label: group.label })
-      for (let index = 0; index < group.entries.length; index += ITEMS_PER_ROW) {
-        rows.push({
-          kind: 'emotes',
-          source: group.source,
-          entries: group.entries.slice(index, index + ITEMS_PER_ROW),
-        })
-      }
+    if (!activeGroup?.entries.length) return []
+    const { source, label, entries } = activeGroup
+    const rows: PickerRow[] = [{ kind: 'heading', source, label }]
+    for (let index = 0; index < entries.length; index += itemsPerRow) {
+      rows.push({ kind: 'emotes', source, entries: entries.slice(index, index + itemsPerRow) })
     }
     return rows
-  }, [groups, activeSource])
+  }, [activeGroup, itemsPerRow])
   useEffect(() => {
     if (listRef.current) renderer.scrollToItem?.(listRef.current.id, 0)
-  }, [renderer, activeSource, searchQuery])
+  }, [renderer, activeSource, query, itemsPerRow])
   const popupContextId = usePopupHotkeys('emotes', {
     delete: onClose,
     search: () => focusPopupSearch(nativeWindow(renderer), searchRef),
-    openTab: groups.length
-      ? ([target]) => {
-          const index = popupTabIndex(activeIndex, target!, groups.length)
-          if (index !== null) setSelectedSource(groups[index]!.source)
-        }
-      : null,
+    openTab: ([target]) => {
+      if (target === undefined) return
+      const index = popupTabIndex(activeIndex, target, groups.length)
+      const group = index === null ? undefined : groups[index]
+      if (group) setSelectedSource(group.source)
+    },
     scrollPage: pickerRows.length
-      ? ([direction]) => scrollPopupPage(renderer, listRef, direction!)
+      ? ([direction]) => {
+          if (direction !== undefined) scrollPopupPage(renderer, listRef, direction)
+        }
       : null,
   })
 
   useOverlayClose(true, onClose, popupContextId)
 
   return (
-    <anchored deferred side="top" align="end" gap={8}>
+    <anchored
+      deferred
+      side="top"
+      align="end"
+      gap={POPUP_MARGIN}
+      fit="snap"
+      snapMargin={POPUP_MARGIN}
+    >
       {/* <anchored> supports only click/hover/fileDrop events, so
           onMouseDownOutside must live on the content div. */}
       <div
+        testId="emote-popup"
         onMouseDownOutside={onClose}
         style={{
-          width: 300,
+          width: popupWidth,
+          maxHeight: Math.max(1, windowSize.height - COMPOSER_CLEARANCE),
+          overflow: 'hidden',
           backgroundColor: theme.surface2,
-          borderWidth: 1,
+          borderWidth: POPUP_BORDER,
           borderColor: theme.border,
           borderRadius: 12,
           display: 'flex',
@@ -152,6 +174,7 @@ export function EmotePicker({
           style={{
             display: 'flex',
             flexDirection: 'row',
+            flexShrink: 0,
             alignItems: 'center',
             gap: 8,
             paddingTop: 10,
@@ -181,30 +204,35 @@ export function EmotePicker({
           />
         </div>
 
-        {groups.length > 1 ? (
-          <div
-            testId="emote-popup-tabs"
-            style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4, padding: 8 }}
-          >
-            {groups.map((group) => (
-              <ActionButton
-                key={group.source}
-                testId={`emote-popup-tab-${group.source}`}
-                primary={group.source === activeSource}
-                onClick={() => setSelectedSource(group.source)}
-              >
-                {group.label}
-              </ActionButton>
-            ))}
-          </div>
-        ) : null}
+        <div
+          testId="emote-popup-tabs"
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexShrink: 0,
+            flexWrap: 'wrap',
+            gap: 4,
+            padding: 8,
+          }}
+        >
+          {groups.map((group) => (
+            <ActionButton
+              key={group.source}
+              testId={`emote-popup-tab-${group.source}`}
+              primary={group.source === activeSource}
+              onClick={() => setSelectedSource(group.source)}
+            >
+              {group.label}
+            </ActionButton>
+          ))}
+        </div>
         {isLoading ? (
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: 32,
+              padding: 12,
             }}
           >
             <Text style={{ fontSize: 13, color: theme.text2 }}>Loading…</Text>
@@ -215,19 +243,29 @@ export function EmotePicker({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: 32,
+              padding: 12,
             }}
           >
             <Text style={{ fontSize: 13, color: theme.text2 }}>
-              {searchQuery.trim() ? 'No emotes found' : 'No emotes for this channel yet'}
+              {query
+                ? firstMatch
+                  ? 'No matches here. Check other tabs.'
+                  : 'No emotes found'
+                : 'No emotes in this tab yet'}
             </Text>
           </div>
         ) : (
           <virtual-list
             ref={listRef}
             testId="emote-popup-list"
-            estimatedItemHeight={44}
-            style={{ height: 340, scrollbarColor: theme.scrollbar, scrollbarWidth: 4 }}
+            estimatedItemHeight={ROW_HEIGHT}
+            style={{
+              height: 340,
+              flexShrink: 1,
+              minHeight: 0,
+              scrollbarColor: theme.scrollbar,
+              scrollbarWidth: SCROLLBAR_WIDTH,
+            }}
           >
             {pickerRows.map((row, index) =>
               row.kind === 'heading' ? (
@@ -251,11 +289,11 @@ export function EmotePicker({
                   style={{
                     display: 'flex',
                     flexDirection: 'row',
-                    paddingLeft: 6,
-                    paddingRight: 6,
+                    paddingLeft: GRID_PADDING,
+                    paddingRight: GRID_PADDING,
                     paddingTop: 2,
                     paddingBottom: 2,
-                    gap: 2,
+                    gap: GRID_GAP,
                   }}
                 >
                   {row.entries.map((emote) => (
@@ -264,6 +302,7 @@ export function EmotePicker({
                       style={{
                         width: CELL_WIDTH,
                         height: CELL_WIDTH,
+                        flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -277,6 +316,7 @@ export function EmotePicker({
                         emote={{ ...emote, name: emote.alias, positions: [] }}
                       >
                         <div
+                          testId={`emote-popup-item-${emote.alias}`}
                           onClick={() => onSelect(emote.alias)}
                           style={{
                             width: CELL_WIDTH,

@@ -1,8 +1,12 @@
 if (process.env.TWIRCHAT_GUI_QA !== '1') throw new Error('Use the isolated qa:gui launcher.')
 const { assertGuiQaEnvironment } = await import('../src/services/gui-qa')
 assertGuiQaEnvironment()
+await import('../src/gpuix/native-bootstrap')
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
+
+import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
+
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider, useGpuixRequired } =
   await import('@gpuix/react')
@@ -19,6 +23,8 @@ const { AddChannelModal } = await import('../src/gpuix/components/AddChannelModa
 const { ChattersDialog } = await import('../src/gpuix/components/ChattersDialog')
 const { SearchAllChatsDialog } = await import('../src/gpuix/components/SearchAllChatsDialog')
 const { EmotePicker } = await import('../src/gpuix/components/EmotePicker')
+const { nativeWindow } = await import('../src/gpuix/native-window')
+const { DEFAULT_EMOTE_PREFERENCES } = await import('../src/services/provider-emotes')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { UserCardDialog } = await import('../src/gpuix/components/UserCardDialog')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
@@ -32,6 +38,23 @@ const sharp = (await import('sharp')).default
 const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: '#8b5cf6' } })
   .png()
   .toBuffer()
+function emote(
+  alias: string,
+  source: EmoteCatalogEntry['source'],
+  provider?: EmoteCatalogEntry['provider'],
+): EmoteCatalogEntry {
+  return {
+    id: alias,
+    alias,
+    name: alias,
+    source,
+    provider,
+    imageUrl: `data:image/png;base64,${png.toString('base64')}`,
+    animated: false,
+    zeroWidth: false,
+    aspectRatio: 1,
+  }
+}
 globalThis.fetch = async (input) => {
   requests.push(String(input))
   return new Response(png, { headers: { 'content-type': 'image/png' } })
@@ -61,7 +84,15 @@ const messages = Array.from({ length: 100 }, (_, index) => ({
 const backend = {
   events: createDesktopEvents(),
   api: {
-    getUiState: async () => null,
+    getUiState: async ({ key }: { key: string }) =>
+      key === 'emote_preferences_v1'
+        ? JSON.stringify({
+            ...DEFAULT_EMOTE_PREFERENCES,
+            favorites: [
+              { ...emote('SavedWave', 'global'), imageUrl: 'https://emotes.invalid/fav' },
+            ],
+          })
+        : null,
     setUiState: async () => {},
     getModerationSettings: async () => moderation,
     getUserCardMetadata: async () => null,
@@ -129,7 +160,7 @@ const stopNativePlan = observeNativeHotkeyPlan('main', (plan) =>
 const root = createRoot(renderer, { onKeyDown: (event) => handleGlobalKeyDown(event) })
 const loop = startFrameLoop(renderer)
 const e = React.createElement
-async function mount(component, props = {}, emote = false) {
+async function mount(component, props = {}, anchored = false) {
   root.render(
     e(
       BackendContext.Provider,
@@ -150,7 +181,7 @@ async function mount(component, props = {}, emote = false) {
               backgroundColor: '#111114',
             },
           },
-          emote
+          anchored
             ? e('div', { style: { height: 24, width: 300 } }, e(component, props))
             : e(component, props),
         ),
@@ -178,6 +209,25 @@ async function clickText(text) {
   assert.ok(b)
   renderer.simulateClick(b.x + b.width / 2, b.y + b.height / 2, 0)
   await Bun.sleep(150)
+}
+function boundsOf(id: string) {
+  const node = find(id)
+  const bounds = nativeWindow(renderer).getPaintedElementBounds(node.id) ?? node.bounds
+  assert.ok(bounds, `Missing bounds for ${id}`)
+  return bounds
+}
+async function click(id: string) {
+  const bounds = boundsOf(id)
+  renderer.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
+  await Bun.sleep(150)
+}
+function emoteViewport() {
+  const list = find('emote-popup-list')
+  const popup = boundsOf('emote-popup')
+  const tabs = boundsOf('emote-popup-tabs')
+  const height = renderer.getListScrollTop(list.id)?.[2]
+  assert.ok(height && height > 0)
+  return { x: tabs.x, y: tabs.y + tabs.height, width: popup.width - 2, height }
 }
 async function type(id, text) {
   const node = find(id)
@@ -255,16 +305,15 @@ try {
     new Map([
       [
         'twitch:mock',
-        Array.from({ length: 280 }, (_, index) => ({
-          id: `${index}`,
-          alias: `Emote${index}`,
-          name: `Emote${index}`,
-          source: index < 140 ? 'channel' : 'global',
-          imageUrl: `data:image/png;base64,${png.toString('base64')}`,
-          animated: false,
-          zeroWidth: false,
-          aspectRatio: 1,
-        })),
+        [
+          ...Array.from({ length: 140 }, (_, index) => emote(`Emote${index}`, 'global')),
+          emote('SevenGlobal', 'global', 'seventv'),
+          emote('FrankerGlobal', 'global', 'ffz'),
+          emote('SevenChannel', 'seventv'),
+          emote('TwitchChannel', 'channel'),
+          emote('Collectible', 'collectibles'),
+          emote('PersonalWave', 'personal'),
+        ],
       ],
     ]),
   )
@@ -283,19 +332,86 @@ try {
     },
     true,
   )
-  assert.ok(nodes().some((node) => node.text === 'CHANNEL'))
+  const tabs = [
+    'favorites',
+    'channel',
+    'global',
+    'seventv',
+    'ffz',
+    'bttv',
+    'collectibles',
+    'personal',
+  ]
+  const assertTabOrder = () =>
+    assert.deepEqual(
+      nodes()
+        .map((node) => node.testId)
+        .filter((id) => id?.startsWith('emote-popup-tab-')),
+      tabs.map((source) => `emote-popup-tab-${source}`),
+    )
+  assertTabOrder()
+  await type('emote-popup-search', 'frankerglobal')
+  assert.ok(find('emote-popup-item-FrankerGlobal'))
   await press('ctrl-right')
-  assert.ok(nodes().some((node) => node.text === 'GLOBAL'))
-  const list = find('emote-popup-list'),
-    before = renderer.getListScrollTop(list.id)
+  assert.ok(renderer.getPaintedText().includes('No matches here. Check other tabs.'))
+  assertTabOrder()
+  await click('emote-popup-tab-ffz')
+  assert.ok(nodes().some((node) => node.text === 'FFZ'))
+  assert.ok(find('emote-popup-item-FrankerGlobal'))
+  await press('ctrl-f')
+  await press('x')
+  assert.ok(renderer.getPaintedText().includes('No emotes found'))
+  await press('backspace')
+  assert.ok(find('emote-popup-item-FrankerGlobal'))
+  await click('emote-popup-tab-global')
+  const normalViewport = emoteViewport()
+  const seventh = boundsOf('emote-popup-item-Emote6')
+  assert.ok(seventh.x + seventh.width <= normalViewport.x + normalViewport.width)
+  await click('emote-popup-item-Emote6')
+  assert.deepEqual(selected, ['Emote6'])
+  await press('ctrl-right')
+  assert.ok(find('emote-popup-item-SevenGlobal'))
+  assert.ok(find('emote-popup-item-SevenChannel'))
+  await click('emote-popup-tab-bttv')
+  assert.ok(renderer.getPaintedText().includes('No emotes in this tab yet'))
+  await press('ctrl-y')
+  assert.deepEqual(selected, ['Emote6'])
+  await click('emote-popup-tab-global')
+  await captureGuiQaDisplay('popup-emotes')
+  const small = { width: 320, height: 240 }
+  await nativeWindow(renderer).setWindowBounds(small)
+  await Bun.sleep(220)
+  const popup = boundsOf('emote-popup')
+  const viewport = emoteViewport()
+  assert.ok(popup.x >= 0 && popup.x + popup.width <= small.width)
+  assert.ok(popup.y >= 0 && popup.y + popup.height <= small.height)
+  assert.ok(viewport.y + viewport.height <= popup.y + popup.height)
+  assert.ok(viewport.height < normalViewport.height)
+  assertTabOrder()
+  const list = find('emote-popup-list')
+  const before = renderer.getListScrollTop(list.id)
   await press('ctrl-pagedown')
   const after = renderer.getListScrollTop(list.id)
   assert.ok(after[0] > before[0] || after[1] > before[1])
-  await press('ctrl-y')
-  assert.equal(selected.length, 0)
-  await captureGuiQaDisplay('popup-emotes')
-  await press('ctrl-d')
+  renderer.simulateScrollWheel(
+    viewport.x + viewport.width / 2,
+    viewport.y + viewport.height / 2,
+    0,
+    -2000,
+  )
+  await Bun.sleep(180)
+  const last = boundsOf('emote-popup-item-FrankerGlobal')
+  assert.ok(last.y >= viewport.y && last.y + last.height <= viewport.y + viewport.height)
+  await captureGuiQaDisplay('popup-emotes-small')
+  await click('emote-popup-item-FrankerGlobal')
+  assert.deepEqual(selected, ['Emote6', 'FrankerGlobal'])
+  await press('ctrl-f')
+  await press('escape')
   assert.equal(closed, 1)
+  renderer.simulateClick(2, 2, 0)
+  await Bun.sleep(120)
+  assert.equal(closed, 2)
+  await nativeWindow(renderer).setWindowBounds({ width: 820, height: 850 })
   closed = 0
   await mount(UserCardDialog, {
     target,
@@ -309,8 +425,11 @@ try {
   assert.equal(commands.length, 1)
   assert.equal(commands[0].text, '/timeout viewer 123 QA selected reason')
   await clickText('History')
-  const history = find('user-card-history-viewport'),
-    top = renderer.getListScrollTop(history.id)
+  const history = find('user-card-history-viewport')
+  // History opens at the latest message. Start inside the list to test Page Down.
+  renderer.scrollToItem(history.id, 50, 0)
+  await Bun.sleep(150)
+  const top = renderer.getListScrollTop(history.id)
   await press('ctrl-pagedown')
   const moved = renderer.getListScrollTop(history.id)
   assert.ok(moved[0] > top[0] || moved[1] > top[1])

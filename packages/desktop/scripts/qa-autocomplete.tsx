@@ -83,10 +83,13 @@ backend.api.getTwirCommands = async (target, options) => {
   if (options?.refresh) twirReloads++
   await waitForTwirCommands
   if (twirReloads) return [{ name: 'updated', description: 'A refreshed Twir command' }]
-  return Array.from({ length: 20 }, (_, index) => ({
-    name: `twir${String(index).padStart(2, '0')}`,
-    description: 'A public bot command',
-  }))
+  return [
+    ...Array.from({ length: 20 }, (_, index) => ({
+      name: `twir${String(index).padStart(2, '0')}`,
+      description: 'A public bot command',
+    })),
+    { name: 'quote add', description: 'Add a quote' },
+  ]
 }
 backend.api.sendWatchedChannelMessage = async ({ id, text }) => {
   assert.equal(id, channel.id)
@@ -201,7 +204,7 @@ function paintedBounds(testId: string) {
   assert(bounds, `Unpainted ${testId}`)
   return bounds
 }
-function selectedLabel(prefix = '/command'): string | undefined {
+function selectedLabel(prefix = '/'): string | undefined {
   const selected = nodes().find((node) => node.testId === 'autocomplete-selected')
   return selected
     ? flatten(selected).find((node) => node.text?.startsWith(prefix))?.text
@@ -219,12 +222,9 @@ async function draft(text: string): Promise<void> {
   updateComposer(composerKey, (state) => editComposer(state, text))
   await Bun.sleep(60)
 }
-async function selectKey(key: 'down' | 'up', index: number, prefix = '/command'): Promise<void> {
+async function selectKey(key: 'down' | 'up', label: string): Promise<void> {
   await pressNative(key === 'down' ? 'Down' : 'Up')
-  await until(
-    () => selectedLabel(prefix) === `${prefix}${String(index).padStart(2, '0')}`,
-    `native ${key} selects ${index}`,
-  )
+  await until(() => selectedLabel(label) === label, `native ${key} selects ${label}`)
   await until(() => {
     const r = currentRenderer()
     const selected = nodes().find((node) => node.testId === 'autocomplete-selected')
@@ -348,10 +348,16 @@ try {
     const startTotal = app.chatActivityStore.get().get(channel.id)?.total ?? 0
     await pressNative('Down', 'Down', 'Up')
     await until(() => selectedLabel() === '/command01', 'Rapid arrows update selection')
-    await selectKey('up', 0)
-    for (let index = 1; index <= 14; index++) await selectKey('down', index)
-    await selectKey('down', 0)
-    await selectKey('up', 14)
+    await selectKey('up', '/command00')
+    await selectKey('up', '/twirreload')
+    await selectKey('down', '/command00')
+    await typeNative('command')
+    await until(() => selectedLabel() === '/command00', 'Filtered slash commands')
+    await selectKey('up', '/command19')
+    await selectKey('down', '/command00')
+    for (let index = 1; index < 20; index++) {
+      await selectKey('down', `/command${String(index).padStart(2, '0')}`)
+    }
     const popup = paintedBounds('autocomplete-popup')
     const viewport = paintedBounds('autocomplete-viewport')
     const composer = paintedBounds('composer-frame')
@@ -366,15 +372,15 @@ try {
       'Live chat continued while navigating',
     )
     screenshots.push(await captureGuiQaDisplay(`autocomplete-${size.width}`))
-    currentRenderer().simulateKeystrokes('tab')
+    await pressNative('Tab')
     await until(
-      () => composerStore.get().get(composerKey)?.text === '/command14 ',
+      () => composerStore.get().get(composerKey)?.text === '/command19 ',
       'Tab inserts selected command',
     )
     assert.equal(sent.length, 0, 'Completion does not send')
     await draft('/')
     await until(() => selectedLabel() === '/command00', 'Reopened completion')
-    await selectKey('down', 1)
+    await selectKey('down', '/command01')
     currentRenderer().simulateKeystrokes('enter')
     await until(
       () => composerStore.get().get(composerKey)?.text === '/command01 ',
@@ -413,9 +419,12 @@ try {
     const beforeTraffic = app.chatActivityStore.get().get(channel.id)?.total ?? 0
     await typeNative('!')
     await until(() => selectedLabel('!twir') === '!twir00', 'Twir suggestions for bare !')
-    for (let index = 1; index <= 14; index++) await selectKey('down', index, '!twir')
-    await selectKey('down', 0, '!twir')
-    await selectKey('up', 14, '!twir')
+    for (let index = 1; index < 20; index++) {
+      await selectKey('down', `!twir${String(index).padStart(2, '0')}`)
+    }
+    await selectKey('down', '!quote add')
+    await selectKey('down', '!twir00')
+    await selectKey('up', '!quote add')
     const twirPopup = paintedBounds('autocomplete-popup')
     assert(twirPopup.x >= 7 && twirPopup.x + twirPopup.width <= size.width - 7)
     assert(twirPopup.y >= 7 && twirPopup.y + twirPopup.height <= composer.y - 4)
@@ -432,6 +441,20 @@ try {
     assert.equal(sent.length, 0, 'Twir completion only inserts text')
     currentRenderer().simulateKeystrokes('enter')
     await until(() => sent.at(-1) === '!twir10', 'A second Enter sends the command as chat')
+    sent.length = 0
+
+    await typeNative('!QUO')
+    await until(() => selectedLabel('!quote') === '!quote add', 'Multiword Twir match')
+    await pressNative('Return')
+    await until(
+      () => composerStore.get().get(composerKey)?.text === '!quote add ',
+      'Enter inserts the full Twir command',
+    )
+    assert.equal(sent.length, 0)
+    await typeNative('Example')
+    assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
+    await pressNative('Return')
+    await until(() => sent.at(-1) === '!quote add Example', 'Sends the command with args')
     sent.length = 0
   }
   /* eslint-enable no-await-in-loop */

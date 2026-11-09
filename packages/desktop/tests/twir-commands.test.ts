@@ -4,7 +4,11 @@ import { createTwirCommandsClient, type TwirCommandTarget } from '../src/service
 
 const API = 'https://twir.app/api'
 const UUID = '42d0d76c-0691-4d5c-8d56-3608adc05dc6'
-const COMMANDS = [{ name: 'Hello', description: null }]
+const COMMANDS = [
+  { name: 'Hello', description: null },
+  { name: 'prediction start', description: 'Start a prediction' },
+  { name: '7tv delete', description: null },
+]
 const TARGET: TwirCommandTarget = { platform: 'kick', platformChannelId: '12345' }
 
 test('looks up a platform ID then fetches commands by Twir UUID, coalescing concurrent reads', async () => {
@@ -15,9 +19,18 @@ test('looks up a platform ID then fetches commands by Twir UUID, coalescing conc
       expect(init.signal).toBeInstanceOf(AbortSignal)
       return url.endsWith('/commands')
         ? Response.json([
-            { ...COMMANDS[0], module: 'custom', responses: [] },
-            { name: '', description: null },
-            { name: 'multiple words', description: null },
+            ...COMMANDS.map((command) => ({ ...command, module: 'custom', responses: [] })),
+            ...[
+              '',
+              ' prediction',
+              'prediction ',
+              'prediction  start',
+              'prediction\tstart',
+              'prediction\n',
+              'prediction\u00a0start',
+              'prediction\u0000',
+              'prediction\ud800',
+            ].map((name) => ({ name, description: null })),
           ])
         : Response.json({ channel_id: UUID })
     },
