@@ -40,6 +40,7 @@ import { BadgeTooltip } from './ui/BadgeTooltip'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
+import { hexMix } from './user-card/format'
 
 const DEFAULT_FONT_SIZE = 14
 const MAX_NAME_GRAPHEMES = 32
@@ -560,6 +561,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       username: message.author.username,
       avatarUrl: avatarUrlFor(message),
       currentAlias: props.alias,
+      badges: message.author.badges,
     })
   }
 
@@ -690,7 +692,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   let rowBackground: string | undefined
 
   if (isFirstMessage) {
-    rowBackground = `color-mix(in srgb, ${semantic.firstMessageSofter} ${FIRST_MESSAGE_BACKGROUND_OPACITY * 100}%, transparent)`
+    rowBackground = hexMix(semantic.firstMessageSofter, theme.bg, FIRST_MESSAGE_BACKGROUND_OPACITY)
   } else if (isSelfPing) {
     rowBackground = props.selfPingColor ?? SELF_PING_BACKGROUND_FALLBACK
   } else if (message.delivery?.state === MessageDiliveryState.Failed) {

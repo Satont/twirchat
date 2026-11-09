@@ -11,6 +11,8 @@ export function ActionButton({
   primary,
   danger,
   testId,
+  style,
+  textStyle,
 }: {
   children: ReactNode
   onClick: () => void
@@ -18,6 +20,8 @@ export function ActionButton({
   primary?: boolean
   danger?: boolean
   testId?: string
+  style?: Record<string, unknown>
+  textStyle?: Record<string, unknown>
 }) {
   const theme = useTheme()
   return (
@@ -48,12 +52,14 @@ export function ActionButton({
         hover: disabled
           ? {}
           : { backgroundColor: primary ? theme.accent.primary : theme.fillHover },
+        ...style,
       }}
     >
       <Text
         style={{
           fontSize: 12,
           color: primary ? theme.accent.onPrimary : danger ? theme.dangerText : theme.text,
+          ...textStyle,
         }}
       >
         {children}

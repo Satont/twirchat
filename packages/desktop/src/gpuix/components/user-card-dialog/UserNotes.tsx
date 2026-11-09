@@ -1,11 +1,10 @@
+import { useBackend } from '@gpuix/backend/context'
+import { ActionButton, FormInput } from '@gpuix/components/ui/Form'
+import { Text } from '@gpuix/components/ui/Text'
+import { parseNoteMarkdown } from '@gpuix/components/user-card/note-markdown'
+import { useTheme } from '@gpuix/theme-context'
+import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
-
-import type { UserCardTarget } from '../../../views/main/utils/chatCommands'
-import { useBackend } from '../../backend/context'
-import { useTheme } from '../../theme-context'
-import { ActionButton, FormInput } from '../ui/Form'
-import { Text } from '../ui/Text'
-import { parseNoteMarkdown } from './note-markdown'
 
 /** Native Markdown preview: paragraphs, headings, lists, quotes and fenced code. */
 export function UserNotes({ target }: { target: UserCardTarget }) {

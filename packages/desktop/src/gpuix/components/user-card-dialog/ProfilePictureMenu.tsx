@@ -1,12 +1,11 @@
+import { useBackend } from '@gpuix/backend/context'
+import { ActionButton, FormError } from '@gpuix/components/ui/Form'
+import { Modal } from '@gpuix/components/ui/Modal'
+import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
+import { Text } from '@gpuix/components/ui/Text'
+import { usePopupHotkeys } from '@gpuix/hooks/use-popup-hotkeys'
+import { useTheme } from '@gpuix/theme-context'
 import { useState } from 'react'
-
-import { useBackend } from '../../backend/context'
-import { usePopupHotkeys } from '../../hooks/use-popup-hotkeys'
-import { useTheme } from '../../theme-context'
-import { ActionButton, FormError } from '../ui/Form'
-import { Modal } from '../ui/Modal'
-import { RemoteImage } from '../ui/RemoteImage'
-import { Text } from '../ui/Text'
 
 export function ProfilePictureMenu({ url, onClose }: { url: string; onClose: () => void }) {
   const backend = useBackend()

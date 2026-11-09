@@ -1,4 +1,4 @@
-import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import type { NormalizedChatMessage, Platform, Badge } from '@twirchat/shared/types'
 
 export interface UserCardTarget {
   platform: Platform
@@ -10,6 +10,7 @@ export interface UserCardTarget {
   username?: string
   avatarUrl?: string
   currentAlias?: string
+  badges?: Badge[]
 }
 
 type AliasMap = Map<Platform, Map<string, string>>
