@@ -771,7 +771,7 @@ export function SettingsPanel() {
                 <FormRow
                   last
                   label="Auto-check for updates"
-                  hint="Check at startup and hourly in the background"
+                  hint="Check at startup and every 10 minutes"
                 >
                   <Switch
                     checked={local.autoCheckUpdates ?? false}
