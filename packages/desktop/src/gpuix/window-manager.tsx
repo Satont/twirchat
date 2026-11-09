@@ -56,7 +56,7 @@ interface MountedWindow {
   stopVisibility?: () => void
 }
 export type WindowContentFactory = (descriptor: DesktopWindowDescriptor) => ReactNode
-const WINDOW_MANAGER_VERSION = 7
+const WINDOW_MANAGER_VERSION = 8
 
 interface WindowUiRuntime {
   createRoot(renderer: Renderer, id: string): Root
@@ -278,7 +278,6 @@ export class DesktopWindowManager {
       },
       openChat: (tabId, panelId, overlay) => this.openChat(tabId, panelId, overlay),
       openUser: (target) => this.openUser(target),
-      openObsRemote: () => this.openObsRemote(),
       close: () => this.close(descriptor.id),
       quit: () => this.quit(),
       toggleOverlayInertia: (target) => this.toggleOverlayInertia(descriptor.id, target),
@@ -317,7 +316,6 @@ export class DesktopWindowManager {
         })
       }
       const bounds = descriptor.bounds
-      const obsRemote = descriptor.kind === 'obs-remote'
       const options: NativeWindowOptions = {
         title: descriptor.title,
         appName: 'TwirChat',
@@ -325,14 +323,8 @@ export class DesktopWindowManager {
           process.env.TWIRCHAT_GUI_QA === '1' ? process.env.TWIRCHAT_QA_APP_ID : 'dev.twirchat.app',
         width:
           bounds?.width ??
-          (obsRemote
-            ? 1240
-            : descriptor.kind === 'main'
-              ? 1200
-              : descriptor.kind === 'user'
-                ? 820
-                : 600),
-        height: bounds?.height ?? (obsRemote ? 920 : descriptor.kind === 'main' ? 800 : 720),
+          (descriptor.kind === 'main' ? 1200 : descriptor.kind === 'user' ? 820 : 600),
+        height: bounds?.height ?? (descriptor.kind === 'main' ? 800 : 720),
         minWidth: 320,
         minHeight: 240,
         kind: descriptor.kind === 'overlay' || descriptor.kind === 'user' ? 'floating' : 'normal',
@@ -433,17 +425,6 @@ export class DesktopWindowManager {
       title: `TwirChat — ${target.username ?? target.platformUserId}`,
       target: structuredClone(target),
     })
-  }
-
-  async openObsRemote(): Promise<string> {
-    const id = 'obs-remote'
-    const current = this.mounted.get(id)
-    if (current?.renderer.isWindowOpen()) {
-      current.renderer.activateWindow()
-      return id
-    }
-    if (current) this.session.closed(id)
-    return this.open({ id, kind: 'obs-remote', title: 'TwirChat — OBS Remote' })
   }
 
   async close(id: string): Promise<void> {

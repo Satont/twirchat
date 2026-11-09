@@ -32,12 +32,15 @@ function find(renderer, testId) {
   return visit(JSON.parse(renderer.getAutomationTree()))
 }
 let main
-async function openNavTab(tab: MainTab, contentId: string) {
-  const item = find(main, `nav-${tab}`)
-  assert.ok(item, `Missing ${tab} navigation item`)
+function click(testId: string) {
+  const item = find(main, testId)
+  assert.ok(item, `Missing ${testId}`)
   const bounds = main.getElementBounds(item.id)
-  assert.ok(bounds, `Missing painted bounds for ${tab}`)
+  assert.ok(bounds, `Missing painted bounds for ${testId}`)
   main.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
+}
+async function openNavTab(tab: MainTab, contentId: string) {
+  click(`nav-${tab}`)
   await until(() => app.activeTabStore.get() === tab && !!find(main, contentId), `opens ${tab}`)
 }
 async function action(category, name, args = []) {
@@ -76,7 +79,16 @@ try {
   await until(() => !!find(main, `pane-${homePane.id}`), 'legacy tab selection falls back to Chat')
   assert.equal(find(main, 'nav-events'), undefined)
   await openNavTab('platforms', 'connect-twitch')
+  await openNavTab('obs-remote', 'obs-remote-controller')
+  assert.equal(mounts.size, 1, 'OBS Remote opens in the main window')
+  click('obs-add-profile')
+  await until(() => !!find(main, 'obs-profile-url'), 'OBS connection editor opens')
+  main.simulateKeystrokes('escape')
+  await until(() => !find(main, 'obs-profile-url'), 'Escape closes the OBS connection editor')
   await openNavTab('settings', 'settings-search')
+  assert.equal(find(main, 'obs-remote-controller'), undefined)
+  await openNavTab('obs-remote', 'obs-remote-controller')
+  assert.equal(mounts.size, 1, 'Reopening OBS Remote reuses the main window')
   await openNavTab('chat', `pane-${homePane.id}`)
   await action('window', 'newSplit')
   await until(
