@@ -1,0 +1,19 @@
+diff --git a/packages/native/Cargo.lock b/packages/native/Cargo.lock
+--- a/packages/native/Cargo.lock
++++ b/packages/native/Cargo.lock
+@@ -2323,6 +2323,7 @@
+  "futures",
+  "futures-concurrency",
+  "getrandom 0.3.4",
++ "gif",
+  "gpui_macros",
+  "gpui_shared_string",
+  "gpui_util",
+@@ -2330,6 +2331,7 @@
+  "heapless",
+  "http_client",
+  "image",
++ "image-webp",
+  "inventory",
+  "itertools 0.14.0",
+  "log",

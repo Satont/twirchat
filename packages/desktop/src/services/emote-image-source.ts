@@ -6,6 +6,7 @@ export interface InlineEmoteImageOptions {
 
 const SEVENTV_HOSTS = new Set(['cdn.7tv.app', 'cdn.7tv.io'])
 const SEVENTV_IMAGE = /^(\/emote\/[A-Za-z0-9_-]{1,100}\/)[1-4]x(_static)?\.(webp|avif|gif|png)$/u
+const BETTERTTV_IMAGE = /^\/emote\/[A-Za-z0-9_-]{1,100}\/(?:static\/)?[1-3]x\.webp$/u
 const SEVENTV_PROXY_ID = /^[A-Za-z0-9_-]{1,100}$/u
 const SEVENTV_FORMATS = new Set(['webp', 'avif', 'gif', 'png'])
 
@@ -17,22 +18,27 @@ function parseUrl(source: string, base?: URL): URL | undefined {
   }
 }
 
-function sizedSevenTvUrl(source: string, variant: number): string {
+function sizedCdnUrl(source: string, physicalHeight: number): string {
   const url = parseUrl(source)
   if (
     !url ||
-    !SEVENTV_HOSTS.has(url.hostname) ||
     !['http:', 'https:'].includes(url.protocol) ||
     url.username ||
     url.password ||
-    url.port ||
-    !SEVENTV_IMAGE.test(url.pathname)
+    url.port
   )
     return source
-  // The native image decoder cannot read animated AVIF; 7TV serves every emote as WebP too.
-  const pathname = url.pathname
-    .replace(/\/[1-4]x(?=_static\.|\.)/u, `/${variant}x`)
-    .replace(/\.avif$/u, '.webp')
+  let pathname: string
+  if (SEVENTV_HOSTS.has(url.hostname) && SEVENTV_IMAGE.test(url.pathname)) {
+    const variant = Math.max(1, Math.min(4, Math.ceil(physicalHeight / 32)))
+    // The native image decoder cannot read animated AVIF; 7TV serves every emote as WebP too.
+    pathname = url.pathname
+      .replace(/\/[1-4]x(?=_static\.|\.)/u, `/${variant}x`)
+      .replace(/\.avif$/u, '.webp')
+  } else if (url.hostname === 'cdn.betterttv.net' && BETTERTTV_IMAGE.test(url.pathname)) {
+    const variant = physicalHeight <= 28 ? 1 : physicalHeight <= 56 ? 2 : 3
+    pathname = url.pathname.replace(/\/[1-3]x\.webp$/u, `/${variant}x.webp`)
+  } else return source
   if (pathname === url.pathname) return source
   url.pathname = pathname
   return source.startsWith('//') ? url.href.slice('https:'.length) : url.href
@@ -42,8 +48,7 @@ function sizedSevenTvUrl(source: string, variant: number): string {
 export function inlineEmoteImageSource(source: string, options: InlineEmoteImageOptions): string {
   const physicalHeight = options.height * options.scale
   if (!Number.isFinite(physicalHeight) || physicalHeight <= 0) return source
-  const variant = Math.max(1, Math.min(4, Math.ceil(physicalHeight / 32)))
-  const direct = sizedSevenTvUrl(source, variant)
+  const direct = sizedCdnUrl(source, physicalHeight)
   if (direct !== source) return direct
 
   const relative = source.startsWith('/') && !source.startsWith('//')
@@ -57,7 +62,7 @@ export function inlineEmoteImageSource(source: string, options: InlineEmoteImage
   if (url.pathname === `${proxyRoot}provider-image`) {
     const original = url.searchParams.get('url')
     if (!original) return source
-    const image = sizedSevenTvUrl(original, variant)
+    const image = sizedCdnUrl(original, physicalHeight)
     if (image === original) return source
     url.searchParams.set('url', image)
   } else if (url.pathname.startsWith(`${proxyRoot}7tv/`)) {
@@ -68,6 +73,7 @@ export function inlineEmoteImageSource(source: string, options: InlineEmoteImage
       !SEVENTV_FORMATS.has(url.searchParams.get('format') ?? 'webp')
     )
       return source
+    const variant = Math.max(1, Math.min(4, Math.ceil(physicalHeight / 32)))
     const size = `${variant}x`
     if (url.searchParams.get('size') === size) return source
     url.searchParams.set('size', size)

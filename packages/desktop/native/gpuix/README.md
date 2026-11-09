@@ -69,7 +69,7 @@ paint uses one timestamp for every image in that window. Decoded images retain
 their original frame delays in a cumulative timeline; frame lookup uses binary
 search rather than scanning frames. Zero delays use 10 ms. Hidden windows and
 reduced motion freeze the last frame; animation rejoins the shared phase on resume.
-The timeline belongs to the decoded image, with no global image registry or timer.
+Each decoded image owns its timeline. Windows schedule their own frame deadlines.
 
 The image-frame-deadline patch coalesces those timelines into one cancelable timer
 per window, armed for the earliest encoded frame boundary. Unrelated chat redraws
@@ -380,21 +380,32 @@ or a mutation of the application's global native keymap.
 
 ## Decoded image resources
 
-Each native view owns a cache for decoded Path/URI images, including deferred virtual-list
-rows. Loading bypasses GPUI's retain-all asset cache. Cold resources are bounded by 256 entries
-and 64 MiB of decoded frame pixels; images used by the current or preceding paint are protected
-from eviction. A visible working set can exceed these limits. A coalesced settling callback
-retires the previous paint after removal without keeping an idle redraw loop alive.
+Native views share one in-flight decode and immutable frame set per absolute file path or
+URI in the process, including windows with separate GPUI applications. Each view holds a
+lease while its cache references the source, including deferred virtual-list rows. The last
+lease releases the shared entry. Atlases and animated slots remain per window.
 
-Eviction and view release cancel owned loading tasks and remove image atlas allocations.
-Cache epochs follow actual native draws, including layouts reached without a root render.
-`getImageResourceStats()` returns a cached snapshot of entries, loading, decodedBytes, evictions,
-decodes and configured limits, or null during a contended publication. It does not request layout.
+Each view targets 256 entries and 64 MiB of decoded frame pixels. The current and preceding
+paint are protected during budget eviction. A settling callback retires the previous paint
+after removal. A minute timer releases resources that have been outside the last painted
+scene and unused for at least four minutes. An empty cache or a closed view stops its timer.
+Cache epochs follow actual draws, including layouts reached without a root render.
+
+The raster loader checks canvas size before expanding pixels. Animated GIF and WebP
+preflight frame count from compressed metadata. Images that fit the 20 MiB animation
+budget retain their original pixels. For larger animations within the canvas and frame-count
+limits, the decoder scales each frame before retaining it and preserves the original delays.
+The canvas and static output limit is 64 MiB. These limits cover canvas and retained pixels.
+Decoder working buffers and GPU textures have separate costs.
+
+`getImageResourceStats()` returns a cached snapshot, or null during a contended publication.
+`decodedBytes` counts the pixels referenced by the view, including shared frames.
+`decodes` counts actual decodes started by that view.
 
 `getWindowScaleFactor()` reads cached native scale and `windowScaleChange` reports actual changes
-at element ID 0. The desktop subscribes once per window and selects inline 7TV 1x–4x images for
-the logical emote height multiplied by display scale. Catalog and tooltip preview URLs keep
-their original resolution.
+at element ID 0. The desktop subscribes once per window and selects inline 7TV 1x–4x and BetterTTV
+1x–3x images for the logical emote height multiplied by display scale. Catalog and tooltip
+previews keep their original URLs.
 
 The finite bundled Kick badge SVG set continues using GPUI's content-keyed data-image cache.
 Sharp paint/emote data URLs are intermediate layers; their final local WebP files use this cache.

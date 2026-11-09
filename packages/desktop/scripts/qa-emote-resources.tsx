@@ -1758,7 +1758,12 @@ async function functional() {
     })
     await captureGuiQaDisplay(`emote-resources-${width}`)
   }
-  const beforeClose = imageStats(second)
+  const beforeClose = await waitForImageStats(
+    second,
+    (stats) => stats.loading === 0 && stats.decodedBytes > 0,
+    'second window finishes loading shared image resources',
+  )
+  assert.equal(beforeClose?.decodes, 0, 'The second window must reuse already decoded images.')
   await manager.close(secondId)
   await until(() => !nativeWindow(second).isWindowOpen(), 'second image window closed')
   const afterClose = await waitForImageStats(
