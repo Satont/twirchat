@@ -387,6 +387,12 @@ export function ChatView({
   const commandRunner = useRef<((text: string) => Promise<void>) | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [bannersHidden, setBannersHidden] = useState(false)
+  const bannerSnapshot = bannersHidden ? null : twitchActivity.snapshot
+  const pinnedMessage = bannerSnapshot?.pinnedMessage
+  const activePolls = bannerSnapshot?.polls.filter((poll) => poll.status === 'ACTIVE')
+  const visiblePredictions = bannerSnapshot?.predictions.filter(
+    (prediction) => prediction.status === 'ACTIVE' || prediction.status === 'LOCKED',
+  )
   useEffect(() => {
     if (!twitchChannel) return
     runUiTask(loadRoomState(backend, 'twitch', twitchChannel))
@@ -1547,26 +1553,37 @@ export function ChatView({
           ) : null}
         </div>
       ) : null}
-      {twitchChannel && twitchActivity.snapshot && !bannersHidden ? (
+      {pinnedMessage || activePolls?.length || visiblePredictions?.length ? (
         <div
           style={{
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
             backgroundColor: theme.surface,
             borderBottomWidth: 1,
             borderColor: theme.border,
           }}
         >
-          {twitchActivity.snapshot.pinnedMessage ? (
-            <div onClick={() => setActivitiesOpen(true)} style={{ padding: 8, cursor: 'pointer' }}>
-              <Text
-                style={{ fontSize: 12, color: theme.text }}
-              >{`Pinned · ${twitchActivity.snapshot.pinnedMessage.authorName ?? ''}: ${twitchActivity.snapshot.pinnedMessage.text}`}</Text>
-            </div>
-          ) : null}
-          {twitchActivity.snapshot.polls
-            .filter((poll) => poll.status === 'ACTIVE')
-            .map((poll) => (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flexGrow: 1,
+              flexBasis: 0,
+              minWidth: 0,
+            }}
+          >
+            {pinnedMessage ? (
+              <div
+                onClick={() => setActivitiesOpen(true)}
+                style={{ padding: 8, cursor: 'pointer' }}
+              >
+                <Text
+                  style={{ fontSize: 12, color: theme.text }}
+                >{`Pinned · ${pinnedMessage.authorName ?? ''}: ${pinnedMessage.text}`}</Text>
+              </div>
+            ) : null}
+            {activePolls?.map((poll) => (
               <div
                 key={poll.id}
                 onClick={() => setActivitiesOpen(true)}
@@ -1577,9 +1594,7 @@ export function ChatView({
                 >{`Poll · ${poll.title} · ${poll.choices.reduce((total, choice) => total + choice.votes, 0)} votes`}</Text>
               </div>
             ))}
-          {twitchActivity.snapshot.predictions
-            .filter((prediction) => ['ACTIVE', 'LOCKED'].includes(prediction.status))
-            .map((prediction) => (
+            {visiblePredictions?.map((prediction) => (
               <div
                 key={prediction.id}
                 onClick={() => setActivitiesOpen(true)}
@@ -1590,18 +1605,16 @@ export function ChatView({
                 >{`Prediction · ${prediction.title} · ${prediction.status}`}</Text>
               </div>
             ))}
-          {twitchActivity.snapshot.pinnedMessage ||
-          twitchActivity.snapshot.polls.some((poll) => poll.status === 'ACTIVE') ||
-          twitchActivity.snapshot.predictions.some((prediction) =>
-            ['ACTIVE', 'LOCKED'].includes(prediction.status),
-          ) ? (
-            <Text
+          </div>
+          <div style={{ paddingTop: 4, paddingRight: 4, flexShrink: 0 }}>
+            <HeaderButton
+              title="Hide activity banners"
+              testId="hide-activity-banners"
               onClick={() => setBannersHidden(true)}
-              style={{ fontSize: 11, color: theme.text2, padding: 6, cursor: 'pointer' }}
             >
-              Hide activity banners
-            </Text>
-          ) : null}
+              <Icon name="close" size={13} color={theme.text2} />
+            </HeaderButton>
+          </div>
         </div>
       ) : null}
       {bannersHidden ? (
