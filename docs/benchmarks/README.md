@@ -85,6 +85,9 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-09 Linux window resizing](2026-11-09-linux-window-resize/report.md) records the
+windowed Wayland load comparison, the fullscreen development matrix and pointer QA.
+
 [2026-11-08 Linux window controls](2026-11-08-linux-window-controls/report.md) records the
 title bar cache, the complete development matrix and three production runs per version.
 
