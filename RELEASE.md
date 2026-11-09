@@ -105,10 +105,11 @@ The development-only injection server defaults to 55824 (`DEV_SERVER_PORT`).
 For GitHub release builds, set all three `TWIRCHAT_` OAuth values above as repository
 variables in **Settings → Secrets and variables → Actions → Variables**.
 
-GitHub Actions reads the three desktop OAuth values from repository variables of the same name.
+The first launch after upgrading signs out all saved Twitch accounts and clears their stored
+Twitch web sessions. Sign in again through Device Code Grant. The reset runs once per local
+profile, and watched channels and their account assignments are preserved.
+Reconnect YouTube accounts authorized with a previous OAuth client.
 
-Users with saved Twitch or YouTube sessions from older releases should reconnect those accounts
-after updating. Their existing refresh tokens belong to the previous OAuth clients.
 OBS URLs copied from settings use the active overlay listener port, including when an older
 settings file contains port 45823.
 

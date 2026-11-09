@@ -195,8 +195,9 @@ of this canonical configuration and requires Docker Compose 2.20 or newer.
    inspect migration logs and verify OAuth/chat connections before considering rollout complete.
 
 The client-side OAuth release removes the Twitch and YouTube OAuth endpoints and the Twitch
-routes that accepted user credentials. Upgrade desktop clients alongside the backend.
-Reconnect saved Twitch and YouTube accounts after the desktop update.
+routes that accepted user credentials. Upgrade desktop clients alongside the backend. The
+desktop signs Twitch accounts out once on upgrade. Users sign in again with Device Code Grant
+and reconnect YouTube accounts authorized with a previous OAuth client.
 
 For application rollback, select the previous version or digest and repeat pull/start. A binary
 rollback is safe only when that version supports the current database schema. For an incompatible

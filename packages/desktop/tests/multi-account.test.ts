@@ -20,6 +20,7 @@ import { TwitchAdapter } from '../src/platforms/twitch/adapter'
 import { YouTubeAdapter } from '../src/platforms/youtube/adapter'
 import { createAccountSessions } from '../src/services/account-sessions'
 import { AccountStore } from '../src/store/account-store'
+import { getClientSecret } from '../src/store/client-secret'
 import { getDb, initDb } from '../src/store/db'
 import {
   createAccountTwitchWebSessionStore,
@@ -131,6 +132,76 @@ describe('saved and active accounts', () => {
     getDb().close()
     initDb(path)
     expect(AccountStore.findByPlatform('twitch')).toBeNull()
+  })
+
+  test('signs out old Twitch accounts once and preserves other profile data', async () => {
+    const twitch = save('twitch', '1')
+    save('twitch', '2', false)
+    const kick = save('kick', '3')
+    const youtube = save('youtube', '4')
+    const clientSecret = getClientSecret()
+    const watched = WatchedChannelStore.upsert('twitch', 'watched', 'Watched')
+    WatchedChannelStore.setAccount(watched.id, twitch.id)
+
+    const db = getDb()
+    db.run("DELETE FROM client_identity WHERE key = 'migration:twitch-device-auth-v1'")
+    db.run(`INSERT INTO client_identity(key, value) VALUES
+      ('secret:twitch-web-session', 'legacy'),
+      ('secret:twitch-web-session:1', 'active'),
+      ('secret:twitch-web-session:2', 'inactive'),
+      ('secret:twitch-web-session-other', 'unrelated')`)
+    db.run("INSERT INTO settings(key, value) VALUES ('fixture', 'saved preference')")
+    db.run(`INSERT INTO chat_messages(id, platform, channel_id, author_id, author_name, text, type, created_at)
+      VALUES ('retained', 'twitch', 'watched', '1', 'user1', 'saved message', 'message', 1)`)
+    db.close()
+    initDb(path)
+
+    expect(AccountStore.findByPlatform('twitch')).toBeNull()
+    expect(
+      AccountStore.findAllSaved()
+        .map((account) => account.id)
+        .sort(),
+    ).toEqual([kick.id, youtube.id])
+    expect(AccountStore.findByPlatform('kick')?.id).toBe(kick.id)
+    expect(AccountStore.findByPlatform('youtube')?.id).toBe(youtube.id)
+    expect(AccountStore.getTokens(kick.id)?.refreshToken).toBe('refresh-3')
+    expect(AccountStore.getTokens(youtube.id)?.refreshToken).toBe('refresh-4')
+    expect(
+      getDb().query("SELECT account_id FROM active_accounts WHERE platform = 'twitch'").get(),
+    ).toEqual({ account_id: null })
+    expect(
+      getDb()
+        .query("SELECT key, value FROM client_identity WHERE key GLOB 'secret:twitch-web-session*'")
+        .all(),
+    ).toEqual([{ key: 'secret:twitch-web-session-other', value: 'unrelated' }])
+    expect(getClientSecret()).toBe(clientSecret)
+    expect(WatchedChannelStore.findById(watched.id)).toMatchObject({ accountId: twitch.id })
+    expect(getDb().query("SELECT value FROM settings WHERE key = 'fixture'").get()).toEqual({
+      value: 'saved preference',
+    })
+    expect(getDb().query("SELECT text FROM chat_messages WHERE id = 'retained'").get()).toEqual({
+      text: 'saved message',
+    })
+
+    const signedIn = save('twitch', twitch.platformUserId)
+    AccountStore.updateTokens(signedIn.id, 'device-access', 'device-refresh', 4_000_000_000)
+    const webSession = {
+      token: 'new',
+      userId: twitch.platformUserId,
+      username: 'user1',
+      clientId: 'client',
+    }
+    await TwitchWebSessionStore.set(webSession)
+    getDb().close()
+    initDb(path)
+
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(signedIn.id)
+    expect(AccountStore.getTokens(signedIn.id)).toMatchObject({
+      accessToken: 'device-access',
+      refreshToken: 'device-refresh',
+    })
+    expect(WatchedChannelStore.findById(watched.id)?.accountId).toBe(signedIn.id)
+    expect(await TwitchWebSessionStore.get()).toEqual(webSession)
   })
 
   test('rejects cross-platform selections and deleting an active account leaves an explicit anonymous selection', () => {
