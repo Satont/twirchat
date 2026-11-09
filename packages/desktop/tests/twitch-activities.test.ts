@@ -6,10 +6,9 @@ import {
   createTwitchActivitiesService,
   type TwitchActivitiesCredentials,
   type TwitchActivitiesDependencies,
-} from '../src/api/twitch-activities'
-import { twitchActivitiesRoutes } from '../src/routes/twitch-activities'
-import { textBody } from './literal'
-import { literal, required } from './literal'
+} from '../src/services/twitch-activities'
+import { textBody } from './fixture-values'
+import { literal, required } from './fixture-values'
 
 const scopes = [
   'channel:manage:polls',
@@ -22,6 +21,7 @@ const scopes = [
 ]
 const account: TwitchActivitiesCredentials = {
   accessToken: 'oauth-token',
+  clientId: 'public-client',
   platformUserId: '100',
   scopes,
   webSession: { token: 'web-secret', userId: '100', username: 'creator', clientId: 'web-client' },
@@ -200,6 +200,7 @@ describe('Twitch activities public API', () => {
         expect(call.url.searchParams.getAll(key)).toEqual(Array.isArray(value) ? value : [value])
       expect(call.init.body ? JSON.parse(textBody(call.init.body)) : undefined).toEqual(item.body)
       expect(new Headers(call.init.headers).get('authorization')).toBe('Bearer oauth-token')
+      expect(new Headers(call.init.headers).get('Client-Id')).toBe('public-client')
     })
 
   test('returns section errors for missing scope rather than inventing an empty activity snapshot', async () => {
@@ -528,16 +529,6 @@ test('creates authorized EventSub registrations with exact version, conditions a
   expect(viewer.subscriptions.map((sub) => sub.type)).toEqual(['stream.online', 'stream.offline'])
 })
 
-test('activity route requires a desktop client', async () => {
-  expect(
-    (
-      await twitchActivitiesRoutes['/api/twitch/activities'].POST(
-        new Request('http://localhost/api/twitch/activities', { method: 'POST', body: '{}' }),
-      )
-    ).status,
-  ).toBe(401)
-})
-
 test('registers AutoMod v2 for broadcasters and moderators with the proper scope', async () => {
   let id = 0
   let canModerate = true
@@ -545,7 +536,7 @@ test('registers AutoMod v2 for broadcasters and moderators with the proper scope
   const { service, calls } = fixture(
     () => Response.json({ data: [{ id: String(++id) }] }),
     async (token, broadcasterId, userId) => {
-      roleChecks.push([token, broadcasterId, userId])
+      roleChecks.push([token.accessToken, broadcasterId, userId])
       return { platform: 'twitch', userId, isModerator: canModerate }
     },
   )
@@ -593,7 +584,12 @@ test('registers AutoMod v2 for broadcasters and moderators with the proper scope
 test('registers sender-side AutoMod for viewers with the chat EventSub scope', async () => {
   let id = 0
   const { service, calls } = fixture(() => Response.json({ data: [{ id: String(++id) }] }))
-  const sender = { accessToken: 'sender-token', platformUserId: '300', scopes: ['chat:read'] }
+  const sender = {
+    accessToken: 'sender-token',
+    clientId: 'public-client',
+    platformUserId: '300',
+    scopes: ['chat:read'],
+  }
   const withoutScope = await service.subscribe(sender, 'session', 'friend')
   expect(withoutScope.errors).toEqual([])
   expect(withoutScope.subscriptions.map((sub) => sub.type)).toEqual([

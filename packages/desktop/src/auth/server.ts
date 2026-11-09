@@ -7,7 +7,6 @@ import type { WebviewSender } from '../shared/rpc'
 import { AccountStore } from '../store/account-store'
 import { ChannelStore } from '../store/channel-store'
 import { handleKickCallback } from './kick'
-import { handleTwitchCallback } from './twitch'
 import { handleYouTubeCallback } from './youtube'
 
 const log = logger('auth-server')
@@ -28,9 +27,18 @@ export function setOnAuthSuccessCallback(
   onAuthSuccessCallback = callback
 }
 
-export function setOnAutoJoinChannelCallback(
-  _callback: (platform: Platform, channelSlug: string) => void,
-): void {}
+export async function finishDesktopSignIn(
+  platform: Platform,
+  {
+    channelSlug,
+    username,
+    displayName,
+  }: { channelSlug: string; username: string; displayName: string },
+): Promise<void> {
+  ChannelStore.save(platform, channelSlug)
+  await onAuthSuccessCallback?.(platform, channelSlug, AccountStore.findByPlatform(platform)?.id)
+  sendToView?.auth_success({ platform, username, displayName })
+}
 
 export function startAuthServer(): void {
   if (server) {
@@ -42,49 +50,14 @@ export function startAuthServer(): void {
       const url = new URL(req.url)
 
       try {
-        if (url.pathname === '/auth/twitch/callback') {
-          const result = await handleTwitchCallback(url)
-
-          // Save the channel to automatically join it
-          ChannelStore.save('twitch', result.channelSlug)
-
-          await onAuthSuccessCallback?.(
-            'twitch',
-            result.channelSlug,
-            AccountStore.findByPlatform('twitch')?.id,
-          )
-          sendToView?.auth_success(result.user)
-
-          return result.response
-        }
-        if (url.pathname === '/auth/youtube/callback') {
+        if (req.method === 'GET' && url.pathname === '/auth/youtube/callback') {
           const result = await handleYouTubeCallback(url)
-
-          // Save the channel to automatically join it
-          ChannelStore.save('youtube', result.channelSlug)
-
-          await onAuthSuccessCallback?.(
-            'youtube',
-            result.channelSlug,
-            AccountStore.findByPlatform('youtube')?.id,
-          )
-          sendToView?.auth_success(result.user)
-
+          await finishDesktopSignIn('youtube', { ...result.user, channelSlug: result.channelSlug })
           return result.response
         }
-        if (url.pathname === '/auth/kick/callback') {
+        if (req.method === 'GET' && url.pathname === '/auth/kick/callback') {
           const result = await handleKickCallback(url)
-
-          // Save the channel to automatically join it
-          ChannelStore.save('kick', result.channelSlug)
-
-          await onAuthSuccessCallback?.(
-            'kick',
-            result.channelSlug,
-            AccountStore.findByPlatform('kick')?.id,
-          )
-          sendToView?.auth_success(result.user)
-
+          await finishDesktopSignIn('kick', { ...result.user, channelSlug: result.channelSlug })
           return result.response
         }
       } catch (err) {
@@ -97,6 +70,7 @@ export function startAuthServer(): void {
 
       return new Response('Not found', { status: 404 })
     },
+    hostname: '127.0.0.1',
     port: AUTH_SERVER_PORT,
   })
 
@@ -109,12 +83,15 @@ export function stopAuthServer(): void {
 }
 
 function errorPage(message: string): string {
+  const escaped = message.replace(/[&<>]/gu, (character) =>
+    character === '&' ? '&amp;' : character === '<' ? '&lt;' : '&gt;',
+  )
   return `<!DOCTYPE html>
 <html>
 <head><title>Auth Error</title></head>
 <body style="font-family:sans-serif;padding:2rem;background:#1a1a1a;color:#ff6b6b;">
   <h1>Authentication Error</h1>
-  <p>${message}</p>
+  <p>${escaped}</p>
   <p>You can close this window.</p>
 </body>
 </html>`

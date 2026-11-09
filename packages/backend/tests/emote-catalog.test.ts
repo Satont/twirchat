@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 
-import { createEmoteCatalogService, parseTwitchEmoteCatalog } from '../src/api/emote-catalog'
+import { parseTwitchEmoteCatalog } from '@twirchat/shared/twitch-emote-catalog'
+
+import { createEmoteCatalogService } from '../src/api/emote-catalog'
 import { createEmoteCatalogRoutes } from '../src/routes/emote-catalog'
 import { required } from './literal'
 
@@ -22,15 +24,10 @@ const body = (name: string, extra: Record<string, unknown> = {}) => ({
 describe('native Twitch emote catalog', () => {
   test('coalesces channel identity lookups and reuses the normalized login and numeric ID', async () => {
     const calls: string[] = []
-    const service = createEmoteCatalogService({
-      fetch: async () => {
-        throw new Error('Identity lookup must use app credentials')
-      },
-      appFetch: async (url) => {
-        calls.push(url)
-        await Bun.sleep(1)
-        return json({ data: [{ id: '42', login: 'creator' }] })
-      },
+    const service = createEmoteCatalogService(async (url) => {
+      calls.push(url)
+      await Bun.sleep(1)
+      return json({ data: [{ id: '42', login: 'creator' }] })
     })
     const values = await Promise.all(
       Array.from({ length: 20 }, () => service.resolveTwitchChannel(' #Creator ')),
@@ -49,12 +46,9 @@ describe('native Twitch emote catalog', () => {
 
   test('resolves numeric channels through the Twitch ID parameter and reports missing channels', async () => {
     const calls: string[] = []
-    const service = createEmoteCatalogService({
-      fetch: async () => json({}),
-      appFetch: async (url) => {
-        calls.push(url)
-        return json({ data: [] })
-      },
+    const service = createEmoteCatalogService(async (url) => {
+      calls.push(url)
+      return json({ data: [] })
     })
     await expect(service.resolveTwitchChannel('42')).rejects.toThrow('not found')
     expect(calls).toEqual(['https://api.twitch.tv/helix/users?id=42'])
@@ -85,114 +79,13 @@ describe('native Twitch emote catalog', () => {
     ).toBe('global')
   })
 
-  test('validates token identity and follows user pagination without leaking client IDs between accounts', async () => {
-    const calls: Array<{ url: URL; headers: Headers }> = []
-    const service = createEmoteCatalogService({
-      appFetch: async () => {
-        throw new Error('Unexpected app token request')
-      },
-      fetch: async (url, init) => {
-        const parsed = new URL(url),
-          headers = new Headers(init?.headers)
-        calls.push({ url: parsed, headers })
-        if (parsed.pathname === '/oauth2/validate')
-          return json({
-            client_id: 'actual-token-client',
-            user_id: '7',
-            scopes: ['user:read:emotes'],
-          })
-        expect(headers.get('Client-Id')).toBe('actual-token-client')
-        expect(headers.get('Authorization')).toBe('Bearer token')
-        if (parsed.pathname.endsWith('/users')) return json({ data: [{ id: '42' }] })
-        if (parsed.pathname.endsWith('/emotes/global')) return json(body('Global'))
-        if (parsed.pathname.endsWith('/emotes/user')) {
-          expect(parsed.searchParams.get('user_id')).toBe('7')
-          expect(parsed.searchParams.get('broadcaster_id')).toBe('42')
-          return json(
-            parsed.searchParams.has('after')
-              ? body('Bits', { emote_type: 'bitstier' })
-              : {
-                  ...body('Subscribed', { emote_type: 'subscriptions' }),
-                  pagination: { cursor: 'next' },
-                },
-          )
-        }
-        return json(body('Channel'))
-      },
-    })
-    const [first, second] = await Promise.all([
-      service.getTwitchEmotes({ channelSlug: 'satont', userAccessToken: 'token' }),
-      service.getTwitchEmotes({ channelSlug: 'satont', userAccessToken: 'token' }),
-    ])
-    expect(first.map((emote) => emote.alias)).toEqual(['Subscribed', 'Bits', 'Channel', 'Global'])
-    expect(second).toEqual(first)
-    expect(calls.filter((call) => call.url.pathname === '/oauth2/validate')).toHaveLength(1)
-    expect(calls.some((call) => call.url.searchParams.get('after') === 'next')).toBe(true)
-  })
-
-  test('keeps global and channel emotes available for older tokens without the new scope', async () => {
-    const paths: string[] = []
-    const service = createEmoteCatalogService({
-      appFetch: async () => json({ data: [] }),
-      fetch: async (url) => {
-        paths.push(url)
-        return url.includes('/validate')
-          ? json({ client_id: 'client', user_id: '7', scopes: [] })
-          : json(body(url.includes('/global') ? 'Global' : 'Local'))
-      },
-    })
-    expect(
-      (await service.getTwitchEmotes({ channelSlug: '42', userAccessToken: 'old-token' })).map(
-        (emote) => emote.alias,
-      ),
-    ).toEqual(['Local', 'Global'])
-    expect(paths.some((path) => path.includes('/emotes/user'))).toBe(false)
-  })
-
   test('uses app credentials for anonymous channel catalogs', async () => {
-    const service = createEmoteCatalogService({
-      fetch: async () => {
-        throw new Error('Unexpected user request')
-      },
-      appFetch: async (url) => json(body(url.includes('/global') ? 'Global' : 'Local')),
-    })
+    const service = createEmoteCatalogService(async (url) =>
+      json(body(url.includes('/global') ? 'Global' : 'Local')),
+    )
     expect(
       (await service.getTwitchEmotes({ channelSlug: '42' })).map((emote) => emote.alias),
     ).toEqual(['Local', 'Global'])
-  })
-
-  test('fails clearly on repeated cursors instead of silently truncating the user catalog', async () => {
-    const service = createEmoteCatalogService({
-      appFetch: async () => json({ data: [] }),
-      fetch: async (url) =>
-        url.includes('/validate')
-          ? json({ client_id: 'client', user_id: '7', scopes: ['user:read:emotes'] })
-          : json({
-              ...body('Loop'),
-              pagination: url.includes('/emotes/user') ? { cursor: 'same' } : {},
-            }),
-    })
-    await expect(
-      service.getTwitchEmotes({ channelSlug: '42', userAccessToken: 'token' }),
-    ).rejects.toThrow('repeated')
-  })
-
-  test('rejects invalid identities and malformed inputs before upstream requests', async () => {
-    let calls = 0
-    const service = createEmoteCatalogService({
-      appFetch: async () => json({ data: [] }),
-      fetch: async () => {
-        calls++
-        return json({ client_id: 'client' })
-      },
-    })
-    await expect(service.getTwitchEmotes({ channelSlug: '../invalid' })).rejects.toThrow(
-      'valid Twitch',
-    )
-    expect(calls).toBe(0)
-    await expect(
-      service.getTwitchEmotes({ channelSlug: '42', userAccessToken: 'bad-token' }),
-    ).rejects.toThrow('valid Twitch user token')
   })
 
   test('requires desktop-client identification for the catalog proxy', async () => {
@@ -209,12 +102,9 @@ describe('native Twitch emote catalog', () => {
 
 test('explicit force refresh bypasses native catalog TTL without leaking token-scoped caches', async () => {
   let requests = 0
-  const service = createEmoteCatalogService({
-    fetch: async () => json({}),
-    appFetch: async () => {
-      requests++
-      return json(body(`Emote${requests}`))
-    },
+  const service = createEmoteCatalogService(async () => {
+    requests++
+    return json(body(`Emote${requests}`))
   })
   const first = await service.getTwitchEmotes({ channelSlug: '' })
   const cached = await service.getTwitchEmotes({ channelSlug: '' })
@@ -229,13 +119,10 @@ test('explicit force refresh bypasses native catalog TTL without leaking token-s
 test('force waits for an older in-flight read and coalesces concurrent forced reads', async () => {
   const { promise: gate, resolve: release } = Promise.withResolvers<void>()
   let requests = 0
-  const service = createEmoteCatalogService({
-    fetch: async () => json({}),
-    appFetch: async () => {
-      const sequence = ++requests
-      if (sequence === 1) await gate
-      return json(body(`Emote${sequence}`))
-    },
+  const service = createEmoteCatalogService(async () => {
+    const sequence = ++requests
+    if (sequence === 1) await gate
+    return json(body(`Emote${sequence}`))
   })
   const original = service.getTwitchEmotes({ channelSlug: '' })
   const forced = service.getTwitchEmotes({ channelSlug: '', force: true })
@@ -267,13 +154,13 @@ test('catalog route forwards boolean force and rejects malformed flags before qu
     new Request('http://localhost/api/emote-catalog/twitch', {
       method: 'POST',
       headers: { 'X-Client-Secret': 'mock' },
-      body: JSON.stringify({ channelSlug: 'fixture', force }),
+      body: JSON.stringify({ channelSlug: 'fixture', force, userAccessToken: 'legacy-token' }),
     })
   try {
     expect((await routes['/api/emote-catalog/twitch'].POST(request('yes'))).status).toBe(400)
     expect(received).toHaveLength(0)
     expect((await routes['/api/emote-catalog/twitch'].POST(request(true))).status).toBe(200)
-    expect(received).toEqual([{ channelSlug: 'fixture', force: true, userAccessToken: undefined }])
+    expect(received).toEqual([{ channelSlug: 'fixture', force: true }])
   } finally {
     ClientStore.upsert = original
   }

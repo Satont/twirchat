@@ -2,6 +2,27 @@ import { runtime } from '../en/runtime'
 
 export const ruRuntime = {
   // Backend API errors (api.ts)
+  'runtime.auth.twitchClientRequired': 'Для входа в Twitch нужен ID публичного OAuth-клиента.',
+  'runtime.auth.youtubeClientRequired':
+    'Для входа в YouTube нужны OAuth-данные приложения Google Desktop.',
+  'runtime.auth.startTwitchFailed': 'Не удалось начать вход в Twitch (HTTP {status}).',
+  'runtime.auth.twitchDeclined': 'Доступ к аккаунту Twitch отклонён.',
+  'runtime.auth.twitchFailed': 'Не удалось войти в Twitch (HTTP {status}).',
+  'runtime.auth.twitchExpired': 'Срок действия кода Twitch истёк. Войдите снова.',
+  'runtime.auth.twitchClientMismatch': 'Twitch вернул токен для другого OAuth-приложения.',
+  'runtime.auth.twitchSignInFailed': 'Не удалось войти в Twitch.',
+  'runtime.auth.twitchReconnect': 'Войдите снова, чтобы подключить @{username}.',
+  'runtime.auth.refreshFailed':
+    'Не удалось обновить токен {platform} (HTTP {status}). Если ошибка повторится, войдите снова.',
+  'runtime.auth.signInToRefresh': 'Войдите в {platform} снова, чтобы обновить данные аккаунта.',
+  'runtime.auth.removedDuringRefresh':
+    'Сохранённый аккаунт {platform} удалён во время обновления токена.',
+  'runtime.auth.sessionExpired': 'Срок действия запроса на вход истёк. Войдите снова.',
+  'runtime.auth.authorizationDeclined': 'В доступе отказано.',
+  'runtime.auth.missingCallbackCode': 'В ответе авторизации отсутствует код.',
+  'runtime.auth.youtubeExchangeFailed': 'Не удалось получить токен YouTube (HTTP {status}).',
+  'runtime.auth.youtubeChannelRequired': 'У этого аккаунта Google нет канала YouTube.',
+
   'runtime.api.activeTwitchAccountChanged':
     'Активный аккаунт Twitch изменился. Повторите действие в выбранном аккаунте.',
   'runtime.api.connectTwitchFirst': 'Сначала подключите аккаунт Twitch на вкладке «Платформы».',

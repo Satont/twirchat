@@ -1,9 +1,5 @@
-import { config } from '../config.ts'
-import { resolveTwitchUserId } from './twitch-users.ts'
+import { resolveTwitchUserId, type TwitchUserCredentials } from './twitch-users.ts'
 
-const MAX_ACCESS_TOKEN_LENGTH = 4096
-const MAX_BROADCASTER_LOGIN_LENGTH = 100
-const MAX_MODERATOR_ID_LENGTH = 64
 const MAX_USER_IDS_PER_REQUEST = 100
 
 export interface TwitchChatter {
@@ -29,8 +25,7 @@ export class TwitchChattersError extends Error {
   }
 }
 
-interface TwitchChattersInput {
-  accessToken: string
+interface TwitchChattersInput extends TwitchUserCredentials {
   broadcasterLogin: string
   moderatorId: string
 }
@@ -40,62 +35,20 @@ interface TwitchChattersPage {
   cursor?: string
 }
 
-interface FetchChattersPageInput {
-  accessToken: string
+interface FetchChattersPageInput extends TwitchUserCredentials {
   broadcasterId: string
   cursor?: string
   moderatorId: string
-  request: Request
+  signal: AbortSignal
 }
 
-interface FetchTwitchUserAvatarsInput {
-  accessToken: string
+interface FetchTwitchUserAvatarsInput extends TwitchUserCredentials {
   ids: string[]
-  request: Request
+  signal: AbortSignal
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function requiredString(value: unknown, name: string, maxLength: number): string {
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new TwitchChattersError(400, `${name} is required`)
-  }
-
-  const result = value.trim()
-  if (result.length > maxLength) {
-    throw new TwitchChattersError(400, `${name} is too long`)
-  }
-
-  return result
-}
-
-function parseRequest(body: unknown): TwitchChattersInput {
-  if (!isRecord(body)) {
-    throw new TwitchChattersError(400, 'Request body must be an object')
-  }
-
-  return {
-    accessToken: requiredString(body.accessToken, 'accessToken', MAX_ACCESS_TOKEN_LENGTH),
-    broadcasterLogin: requiredString(
-      body.broadcasterLogin,
-      'broadcasterLogin',
-      MAX_BROADCASTER_LOGIN_LENGTH,
-    ),
-    moderatorId: requiredString(body.moderatorId, 'moderatorId', MAX_MODERATOR_ID_LENGTH),
-  }
-}
-
-async function parseRequestBody(request: Request): Promise<TwitchChattersInput> {
-  try {
-    return parseRequest(await request.json())
-  } catch (error) {
-    if (error instanceof TwitchChattersError) {
-      throw error
-    }
-    throw new TwitchChattersError(400, 'Request body must be valid JSON')
-  }
 }
 
 function helixString(value: unknown, field: string): string {
@@ -149,10 +102,11 @@ async function fetchChattersPage(input: FetchChattersPageInput): Promise<TwitchC
     response = await fetch(`https://api.twitch.tv/helix/chat/chatters?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
+        'Client-Id': input.clientId,
       },
       method: 'GET',
-      signal: input.request.signal,
+      redirect: 'error',
+      signal: input.signal,
     })
   } catch {
     throw new TwitchChattersError(502, 'Twitch chatters request failed')
@@ -189,10 +143,11 @@ async function fetchTwitchUserAvatars(
       response = await fetch(`https://api.twitch.tv/helix/users?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${input.accessToken}`,
-          'Client-Id': config.TWITCH_CLIENT_ID,
+          'Client-Id': input.clientId,
         },
         method: 'GET',
-        signal: input.request.signal,
+        redirect: 'error',
+        signal: input.signal,
       })
     } catch {
       return new Map()
@@ -229,12 +184,13 @@ async function fetchTwitchUserAvatars(
   return avatars
 }
 
-export async function handleTwitchChatters(request: Request): Promise<TwitchChattersResult> {
-  const input = await parseRequestBody(request)
-
+export async function getTwitchChatters(
+  input: TwitchChattersInput,
+  signal = AbortSignal.timeout(30000),
+): Promise<TwitchChattersResult> {
   let broadcasterId: string | null
   try {
-    broadcasterId = await resolveTwitchUserId(input.broadcasterLogin, input.accessToken)
+    broadcasterId = await resolveTwitchUserId(input.broadcasterLogin, input, signal)
   } catch {
     throw new TwitchChattersError(502, 'Twitch broadcaster lookup failed')
   }
@@ -247,11 +203,10 @@ export async function handleTwitchChatters(request: Request): Promise<TwitchChat
   const seenCursors = new Set<string>()
   const collectPage = async (cursor?: string): Promise<void> => {
     const page = await fetchChattersPage({
-      accessToken: input.accessToken,
+      ...input,
       broadcasterId,
       cursor,
-      moderatorId: input.moderatorId,
-      request,
+      signal,
     })
     for (const chatter of page.chatters) {
       chatters.set(chatter.userId, chatter)
@@ -270,9 +225,9 @@ export async function handleTwitchChatters(request: Request): Promise<TwitchChat
 
   await collectPage()
   const avatarUrls = await fetchTwitchUserAvatars({
-    accessToken: input.accessToken,
+    ...input,
     ids: [...chatters.keys()],
-    request,
+    signal,
   })
   const enrichedChatters = [...chatters.values()]
   for (const chatter of enrichedChatters) {

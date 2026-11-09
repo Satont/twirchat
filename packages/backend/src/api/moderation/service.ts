@@ -1,17 +1,8 @@
 import { handleKickChatroom } from '../kick-chatroom.ts'
-import { resolveTwitchUserId } from '../twitch-users.ts'
 import * as Kick from './kick.ts'
-import * as Twitch from './twitch.ts'
-import type {
-  BanResult,
-  DeleteMessageResult,
-  IsModerator,
-  KickBanRequest,
-  ModerationError,
-  TwitchBanRequest,
-} from './types.ts'
+import type { BanResult, DeleteMessageResult, KickBanRequest, ModerationError } from './types.ts'
 
-export type ModerationPlatform = 'twitch' | 'kick'
+export type ModerationPlatform = 'kick'
 export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
 
 export interface ModerationCredentials {
@@ -41,22 +32,6 @@ export interface ModerationActionResult {
   error?: ModerationError
 }
 
-interface TwitchModerationClient {
-  banUser(
-    accessToken: string,
-    broadcasterUserId: string,
-    moderatorUserId: string,
-    request: TwitchBanRequest,
-  ): Promise<BanResult>
-  deleteMessage(
-    accessToken: string,
-    broadcasterUserId: string,
-    moderatorUserId: string,
-    messageId: string,
-  ): Promise<DeleteMessageResult>
-  isModerator(accessToken: string, broadcasterUserId: string, userId: string): Promise<IsModerator>
-}
-
 interface KickModerationClient {
   banUser(accessToken: string, request: KickBanRequest): Promise<BanResult>
   deleteMessage(accessToken: string, messageId: string): Promise<DeleteMessageResult>
@@ -65,16 +40,12 @@ interface KickModerationClient {
 export interface ModerationDependencies {
   kick: KickModerationClient
   resolveKickBroadcasterUserId(channelSlug: string): Promise<number>
-  resolveTwitchBroadcasterUserId(channelSlug: string, accessToken: string): Promise<string | null>
-  twitch: TwitchModerationClient
 }
 
 export interface ModerationService {
   execute(input: ModerationInput): Promise<ModerationActionResult>
   getCapabilities(input: ModerationCapabilityInput): Promise<ModerationCapabilities>
 }
-
-const twitchRailScopes = ['moderator:manage:chat_messages', 'moderator:manage:banned_users']
 
 const kickRailScopes = ['moderation:chat_message:manage', 'moderation:ban']
 
@@ -85,8 +56,6 @@ const defaultDependencies: ModerationDependencies = {
       await handleKickChatroom(new URL(`http://localhost/?slug=${encodeURIComponent(channelSlug)}`))
     ).broadcasterUserId
   },
-  resolveTwitchBroadcasterUserId: resolveTwitchUserId,
-  twitch: Twitch,
 }
 
 export function createModerationService(
@@ -95,53 +64,12 @@ export function createModerationService(
   return {
     async getCapabilities(input) {
       assertCapabilityInput(input)
-      if (!hasEveryScope(input.scopes, requiredRailScopes(input.platform))) {
-        return { canModerate: false }
-      }
-
-      if (input.platform === 'kick') {
-        return { canModerate: true }
-      }
-
-      const broadcasterUserId = await requireTwitchBroadcasterUserId(dependencies, input)
-      if (broadcasterUserId === input.platformUserId) {
-        return { canModerate: true }
-      }
-      if (!input.scopes.includes('user:read:moderated_channels')) return { canModerate: false }
-
-      const moderator = await dependencies.twitch.isModerator(
-        input.accessToken,
-        broadcasterUserId,
-        input.platformUserId,
-      )
-      return { canModerate: moderator.isModerator && !moderator.error }
+      return { canModerate: hasEveryScope(input.scopes, kickRailScopes) }
     },
 
     async execute(input) {
       assertModerationInput(input)
       assertActionScope(input)
-
-      if (input.platform === 'twitch') {
-        const broadcasterUserId = await requireTwitchBroadcasterUserId(dependencies, input)
-        if (input.action === 'delete_message') {
-          return dependencies.twitch.deleteMessage(
-            input.accessToken,
-            broadcasterUserId,
-            input.platformUserId,
-            input.messageId,
-          )
-        }
-
-        return dependencies.twitch.banUser(
-          input.accessToken,
-          broadcasterUserId,
-          input.platformUserId,
-          {
-            duration: input.action === 'timeout' ? input.durationSeconds : null,
-            user_id: input.targetUserId,
-          },
-        )
-      }
 
       const broadcasterUserId = await dependencies.resolveKickBroadcasterUserId(input.channelSlug)
       if (input.action === 'delete_message') {
@@ -160,9 +88,6 @@ export function createModerationService(
 }
 
 function assertCapabilityInput(input: ModerationCapabilityInput): void {
-  if (input.platform !== 'twitch' && input.platform !== 'kick') {
-    throw new Error(`moderation: unsupported platform ${input.platform}`)
-  }
   if (!input.accessToken || !input.platformUserId || !input.channelSlug) {
     throw new Error('moderation: credentials and channel slug are required')
   }
@@ -180,63 +105,30 @@ function assertModerationInput(input: ModerationInput): asserts input is Validat
     throw new Error('moderation: message ID is required')
   if (input.action !== 'delete_message' && !input.targetUserId)
     throw new Error('moderation: target user ID is required')
-  if (input.action !== 'delete_message' && input.action !== 'timeout' && input.action !== 'ban') {
-    throw new Error(`moderation: unsupported action ${input.action}`)
-  }
   if (
     input.action === 'timeout' &&
-    (!Number.isInteger(input.durationSeconds) ||
-      (input.durationSeconds ?? 0) < (input.platform === 'twitch' ? 1 : 60))
+    (!Number.isInteger(input.durationSeconds) || (input.durationSeconds ?? 0) < 60)
   ) {
-    throw new Error(
-      `moderation: timeout duration must be at least ${input.platform === 'twitch' ? 1 : 60} seconds`,
-    )
+    throw new Error(`moderation: timeout duration must be at least 60 seconds`)
   }
-  if (input.action === 'timeout') {
-    const maximumSeconds = input.platform === 'kick' ? 604_800 : 1_209_600
-    if ((input.durationSeconds ?? 0) > maximumSeconds) {
-      const platformName = input.platform === 'kick' ? 'Kick' : 'Twitch'
-      throw new Error(`moderation: timeout duration exceeds the ${platformName} maximum`)
-    }
+  if (input.action === 'timeout' && (input.durationSeconds ?? 0) > 604_800) {
+    throw new Error('moderation: timeout duration exceeds the Kick maximum')
   }
 }
 
 function assertActionScope(input: ModerationInput): void {
-  const scope = requiredActionScope(input.platform, input.action)
+  const scope = requiredActionScope(input.action)
   if (!input.scopes.includes(scope)) {
     throw new Error(`moderation: reconnect ${input.platform} to grant ${scope}`)
   }
 }
 
-function requiredRailScopes(platform: ModerationPlatform): readonly string[] {
-  return platform === 'twitch' ? twitchRailScopes : kickRailScopes
-}
-
-function requiredActionScope(platform: ModerationPlatform, action: ModerationAction): string {
-  if (platform === 'twitch') {
-    return action === 'delete_message'
-      ? 'moderator:manage:chat_messages'
-      : 'moderator:manage:banned_users'
-  }
+function requiredActionScope(action: ModerationAction): string {
   return action === 'delete_message' ? 'moderation:chat_message:manage' : 'moderation:ban'
 }
 
 function hasEveryScope(granted: readonly string[], required: readonly string[]): boolean {
   return required.every((scope) => granted.includes(scope))
-}
-
-async function requireTwitchBroadcasterUserId(
-  dependencies: ModerationDependencies,
-  input: ModerationCapabilityInput,
-): Promise<string> {
-  const broadcasterUserId = await dependencies.resolveTwitchBroadcasterUserId(
-    input.channelSlug,
-    input.accessToken,
-  )
-  if (!broadcasterUserId) {
-    throw new Error(`moderation: Twitch channel ${input.channelSlug} was not found`)
-  }
-  return broadcasterUserId
 }
 
 function parsePositiveInteger(value: string, label: string): number {

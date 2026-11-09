@@ -1,4 +1,4 @@
-import type { PlatformCommandResult, RoomState } from '@twirchat/shared/channel-tools'
+import type { PlatformCommandResult } from '@twirchat/shared/channel-tools'
 import type {
   StreamStatusResponse,
   UpdateStreamResponse,
@@ -14,39 +14,9 @@ import type {
   UserCardSubAgeField,
   UserCardMetadataResponse,
 } from '@twirchat/shared/protocol'
-import type {
-  TwitchPollChoice,
-  TwitchPoll,
-  TwitchPredictionOutcome,
-  TwitchPrediction,
-  TwitchReward,
-  TwitchPinnedMessage,
-  TwitchActivitiesSnapshot,
-  TwitchRedemption,
-  TwitchRedemptionsPage,
-  TwitchFollowedChannel,
-  TwitchFollowingPage,
-  TwitchRewardQueueSummary,
-  TwitchWebSession,
-  TwitchEventSubscription,
-} from '@twirchat/shared/twitch-activities'
-import type { Platform } from '@twirchat/shared/types'
 import type { UserProfileSnapshot } from '@twirchat/shared/user-profile'
 import { z } from 'zod'
 
-export const twitchChattersSchema = z.object({
-  broadcasterId: z.string().optional(),
-  chatters: z
-    .array(
-      z.object({
-        userId: z.string().optional(),
-        userLogin: z.string().optional(),
-        userName: z.string().optional(),
-        avatarUrl: z.string().optional(),
-      }),
-    )
-    .optional(),
-})
 export const kickChatroomSchema = z.object({
   broadcasterUserId: z.number().optional(),
   chatroomId: z.number().optional(),
@@ -69,148 +39,8 @@ export const kickChattersSchema = z.object({
     .optional(),
 })
 
-export const twitchPollChoiceSchema = z.toZod<TwitchPollChoice>()(
-  z.object({
-    id: z.string(),
-    title: z.string(),
-    votes: z.number(),
-    pointsVotes: z.number().optional(),
-  }),
-)
-export const twitchPollSchema = z.toZod<TwitchPoll>()(
-  z.object({
-    id: z.string(),
-    title: z.string(),
-    status: z.string(),
-    choices: z.array(twitchPollChoiceSchema),
-    startedAt: z.string().optional(),
-    endsAt: z.string().optional(),
-    duration: z.number().optional(),
-  }),
-)
-export const twitchPredictionOutcomeSchema = z.toZod<TwitchPredictionOutcome>()(
-  z.object({
-    id: z.string(),
-    title: z.string(),
-    color: z.string().optional(),
-    users: z.number().optional(),
-    points: z.number().optional(),
-  }),
-)
-export const twitchPredictionSchema = z.toZod<TwitchPrediction>()(
-  z.object({
-    id: z.string(),
-    title: z.string(),
-    status: z.string(),
-    outcomes: z.array(twitchPredictionOutcomeSchema),
-    startedAt: z.string().optional(),
-    locksAt: z.string().optional(),
-    winningOutcomeId: z.string().optional(),
-  }),
-)
-export const twitchRewardSchema = z.toZod<TwitchReward>()(
-  z.object({
-    id: z.string(),
-    title: z.string(),
-    cost: z.number(),
-    prompt: z.string().optional(),
-    isEnabled: z.boolean(),
-    isPaused: z.boolean(),
-    isInputRequired: z.boolean().optional(),
-    manageable: z.boolean().optional(),
-    imageUrl: z.string().optional(),
-  }),
-)
-export const twitchPinnedMessageSchema = z.toZod<TwitchPinnedMessage>()(
-  z.object({
-    id: z.string(),
-    messageId: z.string(),
-    text: z.string(),
-    authorName: z.string().optional(),
-    pinnedAt: z.string().optional(),
-    expiresAt: z.string().optional(),
-  }),
-)
-export const twitchActivitiesSnapshotSchema = z.toZod<TwitchActivitiesSnapshot>()(
-  z.object({
-    channelId: z.string(),
-    channelSlug: z.string(),
-    polls: z.array(twitchPollSchema),
-    predictions: z.array(twitchPredictionSchema),
-    rewards: z.array(twitchRewardSchema),
-    pinnedMessage: z.union([twitchPinnedMessageSchema, z.null()]),
-    pointsBalance: z.number().optional(),
-    errors: z.partialRecord(
-      z.union([
-        z.literal('polls'),
-        z.literal('predictions'),
-        z.literal('rewards'),
-        z.literal('pinnedMessage'),
-        z.literal('pointsBalance'),
-      ]),
-      z.string(),
-    ),
-  }),
-)
-export const twitchRedemptionSchema = z.toZod<TwitchRedemption>()(
-  z.object({
-    id: z.string(),
-    rewardId: z.string(),
-    userId: z.string(),
-    userName: z.string(),
-    input: z.string(),
-    status: z.string(),
-    redeemedAt: z.string(),
-  }),
-)
-export const twitchRedemptionsPageSchema = z.toZod<TwitchRedemptionsPage>()(
-  z.object({ redemptions: z.array(twitchRedemptionSchema), cursor: z.string().optional() }),
-)
-export const twitchFollowedChannelSchema = z.toZod<TwitchFollowedChannel>()(
-  z.object({
-    id: z.string(),
-    login: z.string(),
-    displayName: z.string(),
-    isLive: z.boolean(),
-    title: z.string().optional(),
-    viewerCount: z.number().optional(),
-    categoryName: z.string().optional(),
-  }),
-)
-export const twitchFollowingPageSchema = z.toZod<TwitchFollowingPage>()(
-  z.object({
-    channels: z.array(twitchFollowedChannelSchema),
-    cursor: z.string().optional(),
-    total: z.number().optional(),
-  }),
-)
-export const twitchRewardQueueSummarySchema = z.toZod<TwitchRewardQueueSummary>()(
-  z.object({
-    rewards: z.array(z.intersection(twitchRewardSchema, z.object({ pendingCount: z.number() }))),
-  }),
-)
-export const twitchWebSessionSchema = z.toZod<TwitchWebSession>()(
-  z.object({ token: z.string(), userId: z.string(), username: z.string(), clientId: z.string() }),
-)
-export const twitchEventSubscriptionSchema = z.toZod<TwitchEventSubscription>()(
-  z.object({ id: z.string(), type: z.string(), condition: z.record(z.string(), z.string()) }),
-)
 export const platformCommandResultSchema = z.toZod<PlatformCommandResult>()(
   z.object({ message: z.string().optional() }),
-)
-export const platformSchema = z.toZod<Platform>()(
-  z.union([z.literal('twitch'), z.literal('youtube'), z.literal('kick')]),
-)
-export const roomStateSchema = z.toZod<RoomState>()(
-  z.object({
-    platform: platformSchema,
-    channelId: z.string(),
-    slowSeconds: z.number().optional(),
-    followersOnlyMinutes: z.union([z.number(), z.null()]).optional(),
-    subscribersOnly: z.boolean().optional(),
-    emoteOnly: z.boolean().optional(),
-    uniqueChat: z.boolean().optional(),
-  }),
 )
 export const streamStatusResponseSchema = z.toZod<StreamStatusResponse>()(
   z.object({

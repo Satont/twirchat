@@ -7,6 +7,7 @@ import { runUiTask } from '../hooks/run-ui-task'
 import { useT, type MessageKey } from '../i18n'
 import { accountsStore, channelStatusStore, showNotice } from '../state/app'
 import { useStore } from '../state/create-store'
+import { useWindowScope } from '../state/window-scope'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { SavedAccounts } from './SavedAccounts'
@@ -301,6 +302,7 @@ export function PlatformsPanel() {
   const backend = useBackend()
   const theme = useTheme()
   const { t } = useT()
+  const windowScope = useWindowScope()
   const accounts = useStore(accountsStore)
   const statuses = useStore(channelStatusStore)
 
@@ -317,7 +319,7 @@ export function PlatformsPanel() {
   async function startAuth(platform: Platform) {
     setAuthLoading((current) => ({ ...current, [platform]: true }))
     try {
-      await backend.api.authStart({ platform })
+      await backend.api.authStart({ platform, windowScope })
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : String(error))
     } finally {

@@ -1,6 +1,7 @@
+import { EmoteCatalogError } from '@twirchat/shared/twitch-emote-catalog'
 import { z } from 'zod'
 
-import { createEmoteCatalogService, EmoteCatalogError } from '../api/emote-catalog'
+import { createEmoteCatalogService } from '../api/emote-catalog'
 import { json, requireClient } from './utils'
 
 export function createEmoteCatalogRoutes(service = createEmoteCatalogService()) {
@@ -49,12 +50,13 @@ export function createEmoteCatalogRoutes(service = createEmoteCatalogService()) 
           const parsed = z
             .object({
               channelSlug: z.string(),
-              userAccessToken: z.string().optional(),
               force: z.boolean().optional(),
             })
             .safeParse(value)
           if (!parsed.success)
-            throw new EmoteCatalogError('channelSlug and optional userAccessToken must be strings.')
+            throw new EmoteCatalogError(
+              'channelSlug and an optional boolean force flag are required.',
+            )
           return json(await service.getTwitchEmotes(parsed.data))
         } catch (error) {
           return error instanceof EmoteCatalogError

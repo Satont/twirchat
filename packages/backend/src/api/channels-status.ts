@@ -8,8 +8,7 @@ import type { ChannelStatus, ChannelStatusRequest, ChannelsStatusResponse } from
  * Body: { channels: ChannelStatusRequest[] }
  *
  * For Twitch:
- *   - If userAccessToken is provided → use it (authenticated user context)
- *   - Otherwise → use app access token (client_credentials, anonymous)
+ *   - Uses an app access token
  *   - Batches all Twitch logins into a single /helix/streams call
  *
  * For Kick:
@@ -32,7 +31,6 @@ const MAX_REQUEST_BODY_BYTES = 64 * 1024
 const MAX_CHANNELS = 100
 const MAX_CHANNEL_LOGIN_LENGTH = 100
 const MAX_CHANNEL_ID_LENGTH = 128
-const MAX_USER_ACCESS_TOKEN_LENGTH = 4096
 const KICK_CHANNEL_FETCH_CONCURRENCY = 5
 const MAX_UPSTREAM_LOG_BODY_LENGTH = 300
 const textEncoder = new TextEncoder()
@@ -82,15 +80,6 @@ async function fetchTwitchChannelsStatus(
     }
   })
 
-  // Prefer user token from first channel that has one. Fall back to app token.
-  const userToken = channels.find((c) => c.userAccessToken)?.userAccessToken
-  const headers = userToken
-    ? {
-        Authorization: `Bearer ${userToken}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-      }
-    : undefined
-
   const loginToId = new Map<string, string>()
   for (const channel of normalizedChannels) {
     if (channel.normalizedLogin && channel.normalizedChannelId) {
@@ -105,7 +94,7 @@ async function fetchTwitchChannelsStatus(
 
   if (loginsNeedingResolution.length > 0) {
     try {
-      const resolvedUsers = await resolveTwitchUserIdsByLogin(loginsNeedingResolution, userToken)
+      const resolvedUsers = await resolveTwitchUserIdsByLogin(loginsNeedingResolution)
       for (const [login, id] of resolvedUsers) {
         loginToId.set(login, id)
       }
@@ -137,19 +126,10 @@ async function fetchTwitchChannelsStatus(
     .join('&')
   const idParams = broadcasterIds.map((id) => `broadcaster_id=${encodeURIComponent(id)}`).join('&')
 
-  const [streamsRes, channelsRes] = await Promise.all(
-    userToken
-      ? [
-          fetch(`https://api.twitch.tv/helix/streams?${loginParams}&first=100`, { headers }),
-          fetch(`https://api.twitch.tv/helix/channels?${idParams}`, { headers }),
-        ]
-      : [
-          fetchTwitchHelixWithAppToken(
-            `https://api.twitch.tv/helix/streams?${loginParams}&first=100`,
-          ),
-          fetchTwitchHelixWithAppToken(`https://api.twitch.tv/helix/channels?${idParams}`),
-        ],
-  )
+  const [streamsRes, channelsRes] = await Promise.all([
+    fetchTwitchHelixWithAppToken(`https://api.twitch.tv/helix/streams?${loginParams}&first=100`),
+    fetchTwitchHelixWithAppToken(`https://api.twitch.tv/helix/channels?${idParams}`),
+  ])
 
   const liveMap = new Map<string, HelixStream>()
   const offlineMap = new Map<string, HelixChannel>()
@@ -410,17 +390,11 @@ function validateChannelStatusRequest(value: unknown, index: number): ChannelSta
     `channels[${index}].channelId`,
     MAX_CHANNEL_ID_LENGTH,
   )
-  const userAccessToken = validateOptionalString(
-    value.userAccessToken,
-    `channels[${index}].userAccessToken`,
-    MAX_USER_ACCESS_TOKEN_LENGTH,
-  )
 
   return {
     channelId,
     channelLogin,
     platform,
-    userAccessToken,
   }
 }
 

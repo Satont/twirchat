@@ -32,7 +32,7 @@ describe('user card metadata', () => {
     expect(metadata.subAge.status).toBe('unavailable')
   })
 
-  it('maps Twitch account age, follow age, and current subscription state', async () => {
+  it('uses app credentials for Twitch account age and leaves personal metadata unavailable', async () => {
     global.fetch = Object.assign(
       mock(async (input: string | URL | Request) => {
         const url = fetchUrl(input)
@@ -50,24 +50,6 @@ describe('user card metadata', () => {
           })
         }
 
-        if (url.includes('/helix/users?login=broadcaster')) {
-          return Response.json({
-            data: [{ id: 'broadcaster-id', login: 'broadcaster' }],
-          })
-        }
-
-        if (url.includes('/helix/channels/followers?')) {
-          return Response.json({
-            data: [{ followed_at: '2021-02-03T04:05:06Z' }],
-          })
-        }
-
-        if (url.includes('/helix/subscriptions?')) {
-          return Response.json({
-            data: [{ tier: '1000', is_gift: true, gifter_name: 'GiftUser' }],
-          })
-        }
-
         throw new Error(`Unexpected fetch: ${url}`)
       }),
       { preconnect: originalFetch.preconnect },
@@ -77,20 +59,12 @@ describe('user card metadata', () => {
       platform: 'twitch',
       platformUserId: 'target-user',
       channelId: 'broadcaster',
-      twitchAuth: {
-        accessToken: 'token-1',
-        platformUserId: 'broadcaster-id',
-        scopes: ['channel:read:subscriptions', 'moderator:read:followers'],
-      },
     })
 
     expect(metadata.accountAge.status).toBe('available')
     expect(metadata.accountAge.createdAt).toBe('2020-01-02T03:04:05Z')
-    expect(metadata.followAge.status).toBe('available')
-    expect(metadata.followAge.followedAt).toBe('2021-02-03T04:05:06Z')
-    expect(metadata.subscriptionDuration.status).toBe('available')
-    expect(metadata.subscriptionDuration.currentlySubscribed).toBe(true)
-    expect(metadata.subscriptionDuration.tier).toBe('1000')
+    expect(metadata.followAge.status).toBe('unavailable')
+    expect(metadata.subscriptionDuration.status).toBe('unavailable')
     expect(metadata.subAge.status).toBe('unsupported')
   })
 

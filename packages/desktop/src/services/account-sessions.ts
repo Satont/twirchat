@@ -82,15 +82,17 @@ export function createAccountSessions(dependencies: AccountSessionDependencies) 
         await dependencies.connectOwn(platform, dependencies.active(platform))
       })
     },
-    forget(accountId: string): Promise<void> {
+    forget(accountId: string, isCurrent = () => true): Promise<void> {
       const requested = dependencies.find(accountId)
       if (!requested) return Promise.reject(new Error(t('notices.accounts.missing')))
       return enqueue(requested.platform, async () => {
         const account = dependencies.find(accountId)
-        if (!account) return
+        if (!account || !isCurrent()) return
         if (dependencies.active(account.platform)?.id === accountId)
           await transition(account.platform, null, false)
+        if (!isCurrent()) return
         await dependencies.removeSession?.(account)
+        if (!isCurrent()) return
         dependencies.remove(accountId)
         dependencies.changed(account.platform, false)
       })

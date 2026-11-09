@@ -10,13 +10,17 @@ import { z } from 'zod'
 
 import { refreshKickToken } from '../src/auth/kick'
 import { refreshTwitchToken } from '../src/auth/twitch'
-import { twitchActivitiesRequest } from '../src/gpuix/backend/api'
+import {
+  requestTwitchActivitiesSnapshot,
+  subscribeTwitchActivities,
+} from '../src/gpuix/backend/api'
 import { KickAdapter, type KickSocket } from '../src/platforms/kick/adapter'
 import { kickRetryClock } from '../src/platforms/kick/retry'
 import { TwitchAdapter } from '../src/platforms/twitch/adapter'
 import { YouTubeAdapter } from '../src/platforms/youtube/adapter'
 import { createAccountSessions } from '../src/services/account-sessions'
 import { AccountStore } from '../src/store/account-store'
+import { getClientSecret } from '../src/store/client-secret'
 import { getDb, initDb } from '../src/store/db'
 import {
   createAccountTwitchWebSessionStore,
@@ -29,13 +33,28 @@ import { literal, required } from './fixture-values'
 let directory = ''
 let path = ''
 const originalFetch = globalThis.fetch
+const oauthEnvironment = {
+  TWIRCHAT_TWITCH_CLIENT_ID: 'public-client',
+  TWIRCHAT_YOUTUBE_CLIENT_ID: 'installed-client',
+  TWIRCHAT_YOUTUBE_CLIENT_SECRET: 'installed-secret',
+}
+const savedOAuthEnvironment = Object.entries(oauthEnvironment).map(([key]) => [
+  key,
+  process.env[key],
+])
 beforeEach(() => {
+  Object.assign(process.env, oauthEnvironment)
   directory = mkdtempSync(join(tmpdir(), 'twirchat-multi-account-'))
   path = join(directory, 'db.sqlite')
   initDb(path)
 })
 afterEach(() => {
   globalThis.fetch = originalFetch
+  for (const [key, value] of savedOAuthEnvironment) {
+    if (key === undefined) continue
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
   getDb().close()
   rmSync(directory, { recursive: true, force: true })
 })
@@ -113,6 +132,76 @@ describe('saved and active accounts', () => {
     getDb().close()
     initDb(path)
     expect(AccountStore.findByPlatform('twitch')).toBeNull()
+  })
+
+  test('signs out old Twitch accounts once and preserves other profile data', async () => {
+    const twitch = save('twitch', '1')
+    save('twitch', '2', false)
+    const kick = save('kick', '3')
+    const youtube = save('youtube', '4')
+    const clientSecret = getClientSecret()
+    const watched = WatchedChannelStore.upsert('twitch', 'watched', 'Watched')
+    WatchedChannelStore.setAccount(watched.id, twitch.id)
+
+    const db = getDb()
+    db.run("DELETE FROM client_identity WHERE key = 'migration:twitch-device-auth-v1'")
+    db.run(`INSERT INTO client_identity(key, value) VALUES
+      ('secret:twitch-web-session', 'legacy'),
+      ('secret:twitch-web-session:1', 'active'),
+      ('secret:twitch-web-session:2', 'inactive'),
+      ('secret:twitch-web-session-other', 'unrelated')`)
+    db.run("INSERT INTO settings(key, value) VALUES ('fixture', 'saved preference')")
+    db.run(`INSERT INTO chat_messages(id, platform, channel_id, author_id, author_name, text, type, created_at)
+      VALUES ('retained', 'twitch', 'watched', '1', 'user1', 'saved message', 'message', 1)`)
+    db.close()
+    initDb(path)
+
+    expect(AccountStore.findByPlatform('twitch')).toBeNull()
+    expect(
+      AccountStore.findAllSaved()
+        .map((account) => account.id)
+        .sort(),
+    ).toEqual([kick.id, youtube.id])
+    expect(AccountStore.findByPlatform('kick')?.id).toBe(kick.id)
+    expect(AccountStore.findByPlatform('youtube')?.id).toBe(youtube.id)
+    expect(AccountStore.getTokens(kick.id)?.refreshToken).toBe('refresh-3')
+    expect(AccountStore.getTokens(youtube.id)?.refreshToken).toBe('refresh-4')
+    expect(
+      getDb().query("SELECT account_id FROM active_accounts WHERE platform = 'twitch'").get(),
+    ).toEqual({ account_id: null })
+    expect(
+      getDb()
+        .query("SELECT key, value FROM client_identity WHERE key GLOB 'secret:twitch-web-session*'")
+        .all(),
+    ).toEqual([{ key: 'secret:twitch-web-session-other', value: 'unrelated' }])
+    expect(getClientSecret()).toBe(clientSecret)
+    expect(WatchedChannelStore.findById(watched.id)).toMatchObject({ accountId: twitch.id })
+    expect(getDb().query("SELECT value FROM settings WHERE key = 'fixture'").get()).toEqual({
+      value: 'saved preference',
+    })
+    expect(getDb().query("SELECT text FROM chat_messages WHERE id = 'retained'").get()).toEqual({
+      text: 'saved message',
+    })
+
+    const signedIn = save('twitch', twitch.platformUserId)
+    AccountStore.updateTokens(signedIn.id, 'device-access', 'device-refresh', 4_000_000_000)
+    const webSession = {
+      token: 'new',
+      userId: twitch.platformUserId,
+      username: 'user1',
+      clientId: 'client',
+    }
+    await TwitchWebSessionStore.set(webSession)
+    getDb().close()
+    initDb(path)
+
+    expect(AccountStore.findByPlatform('twitch')?.id).toBe(signedIn.id)
+    expect(AccountStore.getTokens(signedIn.id)).toMatchObject({
+      accessToken: 'device-access',
+      refreshToken: 'device-refresh',
+    })
+    expect(WatchedChannelStore.findById(watched.id)?.accountId).toBe(signedIn.id)
+    expect(await TwitchWebSessionStore.get()).toEqual(webSession)
   })
 
   test('rejects cross-platform selections and deleting an active account leaves an explicit anonymous selection', () => {
@@ -224,6 +313,24 @@ describe('account session transitions', () => {
     expect(calls).toContain('own:anonymous')
     expect(calls).toContain('watched:twitch')
   })
+
+  test('queued session invalidation preserves credentials replaced by a fresh sign-in', async () => {
+    const active = save('twitch', '1')
+    const expired = save('twitch', '2', false)
+    const delayed = gate<void>()
+    const { controller } = fixture(() => delayed.promise)
+    const previousToken = AccountStore.getTokens(expired.id)?.accessToken
+    const switchAccount = controller.select('twitch', null)
+    const invalidation = controller.forget(
+      expired.id,
+      () => AccountStore.getTokens(expired.id)?.accessToken === previousToken,
+    )
+    AccountStore.updateTokens(expired.id, 'replacement-token', 'replacement-refresh')
+    delayed.resolve()
+    await Promise.all([switchAccount, invalidation])
+    expect(AccountStore.findById(active.id)).not.toBeNull()
+    expect(AccountStore.getTokens(expired.id)?.accessToken).toBe('replacement-token')
+  })
 })
 
 describe('account-scoped Twitch web sessions', () => {
@@ -288,16 +395,29 @@ describe('account-scoped Twitch web sessions', () => {
   test('an old account activity response is rejected after the active identity changes', async () => {
     save('twitch', '1')
     const second = save('twitch', '2', false)
+    const lookupStarted = gate<void>()
     const delayed = gate<Response>()
-    globalThis.fetch = Object.assign(() => delayed.promise, { preconnect: fetch.preconnect })
-    const pending = twitchActivitiesRequest(
-      'snapshot',
-      { channelSlug: 'channel' },
-      z.object({ privateBalance: z.number() }),
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request) => {
+        const url = new URL(input instanceof Request ? input.url : input)
+        if (url.pathname === '/oauth2/validate')
+          return Response.json({
+            client_id: 'public-client',
+            user_id: '1',
+            login: 'user1',
+            expires_in: 3600,
+            scopes: [],
+          })
+        expect(url.origin + url.pathname).toBe('https://api.twitch.tv/helix/users')
+        lookupStarted.resolve()
+        return delayed.promise
+      },
+      { preconnect: fetch.preconnect },
     )
-    await Bun.sleep(1)
+    const pending = requestTwitchActivitiesSnapshot({ channelSlug: 'channel', sections: [] })
+    await lookupStarted.promise
     AccountStore.setActive('twitch', second.id)
-    delayed.resolve(Response.json({ privateBalance: 123 }))
+    delayed.resolve(Response.json({ data: [{ id: '100' }] }))
     await expect(pending).rejects.toThrow('account changed')
   })
 
@@ -315,43 +435,56 @@ describe('account-scoped Twitch web sessions', () => {
     const requests: unknown[] = []
     globalThis.fetch = Object.assign(
       async (input: string | URL | Request, init?: RequestInit) => {
-        const body: unknown = JSON.parse(z.string().parse(init?.body))
-        const url = input instanceof Request ? input.url : input.toString()
-        if (url.endsWith('/api/auth/twitch/refresh')) {
-          refreshCount++
-          expect(body).toEqual({ refreshToken: 'refresh-2' })
-          return delayedRefresh.promise
+        const url = new URL(input instanceof Request ? input.url : input)
+        const headers = new Headers(init?.headers)
+        if (url.origin === 'https://id.twitch.tv') {
+          if (url.pathname === '/oauth2/token') {
+            refreshCount++
+            expect(init?.body?.toString()).toBe(
+              'client_id=public-client&grant_type=refresh_token&refresh_token=refresh-2',
+            )
+            return delayedRefresh.promise
+          }
+          expect(url.pathname).toBe('/oauth2/validate')
+          expect(headers.get('Authorization')).toBe('OAuth fresh-activity')
+          return Response.json({
+            client_id: 'public-client',
+            user_id: '2',
+            login: 'user2',
+            expires_in: 3600,
+            scopes: [],
+          })
         }
-        requests.push(body)
-        return Response.json({ success: true })
+        expect(url.origin).toBe('https://api.twitch.tv')
+        expect(headers.get('Authorization')).toBe('Bearer fresh-activity')
+        expect(headers.get('Client-Id')).toBe('public-client')
+        if (url.pathname === '/helix/users') return Response.json({ data: [{ id: '100' }] })
+        expect(url.pathname).toBe('/helix/eventsub/subscriptions')
+        requests.push(JSON.parse(z.string().parse(init?.body)))
+        return Response.json({ data: [{ id: String(requests.length) }] })
       },
       { preconnect: fetch.preconnect },
     )
 
     const pending = Promise.all([
-      twitchActivitiesRequest(
-        'subscribe',
-        { sessionId: 'session', channelSlug: 'channel' },
-        z.object({ success: z.boolean() }),
-        chosen.id,
-      ),
+      subscribeTwitchActivities(chosen.id, 'session', 'channel'),
       refreshTwitchToken(chosen.id),
     ])
     expect(refreshCount).toBe(1)
     delayedRefresh.resolve(
-      Response.json({ accessToken: 'fresh', refreshToken: 'rotated', expiresIn: 3600 }),
+      Response.json({ access_token: 'fresh-activity', refresh_token: 'rotated', expires_in: 3600 }),
     )
-    await expect(pending).resolves.toEqual([{ success: true }, 'fresh'])
-    expect(requests).toEqual([
-      {
-        operation: 'subscribe',
-        sessionId: 'session',
-        channelSlug: 'channel',
-        accessToken: 'fresh',
-        platformUserId: '2',
-        scopes: [],
-      },
-    ])
+    const [subscriptionResult, accessToken] = await pending
+    expect(accessToken).toBe('fresh-activity')
+    expect(subscriptionResult.errors).toEqual([])
+    expect(requests).toEqual(
+      ['stream.online', 'stream.offline'].map((type) => ({
+        type,
+        version: '1',
+        condition: { broadcaster_user_id: '100' },
+        transport: { method: 'websocket', session_id: 'session' },
+      })),
+    )
     expect(AccountStore.getTokens(chosen.id)?.refreshToken).toBe('rotated')
     expect(AccountStore.getTokens('twitch:1')?.accessToken).toBe('token-1')
   })
@@ -448,11 +581,11 @@ describe('adapter identity changes', () => {
       AccountStore.setActive(platform, selected.id)
       await adapter.connect('second')
       delayed.resolve(
-        Response.json({
-          accessToken: 'late-old-token',
-          refreshToken: 'late-refresh',
-          expiresIn: 3600,
-        }),
+        Response.json(
+          platform === 'kick'
+            ? { accessToken: 'late-old-token', refreshToken: 'late-refresh', expiresIn: 3600 }
+            : { access_token: 'late-old-token', refresh_token: 'late-refresh', expires_in: 3600 },
+        ),
       )
       await pending
       if (kickRefresh) expect(await kickRefresh).toBeInstanceOf(Error)

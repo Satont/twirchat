@@ -1,8 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { exchangeKickCode } from '../src/auth/kick'
-import { exchangeTwitchCode } from '../src/auth/twitch'
-import { exchangeYouTubeCode } from '../src/auth/youtube'
 import { authRoutes } from '../src/routes/auth'
 import { getEmoteSetById, getUserByConnection } from '../src/seventv/client'
 import { isSevenTvEventEmoteValue } from '../src/seventv/emote'
@@ -14,6 +12,23 @@ afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
+test('only Kick account authorization is exposed by the backend', () => {
+  expect(Object.keys(authRoutes).sort()).toEqual([
+    '/api/auth/kick/exchange',
+    '/api/auth/kick/legacy-start',
+    '/api/auth/kick/refresh',
+    '/api/auth/kick/start',
+    '/auth/kick/callback',
+  ])
+  expect(
+    desktopMessageSchema.safeParse({
+      type: 'auth_start_twitch',
+      codeChallenge: 'challenge',
+      state: 'state',
+    }).success,
+  ).toBe(false)
+})
+
 test('OAuth request boundaries reject malformed JSON and wrong field types before exchange', async () => {
   let calls = 0
   globalThis.fetch = Object.assign(
@@ -23,11 +38,7 @@ test('OAuth request boundaries reject malformed JSON and wrong field types befor
     },
     { preconnect: originalFetch.preconnect },
   )
-  for (const route of [
-    authRoutes['/api/auth/kick/exchange'],
-    authRoutes['/api/auth/twitch/exchange'],
-    authRoutes['/api/auth/youtube/exchange'],
-  ]) {
+  for (const route of [authRoutes['/api/auth/kick/exchange']]) {
     for (const body of ['{', 'null', '{"code":42,"codeVerifier":"v","redirectUri":"r"}']) {
       const response = await route.POST(
         new Request('http://local/exchange', { method: 'POST', body }),
@@ -42,9 +53,7 @@ test('OAuth token responses require actual string credentials rather than a clai
   globalThis.fetch = Object.assign(async () => Response.json({ access_token: 42 }), {
     preconnect: originalFetch.preconnect,
   })
-  for (const exchange of [exchangeKickCode, exchangeTwitchCode, exchangeYouTubeCode]) {
-    await expect(exchange('code', 'verifier', 'http://local/callback')).rejects.toThrow()
-  }
+  await expect(exchangeKickCode('code', 'verifier', 'http://local/callback')).rejects.toThrow()
 })
 
 test('7TV events verify nested image files and retain typed event variants', () => {

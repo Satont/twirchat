@@ -4,7 +4,6 @@ import { logger } from '@twirchat/shared/logger'
 import type { ServerWebSocket } from 'bun'
 
 import { startKickOAuth } from '../auth/kick.ts'
-import { buildTwitchAuthUrl } from '../auth/twitch.ts'
 import { config } from '../config.ts'
 import { ClientStore } from '../db/index.ts'
 import { AccountStore } from '../db/index.ts'
@@ -101,23 +100,6 @@ export async function handleWsMessage(
           JSON.stringify({
             message: `auth_start: unsupported platform ${msg.platform}`,
             type: 'error',
-          }),
-        )
-      }
-      break
-    }
-
-    case 'auth_start_twitch': {
-      try {
-        // Legacy WS-based flow - uses backend redirect URI
-        const { url } = buildTwitchAuthUrl(msg.codeChallenge, msg.state, config.TWITCH_REDIRECT_URI)
-        ws.send(JSON.stringify({ platform: 'twitch', type: 'auth_url', url }))
-      } catch (error) {
-        ws.send(
-          JSON.stringify({
-            type: 'auth_error',
-            platform: 'twitch',
-            error: String(error),
           }),
         )
       }

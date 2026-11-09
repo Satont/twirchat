@@ -1,5 +1,26 @@
 export const runtime = {
   // Backend API errors (api.ts)
+  'runtime.auth.twitchClientRequired': 'Twitch sign-in requires a public OAuth client ID.',
+  'runtime.auth.youtubeClientRequired':
+    'YouTube sign-in requires OAuth credentials for a Google Desktop app.',
+  'runtime.auth.startTwitchFailed': 'Could not start Twitch sign-in (HTTP {status}).',
+  'runtime.auth.twitchDeclined': 'Twitch authorization was declined.',
+  'runtime.auth.twitchFailed': 'Twitch sign-in failed (HTTP {status}).',
+  'runtime.auth.twitchExpired': 'The Twitch code expired. Start sign-in again.',
+  'runtime.auth.twitchClientMismatch': 'Twitch returned a token for a different OAuth application.',
+  'runtime.auth.twitchSignInFailed': 'Twitch sign-in failed.',
+  'runtime.auth.twitchReconnect': 'Sign in again to reconnect @{username}.',
+  'runtime.auth.refreshFailed':
+    '{platform} token refresh failed (HTTP {status}). Sign in again if it persists.',
+  'runtime.auth.signInToRefresh': 'Sign in to {platform} again to refresh this account.',
+  'runtime.auth.removedDuringRefresh':
+    'The saved {platform} account was removed during token refresh.',
+  'runtime.auth.sessionExpired': 'The sign-in session expired. Start sign-in again.',
+  'runtime.auth.authorizationDeclined': 'Authorization was declined.',
+  'runtime.auth.missingCallbackCode': 'The authorization callback is missing its code.',
+  'runtime.auth.youtubeExchangeFailed': 'YouTube token exchange failed (HTTP {status}).',
+  'runtime.auth.youtubeChannelRequired': 'This Google account has no YouTube channel.',
+
   'runtime.api.activeTwitchAccountChanged':
     'The active Twitch account changed. Retry this action in the selected account.',
   'runtime.api.connectTwitchFirst': 'Connect your Twitch account on the Platforms tab first.',
