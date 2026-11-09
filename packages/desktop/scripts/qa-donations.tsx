@@ -27,6 +27,7 @@ const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot'
 const width = process.argv.includes('--wide') ? 1280 : 650
 const theme = process.argv.includes('--light') ? lightTheme : darkTheme
 const memeUnavailable = process.argv.includes('--meme-unavailable')
+const donationAlertsOAuthAvailable = !process.argv.includes('--donationalerts-unavailable')
 const captureSuffix = `${width}${theme.isLight ? '-light' : ''}${memeUnavailable ? '-meme-unavailable' : ''}`
 const fixtureSettings = {
   ...DEFAULT_SETTINGS,
@@ -50,6 +51,7 @@ const update = (provider: DonationProvider, state: DonationConnections[DonationP
 const backend = {
   events,
   api: {
+    donationAlertsOAuthAvailable,
     getSettings: async () => fixtureSettings,
     getAppVersion: async () => 'Donations QA',
     getUiState: async () => null,
@@ -143,28 +145,34 @@ try {
   await until(() => painted('MemeAlerts'), 'all three providers')
   if (memeUnavailable) {
     await until(() => painted('Проверяем доступность…'), 'checking OAuth availability')
-    assert.ok(!find('donation-connect-donationalerts'))
+    assert.equal(Boolean(find('donation-connect-donationalerts')), donationAlertsOAuthAvailable)
     assert.ok(!find('donation-connect-memealerts'))
     assert.ok(find('donation-connect-donatepay'))
-    availability.resolve({ donationalerts: true, memealerts: false })
+    availability.resolve({ memealerts: false })
     await until(() => painted('Пока не включено'), 'MemeAlerts disabled by backend')
     assert.ok(!find('donation-connect-memealerts'))
-    assert.ok(find('donation-connect-donationalerts'))
+    assert.equal(Boolean(find('donation-connect-donationalerts')), donationAlertsOAuthAvailable)
     assert.ok(find('donation-connect-donatepay'))
   }
   await captureGuiQaDisplay(`donations-settings-${captureSuffix}`)
   if (memeUnavailable) {
     update('memealerts', { status: 'connected' })
     await until(() => find('donation-disconnect-memealerts'), 'existing MemeAlerts connection')
-    assert.ok(!painted('Пока не включено'))
+    if (donationAlertsOAuthAvailable) assert.ok(!painted('Пока не включено'))
     await click('donation-disconnect-memealerts')
     await until(() => painted('Пока не включено'), 'disconnected MemeAlerts stays unavailable')
     assert.ok(!find('donation-connect-memealerts'))
   }
-  await click('donation-connect-donationalerts')
-  await until(() => painted('Waiting for authorization'), 'OAuth wait state')
-  await click('donation-disconnect-donationalerts')
-  await until(() => find('donation-connect-donationalerts'), 'OAuth cancellation')
+  if (donationAlertsOAuthAvailable) {
+    await click('donation-connect-donationalerts')
+    await until(() => painted('Waiting for authorization'), 'OAuth wait state')
+    await click('donation-disconnect-donationalerts')
+    await until(() => find('donation-connect-donationalerts'), 'OAuth cancellation')
+  } else {
+    const notEnabled = memeUnavailable ? 'Пока не включено' : 'Not enabled yet'
+    await until(() => painted(notEnabled), 'DonationAlerts disabled without local configuration')
+    assert.ok(!find('donation-connect-donationalerts'))
+  }
   await click('donation-connect-donatepay')
   await until(() => painted('Copy your DonatePay API key'), 'empty clipboard hint')
   clipboard = 'donatepay-qa-key'

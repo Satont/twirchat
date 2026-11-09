@@ -9,10 +9,15 @@ import {
   type DonationEvent,
   type DonationOAuthTokens,
   type DonationProvider,
-  type OAuthDonationProvider,
 } from '@twirchat/shared/donations'
 import { z } from 'zod'
 
+import {
+  authorizeDonationAlerts,
+  type DonationAlertsAccessToken,
+  DonationAlertsAuthError,
+  donationAlertsAccessTokenSchema,
+} from '../auth/donationalerts'
 import {
   authorizeDonation,
   DonationOAuthError,
@@ -31,7 +36,8 @@ const MAX_RECONNECT_DELAY = 60_000
 
 type Credential =
   | { provider: 'donatepay'; apiKey: string }
-  | { provider: OAuthDonationProvider; tokens: DonationOAuthTokens }
+  | { provider: 'donationalerts'; tokens: DonationAlertsAccessToken }
+  | { provider: 'memealerts'; tokens: DonationOAuthTokens }
 
 interface DonationServiceOptions {
   db: Database
@@ -42,6 +48,7 @@ interface DonationServiceOptions {
 
 const defaultDependencies = {
   authorize: authorizeDonation,
+  authorizeAlerts: authorizeDonationAlerts,
   refresh: refreshDonation,
   receive: receiveDonations,
 }
@@ -57,7 +64,10 @@ async function restoreCredential(
   try {
     const raw = await decryptAsync(encrypted)
     if (provider === 'donatepay') return { provider, apiKey: apiKeySchema.parse(raw) }
-    return { provider, tokens: donationOAuthTokensSchema.parse(JSON.parse(raw)) }
+    const value: unknown = JSON.parse(raw)
+    if (provider === 'donationalerts')
+      return { provider, tokens: donationAlertsAccessTokenSchema.parse(value) }
+    return { provider, tokens: donationOAuthTokensSchema.parse(value) }
   } catch {
     throw new DonationOAuthError('Saved credentials could not be opened. Connect again.')
   }
@@ -65,8 +75,12 @@ async function restoreCredential(
 
 export function createDonationService(
   { db, openBrowser, onConnections, onDonation }: DonationServiceOptions,
-  { authorize, refresh, receive } = defaultDependencies,
+  dependencies: Partial<typeof defaultDependencies> = {},
 ) {
+  const { authorize, authorizeAlerts, refresh, receive } = {
+    ...defaultDependencies,
+    ...dependencies,
+  }
   let connections: DonationConnections = {
     donationalerts: { status: 'disconnected' },
     donatepay: { status: 'disconnected' },
@@ -105,8 +119,10 @@ export function createDonationService(
     while (!signal.aborted) {
       publish(provider, { status: 'connecting' })
       try {
+        if (credential.provider === 'donationalerts' && credential.tokens.expiresAt <= Date.now())
+          throw new DonationOAuthReconnectRequired(credential.provider)
         if (
-          credential.provider !== 'donatepay' &&
+          credential.provider === 'memealerts' &&
           (refreshAfterRejection || credential.tokens.expiresAt - Date.now() < REFRESH_MARGIN)
         ) {
           const tokens = await refresh({
@@ -144,7 +160,7 @@ export function createDonationService(
           return
         }
         if (error instanceof DonationCredentialRejected) {
-          if (provider !== 'donatepay' && !retriedRejectedCredential) {
+          if (provider === 'memealerts' && !retriedRejectedCredential) {
             retriedRejectedCredential = true
             refreshAfterRejection = true
             continue
@@ -185,7 +201,9 @@ export function createDonationService(
       .catch((error: unknown) => {
         if (!signal.aborted) {
           const message =
-            error instanceof DonationOAuthError ? error.message : 'Could not connect. Try again.'
+            error instanceof DonationOAuthError || error instanceof DonationAlertsAuthError
+              ? error.message
+              : 'Could not connect. Try again.'
           publish(provider, { status: 'error', message })
         }
       })
@@ -215,8 +233,10 @@ export function createDonationService(
         return
       }
       launch(provider, 'authorizing', async (signal) => {
-        const tokens = await authorize({ provider, signal, openBrowser })
-        const credential: Credential = { provider, tokens }
+        const credential: Credential =
+          provider === 'donationalerts'
+            ? { provider, tokens: await authorizeAlerts({ signal, openBrowser }) }
+            : { provider, tokens: await authorize({ provider, signal, openBrowser }) }
         await save(credential, signal)
         return credential
       })

@@ -6,22 +6,18 @@ import {
   timingSafeEqual,
 } from 'node:crypto'
 
-import type { DonationOAuthTokens, OAuthDonationProvider } from '@twirchat/shared/donations'
+import type { DonationOAuthTokens } from '@twirchat/shared/donations'
 import { z } from 'zod'
 
 import { generateCodeChallenge } from './pkce'
 
-const PROVIDER_ORIGINS: Record<OAuthDonationProvider, string> = {
-  donationalerts: 'https://www.donationalerts.com',
-  memealerts: 'https://memealerts.com',
-}
+const MEME_ALERTS_ORIGIN = 'https://memealerts.com'
 const SCOPE = 'oauth-user-show oauth-donation-subscribe'
 const LOOPBACK_CALLBACK = '/auth/donations/callback'
 const STATE_TTL_MS = 5 * 60_000
 const NONCE_BYTES = 12
 const TAG_BYTES = 16
 
-export const oauthDonationProvider = z.enum(['donationalerts', 'memealerts'])
 export const donationCodeChallenge = z.string().regex(/^[\w-]{43}$/u)
 export const donationLoopbackPort = z.number().int().min(1024).max(65535)
 export const donationRelayState = z.string().min(1).max(256)
@@ -36,7 +32,7 @@ export const donationRefreshToken = z.string().min(1).max(4096)
 const providerCode = z.string().regex(/^[\x20-\x7e]{1,4096}$/u)
 const stateParts = z.tuple([
   z.literal('v1'),
-  oauthDonationProvider,
+  z.literal('memealerts'),
   z
     .string()
     .regex(/^\d{13}$/u)
@@ -66,10 +62,6 @@ export interface DonationOAuthCredentials {
   redirectUri: string
 }
 
-interface DonationOAuthClient extends DonationOAuthCredentials {
-  provider: OAuthDonationProvider
-}
-
 type TokenGrant = { kind: 'code'; code: string } | { kind: 'refresh'; refreshToken: string }
 
 type TokenFetch = (url: URL, options: RequestInit) => Promise<Response>
@@ -87,22 +79,20 @@ export class DonationOAuthFailure extends Error {
   }
 }
 
-export function donationRedirectUri(provider: OAuthDonationProvider) {
-  return z.url().refine((value) => {
-    const url = new URL(value)
-    const local = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
-    return (
-      (url.protocol === 'https:' || (url.protocol === 'http:' && local)) &&
-      url.pathname === `/auth/donations/${provider}/callback` &&
-      !url.username &&
-      !url.password &&
-      !url.search &&
-      !url.hash
-    )
-  }, `Use the exact OAuth callback URL ending in /auth/donations/${provider}/callback.`)
-}
+export const memeAlertsRedirectUri = z.url().refine((value) => {
+  const url = new URL(value)
+  const local = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+  return (
+    (url.protocol === 'https:' || (url.protocol === 'http:' && local)) &&
+    url.pathname === '/auth/donations/memealerts/callback' &&
+    !url.username &&
+    !url.password &&
+    !url.search &&
+    !url.hash
+  )
+}, 'Use the exact OAuth callback URL ending in /auth/donations/memealerts/callback.')
 
-function signState(payload: string, client: DonationOAuthClient): string {
+function signState(payload: string, client: DonationOAuthCredentials): string {
   return createHmac('sha256', client.clientSecret)
     .update('twirchat-donation-oauth/state/v1:')
     .update(client.clientId)
@@ -113,25 +103,25 @@ function signState(payload: string, client: DonationOAuthClient): string {
     .digest('base64url')
 }
 
-function verifyState(state: string, client: DonationOAuthClient, now: number) {
+function verifyState(state: string, client: DonationOAuthCredentials, now: number) {
   const parts = state.split('.')
   const parsed = stateParts.safeParse(parts)
   if (!parsed.success) return undefined
-  const [, provider, expiresAt, port, challenge, signature] = parsed.data
-  if (provider !== client.provider || expiresAt <= now) return undefined
+  const [, , expiresAt, port, challenge, signature] = parsed.data
+  if (expiresAt <= now) return undefined
   const expected = signState(parts.slice(0, -1).join('.'), client)
   if (!timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return undefined
   return { port, challenge }
 }
 
-function ticketKey(client: DonationOAuthClient): Buffer {
+function ticketKey(client: DonationOAuthCredentials): Buffer {
   return createHmac('sha256', client.clientSecret)
     .update('twirchat-donation-oauth/ticket/v1')
     .digest()
 }
 
 // Keep the upstream code out of the local HTTP redirect and bind the ticket to one state.
-function sealCode(code: string, state: string, client: DonationOAuthClient): string {
+function sealCode(code: string, state: string, client: DonationOAuthCredentials): string {
   const nonce = randomBytes(NONCE_BYTES)
   const cipher = createCipheriv('aes-256-gcm', ticketKey(client), nonce)
   cipher.setAAD(Buffer.from(state))
@@ -139,7 +129,7 @@ function sealCode(code: string, state: string, client: DonationOAuthClient): str
   return Buffer.concat([nonce, cipher.getAuthTag(), encrypted]).toString('base64url')
 }
 
-function openTicket(ticket: string, state: string, client: DonationOAuthClient): string {
+function openTicket(ticket: string, state: string, client: DonationOAuthCredentials): string {
   const bytes = Buffer.from(ticket, 'base64url')
   try {
     const decipher = createDecipheriv(
@@ -163,7 +153,7 @@ export function createDonationOAuth({
   now = Date.now,
 }: DonationOAuthOptions = {}) {
   async function requestTokens(
-    client: DonationOAuthClient,
+    client: DonationOAuthCredentials,
     grant: TokenGrant,
   ): Promise<DonationOAuthTokens> {
     const body = new URLSearchParams({
@@ -177,9 +167,8 @@ export function createDonationOAuth({
     } else {
       body.set('grant_type', 'refresh_token')
       body.set('refresh_token', grant.refreshToken)
-      if (client.provider === 'donationalerts') body.set('scope', SCOPE)
     }
-    const response = await request(new URL('/oauth/token', PROVIDER_ORIGINS[client.provider]), {
+    const response = await request(new URL('/oauth/token', MEME_ALERTS_ORIGIN), {
       method: 'POST',
       body,
       redirect: 'manual',
@@ -206,10 +195,10 @@ export function createDonationOAuth({
   }
 
   return {
-    start: (client: DonationOAuthClient, input: { codeChallenge: string; port: number }) => {
-      const payload = `v1.${client.provider}.${now() + STATE_TTL_MS}.${input.port}.${input.codeChallenge}`
+    start: (client: DonationOAuthCredentials, input: { codeChallenge: string; port: number }) => {
+      const payload = `v1.memealerts.${now() + STATE_TTL_MS}.${input.port}.${input.codeChallenge}`
       const state = `${payload}.${signState(payload, client)}`
-      const url = new URL('/oauth/authorize', PROVIDER_ORIGINS[client.provider])
+      const url = new URL('/oauth/authorize', MEME_ALERTS_ORIGIN)
       url.search = new URLSearchParams({
         client_id: client.clientId,
         redirect_uri: client.redirectUri,
@@ -219,7 +208,7 @@ export function createDonationOAuth({
       }).toString()
       return { url: url.href, state }
     },
-    callback(client: DonationOAuthClient, url: URL): URL | undefined {
+    callback(client: DonationOAuthCredentials, url: URL): URL | undefined {
       const state = donationRelayState.safeParse(url.searchParams.get('state'))
       if (!state.success) return undefined
       const session = verifyState(state.data, client, now())
@@ -233,7 +222,7 @@ export function createDonationOAuth({
       return callback
     },
     exchange: async (
-      client: DonationOAuthClient,
+      client: DonationOAuthCredentials,
       input: { codeVerifier: string; state: string; ticket: string },
     ): Promise<DonationOAuthTokens> => {
       const session = verifyState(input.state, client, now())
@@ -243,7 +232,7 @@ export function createDonationOAuth({
       return requestTokens(client, { kind: 'code', code })
     },
     refresh: (
-      client: DonationOAuthClient,
+      client: DonationOAuthCredentials,
       input: { refreshToken: string },
     ): Promise<DonationOAuthTokens> =>
       requestTokens(client, { kind: 'refresh', refreshToken: input.refreshToken }),

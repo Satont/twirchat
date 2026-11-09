@@ -6,6 +6,7 @@ import type { DonationEvent, DonationOAuthTokens } from '@twirchat/shared/donati
 import { DonationOAuthNotEnabled } from '../src/auth/donations'
 import { DonationCredentialRejected } from '../src/donations/providers'
 import { createDonationService, type DonationService } from '../src/donations/service'
+import { encryptAsync } from '../src/store/crypto'
 
 const originalTokens: DonationOAuthTokens = {
   accessToken: 'original-access',
@@ -38,7 +39,7 @@ test('refreshes rejected OAuth access, delivers the event, and restores rotated 
   const refresh = mock(async () => rotatedTokens)
   const event: DonationEvent = {
     id: '5',
-    provider: 'donationalerts',
+    provider: 'memealerts',
     username: 'Donor',
     amount: '25.00',
     currency: 'RUB',
@@ -57,7 +58,7 @@ test('refreshes rejected OAuth access, delivers the event, and restores rotated 
     refresh,
     receive: async ({ credential, onConnected, onDonation, signal }) => {
       if (credential === originalTokens.accessToken)
-        throw new DonationCredentialRejected('donationalerts')
+        throw new DonationCredentialRejected('memealerts')
       expect(credential).toBe(rotatedTokens.accessToken)
       onConnected()
       onDonation(event)
@@ -66,12 +67,12 @@ test('refreshes rejected OAuth access, delivers the event, and restores rotated 
       )
     },
   })
-  service.connect({ provider: 'donationalerts' })
+  service.connect({ provider: 'memealerts' })
   expect(await donated.promise).toEqual(event)
-  expect(service.getConnections().donationalerts.status).toBe('connected')
+  expect(service.getConnections().memealerts.status).toBe('connected')
   expect(refresh).toHaveBeenCalledTimes(1)
   expect(refresh).toHaveBeenCalledWith({
-    provider: 'donationalerts',
+    provider: 'memealerts',
     refreshToken: originalTokens.refreshToken,
     signal: expect.any(AbortSignal),
   })
@@ -89,32 +90,92 @@ test('refreshes rejected OAuth access, delivers the event, and restores rotated 
   expect(authorize).toHaveBeenCalledTimes(1)
 })
 
-test('disconnect cancels a pending OAuth flow and blocks a late token from being stored', async () => {
-  const tokens = Promise.withResolvers<DonationOAuthTokens>()
+test('disconnect cancels a pending local DonationAlerts flow before storing its token', async () => {
+  const access = { accessToken: 'local-access', expiresAt: originalTokens.expiresAt }
+  const tokens = Promise.withResolvers<typeof access>()
   const finished = Promise.withResolvers<void>()
   const receive = mock(async () => {})
-  const refresh = mock(async () => rotatedTokens)
+  const authorize = mock(async () => originalTokens)
   service = createDonationService(
     { db, openBrowser: async () => {}, onConnections: () => {}, onDonation: () => {} },
     {
-      authorize: ({ signal }) => {
+      authorize,
+      authorizeAlerts: ({ signal }) => {
         signal.addEventListener('abort', () => finished.resolve(), { once: true })
         return tokens.promise
       },
-      refresh,
       receive,
     },
   )
-  service.connect({ provider: 'memealerts' })
-  expect(service.getConnections().memealerts.status).toBe('authorizing')
-  service.disconnect('memealerts')
+  service.connect({ provider: 'donationalerts' })
+  expect(service.getConnections().donationalerts.status).toBe('authorizing')
+  service.disconnect('donationalerts')
   await finished.promise
-  tokens.resolve(originalTokens)
+  tokens.resolve(access)
   await Bun.sleep(0)
-  expect(service.getConnections().memealerts.status).toBe('disconnected')
+  expect(service.getConnections().donationalerts.status).toBe('disconnected')
   expect(db.query('SELECT value FROM client_identity').get()).toBeNull()
+  expect(authorize).not.toHaveBeenCalled()
   expect(receive).not.toHaveBeenCalled()
 })
+
+test.each([
+  {
+    state: 'rejected',
+    remaining: 30_000,
+    connections: 1,
+    message: 'The service rejected authorization. Connect again.',
+  },
+  {
+    state: 'expired',
+    remaining: -1000,
+    connections: 0,
+    message: 'DonationAlerts authorization expired. Connect again.',
+  },
+])(
+  'requires local sign-in for $state legacy DonationAlerts tokens without refresh',
+  async ({ remaining, connections, message }) => {
+    const stopped = Promise.withResolvers<string>()
+    const refresh = mock(async () => rotatedTokens)
+    const receive = mock(async () => {
+      throw new DonationCredentialRejected('donationalerts')
+    })
+    const legacy = await encryptAsync(
+      JSON.stringify({ ...originalTokens, expiresAt: Date.now() + remaining }),
+    )
+    db.run('INSERT INTO client_identity (key, value) VALUES (?, ?)', [
+      'secret:donations:donationalerts',
+      legacy,
+    ])
+    service = createDonationService(
+      {
+        db,
+        openBrowser: async () => {},
+        onConnections: ({ donationalerts }) => {
+          if (donationalerts.status === 'error') stopped.resolve(donationalerts.message)
+        },
+        onDonation: () => {},
+      },
+      { refresh, receive },
+    )
+    service.start()
+    expect(await stopped.promise).toBe(message)
+    expect(receive).toHaveBeenCalledTimes(connections)
+    if (connections) {
+      expect(receive).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'donationalerts',
+          credential: originalTokens.accessToken,
+        }),
+      )
+    }
+    expect(refresh).not.toHaveBeenCalled()
+    expect(db.query('SELECT value FROM client_identity').get()).toEqual({ value: legacy })
+    service.disconnect('donationalerts')
+    expect(service.getConnections().donationalerts.status).toBe('disconnected')
+    expect(db.query('SELECT value FROM client_identity').get()).toBeNull()
+  },
+)
 
 test('a disabled OAuth refresh stops reconnecting and allows disconnect', async () => {
   const stopped = Promise.withResolvers<string>()

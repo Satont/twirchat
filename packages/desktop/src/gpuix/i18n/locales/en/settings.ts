@@ -60,6 +60,7 @@ export const settings = {
   'settings.section.players': 'Stream Players',
   'settings.section.players.desc': 'Open streams in a browser, external player or Streamlink',
   'settings.section.plugins': 'Plugins',
+  'settings.section.donations': 'Donation Providers',
   'settings.section.streamer-mode': 'Streamer Mode',
   'settings.section.streamer-mode.desc': 'Protect private details while streaming',
   'settings.section.similarity': 'Similar Messages',

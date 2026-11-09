@@ -3,9 +3,9 @@ import { expect } from 'bun:test'
 import { createDonationOAuth } from '../src/auth/donations'
 import { createDonationOAuthRoutes } from '../src/routes/donations'
 
-export const callbackPath = '/auth/donations/donationalerts/callback'
+export const callbackPath = '/auth/donations/memealerts/callback'
 export const redirectUri = `https://chat.example.com${callbackPath}`
-export const routeBase = '/api/auth/donations/donationalerts'
+export const routeBase = '/api/auth/donations/memealerts'
 
 export function createDonationOAuthFixture(
   { memealertsConfigured } = { memealertsConfigured: true },
@@ -39,15 +39,7 @@ export function createDonationOAuthFixture(
     hostname: '127.0.0.1',
     port: 0,
     routes: createDonationOAuthRoutes(
-      {
-        donationalerts: credentials,
-        memealerts: memealertsConfigured
-          ? {
-              ...credentials,
-              redirectUri: 'https://chat.example.com/auth/donations/memealerts/callback',
-            }
-          : undefined,
-      },
+      memealertsConfigured ? credentials : undefined,
       oauth,
       async (req) => {
         authCalls++
@@ -69,8 +61,8 @@ export function createDonationOAuthFixture(
         headers: { 'Content-Type': 'application/json', 'X-Client-Secret': 'desktop-test' },
         body: JSON.stringify(body),
       }),
-    relay: (state: string, path = callbackPath) => {
-      const url = new URL(path, server.url)
+    relay: (state: string) => {
+      const url = new URL(callbackPath, server.url)
       url.search = new URLSearchParams({ state, code: 'upstream-authorization-code' }).toString()
       return fetch(url, { redirect: 'manual' })
     },

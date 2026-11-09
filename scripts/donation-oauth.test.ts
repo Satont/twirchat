@@ -19,7 +19,6 @@ test('desktop reads OAuth availability and handles a disabled provider before op
   setRuntimeConfig({ backendUrl: server.url.origin, clientSecret: 'desktop-test' })
   try {
     expect(await getDonationOAuthAvailability()).toEqual({
-      donationalerts: true,
       memealerts: false,
     })
     await expect(
@@ -37,7 +36,7 @@ test('desktop reads OAuth availability and handles a disabled provider before op
   }
 })
 
-test('desktop treats older or malformed availability responses as unknown', async () => {
+test('desktop reads MemeAlerts availability from older backends and tolerates missing or malformed responses', async () => {
   const previous = getRuntimeConfig()
   let response = new Response(null, { status: 404 })
   const server = Bun.serve({
@@ -50,20 +49,22 @@ test('desktop treats older or malformed availability responses as unknown', asyn
     expect(await getDonationOAuthAvailability()).toBeNull()
     response = Response.json({ donationalerts: true, memealerts: 'false' })
     expect(await getDonationOAuthAvailability()).toBeNull()
+    response = Response.json({ donationalerts: true, memealerts: true })
+    expect(await getDonationOAuthAvailability()).toEqual({ memealerts: true })
   } finally {
     setRuntimeConfig(previous)
     await server.stop(true)
   }
 })
 
-test('donation OAuth relays an opaque ticket to the desktop and preserves an unrotated refresh token', async () => {
+test('MemeAlerts OAuth relays an opaque ticket to the desktop and preserves an unrotated refresh token', async () => {
   const { server, requests, relay, rejectRefresh } = createDonationOAuthFixture()
   const previous = getRuntimeConfig()
   setRuntimeConfig({ backendUrl: server.url.origin, clientSecret: 'desktop-test' })
   const cancellation = new AbortController()
   const opened = Promise.withResolvers<URL>()
   const signIn = authorizeDonation({
-    provider: 'donationalerts',
+    provider: 'memealerts',
     signal: AbortSignal.any([cancellation.signal, AbortSignal.timeout(2000)]),
     async openBrowser(url) {
       opened.resolve(new URL(url))
@@ -74,9 +75,7 @@ test('donation OAuth relays an opaque ticket to the desktop and preserves an unr
       opened.promise,
       signIn.then(() => new URL('about:blank')),
     ])
-    expect(authorize.origin + authorize.pathname).toBe(
-      'https://www.donationalerts.com/oauth/authorize',
-    )
+    expect(authorize.origin + authorize.pathname).toBe('https://memealerts.com/oauth/authorize')
     expect(authorize.searchParams.get('redirect_uri')).toBe(redirectUri)
     expect(authorize.searchParams.get('scope')).toBe('oauth-user-show oauth-donation-subscribe')
     expect(authorize.href).not.toContain('client-secret')
@@ -97,7 +96,7 @@ test('donation OAuth relays an opaque ticket to the desktop and preserves an unr
     const tokens = await signIn
     expect(tokens).toMatchObject({ accessToken: 'initial', refreshToken: 'refresh-secret' })
     await expect(fetch(location)).rejects.toThrow()
-    expect(requests[0]?.url).toBe('https://www.donationalerts.com/oauth/token')
+    expect(requests[0]?.url).toBe('https://memealerts.com/oauth/token')
     expect(Object.fromEntries(requests[0]?.fields ?? [])).toEqual({
       client_id: 'client-id',
       client_secret: 'client-secret',
@@ -107,7 +106,7 @@ test('donation OAuth relays an opaque ticket to the desktop and preserves an unr
     })
 
     const refreshOptions = {
-      provider: 'donationalerts',
+      provider: 'memealerts',
       refreshToken: tokens.refreshToken,
       signal: AbortSignal.timeout(2000),
     } satisfies Parameters<typeof refreshDonation>[0]
@@ -115,7 +114,7 @@ test('donation OAuth relays an opaque ticket to the desktop and preserves an unr
       accessToken: 'renewed',
       refreshToken: 'refresh-secret',
     })
-    expect(requests[1]?.fields.get('scope')).toBe('oauth-user-show oauth-donation-subscribe')
+    expect(requests[1]?.fields.has('scope')).toBe(false)
     rejectRefresh()
     await expect(refreshDonation(refreshOptions)).rejects.toBeInstanceOf(
       DonationOAuthReconnectRequired,

@@ -210,6 +210,11 @@ export function DonationSettings() {
   const [connections, setConnections] = useState<DonationConnections | null>(null)
   const [availability, setAvailability] = useState<DonationAvailabilitySnapshot>()
   const oauthAvailability = availability?.backend === backend ? availability.value : undefined
+  const available: Record<DonationProvider, boolean | undefined> = {
+    donationalerts: backend.api.donationAlertsOAuthAvailable,
+    donatepay: true,
+    memealerts: oauthAvailability === null ? true : oauthAvailability?.memealerts,
+  }
   const [loadError, setLoadError] = useState('')
   useEffect(() => {
     let active = true
@@ -256,11 +261,7 @@ export function DonationSettings() {
               key={provider}
               provider={provider}
               connection={connections[provider]}
-              available={
-                provider === 'donatepay' || oauthAvailability === null
-                  ? true
-                  : oauthAvailability?.[provider]
-              }
+              available={available[provider]}
             />
           ))}
         </div>

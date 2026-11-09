@@ -1,4 +1,4 @@
-import type { DonationOAuthAvailability, OAuthDonationProvider } from '@twirchat/shared/donations'
+import type { DonationOAuthAvailability } from '@twirchat/shared/donations'
 import { z } from 'zod'
 
 import {
@@ -10,7 +10,6 @@ import {
   donationRelayState,
   donationRelayTicket,
   DonationOAuthFailure,
-  oauthDonationProvider,
   type DonationOAuthCredentials,
 } from '../auth/donations'
 import { requireClient } from './utils'
@@ -20,10 +19,6 @@ const privateHeaders = {
   'Cache-Control': 'no-store',
   'Referrer-Policy': 'no-referrer',
 }
-
-type ProviderRequest = Request & { params: { provider: string } }
-type OAuth = ReturnType<typeof createDonationOAuth>
-type Client = Parameters<OAuth['start']>[0]
 
 function oauthError(error: string, status: number): Response {
   return Response.json({ error }, { status, headers: privateHeaders })
@@ -51,21 +46,23 @@ async function readBody<T>(req: Request, schema: z.ZodType<T>): Promise<T | Resp
 }
 
 export function createDonationOAuthRoutes(
-  credentials: Record<OAuthDonationProvider, DonationOAuthCredentials | undefined>,
+  credentials: DonationOAuthCredentials | undefined,
   oauth = createDonationOAuth(),
   authenticate = requireClient,
 ) {
-  function withClient(run: (req: ProviderRequest, client: Client) => Response | Promise<Response>) {
-    return (req: ProviderRequest) => {
-      const provider = oauthDonationProvider.safeParse(req.params.provider)
-      if (!provider.success) return oauthError('unknown_provider', 404)
-      const client = credentials[provider.data]
-      if (!client) return oauthError('unconfigured', 503)
-      return run(req, { ...client, provider: provider.data })
+  function withClient(
+    run: (req: Request, client: DonationOAuthCredentials) => Response | Promise<Response>,
+  ) {
+    return (req: Request) => {
+      if (!credentials) return oauthError('unconfigured', 503)
+      return run(req, credentials)
     }
   }
 
-  function post<T>(schema: z.ZodType<T>, run: (client: Client, body: T) => unknown) {
+  function post<T>(
+    schema: z.ZodType<T>,
+    run: (client: DonationOAuthCredentials, body: T) => unknown,
+  ) {
     return withClient(async (req, client) => {
       const body = await readBody(req, schema)
       if (body instanceof Response) return body
@@ -89,23 +86,24 @@ export function createDonationOAuthRoutes(
         try {
           const auth = await authenticate(req)
           if (auth instanceof Response) return auth
-          const availability: DonationOAuthAvailability = {
-            donationalerts: Boolean(credentials.donationalerts),
-            memealerts: Boolean(credentials.memealerts),
-          }
-          return Response.json(availability, { headers: privateHeaders })
+          const availability: DonationOAuthAvailability = { memealerts: Boolean(credentials) }
+          // Older desktops use the DonationAlerts flag to hide the retired server login.
+          return Response.json(
+            { donationalerts: false, ...availability },
+            { headers: privateHeaders },
+          )
         } catch {
           return oauthError('provider_unavailable', 502)
         }
       },
     },
-    '/api/auth/donations/:provider/start': {
+    '/api/auth/donations/memealerts/start': {
       POST: post(
         z.object({ codeChallenge: donationCodeChallenge, port: donationLoopbackPort }),
         oauth.start,
       ),
     },
-    '/auth/donations/:provider/callback': {
+    '/auth/donations/memealerts/callback': {
       GET: withClient((req, client) => {
         const location = oauth.callback(client, new URL(req.url))
         if (!location) {
@@ -120,7 +118,7 @@ export function createDonationOAuthRoutes(
         })
       }),
     },
-    '/api/auth/donations/:provider/exchange': {
+    '/api/auth/donations/memealerts/exchange': {
       POST: post(
         z.object({
           codeVerifier: donationCodeVerifier,
@@ -130,7 +128,7 @@ export function createDonationOAuthRoutes(
         oauth.exchange,
       ),
     },
-    '/api/auth/donations/:provider/refresh': {
+    '/api/auth/donations/memealerts/refresh': {
       POST: post(z.object({ refreshToken: donationRefreshToken }), oauth.refresh),
     },
   }
