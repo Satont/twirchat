@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { refreshKickToken } from '../../auth/kick'
 import { backendFetch } from '../../runtime-config'
 import { AccountStore } from '../../store/account-store'
-import { BasePlatformAdapter } from '../base-adapter'
+import { BasePlatformAdapter, type ChatReplyTarget } from '../base-adapter'
 import { resolveKickAvatarUrl, type KickAvatarResolver } from './avatar-cache'
 import { kickBadgeCatalog } from './badge-catalog'
 import {
@@ -365,11 +365,12 @@ export class KickAdapter extends BasePlatformAdapter {
   async sendMessage(
     _channelId: string,
     text: string,
-    replyToMessageId?: string,
+    replyTo?: ChatReplyTarget,
   ): Promise<ChatSendReceipt> {
     const revision = this.identityRevision
     if (!this.broadcasterUserId)
       throw new Error('Kick channel is not ready. Reconnect chat before sending.')
+    const replyToMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
     const body: KickSendBody = {
       broadcaster_user_id: this.broadcasterUserId,
       content: text,

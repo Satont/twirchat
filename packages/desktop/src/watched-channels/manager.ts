@@ -22,7 +22,7 @@ import type {
 } from '@twirchat/shared/types'
 
 import { parseMessageWithEmotes } from '../platforms/7tv/emote-parser'
-import type { IPlatformAdapter } from '../platforms/base-adapter'
+import type { ChatReplyTarget, IPlatformAdapter } from '../platforms/base-adapter'
 import { KickAdapter } from '../platforms/kick/adapter'
 import { TwitchAdapter } from '../platforms/twitch/adapter'
 import { YouTubeAdapter } from '../platforms/youtube/adapter'
@@ -242,13 +242,13 @@ export class WatchedChannelManager {
   async sendMessage(
     id: string,
     text: string,
-    replyToMessageId?: string,
+    replyTo?: ChatReplyTarget,
   ): Promise<void | ChatSendReceipt> {
     const entry = this.entries.get(id)
     if (!entry) {
       throw new Error(`Watched channel ${id} not found`)
     }
-    return entry.adapter.sendMessage(entry.watchedChannel.channelSlug, text, replyToMessageId)
+    return entry.adapter.sendMessage(entry.watchedChannel.channelSlug, text, replyTo)
   }
 
   /** Register a handler for incoming messages */

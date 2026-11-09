@@ -25,6 +25,8 @@ export type PlatformEventHandler<K extends keyof PlatformEventMap> = (
   data: PlatformEventMap[K],
 ) => void
 
+export type ChatReplyTarget = string | NonNullable<NormalizedChatMessage['reply']>
+
 export interface IPlatformAdapter {
   readonly platform: Platform
 
@@ -33,7 +35,7 @@ export interface IPlatformAdapter {
   sendMessage(
     channelId: string,
     text: string,
-    replyToMessageId?: string,
+    replyTo?: ChatReplyTarget,
   ): Promise<void | ChatSendReceipt>
   getBroadcasterUserId?(): number | null
   getRoomState?(): RoomState | undefined
@@ -83,6 +85,6 @@ export abstract class BasePlatformAdapter implements IPlatformAdapter {
   abstract sendMessage(
     channelId: string,
     text: string,
-    replyToMessageId?: string,
+    replyTo?: ChatReplyTarget,
   ): Promise<void | ChatSendReceipt>
 }

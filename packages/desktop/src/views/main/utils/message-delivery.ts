@@ -120,7 +120,12 @@ function matchesProviderMessage(local: DeliveryMessage, provider: NormalizedChat
     local.author.id !== provider.author.id
   )
     return false
-  if (local.delivery?.providerMessageId) return local.delivery.providerMessageId === provider.id
+  const receiptId = local.delivery?.providerMessageId
+  if (receiptId)
+    return (
+      receiptId === provider.id ||
+      (provider.platform === 'twitch' && receiptId === provider.localTwitchEchoId)
+    )
   const sentText =
     local.platform === 'kick' ? local.text.replace(/\[emote:\d+:([^\]]+)\]/g, '$1') : local.text
   const elapsed = provider.timestamp.getTime() - local.timestamp.getTime()
@@ -139,7 +144,6 @@ export function reconcilePendingMessages(
   providerMessages: NormalizedChatMessage[],
 ): DeliveryMessage[] {
   if (pending.length === 0 || providerMessages.length === 0) return pending
-  const providers = providerMessages.map((message) => ({ message, key: providerKey(message) }))
   const reserved = new Set(
     pending.flatMap((message) =>
       message.delivery?.providerMessageId && message.delivery.state !== 'failed'
@@ -147,6 +151,17 @@ export function reconcilePendingMessages(
         : [],
     ),
   )
+  const providers = providerMessages.map((message) => {
+    const key = providerKey(message)
+    if (
+      reserved.size &&
+      message.platform === 'twitch' &&
+      message.localTwitchEchoId &&
+      reserved.has(providerKey({ ...message, id: message.localTwitchEchoId }))
+    )
+      reserved.add(key)
+    return { message, key }
+  })
   const consumed = new Set<string>()
   const retained: DeliveryMessage[] = []
   for (const local of pending) {
@@ -159,8 +174,7 @@ export function reconcilePendingMessages(
       (candidate) =>
         !consumed.has(candidate.key) &&
         !excluded.has(candidate.key) &&
-        (!reserved.has(candidate.key) ||
-          local.delivery?.providerMessageId === candidate.message.id) &&
+        (!reserved.has(candidate.key) || local.delivery?.providerMessageId) &&
         matchesProviderMessage(local, candidate.message),
     )
     if (provider) consumed.add(provider.key)
