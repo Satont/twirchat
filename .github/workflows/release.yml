@@ -91,10 +91,14 @@ jobs:
         with:
           pattern: desktop-*
           path: release-assets
-      - name: Validate installers, feeds and checksums before publication
+      - name: Validate installers, download links, feeds and checksums before publication
         env:
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
-        run: bash .github/scripts/assemble-release-assets.sh release-assets final-assets "$RELEASE_VERSION"
+        run: |
+          bash .github/scripts/assemble-release-assets.sh release-assets final-assets "$RELEASE_VERSION"
+          bash .github/scripts/render-release-downloads.sh final-assets \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$RELEASE_TAG" > /dev/null
 
   backend:
     needs: [version, validation, desktop, assets-preflight]
@@ -133,6 +137,11 @@ jobs:
       - name: Assemble assets without silent filename collisions
         shell: bash
         run: bash .github/scripts/assemble-release-assets.sh release-assets final-assets "$RELEASE_VERSION"
+      - name: Generate download links for the release notes
+        shell: bash
+        run: |
+          bash .github/scripts/render-release-downloads.sh final-assets \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$RELEASE_TAG" > "$RUNNER_TEMP/release-downloads.md"
       - name: Create or resume draft release
         shell: bash
         run: |
@@ -145,7 +154,8 @@ jobs:
             test "$draft" = true || { echo 'Refusing to overwrite an already published release'; exit 1; }
           else
             {
-              printf 'GPUIX desktop release for Linux x64, Windows x64, and macOS Apple Silicon/Intel.\n\n'
+              cat "$RUNNER_TEMP/release-downloads.md"
+              printf '\nGPUIX desktop release for Linux x64, Windows x64, and macOS Apple Silicon/Intel.\n\n'
               printf 'Source: `%s`\n\n' "$RELEASE_SHA"
               printf 'Backend image: `ghcr.io/%s/backend@%s`\n\n' "${GITHUB_REPOSITORY,,}" "$BACKEND_DIGEST"
               cat final-assets/signature-*.txt

@@ -69,3 +69,32 @@ rm "$input/desktop-linux-x64/SHA256SUMS"
 printf 'corruption' >> "$input/desktop-linux-x64/package-linux-x64.nupkg"
 expect_assembly_rejection corrupt-package
 echo 'Release assembly validates all four artifact directories and creates checked SHA256SUMS.'
+
+render_downloads="$(dirname "$0")/render-release-downloads.sh"
+downloads="$directory/downloads"
+mkdir "$downloads"
+for installer in \
+  dev.twirchat.app-win-x64-Setup.exe \
+  dev.twirchat.app-osx-arm64-Setup.pkg \
+  dev.twirchat.app-osx-x64-Setup.pkg \
+  dev.twirchat.app-linux-x64.AppImage; do
+  printf 'fixture installer\n' > "$downloads/$installer"
+done
+repository_url=https://github.example.com/example/twirchat
+bash "$render_downloads" "$downloads" "$repository_url" v1.0.0 > "$directory/downloads.md"
+diff -u - "$directory/downloads.md" <<'EXPECTED'
+**Download TwirChat**
+
+| Platform | Download |
+| --- | --- |
+| Windows (x64) | [Installer (.exe)](https://github.example.com/example/twirchat/releases/download/v1.0.0/dev.twirchat.app-win-x64-Setup.exe) |
+| macOS (Apple Silicon) | [Installer (.pkg)](https://github.example.com/example/twirchat/releases/download/v1.0.0/dev.twirchat.app-osx-arm64-Setup.pkg) |
+| macOS (Intel) | [Installer (.pkg)](https://github.example.com/example/twirchat/releases/download/v1.0.0/dev.twirchat.app-osx-x64-Setup.pkg) |
+| Linux (x64) | [AppImage](https://github.example.com/example/twirchat/releases/download/v1.0.0/dev.twirchat.app-linux-x64.AppImage) |
+EXPECTED
+rm "$downloads/dev.twirchat.app-osx-x64-Setup.pkg"
+if bash "$render_downloads" "$downloads" "$repository_url" v1.0.0 > /dev/null 2>&1; then
+  echo 'Release download table accepted a missing installer' >&2
+  exit 1
+fi
+echo 'Release notes link to all four installers and reject missing downloads.'
