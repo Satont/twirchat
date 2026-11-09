@@ -1,4 +1,4 @@
-import type { OAuthDonationProvider } from '@twirchat/shared/donations'
+import type { DonationOAuthAvailability, OAuthDonationProvider } from '@twirchat/shared/donations'
 import { z } from 'zod'
 
 import {
@@ -84,6 +84,21 @@ export function createDonationOAuthRoutes(
   }
 
   return {
+    '/api/auth/donations/availability': {
+      GET: async (req: Request) => {
+        try {
+          const auth = await authenticate(req)
+          if (auth instanceof Response) return auth
+          const availability: DonationOAuthAvailability = {
+            donationalerts: Boolean(credentials.donationalerts),
+            memealerts: Boolean(credentials.memealerts),
+          }
+          return Response.json(availability, { headers: privateHeaders })
+        } catch {
+          return oauthError('provider_unavailable', 502)
+        }
+      },
+    },
     '/api/auth/donations/:provider/start': {
       POST: post(
         z.object({ codeChallenge: donationCodeChallenge, port: donationLoopbackPort }),

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import type {
   DonationConnections,
   DonationEvent,
+  DonationOAuthAvailability,
   DonationProvider,
 } from '@twirchat/shared/donations'
 
@@ -15,6 +16,7 @@ const { BackendContext } = await import('../src/gpuix/backend/context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { SettingsPanel } = await import('../src/gpuix/components/SettingsPanel')
+const { setLanguage } = await import('../src/gpuix/i18n')
 const { settingsStore, wireBackendToStores } = await import('../src/gpuix/state/app')
 const { darkTheme, lightTheme } = await import('../src/gpuix/theme')
 const { ThemeContext } = await import('../src/gpuix/theme-context')
@@ -24,12 +26,20 @@ const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot'
 
 const width = process.argv.includes('--wide') ? 1280 : 650
 const theme = process.argv.includes('--light') ? lightTheme : darkTheme
-const captureSuffix = theme.isLight ? `${width}-light` : String(width)
+const memeUnavailable = process.argv.includes('--meme-unavailable')
+const captureSuffix = `${width}${theme.isLight ? '-light' : ''}${memeUnavailable ? '-meme-unavailable' : ''}`
+const fixtureSettings = {
+  ...DEFAULT_SETTINGS,
+  showAvatars: false,
+  language: memeUnavailable ? 'ru' : 'en',
+} satisfies typeof DEFAULT_SETTINGS
 const events = createDesktopEvents()
+const availability = Promise.withResolvers<DonationOAuthAvailability | null>()
+if (!memeUnavailable) availability.resolve(null)
 let connections: DonationConnections = {
   donationalerts: { status: 'disconnected' },
   donatepay: { status: 'disconnected' },
-  memealerts: { status: 'connected' },
+  memealerts: { status: memeUnavailable ? 'disconnected' : 'connected' },
 }
 let clipboard = ''
 let pasteReceived = false
@@ -40,7 +50,7 @@ const update = (provider: DonationProvider, state: DonationConnections[DonationP
 const backend = {
   events,
   api: {
-    getSettings: async () => DEFAULT_SETTINGS,
+    getSettings: async () => fixtureSettings,
     getAppVersion: async () => 'Donations QA',
     getUiState: async () => null,
     getTranslationSettings: async () => ({
@@ -48,6 +58,7 @@ const backend = {
       credentials: [],
     }),
     getDonationConnections: async () => connections,
+    getDonationOAuthAvailability: () => availability.promise,
     readClipboard: async () => clipboard,
     connectDonationProvider: async ({ provider, apiKey }) => {
       if (provider === 'donatepay') {
@@ -59,7 +70,8 @@ const backend = {
       update(provider, { status: 'disconnected' }),
   },
 }
-settingsStore.set({ ...DEFAULT_SETTINGS, showAvatars: false })
+settingsStore.set(fixtureSettings)
+setLanguage(fixtureSettings.language)
 const stop = wireBackendToStores(backend)
 const renderer = createRenderer()
 renderer.init({ title: 'TwirChat donations QA', width, height: 780, focus: false })
@@ -129,7 +141,26 @@ try {
   await click('settings-search')
   renderer.simulateKeystrokes('d o n a t i o n s')
   await until(() => painted('MemeAlerts'), 'all three providers')
+  if (memeUnavailable) {
+    await until(() => painted('Проверяем доступность…'), 'checking OAuth availability')
+    assert.ok(!find('donation-connect-donationalerts'))
+    assert.ok(!find('donation-connect-memealerts'))
+    assert.ok(find('donation-connect-donatepay'))
+    availability.resolve({ donationalerts: true, memealerts: false })
+    await until(() => painted('Пока не включено'), 'MemeAlerts disabled by backend')
+    assert.ok(!find('donation-connect-memealerts'))
+    assert.ok(find('donation-connect-donationalerts'))
+    assert.ok(find('donation-connect-donatepay'))
+  }
   await captureGuiQaDisplay(`donations-settings-${captureSuffix}`)
+  if (memeUnavailable) {
+    update('memealerts', { status: 'connected' })
+    await until(() => find('donation-disconnect-memealerts'), 'existing MemeAlerts connection')
+    assert.ok(!painted('Пока не включено'))
+    await click('donation-disconnect-memealerts')
+    await until(() => painted('Пока не включено'), 'disconnected MemeAlerts stays unavailable')
+    assert.ok(!find('donation-connect-memealerts'))
+  }
   await click('donation-connect-donationalerts')
   await until(() => painted('Waiting for authorization'), 'OAuth wait state')
   await click('donation-disconnect-donationalerts')
@@ -144,6 +175,7 @@ try {
 
   mount(<ChatView isMain />)
   await until(() => find('chat-pause-button'), 'My channels with no signed-in accounts')
+  setLanguage('en')
   donate('donationalerts', 'first', {
     username: 'Luna',
     amount: '250.50',

@@ -3,12 +3,14 @@ import {
   DONATION_PROVIDER_LABELS,
   type DonationConnection,
   type DonationConnections,
+  type DonationOAuthAvailability,
   type DonationProvider,
 } from '@twirchat/shared/donations'
 import { useEffect, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { useT } from '../i18n'
 import { useTheme } from '../theme-context'
 import { DonationBrandMark } from './DonationBrandMark'
 import { SettingsFooter } from './settings/SettingsLayout'
@@ -23,29 +25,44 @@ const statusLabels = {
   error: 'Connection failed',
 } satisfies Record<DonationConnection['status'], string>
 
+interface DonationAvailabilitySnapshot {
+  backend: ReturnType<typeof useBackend>
+  value: DonationOAuthAvailability | null
+}
+
 function DonationProviderSettings({
   provider,
   connection,
+  available,
 }: {
   provider: DonationProvider
   connection: DonationConnection
+  available: boolean | undefined
 }) {
   const { api } = useBackend()
   const theme = useTheme()
+  const { t } = useT()
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState('')
   const status = connection.status
   const hasConnection = status !== 'disconnected'
   const pending = status === 'authorizing' || status === 'connecting'
-  const showConnect = status === 'disconnected' || status === 'error'
-  const statusColor = {
+  const canConnect = status === 'disconnected' || status === 'error'
+  const showConnect = canConnect && available === true
+  const availabilityLabel =
+    canConnect && available !== true
+      ? t(available === false ? 'settings.donations.notEnabled' : 'settings.donations.checking')
+      : null
+  const connectionColor = {
     disconnected: theme.text2,
     authorizing: theme.warningText,
     connecting: theme.warningText,
     connected: theme.successText,
     error: theme.dangerText,
   }[status]
-  const error = actionError || (connection.status === 'error' ? connection.message : '')
+  const statusColor = availabilityLabel ? theme.text2 : connectionColor
+  const error =
+    actionError || (connection.status === 'error' && available !== false ? connection.message : '')
 
   async function changeConnection(connect: boolean) {
     setBusy(true)
@@ -144,7 +161,7 @@ function DonationProviderSettings({
               testId={`donation-status-${provider}`}
               style={{ fontSize: 12, color: statusColor, minWidth: 0 }}
             >
-              {statusLabels[status]}
+              {availabilityLabel ?? statusLabels[status]}
             </Text>
           </div>
           {showConnect ? (
@@ -191,6 +208,8 @@ export function DonationSettings() {
   const backend = useBackend()
   const theme = useTheme()
   const [connections, setConnections] = useState<DonationConnections | null>(null)
+  const [availability, setAvailability] = useState<DonationAvailabilitySnapshot>()
+  const oauthAvailability = availability?.backend === backend ? availability.value : undefined
   const [loadError, setLoadError] = useState('')
   useEffect(() => {
     let active = true
@@ -208,7 +227,17 @@ export function DonationSettings() {
         if (active && !received) setLoadError('Could not load donation connections.')
       }
     }
+    async function loadAvailability() {
+      let value: DonationOAuthAvailability | null
+      try {
+        value = await backend.api.getDonationOAuthAvailability()
+      } catch {
+        value = null
+      }
+      if (active) setAvailability({ backend, value })
+    }
     runUiTask(loadConnections())
+    runUiTask(loadAvailability())
     return () => {
       active = false
       unsubscribe()
@@ -227,6 +256,11 @@ export function DonationSettings() {
               key={provider}
               provider={provider}
               connection={connections[provider]}
+              available={
+                provider === 'donatepay' || oauthAvailability === null
+                  ? true
+                  : oauthAvailability?.[provider]
+              }
             />
           ))}
         </div>

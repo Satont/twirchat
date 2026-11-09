@@ -6,6 +6,7 @@ import {
 import type {
   ConnectDonationProvider,
   DonationConnections,
+  DonationOAuthAvailability,
   DonationProvider,
 } from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
@@ -60,6 +61,7 @@ import {
   prepareKickAuth,
   requestTwitchDeviceCode,
 } from '../../auth'
+import { getDonationOAuthAvailability } from '../../auth/donations'
 import { refreshTwitchToken } from '../../auth/twitch'
 import { validateTwitchUserToken } from '../../auth/twitch-user-token'
 import type { BackendConnection } from '../../backend-connection'
@@ -245,6 +247,7 @@ interface AuthRequest {
 export interface DesktopApi {
   obsRemote: typeof obsRemoteApi
   getDonationConnections(): Promise<DonationConnections>
+  getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null>
   connectDonationProvider(params: ConnectDonationProvider): Promise<void>
   disconnectDonationProvider(params: { provider: DonationProvider }): Promise<void>
   getStreamerMode(): Promise<StreamerModeStatus>
@@ -1000,6 +1003,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
     getImageUploaderSettings: imageUploader.getImageUploaderSettings,
     getDonationConnections: async () => donations().getConnections(),
+    getDonationOAuthAvailability,
     connectDonationProvider: async (params) => {
       await Bun.sleep(0)
       donations().connect(params)

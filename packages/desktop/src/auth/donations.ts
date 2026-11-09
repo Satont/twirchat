@@ -1,5 +1,6 @@
 import {
   DONATION_PROVIDER_LABELS,
+  type DonationOAuthAvailability,
   type DonationOAuthTokens,
   type OAuthDonationProvider,
 } from '@twirchat/shared/donations'
@@ -15,7 +16,9 @@ const PROVIDER_ORIGINS: Record<OAuthDonationProvider, string> = {
 const CALLBACK_PATH = '/auth/donations/callback'
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000
 const REQUEST_TIMEOUT_MS = 15_000
+const AVAILABILITY_TIMEOUT_MS = 4_000
 const startResponse = z.object({ url: z.url(), state: z.string().min(1).max(256) })
+const availabilityResponse = z.object({ donationalerts: z.boolean(), memealerts: z.boolean() })
 export const donationOAuthTokensSchema = z.object({
   accessToken: z
     .string()
@@ -49,6 +52,12 @@ type OAuthEndpoint = 'start' | 'exchange' | 'refresh'
 
 export class DonationOAuthError extends Error {}
 
+export class DonationOAuthNotEnabled extends DonationOAuthError {
+  constructor(provider: OAuthDonationProvider) {
+    super(`${DONATION_PROVIDER_LABELS[provider]} is not enabled yet.`)
+  }
+}
+
 export class DonationOAuthReconnectRequired extends DonationOAuthError {
   constructor(provider: OAuthDonationProvider) {
     super(`${DONATION_PROVIDER_LABELS[provider]} authorization expired. Connect again.`)
@@ -62,6 +71,22 @@ function secureBackend(): boolean {
     (url.protocol === 'https:' ||
       (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))),
   )
+}
+
+export async function getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null> {
+  if (!secureBackend()) return null
+  try {
+    const response = await backendFetch('/api/auth/donations/availability', {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(AVAILABILITY_TIMEOUT_MS),
+    })
+    if (!response.ok) return null
+    const body: unknown = await response.json()
+    const parsed = availabilityResponse.safeParse(body)
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
 }
 
 async function requestOAuth<T>(
@@ -91,7 +116,7 @@ async function requestOAuth<T>(
     if (failure.success) {
       switch (failure.data.error) {
         case 'unconfigured':
-          throw new DonationOAuthError(`${label} OAuth is not configured on the TwirChat backend.`)
+          throw new DonationOAuthNotEnabled(provider)
         case 'invalid_session':
           throw new DonationOAuthError(`${label} sign-in expired. Try again.`)
         case 'refresh_rejected':

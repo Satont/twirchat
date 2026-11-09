@@ -7,7 +7,9 @@ export const callbackPath = '/auth/donations/donationalerts/callback'
 export const redirectUri = `https://chat.example.com${callbackPath}`
 export const routeBase = '/api/auth/donations/donationalerts'
 
-export function createDonationOAuthFixture() {
+export function createDonationOAuthFixture(
+  { memealertsConfigured } = { memealertsConfigured: true },
+) {
   let time = Date.now()
   let refreshRejected = false
   let authCalls = 0
@@ -39,10 +41,12 @@ export function createDonationOAuthFixture() {
     routes: createDonationOAuthRoutes(
       {
         donationalerts: credentials,
-        memealerts: {
-          ...credentials,
-          redirectUri: 'https://chat.example.com/auth/donations/memealerts/callback',
-        },
+        memealerts: memealertsConfigured
+          ? {
+              ...credentials,
+              redirectUri: 'https://chat.example.com/auth/donations/memealerts/callback',
+            }
+          : undefined,
       },
       oauth,
       async (req) => {

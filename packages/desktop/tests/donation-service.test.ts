@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
 
 import type { DonationEvent, DonationOAuthTokens } from '@twirchat/shared/donations'
 
+import { DonationOAuthNotEnabled } from '../src/auth/donations'
 import { DonationCredentialRejected } from '../src/donations/providers'
 import { createDonationService, type DonationService } from '../src/donations/service'
 
@@ -113,4 +114,32 @@ test('disconnect cancels a pending OAuth flow and blocks a late token from being
   expect(service.getConnections().memealerts.status).toBe('disconnected')
   expect(db.query('SELECT value FROM client_identity').get()).toBeNull()
   expect(receive).not.toHaveBeenCalled()
+})
+
+test('a disabled OAuth refresh stops reconnecting and allows disconnect', async () => {
+  const stopped = Promise.withResolvers<string>()
+  const receive = mock(async () => {})
+  service = createDonationService(
+    {
+      db,
+      openBrowser: async () => {},
+      onConnections: ({ memealerts }) => {
+        if (memealerts.status === 'error') stopped.resolve(memealerts.message)
+      },
+      onDonation: () => {},
+    },
+    {
+      authorize: async () => ({ ...originalTokens, expiresAt: Date.now() - 1000 }),
+      refresh: async () => {
+        throw new DonationOAuthNotEnabled('memealerts')
+      },
+      receive,
+    },
+  )
+  service.connect({ provider: 'memealerts' })
+  expect(await stopped.promise).toBe('MemeAlerts is not enabled yet.')
+  expect(receive).not.toHaveBeenCalled()
+  service.disconnect('memealerts')
+  expect(service.getConnections().memealerts.status).toBe('disconnected')
+  expect(db.query('SELECT value FROM client_identity').get()).toBeNull()
 })

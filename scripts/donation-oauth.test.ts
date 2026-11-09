@@ -6,10 +6,55 @@ import {
 } from '../packages/backend/tests/donation-oauth-fixture'
 import {
   authorizeDonation,
+  DonationOAuthNotEnabled,
   DonationOAuthReconnectRequired,
+  getDonationOAuthAvailability,
   refreshDonation,
 } from '../packages/desktop/src/auth/donations'
 import { getRuntimeConfig, setRuntimeConfig } from '../packages/desktop/src/runtime-config'
+
+test('desktop reads OAuth availability and handles a disabled provider before opening the browser', async () => {
+  const { server } = createDonationOAuthFixture({ memealertsConfigured: false })
+  const previous = getRuntimeConfig()
+  setRuntimeConfig({ backendUrl: server.url.origin, clientSecret: 'desktop-test' })
+  try {
+    expect(await getDonationOAuthAvailability()).toEqual({
+      donationalerts: true,
+      memealerts: false,
+    })
+    await expect(
+      authorizeDonation({
+        provider: 'memealerts',
+        signal: AbortSignal.timeout(2000),
+        openBrowser: async () => {
+          throw new Error('Unexpected browser launch')
+        },
+      }),
+    ).rejects.toBeInstanceOf(DonationOAuthNotEnabled)
+  } finally {
+    setRuntimeConfig(previous)
+    await server.stop(true)
+  }
+})
+
+test('desktop treats older or malformed availability responses as unknown', async () => {
+  const previous = getRuntimeConfig()
+  let response = new Response(null, { status: 404 })
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch: () => response,
+  })
+  setRuntimeConfig({ backendUrl: server.url.origin })
+  try {
+    expect(await getDonationOAuthAvailability()).toBeNull()
+    response = Response.json({ donationalerts: true, memealerts: 'false' })
+    expect(await getDonationOAuthAvailability()).toBeNull()
+  } finally {
+    setRuntimeConfig(previous)
+    await server.stop(true)
+  }
+})
 
 test('donation OAuth relays an opaque ticket to the desktop and preserves an unrotated refresh token', async () => {
   const { server, requests, relay, rejectRefresh } = createDonationOAuthFixture()

@@ -13,6 +13,20 @@ import {
 
 const startResult = z.object({ url: z.url(), state: z.string() })
 
+test('donation OAuth availability reports only configured providers to authenticated clients', async () => {
+  const { server } = createDonationOAuthFixture({ memealertsConfigured: false })
+  try {
+    const url = new URL('/api/auth/donations/availability', server.url)
+    expect((await fetch(url)).status).toBe(401)
+    const response = await fetch(url, { headers: { 'X-Client-Secret': 'desktop-test' } })
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual({ donationalerts: true, memealerts: false })
+  } finally {
+    await server.stop(true)
+  }
+})
+
 test('donation OAuth rejects expired or altered state, mismatched verifier and cross-session tickets', async () => {
   const { server, requests, relay, post, expire } = createDonationOAuthFixture()
   try {

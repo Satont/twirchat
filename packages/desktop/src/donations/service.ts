@@ -16,6 +16,7 @@ import { z } from 'zod'
 import {
   authorizeDonation,
   DonationOAuthError,
+  DonationOAuthNotEnabled,
   DonationOAuthReconnectRequired,
   donationOAuthTokensSchema,
   refreshDonation,
@@ -135,7 +136,10 @@ export function createDonationService(
         })
       } catch (error) {
         if (signal.aborted) return
-        if (error instanceof DonationOAuthReconnectRequired) {
+        if (
+          error instanceof DonationOAuthReconnectRequired ||
+          error instanceof DonationOAuthNotEnabled
+        ) {
           publish(provider, { status: 'error', message: error.message })
           return
         }
