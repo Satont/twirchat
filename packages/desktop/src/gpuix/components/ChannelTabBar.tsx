@@ -6,8 +6,7 @@ import {
   useGpuixRequired,
   type Props,
 } from '@gpuix/react'
-import type { PlatformStatusInfo } from '@twirchat/shared/types'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 import { useBackend } from '../backend/context'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
@@ -23,9 +22,9 @@ import {
   setChatTabColor,
   setChatTabLocked,
 } from '../state/chat-tabs'
-import { useStore } from '../state/create-store'
+import { useStore, useStoreSelector } from '../state/create-store'
 import { useOverlayClose } from '../state/overlays'
-import type { TabUnread } from '../state/tab-unread'
+import { tabUnreadStore, type TabUnread } from '../state/tab-unread'
 import {
   describeTabCounts,
   formatTabUnread,
@@ -50,21 +49,9 @@ interface TabMenuItemOptions {
   autoFocus?: boolean
 }
 
-export function ChannelTabBar({
-  watchedChannels,
-  activeTabId,
-  watchedLiveStatuses,
-  homeViewerCount,
-  tabChannelNames,
-  unread,
-  onSelectTab,
-  onAddChannel,
-  onRemoveChannel,
-  onSearchAll,
-}: {
+interface ChannelTabsProps {
   watchedChannels: Array<Omit<ChatTabView, 'sourceChannelId'> & { sourceChannelId?: string }>
   activeTabId: string
-  watchedStatuses: Map<string, PlatformStatusInfo>
   watchedLiveStatuses: Map<string, WatchedLiveStatus>
   homeViewerCount?: number
   tabChannelNames?: Map<string, string[]>
@@ -73,13 +60,57 @@ export function ChannelTabBar({
   onAddChannel: () => void
   onRemoveChannel: (id: string) => void
   onSearchAll?: () => void
-}) {
+}
+
+export function ChannelTabBar({ leading, tabs }: { leading?: ReactNode; tabs?: ChannelTabsProps }) {
+  const barElement = useRef<number | null>(null)
+
+  return (
+    <div
+      ref={(element) => {
+        barElement.current = element?.id ?? null
+      }}
+      testId="channel-tab-bar"
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        alignContent: 'start',
+        minWidth: 0,
+        gap: 2,
+        paddingTop: 6,
+        paddingLeft: 8,
+        paddingRight: 8,
+        flexShrink: 0,
+        userSelect: 'none',
+      }}
+    >
+      {leading}
+      {tabs ? <ChannelTabs {...tabs} barElement={barElement} /> : null}
+    </div>
+  )
+}
+
+function ChannelTabs({
+  barElement,
+  watchedChannels,
+  activeTabId,
+  watchedLiveStatuses,
+  homeViewerCount,
+  tabChannelNames,
+  unread: suppliedUnread,
+  onSelectTab,
+  onAddChannel,
+  onRemoveChannel,
+  onSearchAll,
+}: ChannelTabsProps & { barElement: RefObject<number | null> }) {
   const theme = useTheme()
   const backend = useBackend()
   const renderer = useGpuixRequired()
   const native = nativeWindow(renderer)
   const state = useStore(chatTabsStore)
-  const barElement = useRef<number | null>(null)
+  const unread = useStoreSelector(tabUnreadStore, (current) => suppliedUnread ?? current)
   const elements = useRef(new Map<string, number>())
   const drag = useRef<{
     id: string
@@ -174,86 +205,60 @@ export function ChannelTabBar({
   )
   return (
     <>
-      <div
-        ref={(element) => {
-          barElement.current = element?.id ?? null
-        }}
-        testId="channel-tab-bar"
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          alignContent: 'start',
-          minWidth: 0,
-          gap: 2,
-          paddingTop: 6,
-          paddingLeft: 8,
-          paddingRight: 8,
-          borderBottomWidth: 1,
-          borderColor: theme.border,
-          backgroundColor: theme.navBg,
-          flexShrink: 0,
-          userSelect: 'none',
-        }}
-      >
-        <Tab
-          testId="tab-home"
-          label="My channels"
-          icon={
-            <Icon name="home" size={13} color={activeTabId === 'home' ? theme.text : theme.text2} />
-          }
-          active={activeTabId === 'home'}
-          activeColor={theme.text}
-          viewers={homeViewerCount}
-          unread={unread?.get('home')}
-          onClick={() => onSelectTab('home')}
-        />
-        {watchedChannels.map((channel, index) => {
-          const sourceId =
-            'sourceChannelId' in channel ? String(channel.sourceChannelId) : channel.id
-          const live = watchedLiveStatuses.get(channel.id) ?? watchedLiveStatuses.get(sourceId)
-          const metadata = state.value.metadata[channel.id]
-          const names = tabChannelNames?.get(channel.id)
-          const label = metadata?.title ?? (names?.length ? names.join(', ') : channel.displayName)
-          const active = activeTabId === channel.id
-          const color =
-            metadata?.color ?? (channel.platform ? platformColor(channel.platform) : theme.text2)
-          const locked = metadata?.locked === true
-          const menuItem = (
-            text: string,
-            callback: () => void,
-            { disabled = false, autoFocus = false }: TabMenuItemOptions = {},
-          ) => (
-            <div
-              role="menuitem"
-              aria-description={disabled ? 'Unavailable' : undefined}
-              autoFocus={autoFocus}
-              tabIndex={disabled ? undefined : 0}
-              onClick={() => {
-                if (!disabled) callback()
-              }}
-              onKeyDown={(event) => {
-                if (!disabled && (event.key === 'enter' || event.key === 'space')) {
-                  event.preventDefault()
-                  callback()
-                }
-              }}
-              style={{
-                padding: 6,
-                cursor: disabled ? 'default' : 'pointer',
-                opacity: disabled ? 0.45 : 1,
-                borderRadius: 4,
-                hover: disabled ? {} : { backgroundColor: theme.fillHover },
-              }}
-            >
-              <Text style={{ fontSize: 12, color: theme.text }}>{text}</Text>
-            </div>
-          )
-          const interaction: Pick<
-            Props,
-            'onKeyDown' | 'onMouseDown' | 'onMouseMove' | 'onMouseUp'
-          > = {
+      <Tab
+        testId="tab-home"
+        label="My channels"
+        icon={
+          <Icon name="home" size={13} color={activeTabId === 'home' ? theme.text : theme.text2} />
+        }
+        active={activeTabId === 'home'}
+        activeColor={theme.text}
+        viewers={homeViewerCount}
+        unread={unread.get('home')}
+        onClick={() => onSelectTab('home')}
+      />
+      {watchedChannels.map((channel, index) => {
+        const sourceId = 'sourceChannelId' in channel ? String(channel.sourceChannelId) : channel.id
+        const live = watchedLiveStatuses.get(channel.id) ?? watchedLiveStatuses.get(sourceId)
+        const metadata = state.value.metadata[channel.id]
+        const names = tabChannelNames?.get(channel.id)
+        const label = metadata?.title ?? (names?.length ? names.join(', ') : channel.displayName)
+        const active = activeTabId === channel.id
+        const color =
+          metadata?.color ?? (channel.platform ? platformColor(channel.platform) : theme.text2)
+        const locked = metadata?.locked === true
+        const menuItem = (
+          text: string,
+          callback: () => void,
+          { disabled = false, autoFocus = false }: TabMenuItemOptions = {},
+        ) => (
+          <div
+            role="menuitem"
+            aria-description={disabled ? 'Unavailable' : undefined}
+            autoFocus={autoFocus}
+            tabIndex={disabled ? undefined : 0}
+            onClick={() => {
+              if (!disabled) callback()
+            }}
+            onKeyDown={(event) => {
+              if (!disabled && (event.key === 'enter' || event.key === 'space')) {
+                event.preventDefault()
+                callback()
+              }
+            }}
+            style={{
+              padding: 6,
+              cursor: disabled ? 'default' : 'pointer',
+              opacity: disabled ? 0.45 : 1,
+              borderRadius: 4,
+              hover: disabled ? {} : { backgroundColor: theme.fillHover },
+            }}
+          >
+            <Text style={{ fontSize: 12, color: theme.text }}>{text}</Text>
+          </div>
+        )
+        const interaction: Pick<Props, 'onKeyDown' | 'onMouseDown' | 'onMouseMove' | 'onMouseUp'> =
+          {
             onKeyDown: (event) => {
               if (event.key === 'escape') {
                 cancelDrag()
@@ -327,177 +332,176 @@ export function ChannelTabBar({
                 action(() => reorderChatTab(backend, current.id, targetIndex))
             },
           }
-          return (
-            <div
-              key={channel.id}
-              ref={(element) => {
-                if (element) elements.current.set(channel.id, element.id)
-                else elements.current.delete(channel.id)
-              }}
-              style={{
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                flexShrink: 0,
-                minWidth: 0,
-                maxWidth: '100%',
-              }}
-            >
-              {dropId === channel.id ? (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 2,
-                    backgroundColor: accent.primary,
-                    pointerEvents: 'none',
-                  }}
-                />
-              ) : null}
-              <Tab
-                testId={`tab-${channel.id}`}
-                interaction={interaction}
-                label={label}
-                active={active}
-                activeColor={color}
-                viewers={live?.isLive ? live.viewerCount : undefined}
-                unread={unread?.get(channel.id)}
-                onClick={() => {
-                  if (!suppressClick.current) onSelectTab(channel.id)
-                }}
-                icon={
-                  <>
-                    {channel.platform ? (
-                      <PlatformIcon
-                        platform={channel.platform}
-                        size={12}
-                        color={active ? color : theme.text2}
-                      />
-                    ) : (
-                      <Icon name="chat" size={12} color={active ? color : theme.text2} />
-                    )}
-                    <div
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: 3,
-                        flexShrink: 0,
-                        backgroundColor: live?.isLive ? color : 'transparent',
-                      }}
-                    />
-                    {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
-                  </>
-                }
-              />
-              {menuId === channel.id ? (
-                <DismissableLayer
-                  onEscapeKeyDown={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    setMenuId(null)
-                  }}
-                >
-                  <anchored
-                    deferred
-                    side="bottom"
-                    align="start"
-                    gap={4}
-                    occlude
-                    style={{ borderRadius: 7 }}
-                  >
-                    <div
-                      role="menu"
-                      onMouseDownOutside={() => setMenuId(null)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'escape') {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          setMenuId(null)
-                        }
-                      }}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        minWidth: 190,
-                        padding: 4,
-                        backgroundColor: theme.popover,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        borderRadius: 7,
-                      }}
-                    >
-                      {menuItem(
-                        'Rename / tab color…',
-                        () => {
-                          setMenuId(null)
-                          setEditError('')
-                          setEdit({
-                            id: channel.id,
-                            title: metadata?.title ?? '',
-                            color: metadata?.color ?? '',
-                          })
-                        },
-                        { autoFocus: true },
-                      )}
-                      {menuItem('Duplicate tab', () =>
-                        action(() => duplicateChatTab(backend, channel.id)),
-                      )}
-                      {menuItem(locked ? 'Unlock tab' : 'Lock tab', () =>
-                        action(() => setChatTabLocked(backend, channel.id, !locked)),
-                      )}
-                      {menuItem(
-                        'Move left',
-                        () => action(() => reorderChatTab(backend, channel.id, index - 1)),
-                        { disabled: locked || index === 0 },
-                      )}
-                      {menuItem(
-                        'Move right',
-                        () => action(() => reorderChatTab(backend, channel.id, index + 1)),
-                        { disabled: locked || index === watchedChannels.length - 1 },
-                      )}
-                      {menuItem(
-                        'Close tab',
-                        () => {
-                          setMenuId(null)
-                          onRemoveChannel(channel.id)
-                        },
-                        { disabled: locked },
-                      )}
-                    </div>
-                  </anchored>
-                </DismissableLayer>
-              ) : null}
-            </div>
-          )
-        })}
-        {toolbar('tab-add', '', 'plus', onAddChannel)}
-        {onSearchAll ? toolbar('tab-search-all', 'Search all', 'search', onSearchAll) : null}
-        {state.value.closed.length
-          ? toolbar('tab-restore', 'Restore tab', 'refresh', () =>
-              action(() => restoreClosedChatTab(backend)),
-            )
-          : null}
-        {state.error ? (
-          <Text
-            onClick={() => {
-              if (state.error) showNotice('error', state.error, 8000)
+        return (
+          <div
+            key={channel.id}
+            ref={(element) => {
+              if (element) elements.current.set(channel.id, element.id)
+              else elements.current.delete(channel.id)
             }}
             style={{
-              fontSize: 11,
-              color: theme.warningText,
-              maxWidth: 240,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              cursor: 'pointer',
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 0,
+              minWidth: 0,
+              maxWidth: '100%',
             }}
           >
-            {state.error}
-          </Text>
-        ) : null}
-      </div>
+            {dropId === channel.id ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 2,
+                  backgroundColor: accent.primary,
+                  pointerEvents: 'none',
+                }}
+              />
+            ) : null}
+            <Tab
+              testId={`tab-${channel.id}`}
+              interaction={interaction}
+              label={label}
+              active={active}
+              activeColor={color}
+              viewers={live?.isLive ? live.viewerCount : undefined}
+              unread={unread.get(channel.id)}
+              onClick={() => {
+                if (!suppressClick.current) onSelectTab(channel.id)
+              }}
+              icon={
+                <>
+                  {channel.platform ? (
+                    <PlatformIcon
+                      platform={channel.platform}
+                      size={12}
+                      color={active ? color : theme.text2}
+                    />
+                  ) : (
+                    <Icon name="chat" size={12} color={active ? color : theme.text2} />
+                  )}
+                  <div
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 3,
+                      flexShrink: 0,
+                      backgroundColor: live?.isLive ? color : 'transparent',
+                    }}
+                  />
+                  {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
+                </>
+              }
+            />
+            {menuId === channel.id ? (
+              <DismissableLayer
+                onEscapeKeyDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setMenuId(null)
+                }}
+              >
+                <anchored
+                  deferred
+                  side="bottom"
+                  align="start"
+                  gap={4}
+                  occlude
+                  style={{ borderRadius: 7 }}
+                >
+                  <div
+                    role="menu"
+                    onMouseDownOutside={() => setMenuId(null)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'escape') {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setMenuId(null)
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      minWidth: 190,
+                      padding: 4,
+                      backgroundColor: theme.popover,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      borderRadius: 7,
+                    }}
+                  >
+                    {menuItem(
+                      'Rename / tab color…',
+                      () => {
+                        setMenuId(null)
+                        setEditError('')
+                        setEdit({
+                          id: channel.id,
+                          title: metadata?.title ?? '',
+                          color: metadata?.color ?? '',
+                        })
+                      },
+                      { autoFocus: true },
+                    )}
+                    {menuItem('Duplicate tab', () =>
+                      action(() => duplicateChatTab(backend, channel.id)),
+                    )}
+                    {menuItem(locked ? 'Unlock tab' : 'Lock tab', () =>
+                      action(() => setChatTabLocked(backend, channel.id, !locked)),
+                    )}
+                    {menuItem(
+                      'Move left',
+                      () => action(() => reorderChatTab(backend, channel.id, index - 1)),
+                      { disabled: locked || index === 0 },
+                    )}
+                    {menuItem(
+                      'Move right',
+                      () => action(() => reorderChatTab(backend, channel.id, index + 1)),
+                      { disabled: locked || index === watchedChannels.length - 1 },
+                    )}
+                    {menuItem(
+                      'Close tab',
+                      () => {
+                        setMenuId(null)
+                        onRemoveChannel(channel.id)
+                      },
+                      { disabled: locked },
+                    )}
+                  </div>
+                </anchored>
+              </DismissableLayer>
+            ) : null}
+          </div>
+        )
+      })}
+      {toolbar('tab-add', '', 'plus', onAddChannel)}
+      {onSearchAll ? toolbar('tab-search-all', 'Search all', 'search', onSearchAll) : null}
+      {state.value.closed.length
+        ? toolbar('tab-restore', 'Restore tab', 'refresh', () =>
+            action(() => restoreClosedChatTab(backend)),
+          )
+        : null}
+      {state.error ? (
+        <Text
+          onClick={() => {
+            if (state.error) showNotice('error', state.error, 8000)
+          }}
+          style={{
+            fontSize: 11,
+            color: theme.warningText,
+            maxWidth: 240,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            cursor: 'pointer',
+          }}
+        >
+          {state.error}
+        </Text>
+      ) : null}
       {edit ? (
         <Modal
           width={420}
@@ -610,7 +614,6 @@ function Tab({
         flexShrink: 0,
         minWidth: 0,
         maxWidth: '100%',
-        marginBottom: -1,
       }}
     >
       {icon}

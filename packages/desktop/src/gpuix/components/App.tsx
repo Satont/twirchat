@@ -1,9 +1,7 @@
 import { motion, useGpuixRequired, type StyleDesc } from '@gpuix/react'
 import { useEffect, useMemo, useState } from 'react'
 /**
- * Root component — port of App.vue's shell: nav rail + channel tab bar +
- * tabbed content area (chat / platforms / settings) + modals +
- * transient notice toast. Window chrome is the native GPUI titlebar.
+ * The app header, tabbed content, modals and toasts sit below the native titlebar.
  */
 
 import { APP_VERSION } from '../../build-info'
@@ -45,15 +43,15 @@ import { allPanels, layoutStore, loadLayout, splitPanel, reopenClosedSplit } fro
 import { messageSimilarityPreferences } from '../state/message-similarity'
 import { saveStreamerMode, streamerModeStore } from '../state/streamer-mode'
 import { visitChatTab, navigateChatTabHistory } from '../state/tab-history'
-import { clearTabUnread, tabUnreadStore } from '../state/tab-unread'
+import { clearTabUnread } from '../state/tab-unread'
 import { changeWindowPresentation, useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
 import { accent, withAlpha } from '../theme'
 import { resolveFont, resolveTheme, useTheme, FontContext, ThemeContext } from '../theme-context'
 import { loadPendingChangelog, type PendingChangelog } from '../update-changelog'
 import { AddChannelModal } from './AddChannelModal'
+import { AppNavigation } from './AppNavigation'
 import { ChannelTabBar, type WatchedLiveStatus } from './ChannelTabBar'
-import { NavRail } from './NavRail'
 import { PlatformsPanel } from './PlatformsPanel'
 import { SavedAccounts } from './SavedAccounts'
 import { SearchAllChatsDialog } from './SearchAllChatsDialog'
@@ -65,12 +63,6 @@ import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
 import { UpdateChangelogModal } from './UpdateChangelogModal'
 import { WatchedView } from './WatchedView'
-
-/** Badge updates stay inside the tab bar, outside the chat render tree. */
-function UnreadChannelTabBar(props: React.ComponentProps<typeof ChannelTabBar>) {
-  const unread = useStore(tabUnreadStore)
-  return <ChannelTabBar {...props} unread={unread} />
-}
 
 /** Transient top-center toast (port of ChatNotice.vue). */
 export function ChatNotice() {
@@ -267,7 +259,6 @@ export function App() {
   const tabChannelNames = useStore(tabChannelNamesStore)
   const streamStatuses = useStore(streamStatusStore)
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showTabSelector, setShowTabSelector] = useState(false)
   const [showAllChatSearch, setShowAllChatSearch] = useState(false)
@@ -278,15 +269,6 @@ export function App() {
 
   const theme = resolveTheme(settings)
   const font = resolveFont(settings)
-
-  // Sidebar collapse preference survives restarts via the settings KV store.
-  useEffect(() => {
-    runUiTask(
-      backend.api.getUiState({ key: 'sidebar_collapsed' }).then((value) => {
-        if (value === 'true') setSidebarCollapsed(true)
-      }),
-    )
-  }, [backend])
 
   useEffect(() => {
     let mounted = true
@@ -304,13 +286,6 @@ export function App() {
       mounted = false
     }
   }, [backend])
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed((current) => {
-      runUiTask(backend.api.setUiState({ key: 'sidebar_collapsed', value: String(!current) }))
-      return !current
-    })
-  }
 
   // Global hotkeys (Ctrl+K etc.) are dispatched from main.tsx's render().
   useEffect(() => {
@@ -516,7 +491,7 @@ export function App() {
           style={{
             position: 'relative',
             display: 'flex',
-            flexDirection: 'row',
+            flexDirection: 'column',
             width: '100%',
             height: '100%',
             backgroundColor: theme.bg,
@@ -524,33 +499,43 @@ export function App() {
             selectionColor: withAlpha(accent.primary, 0.35),
           }}
         >
-          <NavRail collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+          <div
+            testId="app-header"
+            style={{
+              flexShrink: 0,
+              backgroundColor: theme.navBg,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <ChannelTabBar
+              leading={<AppNavigation />}
+              tabs={
+                activeTab === 'chat' && presentation.tabVisibility !== 'off'
+                  ? {
+                      watchedChannels: visibleTabs,
+                      activeTabId: activeWatchedTab,
+                      watchedLiveStatuses,
+                      homeViewerCount,
+                      tabChannelNames,
+                      onSelectTab: selectWatchedTab,
+                      onAddChannel: () => setShowAddModal(true),
+                      onSearchAll: () => setShowAllChatSearch(true),
+                      onRemoveChannel: (id) => void onRemoveChannel(id),
+                    }
+                  : undefined
+              }
+            />
+          </div>
 
           <div
             style={{
               flexGrow: 1,
-              minWidth: 0,
-              height: '100%',
+              minHeight: 0,
               display: 'flex',
               flexDirection: 'column',
-              backgroundColor: theme.bg,
             }}
           >
-            {activeTab === 'chat' && presentation.tabVisibility !== 'off' ? (
-              <UnreadChannelTabBar
-                watchedChannels={visibleTabs}
-                activeTabId={activeWatchedTab}
-                watchedStatuses={new Map()}
-                watchedLiveStatuses={watchedLiveStatuses}
-                homeViewerCount={homeViewerCount}
-                tabChannelNames={tabChannelNames}
-                onSelectTab={selectWatchedTab}
-                onAddChannel={() => setShowAddModal(true)}
-                onSearchAll={() => setShowAllChatSearch(true)}
-                onRemoveChannel={(id) => void onRemoveChannel(id)}
-              />
-            ) : null}
-
             {activeTab === 'chat' ? (
               <WatchedView
                 tabId={activeWatchedTab}

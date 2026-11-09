@@ -53,7 +53,7 @@ const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
 let renderer: Renderer | undefined
 let commits = 0
-const channels: Parameters<typeof ChannelTabBar>[0]['watchedChannels'] = [
+const channels: NonNullable<Parameters<typeof ChannelTabBar>[0]['tabs']>['watchedChannels'] = [
   { id: 'a', platform: 'kick', displayName: 'Satont', channelSlug: 'satont', createdAt: 0 },
   {
     id: 'b',
@@ -109,12 +109,11 @@ function Content() {
       }}
     >
       <ChannelTabBar
-        watchedChannels={channels}
-        activeTabId={value.active}
-        homeViewerCount={value.mode === 'mixed' ? 11 : undefined}
-        watchedStatuses={new Map()}
-        watchedLiveStatuses={
-          new Map(
+        tabs={{
+          watchedChannels: channels,
+          activeTabId: value.active,
+          homeViewerCount: value.mode === 'mixed' ? 11 : undefined,
+          watchedLiveStatuses: new Map(
             channels.map((channel) => [
               channel.id,
               value.mode === 'mixed'
@@ -124,13 +123,13 @@ function Content() {
                   }
                 : { isLive: value.viewers !== undefined, viewerCount: value.viewers },
             ]),
-          )
-        }
-        unread={unread}
-        onSelectTab={(id) => state.modify((current) => ({ ...current, active: id }))}
-        onAddChannel={() => {}}
-        onRemoveChannel={() => {}}
-        onSearchAll={() => {}}
+          ),
+          unread,
+          onSelectTab: (id) => state.modify((current) => ({ ...current, active: id })),
+          onAddChannel: () => {},
+          onRemoveChannel: () => {},
+          onSearchAll: () => {},
+        }}
       />
       <text style={{ color: '#8b8b99', padding: 12 }}>
         Private controlled counter geometry check
