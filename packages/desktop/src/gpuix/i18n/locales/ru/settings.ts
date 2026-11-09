@@ -47,6 +47,8 @@ export const ruSettings = {
   'settings.category.commands.desc': 'Свои команды и действия',
   'settings.category.plugins': 'Плагины',
   'settings.category.plugins.desc': 'Локальные и удалённые расширения, транспорты каналов',
+  'settings.category.donations': 'Донаты',
+  'settings.category.donations.desc': 'Оповещения о донатах во вкладке «Мои каналы»',
   'settings.category.overlay': 'Оверлей OBS',
   'settings.category.overlay.desc': 'Внешний вид источника браузера',
   'settings.category.shortcuts': 'Сочетания клавиш',

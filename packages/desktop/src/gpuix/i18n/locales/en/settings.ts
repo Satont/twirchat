@@ -42,6 +42,8 @@ export const settings = {
   'settings.category.commands.desc': 'Custom commands and actions',
   'settings.category.plugins': 'Plugins',
   'settings.category.plugins.desc': 'Local and remote extensions and channel transports',
+  'settings.category.donations': 'Donations',
+  'settings.category.donations.desc': 'Live donation alerts in My channels',
   'settings.category.overlay': 'OBS overlay',
   'settings.category.overlay.desc': 'Browser source appearance',
   'settings.category.shortcuts': 'Shortcuts',
