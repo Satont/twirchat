@@ -680,7 +680,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     )
   }
 
-  const FIRST_MESSAGE_BACKGROUND_OPACITY = 0.08
+  const FIRST_MESSAGE_BACKGROUND_OPACITY = 0.15
 
   const SELF_PING_BACKGROUND_FALLBACK = 'rgba(167, 139, 250, 0.15)'
   const FAILED_MESSAGE_BACKGROUND = 'rgba(239, 68, 68, 0.08)'
