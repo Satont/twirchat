@@ -35,8 +35,8 @@ import { MessageModerationRail } from './MessageModerationRail'
 import { MessageText, MessageTokens } from './MessageText'
 import { MessageTranslation } from './MessageTranslation'
 import { TwitchChatNotice } from './TwitchChatNotice'
+import { Badge as BadgeComponent } from './ui/Badge'
 import { BadgeTooltip } from './ui/BadgeTooltip'
-import { Badge } from './ui/Badge'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
@@ -85,7 +85,7 @@ interface ModernLeading {
 
 enum MessageDiliveryState {
   Failed = 'failed',
-  Pending = 'pending'
+  Pending = 'pending',
 }
 
 /** Absolute placement of the modern row's icon and avatar, matching a gapped flex row. */
@@ -681,14 +681,14 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   }
 
   const FIRST_MESSAGE_BACKGROUND_OPACITY = 0.08
-  
-  const SELF_PING_BACKGROUND_FALLBACK    = 'rgba(167, 139, 250, 0.15)'
-  const FAILED_MESSAGE_BACKGROUND        = 'rgba(239, 68, 68, 0.08)'
-  
+
+  const SELF_PING_BACKGROUND_FALLBACK = 'rgba(167, 139, 250, 0.15)'
+  const FAILED_MESSAGE_BACKGROUND = 'rgba(239, 68, 68, 0.08)'
+
   const isFirstMessage = message.metadata?.firstMessage === true
-  
+
   let rowBackground: string | undefined
-  
+
   if (isFirstMessage) {
     rowBackground = `color-mix(in srgb, ${semantic.firstMessageSofter} ${FIRST_MESSAGE_BACKGROUND_OPACITY * 100}%, transparent)`
   } else if (isSelfPing) {
@@ -700,7 +700,11 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   }
 
   const rowOpacity =
-    message.delivery?.state === MessageDiliveryState.Failed ? 0.52 : props.moderationOutcome ? 0.48 : 1
+    message.delivery?.state === MessageDiliveryState.Failed
+      ? 0.52
+      : props.moderationOutcome
+        ? 0.48
+        : 1
   const announcement = message.platform === 'twitch' ? message.metadata?.announcement : undefined
   const bits = message.platform === 'twitch' && !isTombstone ? message.metadata?.bits : undefined
 
@@ -814,7 +818,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             onClick={openUserCard}
           />
           {isFirstMessage ? (
-            <Badge
+            <BadgeComponent
               variant="warning"
               size="sm"
               style={{
@@ -825,7 +829,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               }}
             >
               First message
-            </Badge>
+            </BadgeComponent>
           ) : null}
           <Text
             style={{
@@ -974,7 +978,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             onClick={openUserCard}
           />
           {isFirstMessage ? (
-            <Badge
+            <BadgeComponent
               variant="warning"
               size="sm"
               style={{
@@ -985,7 +989,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               }}
             >
               First message
-            </Badge>
+            </BadgeComponent>
           ) : null}
           {props.showTimestamp ? (
             <Text
