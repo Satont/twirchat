@@ -1,15 +1,14 @@
+import { useBackend } from '@gpuix/backend/context'
+import { SettingsFooter } from '@gpuix/components/settings/SettingsLayout'
+import { FormField, FormInput } from '@gpuix/components/ui/Form'
+import { Text } from '@gpuix/components/ui/Text'
+import { useTheme } from '@gpuix/theme-context'
 import {
   DEFAULT_MODERATION_SETTINGS,
   validateModerationSettings,
   type ModerationSettings as Settings,
 } from '@twirchat/shared/user-profile'
 import { useEffect, useMemo, useRef, useState } from 'react'
-
-import { useBackend } from '../../backend/context'
-import { useTheme } from '../../theme-context'
-import { SettingsFooter } from '../settings/SettingsLayout'
-import { FormField, FormInput } from '../ui/Form'
-import { Text } from '../ui/Text'
 
 export function ModerationSettings() {
   const backend = useBackend()

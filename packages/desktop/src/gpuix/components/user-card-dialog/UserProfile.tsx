@@ -1,17 +1,16 @@
+import type { UserCosmetics } from '@desktop/services/cosmetics'
+import { useBackend } from '@gpuix/backend/context'
+import { BadgeTooltip } from '@gpuix/components/ui/BadgeTooltip'
+import { ActionButton } from '@gpuix/components/ui/Form'
+import { RemoteImage } from '@gpuix/components/ui/RemoteImage'
+import { Text } from '@gpuix/components/ui/Text'
+import { runUiTask } from '@gpuix/hooks/run-ui-task'
+import { useStoreSelector } from '@gpuix/state/create-store'
+import { emotePreferencesStore } from '@gpuix/state/emote-preferences'
+import { useTheme } from '@gpuix/theme-context'
 import type { UserProfileSnapshot } from '@twirchat/shared/user-profile'
+import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useState } from 'react'
-
-import type { UserCosmetics } from '../../../services/cosmetics'
-import type { UserCardTarget } from '../../../views/main/utils/chatCommands'
-import { useBackend } from '../../backend/context'
-import { runUiTask } from '../../hooks/run-ui-task'
-import { useStoreSelector } from '../../state/create-store'
-import { emotePreferencesStore } from '../../state/emote-preferences'
-import { useTheme } from '../../theme-context'
-import { BadgeTooltip } from '../ui/BadgeTooltip'
-import { ActionButton } from '../ui/Form'
-import { RemoteImage } from '../ui/RemoteImage'
-import { Text } from '../ui/Text'
 
 export function UserProfile({
   target,

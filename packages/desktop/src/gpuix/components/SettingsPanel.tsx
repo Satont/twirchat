@@ -70,7 +70,7 @@ import { Slider } from './ui/Slider'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 import { ToggleGroup } from './ui/ToggleGroup'
-import { ModerationSettings } from './user-card/ModerationSettings'
+import { ModerationSettings } from './user-card-dialog/ModerationSettings'
 
 /** AppSettings with the optional selfPing block materialized (Vue makeLocal). */
 type EditableSettings = AppSettings & { selfPing: SelfPingConfig }

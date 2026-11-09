@@ -1,15 +1,14 @@
+import { useBackend } from '@gpuix/backend/context'
+import { ActionButton, FormInput, FormField } from '@gpuix/components/ui/Form'
+import { Text } from '@gpuix/components/ui/Text'
+import { resolveModeratorHotkey } from '@gpuix/components/user-card/moderation-hotkeys'
+import { applyModerationOutcome } from '@gpuix/state/app'
+import { chatRulesPreferences, chatRulesStore } from '@gpuix/state/chat-rules'
+import { useStore } from '@gpuix/state/create-store'
+import { useTheme } from '@gpuix/theme-context'
 import { DEFAULT_MODERATION_SETTINGS, type ModerationSettings } from '@twirchat/shared/user-profile'
+import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useRef, useState } from 'react'
-
-import type { UserCardTarget } from '../../../views/main/utils/chatCommands'
-import { useBackend } from '../../backend/context'
-import { applyModerationOutcome } from '../../state/app'
-import { chatRulesPreferences, chatRulesStore } from '../../state/chat-rules'
-import { useStore } from '../../state/create-store'
-import { useTheme } from '../../theme-context'
-import { ActionButton, FormInput, FormField } from '../ui/Form'
-import { Text } from '../ui/Text'
-import { resolveModeratorHotkey } from './moderation-hotkeys'
 
 export function useUserCardModeration(target: UserCardTarget) {
   const backend = useBackend()

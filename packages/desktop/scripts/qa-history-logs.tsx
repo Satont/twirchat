@@ -20,7 +20,7 @@ const { GpuixRenderer: NativeRenderer } = await import('@gpuix/native')
 const { useGpuixRequired } = await import('@gpuix/react')
 const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { UserChatHistoryPanel } =
-  await import('../src/gpuix/components/user-card/UserChatHistoryPanel')
+  await import('../src/gpuix/components/user-card-dialog/UserChatHistoryPanel')
 const { ChatHistoryPanel } = await import('../src/gpuix/components/ChatHistoryPanel')
 const { ChatLoggingSettings } = await import('../src/gpuix/components/ChatLoggingSettings')
 const { nativeWindow } = await import('../src/gpuix/native-window')

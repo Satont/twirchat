@@ -20,7 +20,14 @@
     "paths": {
       "@desktop/*": ["./src/*"],
       "@twirchat/shared": ["../shared/index.ts"],
-      "@twirchat/shared/*": ["../shared/*"]
+      "@twirchat/shared/*": ["../shared/*"],
+      "@gpuix/*": ["./src/gpuix/*"],
+      "@gpuix/hooks/*": ["./src/gpuix/hooks/*"],
+      "@gpuix/components/*": ["./src/gpuix/components/*"],
+      "@gpuix/state/*": ["./src/gpuix/state/*"],
+      "@gpuix/theme/*": ["./src/gpuix/theme*"],
+      "@gpuix/backend/*": ["./src/gpuix/backend/*"],
+      "@views/*": ["./src/views/*"]
     }
   },
   "include": [

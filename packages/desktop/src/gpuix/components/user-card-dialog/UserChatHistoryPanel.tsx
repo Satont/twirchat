@@ -1,8 +1,14 @@
+import type { UserChatHistoryCursor, UserChatHistoryPage } from '@desktop/shared/rpc'
+import { useBackend, useBackendEvent } from '@gpuix/backend/context'
+import { chatMessageKey } from '@gpuix/chat-tools'
+import { ChatMessage } from '@gpuix/components/ChatMessage'
+import { Text } from '@gpuix/components/ui/Text'
+import { errorText } from '@gpuix/components/user-card/format'
+import { runUiTask } from '@gpuix/hooks/run-ui-task'
 import type { PublicInstance } from '@gpuix/react'
+import { platformColor } from '@gpuix/theme'
+import { useTheme } from '@gpuix/theme-context'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
-
-import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../../shared/rpc'
 import {
   HISTORY_DISPLAY_LIMIT,
   appendLiveHistoryMessage,
@@ -13,15 +19,8 @@ import {
   mergeHistoryMessages,
   type HistoryUserTarget,
   type HistoryVisibleRange,
-} from '../../../views/main/utils/history-display'
-import { useBackend, useBackendEvent } from '../../backend/context'
-import { chatMessageKey } from '../../chat-tools'
-import { runUiTask } from '../../hooks/run-ui-task'
-import { platformColor } from '../../theme'
-import { useTheme } from '../../theme-context'
-import { ChatMessage } from '../ChatMessage'
-import { Text } from '../ui/Text'
-import { errorText } from './format'
+} from '@views/main/utils/history-display'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
 const PAGE_SIZE = 50
 type UserChatHistoryProps = HistoryUserTarget & {
