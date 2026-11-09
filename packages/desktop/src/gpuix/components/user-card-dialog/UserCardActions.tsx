@@ -11,8 +11,11 @@ import { DEFAULT_MODERATION_SETTINGS, type ModerationSettings } from '@twirchat/
 import type { UserCardTarget } from '@views/main/utils/chatCommands'
 import { useEffect, useRef, useState } from 'react'
 
+import { usePaneAccountId } from '../../pane-account-context'
+
 export function useUserCardModeration(target: UserCardTarget) {
   const backend = useBackend()
+  const paneAccountId = usePaneAccountId()
   const { t } = useT()
   const channel = target.channelSlug
   const identity = target.platformUserId
@@ -63,6 +66,7 @@ export function useUserCardModeration(target: UserCardTarget) {
     if (target.platform !== 'twitch' && target.platform !== 'kick')
       throw new Error(t('userCard.error.platformUnsupported'))
     return backend.api.executePlatformCommand({
+      accountId: paneAccountId,
       platform: target.platform,
       channelSlug: channel || target.username || identity,
       text,

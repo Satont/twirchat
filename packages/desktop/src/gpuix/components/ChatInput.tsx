@@ -18,6 +18,7 @@ import type {
   Account,
   AppSettings,
   NormalizedChatMessage,
+  PanelNode,
   Platform,
   PlatformStatusInfo,
   WatchedChannel,
@@ -42,7 +43,6 @@ import {
 import { resolveUserCardCommand, type UserCardTarget } from '../../views/main/utils/chatCommands'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
-import { resolveChatAccount } from '../chat-account'
 import {
   commandApplies,
   runCommandActions,
@@ -80,6 +80,7 @@ import { useComposerFocusRegistration } from '../state/composer-focus'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { customCommandsStore, loadCustomCommands } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
+import { resolvePaneAccount } from '../state/pane-accounts'
 import { loadTranslationSettings, translationSettingsStore } from '../state/translation'
 import { lastWhisperRecipientStore, rememberWhisperRecipient } from '../state/twitch-activities'
 import { useWindowScope } from '../state/window-scope'
@@ -165,6 +166,8 @@ export interface ChatInputProps {
   statuses: Partial<Record<import('@twirchat/shared/types').Platform, PlatformStatusInfo>>
   watchedChannel?: WatchedChannel | null
   watchedChannelStatus?: PlatformStatusInfo | null
+  /** The layout pane this composer belongs to; its account choice applies to that pane. */
+  pane?: { tabId: string; panel: PanelNode }
   replyTarget?: NormalizedChatMessage | null
   messages?: NormalizedChatMessage[]
   composerKey?: string
@@ -228,15 +231,15 @@ export function ChatInput(props: ChatInputProps) {
   }, [])
   const aliases = useStore(aliasesStore)
   const savedAccounts = useStore(savedAccountsStore)
-  // The account this chat sends with. A chosen account sends over its own connection, so it
-  // does not depend on the chat reading anonymously or not; the default account does.
+  // The account this pane sends with. Another account sends over its own connection, so it does
+  // not depend on the chat reading anonymously or not; the default account does.
   const resolvedWatchedAccount = props.watchedChannel
-    ? resolveChatAccount(props.watchedChannel, savedAccounts, props.accounts)
+    ? resolvePaneAccount(props.watchedChannel, props.pane?.panel, savedAccounts, props.accounts)
     : undefined
   const watchedAccount =
     resolvedWatchedAccount &&
-    (resolvedWatchedAccount.id === props.watchedChannel?.accountId ||
-      props.watchedChannelStatus?.mode === 'authenticated')
+    (props.watchedChannelStatus?.mode === 'authenticated' ||
+      !props.accounts.some((account) => account.id === resolvedWatchedAccount.id))
       ? resolvedWatchedAccount
       : undefined
   const renderer = useGpuixRequired()
@@ -1640,6 +1643,7 @@ export function ChatInput(props: ChatInputProps) {
                 <ChatAccountControl
                   channel={props.watchedChannel}
                   account={watchedAccount}
+                  pane={props.pane}
                   statusColor={statusDotColor(props.watchedChannelStatus?.status, theme)}
                   statusText={connectionStatusText(
                     props.watchedChannelStatus?.status,

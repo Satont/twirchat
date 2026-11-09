@@ -59,6 +59,29 @@ function validateLayout(layout: WatchedChannelsLayout): void {
   }
 }
 
+/** Channel ID → accounts its panes chose; rebuilt lazily after any layout write. */
+let paneAccounts: Map<string, Set<string>> | null = null
+
+function indexPaneAccounts(store: {
+  get(tabId: string): WatchedChannelsLayout
+}): Map<string, Set<string>> {
+  const prefix = getKey('')
+  const keys = getDb()
+    .query<{ key: string }, [string]>('SELECT key FROM settings WHERE key GLOB ?')
+    .all(`${prefix}*`)
+  const index = new Map<string, Set<string>>()
+  const visit = (node: LayoutNode): void => {
+    if (node.type === 'split') node.children.forEach(visit)
+    else if (node.content.type === 'watched' && node.content.accountId) {
+      const ids = index.get(node.content.channelId) ?? new Set<string>()
+      ids.add(node.content.accountId)
+      index.set(node.content.channelId, ids)
+    }
+  }
+  for (const { key } of keys) visit(store.get(key.slice(prefix.length)).root)
+  return index
+}
+
 export const WatchedChannelsLayoutStore = {
   get(tabId: string): WatchedChannelsLayout {
     const db = getDb()
@@ -99,11 +122,15 @@ export const WatchedChannelsLayoutStore = {
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
       [getKey(tabId), JSON.stringify(layoutWithMeta)],
     )
+
+    paneAccounts = null
   },
 
   remove(tabId: string): void {
     const db = getDb()
     db.run('DELETE FROM settings WHERE key = ?', [getKey(tabId)])
+
+    paneAccounts = null
   },
 
   canAddPanel(tabId: string): boolean {
@@ -141,6 +168,12 @@ export const WatchedChannelsLayoutStore = {
 
     cleanNode(layout.root)
     if (changed) this.set(tabId, layout)
+  },
+
+  /** Accounts chosen by individual panes that show `channelId`, across every saved tab layout. */
+  paneAccountIds(channelId: string): string[] {
+    paneAccounts ??= indexPaneAccounts(this)
+    return [...(paneAccounts.get(channelId) ?? [])]
   },
 
   getPanelNode(layout: WatchedChannelsLayout, panelId: string): PanelNode | null {

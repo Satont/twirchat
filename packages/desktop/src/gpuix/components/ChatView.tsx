@@ -35,7 +35,6 @@ import type { ModerationDragAction } from '../../views/main/utils/moderation-dra
 import { publicChannelURL } from '../../views/main/utils/public-channel-url'
 import { initialsOf } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
-import { resolveChatAccount } from '../chat-account'
 import { mergeChatTimeline, pluginChatSearchMessage, timelineRowKey } from '../chat-timeline'
 import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
@@ -44,6 +43,7 @@ import { useT } from '../i18n'
 import { isMessageHiddenForStreamer } from '../message-privacy'
 import { compileMessageRules } from '../message-rules'
 import { nativeWindow } from '../native-window'
+import { PaneAccountContext } from '../pane-account-context'
 import { useHotkeyContext, useHotkeyRoute, dispatchCustomHotkey } from '../state/action-bindings'
 import { activePaneByWindowStore, getActivePane, setActivePane } from '../state/active-pane'
 import {
@@ -82,6 +82,7 @@ import { invokeHotkeyUiAction } from '../state/hotkeys'
 import { allPanels, layoutStore, focusLayoutPanel } from '../state/layout'
 import { messageSimilarityStore, messageSimilarityReaderStore } from '../state/message-similarity'
 import { useOverlayClose } from '../state/overlays'
+import { resolvePaneAccount } from '../state/pane-accounts'
 import { streamerModeStore } from '../state/streamer-mode'
 import {
   EMPTY_ACTIVITIES,
@@ -93,6 +94,7 @@ import { useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
 import { platformColor, semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
+import { PaneAccountChip } from './ChatAccountControl'
 import { ChatAppearanceDialog } from './ChatAppearanceDialog'
 import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
@@ -297,9 +299,18 @@ export function ChatView({
   )
   const accounts = useStore(accountsStore)
   const savedAccounts = useStore(savedAccountsStore)
+  const layoutPanel = useStoreSelector(layoutStore, (entries) =>
+    layoutPanelId
+      ? allPanels(entries.get(layoutTabId)?.layout ?? null).find(
+          (node) => node.id === layoutPanelId,
+        )
+      : undefined,
+  )
   const chatAccount = watchedChannel
-    ? resolveChatAccount(watchedChannel, savedAccounts, accounts)
+    ? resolvePaneAccount(watchedChannel, layoutPanel, savedAccounts, accounts)
     : undefined
+  // Actions in a watched pane (sending, moderation, commands) use the pane's account.
+  const paneAccountId = watchedChannel ? chatAccount?.id : undefined
   // Mentions of, and messages from, the account this chat sends with count as the user's own.
   const ownAccounts = useMemo(
     () =>
@@ -749,7 +760,11 @@ export function ChatView({
       return
     }
     backend.api
-      .getModerationCapabilities({ channelSlug: watchedChannel.channelSlug, platform })
+      .getModerationCapabilities({
+        channelSlug: watchedChannel.channelSlug,
+        platform,
+        accountId: watchedAccountId,
+      })
       .then((cap) => {
         if (!cancelled) setWatchedModerationAllowed(cap.canModerate)
       })
@@ -778,6 +793,7 @@ export function ChatView({
         await backend.api.moderateMessage({
           action: action.action,
           channelSlug,
+          accountId: paneAccountId,
           messageId: message.id,
           platform,
           targetUserId: message.author.id,
@@ -807,7 +823,7 @@ export function ChatView({
         })
       }
     },
-    [backend, watchedChannel?.channelSlug, getChannelSlugForPlatform, t],
+    [backend, watchedChannel?.channelSlug, getChannelSlugForPlatform, t, paneAccountId],
   )
   const handleModeration = useCallback(
     (...args: Parameters<typeof onModerate>) => runUiTask(onModerate(...args)),
@@ -873,6 +889,7 @@ export function ChatView({
             id: watchedChannelId,
             text,
             replyTo,
+            accountId: account.id,
           })
         : await backend.api.sendMessage({ channelId, platform, text, replyTo })
       if (receipt?.held) {
@@ -954,6 +971,21 @@ export function ChatView({
 
   const activePane = useStoreSelector(activePaneByWindowStore, (entries) => entries.get(scope))
   const paneLayout = useStoreSelector(layoutStore, (entries) => entries.get(layoutTabId)?.layout)
+  const paneTarget = layoutPanel ? { tabId: layoutTabId, panel: layoutPanel } : undefined
+  // The header names the pane's account only while it can be mistaken: it is not the platform
+  // default, or the same chat is open next to it with another account.
+  const showPaneAccount =
+    !!watchedChannel &&
+    !!chatAccount &&
+    watchedChannel.platform !== 'youtube' &&
+    (!accounts.some((account) => account.id === chatAccount.id) ||
+      allPanels(paneLayout ?? null).some(
+        (other) =>
+          other.id !== layoutPanelId &&
+          other.content.type === 'watched' &&
+          other.content.channelId === watchedChannel.id &&
+          resolvePaneAccount(watchedChannel, other, savedAccounts, accounts)?.id !== chatAccount.id,
+      ))
   const paneIdentity = paneId ?? 'home'
   const splitContextId = `split:${paneIdentity}`
   useEffect(() => {
@@ -997,6 +1029,7 @@ export function ChatView({
               const result = await backend.api.executePlatformCommand({
                 ...actionTarget,
                 text: '/clip',
+                accountId: paneAccountId,
               })
               if (result.message) showNotice('info', result.message, 6000)
             }
@@ -1158,986 +1191,1007 @@ export function ChatView({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      testId="chat-pane"
-      onMouseDown={() => setActivePane({ tabId: layoutTabId, paneId: paneIdentity }, scope)}
-      onKeyDown={(event) => {
-        if (dispatchCustomHotkey(event, scope)) return
-        if (
-          event.modifiers?.ctrl &&
-          !event.modifiers.alt &&
-          !event.modifiers.shift &&
-          event.key === 'f'
-        ) {
-          event.preventDefault()
-          openSearch()
-        }
-      }}
-      style={{
-        flexGrow: 1,
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      {/* Header */}
+    <PaneAccountContext.Provider value={paneAccountId}>
       <div
-        testId="chat-header"
+        testId="chat-pane"
+        onMouseDown={() => setActivePane({ tabId: layoutTabId, paneId: paneIdentity }, scope)}
+        onKeyDown={(event) => {
+          if (dispatchCustomHotkey(event, scope)) return
+          if (
+            event.modifiers?.ctrl &&
+            !event.modifiers.alt &&
+            !event.modifiers.shift &&
+            event.key === 'f'
+          ) {
+            event.preventDefault()
+            openSearch()
+          }
+        }}
         style={{
-          backgroundColor: flash
-            ? withAlpha(flash.color?.slice(0, 7) ?? theme.accent.primary, 0.22)
-            : undefined,
+          flexGrow: 1,
+          minHeight: 0,
           display: 'flex',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 8,
-          paddingTop: 8,
-          paddingBottom: 8,
-          paddingLeft: 12,
-          paddingRight: 12,
-          borderBottomWidth: 1,
-          borderColor: theme.border,
-          flexShrink: 0,
-          minHeight: 44,
-          userSelect: 'none',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          position: 'relative',
         }}
       >
-        {headerLeading}
-        {watchedChannel ? (
-          <>
-            <div
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                flexShrink: 0,
-                backgroundColor:
-                  watchedChannelStatus?.status === 'connected'
-                    ? '#22c55e'
-                    : watchedChannelStatus?.status === 'connecting'
-                      ? '#f59e0b'
-                      : theme.text2,
-              }}
-            />
-            <PlatformIcon platform={watchedChannel.platform} size={14} />
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: theme.text2,
-                // The channel name wins over the stream title/category,
-                // which absorb the squeeze in narrow split panes.
-                maxWidth: 160,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              {watchedChannel.displayName.toUpperCase()}
-            </Text>
-            {watchedStreamStatus?.isLive ? (
-              <>
-                {watchedStreamStatus.viewerCount !== undefined &&
-                !(
-                  streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration
-                ) ? (
-                  <Text style={{ fontSize: 11, fontWeight: 600, color: '#22c55e', flexShrink: 0 }}>
-                    {formatViewers(watchedStreamStatus.viewerCount)}
-                  </Text>
-                ) : null}
-                {watchedStreamStatus.categoryName ? (
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: theme.text2,
-                      minWidth: 0,
-                      flexShrink: 1,
-                      maxWidth: 100,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {watchedStreamStatus.categoryName}
-                  </Text>
-                ) : null}
-                {watchedStreamStatus.title ? (
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: theme.text2,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      flexGrow: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    {watchedStreamStatus.title}
-                  </Text>
-                ) : null}
-              </>
-            ) : null}
-            {/* Authenticated is the normal state — only flag read-only. */}
-            {watchedChannelStatus && watchedChannelStatus.mode !== 'authenticated' ? (
+        {/* Header */}
+        <div
+          testId="chat-header"
+          style={{
+            backgroundColor: flash
+              ? withAlpha(flash.color?.slice(0, 7) ?? theme.accent.primary, 0.22)
+              : undefined,
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 8,
+            paddingTop: 8,
+            paddingBottom: 8,
+            paddingLeft: 12,
+            paddingRight: 12,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            flexShrink: 0,
+            minHeight: 44,
+            userSelect: 'none',
+          }}
+        >
+          {headerLeading}
+          {watchedChannel ? (
+            <>
               <div
                 style={{
-                  borderRadius: 10,
-                  paddingTop: 2,
-                  paddingBottom: 2,
-                  paddingLeft: 7,
-                  paddingRight: 7,
-                  borderWidth: 1,
+                  width: 7,
+                  height: 7,
+                  borderRadius: 4,
                   flexShrink: 0,
-                  borderColor: theme.border,
+                  backgroundColor:
+                    watchedChannelStatus?.status === 'connected'
+                      ? '#22c55e'
+                      : watchedChannelStatus?.status === 'connecting'
+                        ? '#f59e0b'
+                        : theme.text2,
+                }}
+              />
+              <PlatformIcon platform={watchedChannel.platform} size={14} />
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: theme.text2,
+                  // The channel name wins over the stream title/category,
+                  // which absorb the squeeze in narrow split panes.
+                  maxWidth: 160,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
-                <Text style={{ fontSize: 11, color: theme.text2 }}>
-                  {t('chat.header.readOnly')}
-                </Text>
+                {watchedChannel.displayName.toUpperCase()}
+              </Text>
+              {watchedStreamStatus?.isLive ? (
+                <>
+                  {watchedStreamStatus.viewerCount !== undefined &&
+                  !(
+                    streamerMode.effectiveEnabled &&
+                    streamerMode.settings.hideViewerCountAndDuration
+                  ) ? (
+                    <Text
+                      style={{ fontSize: 11, fontWeight: 600, color: '#22c55e', flexShrink: 0 }}
+                    >
+                      {formatViewers(watchedStreamStatus.viewerCount)}
+                    </Text>
+                  ) : null}
+                  {watchedStreamStatus.categoryName ? (
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: theme.text2,
+                        minWidth: 0,
+                        flexShrink: 1,
+                        maxWidth: 100,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {watchedStreamStatus.categoryName}
+                    </Text>
+                  ) : null}
+                  {watchedStreamStatus.title ? (
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: theme.text2,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        flexGrow: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      {watchedStreamStatus.title}
+                    </Text>
+                  ) : null}
+                </>
+              ) : null}
+              {/* Authenticated is the normal state — only flag read-only. */}
+              {watchedChannelStatus && watchedChannelStatus.mode !== 'authenticated' ? (
+                <div
+                  style={{
+                    borderRadius: 10,
+                    paddingTop: 2,
+                    paddingBottom: 2,
+                    paddingLeft: 7,
+                    paddingRight: 7,
+                    borderWidth: 1,
+                    flexShrink: 0,
+                    borderColor: theme.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: theme.text2 }}>
+                    {t('chat.header.readOnly')}
+                  </Text>
+                </div>
+              ) : null}
+              {chatAccount && showPaneAccount ? (
+                <PaneAccountChip channel={watchedChannel} account={chatAccount} pane={paneTarget} />
+              ) : null}
+            </>
+          ) : (
+            <>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: theme.text2,
+                  flexShrink: 0,
+                }}
+              >
+                {t('chat.header.liveChat').toUpperCase()}
+              </Text>
+              {displayedChannels.length > 0 || pluginFeed.channels.length > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    flexGrow: 1,
+                    minWidth: 0,
+                    overflowX: 'scroll',
+                  }}
+                >
+                  {displayedChannels.map((ch) => (
+                    <HeaderChannelChip key={`${ch.platform}:${ch.channelLogin}`} channel={ch} />
+                  ))}
+                  {pluginFeed.channels.map((channel) => (
+                    <div
+                      key={channel.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        flexShrink: 0,
+                        paddingLeft: 8,
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: theme.hairline,
+                        backgroundColor: theme.fill,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: theme.text2 }}>
+                        {`${channel.transportName} · ${channel.displayName}`}
+                      </Text>
+                      <HeaderButton
+                        testId={`home-plugin-remove-${channel.id}`}
+                        title={t('chat.header.removePluginChannel', {
+                          name: channel.displayName,
+                        })}
+                        onClick={() =>
+                          runUiTask(setHomePluginChannel(backend.api, channel.id, false))
+                        }
+                      >
+                        <Icon name="close" size={12} color={theme.text2} />
+                      </HeaderButton>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {/* Right side */}
+          <div style={{ flexGrow: 1 }} />
+          <div
+            testId="chat-header-actions"
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 2,
+              maxWidth: '100%',
+              minWidth: 0,
+            }}
+          >
+            <MessageRate activityKey={activityKey} />
+            <HeaderButton
+              testId="chat-history-button"
+              title={t('chat.tooltip.searchHistory')}
+              onClick={() => setHistoryOpen(true)}
+            >
+              <Icon name="clock" size={14} color={theme.text2} />
+            </HeaderButton>
+            {twitchChannel ? (
+              <HeaderButton
+                testId="twitch-activities-button"
+                title={t('chat.tooltip.activities')}
+                onClick={() => setActivitiesOpen(true)}
+              >
+                <Icon name="globe" size={14} color={theme.text2} />
+              </HeaderButton>
+            ) : null}
+            <HeaderButton
+              testId="chat-filters-button"
+              title={t('chat.tooltip.filters')}
+              onClick={() => setFiltersOpen((value) => !value)}
+            >
+              <Icon
+                name="sliders"
+                size={14}
+                color={rules.paneFilters[paneKey]?.length ? theme.accent.primary : theme.text2}
+              />
+            </HeaderButton>
+            <HeaderButton
+              testId="chat-search-button"
+              title={t('chat.tooltip.searchMessages')}
+              onClick={() => openSearch()}
+            >
+              <Icon
+                name="search"
+                size={14}
+                color={searchOpen ? theme.accent.primary : theme.text2}
+              />
+            </HeaderButton>
+            <HeaderButton
+              testId="chat-mentions-button"
+              title={t('chat.tooltip.mentions')}
+              onClick={() => setMentionsOnly((value) => !value)}
+            >
+              <Icon
+                name="bell"
+                size={14}
+                color={mentionsOnly ? theme.accent.primary : theme.text2}
+              />
+            </HeaderButton>
+            <HeaderButton
+              testId="chat-pause-button"
+              title={paused ? t('chat.tooltip.resume') : t('chat.tooltip.pause')}
+              onClick={() => changePause(!paused)}
+            >
+              <Icon
+                name={paused ? 'play' : 'pause'}
+                size={14}
+                color={paused ? theme.accent.primary : theme.text2}
+              />
+            </HeaderButton>
+
+            {chattersTargets.length > 0 ? (
+              <HeaderButton testId="chatters-button" onClick={() => setChattersOpen(true)}>
+                <Icon name="users" size={14} color={theme.text2} />
+              </HeaderButton>
+            ) : null}
+
+            {settings ? <ChatAppearanceDialog settings={settings} /> : null}
+
+            {onSplitRight || onClosePanel || windows ? (
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
+                <HeaderButton testId="split-right" onClick={() => onSplitRight?.()}>
+                  <Icon name="plus" size={14} color={theme.text2} />
+                </HeaderButton>
+                <HeaderButton
+                  testId="panel-menu"
+                  onClick={() => {
+                    if (Date.now() - menuDismissedAt.current < 250) return
+                    setMenuOpen((open) => !open)
+                  }}
+                >
+                  <Icon name="moreVertical" size={14} color={theme.text2} />
+                </HeaderButton>
+                {menuOpen ? (
+                  <anchored deferred side="bottom" align="end" gap={4}>
+                    <div
+                      onMouseDownOutside={() => {
+                        menuDismissedAt.current = Date.now()
+                        setMenuOpen(false)
+                      }}
+                      style={{
+                        backgroundColor: theme.surface,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        borderRadius: 8,
+                        padding: 4,
+                        minWidth: 180,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: {
+                          offsetX: 0,
+                          offsetY: 4,
+                          blurRadius: 12,
+                          spreadRadius: 0,
+                          color: '#00000066',
+                        },
+                      }}
+                    >
+                      {onChangeChannel ? (
+                        <MenuItem
+                          icon="refresh"
+                          label={t('chat.menu.changeChannel')}
+                          onClick={() => {
+                            setMenuOpen(false)
+                            onChangeChannel?.()
+                          }}
+                        />
+                      ) : null}
+                      {windows ? (
+                        <>
+                          <MenuItem
+                            icon="externalLink"
+                            label={t('chat.menu.openWindow')}
+                            onClick={() => {
+                              setMenuOpen(false)
+                              void windows
+                                .openChat(layoutTabId, layoutPanelId)
+                                .catch((error) => showNotice('error', String(error)))
+                            }}
+                          />
+                          <MenuItem
+                            icon="externalLink"
+                            label={t('chat.menu.openOverlay')}
+                            onClick={() => {
+                              setMenuOpen(false)
+                              void windows
+                                .openChat(layoutTabId, layoutPanelId, true)
+                                .catch((error) => showNotice('error', String(error)))
+                            }}
+                          />
+                        </>
+                      ) : null}
+                      {onChangeChannel || windows ? (
+                        <div
+                          style={{
+                            height: 1,
+                            backgroundColor: theme.border,
+                            marginTop: 4,
+                            marginBottom: 4,
+                          }}
+                        />
+                      ) : null}
+                      {layoutTabId !== 'home' ||
+                      (paneLayout && allPanels(paneLayout).length > 1) ? (
+                        <MenuItem
+                          icon="close"
+                          label={t('chat.menu.closePanel')}
+                          danger
+                          onClick={() => {
+                            setMenuOpen(false)
+                            if (
+                              windows?.descriptor.kind !== 'main' &&
+                              paneLayout &&
+                              allPanels(paneLayout).length === 1
+                            )
+                              void windows
+                                ?.close()
+                                .catch((error) => showNotice('error', String(error)))
+                            else onClosePanel?.()
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  </anchored>
+                ) : null}
               </div>
             ) : null}
-          </>
-        ) : (
-          <>
-            <Text
+          </div>
+        </div>
+
+        {room &&
+        (room.slowSeconds ||
+          (room.followersOnlyMinutes !== undefined && room.followersOnlyMinutes !== null) ||
+          room.subscribersOnly ||
+          room.emoteOnly ||
+          room.uniqueChat) ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 8,
+              paddingLeft: 12,
+              paddingRight: 12,
+              paddingTop: 5,
+              paddingBottom: 5,
+              backgroundColor: theme.surface,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            {room.slowSeconds ? (
+              <Text style={{ fontSize: 11, color: theme.text2 }}>
+                {t('chat.room.slow', { seconds: room.slowSeconds })}
+              </Text>
+            ) : null}
+            {room.followersOnlyMinutes !== undefined && room.followersOnlyMinutes !== null ? (
+              <Text style={{ fontSize: 11, color: theme.text2 }}>
+                {t('chat.room.followers', { minutes: room.followersOnlyMinutes })}
+              </Text>
+            ) : null}
+            {room.subscribersOnly ? (
+              <Text style={{ fontSize: 11, color: theme.text2 }}>
+                {t('chat.room.subscribersOnly')}
+              </Text>
+            ) : null}
+            {room.emoteOnly ? (
+              <Text style={{ fontSize: 11, color: theme.text2 }}>{t('chat.room.emoteOnly')}</Text>
+            ) : null}
+            {room.uniqueChat ? (
+              <Text style={{ fontSize: 11, color: theme.text2 }}>{t('chat.room.uniqueChat')}</Text>
+            ) : null}
+          </div>
+        ) : null}
+        {pinnedMessage || activePolls?.length || visiblePredictions?.length ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+              backgroundColor: theme.surface,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <div
               style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: theme.text2,
-                flexShrink: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                flexGrow: 1,
+                flexBasis: 0,
+                minWidth: 0,
               }}
             >
-              {t('chat.header.liveChat').toUpperCase()}
-            </Text>
-            {displayedChannels.length > 0 || pluginFeed.channels.length > 0 ? (
+              {pinnedMessage ? (
+                <div
+                  onClick={() => setActivitiesOpen(true)}
+                  style={{ padding: 8, cursor: 'pointer' }}
+                >
+                  <Text style={{ fontSize: 12, color: theme.text }}>
+                    {t('chat.banner.pinned', {
+                      author: pinnedMessage.authorName ?? '',
+                      text: pinnedMessage.text,
+                    })}
+                  </Text>
+                </div>
+              ) : null}
+              {activePolls?.map((poll) => (
+                <div
+                  key={poll.id}
+                  onClick={() => setActivitiesOpen(true)}
+                  style={{ padding: 8, cursor: 'pointer' }}
+                >
+                  <Text style={{ fontSize: 12, color: theme.text }}>
+                    {tPlural(
+                      'chat.banner.poll',
+                      poll.choices.reduce((total, choice) => total + choice.votes, 0),
+                      {
+                        title: poll.title,
+                      },
+                    )}
+                  </Text>
+                </div>
+              ))}
+              {visiblePredictions?.map((prediction) => (
+                <div
+                  key={prediction.id}
+                  onClick={() => setActivitiesOpen(true)}
+                  style={{ padding: 8, cursor: 'pointer' }}
+                >
+                  <Text style={{ fontSize: 12, color: theme.text }}>
+                    {t('chat.banner.prediction', {
+                      title: prediction.title,
+                      status: prediction.status,
+                    })}
+                  </Text>
+                </div>
+              ))}
+            </div>
+            <div style={{ paddingTop: 4, paddingRight: 4, flexShrink: 0 }}>
+              <HeaderButton
+                title={t('chat.banner.hide')}
+                testId="hide-activity-banners"
+                onClick={() => setBannersHidden(true)}
+              >
+                <Icon name="close" size={13} color={theme.text2} />
+              </HeaderButton>
+            </div>
+          </div>
+        ) : null}
+        {bannersHidden ? (
+          <Text
+            onClick={() => setBannersHidden(false)}
+            style={{ fontSize: 11, color: theme.link, padding: 6, cursor: 'pointer' }}
+          >
+            {t('chat.banner.restore')}
+          </Text>
+        ) : null}
+        {filtersOpen ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 7,
+              padding: 10,
+              flexShrink: 0,
+              maxHeight: 220,
+              overflowY: 'scroll',
+              backgroundColor: theme.surface,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
+                {t('chat.filters.title')}
+              </Text>
+              <HeaderButton title={t('chat.filters.close')} onClick={() => setFiltersOpen(false)}>
+                <Icon name="close" size={13} color={theme.text2} />
+              </HeaderButton>
+            </div>
+            {rules.filters.map((filter) => (
               <div
+                key={filter.id}
+                style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}
+              >
+                <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>{filter.name}</Text>
+                <Switch
+                  checked={(rules.paneFilters[paneKey] ?? []).includes(filter.id)}
+                  onChange={(enabled) => selectFilter(filter.id, enabled)}
+                />
+              </div>
+            ))}
+            <Text
+              onClick={() => activeTabStore.set('settings')}
+              style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
+            >
+              {rules.filters.length ? t('chat.filters.edit') : t('chat.filters.create')}
+            </Text>
+          </div>
+        ) : null}
+        {searchOpen ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 5,
+              padding: 8,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <input
+                ref={searchRef}
+                testId="chat-search"
+                autoFocus
+                value={searchQuery}
+                placeholder={t('chat.search.placeholder')}
+                {...searchFocus}
+                onChange={(event) => setSearchQuery(event.value ?? '')}
+                onKeyDown={(event) => {
+                  if (event.key === 'escape') {
+                    event.preventDefault()
+                    closeSearch()
+                  }
+                }}
+                theme={{ caret: theme.accent.primary }}
                 style={{
+                  flexGrow: 1,
+                  minWidth: 0,
+                  fontSize: 12,
+                  color: theme.text,
+                  backgroundColor: theme.surface2,
+                  borderRadius: 5,
+                  padding: 6,
+                }}
+              />
+              <Text
+                testId="chat-search-count"
+                style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}
+              >
+                {`${displayedTimeline.length} / ${readingMessages.length + readingPluginRows.length}`}
+              </Text>
+              <HeaderButton
+                testId="chat-search-close"
+                title={t('chat.search.close')}
+                onClick={closeSearch}
+              >
+                <Icon name="close" size={14} color={theme.text2} />
+              </HeaderButton>
+            </div>
+            <Text style={{ fontSize: 11, color: search.error ? theme.warningText : theme.text2 }}>
+              {search.error ?? t('chat.search.help')}
+            </Text>
+          </div>
+        ) : null}
+        {mentionsOnly ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              padding: 8,
+              backgroundColor: theme.surface,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+              flexShrink: 0,
+            }}
+          >
+            <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
+              {t('chat.mentions.title', { count: mentionsCount })}
+            </Text>
+            <HeaderButton title={t('chat.mentions.showAll')} onClick={() => setMentionsOnly(false)}>
+              <Icon name="close" size={13} color={theme.text2} />
+            </HeaderButton>
+          </div>
+        ) : null}
+
+        {/* Messages + scroll pill */}
+        {revealedMessageKey ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              padding: 8,
+              backgroundColor: theme.surface,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <Text style={{ fontSize: 12, color: theme.text2, flexGrow: 1 }}>
+              {t('chat.reveal.title')}
+            </Text>
+            <Text
+              onClick={() => changePause(false)}
+              style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
+            >
+              {t('chat.reveal.return')}
+            </Text>
+          </div>
+        ) : null}
+        <div
+          testId="chat-messages"
+          onMouseMove={(event) => {
+            updateWindowActivity(scope, windowActivity?.active ?? true, event.modifiers)
+            if (pausePreferences.hoverSeconds !== 0)
+              pauseController.add('mouse', hoverPauseDurationMs(pausePreferences.hoverSeconds))
+          }}
+          onMouseLeave={() => pauseController.remove('mouse')}
+          style={{
+            flexGrow: 1,
+            minHeight: 0,
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          {displayedTimeline.length > 0 ? (
+            <virtual-list
+              ref={listRef}
+              alignment="bottom"
+              followTail={!paused}
+              estimatedItemHeight={56}
+              onVisibleRange={(event) => {
+                const end = event.endIndex ?? 0
+                const start = event.startIndex ?? 0
+                setVisibleRange((current) =>
+                  current?.start === start && current.end === end ? current : { start, end },
+                )
+                setAtBottom(end >= renderedTimeline.length)
+              }}
+              style={{
+                flexGrow: 1,
+                minHeight: 0,
+                scrollbarColor: theme.scrollbar,
+                scrollbarWidth: 5,
+              }}
+            >
+              {renderedTimeline.map((message, index) => {
+                if ('message' in message) {
+                  return (
+                    <PluginChatRow
+                      key={message.key}
+                      message={message.message}
+                      source={
+                        pluginFeed.channels.length > 1
+                          ? `${message.channel.transportName} · ${message.channel.displayName}`
+                          : message.channel.transportName
+                      }
+                      fontSize={settings?.fontSize}
+                      showTimestamp={settings?.showTimestamp}
+                      chatTheme={settings?.chatTheme}
+                    />
+                  )
+                }
+                const key = chatMessageKey(message)
+                const revealed = revealedMessageKey === key
+                const outcome = moderationView.outcomeFor(message)
+                const classification = ruleEngine.classify(message)
+                return (
+                  <ChatMessageRow
+                    key={key}
+                    gray={similarityReader.get(message)?.gray ?? false}
+                    revealedColor={revealed ? theme.accent.primary : undefined}
+                    onPauseDoubleClick={
+                      pausePreferences.doubleClickLinks && !classification.hidden
+                        ? pauseForDoubleClick
+                        : undefined
+                    }
+                    visible={
+                      visibleRange
+                        ? index >= visibleRange.start - 4 && index < visibleRange.end + 4
+                        : index >= renderedTimeline.length - 32
+                    }
+                    message={revealed ? message : classification.message}
+                    hiddenLabel={
+                      classification.hidden && !revealed ? t('chat.message.hidden') : undefined
+                    }
+                    channelSlug={getChannelSlugForPlatform(message.platform)}
+                    alias={aliasMap.get(`${message.platform}:${message.author.id}`)}
+                    showPlatformColorStripe={
+                      watchedChannel ? false : settings?.showPlatformColorStripe
+                    }
+                    showPlatformIcon={watchedChannel ? false : settings?.showPlatformIcon}
+                    showTimestamp={settings?.showTimestamp}
+                    showAvatar={settings?.showAvatars}
+                    showBadges={settings?.showBadges}
+                    fontSize={settings?.fontSize}
+                    chatTheme={settings?.chatTheme}
+                    accounts={ownAccounts}
+                    selfPingEnabled={settings?.selfPing?.enabled}
+                    selfPingColor={
+                      classification.color
+                        ? classification.color.length === 7
+                          ? withAlpha(classification.color, 0.16)
+                          : classification.color
+                        : settings?.selfPing?.color
+                    }
+                    highlighted={
+                      classification.highlighted &&
+                      (classification.rules.length > 0 ||
+                        message.metadata?.highlighted === true ||
+                        settings?.selfPing?.enabled === true)
+                    }
+                    moderationOutcome={outcome}
+                    onOpenUserCard={setUserCardTarget}
+                    onReply={setReplyTarget}
+                    onSearch={openSearch}
+                    canModerate={showModerationRail}
+                    moderationPending={moderationPendingIds.has(message.id)}
+                    onModerate={handleModeration}
+                  />
+                )
+              })}
+            </virtual-list>
+          ) : filtered || clearedKeys.size > 0 || paused ? (
+            <div
+              style={{
+                flexGrow: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 24,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: theme.text2 }}>
+                {filtered
+                  ? t('chat.empty.noMatch')
+                  : paused
+                    ? t('chat.empty.paused')
+                    : t('chat.empty.cleared')}
+              </Text>
+            </div>
+          ) : (
+            <EmptyState
+              watchedChannel={watchedChannel}
+              watchedChannelStatus={watchedChannelStatus}
+              accounts={accounts}
+              hasAnyConnection={hasAnyConnection}
+              onGoToPlatforms={onGoToPlatforms}
+            />
+          )}
+
+          {/* Scroll-to-latest pill */}
+          {paused || (!atBottom && displayedTimeline.length > 0) ? (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 14,
+                left: 0,
+                right: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                testId="scroll-to-latest"
+                onClick={() => (paused ? changePause(false) : scrollToLatest())}
+                style={{
+                  pointerEvents: 'auto',
                   display: 'flex',
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  flexGrow: 1,
-                  minWidth: 0,
-                  overflowX: 'scroll',
+                  backgroundColor: theme.popover,
+                  borderWidth: 1,
+                  borderColor: theme.dialogBorder,
+                  borderRadius: 20,
+                  paddingTop: 6,
+                  paddingBottom: 6,
+                  paddingLeft: 14,
+                  paddingRight: 14,
+                  cursor: 'pointer',
+                  hover: { backgroundColor: theme.surface2 },
                 }}
               >
-                {displayedChannels.map((ch) => (
-                  <HeaderChannelChip key={`${ch.platform}:${ch.channelLogin}`} channel={ch} />
-                ))}
-                {pluginFeed.channels.map((channel) => (
-                  <div
-                    key={channel.id}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                      flexShrink: 0,
-                      paddingLeft: 8,
-                      borderRadius: 20,
-                      borderWidth: 1,
-                      borderColor: theme.hairline,
-                      backgroundColor: theme.fill,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, color: theme.text2 }}>
-                      {`${channel.transportName} · ${channel.displayName}`}
-                    </Text>
-                    <HeaderButton
-                      testId={`home-plugin-remove-${channel.id}`}
-                      title={t('chat.header.removePluginChannel', {
-                        name: channel.displayName,
-                      })}
-                      onClick={() =>
-                        runUiTask(setHomePluginChannel(backend.api, channel.id, false))
-                      }
-                    >
-                      <Icon name="close" size={12} color={theme.text2} />
-                    </HeaderButton>
-                  </div>
-                ))}
+                <Icon name="chevronDown" size={14} color={theme.text} />
+                <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
+                  {paused
+                    ? pendingCount
+                      ? t('chat.pill.resumeNew', { count: pendingCount })
+                      : t('chat.pill.resume')
+                    : t('chat.pill.scrollLatest')}
+                </Text>
               </div>
-            ) : null}
-          </>
-        )}
-
-        {/* Right side */}
-        <div style={{ flexGrow: 1 }} />
-        <div
-          testId="chat-header-actions"
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: 2,
-            maxWidth: '100%',
-            minWidth: 0,
-          }}
-        >
-          <MessageRate activityKey={activityKey} />
-          <HeaderButton
-            testId="chat-history-button"
-            title={t('chat.tooltip.searchHistory')}
-            onClick={() => setHistoryOpen(true)}
-          >
-            <Icon name="clock" size={14} color={theme.text2} />
-          </HeaderButton>
-          {twitchChannel ? (
-            <HeaderButton
-              testId="twitch-activities-button"
-              title={t('chat.tooltip.activities')}
-              onClick={() => setActivitiesOpen(true)}
-            >
-              <Icon name="globe" size={14} color={theme.text2} />
-            </HeaderButton>
-          ) : null}
-          <HeaderButton
-            testId="chat-filters-button"
-            title={t('chat.tooltip.filters')}
-            onClick={() => setFiltersOpen((value) => !value)}
-          >
-            <Icon
-              name="sliders"
-              size={14}
-              color={rules.paneFilters[paneKey]?.length ? theme.accent.primary : theme.text2}
-            />
-          </HeaderButton>
-          <HeaderButton
-            testId="chat-search-button"
-            title={t('chat.tooltip.searchMessages')}
-            onClick={() => openSearch()}
-          >
-            <Icon name="search" size={14} color={searchOpen ? theme.accent.primary : theme.text2} />
-          </HeaderButton>
-          <HeaderButton
-            testId="chat-mentions-button"
-            title={t('chat.tooltip.mentions')}
-            onClick={() => setMentionsOnly((value) => !value)}
-          >
-            <Icon name="bell" size={14} color={mentionsOnly ? theme.accent.primary : theme.text2} />
-          </HeaderButton>
-          <HeaderButton
-            testId="chat-pause-button"
-            title={paused ? t('chat.tooltip.resume') : t('chat.tooltip.pause')}
-            onClick={() => changePause(!paused)}
-          >
-            <Icon
-              name={paused ? 'play' : 'pause'}
-              size={14}
-              color={paused ? theme.accent.primary : theme.text2}
-            />
-          </HeaderButton>
-
-          {chattersTargets.length > 0 ? (
-            <HeaderButton testId="chatters-button" onClick={() => setChattersOpen(true)}>
-              <Icon name="users" size={14} color={theme.text2} />
-            </HeaderButton>
-          ) : null}
-
-          {settings ? <ChatAppearanceDialog settings={settings} /> : null}
-
-          {onSplitRight || onClosePanel || windows ? (
-            <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
-              <HeaderButton testId="split-right" onClick={() => onSplitRight?.()}>
-                <Icon name="plus" size={14} color={theme.text2} />
-              </HeaderButton>
-              <HeaderButton
-                testId="panel-menu"
-                onClick={() => {
-                  if (Date.now() - menuDismissedAt.current < 250) return
-                  setMenuOpen((open) => !open)
-                }}
-              >
-                <Icon name="moreVertical" size={14} color={theme.text2} />
-              </HeaderButton>
-              {menuOpen ? (
-                <anchored deferred side="bottom" align="end" gap={4}>
-                  <div
-                    onMouseDownOutside={() => {
-                      menuDismissedAt.current = Date.now()
-                      setMenuOpen(false)
-                    }}
-                    style={{
-                      backgroundColor: theme.surface,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      borderRadius: 8,
-                      padding: 4,
-                      minWidth: 180,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      boxShadow: {
-                        offsetX: 0,
-                        offsetY: 4,
-                        blurRadius: 12,
-                        spreadRadius: 0,
-                        color: '#00000066',
-                      },
-                    }}
-                  >
-                    {onChangeChannel ? (
-                      <MenuItem
-                        icon="refresh"
-                        label={t('chat.menu.changeChannel')}
-                        onClick={() => {
-                          setMenuOpen(false)
-                          onChangeChannel?.()
-                        }}
-                      />
-                    ) : null}
-                    {windows ? (
-                      <>
-                        <MenuItem
-                          icon="externalLink"
-                          label={t('chat.menu.openWindow')}
-                          onClick={() => {
-                            setMenuOpen(false)
-                            void windows
-                              .openChat(layoutTabId, layoutPanelId)
-                              .catch((error) => showNotice('error', String(error)))
-                          }}
-                        />
-                        <MenuItem
-                          icon="externalLink"
-                          label={t('chat.menu.openOverlay')}
-                          onClick={() => {
-                            setMenuOpen(false)
-                            void windows
-                              .openChat(layoutTabId, layoutPanelId, true)
-                              .catch((error) => showNotice('error', String(error)))
-                          }}
-                        />
-                      </>
-                    ) : null}
-                    {onChangeChannel || windows ? (
-                      <div
-                        style={{
-                          height: 1,
-                          backgroundColor: theme.border,
-                          marginTop: 4,
-                          marginBottom: 4,
-                        }}
-                      />
-                    ) : null}
-                    {layoutTabId !== 'home' || (paneLayout && allPanels(paneLayout).length > 1) ? (
-                      <MenuItem
-                        icon="close"
-                        label={t('chat.menu.closePanel')}
-                        danger
-                        onClick={() => {
-                          setMenuOpen(false)
-                          if (
-                            windows?.descriptor.kind !== 'main' &&
-                            paneLayout &&
-                            allPanels(paneLayout).length === 1
-                          )
-                            void windows
-                              ?.close()
-                              .catch((error) => showNotice('error', String(error)))
-                          else onClosePanel?.()
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                </anchored>
-              ) : null}
             </div>
           ) : null}
         </div>
-      </div>
 
-      {room &&
-      (room.slowSeconds ||
-        (room.followersOnlyMinutes !== undefined && room.followersOnlyMinutes !== null) ||
-        room.subscribersOnly ||
-        room.emoteOnly ||
-        room.uniqueChat) ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 8,
-            paddingLeft: 12,
-            paddingRight: 12,
-            paddingTop: 5,
-            paddingBottom: 5,
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          {room.slowSeconds ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>
-              {t('chat.room.slow', { seconds: room.slowSeconds })}
-            </Text>
-          ) : null}
-          {room.followersOnlyMinutes !== undefined && room.followersOnlyMinutes !== null ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>
-              {t('chat.room.followers', { minutes: room.followersOnlyMinutes })}
-            </Text>
-          ) : null}
-          {room.subscribersOnly ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>
-              {t('chat.room.subscribersOnly')}
-            </Text>
-          ) : null}
-          {room.emoteOnly ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>{t('chat.room.emoteOnly')}</Text>
-          ) : null}
-          {room.uniqueChat ? (
-            <Text style={{ fontSize: 11, color: theme.text2 }}>{t('chat.room.uniqueChat')}</Text>
-          ) : null}
-        </div>
-      ) : null}
-      {pinnedMessage || activePolls?.length || visiblePredictions?.length ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              flexGrow: 1,
-              flexBasis: 0,
-              minWidth: 0,
+        {/* Composer */}
+        {twitchChannel &&
+        !(streamerMode.effectiveEnabled && streamerMode.settings.hideModActions) ? (
+          <TwitchAutoMod
+            channelSlug={twitchChannel}
+            hideBlockedTerms={
+              streamerMode.effectiveEnabled && streamerMode.settings.hideBlockedTermText
+            }
+          />
+        ) : null}
+        {settings ? (
+          <ChatInput
+            hotkeyContextId={`input:${paneKey}`}
+            hotkeyParentContextIds={[splitContextId, 'window']}
+            onCommandRunnerReady={(runner) => {
+              commandRunner.current = runner
             }}
-          >
-            {pinnedMessage ? (
-              <div
-                onClick={() => setActivitiesOpen(true)}
-                style={{ padding: 8, cursor: 'pointer' }}
-              >
-                <Text style={{ fontSize: 12, color: theme.text }}>
-                  {t('chat.banner.pinned', {
-                    author: pinnedMessage.authorName ?? '',
-                    text: pinnedMessage.text,
-                  })}
-                </Text>
-              </div>
-            ) : null}
-            {activePolls?.map((poll) => (
-              <div
-                key={poll.id}
-                onClick={() => setActivitiesOpen(true)}
-                style={{ padding: 8, cursor: 'pointer' }}
-              >
-                <Text style={{ fontSize: 12, color: theme.text }}>
-                  {tPlural(
-                    'chat.banner.poll',
-                    poll.choices.reduce((total, choice) => total + choice.votes, 0),
-                    {
-                      title: poll.title,
-                    },
-                  )}
-                </Text>
-              </div>
-            ))}
-            {visiblePredictions?.map((prediction) => (
-              <div
-                key={prediction.id}
-                onClick={() => setActivitiesOpen(true)}
-                style={{ padding: 8, cursor: 'pointer' }}
-              >
-                <Text style={{ fontSize: 12, color: theme.text }}>
-                  {t('chat.banner.prediction', {
-                    title: prediction.title,
-                    status: prediction.status,
-                  })}
-                </Text>
-              </div>
-            ))}
-          </div>
-          <div style={{ paddingTop: 4, paddingRight: 4, flexShrink: 0 }}>
-            <HeaderButton
-              title={t('chat.banner.hide')}
-              testId="hide-activity-banners"
-              onClick={() => setBannersHidden(true)}
-            >
-              <Icon name="close" size={13} color={theme.text2} />
-            </HeaderButton>
-          </div>
-        </div>
-      ) : null}
-      {bannersHidden ? (
-        <Text
-          onClick={() => setBannersHidden(false)}
-          style={{ fontSize: 11, color: theme.link, padding: 6, cursor: 'pointer' }}
-        >
-          {t('chat.banner.restore')}
-        </Text>
-      ) : null}
-      {filtersOpen ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 7,
-            padding: 10,
-            flexShrink: 0,
-            maxHeight: 220,
-            overflowY: 'scroll',
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
-              {t('chat.filters.title')}
-            </Text>
-            <HeaderButton title={t('chat.filters.close')} onClick={() => setFiltersOpen(false)}>
-              <Icon name="close" size={13} color={theme.text2} />
-            </HeaderButton>
-          </div>
-          {rules.filters.map((filter) => (
-            <div
-              key={filter.id}
-              style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}
-            >
-              <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>{filter.name}</Text>
-              <Switch
-                checked={(rules.paneFilters[paneKey] ?? []).includes(filter.id)}
-                onChange={(enabled) => selectFilter(filter.id, enabled)}
-              />
-            </div>
-          ))}
-          <Text
-            onClick={() => activeTabStore.set('settings')}
-            style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
-          >
-            {rules.filters.length ? t('chat.filters.edit') : t('chat.filters.create')}
-          </Text>
-        </div>
-      ) : null}
-      {searchOpen ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 5,
-            padding: 8,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-            backgroundColor: theme.surface,
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <input
-              ref={searchRef}
-              testId="chat-search"
-              autoFocus
-              value={searchQuery}
-              placeholder={t('chat.search.placeholder')}
-              {...searchFocus}
-              onChange={(event) => setSearchQuery(event.value ?? '')}
-              onKeyDown={(event) => {
-                if (event.key === 'escape') {
-                  event.preventDefault()
-                  closeSearch()
-                }
-              }}
-              theme={{ caret: theme.accent.primary }}
-              style={{
-                flexGrow: 1,
-                minWidth: 0,
-                fontSize: 12,
-                color: theme.text,
-                backgroundColor: theme.surface2,
-                borderRadius: 5,
-                padding: 6,
-              }}
-            />
-            <Text
-              testId="chat-search-count"
-              style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}
-            >
-              {`${displayedTimeline.length} / ${readingMessages.length + readingPluginRows.length}`}
-            </Text>
-            <HeaderButton
-              testId="chat-search-close"
-              title={t('chat.search.close')}
-              onClick={closeSearch}
-            >
-              <Icon name="close" size={14} color={theme.text2} />
-            </HeaderButton>
-          </div>
-          <Text style={{ fontSize: 11, color: search.error ? theme.warningText : theme.text2 }}>
-            {search.error ?? t('chat.search.help')}
-          </Text>
-        </div>
-      ) : null}
-      {mentionsOnly ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            padding: 8,
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-            flexShrink: 0,
-          }}
-        >
-          <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>
-            {t('chat.mentions.title', { count: mentionsCount })}
-          </Text>
-          <HeaderButton title={t('chat.mentions.showAll')} onClick={() => setMentionsOnly(false)}>
-            <Icon name="close" size={13} color={theme.text2} />
-          </HeaderButton>
-        </div>
-      ) : null}
-
-      {/* Messages + scroll pill */}
-      {revealedMessageKey ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-            padding: 8,
-            backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          <Text style={{ fontSize: 12, color: theme.text2, flexGrow: 1 }}>
-            {t('chat.reveal.title')}
-          </Text>
-          <Text
-            onClick={() => changePause(false)}
-            style={{ fontSize: 12, color: theme.link, cursor: 'pointer' }}
-          >
-            {t('chat.reveal.return')}
-          </Text>
-        </div>
-      ) : null}
-      <div
-        testId="chat-messages"
-        onMouseMove={(event) => {
-          updateWindowActivity(scope, windowActivity?.active ?? true, event.modifiers)
-          if (pausePreferences.hoverSeconds !== 0)
-            pauseController.add('mouse', hoverPauseDurationMs(pausePreferences.hoverSeconds))
-        }}
-        onMouseLeave={() => pauseController.remove('mouse')}
-        style={{
-          flexGrow: 1,
-          minHeight: 0,
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        {displayedTimeline.length > 0 ? (
-          <virtual-list
-            ref={listRef}
-            alignment="bottom"
-            followTail={!paused}
-            estimatedItemHeight={56}
-            onVisibleRange={(event) => {
-              const end = event.endIndex ?? 0
-              const start = event.startIndex ?? 0
-              setVisibleRange((current) =>
-                current?.start === start && current.end === end ? current : { start, end },
-              )
-              setAtBottom(end >= renderedTimeline.length)
-            }}
-            style={{
-              flexGrow: 1,
-              minHeight: 0,
-              scrollbarColor: theme.scrollbar,
-              scrollbarWidth: 5,
-            }}
-          >
-            {renderedTimeline.map((message, index) => {
-              if ('message' in message) {
-                return (
-                  <PluginChatRow
-                    key={message.key}
-                    message={message.message}
-                    source={
-                      pluginFeed.channels.length > 1
-                        ? `${message.channel.transportName} · ${message.channel.displayName}`
-                        : message.channel.transportName
-                    }
-                    fontSize={settings?.fontSize}
-                    showTimestamp={settings?.showTimestamp}
-                    chatTheme={settings?.chatTheme}
-                  />
-                )
-              }
-              const key = chatMessageKey(message)
-              const revealed = revealedMessageKey === key
-              const outcome = moderationView.outcomeFor(message)
-              const classification = ruleEngine.classify(message)
-              return (
-                <ChatMessageRow
-                  key={key}
-                  gray={similarityReader.get(message)?.gray ?? false}
-                  revealedColor={revealed ? theme.accent.primary : undefined}
-                  onPauseDoubleClick={
-                    pausePreferences.doubleClickLinks && !classification.hidden
-                      ? pauseForDoubleClick
-                      : undefined
-                  }
-                  visible={
-                    visibleRange
-                      ? index >= visibleRange.start - 4 && index < visibleRange.end + 4
-                      : index >= renderedTimeline.length - 32
-                  }
-                  message={revealed ? message : classification.message}
-                  hiddenLabel={
-                    classification.hidden && !revealed ? t('chat.message.hidden') : undefined
-                  }
-                  channelSlug={getChannelSlugForPlatform(message.platform)}
-                  alias={aliasMap.get(`${message.platform}:${message.author.id}`)}
-                  showPlatformColorStripe={
-                    watchedChannel ? false : settings?.showPlatformColorStripe
-                  }
-                  showPlatformIcon={watchedChannel ? false : settings?.showPlatformIcon}
-                  showTimestamp={settings?.showTimestamp}
-                  showAvatar={settings?.showAvatars}
-                  showBadges={settings?.showBadges}
-                  fontSize={settings?.fontSize}
-                  chatTheme={settings?.chatTheme}
-                  accounts={ownAccounts}
-                  selfPingEnabled={settings?.selfPing?.enabled}
-                  selfPingColor={
-                    classification.color
-                      ? classification.color.length === 7
-                        ? withAlpha(classification.color, 0.16)
-                        : classification.color
-                      : settings?.selfPing?.color
-                  }
-                  highlighted={
-                    classification.highlighted &&
-                    (classification.rules.length > 0 ||
-                      message.metadata?.highlighted === true ||
-                      settings?.selfPing?.enabled === true)
-                  }
-                  moderationOutcome={outcome}
-                  onOpenUserCard={setUserCardTarget}
-                  onReply={setReplyTarget}
-                  onSearch={openSearch}
-                  canModerate={showModerationRail}
-                  moderationPending={moderationPendingIds.has(message.id)}
-                  onModerate={handleModeration}
-                />
-              )
-            })}
-          </virtual-list>
-        ) : filtered || clearedKeys.size > 0 || paused ? (
-          <div
-            style={{
-              flexGrow: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 24,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: theme.text2 }}>
-              {filtered
-                ? t('chat.empty.noMatch')
-                : paused
-                  ? t('chat.empty.paused')
-                  : t('chat.empty.cleared')}
-            </Text>
-          </div>
-        ) : (
-          <EmptyState
+            composerKey={paneKey}
+            accounts={accounts}
+            settings={settings}
+            statuses={statuses}
             watchedChannel={watchedChannel}
             watchedChannelStatus={watchedChannelStatus}
-            accounts={accounts}
-            hasAnyConnection={hasAnyConnection}
-            onGoToPlatforms={onGoToPlatforms}
-          />
-        )}
-
-        {/* Scroll-to-latest pill */}
-        {paused || (!atBottom && displayedTimeline.length > 0) ? (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 14,
-              left: 0,
-              right: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none',
+            pane={paneTarget}
+            replyTarget={replyTarget}
+            messages={providerMessages}
+            onCancelReply={() => setReplyTarget(null)}
+            onOpenUserCard={setUserCardTarget}
+            onSend={(targets) => void onSend(targets)}
+            onSendWatched={(payload) => void onSendWatched(payload)}
+            onClearMessages={clearMessages}
+            onCopyMessages={copyMessages}
+            onPauseChange={changePause}
+            onToggleMentions={() => setMentionsOnly((value) => !value)}
+            onSearch={openSearch}
+            onPlatformCommand={async (text, target) => {
+              const result = await backend.api.executePlatformCommand({
+                platform: target.platform,
+                channelSlug: target.channelSlug,
+                text,
+                accountId:
+                  target.channelSlug === watchedChannel?.channelSlug ? paneAccountId : undefined,
+              })
+              if (result.message) showNotice('info', result.message, 6000)
             }}
-          >
+          />
+        ) : null}
+
+        {/* Dialogs */}
+        {diagnosticsOpen ? (
+          <Modal width={620} onClose={() => setDiagnosticsOpen(false)}>
             <div
-              testId="scroll-to-latest"
-              onClick={() => (paused ? changePause(false) : scrollToLatest())}
               style={{
-                pointerEvents: 'auto',
+                padding: 16,
+                maxHeight: 600,
+                overflow: 'scroll',
                 display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                backgroundColor: theme.popover,
-                borderWidth: 1,
-                borderColor: theme.dialogBorder,
-                borderRadius: 20,
-                paddingTop: 6,
-                paddingBottom: 6,
-                paddingLeft: 14,
-                paddingRight: 14,
-                cursor: 'pointer',
-                hover: { backgroundColor: theme.surface2 },
+                flexDirection: 'column',
+                gap: 12,
               }}
             >
-              <Icon name="chevronDown" size={14} color={theme.text} />
-              <Text style={{ fontSize: 12, fontWeight: 500, color: theme.text }}>
-                {paused
-                  ? pendingCount
-                    ? t('chat.pill.resumeNew', { count: pendingCount })
-                    : t('chat.pill.resume')
-                  : t('chat.pill.scrollLatest')}
+              <Text style={{ color: theme.text, fontWeight: 600 }}>
+                {t('chat.diagnostics.title')}
+              </Text>
+              <Text style={{ color: theme.text2, fontSize: 12 }}>
+                {JSON.stringify(
+                  {
+                    window: scope,
+                    tab: layoutTabId,
+                    panel: layoutPanelId,
+                    channel: actionTarget,
+                    received: activeMessages.length + pluginFeed.rows.length,
+                    shown: displayedTimeline.length,
+                    paused: !!paused,
+                    visibleRange,
+                    status: watchedChannelStatus ?? statuses,
+                  },
+                  null,
+                  2,
+                )}
               </Text>
             </div>
-          </div>
+          </Modal>
+        ) : null}
+        {historyOpen ? (
+          <ChatHistoryPanel
+            channel={
+              watchedChannel
+                ? {
+                    platform: watchedChannel.platform,
+                    channelId: watchedChannel.channelSlug,
+                    displayName: watchedChannel.displayName,
+                  }
+                : undefined
+            }
+            onClose={() => setHistoryOpen(false)}
+          />
+        ) : null}
+        {activitiesOpen && twitchChannel ? (
+          <TwitchActivitiesPanel
+            channelSlug={twitchChannel}
+            initialTab={activitiesTab}
+            onClose={() => setActivitiesOpen(false)}
+          />
+        ) : null}
+        {chattersOpen && chattersTargets.length > 0 ? (
+          <ChattersDialog targets={chattersTargets} onClose={() => setChattersOpen(false)} />
+        ) : null}
+        {userCardTarget ? (
+          <UserCardDialog
+            target={userCardTarget}
+            currentAlias={
+              aliases.find(
+                (a) =>
+                  a.platform === userCardTarget.platform &&
+                  a.platformUserId === userCardTarget.platformUserId,
+              )?.alias ?? userCardTarget.currentAlias
+            }
+            onClose={() => setUserCardTarget(null)}
+          />
         ) : null}
       </div>
-
-      {/* Composer */}
-      {twitchChannel && !(streamerMode.effectiveEnabled && streamerMode.settings.hideModActions) ? (
-        <TwitchAutoMod
-          channelSlug={twitchChannel}
-          hideBlockedTerms={
-            streamerMode.effectiveEnabled && streamerMode.settings.hideBlockedTermText
-          }
-        />
-      ) : null}
-      {settings ? (
-        <ChatInput
-          hotkeyContextId={`input:${paneKey}`}
-          hotkeyParentContextIds={[splitContextId, 'window']}
-          onCommandRunnerReady={(runner) => {
-            commandRunner.current = runner
-          }}
-          composerKey={paneKey}
-          accounts={accounts}
-          settings={settings}
-          statuses={statuses}
-          watchedChannel={watchedChannel}
-          watchedChannelStatus={watchedChannelStatus}
-          replyTarget={replyTarget}
-          messages={providerMessages}
-          onCancelReply={() => setReplyTarget(null)}
-          onOpenUserCard={setUserCardTarget}
-          onSend={(targets) => void onSend(targets)}
-          onSendWatched={(payload) => void onSendWatched(payload)}
-          onClearMessages={clearMessages}
-          onCopyMessages={copyMessages}
-          onPauseChange={changePause}
-          onToggleMentions={() => setMentionsOnly((value) => !value)}
-          onSearch={openSearch}
-          onPlatformCommand={async (text, target) => {
-            const result = await backend.api.executePlatformCommand({
-              platform: target.platform,
-              channelSlug: target.channelSlug,
-              text,
-            })
-            if (result.message) showNotice('info', result.message, 6000)
-          }}
-        />
-      ) : null}
-
-      {/* Dialogs */}
-      {diagnosticsOpen ? (
-        <Modal width={620} onClose={() => setDiagnosticsOpen(false)}>
-          <div
-            style={{
-              padding: 16,
-              maxHeight: 600,
-              overflow: 'scroll',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
-            <Text style={{ color: theme.text, fontWeight: 600 }}>
-              {t('chat.diagnostics.title')}
-            </Text>
-            <Text style={{ color: theme.text2, fontSize: 12 }}>
-              {JSON.stringify(
-                {
-                  window: scope,
-                  tab: layoutTabId,
-                  panel: layoutPanelId,
-                  channel: actionTarget,
-                  received: activeMessages.length + pluginFeed.rows.length,
-                  shown: displayedTimeline.length,
-                  paused: !!paused,
-                  visibleRange,
-                  status: watchedChannelStatus ?? statuses,
-                },
-                null,
-                2,
-              )}
-            </Text>
-          </div>
-        </Modal>
-      ) : null}
-      {historyOpen ? (
-        <ChatHistoryPanel
-          channel={
-            watchedChannel
-              ? {
-                  platform: watchedChannel.platform,
-                  channelId: watchedChannel.channelSlug,
-                  displayName: watchedChannel.displayName,
-                }
-              : undefined
-          }
-          onClose={() => setHistoryOpen(false)}
-        />
-      ) : null}
-      {activitiesOpen && twitchChannel ? (
-        <TwitchActivitiesPanel
-          channelSlug={twitchChannel}
-          initialTab={activitiesTab}
-          onClose={() => setActivitiesOpen(false)}
-        />
-      ) : null}
-      {chattersOpen && chattersTargets.length > 0 ? (
-        <ChattersDialog targets={chattersTargets} onClose={() => setChattersOpen(false)} />
-      ) : null}
-      {userCardTarget ? (
-        <UserCardDialog
-          target={userCardTarget}
-          currentAlias={
-            aliases.find(
-              (a) =>
-                a.platform === userCardTarget.platform &&
-                a.platformUserId === userCardTarget.platformUserId,
-            )?.alias ?? userCardTarget.currentAlias
-          }
-          onClose={() => setUserCardTarget(null)}
-        />
-      ) : null}
-    </div>
+    </PaneAccountContext.Provider>
   )
 }
 

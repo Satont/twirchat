@@ -6,13 +6,22 @@ import {
   useGpuixRequired,
   type Props,
 } from '@gpuix/react'
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import type { Account } from '@twirchat/shared/types'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 
 import { useBackend } from '../backend/context'
 import { useDragCancellation, useDragMotion } from '../hooks/use-drag-motion'
 import { useT } from '../i18n'
 import { nativeWindow } from '../native-window'
-import { showNotice } from '../state/app'
+import { accountsStore, savedAccountsStore, showNotice, watchedChannelsStore } from '../state/app'
 import type { ChatTabView } from '../state/chat-tabs'
 import {
   chatTabsStore,
@@ -24,7 +33,9 @@ import {
   setChatTabLocked,
 } from '../state/chat-tabs'
 import { useStore, useStoreSelector } from '../state/create-store'
+import { layoutStore } from '../state/layout'
 import { useOverlayClose } from '../state/overlays'
+import { tabSenderAccounts } from '../state/pane-accounts'
 import { tabUnreadStore, type TabUnread } from '../state/tab-unread'
 import {
   formatTabUnread,
@@ -35,6 +46,7 @@ import {
 } from '../tab-counts'
 import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
+import { AccountAvatar } from './ChatAccountControl'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { Modal } from './ui/Modal'
@@ -112,6 +124,19 @@ function ChannelTabs({
   const native = nativeWindow(renderer)
   const state = useStore(chatTabsStore)
   const unread = useStoreSelector(tabUnreadStore, (current) => suppliedUnread ?? current)
+  const layouts = useStore(layoutStore)
+  const chats = useStore(watchedChannelsStore)
+  const savedAccounts = useStore(savedAccountsStore)
+  const activeAccounts = useStore(accountsStore)
+  // Tab → accounts other than the platform defaults its panes send with.
+  const tabSenders = useMemo(() => {
+    const result = new Map<string, Account[]>()
+    for (const [tabId, entry] of layouts) {
+      const senders = tabSenderAccounts(entry.layout, chats, savedAccounts, activeAccounts)
+      if (senders.length) result.set(tabId, senders)
+    }
+    return result
+  }, [layouts, chats, savedAccounts, activeAccounts])
   const elements = useRef(new Map<string, number>())
   const drag = useRef<{
     id: string
@@ -394,6 +419,21 @@ function ChannelTabs({
                     }}
                   />
                   {locked ? <Icon name="lock" size={10} color={theme.text2} /> : null}
+                  {tabSenders.get(channel.id)?.length ? (
+                    <div
+                      testId={`tab-accounts-${channel.id}`}
+                      style={{ display: 'flex', flexDirection: 'row', flexShrink: 0 }}
+                    >
+                      {tabSenders
+                        .get(channel.id)
+                        ?.slice(0, 3)
+                        .map((account, position) => (
+                          <div key={account.id} style={{ marginLeft: position ? -4 : 0 }}>
+                            <AccountAvatar account={account} size={12} ring={theme.bg} />
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
                 </>
               }
             />

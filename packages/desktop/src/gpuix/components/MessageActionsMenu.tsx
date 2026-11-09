@@ -11,6 +11,7 @@ import {
 } from '../commands'
 import { useT } from '../i18n'
 import type { IgnoreRule } from '../message-rules'
+import { usePaneAccountId } from '../pane-account-context'
 import { accountsStore, showNotice, streamStatusStore } from '../state/app'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
 import { useStoreSelector } from '../state/create-store'
@@ -39,6 +40,7 @@ export function MessageActionsMenu({
   request?: number
 }) {
   const backend = useBackend()
+  const paneAccountId = usePaneAccountId()
   const theme = useTheme()
   const { t } = useT()
   const [open, setOpen] = useState(false)
@@ -160,6 +162,7 @@ export function MessageActionsMenu({
         const name = text.match(/^\/([a-z]+)/iu)?.[1]?.toLowerCase()
         if (name && PLATFORM_COMMAND_NAMES.some((command) => command === name)) {
           const response = await backend.api.executePlatformCommand({
+            accountId: paneAccountId,
             platform: message.platform,
             channelSlug: channel,
             text,
@@ -274,6 +277,7 @@ export function MessageActionsMenu({
             {message.platform === 'twitch'
               ? item(t('chatMessages.actions.blockOnTwitch'), async () => {
                   await backend.api.executePlatformCommand({
+                    accountId: paneAccountId,
                     platform: 'twitch',
                     channelSlug: channel,
                     text: `/block ${message.author.username ?? message.author.id}`,
@@ -284,6 +288,7 @@ export function MessageActionsMenu({
             {message.platform === 'twitch'
               ? item(t('chatMessages.actions.unblockOnTwitch'), async () => {
                   await backend.api.executePlatformCommand({
+                    accountId: paneAccountId,
                     platform: 'twitch',
                     channelSlug: channel,
                     text: `/unblock ${message.author.username ?? message.author.id}`,

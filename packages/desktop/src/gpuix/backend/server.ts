@@ -59,6 +59,7 @@ import { getClientSecret } from '../../store/client-secret'
 import { getDb } from '../../store/db'
 import { initDb } from '../../store/db'
 import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
+import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
 import { createChatAccountSender } from '../../watched-channels/account-sender'
 import {
   HOME_PLUGIN_CHANNELS_KEY,
@@ -164,6 +165,7 @@ function boot(): DesktopBackend {
     (message) => providerRuntime.enrich(message),
     undefined,
     createChatAccountSender(twitchSenders),
+    (channelId) => WatchedChannelsLayoutStore.paneAccountIds(channelId),
   )
   let twitchEventSubConnected = false
   const emitTwitchNotice = (

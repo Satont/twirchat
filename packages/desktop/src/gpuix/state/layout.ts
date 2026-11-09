@@ -505,6 +505,18 @@ export async function assignChannel(
   }
 }
 
+/** Chooses the saved account one pane sends with; `null` follows the chat's account again. */
+export function setPanelAccount(
+  backend: { api: LayoutIOBackend['api'] & Pick<DesktopApi, 'setPanelAccount'> },
+  tabId: string,
+  panelId: string,
+  accountId: string | null,
+): Promise<void> {
+  return mutateLayout(backend, tabId, () =>
+    backend.api.setPanelAccount({ tabId, panelId, accountId }),
+  )
+}
+
 export function restoreHomePanel(
   backend: LayoutIOBackend,
   panelId: string,

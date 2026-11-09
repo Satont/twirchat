@@ -4,9 +4,15 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { Account, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import type {
+  Account,
+  NormalizedChatMessage,
+  Platform,
+  WatchedChannelsLayout,
+} from '@twirchat/shared/types'
 
 import { resolveChatAccount } from '../src/gpuix/chat-account'
+import { tabSenderAccounts } from '../src/gpuix/state/pane-accounts'
 import { BasePlatformAdapter } from '../src/platforms/base-adapter'
 import {
   hasPrivilegedChatRole,
@@ -21,6 +27,7 @@ import { channelAccount, chatAccount, chatSender } from '../src/services/chat-ac
 import { sevenTVService } from '../src/seventv'
 import { AccountStore } from '../src/store/account-store'
 import { getDb, initDb } from '../src/store/db'
+import { WatchedChannelsLayoutStore } from '../src/store/watched-channels-layout-store'
 import { WatchedChannelStore } from '../src/store/watched-channels-store'
 import {
   createPendingMessage,
@@ -380,4 +387,82 @@ test('the UI shows the same account the backend sends with', () => {
   expect(
     resolveChatAccount({ platform: 'youtube', accountId: alt.id }, saved, [main]),
   ).toBeUndefined()
+})
+
+function paneLayout(channelId: string, accounts: Array<string | undefined>): WatchedChannelsLayout {
+  return {
+    version: 2,
+    root: {
+      type: 'split',
+      id: 'split',
+      direction: 'vertical',
+      flex: 100,
+      children: accounts.map((accountId, index) => ({
+        type: 'panel',
+        id: `pane-${index}`,
+        flex: 100 / accounts.length,
+        content: { type: 'watched', channelId, ...(accountId ? { accountId } : {}) },
+      })),
+    },
+  }
+}
+
+test('panes of one chat send with their own accounts over a single reading connection', async () => {
+  const main = save('twitch', 'main')
+  const alt = save('twitch', 'alt', false)
+  const bot = save('twitch', 'bot', false)
+  const kick = save('kick', 'kick')
+  const adapters: ReadingAdapter[] = []
+  const { sender, log } = fixtureSender()
+  const manager = new WatchedChannelManager(
+    (message) => message,
+    () => {
+      const adapter = new ReadingAdapter()
+      adapters.push(adapter)
+      return adapter
+    },
+    sender,
+    (channelId) => WatchedChannelsLayoutStore.paneAccountIds(channelId),
+  )
+  const chat = await manager.addChannel('twitch', 'shared')
+  WatchedChannelsLayoutStore.set('tab:a', paneLayout(chat.id, [undefined, alt.id]))
+  WatchedChannelsLayoutStore.set('tab:b', paneLayout(chat.id, [bot.id, main.id]))
+  await manager.setActiveChannels([chat.id])
+
+  expect(adapters).toHaveLength(1)
+  expect(log.toSorted()).toEqual(['prepare twitch:alt shared', 'prepare twitch:bot shared'])
+  await manager.sendMessage(chat.id, 'from alt', undefined, alt.id)
+  await manager.sendMessage(chat.id, 'from main', undefined, main.id)
+  await manager.sendMessage(chat.id, 'from the chat')
+  expect(required(adapters[0]).sent).toEqual(['from main', 'from the chat'])
+  expect(log.at(-1)).toBe('send twitch:alt shared from alt')
+  await expect(manager.sendMessage(chat.id, 'wrong', undefined, kick.id)).rejects.toThrow()
+
+  // Closing the bot's pane releases its connection once the chat's senders are re-read.
+  WatchedChannelsLayoutStore.set('tab:b', paneLayout(chat.id, [main.id]))
+  manager.refreshSenders(chat.id)
+  expect(log.at(-1)).toBe('release twitch:bot shared')
+  expect(WatchedChannelsLayoutStore.paneAccountIds(chat.id).toSorted()).toEqual(
+    [alt.id, main.id].toSorted(),
+  )
+})
+
+test('a pane account wins over the chat account, and the tab lists non-default ones', () => {
+  const main = save('twitch', 'main')
+  const alt = save('twitch', 'alt', false)
+  const bot = save('twitch', 'bot', false)
+  const saved = [main, alt, bot]
+  const chat = { platform: literal('twitch'), accountId: alt.id }
+  expect(resolveChatAccount(chat, saved, [main], bot.id)?.id).toBe(bot.id)
+  expect(resolveChatAccount(chat, saved, [main], 'twitch:gone')?.id).toBe(alt.id)
+  expect(resolveChatAccount({ platform: 'twitch' }, saved, [main], main.id)?.id).toBe(main.id)
+  expect(resolveChatAccount({ platform: 'youtube' }, saved, [], bot.id)).toBeUndefined()
+
+  const channel = { ...WatchedChannelStore.upsert('twitch', 'shared', 'Shared'), accountId: alt.id }
+  const layout = paneLayout(channel.id, [undefined, bot.id, main.id])
+  expect(tabSenderAccounts(layout, [channel], saved, [main]).map((account) => account.id)).toEqual([
+    alt.id,
+    bot.id,
+  ])
+  expect(tabSenderAccounts(paneLayout(channel.id, [main.id]), [channel], saved, [main])).toEqual([])
 })
