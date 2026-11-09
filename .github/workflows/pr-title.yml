@@ -1,0 +1,34 @@
+name: PR title lint
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Validate current PR title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          # Preserve trailing newlines for validation after command substitution.
+          title="$(gh pr view "$PR_NUMBER" --json title --jq '.title + "."')"
+          title="${title%.}"
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9]+([./_-][a-z0-9]+)*\))?!?: [^[:space:]](.*[^[:space:]])?$'
+          if [[ "$title" =~ [[:cntrl:]] || ! "$title" =~ $pattern ]]; then
+            echo '::error title=Invalid PR title::Use type(scope)!: summary, as in fix(desktop): prevent duplicate messages. See AGENTS.md for the allowed types and formatting.'
+            exit 1
+          fi
