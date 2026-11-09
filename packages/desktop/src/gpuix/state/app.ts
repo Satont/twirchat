@@ -82,9 +82,9 @@ export const authorEmoteStore = persistentResource('authorEmotes', () =>
   createStore<Map<string, EmoteCatalogEntry[]>>(new Map()),
 )
 
-export type MainTab = 'chat' | 'platforms' | 'settings'
+export type MainTab = 'chat' | 'platforms' | 'settings' | 'obs-remote'
 function normalizeMainTab(tab: string | undefined): MainTab {
-  return tab === 'platforms' || tab === 'settings' ? tab : 'chat'
+  return tab === 'platforms' || tab === 'settings' || tab === 'obs-remote' ? tab : 'chat'
 }
 export const activeTabStore = persistentResource('activeMainTab', () =>
   createStore(normalizeMainTab(process.env.TWIRCHAT_GPUIX_START_MAIN_TAB)),

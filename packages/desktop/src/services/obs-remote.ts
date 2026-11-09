@@ -60,7 +60,7 @@ export interface ObsRemoteSnapshot {
   record: ObsOutputStatus
   virtualCamera: boolean
   virtualCameraAvailable: boolean
-  replayBuffer: boolean
+  replayBuffer: 'unavailable' | 'stopped' | 'active'
   profiles: string[]
   profile: string
   collections: string[]
@@ -134,7 +134,7 @@ export function createObsRemoteSnapshot(): ObsRemoteSnapshot {
     record: idleOutput(),
     virtualCamera: false,
     virtualCameraAvailable: false,
-    replayBuffer: false,
+    replayBuffer: 'unavailable',
     profiles: [],
     profile: '',
     collections: [],
@@ -519,20 +519,30 @@ export class ObsRemoteSession {
     }
   }
 
+  private async readReplayBufferStatus(): Promise<ObsRemoteSnapshot['replayBuffer']> {
+    try {
+      const replay = await this.call('GetReplayBufferStatus')
+      return replay.outputActive ? 'active' : 'stopped'
+    } catch (error) {
+      if (error instanceof OBSWebSocketError && error.code === 604) return 'unavailable'
+      throw error
+    }
+  }
+
   private async readSnapshot(): Promise<void> {
     const revision = this.inputRevision
     const structure = this.dirty
     this.dirty = false
     try {
       const patch = structure ? await this.readStructure() : {}
-      const [stream, record, camera, replay, stats] = await Promise.all([
+      const [stream, record, camera, replayBuffer, stats] = await Promise.all([
         this.call('GetStreamStatus'),
         this.call('GetRecordStatus'),
         this.call('GetVirtualCamStatus').catch((error: unknown) => {
           if (error instanceof OBSWebSocketError && error.code === 604) return null
           throw error
         }),
-        this.call('GetReplayBufferStatus'),
+        this.readReplayBufferStatus(),
         this.call('GetStats'),
       ])
       const now = Date.now()
@@ -551,7 +561,7 @@ export class ObsRemoteSession {
         stats,
         virtualCamera: camera?.outputActive ?? false,
         virtualCameraAvailable: camera !== null,
-        replayBuffer: replay.outputActive,
+        replayBuffer,
         stream: {
           active: stream.outputActive,
           paused: false,

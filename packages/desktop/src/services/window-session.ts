@@ -7,7 +7,6 @@ export type DesktopWindowDescriptor = {
   bounds?: NativeWindowBounds
 } & (
   | { kind: 'main' }
-  | { kind: 'obs-remote' }
   | { kind: 'chat' | 'overlay'; tabId: string; clickThrough: boolean }
   | { kind: 'user'; target: UserCardTarget; pinned?: boolean }
 )

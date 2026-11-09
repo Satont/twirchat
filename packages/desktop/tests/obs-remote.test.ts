@@ -24,7 +24,15 @@ afterEach(async () => {
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
 })
 
-function fixture(holdHello = false) {
+interface FixtureOptions {
+  holdHello?: boolean
+  replayBuffer?: { outputActive: boolean } | { code: number; comment: string }
+}
+
+function fixture({
+  holdHello = false,
+  replayBuffer = { outputActive: false },
+}: FixtureOptions = {}) {
   const requests: string[] = []
   const mutes = new Map([
     ['Microphone', false],
@@ -85,7 +93,7 @@ function fixture(holdHello = false) {
     GetStreamStatus: output,
     GetRecordStatus: output,
     GetVirtualCamStatus: output,
-    GetReplayBufferStatus: output,
+    GetReplayBufferStatus: replayBuffer,
     GetStats: {
       cpuUsage: 1,
       memoryUsage: 100,
@@ -123,10 +131,14 @@ function fixture(holdHello = false) {
         requests.push(d.requestType)
         if (d.requestType === 'GetSourceScreenshot' && pendingScreenshot) return
         const inputName = d.requestData?.inputName
-        if (
+        const resourceUnavailable =
           (d.requestType === 'GetInputVolume' && inputName === 'Image') ||
           d.requestType === 'GetVirtualCamStatus'
-        ) {
+        const requestError =
+          d.requestType === 'GetReplayBufferStatus' && 'code' in replayBuffer
+            ? replayBuffer
+            : undefined
+        if (resourceUnavailable || requestError) {
           socket.send(
             JSON.stringify({
               op: 7,
@@ -135,8 +147,8 @@ function fixture(holdHello = false) {
                 requestType: d.requestType,
                 requestStatus: {
                   result: false,
-                  code: 604,
-                  comment: 'Resource unavailable',
+                  code: requestError?.code ?? 604,
+                  comment: requestError?.comment ?? 'Resource unavailable',
                 },
               },
             }),
@@ -188,6 +200,7 @@ test('connects to OBS v5 and includes global audio inputs absent from input list
   expect(obs.snapshot().connected).toBe(true)
   expect(obs.snapshot().version).toBe('33.0.0')
   expect(obs.snapshot().virtualCameraAvailable).toBe(false)
+  expect(obs.snapshot().replayBuffer).toBe('stopped')
   expect(
     obs
       .snapshot()
@@ -200,6 +213,36 @@ test('connects to OBS v5 and includes global audio inputs absent from input list
     muted: true,
   })
   expect(await obs.session.preview('Main')).toBe('data:image/jpeg;base64,AA==')
+})
+
+test('unavailable replay buffer leaves the OBS session and other controls usable', async () => {
+  const obs = fixture({ replayBuffer: { code: 604, comment: 'Replay buffer is not available.' } })
+  await obs.session.connect()
+  expect(obs.snapshot()).toMatchObject({
+    connected: true,
+    error: null,
+    replayBuffer: 'unavailable',
+    programScene: 'Main',
+    stats: { activeFps: 60 },
+  })
+  await obs.session.run({ kind: 'program', scene: 'Main' })
+  expect(obs.requests).toContain('SetCurrentProgramScene')
+  expect(obs.snapshot().connected).toBe(true)
+})
+
+test('reports an active replay buffer', async () => {
+  const obs = fixture({ replayBuffer: { outputActive: true } })
+  await obs.session.connect()
+  expect(obs.snapshot().replayBuffer).toBe('active')
+})
+
+test('propagates unexpected replay buffer status errors', async () => {
+  const obs = fixture({ replayBuffer: { code: 700, comment: 'Could not read replay status.' } })
+  await expect(obs.session.connect()).rejects.toMatchObject({
+    code: 700,
+    message: 'Could not read replay status.',
+  })
+  expect(obs.snapshot().connected).toBe(false)
 })
 
 test('panic restores original mute states and mixer edits do not reload scene topology', async () => {
@@ -265,7 +308,7 @@ test('active source traversal excludes children of hidden groups', () => {
 })
 
 test('dispose cancels a connection awaiting the OBS hello handshake', async () => {
-  const obs = fixture(true)
+  const obs = fixture({ holdHello: true })
   const connecting = obs.session.connect().then(
     () => {
       throw new Error('Expected cancelled connection')

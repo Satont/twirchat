@@ -1,17 +1,16 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 
 import type { StreamerModeStatus } from '../../services/streamer-mode'
-import { accountsStore, activeTabStore, showNotice, type MainTab } from '../state/app'
+import { accountsStore, activeTabStore, type MainTab } from '../state/app'
 import { useStore, useStoreSelector } from '../state/create-store'
-import { useDesktopWindows } from '../state/desktop-windows'
 import { streamerModeStore } from '../state/streamer-mode'
 import { useTheme } from '../theme-context'
 import { Icon, type IconName } from './ui/Icon'
 import { describeStreamerMode, StreamerModeDot } from './ui/StreamerModeIndicator'
 import { Text } from './ui/Text'
 
-interface NavItem<Id extends string = MainTab> {
-  id: Id
+interface NavItem {
+  id: MainTab
   label: string
   icon: IconName
 }
@@ -20,12 +19,8 @@ const ITEMS: readonly NavItem[] = [
   { id: 'chat', label: 'Chat', icon: 'chat' },
   { id: 'platforms', label: 'Platforms', icon: 'globe' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
+  { id: 'obs-remote', label: 'OBS Remote', icon: 'monitor' },
 ]
-const OBS_REMOTE_ITEM: NavItem<'obs-remote'> = {
-  id: 'obs-remote',
-  label: 'OBS Remote',
-  icon: 'monitor',
-}
 
 function NavItemButton({
   item,
@@ -34,7 +29,7 @@ function NavItemButton({
   streamerMode,
   select,
 }: {
-  item: NavItem<MainTab | 'obs-remote'>
+  item: NavItem
   active: boolean
   badge?: number
   streamerMode?: StreamerModeStatus
@@ -136,7 +131,6 @@ export function AppNavigation() {
   const activeTab = useStore(activeTabStore)
   const accountCount = useStoreSelector(accountsStore, (accounts) => accounts.length)
   const streamerMode = useStore(streamerModeStore)
-  const windows = useDesktopWindows()
 
   return (
     <div
@@ -165,17 +159,6 @@ export function AppNavigation() {
           select={() => activeTabStore.set(item.id)}
         />
       ))}
-      {windows ? (
-        <NavItemButton
-          item={OBS_REMOTE_ITEM}
-          active={false}
-          select={() => {
-            void windows
-              .openObsRemote()
-              .catch((error: unknown) => showNotice('error', String(error)))
-          }}
-        />
-      ) : null}
     </div>
   )
 }

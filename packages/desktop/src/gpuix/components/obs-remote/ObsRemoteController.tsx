@@ -1,4 +1,4 @@
-import { useGpuixRequired, useWindowSize } from '@gpuix/react'
+import { useWindowSize } from '@gpuix/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -12,12 +12,10 @@ import type {
   ObsRemoteProfile,
   ObsRemoteProfileDraft,
 } from '../../backend/obs-remote'
-import { nativeWindow } from '../../native-window'
-import { settingsStore } from '../../state/app'
 import { useStoreSelector } from '../../state/create-store'
 import { useWindowScope } from '../../state/window-scope'
 import { windowVisibilityStore } from '../../state/window-visibility'
-import { useTheme, ThemeContext, FontContext, resolveTheme, resolveFont } from '../../theme-context'
+import { useTheme } from '../../theme-context'
 import { ActionButton, FormError, FormField, FormInput } from '../ui/Form'
 import { Modal } from '../ui/Modal'
 import { Text } from '../ui/Text'
@@ -32,27 +30,14 @@ interface Confirmation {
   action: () => Promise<void>
 }
 
-export function ObsRemoteController() {
-  const theme = useStoreSelector(settingsStore, resolveTheme)
-  const font = useStoreSelector(settingsStore, resolveFont)
-  return (
-    <ThemeContext.Provider value={theme}>
-      <FontContext.Provider value={font}>
-        <ControllerContent />
-      </FontContext.Provider>
-    </ThemeContext.Provider>
-  )
-}
-
-function ControllerContent() {
+export function ObsRemoteController({ active }: { active: boolean }) {
   const { api } = useBackend()
   const theme = useTheme()
-  const renderer = useGpuixRequired()
   const size = useWindowSize()
   const scope = useWindowScope()
   const visible = useStoreSelector(
     windowVisibilityStore,
-    (state) => state.windows.get(scope) !== 'hidden',
+    (state) => active && state.windows.get(scope) !== 'hidden',
   )
   const [profiles, setProfiles] = useState<ObsRemoteProfile[]>([])
   const [selected, setSelected] = useState('')
@@ -63,19 +48,11 @@ function ControllerContent() {
   const [busy, setBusy] = useState(false)
   const [editor, setEditor] = useState<ObsRemoteProfileDraft | null>(null)
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
-  const [fullscreen, setFullscreen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [duration, setDuration] = useState<string | null>(null)
   const generation = useRef(0)
   const mounted = useRef(true)
   const operation = useRef(false)
-  const narrow = size.width < 900
-  const panelWidth = Math.max(260, size.width - 48 - (narrow ? 0 : 300))
-  const frameWidth = snapshot.studioMode
-    ? Math.max(140, Math.floor((panelWidth - 12) / 2))
-    : Math.min(panelWidth, Math.round((Math.max(180, Math.min(345, size.height - 535)) * 16) / 9))
-  const profile = profiles.find((item) => item.id === selected)
-
   const report = useCallback((cause: unknown) => {
     if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause))
   }, [])
@@ -125,6 +102,15 @@ function ControllerContent() {
   useEffect(() => {
     if (connection && snapshot.connected) connection.setMetering(visible).catch(report)
   }, [connection, snapshot.connected, visible, report])
+
+  if (!active) return null
+
+  const narrow = size.width < 900
+  const panelWidth = Math.max(260, size.width - 48 - (narrow ? 0 : 300))
+  const frameWidth = snapshot.studioMode
+    ? Math.floor((panelWidth - 12) / 2)
+    : Math.min(panelWidth, Math.round((Math.max(180, Math.min(345, size.height - 535)) * 16) / 9))
+  const profile = profiles.find((item) => item.id === selected)
 
   async function disconnect() {
     generation.current++
@@ -177,6 +163,8 @@ function ControllerContent() {
   }
 
   const disabled = busy || !snapshot.connected
+  const replayActive = snapshot.replayBuffer === 'active'
+  const replayUnavailable = snapshot.replayBuffer === 'unavailable'
   return (
     <div
       testId="obs-remote-controller"
@@ -218,31 +206,16 @@ function ControllerContent() {
               {`${busy ? 'Working…' : snapshot.connected ? `Connected · OBS ${snapshot.version}` : 'Disconnected'}${profile ? ` · ${profile.name}` : ''}`}
             </Text>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-            <ActionButton
-              testId="obs-add-profile"
-              disabled={busy}
-              onClick={() => {
-                setShowPassword(false)
-                setEditor({ name: '', url: 'ws://localhost:4455', password: '' })
-              }}
-            >
-              Add connection
-            </ActionButton>
-            <ActionButton
-              disabled={busy}
-              onClick={() => {
-                task(async () => {
-                  await nativeWindow(renderer).setWindowBounds({
-                    mode: fullscreen ? 'windowed' : 'fullscreen',
-                  })
-                  setFullscreen(!fullscreen)
-                }).catch(report)
-              }}
-            >
-              {fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            </ActionButton>
-          </div>
+          <ActionButton
+            testId="obs-add-profile"
+            disabled={busy}
+            onClick={() => {
+              setShowPassword(false)
+              setEditor({ name: '', url: 'ws://localhost:4455', password: '' })
+            }}
+          >
+            Add connection
+          </ActionButton>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {profiles.map((item) => (
@@ -385,15 +358,17 @@ function ControllerContent() {
           </ActionButton>
           <ActionButton
             testId="obs-replay-buffer"
-            disabled={disabled}
-            primary={snapshot.replayBuffer}
-            onClick={() => run({ kind: 'replay-buffer', active: !snapshot.replayBuffer })}
+            disabled={disabled || replayUnavailable}
+            primary={replayActive}
+            onClick={() => run({ kind: 'replay-buffer', active: !replayActive })}
           >
-            Replay buffer
+            {snapshot.connected && replayUnavailable
+              ? 'Replay buffer unavailable'
+              : 'Replay buffer'}
           </ActionButton>
           <ActionButton
             testId="obs-save-replay"
-            disabled={disabled || !snapshot.replayBuffer}
+            disabled={disabled || !replayActive}
             onClick={() => run({ kind: 'save-replay' })}
           >
             Save replay
@@ -587,7 +562,19 @@ function ControllerContent() {
             if (!busy) setEditor(null)
           }}
         >
-          <div style={{ padding: 20, gap: 14, display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              padding: 20,
+              gap: 14,
+              display: 'flex',
+              flexDirection: 'column',
+              flexShrink: 1,
+              minHeight: 0,
+              overflowY: 'scroll',
+              scrollbarColor: theme.scrollbar,
+              scrollbarWidth: 4,
+            }}
+          >
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: 600 }}>
               {editor.id ? 'Edit connection' : 'Add connection'}
             </Text>
@@ -635,7 +622,7 @@ function ControllerContent() {
                     ? 'Password set'
                     : 'No password'}
               </Text>
-              <div style={{ display: 'flex', flexDirection: 'row', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 <ActionButton
                   testId="obs-paste-password"
                   disabled={busy}

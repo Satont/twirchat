@@ -52,6 +52,7 @@ import { loadPendingChangelog, type PendingChangelog } from '../update-changelog
 import { AddChannelModal } from './AddChannelModal'
 import { AppNavigation } from './AppNavigation'
 import { ChannelTabBar, type WatchedLiveStatus } from './ChannelTabBar'
+import { ObsRemoteController } from './obs-remote/ObsRemoteController'
 import { PlatformsPanel } from './PlatformsPanel'
 import { SavedAccounts } from './SavedAccounts'
 import { SearchAllChatsDialog } from './SearchAllChatsDialog'
@@ -266,6 +267,9 @@ export function App() {
   const [showFollowing, setShowFollowing] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
   const [changelogData, setChangelogData] = useState<PendingChangelog | null>(null)
+  const [hasOpenedObsRemote, setHasOpenedObsRemote] = useState(false)
+  const obsRemoteActive = activeTab === 'obs-remote'
+  if (obsRemoteActive && !hasOpenedObsRemote) setHasOpenedObsRemote(true)
 
   const theme = resolveTheme(settings)
   const font = resolveFont(settings)
@@ -544,6 +548,7 @@ export function App() {
             ) : null}
             {activeTab === 'platforms' ? <PlatformsPanel /> : null}
             {activeTab === 'settings' ? <SettingsPanel /> : null}
+            {hasOpenedObsRemote ? <ObsRemoteController active={obsRemoteActive} /> : null}
           </div>
 
           {showAddModal ? (
