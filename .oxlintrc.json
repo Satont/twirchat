@@ -85,7 +85,9 @@
     "**/frontend/bindings/**",
     "**/.opencode/**",
     "**/.agents/skills/**",
-    "**/.cursor/skills/**"
+    "**/.cursor/skills/**",
+    "**/packages/shared/youtube/gen/**",
+    "**/packages/shared/tests/fixtures/gen/**"
   ],
   "jsPlugins": ["./scripts/quality-plugin.mjs"],
   "options": {
