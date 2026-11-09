@@ -9,6 +9,8 @@ export type LayoutApi = Pick<
   DesktopApi,
   | 'getUiState'
   | 'setUiState'
+  | 'getLastSeenVersion'
+  | 'setLastSeenVersion'
   | 'getTabChannelIds'
   | 'setTabChannelIds'
   | 'getWatchedChannelsLayout'
@@ -56,11 +58,32 @@ function countPanels(node: LayoutNode): number {
   return node.children.reduce((sum, child) => sum + countPanels(child), 0)
 }
 
-export function readUiState(key: string): string | null {
+const LAST_SEEN_VERSION_KEY = 'gpuix_last_seen_version'
+
+function readSetting(key: string): string | null {
   const row = getDb()
     .query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?')
-    .get(`gpuix_ui_${key}`)
+    .get(key)
   return row?.value ?? null
+}
+
+function writeSetting(key: string, value: string): void {
+  getDb().run(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    [key, value],
+  )
+}
+
+export function readUiState(key: string): string | null {
+  return readSetting(`gpuix_ui_${key}`)
+}
+
+export function getLastSeenVersion(): string | null {
+  return readSetting(LAST_SEEN_VERSION_KEY)
+}
+
+export function setLastSeenVersion(version: string): void {
+  writeSetting(LAST_SEEN_VERSION_KEY, version)
 }
 
 export function createLayoutApi(onUiStateSaved?: (key: string, value: string) => void): LayoutApi {
@@ -68,13 +91,13 @@ export function createLayoutApi(onUiStateSaved?: (key: string, value: string) =>
     getUiState: async ({ key }) => readUiState(key),
 
     setUiState: async ({ key, value }) => {
-      const db = getDb()
-      db.run(
-        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-        [`gpuix_ui_${key}`, value],
-      )
+      writeSetting(`gpuix_ui_${key}`, value)
       onUiStateSaved?.(key, value)
     },
+
+    getLastSeenVersion: async () => getLastSeenVersion(),
+
+    setLastSeenVersion: async ({ version }) => setLastSeenVersion(version),
 
     getTabChannelIds: async () => {
       const db = getDb()

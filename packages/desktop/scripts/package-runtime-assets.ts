@@ -52,6 +52,11 @@ export async function stageNativeRuntime(options: {
     throw new Error('Native packaging source pins do not match this application.')
   const patches = await Promise.all(
     source.patches.map(async (patch) => {
+      if (
+        !['gpuix', 'gpui', 'cosmic-text'].includes(patch.root) ||
+        !/^patches\/[a-z\d-]+\.patch$/u.test(patch.path)
+      )
+        throw new Error('Invalid native patch path.')
       const bytes = Buffer.from(await Bun.file(join(sourceRoot, patch.path)).arrayBuffer())
       if (createHash('sha256').update(bytes).digest('hex') !== patch.sha256)
         throw new Error(`Native patch checksum mismatch: ${patch.path}`)

@@ -132,6 +132,9 @@ const methods = {
   authStart: async () => {
     throw new Error('QA never starts OAuth')
   },
+  authLink: async ({ platform }) => ({
+    url: `https://auth.example.test/authorize?state=qa-${platform}`,
+  }),
 }
 const backend = {
   events,
@@ -403,6 +406,16 @@ try {
   events.emit('accounts_changed', {})
   await Bun.sleep(180)
   assert.ok(hasText('Twitch · @beta'))
+  await click('add-account-twitch-more')
+  assert.ok(find('add-account-twitch-menu'))
+  await clickNode(textNode('Saved accounts'))
+  assert.ok(!flatten().some((node) => node.testId === 'add-account-twitch-menu'))
+  await click('add-account-twitch-more')
+  const addAccountMenu = await captureGuiQaDisplay('accounts-add-menu')
+  await click('add-account-twitch-copy')
+  assert.equal(clipboard, 'https://auth.example.test/authorize?state=qa-twitch')
+  assert.ok(!flatten().some((node) => node.testId === 'add-account-twitch-menu'))
+  assert.ok(hasText('Twitch sign-in link copied.'))
   assert.ok(!calls.some((call) => call.name === 'authStart'))
   await Bun.write(
     `${process.env.TWIRCHAT_QA_SESSION_DIR}/settings-calls.json`,
@@ -421,7 +434,8 @@ try {
       imageUploaderImportSaveExport: true,
       twirUploaderSignInCancelRetryDisconnect: true,
       accountSwitchAnonymousForget: true,
-      screenshots: [narrow, search, uploader, twir, accounts],
+      addAccountCopyLink: true,
+      screenshots: [narrow, search, uploader, twir, accounts, addAccountMenu],
     }),
   )
 } catch (error) {

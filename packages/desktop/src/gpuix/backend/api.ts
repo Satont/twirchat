@@ -149,6 +149,7 @@ import {
 import type { DesktopEvents } from './events'
 import * as imageUploader from './image-uploader'
 import { createLayoutApi } from './layout-api'
+import { readCachedReleaseNotes, writeCachedReleaseNotes } from './release-notes-cache'
 import { createStreamerModeApi } from './streamer-mode-api'
 import * as translation from './translation'
 import type {
@@ -170,6 +171,13 @@ import {
 
 const log = logger('gpuix-backend')
 const platformCommands = new Set<string>(PLATFORM_COMMAND_NAMES)
+
+const githubReleaseSchema = z.object({
+  tag_name: z.string().min(1).optional(),
+  body: z.string().nullable().optional(),
+  published_at: z.string().nullable().optional(),
+  html_url: z.string().nullable().optional(),
+})
 
 export interface UserAlias {
   platform: Platform
@@ -297,6 +305,8 @@ export interface DesktopApi {
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
   getChannels(): Promise<Partial<Record<Platform, string[]>>>
   authStart(params: { platform: Platform }): Promise<void>
+  /** Prepares a sign-in like `authStart` and returns its link instead of opening a browser. */
+  authLink(params: { platform: Platform }): Promise<{ url: string }>
   authLogout(params: { platform: Platform }): Promise<void>
   joinChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
   leaveChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
@@ -392,6 +402,17 @@ export interface DesktopApi {
   /** GPUIX-only: generic UI preference stored in the settings KV table. */
   getUiState(params: { key: string }): Promise<string | null>
   setUiState(params: { key: string; value: string }): Promise<void>
+  /** Get the last seen app version (for update changelog). */
+  getLastSeenVersion(): Promise<string | null>
+  /** Set the last seen app version. */
+  setLastSeenVersion(params: { version: string }): Promise<void>
+  /** Fetch release notes for a specific version from GitHub. */
+  getReleaseNotes(params: { version: string }): Promise<{
+    version: string
+    releaseNotes: string
+    publishedAt: string
+    htmlUrl: string
+  } | null>
   /** GPUIX-only: write to the system clipboard (GPUIX exposes no clipboard API). */
   copyText(params: { text: string }): Promise<void>
   readClipboard(): Promise<string>
@@ -439,6 +460,20 @@ export interface DesktopApiContext {
 }
 
 const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
+
+/** Starts a pending PKCE sign-in and returns the provider link that completes it. */
+async function createAuthUrl(platform: Platform): Promise<string> {
+  if (platform === 'twitch') {
+    const { codeChallenge, state } = prepareTwitchAuth()
+    return getTwitchAuthUrl(codeChallenge, state)
+  }
+  if (platform === 'kick') {
+    const { codeChallenge, state } = prepareKickAuth()
+    return getKickAuthUrl(codeChallenge, state)
+  }
+  const { codeChallenge, state } = prepareYouTubeAuth()
+  return getYouTubeAuthUrl(codeChallenge, state)
+}
 
 async function prepareTwitchActivitiesRequest(
   operation: string,
@@ -734,7 +769,7 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 // ── API factory ─────────────────────────────────────────────────────────────
 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
-  const { aggregator, backendConn, watchedChannelManager, currentStatuses } = ctx
+  const { aggregator, watchedChannelManager, currentStatuses } = ctx
   const updater = createUpdater(ctx.events)
 
   const getSevenTvTwitchPlatformUserId = (channelSlug: string): string | undefined => {
@@ -895,22 +930,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     getChannels: async () => ChannelStore.findAll(),
 
     authStart: async ({ platform }) => {
-      if (platform === 'twitch') {
-        const { codeChallenge, state } = prepareTwitchAuth()
-        const url = await getTwitchAuthUrl(codeChallenge, state)
-        ctx.openBrowser(url)
-      } else if (platform === 'kick') {
-        const { codeChallenge, state } = prepareKickAuth()
-        const url = await getKickAuthUrl(codeChallenge, state)
-        ctx.openBrowser(url)
-      } else if (platform === 'youtube') {
-        const { codeChallenge, state } = prepareYouTubeAuth()
-        const url = await getYouTubeAuthUrl(codeChallenge, state)
-        ctx.openBrowser(url)
-      } else {
-        backendConn.send({ type: 'auth_start', platform })
-      }
+      ctx.openBrowser(await createAuthUrl(platform))
     },
+
+    authLink: async ({ platform }) => ({ url: await createAuthUrl(platform) }),
 
     authLogout: async ({ platform }) => {
       if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
@@ -1189,6 +1212,37 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     downloadUpdate: () => updater.download(),
     applyUpdate: () => updater.apply(),
     skipUpdate: ({ hash }) => updater.skip(hash),
+    getReleaseNotes: async ({ version }) => {
+      const cached = readCachedReleaseNotes(version)
+      // Preview remounts must not burn the unauthenticated GitHub API limit.
+      const preview = process.env.TWIRCHAT_CHANGELOG_PREVIEW === '1'
+      if (preview && cached && process.env.TWIRCHAT_RELEASE_NOTES_REFRESH !== '1') return cached
+
+      const url = `https://api.github.com/repos/Satont/twirchat/releases/tags/v${version}`
+      try {
+        const res = await fetch(url, {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'TwirChat',
+          },
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (!res.ok) return cached
+        const release = githubReleaseSchema.parse(await res.json())
+        const notes = {
+          version: release.tag_name?.replace(/^v/u, '') ?? version,
+          releaseNotes: release.body ?? '',
+          publishedAt: release.published_at ?? '',
+          htmlUrl:
+            release.html_url ?? `https://github.com/Satont/twirchat/releases/tag/v${version}`,
+        }
+        if (notes.releaseNotes) writeCachedReleaseNotes(notes)
+        return notes
+      } catch (error) {
+        log.warn('Could not load release notes', { version, error: String(error) })
+        return cached
+      }
+    },
 
     getWatchedChannels: async () => {
       const builtin = watchedChannelManager.getAll()

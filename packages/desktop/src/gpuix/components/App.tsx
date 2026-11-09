@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
  * The app header, tabbed content, modals and toasts sit below the native titlebar.
  */
 
+import { APP_VERSION } from '../../build-info'
 import {
   isPluginPlatform,
   isPluginWatchedChannel,
@@ -47,6 +48,7 @@ import { changeWindowPresentation, useWindowPresentation } from '../state/window
 import { useWindowScope } from '../state/window-scope'
 import { accent, withAlpha } from '../theme'
 import { resolveFont, resolveTheme, useTheme, FontContext, ThemeContext } from '../theme-context'
+import { loadPendingChangelog, type PendingChangelog } from '../update-changelog'
 import { AddChannelModal } from './AddChannelModal'
 import { AppNavigation } from './AppNavigation'
 import { ChannelTabBar, type WatchedLiveStatus } from './ChannelTabBar'
@@ -59,6 +61,7 @@ import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
 import { Icon } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
+import { UpdateChangelogModal } from './UpdateChangelogModal'
 import { WatchedView } from './WatchedView'
 
 /** Transient top-center toast (port of ChatNotice.vue). */
@@ -261,9 +264,28 @@ export function App() {
   const [showAllChatSearch, setShowAllChatSearch] = useState(false)
   const [showAccounts, setShowAccounts] = useState(false)
   const [showFollowing, setShowFollowing] = useState(false)
+  const [showChangelog, setShowChangelog] = useState(false)
+  const [changelogData, setChangelogData] = useState<PendingChangelog | null>(null)
 
   const theme = resolveTheme(settings)
   const font = resolveFont(settings)
+
+  useEffect(() => {
+    let mounted = true
+    runUiTask(
+      loadPendingChangelog(APP_VERSION, backend.api, {
+        preview:
+          process.env.TWIRCHAT_CHANGELOG_PREVIEW === '1' && process.env.NODE_ENV !== 'production',
+      }).then((changelog) => {
+        if (!mounted || !changelog) return
+        setChangelogData(changelog)
+        setShowChangelog(true)
+      }),
+    )
+    return () => {
+      mounted = false
+    }
+  }, [backend])
 
   // Global hotkeys (Ctrl+K etc.) are dispatched from main.tsx's render().
   useEffect(() => {
@@ -554,6 +576,17 @@ export function App() {
               }
               initialTab="following"
               onClose={() => setShowFollowing(false)}
+            />
+          ) : null}
+          {showChangelog && changelogData ? (
+            <UpdateChangelogModal
+              version={changelogData.version}
+              releaseNotes={changelogData.releaseNotes}
+              publishedAt={changelogData.publishedAt}
+              onClose={() => {
+                setShowChangelog(false)
+                setChangelogData(null)
+              }}
             />
           ) : null}
 
