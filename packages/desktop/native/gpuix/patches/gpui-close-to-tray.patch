@@ -104,20 +104,26 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
              blur: None,
              viewport,
              globals,
-@@ -634,6 +652,30 @@
+@@ -634,6 +652,36 @@
          })
      }
  
++    fn apply_toplevel_identity(&self) {
++        if let Some(toplevel) = self.surface_state.toplevel() {
++            toplevel.set_title(self.title.clone());
++            if let Some(app_id) = &self.app_id {
++                toplevel.set_app_id(app_id.clone());
++            }
++        }
++    }
++
 +    fn restore_mapping(&mut self) {
 +        let Some(toplevel) = self.surface_state.toplevel() else {
 +            return;
 +        };
 +        // Unmapping resets all xdg_toplevel attributes. Reapply them before
 +        // the initial empty commit, after the unmap barrier drained old events.
-+        toplevel.set_title(self.title.clone());
-+        if let Some(app_id) = &self.app_id {
-+            toplevel.set_app_id(app_id.clone());
-+        }
++        self.apply_toplevel_identity();
 +        if let Some(size) = self.min_size {
 +            toplevel.set_min_size(f32::from(size.width) as i32, f32::from(size.height) as i32);
 +        }
@@ -135,7 +141,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
      pub fn is_transparent(&self) -> bool {
          self.decorations == WindowDecorations::Client
              || self.background_appearance != WindowBackgroundAppearance::Opaque
-@@ -987,10 +1029,28 @@
+@@ -987,10 +1035,32 @@
          self.frame_loop.set(FrameLoop::Parked);
      }
  
@@ -151,6 +157,10 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
 +                *barrier = None;
 +                if *restore_requested {
 +                    state.restore_mapping();
++                } else {
++                    // Mutter replaces its window on unmap. Restore its identity
++                    // after that reset without committing or remapping the surface.
++                    state.apply_toplevel_identity();
 +                }
 +            }
 +            return;
@@ -166,7 +176,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
          if self.frame_loop.get() == FrameLoop::AwaitingCallback {
              self.frame();
          }
-@@ -1060,6 +1120,13 @@
+@@ -1060,6 +1130,13 @@
  
      pub fn handle_xdg_surface_event(&self, event: xdg_surface::Event) {
          if let xdg_surface::Event::Configure { serial } = event {
@@ -180,7 +190,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
              {
                  let mut state = self.state.borrow_mut();
                  if let Some(window_controls) = state.in_progress_window_controls.take() {
-@@ -1106,8 +1173,9 @@
+@@ -1106,8 +1183,9 @@
                      }
                  }
              }
@@ -191,7 +201,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
  
              let window_geometry = inset_by_tiling(
                  state.bounds.map_origin(|_| px(0.0)),
-@@ -1230,7 +1298,9 @@
+@@ -1230,7 +1308,9 @@
  
                  let mut state = self.state.borrow_mut();
                  state.visibility.store(
@@ -202,7 +212,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
                          0
                      } else if suspended {
                          2
-@@ -1793,6 +1863,19 @@
+@@ -1793,6 +1873,19 @@
      }
  
      fn activate(&self) {
@@ -222,7 +232,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
          // Try to request an activation token. Even though the activation is likely going to be rejected,
          // KWin and Mutter can use the app_id to visually indicate we're requesting attention.
          let state = self.borrow();
-@@ -1809,6 +1892,40 @@
+@@ -1809,6 +1902,40 @@
          }
      }
  
@@ -263,7 +273,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
      fn request_attention(&self) {}
  
      fn is_active(&self) -> bool {
-@@ -1826,7 +1943,9 @@
+@@ -1826,7 +1953,9 @@
      }
  
      fn set_title(&mut self, title: &str) {
@@ -274,7 +284,7 @@ diff --git a/crates/gpui_linux/src/linux/wayland/window.rs b/crates/gpui_linux/s
              toplevel.set_title(title.to_string());
          }
      }
-@@ -1940,6 +2059,10 @@
+@@ -1940,6 +2069,10 @@
  
      fn draw(&self, scene: &Scene) {
          let mut state = self.borrow_mut();

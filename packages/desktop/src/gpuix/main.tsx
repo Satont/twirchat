@@ -10,7 +10,10 @@
 import './native-bootstrap'
 import { z } from 'zod'
 
+import { APP_ENV } from '../build-info'
+import { getDbPath, setRuntimeConfig } from '../runtime-config'
 import { assertGuiQaEnvironment } from '../services/gui-qa'
+import { establishLinuxSingleInstance } from '../services/linux-single-instance'
 import { getDesktopBackend } from './backend/server'
 import { App } from './components/App'
 import { ChatWindow } from './components/ChatWindow'
@@ -46,6 +49,9 @@ if (process.env.TWIRCHAT_GUI_QA === '1') assertGuiQaEnvironment()
 else if (process.platform === 'linux' && process.env.GPUIX_BACKGROUND === '1') {
   throw new Error('Background GUI tests require the isolated qa:gui launcher.')
 }
+setRuntimeConfig({ nodeEnv: APP_ENV })
+const instance = await establishLinuxSingleInstance(getDbPath())
+if (instance.kind === 'forwarded') process.exit(0)
 const backend = getDesktopBackend()
 initCosmeticCaches(backend.api)
 void Promise.all([
@@ -122,7 +128,7 @@ if (!g.__twirchatWatchedSubscriptionsWired) {
   wireActiveWatchedChannels(backend)
 }
 
-mountDesktopWindows(
+const windows = mountDesktopWindows(
   backend,
   (descriptor) => (descriptor.kind === 'main' ? <App /> : <ChatWindow descriptor={descriptor} />),
   () => {
@@ -130,9 +136,12 @@ mountDesktopWindows(
       backend.dispose?.()
       process.exit(0)
     }
-    void (backend.shutdownPlugins?.() ?? Promise.resolve()).then(exit, exit)
+    const stopActivation = instance.kind === 'primary' ? instance.stopActivation() : undefined
+    void Promise.allSettled([stopActivation, backend.shutdownPlugins?.()]).then(exit, exit)
   },
 )
+
+if (instance.kind === 'primary') instance.bindActivation(() => windows.activate())
 
 // Dev-only debug actions driven through POST :55824/dev/hook by default.
 const debugPayloadSchema = z.object({

@@ -124,9 +124,61 @@ describe.skipIf(process.platform !== 'linux')('Linux installer', () => {
       expect(await Bun.file(join(home, '.local/share/dev.twirchat.app/icon.png')).text()).toBe(
         'fixture icon',
       )
+      const desktop = await Bun.file(
+        join(home, '.local/share/applications/dev.twirchat.app.desktop'),
+      ).text()
+      expect(desktop).toContain(`Exec="${app}" %u`)
+      expect(desktop).toContain('StartupWMClass=dev.twirchat.app\n')
       expect(
-        await Bun.file(join(home, '.local/share/applications/twirchat.desktop')).text(),
-      ).toContain(`Exec="${app}" %u`)
+        await Bun.file(join(home, '.local/share/applications/twirchat.desktop')).exists(),
+      ).toBe(false)
+    }))
+
+  test('migrates the previous installer desktop entry', () =>
+    withFixture(async ({ home, run }) => {
+      const app = join(home, '.local/share/dev.twirchat.app/TwirChat.AppImage')
+      const legacy = join(home, '.local/share/applications/twirchat.desktop')
+      await Bun.write(
+        legacy,
+        `[Desktop Entry]\nVersion=1.0\nType=Application\nName=TwirChat\nComment=Multi-platform chat manager for streamers\nExec="${app}" %u\nIcon=twirchat\nTerminal=false\nStartupWMClass=TwirChat\nCategories=Network;InstantMessaging;\n`,
+      )
+      expect(await run()).toMatchObject({ code: 0, stderr: '' })
+      expect(await Bun.file(legacy).exists()).toBe(false)
+      expect(
+        await Bun.file(join(home, '.local/share/applications/dev.twirchat.app.desktop')).text(),
+      ).toContain('StartupWMClass=dev.twirchat.app\n')
+    }))
+
+  test.each(['Exec', 'Name', 'StartupWMClass'])(
+    'preserves a legacy-named desktop entry with a custom %s',
+    (customField) =>
+      withFixture(async ({ home, run }) => {
+        const app = join(home, '.local/share/dev.twirchat.app/TwirChat.AppImage')
+        const legacy = join(home, '.local/share/applications/twirchat.desktop')
+        const fields = {
+          Exec: `"${app}" %u`,
+          Name: 'TwirChat',
+          StartupWMClass: 'TwirChat',
+        }
+        const contents = `[Desktop Entry]\n${Object.entries(fields)
+          .map(([key, value]) => `${key}=${key === customField ? 'custom' : value}`)
+          .join('\n')}\n`
+        await Bun.write(legacy, contents)
+        expect(await run()).toMatchObject({ code: 0, stderr: '' })
+        expect(await Bun.file(legacy).text()).toBe(contents)
+        expect(
+          await Bun.file(join(home, '.local/share/applications/dev.twirchat.app.desktop')).exists(),
+        ).toBe(true)
+      }),
+  )
+
+  test('preserves an unrelated legacy-named desktop file', () =>
+    withFixture(async ({ home, run }) => {
+      const legacy = join(home, '.local/share/applications/twirchat.desktop')
+      const contents = '[Desktop Entry]\nName=Other application\nExec=/opt/other\n'
+      await Bun.write(legacy, contents)
+      expect(await run()).toMatchObject({ code: 0, stderr: '' })
+      expect(await Bun.file(legacy).text()).toBe(contents)
     }))
 
   test('rejects a damaged download without replacing the existing installation', () =>
@@ -140,7 +192,7 @@ describe.skipIf(process.platform !== 'linux')('Linux installer', () => {
       expect(result.stdout).toContain('FAILED')
       expect(await Bun.file(app).text()).toBe('previous installation')
       expect(
-        await Bun.file(join(home, '.local/share/applications/twirchat.desktop')).exists(),
+        await Bun.file(join(home, '.local/share/applications/dev.twirchat.app.desktop')).exists(),
       ).toBe(false)
     }))
 

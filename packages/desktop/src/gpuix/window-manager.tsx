@@ -101,12 +101,14 @@ const currentUiRuntime: WindowUiRuntime = {
 
 /** Each window owns its React root, native editor, event route and lifetime. */
 export class DesktopWindowManager {
-  readonly runtimeVersion = 5
+  readonly runtimeVersion = 6
   private readonly mounted = new Map<string, MountedWindow>()
   private readonly session
   private readonly poller: ReturnType<typeof setInterval>
   private stopIdleGc?: () => void
   private factory: WindowContentFactory
+  private pendingActivation = false
+  private ready = false
   private started = false
   private opening = 0
   private quitting = false
@@ -170,6 +172,7 @@ export class DesktopWindowManager {
       save: (session) =>
         backend.api.setUiState({ key: WINDOW_SESSION_KEY, value: JSON.stringify(session) }),
       onEmpty: () => {
+        this.quitting = true
         this.stopWindowsNotifications()
         clearInterval(this.poller)
         this.stopIdleGc?.()
@@ -212,6 +215,8 @@ export class DesktopWindowManager {
     }
     this.session.restore(saved)
     await this.open({ id: 'main', kind: 'main', title: 'TwirChat', bounds: saved.mainBounds })
+    this.ready = true
+    if (this.pendingActivation) this.activate()
     // Serial creation bounds GPU allocations and avoids simultaneous AppKit startup.
     for (const descriptor of saved.windows) {
       try {
@@ -222,6 +227,22 @@ export class DesktopWindowManager {
     }
     await this.session.persist().catch(() => {})
     if (this.mounted.size) this.stopIdleGc = collectGarbageWhenIdle()
+  }
+
+  activate(): boolean {
+    if (this.quitting) return false
+    if (!this.ready) {
+      this.pendingActivation = true
+      return true
+    }
+    this.pendingActivation = false
+    const main = this.mounted.get('main')
+    const target = main?.renderer.isWindowOpen()
+      ? main
+      : [...this.mounted.values()].find((window) => window.renderer.isWindowOpen())
+    if (!target) return false
+    target.renderer.activateWindow()
+    return true
   }
 
   remount(factory: WindowContentFactory, runtime: WindowUiRuntime = this.uiRuntime): void {
@@ -487,7 +508,7 @@ export function mountDesktopWindows(
 ): DesktopWindowManager {
   const global = globalThis
   if (global.__twirchatWindows) {
-    if (global.__twirchatWindows.runtimeVersion !== 5)
+    if (global.__twirchatWindows.runtimeVersion !== 6)
       throw new Error('Restart TwirChat once to apply the hot-reload runtime upgrade.')
     global.__twirchatWindows.remount(factory, currentUiRuntime)
   } else {
