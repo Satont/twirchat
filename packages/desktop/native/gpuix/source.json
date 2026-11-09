@@ -194,7 +194,7 @@
     {
       "path": "patches/gpuix-linux-window-resize.patch",
       "root": "gpuix",
-      "sha256": "c14b2bf6911d22e5379a9837d290a70f187abe0aad0ea32fb909f25215a016a0"
+      "sha256": "2c35f567d7110998a983bccc1b3b64ca53f6a29249295db94e9be7f615798824"
     }
   ],
   "cosmicText": {

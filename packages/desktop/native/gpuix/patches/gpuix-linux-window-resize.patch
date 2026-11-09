@@ -12,7 +12,7 @@ index 221e9e3..3284c51 100644
  mod motion;
  mod plain_text_cache;
 diff --git a/packages/native/src/linux_titlebar.rs b/packages/native/src/linux_titlebar.rs
-index 974bf7f..3ce4437 100644
+index 974bf7f..a026e84 100644
 --- a/packages/native/src/linux_titlebar.rs
 +++ b/packages/native/src/linux_titlebar.rs
 @@ -1,12 +1,12 @@
@@ -28,11 +28,27 @@ index 974bf7f..3ce4437 100644
  };
  
 -use crate::theme::grey;
-+use crate::{linux_window_frame::with_resize_handles, theme::grey};
++use crate::{linux_window_frame::ResizeHandles, theme::grey};
  
  const TITLEBAR_HEIGHT: Pixels = px(44.);
  
-@@ -57,18 +57,20 @@ impl ClientTitlebar {
+@@ -44,31 +44,35 @@ pub(crate) struct ClientTitlebar {
+     title: SharedString,
+     state: TitlebarState,
+     version: u64,
++    resize_handles: Entity<ResizeHandles>,
+ }
+ 
+ impl ClientTitlebar {
+-    pub(crate) fn new(can_close: CloseRequest, title: &str, window: &Window, cx: &App) -> Self {
++    pub(crate) fn new(can_close: CloseRequest, title: &str, window: &Window, cx: &mut App) -> Self {
+         Self {
+             can_close,
+             drag_pending: Rc::new(Cell::new(false)),
+             title: SharedString::new(title),
+             state: TitlebarState::read(window, cx),
+             version: 0,
++            resize_handles: cx.new(|_| ResizeHandles::default()),
          }
      }
  
@@ -61,7 +77,7 @@ index 974bf7f..3ce4437 100644
  
          let state = TitlebarState::read(window, cx);
          let previous = view.read(cx);
-@@ -87,16 +89,25 @@ impl ClientTitlebar {
+@@ -87,16 +91,33 @@ impl ClientTitlebar {
              previous.version
          };
  
@@ -74,7 +90,6 @@ index 974bf7f..3ce4437 100644
 -                        .flex_none(),
 -                )
 -                .cache_version(version),
--        )
 +        let titlebar = view
 +            .clone()
 +            .cached(
@@ -93,11 +108,19 @@ index 974bf7f..3ce4437 100644
 +        if state.maximized || !window.is_resizable() || tiling == Tiling::tiled() {
 +            return frame.into_any_element();
 +        }
-+        with_resize_handles(frame, tiling, titlebar_colors(state.appearance).0).into_any_element()
++        let resize_handles = view.read(cx).resize_handles.clone();
++        ResizeHandles::frame(
++            resize_handles,
++            frame,
++            tiling,
++            titlebar_colors(state.appearance).0,
++            cx,
+         )
++        .into_any_element()
      }
  }
  
-@@ -110,15 +121,7 @@ impl Render for ClientTitlebar {
+@@ -110,15 +131,7 @@ impl Render for ClientTitlebar {
              window_menu,
              maximized,
          } = self.state;
@@ -114,7 +137,7 @@ index 974bf7f..3ce4437 100644
          let buttons = |side: [Option<WindowButton>; gpui::MAX_BUTTONS_PER_SIDE]| {
              div().flex().flex_none().gap(px(6.)).children(
                  side.into_iter()
-@@ -194,6 +197,13 @@ impl Render for ClientTitlebar {
+@@ -194,6 +207,13 @@ impl Render for ClientTitlebar {
      }
  }
  
@@ -130,30 +153,68 @@ index 974bf7f..3ce4437 100644
      maximized: bool,
 diff --git a/packages/native/src/linux_window_frame.rs b/packages/native/src/linux_window_frame.rs
 new file mode 100644
-index 0000000..df5e8a0
+index 0000000..7edc6c8
 --- /dev/null
 +++ b/packages/native/src/linux_window_frame.rs
-@@ -0,0 +1,117 @@
+@@ -0,0 +1,168 @@
 +use gpui::{
-+    canvas, div, point, prelude::*, px, size, Bounds, CursorStyle, Decorations, DispatchPhase, Div,
-+    HitboxBehavior, Hsla, MouseButton, MouseDownEvent, Pixels, ResizeEdge, Tiling,
++    canvas, fill, point, prelude::*, px, size, App, Bounds, Context, CursorStyle, Decorations,
++    DispatchPhase, Div, Entity, HitboxBehavior, Hsla, MouseButton, MouseDownEvent, Pixels, Render,
++    ResizeEdge, StyleRefinement, Tiling, Window,
 +};
 +
 +const RESIZE_GUTTER: Pixels = px(6.);
 +
-+pub(crate) fn with_resize_handles(content: Div, tiling: Tiling, background: Hsla) -> Div {
-+    div()
-+        .relative()
-+        .size_full()
-+        .bg(background)
-+        .child(
-+            content
-+                .pt(gutter(tiling.top))
-+                .pr(gutter(tiling.right))
-+                .pb(gutter(tiling.bottom))
-+                .pl(gutter(tiling.left)),
-+        )
-+        .child(resize_handles(tiling))
++#[derive(Default)]
++pub(crate) struct ResizeHandles {
++    tiling: Tiling,
++    background: Hsla,
++    version: u64,
++}
++
++impl ResizeHandles {
++    pub(crate) fn frame(
++        view: Entity<Self>,
++        frame: Div,
++        tiling: Tiling,
++        background: Hsla,
++        cx: &mut App,
++    ) -> Div {
++        let previous = view.read(cx);
++        let version = if previous.tiling == tiling && previous.background == background {
++            previous.version
++        } else {
++            view.update(cx, |handles, _| {
++                handles.tiling = tiling;
++                handles.background = background;
++                handles.version = handles.version.wrapping_add(1);
++                handles.version
++            })
++        };
++
++        frame
++            .relative()
++            .pt(gutter(tiling.top))
++            .pr(gutter(tiling.right))
++            .pb(gutter(tiling.bottom))
++            .pl(gutter(tiling.left))
++            .child(
++                view.cached(
++                    StyleRefinement::default()
++                        .absolute()
++                        .top_0()
++                        .left_0()
++                        .size_full(),
++                )
++                .cache_version(version),
++            )
++    }
++}
++
++impl Render for ResizeHandles {
++    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
++        resize_handles(self.tiling, self.background)
++    }
 +}
 +
 +fn gutter(tiled: bool) -> Pixels {
@@ -164,7 +225,7 @@ index 0000000..df5e8a0
 +    }
 +}
 +
-+fn resize_handles(tiling: Tiling) -> impl IntoElement {
++fn resize_handles(tiling: Tiling, background: Hsla) -> impl IntoElement {
 +    use ResizeEdge::*;
 +
 +    canvas(
@@ -187,7 +248,19 @@ index 0000000..df5e8a0
 +                bounds.bottom() - bottom,
 +                bounds.bottom(),
 +            ];
-+            [
++            let rect = |left: usize, top: usize, right: usize, bottom: usize| {
++                Bounds::new(
++                    point(columns[left], rows[top]),
++                    size(columns[right] - columns[left], rows[bottom] - rows[top]),
++                )
++            };
++            let strips = [
++                rect(0, 0, 3, 1),
++                rect(0, 2, 3, 3),
++                rect(0, 1, 1, 2),
++                rect(2, 1, 3, 2),
++            ];
++            let handles = [
 +                (0, 0, TopLeft),
 +                (1, 0, Top),
 +                (2, 0, TopRight),
@@ -198,19 +271,20 @@ index 0000000..df5e8a0
 +                (0, 1, Left),
 +            ]
 +            .map(|(column, row, edge)| {
-+                let width = columns[column + 1] - columns[column];
-+                let height = rows[row + 1] - rows[row];
-+                (width > px(0.) && height > px(0.)).then(|| {
-+                    let bounds =
-+                        Bounds::new(point(columns[column], rows[row]), size(width, height));
++                let bounds = rect(column, row, column + 1, row + 1);
++                (!bounds.is_empty()).then(|| {
 +                    (
 +                        edge,
 +                        window.insert_hitbox(bounds, HitboxBehavior::BlockMouse),
 +                    )
 +                })
-+            })
++            });
++            (strips, handles)
 +        },
-+        move |_, handles, window, _| {
++        move |_, (strips, handles), window, _| {
++            for strip in strips.into_iter().filter(|strip| !strip.is_empty()) {
++                window.paint_quad(fill(strip, background));
++            }
 +            for (edge, hitbox) in handles.iter().flatten() {
 +                let cursor = match edge {
 +                    Top => CursorStyle::ResizeUp,
