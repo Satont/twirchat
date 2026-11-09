@@ -13,13 +13,19 @@ export default defineConfig({
   },
   plugins: [vue(), svgLoader({ defaultImport: 'component' })],
   resolve: {
-    alias: {
-      '@desktop': resolve(__dirname, 'src'),
-      '@twirchat/shared': resolve(__dirname, '../shared/index.ts'),
-      '@twirchat/shared/constants': resolve(__dirname, '../shared/constants.ts'),
-      '@twirchat/shared/protocol': resolve(__dirname, '../shared/protocol.ts'),
-      '@twirchat/shared/types': resolve(__dirname, '../shared/types.ts'),
-    },
+    alias: [
+      { find: '@desktop', replacement: resolve(__dirname, 'src') },
+      { find: /^@twirchat\/shared$/, replacement: resolve(__dirname, '../shared/index.ts') },
+      {
+        find: '@twirchat/shared/constants',
+        replacement: resolve(__dirname, '../shared/constants.ts'),
+      },
+      {
+        find: '@twirchat/shared/protocol',
+        replacement: resolve(__dirname, '../shared/protocol.ts'),
+      },
+      { find: '@twirchat/shared/types', replacement: resolve(__dirname, '../shared/types.ts') },
+    ],
   },
   root: 'src/views/overlay',
 })
