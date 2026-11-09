@@ -61,6 +61,8 @@ const singleWord = 'Ordinary'
 const mixed = ['Alpha ', 'βета ', '42', ' tail']
 const wrap = 'Wrapping preserves measured widths, punctuation, Привет and multiple visual lines.'
 const highlight = 'Привет 🌍'
+const copiedMessage = 'iHackFX: Ержан, вставай, пора вайбкодить)'
+const copiedReply = 'Linaryx: :'
 root.render(
   <div
     testId="fixture"
@@ -125,6 +127,25 @@ root.render(
         {42}
         {' tail'}
       </Text>
+    </div>
+    <div testId="copy-messages" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div
+        testId="copy-message"
+        style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap' }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'row' }}>
+          <Text style={{ color: '#e0e7ff' }}>iHackFX</Text>
+        </div>
+        <Text style={{ color: '#e0e7ff' }}>{': '}</Text>
+        <Text style={{ color: '#e0e7ff' }}>{'Ержан, '}</Text>
+        <Text style={{ color: '#e0e7ff' }}>{'вставай, '}</Text>
+        <Text style={{ color: '#e0e7ff' }}>{'пора '}</Text>
+        <Text style={{ color: '#e0e7ff' }}>вайбкодить)</Text>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap' }}>
+        <Text style={{ color: '#e0e7ff' }}>Linaryx</Text>
+        <Text style={{ color: '#e0e7ff' }}>{': :'}</Text>
+      </div>
     </div>
     <div style={{ userSelect: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
       <Text testId="forbidden" style={{ color: '#fda4af' }}>
@@ -248,7 +269,7 @@ try {
     )
     const screenshot = await captureGuiQaDisplay(`text-${size.width}`)
     const selected = await drag('selection')
-    assert.equal(selected?.replace(/\s+/gu, ' ').trim(), mixed.join('').trim())
+    assert.equal(selected, mixed.join(''))
     renderer.simulateKeystrokes('ctrl-c')
     await Bun.sleep(80)
     assert.equal(renderer.getSelectedText(), selected, 'Copy must preserve selection.')
@@ -257,6 +278,10 @@ try {
     renderer.focusElement(target.id)
     renderer.simulateKeystrokes('ctrl-a backspace ctrl-v')
     await until(() => pasted === selected, 'native copy/paste round trip')
+    const copiedMessageSelection = await drag('copy-message')
+    assert.equal(copiedMessageSelection, copiedMessage)
+    const copiedMessagesSelection = await drag('copy-messages')
+    assert.equal(copiedMessagesSelection, `${copiedMessage}\n${copiedReply}`)
     const forbidden = await drag('forbidden')
     assert.equal(forbidden, null, 'userSelect none must exclude text.')
     const island = await drag('island')
@@ -287,6 +312,8 @@ try {
       screenshot,
       selected,
       pasted,
+      copiedMessageSelection,
+      copiedMessagesSelection,
       forbidden,
       island,
       linkSelection,

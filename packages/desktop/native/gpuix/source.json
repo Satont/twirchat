@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.24",
+  "version": "0.11.0-twirchat.25",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -210,6 +210,11 @@
       "path": "patches/gpuix-shared-image-resources.patch",
       "root": "gpuix",
       "sha256": "bd771106060117fe4cc050d6543d2b12b4c1e02628cd5a041eadc2dd9d8b3b46"
+    },
+    {
+      "path": "patches/gpuix-selection-copy-groups.patch",
+      "root": "gpuix",
+      "sha256": "95f900cfa03fb14a160870fb3f2c4cf564cad8bb5e6253cdb4c6ae3d81148b27"
     }
   ],
   "cosmicText": {

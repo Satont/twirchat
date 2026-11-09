@@ -5,6 +5,11 @@ pins GPUIX and its GPUI submodule to full Git revisions and verifies the `cosmic
 source archive and each local patch by SHA-256. Build caches live outside the repository.
 No upstream commits, publishing, or downloaded native binaries are part of this build.
 
+Native version `0.11.0-twirchat.25` copies text in one horizontal flex container
+as one logical line, including separate author, mention and word hosts. Vertical
+containers still insert line breaks. Selection groups are part of the native
+plain-text and flow-cache identities, so cached paints preserve copy behavior.
+
 Native version `0.11.0-twirchat.23` lets users resize Linux client-decorated
 windows from free edges and corners. A six-pixel frame keeps resize targets
 outside the titlebar and chat controls. The compositor takes over the drag.
