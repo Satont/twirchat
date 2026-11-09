@@ -22,7 +22,20 @@ import { useWindowScope } from './window-scope'
 export const actionBindingsPreferences = persistentResource('preference:ui.actionBindings', () =>
   createPreferenceStore<HotkeyConfiguration>(
     'ui.actionBindings',
-    { bindings: [], legacyNavigation: true },
+    {
+      bindings: [
+        {
+          id: 'cancel-reply-default',
+          name: 'Cancel Reply',
+          enabled: true,
+          action: 'cancelReply',
+          category: 'splitInput',
+          keys: ['escape'],
+          arguments: [],
+        },
+      ],
+      legacyNavigation: true,
+    },
     validateHotkeyConfiguration,
   ),
 )
