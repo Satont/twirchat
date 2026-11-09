@@ -4,10 +4,10 @@ import { memo } from 'react'
 
 import { chunkGraphemes } from '../../views/shared/utils/display-text'
 import { donationAmount } from '../chat-timeline'
-import { withAlpha } from '../theme'
+import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { formatMessageTime, timestampSize } from './ChatMessage'
-import { Icon } from './ui/Icon'
+import { DONATION_BRAND_ACCENTS, DonationBrandMark } from './DonationBrandMark'
 import { Text } from './ui/Text'
 
 interface DonationChatRowProps {
@@ -34,7 +34,17 @@ export const DonationChatRow = memo(function DonationChatRow({
   const theme = useTheme()
   const fontFamily = useFont()
   const compact = chatTheme === 'compact'
-  const style = { fontSize, fontFamily, color: theme.text, lineHeight: Math.round(fontSize * 1.45) }
+  const amountColor = readableOn(DONATION_BRAND_ACCENTS[donation.provider], theme.surface)
+  const provider = DONATION_PROVIDER_LABELS[donation.provider]
+  const source = showTimestamp
+    ? `${provider} · ${formatMessageTime(new Date(donation.timestamp))}`
+    : provider
+  const style = {
+    fontSize,
+    fontFamily,
+    color: theme.text2,
+    lineHeight: Math.round(fontSize * 1.45),
+  }
   const words = donation.message.match(/\S+ ?/g) ?? []
   let position = 0
   const body = words.flatMap((word) =>
@@ -54,46 +64,52 @@ export const DonationChatRow = memo(function DonationChatRow({
       testId={`donation-${donation.provider}-${donation.id.toWellFormed()}`}
       style={{
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
+        alignItems: 'flex-start',
         width: '100%',
         minWidth: 0,
         paddingLeft: 12,
         paddingRight: 12,
-        paddingTop: compact ? 4 : 7,
-        paddingBottom: compact ? 4 : 7,
-        borderLeftWidth: 2,
-        borderColor: theme.accent.primary,
-        backgroundColor: withAlpha(theme.accent.primary, 0.09),
-        gap: 2,
+        paddingTop: compact ? 5 : 8,
+        paddingBottom: compact ? 5 : 8,
+        borderTopWidth: 1,
+        borderColor: theme.divider,
+        backgroundColor: theme.surface,
+        gap: 8,
       }}
     >
-      <div style={{ ...wrappingRow, columnGap: 6 }}>
-        {showTimestamp ? (
-          <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2 }}>
-            {formatMessageTime(new Date(donation.timestamp))}
-          </Text>
-        ) : null}
-        <Icon name="gift" size={Math.min(18, fontSize)} color={theme.accent.primary} />
-        <Text
+      <DonationBrandMark provider={donation.provider} size={compact ? 22 : 26} />
+      <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0, gap: 2 }}>
+        <div
           style={{
-            ...style,
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            fontWeight: 700,
+            ...wrappingRow,
+            justifyContent: 'space-between',
+            columnGap: 12,
+            rowGap: 2,
           }}
         >
-          {donation.username}
-        </Text>
-        <Text style={{ ...style, color: theme.accent.primary, fontWeight: 600 }}>
-          {`donated ${donationAmount(donation)}`}
-        </Text>
-        <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2 }}>
-          {DONATION_PROVIDER_LABELS[donation.provider]}
-        </Text>
+          <div style={{ ...wrappingRow, columnGap: 6, maxWidth: '100%' }}>
+            <Text
+              style={{
+                ...style,
+                color: theme.text,
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontWeight: 700,
+              }}
+            >
+              {donation.username}
+            </Text>
+            <Text style={{ ...style, color: amountColor, fontWeight: 650 }}>
+              {`donated ${donationAmount(donation)}`}
+            </Text>
+          </div>
+          <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2 }}>{source}</Text>
+        </div>
+        {body.length > 0 ? <div style={wrappingRow}>{body}</div> : null}
       </div>
-      {body.length > 0 ? <div style={wrappingRow}>{body}</div> : null}
     </div>
   )
 })

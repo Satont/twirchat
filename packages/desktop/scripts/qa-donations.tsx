@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 
-import type { DonationConnections, DonationProvider } from '@twirchat/shared/donations'
+import type {
+  DonationConnections,
+  DonationEvent,
+  DonationProvider,
+} from '@twirchat/shared/donations'
 
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 
@@ -12,11 +16,15 @@ const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { SettingsPanel } = await import('../src/gpuix/components/SettingsPanel')
 const { settingsStore, wireBackendToStores } = await import('../src/gpuix/state/app')
+const { darkTheme, lightTheme } = await import('../src/gpuix/theme')
+const { ThemeContext } = await import('../src/gpuix/theme-context')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 
 const width = process.argv.includes('--wide') ? 1280 : 650
+const theme = process.argv.includes('--light') ? lightTheme : darkTheme
+const captureSuffix = theme.isLight ? `${width}-light` : String(width)
 const events = createDesktopEvents()
 let connections: DonationConnections = {
   donationalerts: { status: 'disconnected' },
@@ -62,17 +70,19 @@ function mount(children) {
   root.render(
     <BackendContext.Provider value={backend}>
       <TooltipProvider>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#16161c',
-          }}
-        >
-          {children}
-        </div>
+        <ThemeContext.Provider value={theme}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              width: '100%',
+              height: '100%',
+              backgroundColor: theme.bg,
+            }}
+          >
+            {children}
+          </div>
+        </ThemeContext.Provider>
       </TooltipProvider>
     </BackendContext.Provider>,
   )
@@ -101,14 +111,15 @@ async function click(testId) {
   await Bun.sleep(100)
 }
 
-function donate(provider: DonationProvider, id: string, message: string) {
+function donate(
+  provider: DonationProvider,
+  id: string,
+  details: Pick<DonationEvent, 'username' | 'amount' | 'currency' | 'message'>,
+) {
   events.emit('donation_received', {
     id,
     provider,
-    username: 'Supporter',
-    amount: '250.50',
-    currency: 'RUB',
-    message,
+    ...details,
     timestamp: Date.now(),
   })
 }
@@ -118,6 +129,7 @@ try {
   await click('settings-search')
   renderer.simulateKeystrokes('d o n a t i o n s')
   await until(() => painted('MemeAlerts'), 'all three providers')
+  await captureGuiQaDisplay(`donations-settings-${captureSuffix}`)
   await click('donation-connect-donationalerts')
   await until(() => painted('Waiting for authorization'), 'OAuth wait state')
   await click('donation-disconnect-donationalerts')
@@ -129,30 +141,45 @@ try {
   await until(() => find('donation-disconnect-donatepay'), 'DonatePay connected')
   assert.ok(pasteReceived)
   assert.ok(!renderer.getAllText().join('').includes(clipboard), 'The API key must stay hidden')
-  await captureGuiQaDisplay(`donations-settings-${width}`)
 
   mount(<ChatView isMain />)
   await until(() => find('chat-pause-button'), 'My channels with no signed-in accounts')
-  donate('donationalerts', 'first', 'DA_QA')
-  await until(() => painted('DA_QA'), 'first donation')
+  donate('donationalerts', 'first', {
+    username: 'Luna',
+    amount: '250.50',
+    currency: 'RUB',
+    message: 'That comeback was unreal. Great stream!',
+  })
+  await until(() => painted('Luna'), 'first donation')
   await click('chat-pause-button')
-  donate('donatepay', 'second', 'DP_QA')
-  donate('memealerts', 'third', 'MA_QA')
-  donate('memealerts', 'third', 'DUPLICATE_QA')
+  donate('donatepay', 'second', {
+    username: 'TeaBreak',
+    amount: '500',
+    currency: 'RUB',
+    message: 'For the next co-op night.',
+  })
+  const memeDonation = {
+    username: 'PixelCat',
+    amount: '5',
+    currency: 'coins',
+    message: 'Maximum meme power unlocked.',
+  }
+  donate('memealerts', 'third', memeDonation)
+  donate('memealerts', 'third', { ...memeDonation, message: 'DUPLICATE_QA' })
   await until(() => painted('2 new'), 'two distinct donations while paused')
-  assert.ok(!painted('DP_QA') && !painted('MA_QA'))
+  assert.ok(!painted('TeaBreak') && !painted('PixelCat'))
   await click('chat-pause-button')
-  await until(() => painted('DP_QA') && painted('MA_QA'), 'all donations on resume')
+  await until(() => painted('TeaBreak') && painted('PixelCat'), 'all donations on resume')
   assert.ok(painted('donated 250.50 RUB') && !painted('DUPLICATE_QA'))
-  await captureGuiQaDisplay(`donations-chat-${width}`)
+  await captureGuiQaDisplay(`donations-chat-${captureSuffix}`)
   await click('chat-mentions-button')
-  await until(() => !painted('MA_QA'), 'mentions filter excludes donations')
+  await until(() => !painted('PixelCat'), 'mentions filter excludes donations')
   await click('chat-mentions-button')
-  await until(() => painted('MA_QA'), 'clearing filter restores donations')
+  await until(() => painted('PixelCat'), 'clearing filter restores donations')
   await click('chat-search-button')
   await click('chat-search')
   renderer.simulateKeystrokes('m a')
-  await until(() => painted('MA_QA') && !painted('DP_QA'), 'search matches donation text')
+  await until(() => painted('PixelCat') && !painted('TeaBreak'), 'search matches donation text')
 
   mount(
     <ChatView
@@ -173,7 +200,7 @@ try {
   )
   console.log(`Native donations settings and chat QA passed at ${width}px.`)
 } catch (error) {
-  await captureGuiQaDisplay(`donations-failure-${width}`).catch(() => {})
+  await captureGuiQaDisplay(`donations-failure-${captureSuffix}`).catch(() => {})
   console.error(error)
   process.exitCode = 1
 } finally {

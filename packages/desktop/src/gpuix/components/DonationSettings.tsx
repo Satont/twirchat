@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useTheme } from '../theme-context'
+import { DonationBrandMark } from './DonationBrandMark'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton } from './ui/Form'
 import { Text } from './ui/Text'
@@ -37,6 +38,14 @@ function DonationProviderSettings({
   const hasConnection = status !== 'disconnected'
   const pending = status === 'authorizing' || status === 'connecting'
   const showConnect = status === 'disconnected' || status === 'error'
+  const statusColor = {
+    disconnected: theme.text2,
+    authorizing: theme.warningText,
+    connecting: theme.warningText,
+    connected: theme.successText,
+    error: theme.dangerText,
+  }[status]
+  const error = actionError || (connection.status === 'error' ? connection.message : '')
 
   async function changeConnection(connect: boolean) {
     setBusy(true)
@@ -64,61 +73,116 @@ function DonationProviderSettings({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 7,
-        paddingTop: 12,
+        gap: 8,
+        paddingTop: 14,
+        paddingBottom: 14,
         borderTopWidth: 1,
         borderColor: theme.border,
       }}
     >
-      <Text style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>
-        {DONATION_PROVIDER_LABELS[provider]}
-      </Text>
-      <Text
-        testId={`donation-status-${provider}`}
-        style={{ fontSize: 12, color: status === 'connected' ? theme.successText : theme.text2 }}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+          minWidth: 0,
+        }}
       >
-        {statusLabels[status]}
-      </Text>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            flexGrow: 1,
+            flexBasis: 164,
+            gap: 12,
+            minWidth: 0,
+          }}
+        >
+          <DonationBrandMark provider={provider} size={42} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+            <Text style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
+              {DONATION_PROVIDER_LABELS[provider]}
+            </Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>
+              {provider === 'donatepay' ? 'API key' : 'Browser sign-in'}
+            </Text>
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 8,
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingRight: 4,
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                flexShrink: 0,
+                backgroundColor: statusColor,
+              }}
+            />
+            <Text
+              testId={`donation-status-${provider}`}
+              style={{ fontSize: 12, color: statusColor, minWidth: 0 }}
+            >
+              {statusLabels[status]}
+            </Text>
+          </div>
+          {showConnect ? (
+            <ActionButton
+              primary
+              disabled={busy}
+              testId={`donation-connect-${provider}`}
+              onClick={() => runUiTask(changeConnection(true))}
+            >
+              {provider === 'donatepay' ? 'Connect with API key' : 'Connect in browser'}
+            </ActionButton>
+          ) : null}
+          {provider === 'donatepay' && showConnect ? (
+            <ActionButton
+              onClick={() =>
+                runUiTask(api.openExternalUrl({ url: 'https://donatepay.ru/page/api' }))
+              }
+            >
+              Get API key
+            </ActionButton>
+          ) : null}
+          {hasConnection ? (
+            <ActionButton
+              disabled={busy}
+              testId={`donation-disconnect-${provider}`}
+              onClick={() => runUiTask(changeConnection(false))}
+            >
+              {pending ? 'Cancel' : 'Disconnect'}
+            </ActionButton>
+          ) : null}
+        </div>
+      </div>
       {provider === 'donatepay' && showConnect ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>
           Copy your API key from DonatePay. TwirChat saves it encrypted.
         </Text>
       ) : null}
-      {actionError || connection.status === 'error' ? (
-        <Text style={{ fontSize: 12, color: theme.dangerText }}>
-          {actionError || (connection.status === 'error' ? connection.message : '')}
-        </Text>
-      ) : null}
-      <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {showConnect ? (
-          <ActionButton
-            primary
-            disabled={busy}
-            testId={`donation-connect-${provider}`}
-            onClick={() => runUiTask(changeConnection(true))}
-          >
-            {provider === 'donatepay'
-              ? 'Connect with API key from clipboard'
-              : 'Connect in browser'}
-          </ActionButton>
-        ) : null}
-        {provider === 'donatepay' && showConnect ? (
-          <ActionButton
-            onClick={() => runUiTask(api.openExternalUrl({ url: 'https://donatepay.ru/page/api' }))}
-          >
-            Open DonatePay API page
-          </ActionButton>
-        ) : null}
-        {hasConnection ? (
-          <ActionButton
-            disabled={busy}
-            testId={`donation-disconnect-${provider}`}
-            onClick={() => runUiTask(changeConnection(false))}
-          >
-            {pending ? 'Cancel' : 'Disconnect'}
-          </ActionButton>
-        ) : null}
-      </div>
+      {error ? <Text style={{ fontSize: 12, color: theme.dangerText }}>{error}</Text> : null}
     </div>
   )
 }
@@ -157,13 +221,15 @@ export function DonationSettings() {
         New donations appear as events in My channels while TwirChat is open.
       </Text>
       {connections ? (
-        DONATION_PROVIDERS.map((provider) => (
-          <DonationProviderSettings
-            key={provider}
-            provider={provider}
-            connection={connections[provider]}
-          />
-        ))
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {DONATION_PROVIDERS.map((provider) => (
+            <DonationProviderSettings
+              key={provider}
+              provider={provider}
+              connection={connections[provider]}
+            />
+          ))}
+        </div>
       ) : !loadError ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>Loading connections…</Text>
       ) : null}
