@@ -87,7 +87,13 @@ function makeLocal(s: AppSettings): EditableSettings {
 /** Sections that persist through the shared app-settings document. */
 type AppSettingsSectionId = Extract<
   SettingsSectionId,
-  'appearance' | 'updates' | 'self-ping' | 'overlay' | 'shortcuts' | 'twir-integration'
+  | 'appearance'
+  | 'updates'
+  | 'self-ping'
+  | 'overlay'
+  | 'shortcuts'
+  | 'twir-integration'
+  | 'moderation'
 >
 
 const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
@@ -97,6 +103,7 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'overlay',
   'shortcuts',
   'twir-integration',
+  'moderation',
 ]
 
 function appSectionFields(
@@ -121,6 +128,8 @@ function appSectionFields(
       return { hotkeys: { ...source.hotkeys } }
     case 'twir-integration':
       return { twirIntegrationEnabled: source.twirIntegrationEnabled }
+    case 'moderation':
+      return { showModerationRail: source.showModerationRail }
     default:
       return {}
   }
@@ -897,6 +906,21 @@ export function SettingsPanel() {
                     <RetainedSettingsEditor component={TranslationSettings} />
                   </SettingsSection>
                   <SettingsSection id="moderation" title="Moderation">
+                    <SettingsRow
+                      first
+                      label="Show chat moderation slider"
+                      hint="Drag from the left edge of a message to delete it, time out its author or ban them"
+                    >
+                      <Switch
+                        testId="settings-show-moderation-rail"
+                        checked={local.showModerationRail !== false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.showModerationRail = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
                     <RetainedSettingsEditor component={ModerationSettings} />
                   </SettingsSection>
 

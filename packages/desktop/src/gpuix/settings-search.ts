@@ -221,7 +221,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     title: 'Moderation',
     saveMode: 'section',
     keywords:
-      'user card moderation eight timeout buttons label seconds durations quick reasons one per line default reason Twitch Kick 1 1209600 60 модерация карточка таймаут длительность секунды кнопки причины причина',
+      'show chat moderation slider drag user card eight timeout buttons label seconds durations quick reasons one per line default reason Twitch Kick 1 1209600 60 чат модерация слайдер ползунок перетаскивание карточка таймаут длительность секунды кнопки причины причина',
   },
   {
     id: 'commands',
