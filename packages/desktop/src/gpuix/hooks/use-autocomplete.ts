@@ -225,7 +225,6 @@ export function useAutocomplete(params: {
         insertText: label,
         description: sanitizeDisplayText(command.description ?? ''),
       })
-      if (matches.length === 15) break
     }
     return matches
   }, [twirCommands, twirQuery])
@@ -333,8 +332,7 @@ export function useAutocomplete(params: {
           })
         }
       }
-      if (!query) return commands.slice(0, 15)
-      return fuzzyFilter(commands, query).slice(0, 15)
+      return fuzzyFilter(commands, query)
     }
     if (!query) return []
     if (mode === 'mention') {

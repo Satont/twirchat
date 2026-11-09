@@ -13,6 +13,7 @@ const CACHE_CAPACITY = 128
 const CACHE_TTL_MS = 5 * 60_000
 const RETRY_MS = 30_000
 const REQUEST_TIMEOUT_MS = 5_000
+const COMMAND_NAME = /^[^\s\p{Cc}]+(?: [^\s\p{Cc}]+)*$/u
 
 const channelSchema = z.object({ channel_id: z.uuid() })
 const commandSchema = z.object({
@@ -84,7 +85,7 @@ export function createTwirCommandsClient({
     if (!commands.ok) throw new Error(`Twir command lookup: HTTP ${commands.status}.`)
     return commandsSchema
       .parse(await commands.json())
-      .filter(({ name }) => name.length > 0 && name.isWellFormed() && !/\s/u.test(name))
+      .filter(({ name }) => name.isWellFormed() && COMMAND_NAME.test(name))
   }
 
   return (
