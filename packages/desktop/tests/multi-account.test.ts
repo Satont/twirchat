@@ -9,6 +9,7 @@ import { createYouTubeGrpcSession } from '@twirchat/shared/youtube'
 import { z } from 'zod'
 
 import { refreshKickToken } from '../src/auth/kick'
+import { refreshTwitchToken } from '../src/auth/twitch'
 import { twitchActivitiesRequest } from '../src/gpuix/backend/api'
 import { KickAdapter, type KickSocket } from '../src/platforms/kick/adapter'
 import { kickRetryClock } from '../src/platforms/kick/retry'
@@ -20,6 +21,7 @@ import { getDb, initDb } from '../src/store/db'
 import {
   createAccountTwitchWebSessionStore,
   createTwitchWebSessionStore,
+  TwitchWebSessionStore,
 } from '../src/store/twitch-web-session-store'
 import { WatchedChannelStore } from '../src/store/watched-channels-store'
 import { literal, required } from './fixture-values'
@@ -297,6 +299,61 @@ describe('account-scoped Twitch web sessions', () => {
     AccountStore.setActive('twitch', second.id)
     delayed.resolve(Response.json({ privateBalance: 123 }))
     await expect(pending).rejects.toThrow('account changed')
+  })
+
+  test('EventSub uses the chosen account without sending the default web session', async () => {
+    save('twitch', '1')
+    const chosen = save('twitch', '2', false, 1)
+    await TwitchWebSessionStore.set({
+      token: 'secret',
+      userId: '1',
+      username: 'user1',
+      clientId: 'client',
+    })
+    const delayedRefresh = gate<Response>()
+    let refreshCount = 0
+    const requests: unknown[] = []
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const body: unknown = JSON.parse(z.string().parse(init?.body))
+        const url = input instanceof Request ? input.url : input.toString()
+        if (url.endsWith('/api/auth/twitch/refresh')) {
+          refreshCount++
+          expect(body).toEqual({ refreshToken: 'refresh-2' })
+          return delayedRefresh.promise
+        }
+        requests.push(body)
+        return Response.json({ success: true })
+      },
+      { preconnect: fetch.preconnect },
+    )
+
+    const pending = Promise.all([
+      twitchActivitiesRequest(
+        'subscribe',
+        { sessionId: 'session', channelSlug: 'channel' },
+        z.object({ success: z.boolean() }),
+        chosen.id,
+      ),
+      refreshTwitchToken(chosen.id),
+    ])
+    expect(refreshCount).toBe(1)
+    delayedRefresh.resolve(
+      Response.json({ accessToken: 'fresh', refreshToken: 'rotated', expiresIn: 3600 }),
+    )
+    await expect(pending).resolves.toEqual([{ success: true }, 'fresh'])
+    expect(requests).toEqual([
+      {
+        operation: 'subscribe',
+        sessionId: 'session',
+        channelSlug: 'channel',
+        accessToken: 'fresh',
+        platformUserId: '2',
+        scopes: [],
+      },
+    ])
+    expect(AccountStore.getTokens(chosen.id)?.refreshToken).toBe('rotated')
+    expect(AccountStore.getTokens('twitch:1')?.accessToken).toBe('token-1')
   })
 })
 

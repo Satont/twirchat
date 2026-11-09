@@ -4,7 +4,7 @@ import { DEV_SERVER_PORT } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
-import type { Platform, PlatformStatusInfo } from '@twirchat/shared/types'
+import type { NormalizedChatMessage, Platform, PlatformStatusInfo } from '@twirchat/shared/types'
 /**
  * GPUIX backend bridge — process bootstrap.
  *
@@ -45,12 +45,14 @@ import {
   validatePlayerSettings,
   spawnChannelPlayer,
 } from '../../services/channel-actions'
+import { channelAccount } from '../../services/chat-accounts'
 import { normalizedChatMessageSchema } from '../../services/persisted-schemas'
 import { createDesktopProviderRuntime } from '../../services/provider-runtime'
 import { buildSevenTvSystemMessage } from '../../services/seventv-system-message'
 import { createStreamerModeService } from '../../services/streamer-mode'
 import { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchEventSubClient } from '../../services/twitch-eventsub'
+import { createTwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
 import { sevenTVService } from '../../seventv'
 import { AccountStore, ChannelStore, SettingsStore } from '../../store'
 import { getClientSecret } from '../../store/client-secret'
@@ -80,6 +82,8 @@ import { createTwitchHistoryRuntime } from './twitch-history'
 import { createUpdater } from './updater'
 
 const log = logger('gpuix-backend')
+const isHomeTwitchChannel = (channel: string) =>
+  AccountStore.findByPlatform('twitch')?.username.toLowerCase() === channel
 
 export interface DesktopBackend {
   api: DesktopApi
@@ -159,46 +163,83 @@ function boot(): DesktopBackend {
     createChatAccountSender(twitchSenders),
   )
   let twitchEventSubConnected = false
-  let twitchActivityRefresh: TwitchActivityRefreshClient | undefined
-  const twitchEventSub = new TwitchEventSubClient({
-    hasAccount: () => !!AccountStore.findByPlatform('twitch'),
-    subscribe: (sessionId, channelSlug) =>
-      twitchActivitiesRequest(
-        'subscribe',
-        { sessionId, channelSlug },
-        z.object({
-          subscriptions: z.array(twitchEventSubscriptionSchema),
-          errors: z.array(z.string()),
-        }),
-      ),
-    unsubscribe: async (ids) => {
-      await twitchActivitiesRequest('unsubscribe', { ids }, z.object({ success: z.boolean() }))
-    },
-    activity: (event) => {
-      if (event.eventType === 'stream.online' || event.eventType === 'stream.offline')
-        twitchActivityRefresh?.setChannelOnline(
-          event.channelId,
-          event.eventType === 'stream.online',
-        )
-      events.emit('twitch_activity', event)
-    },
-    autoMod: (event) => events.emit('twitch_automod', event),
-    moderationNotice: (message) => {
-      if (AccountStore.findByPlatform('twitch')?.username.toLowerCase() === message.channelId)
-        events.emit('twitch_chat_notice', { message })
+  const emitTwitchNotice = (
+    message: NormalizedChatMessage,
+    destination: { home: boolean; watched: boolean },
+  ) => {
+    if (destination.home) events.emit('twitch_chat_notice', { message })
+    if (destination.watched) {
       const watchedChannelId = watchedChannelManager.findActiveChannelId(
         'twitch',
         message.channelId,
       )
       if (watchedChannelId) events.emit('twitch_chat_notice', { message, watchedChannelId })
-    },
-    whisper: (event) => events.emit('twitch_whisper', event),
-    status: (status) => {
-      twitchEventSubConnected = status.status === 'connected'
-      events.emit('twitch_eventsub_status', status)
+    }
+  }
+  const twitchEventSub = createTwitchEventSubAccounts({
+    activeAccount: () => AccountStore.findByPlatform('twitch'),
+    channelAccount: (channelSlug) => channelAccount('twitch', channelSlug),
+    clearAutoMod: (channelSlug) => events.emit('twitch_automod', { type: 'clear', channelSlug }),
+    createClient(account, primary): TwitchEventSubClient {
+      const ownsChannel = (channel: string) => twitchEventSub.ownsChannel(account.id, channel)
+      return new TwitchEventSubClient({
+        hasAccount: () => !!AccountStore.findById(account.id),
+        senderUserId: account.platformUserId,
+        receiveWhispers: primary,
+        subscribe: (sessionId, channelSlug) =>
+          twitchActivitiesRequest(
+            'subscribe',
+            { sessionId, channelSlug },
+            z.object({
+              subscriptions: z.array(twitchEventSubscriptionSchema),
+              errors: z.array(z.string()),
+            }),
+            account.id,
+          ),
+        unsubscribe: async (ids) => {
+          await twitchActivitiesRequest(
+            'unsubscribe',
+            { ids },
+            z.object({ success: z.boolean() }),
+            account.id,
+          )
+        },
+        activity: (event) => {
+          if (event.eventType === 'stream.online' || event.eventType === 'stream.offline')
+            twitchActivityRefresh.setChannelOnline(
+              event.channelId,
+              event.eventType === 'stream.online',
+            )
+          events.emit('twitch_activity', event)
+        },
+        autoMod: (event) => {
+          if (event.channelSlug && ownsChannel(event.channelSlug))
+            events.emit('twitch_automod', event)
+        },
+        senderNotice: (message) =>
+          emitTwitchNotice(message, {
+            home: primary && isHomeTwitchChannel(message.channelId),
+            watched: ownsChannel(message.channelId),
+          }),
+        moderationNotice: (message) => {
+          if (ownsChannel(message.channelId))
+            emitTwitchNotice(message, {
+              home: isHomeTwitchChannel(message.channelId),
+              watched: true,
+            })
+        },
+        whisper: (event) => events.emit('twitch_whisper', event),
+        status: (status) => {
+          if (status.status === 'error')
+            log.warn('Twitch EventSub reported an error', { accountId: account.id })
+          if (!primary) return
+          twitchEventSubConnected = status.status === 'connected'
+          events.emit('twitch_eventsub_status', status)
+        },
+      })
     },
   })
-  twitchActivityRefresh = new TwitchActivityRefreshClient({
+  const twitchActivityRefresh = new TwitchActivityRefreshClient({
     async plan(channelSlug) {
       const account = AccountStore.findByPlatform('twitch')
       if (!account)
@@ -236,24 +277,11 @@ function boot(): DesktopBackend {
     publish: (update) => events.emit('twitch_activity_snapshot', update),
     capability: (capability) => events.emit('twitch_activity_capability', capability),
   })
-  let ownActivityChannel = AccountStore.findByPlatform('twitch')?.username
-  if (ownActivityChannel)
-    void twitchEventSub
-      .watch(ownActivityChannel, true)
-      .catch((error) =>
-        events.emit('twitch_eventsub_status', { status: 'error', message: String(error) }),
-      )
-  else twitchEventSub.start()
+  twitchEventSub.refresh()
 
-  const refreshTwitchEvents = async () => {
-    const next = AccountStore.findByPlatform('twitch')?.username
-    twitchEventSub.stop()
-    if (ownActivityChannel && ownActivityChannel !== next)
-      await twitchEventSub.watch(ownActivityChannel, false)
-    if (next && next !== ownActivityChannel) await twitchEventSub.watch(next, true)
-    else twitchEventSub.start()
-    ownActivityChannel = next
-    twitchActivityRefresh?.restart()
+  const refreshTwitchEvents = () => {
+    twitchEventSub.refresh(true)
+    twitchActivityRefresh.restart()
   }
 
   const accountSessions = createAccountSessions({
@@ -273,7 +301,7 @@ function boot(): DesktopBackend {
     },
     refreshIdentity: async (platform) => {
       providerRuntime.refreshAccounts()
-      if (platform === 'twitch') await refreshTwitchEvents()
+      if (platform === 'twitch') refreshTwitchEvents()
     },
     connectOwn: async (platform, account) => {
       if (!account) return
@@ -688,7 +716,7 @@ function boot(): DesktopBackend {
       streamerMode.stop()
       providerRuntime.stop()
       twitchEventSub.stop()
-      twitchActivityRefresh?.stop()
+      twitchActivityRefresh.stop()
     },
   }
 }

@@ -55,6 +55,7 @@ import {
   prepareTwitchAuth,
   prepareYouTubeAuth,
 } from '../../auth'
+import { refreshTwitchToken } from '../../auth/twitch'
 import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
@@ -102,7 +103,7 @@ import {
   type TwirCommandTarget,
 } from '../../services/twir-commands'
 import type { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
-import type { TwitchEventSubClient } from '../../services/twitch-eventsub'
+import type { TwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
 import { sevenTVService } from '../../seventv'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
 import { AccountStore, ChannelStore, MessageStore, SettingsStore } from '../../store'
@@ -455,7 +456,7 @@ export interface DesktopApiContext {
   accountSessions?: AccountSessions
   providerRuntime?: ProviderRuntime
   twitchActivityRefresh?: TwitchActivityRefreshClient
-  twitchEventSub?: TwitchEventSubClient
+  twitchEventSub?: TwitchEventSubAccounts
   aggregator: ChatAggregator
   backendConn: BackendConnection
   watchedChannelManager: WatchedChannelManager
@@ -485,26 +486,38 @@ async function createAuthUrl(platform: Platform): Promise<string> {
 async function prepareTwitchActivitiesRequest(
   operation: string,
   params: Record<string, unknown> = {},
+  eventSubAccountId?: string,
 ) {
   let credentials: Record<string, unknown> = {}
   let selectedAccountId: string | null = null
+  const getAccount = () =>
+    eventSubAccountId
+      ? AccountStore.findById(eventSubAccountId)
+      : AccountStore.findByPlatform('twitch')
   const checkIdentity = () => {
-    if (selectedAccountId && AccountStore.findByPlatform('twitch')?.id !== selectedAccountId)
+    if (selectedAccountId && getAccount()?.id !== selectedAccountId)
       throw new Error(
         'The active Twitch account changed. Retry this action in the selected account.',
       )
   }
   if (operation !== 'validate_session') {
-    const account = AccountStore.findByPlatform('twitch')
+    const account = getAccount()
     const tokens = account ? AccountStore.getTokens(account.id) : null
-    if (!account || !tokens?.accessToken)
+    if (account?.platform !== 'twitch' || !tokens?.accessToken)
       throw new Error('Connect your Twitch account on the Platforms tab first.')
     selectedAccountId = account.id
+    const accessToken =
+      eventSubAccountId &&
+      tokens.refreshToken &&
+      tokens.expiresAt &&
+      tokens.expiresAt < Date.now() / 1000 + 300
+        ? await refreshTwitchToken(eventSubAccountId)
+        : tokens.accessToken
     credentials = {
-      accessToken: tokens.accessToken,
+      accessToken,
       platformUserId: account.platformUserId,
       scopes: account.scopes,
-      webSession: await TwitchWebSessionStore.get(),
+      ...(eventSubAccountId ? {} : { webSession: await TwitchWebSessionStore.get() }),
     }
   }
   const run = async (): Promise<unknown> => {
@@ -527,8 +540,9 @@ export async function twitchActivitiesRequest<T>(
   operation: string,
   params: Record<string, unknown>,
   responseSchema: z.ZodType<T>,
+  eventSubAccountId?: string,
 ): Promise<T> {
-  const request = await prepareTwitchActivitiesRequest(operation, params)
+  const request = await prepareTwitchActivitiesRequest(operation, params, eventSubAccountId)
   return responseSchema.parse(await request.run())
 }
 
@@ -853,12 +867,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
     watchTwitchActivities: async ({ channelSlug, watch }) => {
       if (!ctx.twitchEventSub) throw new Error('Twitch events are not initialized.')
-      void ctx.twitchEventSub.watch(channelSlug, watch).catch(() =>
-        ctx.events.emit('twitch_eventsub_status', {
-          status: 'error',
-          message: 'Could not update Twitch event subscriptions.',
-        }),
-      )
+      ctx.twitchEventSub.watch(channelSlug, watch)
       await ctx.twitchActivityRefresh?.watch(channelSlug, watch)
     },
     ...createStreamerModeApi(ctx.streamerMode),
@@ -892,6 +901,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
       await ctx.accountSessions.forget(accountId)
       watchedChannelManager.releaseAccount(accountId)
+      ctx.twitchEventSub?.refresh()
       forgetTwitchSendLimiter(accountId)
     },
     setProviderActiveChannel: async (params) => {
@@ -1305,7 +1315,9 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         if (account?.platform !== channel.platform)
           throw new Error("Choose a saved account belonging to this chat's platform.")
       }
-      return watchedChannelManager.setChannelAccount(id, accountId)
+      const channel = watchedChannelManager.setChannelAccount(id, accountId)
+      if (channel.platform === 'twitch') ctx.twitchEventSub?.refresh()
+      return channel
     },
 
     getWatchedChannelMessages: async ({ id }) => {

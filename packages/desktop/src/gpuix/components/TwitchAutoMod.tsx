@@ -23,16 +23,12 @@ export const TwitchAutoMod = memo(function TwitchAutoMod({
   const channel = channelSlug.toLowerCase()
   const held = useStoreSelector(twitchAutoModStore, (queues) => queues.get(channel)?.held)
   if (!held) return null
-  let message: ReturnType<typeof held.get>
-  let count = 0
-  for (const entry of held.values()) {
-    if (hideBlockedTerms && entry.hold.blockedTerm) continue
-    message ??= entry
-    count++
-  }
+  const message = held.values().next().value
   if (!message) return null
 
   const { messageId, displayName, text } = message.hold
+  const displayText =
+    hideBlockedTerms && message.hold.blockedTerm ? '[blocked-term message hidden]' : text
   const pending = message.state === 'deciding'
   return (
     <div
@@ -66,7 +62,7 @@ export const TwitchAutoMod = memo(function TwitchAutoMod({
           <Icon name="alert" size={13} color={theme.warningText} />
           <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text }}>AutoMod</Text>
           <Text style={{ fontSize: 11, color: theme.warningText }}>
-            {pending ? 'Submitting…' : `${count} held`}
+            {pending ? 'Submitting…' : `${held.size} held`}
           </Text>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 5 }}>
@@ -105,7 +101,7 @@ export const TwitchAutoMod = memo(function TwitchAutoMod({
       </div>
       <div key={messageId} style={{ minWidth: 0, maxHeight: 54, overflowY: 'scroll' }}>
         <Text style={{ fontSize: 13, lineHeight: 18, color: theme.text }}>
-          {sanitizeDisplayText(`${displayName}: ${text}`)}
+          {sanitizeDisplayText(`${displayName}: ${displayText}`)}
         </Text>
       </div>
       {message.state === 'pending' && message.error ? (

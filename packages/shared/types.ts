@@ -6,10 +6,9 @@ import { OVERLAY_SERVER_PORT } from './constants'
 
 export type Platform = 'twitch' | 'youtube' | 'kick'
 
-export interface ChatSendReceipt {
-  channelId: string
-  messageId?: string
-}
+export type ChatSendReceipt =
+  | { channelId: string; messageId?: string; held?: never }
+  | { channelId: string; messageId?: never; held: true }
 
 export interface Badge {
   id: string

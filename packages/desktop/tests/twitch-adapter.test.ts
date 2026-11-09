@@ -344,7 +344,10 @@ describe('Twitch self message badges', () => {
     }
     const pending = createPendingMessage({ account, channelId: 'satont', text: 'reply', reply })
     const write = Promise.withResolvers<void>()
-    const say = spyOn(client, 'say').mockReturnValue(write.promise)
+    const say = spyOn(client, 'say').mockImplementation(async () => {
+      await write.promise
+      client.irc.receiveLine('@id=sent-message :tmi.twitch.tv USERSTATE #satont')
+    })
     const getRecent = spyOn(MessageStore, 'getRecent').mockReturnValue([])
     try {
       const sending = adapter.sendMessage(pending.channelId, pending.text, reply)
@@ -366,6 +369,61 @@ describe('Twitch self message badges', () => {
     } finally {
       say.mockRestore()
       getRecent.mockRestore()
+    }
+  })
+
+  test('an AutoMod hold returns a held receipt without echoing the message', async () => {
+    const { adapter, client, messages } = selfFixture('viewer', 'another')
+    Object.assign(adapter, { isConnected: true })
+    const say = spyOn(client, 'say').mockImplementation(async () => {
+      client.irc.receiveLine('@id=unrelated :tmi.twitch.tv USERSTATE #other')
+      client.irc.receiveLine(':tmi.twitch.tv USERSTATE #another')
+      client.irc.receiveLine(
+        '@msg-id=msg_rejected :tmi.twitch.tv NOTICE #another :Your message is being checked.',
+      )
+    })
+    try {
+      expect(await adapter.sendMessage('another', 'held text')).toEqual({
+        channelId: 'another',
+        held: true,
+      })
+      expect(messages).toEqual([])
+    } finally {
+      say.mockRestore()
+    }
+  })
+
+  test('a mandatory moderation rejection is a send failure', async () => {
+    const { adapter, client, messages } = selfFixture('viewer', 'another')
+    Object.assign(adapter, { isConnected: true })
+    const say = spyOn(client, 'say').mockImplementation(async () => {
+      client.irc.receiveLine(
+        '@msg-id=msg_rejected_mandatory :tmi.twitch.tv NOTICE #another :Your message was blocked.',
+      )
+    })
+    try {
+      await expect(adapter.sendMessage('another', 'blocked text')).rejects.toThrow(
+        'Twitch did not send the message: Twitch blocked the message.',
+      )
+      expect(messages).toEqual([])
+    } finally {
+      say.mockRestore()
+    }
+  })
+
+  test('disconnecting cancels the wait for a send acknowledgment', async () => {
+    const { adapter, client, messages } = selfFixture('viewer', 'another')
+    Object.assign(adapter, { isConnected: true })
+    const written = Promise.withResolvers<void>()
+    const say = spyOn(client, 'say').mockImplementation(async () => written.resolve())
+    try {
+      const sending = adapter.sendMessage('another', 'sending')
+      const disconnecting = written.promise.then(() => adapter.disconnect())
+      await expect(sending).rejects.toThrow('disconnected before delivery')
+      await disconnecting
+      expect(messages).toEqual([])
+    } finally {
+      say.mockRestore()
     }
   })
 

@@ -227,11 +227,21 @@ export async function handleTwitchCallback(url: URL): Promise<{
   }
 }
 
+const tokenRefreshes = new Map<string, Promise<string>>()
+
 /**
  * Refreshes the Twitch access token for the given accountId via the backend proxy.
  * Updates the stored tokens in SQLite and returns the new access token.
  */
-export async function refreshTwitchToken(accountId: string): Promise<string> {
+export function refreshTwitchToken(accountId: string): Promise<string> {
+  const pending = tokenRefreshes.get(accountId)
+  if (pending) return pending
+  const refresh = exchangeRefreshToken(accountId).finally(() => tokenRefreshes.delete(accountId))
+  tokenRefreshes.set(accountId, refresh)
+  return refresh
+}
+
+async function exchangeRefreshToken(accountId: string): Promise<string> {
   const stored = AccountStore.getTokens(accountId)
   if (!stored?.refreshToken) {
     throw new Error('No refresh token for Twitch account')
@@ -251,6 +261,10 @@ export async function refreshTwitchToken(accountId: string): Promise<string> {
   }
 
   const data = refreshedTokenSchema.parse(await res.json())
+  const current = AccountStore.getTokens(accountId)
+  if (!current) throw new Error('The saved Twitch account was removed during token refresh.')
+  if (current.accessToken !== stored.accessToken || current.refreshToken !== stored.refreshToken)
+    return current.accessToken
 
   const expiresAt = data.expiresIn ? Math.floor(Date.now() / 1000) + data.expiresIn : undefined
 

@@ -39,6 +39,12 @@ import { resolveTwitchAvatarUrl } from './avatar-cache'
 import { parseTwitchBadgeCatalog } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
 import { hasPrivilegedChatRole, twitchSendLimiter } from './send-limiter'
+import {
+  onTwitchSendRejected,
+  twitchIrcChannelName,
+  TwitchSendOutcomes,
+  twitchSendRejection,
+} from './send-outcomes'
 
 const log = logger('twitch')
 
@@ -152,11 +158,13 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private login: string | null = null
   private platformUserId: string | null = null
   private selfTags: ReadonlyMap<string, string> = new Map()
+  private readonly sendOutcomes = new TwitchSendOutcomes()
 
   private identityRevision = 0
 
   async connect(channelName: string): Promise<void> {
     const revision = ++this.identityRevision
+    this.sendOutcomes.clear()
     this.channelName = channelName.trim().replace(/^#/, '').toLowerCase()
     this.selfTags = new Map()
     this.badgeCache = new Map()
@@ -236,6 +244,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   async disconnect(): Promise<void> {
     this.identityRevision++
+    this.sendOutcomes.clear()
     this.selfTags = new Map()
     this.accountId = null
     this.accessToken = null
@@ -289,8 +298,12 @@ export class TwitchAdapter extends BasePlatformAdapter {
       )
     if (revision !== this.identityRevision || !this.chatClient)
       throw new Error('The Twitch account changed before sending. Review the draft and send again.')
+    const client = this.chatClient
+    let outcome
     try {
-      await this.chatClient.say(channelId, text, attributes)
+      outcome = await this.sendOutcomes.send(channelId, () =>
+        client.say(channelId, text, attributes),
+      )
     } catch (error) {
       if (!this.isAuthError(error)) throw error
       log.info('[Twitch] Auth error on send, attempting refresh...')
@@ -302,12 +315,21 @@ export class TwitchAdapter extends BasePlatformAdapter {
         )
       if (!refreshed || !this.chatClient) throw error
       await this.reconnectWithNewToken()
-      if (revision !== this.identityRevision)
+      const retryClient = this.chatClient
+      if (revision !== this.identityRevision || !retryClient)
         throw new Error('The Twitch account changed while reconnecting.', { cause: error })
-      await this.chatClient.say(channelId, text, attributes)
+      outcome = await this.sendOutcomes.send(channelId, () =>
+        retryClient.say(channelId, text, attributes),
+      )
     }
-    if (revision === this.identityRevision)
-      return this.emitLocalSentMessage(channelId, text, replyTo || undefined)
+    if (outcome.kind === 'disconnected')
+      throw new Error('The Twitch chat disconnected before delivery could be confirmed.')
+    if (revision !== this.identityRevision)
+      throw new Error('The Twitch account changed while sending. Delivery could not be confirmed.')
+    if (outcome.kind === 'rejected')
+      throw new Error(`Twitch did not send the message: ${twitchSendRejection(outcome.reason)}.`)
+    if (outcome.kind === 'held') return { channelId: twitchIrcChannelName(channelId), held: true }
+    return this.emitLocalSentMessage(channelId, text, replyTo || undefined)
   }
 
   // ============================================================
@@ -317,6 +339,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private async connectChatClient(): Promise<void> {
     const revision = this.identityRevision
     this.selfTags = new Map()
+    this.sendOutcomes.clear()
     try {
       if (this.chatClient) {
         try {
@@ -381,9 +404,14 @@ export class TwitchAdapter extends BasePlatformAdapter {
       if (
         current() &&
         !this.anonymous &&
-        message.channel.replace(/^#/, '').toLowerCase() === this.channelName
-      )
+        twitchIrcChannelName(message.channel) === this.channelName
+      ) {
         this.selfTags = new Map(message.tags)
+        this.sendOutcomes.userState(message.channel, message.tags)
+      }
+    })
+    onTwitchSendRejected(client, (channel, reason) => {
+      if (current()) this.sendOutcomes.rejected(channel, reason)
     })
 
     // Connection successful
@@ -419,6 +447,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     // Disconnected
     client.onDisconnect((manually, reason) => {
       if (!current()) return
+      this.sendOutcomes.clear()
       log.warn(`[Twitch] Disconnected${reason ? `: ${reason}` : ''}`)
       this.isConnected = false
 

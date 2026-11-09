@@ -1052,6 +1052,13 @@ export function createTwitchActivitiesService(
               version: '2',
               condition: { broadcaster_user_id: id, moderator_user_id: credentials.platformUserId },
             })
+        if (allowed('user:read:chat'))
+          for (const type of ['channel.chat.user_message_hold', 'channel.chat.user_message_update'])
+            definitions.push({
+              type,
+              version: '1',
+              condition: { broadcaster_user_id: id, user_id: credentials.platformUserId },
+            })
         if (canUseModerationEvents && moderatesChannel)
           definitions.push({
             type: 'channel.moderate',
