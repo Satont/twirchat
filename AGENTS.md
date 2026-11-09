@@ -1,3 +1,19 @@
+## Commit and pull request titles
+
+- Write commit and pull request titles in English using `type(scope)!: summary`.
+  The scope and breaking-change marker (`!`) are optional.
+- Use one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
+  `build`, `ci`, `chore`, or `revert`.
+- If present, the scope consists of lowercase alphanumeric words separated by `.`, `/`, `_`,
+  or `-`, for example `desktop/chat`.
+- Use exactly one space after the colon and a concise, imperative English summary.
+  Do not include leading/trailing whitespace or control characters.
+- Mark breaking changes with `!` and explain the change and migration in a
+  `BREAKING CHANGE:` footer in the commit body and PR description.
+- Do not add AI co-author trailers unless explicitly requested.
+- The `PR title` check must pass to merge into `main`. Squash the PR and keep its title
+  as the squash commit subject so git-cliff can include it in the changelog.
+
 ## Agent GUI testing
 
 - Run native GUI tests only through `bun run qa:gui` or `bun run qa:native` from `packages/desktop`.
