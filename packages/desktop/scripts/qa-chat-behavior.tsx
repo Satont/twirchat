@@ -239,9 +239,10 @@ try {
   renderer.simulateMouseMove(list.x + 50, list.y + 30, undefined, 'shift')
   await until(() => painted('DURING_MODIFIER'), 'different modifier releases pause')
   pause({ doubleClickLinks: true })
-  incoming('link', 'https://example.com/qa')
-  await until(() => painted('https://example.com/qa'), 'link text')
-  const link = nodes().find((node) => node.text === 'https://example.com/qa')
+  const encodedLink = 'https://example.com/%D1%82%D0%B5%D1%81%D1%82'
+  incoming('link', encodedLink)
+  await until(() => painted('https://example.com/тест'), 'readable link text')
+  const link = nodes().find((node) => node.text === 'https://example.com/тест')
   assert.ok(link)
   const box = renderer.getElementBounds(link.id)
   assert.ok(box)
@@ -255,6 +256,7 @@ try {
   renderer.focusElement(link.id)
   renderer.simulateKeystrokes('enter')
   await until(() => opened.length === 1, 'keyboard link activation')
+  assert.deepEqual(opened, [encodedLink], 'readable link opens its original encoded URL')
   pause({})
   messageSimilarityStore.update({
     value: { ...messageSimilarityStore.get().value, enabled: true, hideSimilar: false },

@@ -7,6 +7,7 @@ import { createStore } from '../src/gpuix/state/create-store'
 import { messageLength, messageLengthLimit } from '../src/views/main/utils/chat-send-targets'
 import {
   codePointRangeToUtf16,
+  graphemes,
   initialsOf,
   sanitizeDisplayText,
   truncateGraphemes,
@@ -67,6 +68,55 @@ describe('buildMessageTokens', () => {
       text: 'https://example.com/x ',
       url: 'https://example.com/x',
     })
+  })
+
+  test('encoded Cyrillic links wrap readable labels and retain the original target', () => {
+    const path = 'очень-длинное-название-темы-на-русском-языке-для-проверки-переноса'
+    const url = `https://forum.example.com/t/${encodeURIComponent(path)}/123`
+    const message = makeMessage({ text: url })
+    const tokens = buildMessageTokens(message)
+    const links = tokens.filter((token) => token.kind === 'link')
+    expect(links.length).toBeGreaterThan(2)
+    expect(links).toHaveLength(tokens.length)
+    expect(links.map((token) => token.text).join('')).toBe(
+      `https://forum.example.com/t/${path}/123`,
+    )
+    for (const token of links) {
+      expect(token.url).toBe(url)
+      expect(graphemes(token.text).length).toBeLessThanOrEqual(28)
+    }
+    expect(message.text).toBe(url)
+  })
+
+  test('link labels preserve ASCII escapes and invisible Unicode escapes', () => {
+    const escaped = '%2F%3F%23%26%25%40%20%09%0A%00%7F/%C2%85/%C2%A0/%E2%80%8B/%E2%80%AE/%E2%80%A8'
+    const url = `https://example.com/%d1%82/${escaped}`
+    const links = buildMessageTokens(makeMessage({ text: url })).filter(
+      (token) => token.kind === 'link',
+    )
+    expect(links.map((token) => token.text).join('')).toBe(`https://example.com/т/${escaped}`)
+    expect(links.every((token) => token.url === url)).toBe(true)
+  })
+
+  test('malformed encoded UTF-8 stays escaped without preventing other runs from decoding', () => {
+    const malformed = '%D0/%FF/%ED%A0%80/%E0%80%AF/%D0%ZZ/%'
+    const url = `https://example.com/${malformed}/%D1%82`
+    const links = buildMessageTokens(makeMessage({ text: url })).filter(
+      (token) => token.kind === 'link',
+    )
+    expect(links.map((token) => token.text).join('')).toBe(`https://example.com/${malformed}/т`)
+    expect(links.every((token) => token.url === url)).toBe(true)
+  })
+
+  test('decoded link labels bound combining stacks across literal and encoded text', () => {
+    const url = `https://example.com/a\u0301\u0301${encodeURIComponent('\u0301'.repeat(20))}`
+    const links = buildMessageTokens(makeMessage({ text: url })).filter(
+      (token) => token.kind === 'link',
+    )
+    expect(links.map((token) => token.text).join('')).toBe(
+      'https://example.com/a\u0301\u0301\u0301',
+    )
+    expect(links.every((token) => token.url === url)).toBe(true)
   })
 
   test('mentions become mention tokens', () => {

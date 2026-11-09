@@ -84,6 +84,23 @@ export function layerEmoteTokens(
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g
 const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
+const ENCODED_UNICODE_RUN = /(?:%[89a-f][\da-f])+/gi
+const INVISIBLE_UNICODE = /[\p{C}\p{Z}]/u
+
+function linkDisplayText(url: string): string {
+  if (!url.includes('%')) return url
+  return sanitizeDisplayText(
+    url.replace(ENCODED_UNICODE_RUN, (encoded) => {
+      try {
+        const decoded = decodeURIComponent(encoded)
+        return INVISIBLE_UNICODE.test(decoded) ? encoded : decoded
+      } catch (error) {
+        if (error instanceof URIError) return encoded
+        throw error
+      }
+    }),
+  )
+}
 
 /**
  * Break long unbreakable words (URLs, emoji walls) so the flex row can wrap
@@ -145,7 +162,7 @@ export function buildMessageTokens(
     for (const match of content.matchAll(URL_REGEX)) {
       const before = content.slice(cursor, match.index)
       pushMentions(tokens, before, message.platform)
-      pushSegment(tokens, match[0], message.platform, (word) => ({
+      pushSegment(tokens, linkDisplayText(match[0]), message.platform, (word) => ({
         kind: 'link',
         text: word,
         url: match[0],
