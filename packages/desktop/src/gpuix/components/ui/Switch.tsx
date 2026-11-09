@@ -47,6 +47,7 @@ export function Switch({
           height: knob,
           borderRadius: knob / 2,
           backgroundColor: checked ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+          pointerEvents: 'none',
         }}
       />
     </div>
