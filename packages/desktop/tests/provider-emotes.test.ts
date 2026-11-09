@@ -649,6 +649,28 @@ describe('7TV cosmetics', () => {
     expect(result.paint?.layers[0]?.type).toBe('linear')
   })
 
+  test('normalizes descending gradient positions without changing paint stop order', () => {
+    const response = cosmeticResponse()
+    const layer = required(response.data.users.userByConnection.style.activePaint.data.layers[0])
+    layer.ty.stops.splice(
+      1,
+      0,
+      { at: 0.6, color: { hex: '#00ff00' } },
+      {
+        at: 0.4,
+        color: { hex: '#ffffff' },
+      },
+    )
+    expect(parseCosmetics(response).paint?.layers[0]).toMatchObject({
+      stops: [
+        { at: 0, color: '#ff0000' },
+        { at: 0.6, color: '#00ff00' },
+        { at: 0.6, color: '#ffffff' },
+        { at: 1, color: '#0000ff' },
+      ],
+    })
+  })
+
   test('coalesces user lookups, caches metadata and sends the correct platform identity', async () => {
     let calls = 0
     const service = createCosmeticsService(
