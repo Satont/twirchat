@@ -81,7 +81,7 @@ import { useTextInputFocusTracking } from '../state/focus'
 import { loadTranslationSettings, translationSettingsStore } from '../state/translation'
 import { lastWhisperRecipientStore, rememberWhisperRecipient } from '../state/twitch-activities'
 import { useWindowScope } from '../state/window-scope'
-import { accent, platformColor, withAlpha, type Theme } from '../theme'
+import { platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { AutocompletePopup } from './AutocompletePopup'
 import { ComposerImageUpload } from './ComposerImageUpload'
@@ -1711,7 +1711,7 @@ export function ChatInput(props: ChatInputProps) {
                 autocomplete.close()
               }
             }}
-            theme={{ caret: '#a78bfa' }}
+            theme={{ caret: theme.accent.primary }}
             style={{
               flexGrow: 1,
               flexShrink: 1,
@@ -1742,7 +1742,7 @@ export function ChatInput(props: ChatInputProps) {
               justifyContent: 'center',
               cursor: isDisabled ? 'default' : 'pointer',
               opacity: isDisabled ? 0.3 : 1,
-              backgroundColor: emotePickerOpen ? accent.tint15 : undefined,
+              backgroundColor: emotePickerOpen ? theme.accent.tint15 : undefined,
               hover: { backgroundColor: theme.fillHover },
             }}
           >

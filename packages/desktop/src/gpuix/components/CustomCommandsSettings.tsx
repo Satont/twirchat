@@ -10,7 +10,6 @@ import {
   saveCustomCommands,
 } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
-import { accent } from '../theme'
 import { useTheme } from '../theme-context'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
@@ -274,7 +273,7 @@ function CommandField({
           maxRows={6}
           onChange={(event) => onChange(event.value ?? '')}
           {...tracking}
-          theme={{ caret: accent.primary }}
+          theme={{ caret: theme.accent.primary }}
           style={style}
         />
       ) : (
@@ -283,7 +282,7 @@ function CommandField({
           placeholder={placeholder}
           onChange={(event) => onChange(event.value ?? '')}
           {...tracking}
-          theme={{ caret: accent.primary }}
+          theme={{ caret: theme.accent.primary }}
           style={style}
         />
       )}
@@ -326,7 +325,7 @@ function CommandButton({
         paddingLeft: 9,
         paddingRight: 9,
         borderRadius: 6,
-        backgroundColor: active ? accent.tint20 : theme.fill,
+        backgroundColor: active ? theme.accent.tint20 : theme.fill,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.4 : 1,
         flexShrink: 0,
@@ -336,7 +335,7 @@ function CommandButton({
       <Text
         style={{
           fontSize: 12,
-          color: danger ? theme.dangerText : active ? accent.primary : theme.text,
+          color: danger ? theme.dangerText : active ? theme.accent.primary : theme.text,
         }}
       >
         {label}

@@ -1,6 +1,11 @@
 import { useGpuixRequired, useWindowSize, type PublicInstance } from '@gpuix/react'
 import { OVERLAY_SERVER_PORT } from '@twirchat/shared/constants'
-import type { AppSettings, HotkeySettings, SelfPingConfig } from '@twirchat/shared/types'
+import type {
+  AppSettings,
+  CustomPalette,
+  HotkeySettings,
+  SelfPingConfig,
+} from '@twirchat/shared/types'
 /**
  * Settings panel — port of SettingsPanel.vue: appearance (theme + font),
  * self-ping highlight, updates, OBS overlay, and keyboard shortcuts.
@@ -33,7 +38,7 @@ import { useStore } from '../state/create-store'
 import { useTextInputFocusTracking } from '../state/focus'
 import { formatKeyCombo, GPUIX_TO_DOM_KEY } from '../state/hotkeys'
 import { useOverlayClose } from '../state/overlays'
-import { accent } from '../theme'
+import { DEFAULT_CUSTOM_PALETTE, normalizePaletteColor, THEME_PRESETS } from '../theme'
 import { useTheme } from '../theme-context'
 import { ChatLoggingSettings } from './ChatLoggingSettings'
 import { ChatPauseSettings } from './ChatPauseSettings'
@@ -47,6 +52,7 @@ import { PlayerSettings } from './PlayerSettings'
 import { PluginSettings } from './PluginSettings'
 import { SimilaritySettings } from './SimilaritySettings'
 import { StreamerModeSettings } from './StreamerModeSettings'
+import { ThemeSettings, type PaletteInputs } from './ThemeSettings'
 import { TranslationSettings } from './TranslationSettings'
 import { TwitchSessionSettings } from './TwitchSessionSettings'
 import { ActionButton } from './ui/Form'
@@ -66,6 +72,14 @@ function makeLocal(s: AppSettings): EditableSettings {
     selfPing: { ...(s.selfPing ?? DEFAULT_SETTINGS.selfPing!) },
     hotkeys: { ...(s.hotkeys ?? DEFAULT_SETTINGS.hotkeys) },
   }
+}
+
+function customPaletteFor(settings: AppSettings): CustomPalette {
+  return (
+    settings.customPalette ??
+    THEME_PRESETS.find((preset) => preset.id === settings.theme)?.palette ??
+    DEFAULT_CUSTOM_PALETTE
+  )
 }
 
 const HOTKEYS_CONFIG: { action: keyof HotkeySettings; label: string; description: string }[] = [
@@ -164,20 +178,20 @@ export function SettingsPanel() {
   const [local, setLocal] = useState<EditableSettings>(() =>
     makeLocal(settings ?? DEFAULT_SETTINGS),
   )
+  const [paletteInputs, setPaletteInputs] = useState<PaletteInputs>({})
+  const invalidPalette = Object.values(paletteInputs).some((input) => input.invalid)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [baselineLoaded, setBaselineLoaded] = useState(false)
   const [actionError, setActionError] = useState('')
-  const [savedFingerprint, setSavedFingerprint] = useState(() =>
-    JSON.stringify(makeLocal(settings ?? DEFAULT_SETTINGS)),
-  )
+  const [savedSettings, setSavedSettings] = useState(() => makeLocal(settings ?? DEFAULT_SETTINGS))
   const localRef = useRef(local)
   localRef.current = local
   const savingRef = useRef(false)
   const baselineRevision = useRef(0)
   const ownPreview = useRef<AppSettings | null>(null)
-  const dirty = JSON.stringify(local) !== savedFingerprint
+  const dirty = !Bun.deepEquals(local, savedSettings)
   const [recordingAction, setRecordingAction] = useState<keyof HotkeySettings | null>(null)
   useOverlayClose(recordingAction !== null, () => setRecordingAction(null))
   const [appVersion, setAppVersion] = useState('…')
@@ -205,8 +219,7 @@ export function SettingsPanel() {
       .getSettings()
       .then((persisted) => {
         if (!active) return
-        if (revision === baselineRevision.current)
-          setSavedFingerprint(JSON.stringify(makeLocal(persisted)))
+        if (revision === baselineRevision.current) setSavedSettings(makeLocal(persisted))
         setBaselineLoaded(true)
       })
       .catch((error) => {
@@ -229,7 +242,8 @@ export function SettingsPanel() {
     const next = makeLocal(settings)
     localRef.current = next
     setLocal(next)
-    setSavedFingerprint(JSON.stringify(next))
+    setPaletteInputs({})
+    setSavedSettings(next)
   }, [settings])
 
   useEffect(() => {
@@ -251,18 +265,17 @@ export function SettingsPanel() {
   }
 
   const save = async () => {
-    if (savingRef.current) return
+    if (savingRef.current || invalidPalette) return
     savingRef.current = true
     setSaving(true)
     setSaveError('')
     const snapshot = makeLocal(localRef.current)
-    const fingerprint = JSON.stringify(snapshot)
     try {
       await backend.api.saveSettings(snapshot)
       baselineRevision.current++
-      setSavedFingerprint(fingerprint)
+      setSavedSettings(snapshot)
       setBaselineLoaded(true)
-      setSaved(JSON.stringify(localRef.current) === fingerprint)
+      setSaved(Bun.deepEquals(localRef.current, snapshot))
       if (savedTimer.current) clearTimeout(savedTimer.current)
       savedTimer.current = setTimeout(() => setSaved(false), 2000)
     } catch (error) {
@@ -271,6 +284,32 @@ export function SettingsPanel() {
       savingRef.current = false
       setSaving(false)
     }
+  }
+
+  const selectTheme = (value: AppSettings['theme']) => {
+    const current = localRef.current
+    if (value === current.theme) return
+    setPaletteInputs({})
+    patch((draft) => {
+      if (value === 'custom') draft.customPalette = customPaletteFor(current)
+      draft.theme = value
+    })
+  }
+
+  const editPalette = (key: keyof CustomPalette, value: string) => {
+    const color = normalizePaletteColor(value)
+    setPaletteInputs((inputs) => ({ ...inputs, [key]: { value, invalid: color === null } }))
+    if (color === null || color === localRef.current.customPalette?.[key]) return
+    patch((draft) => {
+      draft.customPalette = { ...(draft.customPalette ?? DEFAULT_CUSTOM_PALETTE), [key]: color }
+    })
+  }
+
+  const resetPalette = () => {
+    setPaletteInputs({})
+    patch((draft) => {
+      draft.customPalette = DEFAULT_CUSTOM_PALETTE
+    })
   }
 
   // URLSearchParams is a Web API and is not available in the GPUIX runtime;
@@ -349,20 +388,27 @@ export function SettingsPanel() {
           <ActionButton
             testId="settings-save"
             primary
-            disabled={saving || (baselineLoaded && !dirty && !saveError)}
+            disabled={saving || invalidPalette || (baselineLoaded && !dirty && !saveError)}
             onClick={() => void save()}
           >
             {saving
               ? 'Saving…'
               : saveError
                 ? 'Retry saving app settings'
-                : saved
+                : saved && !invalidPalette
                   ? 'App settings saved'
                   : 'Save app settings'}
           </ActionButton>
         </div>
-        <Text style={{ fontSize: 11, color: dirty ? theme.text : theme.text2 }}>
-          {`${dirty ? 'Unsaved app settings · ' : ''}Appearance, self-ping, updates and OBS use Save app settings. Each feature section describes how it saves.`}
+        <Text
+          style={{
+            fontSize: 11,
+            color: invalidPalette ? theme.dangerText : dirty ? theme.text : theme.text2,
+          }}
+        >
+          {invalidPalette
+            ? 'Fix the marked colors in Appearance → Custom to save app settings.'
+            : `${dirty ? 'Unsaved app settings · ' : ''}Appearance, self-ping, updates and OBS use Save app settings. Each feature section describes how it saves.`}
         </Text>
         {saveError ? (
           <Text testId="settings-save-error" style={{ color: theme.dangerText, fontSize: 12 }}>
@@ -391,7 +437,7 @@ export function SettingsPanel() {
                 selectCategory(selectedCategory)
               }
             }}
-            theme={{ caret: accent.primary }}
+            theme={{ caret: theme.accent.primary }}
             style={{
               flexGrow: 1,
               minWidth: 0,
@@ -472,18 +518,18 @@ export function SettingsPanel() {
                   padding: narrow ? 8 : 10,
                   borderRadius: 7,
                   cursor: 'pointer',
-                  backgroundColor: active ? accent.tint12 : undefined,
+                  backgroundColor: active ? theme.accent.tint12 : undefined,
                   borderWidth: 1,
-                  borderColor: active ? accent.tint25 : 'transparent',
+                  borderColor: active ? theme.accent.tint25 : 'transparent',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 3,
-                  hover: { backgroundColor: active ? accent.tint12 : theme.fillHover },
+                  hover: { backgroundColor: active ? theme.accent.tint12 : theme.fillHover },
                 }}
               >
                 <Text
                   style={{
-                    color: active ? accent.primary : theme.text,
+                    color: active ? theme.link : theme.text,
                     fontSize: 12,
                     fontWeight: active ? 700 : 500,
                   }}
@@ -546,18 +592,15 @@ export function SettingsPanel() {
             <SectionVisibilityContext.Provider value={visibility}>
               {/* Appearance */}
               <Section id="appearance" title="Appearance">
-                <FormRow first label="Theme">
-                  <ToggleGroup
+                <FormRow first alignTop label="Theme">
+                  <ThemeSettings
                     value={local.theme}
-                    options={[
-                      { value: 'dark', label: 'Dark' },
-                      { value: 'light', label: 'Light' },
-                    ]}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.theme = value
-                      })
-                    }
+                    palette={customPaletteFor(local)}
+                    inputs={paletteInputs}
+                    invalid={invalidPalette}
+                    onSelect={selectTheme}
+                    onEdit={editPalette}
+                    onReset={resetPalette}
                   />
                 </FormRow>
                 <FormRow last label="Font">
@@ -723,14 +766,14 @@ export function SettingsPanel() {
                       style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        color: accent.primary,
+                        color: theme.link,
                         flexShrink: 0,
                       }}
                     >
                       StreamerName:
                     </Text>
                     <Text style={{ fontSize: 13, color: theme.text }}>Hey</Text>
-                    <Text style={{ fontSize: 13, fontWeight: 600, color: accent.primary }}>
+                    <Text style={{ fontSize: 13, fontWeight: 600, color: theme.link }}>
                       @YourName
                     </Text>
                     <Text style={{ fontSize: 13, color: theme.text }}>what do you think?</Text>
@@ -813,7 +856,7 @@ export function SettingsPanel() {
                       minWidth: 0,
                       fontFamily: 'monospace',
                       fontSize: 11,
-                      color: accent.primary,
+                      color: theme.link,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -829,9 +872,9 @@ export function SettingsPanel() {
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 6,
-                      backgroundColor: accent.tint12,
+                      backgroundColor: theme.accent.tint12,
                       borderWidth: 1,
-                      borderColor: accent.tint25,
+                      borderColor: theme.accent.tint25,
                       borderRadius: 8,
                       paddingTop: 5,
                       paddingBottom: 5,
@@ -839,15 +882,15 @@ export function SettingsPanel() {
                       paddingRight: 10,
                       cursor: 'pointer',
                       flexShrink: 0,
-                      hover: { backgroundColor: 'rgba(167, 139, 250, 0.22)' },
+                      hover: { backgroundColor: theme.accent.tint20 },
                     }}
                   >
-                    <Icon name="copy" size={14} color={accent.primary} />
+                    <Icon name="copy" size={14} color={theme.link} />
                     <Text
                       style={{
                         fontSize: 12,
                         fontWeight: 600,
-                        color: accent.primary,
+                        color: theme.link,
                         whiteSpace: 'nowrap',
                       }}
                     >
@@ -1039,9 +1082,9 @@ export function SettingsPanel() {
                           paddingBottom: 4,
                           paddingLeft: 10,
                           paddingRight: 10,
-                          backgroundColor: recording ? accent.tint10 : theme.surface2,
+                          backgroundColor: recording ? theme.accent.tint10 : theme.surface2,
                           borderWidth: 1,
-                          borderColor: recording ? accent.primary : theme.border,
+                          borderColor: recording ? theme.accent.primary : theme.border,
                           borderRadius: 6,
                           cursor: 'pointer',
                           flexShrink: 0,
@@ -1051,9 +1094,7 @@ export function SettingsPanel() {
                         }}
                       >
                         {recording ? (
-                          <Text
-                            style={{ fontSize: 12, color: accent.primary, whiteSpace: 'nowrap' }}
-                          >
+                          <Text style={{ fontSize: 12, color: theme.link, whiteSpace: 'nowrap' }}>
                             Press a key…
                           </Text>
                         ) : (
@@ -1258,7 +1299,7 @@ function ToggleGroup<T extends string>({
               paddingLeft: 12,
               paddingRight: 12,
               cursor: 'pointer',
-              backgroundColor: active ? accent.tint20 : undefined,
+              backgroundColor: active ? theme.accent.tint20 : undefined,
               borderLeftWidth: index === 0 ? 0 : 1,
               borderColor: theme.border,
             }}
@@ -1267,7 +1308,7 @@ function ToggleGroup<T extends string>({
               style={{
                 fontSize: 12,
                 fontWeight: 500,
-                color: active ? accent.primary : theme.text2,
+                color: active ? theme.link : theme.text2,
               }}
             >
               {option.label}
@@ -1300,7 +1341,7 @@ function SmallInput({
       placeholder={placeholder}
       onChange={(event) => onChange(event.value ?? '')}
       {...focusTracking}
-      theme={{ caret: accent.primary }}
+      theme={{ caret: theme.accent.primary }}
       style={{
         width,
         maxWidth: '100%',
@@ -1308,7 +1349,7 @@ function SmallInput({
         flexShrink: 1,
         backgroundColor: theme.surface2,
         borderWidth: 1,
-        borderColor: focused ? accent.primary : theme.border,
+        borderColor: focused ? theme.accent.primary : theme.border,
         borderRadius: 6,
         color: theme.text,
         fontSize: 13,

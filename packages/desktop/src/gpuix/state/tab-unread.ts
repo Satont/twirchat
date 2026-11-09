@@ -23,7 +23,7 @@ import { streamerModeStore } from './streamer-mode'
 export interface TabUnread {
   unread: number
   mentions: number
-  color?: string
+  color?: string | null
 }
 
 export const tabUnreadStore = persistentResource('tabUnread', () =>
@@ -106,7 +106,7 @@ export function wireTabUnread(backend: Pick<DesktopBackend, 'events'>): () => vo
         next.set(tabId, {
           unread: (existing?.unread ?? 0) + counts.unread,
           mentions: (existing?.mentions ?? 0) + counts.mentions,
-          color: counts.color ?? existing?.color,
+          color: counts.color === undefined ? existing?.color : counts.color,
         })
       }
       return next
@@ -145,7 +145,7 @@ export function wireTabUnread(backend: Pick<DesktopBackend, 'events'>): () => vo
         mentions: (existing?.mentions ?? 0) + (mentioned ? 1 : 0),
         color:
           classification.highlighted && alertAllowed
-            ? (classification.color ?? '#a78bfa')
+            ? (classification.color ?? null)
             : existing?.color,
       })
     }

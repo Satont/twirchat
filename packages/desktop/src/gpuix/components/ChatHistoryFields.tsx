@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
 import { useTextInputFocusTracking } from '../state/focus'
-import { accent } from '../theme'
 import { useTheme } from '../theme-context'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
@@ -36,7 +35,7 @@ export function HistoryInput({
       placeholder={placeholder}
       onChange={(event) => onChange(event.value ?? '')}
       {...focus}
-      theme={{ caret: accent.primary }}
+      theme={{ caret: theme.accent.primary }}
       style={{
         width: '100%',
         minWidth: 0,
@@ -85,7 +84,7 @@ export function HistoryButton({
         paddingLeft: 10,
         paddingRight: 10,
         borderRadius: 6,
-        backgroundColor: primary ? accent.tint20 : theme.fill,
+        backgroundColor: primary ? theme.accent.tint20 : theme.fill,
         borderWidth: 1,
         borderColor: primary ? theme.link : theme.hairline,
         cursor: disabled ? 'default' : 'pointer',

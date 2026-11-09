@@ -5,7 +5,7 @@
 
 import { motion } from '@gpuix/react'
 
-import { accent } from '../../theme'
+import { useTheme } from '../../theme-context'
 
 export function Switch({
   checked,
@@ -16,6 +16,7 @@ export function Switch({
   onChange: (next: boolean) => void
   small?: boolean
 }) {
+  const theme = useTheme()
   const width = small ? 34 : 40
   const height = small ? 19 : 22
   const knob = small ? 14 : 16
@@ -29,7 +30,7 @@ export function Switch({
         width,
         height,
         borderRadius: height / 2,
-        backgroundColor: checked ? accent.primary : 'rgba(255, 255, 255, 0.12)',
+        backgroundColor: checked ? theme.accent.primary : theme.scrollbar,
         cursor: 'pointer',
         position: 'relative',
         flexShrink: 0,
@@ -46,7 +47,7 @@ export function Switch({
           width: knob,
           height: knob,
           borderRadius: knob / 2,
-          backgroundColor: checked ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+          backgroundColor: checked ? theme.accent.onPrimary : theme.text2,
           pointerEvents: 'none',
         }}
       />

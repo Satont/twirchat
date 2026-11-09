@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useBackend } from '../backend/context'
 import { settingsStore } from '../state/app'
 import { useOverlayClose } from '../state/overlays'
-import { accent } from '../theme'
+import { withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
 import { Slider } from './ui/Slider'
@@ -217,9 +217,9 @@ function ThemeCard({
       onClick={onClick}
       style={{
         flexGrow: 1,
-        backgroundColor: active ? 'rgba(167, 139, 250, 0.1)' : theme.fill,
+        backgroundColor: active ? theme.accent.tint10 : theme.fill,
         borderWidth: 1,
-        borderColor: active ? accent.primary : theme.hairline,
+        borderColor: active ? theme.accent.primary : theme.hairline,
         borderRadius: 10,
         paddingTop: 10,
         paddingBottom: 8,
@@ -252,7 +252,7 @@ function ThemeCard({
                   style={{
                     height: 3,
                     borderRadius: 2,
-                    backgroundColor: 'rgba(167, 139, 250, 0.5)',
+                    backgroundColor: withAlpha(theme.accent.primary, 0.5),
                     width: '40%',
                   }}
                 />
@@ -280,7 +280,7 @@ function ThemeCard({
                   width: `${nameWidth}%`,
                   height: 3,
                   borderRadius: 2,
-                  backgroundColor: 'rgba(167, 139, 250, 0.5)',
+                  backgroundColor: withAlpha(theme.accent.primary, 0.5),
                   flexShrink: 0,
                 }}
               />

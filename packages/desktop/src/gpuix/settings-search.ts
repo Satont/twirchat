@@ -1,3 +1,5 @@
+import { THEME_PRESETS } from './theme'
+
 interface SettingsCategoryMetadata {
   id: string
   label: string
@@ -147,8 +149,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'general',
     title: 'Appearance',
     saveMode: 'app',
-    keywords:
-      'theme dark light font fontFamily Inter Manrope system appearance typography шрифт тема темная светлая',
+    keywords: `${THEME_PRESETS.map((preset) => preset.label).join(' ')} theme custom palette color hex accent font fontFamily Inter Manrope system appearance typography шрифт тема темная светлая палитра цвет акцент`,
   },
   {
     id: 'updates',

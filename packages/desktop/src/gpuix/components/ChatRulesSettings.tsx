@@ -18,7 +18,6 @@ import { accountsStore, homeMessagesStore, watchedMessagesStore } from '../state
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
 import { useStore } from '../state/create-store'
 import { useTextInputFocusTracking } from '../state/focus'
-import { accent } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
 import { Switch } from './ui/Switch'
@@ -857,7 +856,7 @@ function Input({
     placeholder,
     onChange: (event: { value?: string }) => onChange(event.value ?? ''),
     ...focus,
-    theme: { caret: accent.primary },
+    theme: { caret: theme.accent.primary },
     style: {
       width: '100%',
       minWidth: 0,
@@ -934,7 +933,7 @@ function Button({
         paddingLeft: 9,
         paddingRight: 9,
         borderRadius: 6,
-        backgroundColor: primary ? accent.tint20 : theme.fill,
+        backgroundColor: primary ? theme.accent.tint20 : theme.fill,
         borderWidth: 1,
         borderColor: primary ? theme.link : theme.hairline,
         cursor: disabled ? 'default' : 'pointer',

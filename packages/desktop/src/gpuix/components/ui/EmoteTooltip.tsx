@@ -18,12 +18,20 @@ import {
   loadEmotePreferences,
   toggleFavoriteEmote,
 } from '../../state/emote-preferences'
-import { elevated } from '../../theme'
+import type { Theme } from '../../theme'
 import { useFont } from '../../theme-context'
 import { Icon } from './Icon'
 import { RemoteImage } from './RemoteImage'
 
-export function EmoteTooltip({ emote, children }: { emote: Emote; children: ReactNode }) {
+export function EmoteTooltip({
+  emote,
+  children,
+  theme,
+}: {
+  emote: Emote
+  children: ReactNode
+  theme: Theme
+}) {
   const backend = useBackend()
   const font = useFont()
   const entry = favoriteEntry(emote)
@@ -51,9 +59,9 @@ export function EmoteTooltip({ emote, children }: { emote: Emote; children: Reac
         side="top"
         sideOffset={8}
         style={{
-          backgroundColor: elevated.tooltip,
+          backgroundColor: theme.popover,
           borderWidth: 1,
-          borderColor: 'rgba(255, 255, 255, 0.1)',
+          borderColor: theme.dialogBorder,
           borderRadius: 10,
           padding: 12,
           minWidth: 140,
@@ -74,7 +82,7 @@ export function EmoteTooltip({ emote, children }: { emote: Emote; children: Reac
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              backgroundColor: theme.fill,
               borderRadius: 8,
               flexShrink: 0,
             }}
@@ -86,7 +94,7 @@ export function EmoteTooltip({ emote, children }: { emote: Emote; children: Reac
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <text style={{ fontSize: 13, fontWeight: 600, color: '#e2e2e8', fontFamily: font }}>
+            <text style={{ fontSize: 13, fontWeight: 600, color: theme.text, fontFamily: font }}>
               {emote.name}
             </text>
             <div
@@ -101,8 +109,8 @@ export function EmoteTooltip({ emote, children }: { emote: Emote; children: Reac
                 cursor: 'pointer',
               }}
             >
-              <Icon name="externalLink" size={12} color="#a78bfa" />
-              <text style={{ fontSize: 12, color: '#a78bfa', fontFamily: font }}>
+              <Icon name="externalLink" size={12} color={theme.link} />
+              <text style={{ fontSize: 12, color: theme.link, fontFamily: font }}>
                 {provider === 'twitch' ? 'Open image' : `View on ${label}`}
               </text>
             </div>
@@ -130,8 +138,8 @@ export function EmoteTooltip({ emote, children }: { emote: Emote; children: Reac
                 paddingTop: 4,
               }}
             >
-              <Icon name="star" size={12} color={favorite ? '#facc15' : '#a78bfa'} />
-              <text style={{ fontSize: 12, color: '#a78bfa', fontFamily: font }}>
+              <Icon name="star" size={12} color={favorite ? theme.warningText : theme.link} />
+              <text style={{ fontSize: 12, color: theme.link, fontFamily: font }}>
                 {favorite ? 'Remove favorite' : 'Add to favorites'}
               </text>
             </div>

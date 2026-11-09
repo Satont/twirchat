@@ -11,7 +11,7 @@ import {
   releaseNoteKindLabels,
   type ReleaseNoteKind,
 } from '../release-notes'
-import { accent, type Theme } from '../theme'
+import { type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { Badge } from './ui/Badge'
 import { Icon } from './ui/Icon'
@@ -102,7 +102,7 @@ export function UpdateChangelogModal({
               type: 'linear-gradient',
               angle: 135,
               stops: [
-                { color: hexMix(accent.primary, theme.dialog, 0.18), position: 0 },
+                { color: hexMix(theme.accent.primary, theme.dialog, 0.18), position: 0 },
                 { color: theme.dialog, position: 1 },
               ],
             },
@@ -115,14 +115,14 @@ export function UpdateChangelogModal({
               width: 48,
               height: 48,
               borderRadius: 14,
-              backgroundColor: accent.primary,
+              backgroundColor: theme.accent.primary,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <Icon name="sparkle" size={28} color="#ffffff" />
+            <Icon name="sparkle" size={28} color={theme.accent.onPrimary} />
           </div>
           <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <div
@@ -145,9 +145,9 @@ export function UpdateChangelogModal({
                   paddingBottom: 3,
                   paddingLeft: 10,
                   paddingRight: 10,
-                  backgroundColor: accent.tint15,
+                  backgroundColor: theme.accent.tint15,
                   borderWidth: 1,
-                  borderColor: accent.tint25,
+                  borderColor: theme.accent.tint25,
                   flexShrink: 0,
                 }}
               >
@@ -296,7 +296,7 @@ export function UpdateChangelogModal({
             testId="update-changelog-continue"
             onClick={onClose}
             style={{
-              backgroundColor: accent.deep,
+              backgroundColor: theme.accent.deep,
               borderRadius: 6,
               paddingTop: 8,
               paddingBottom: 8,
@@ -306,7 +306,7 @@ export function UpdateChangelogModal({
               hover: { opacity: 0.9 },
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: 500, color: '#ffffff' }}>Close</Text>
+            <Text style={{ fontSize: 13, fontWeight: 500, color: theme.accent.onDeep }}>Close</Text>
           </div>
         </div>
       </div>

@@ -1,9 +1,29 @@
-/**
- * Design tokens — exact port of the CSS custom properties from the Vue app
- * (src/views/main/App.vue) into a JS theme object, since GPUIX has no CSS.
- */
+import type { AppSettings, CustomPalette, ThemePreset } from '@twirchat/shared/types'
+
+import { normalizePaletteColor } from '../shared/theme-palette'
+
+export { normalizePaletteColor } from '../shared/theme-palette'
+
+const BLACK = '#000000'
+const WHITE = '#ffffff'
+
+const legacyAccent = {
+  primary: '#a78bfa',
+  deep: '#7c3aed',
+  deepHover: '#6d28d9',
+  onPrimary: BLACK,
+  onDeep: WHITE,
+  tint06: 'rgba(167, 139, 250, 0.06)',
+  tint10: 'rgba(167, 139, 250, 0.10)',
+  tint12: 'rgba(167, 139, 250, 0.12)',
+  tint15: 'rgba(167, 139, 250, 0.15)',
+  tint20: 'rgba(167, 139, 250, 0.20)',
+  tint25: 'rgba(167, 139, 250, 0.25)',
+  tint45: 'rgba(167, 139, 250, 0.45)',
+}
 
 export interface Theme {
+  accent: typeof legacyAccent
   bg: string
   surface: string
   surface2: string
@@ -43,6 +63,7 @@ export interface Theme {
 }
 
 export const darkTheme: Theme = {
+  accent: legacyAccent,
   bg: '#17161c',
   surface: '#1c1b22',
   surface2: '#25242d',
@@ -71,6 +92,7 @@ export const darkTheme: Theme = {
 }
 
 export const lightTheme: Theme = {
+  accent: legacyAccent,
   bg: '#f0eff4',
   surface: '#faf9fc',
   surface2: '#e8e7ed',
@@ -96,23 +118,6 @@ export const lightTheme: Theme = {
   successText: '#15803d',
   warningText: '#a16207',
   isLight: true,
-}
-
-/** Brand / accent palette (theme-independent) */
-export const accent = {
-  /** violet-400, primary accent */
-  primary: '#a78bfa',
-  /** deeper violet for solid buttons */
-  deep: '#7c3aed',
-  deepHover: '#6d28d9',
-  /** tints */
-  tint06: 'rgba(167, 139, 250, 0.06)',
-  tint10: 'rgba(167, 139, 250, 0.10)',
-  tint12: 'rgba(167, 139, 250, 0.12)',
-  tint15: 'rgba(167, 139, 250, 0.15)',
-  tint20: 'rgba(167, 139, 250, 0.20)',
-  tint25: 'rgba(167, 139, 250, 0.25)',
-  tint45: 'rgba(167, 139, 250, 0.45)',
 }
 
 /** Platform brand colors (see src/views/shared/utils/platform.ts) */
@@ -171,36 +176,79 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 function parseHex(color: string): [number, number, number] | null {
-  let value = color.trim().replace('#', '')
-  if (value.length === 3) {
-    value = value
-      .split('')
-      .map((c) => c + c)
-      .join('')
-  }
-  if (!/^[0-9a-f]{6}$/i.test(value)) return null
+  const value = normalizePaletteColor(color)
+  return value === null ? null : hexChannels(value)
+}
+
+function hexChannels(value: string): [number, number, number] {
   return [
-    parseInt(value.slice(0, 2), 16),
-    parseInt(value.slice(2, 4), 16),
-    parseInt(value.slice(4, 6), 16),
+    parseInt(value.slice(1, 3), 16),
+    parseInt(value.slice(3, 5), 16),
+    parseInt(value.slice(5, 7), 16),
   ]
 }
 
+function toHex(rgb: [number, number, number]): string {
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+}
+
+function mixChannels(
+  from: [number, number, number],
+  to: [number, number, number],
+  ratio: number,
+): [number, number, number] {
+  return [
+    Math.round(from[0] + (to[0] - from[0]) * ratio),
+    Math.round(from[1] + (to[1] - from[1]) * ratio),
+    Math.round(from[2] + (to[2] - from[2]) * ratio),
+  ]
+}
+
+function mixHex(from: string, to: string, ratio: number): string {
+  return toHex(mixChannels(hexChannels(from), hexChannels(to), ratio))
+}
+
+function linearChannel(value: number): number {
+  const c = value / 255
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+}
+
 function luminance([r, g, b]: [number, number, number]): number {
-  const channel = (v: number) => {
-    const c = v / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  return 0.2126 * linearChannel(r) + 0.7152 * linearChannel(g) + 0.0722 * linearChannel(b)
+}
+
+function contrast(a: number, b: number): number {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
+function contrastForeground(backgroundLuminance: number): string {
+  return contrast(0, backgroundLuminance) >= contrast(1, backgroundLuminance) ? BLACK : WHITE
+}
+
+function mixUntilReadable(
+  foreground: [number, number, number],
+  backgroundLuminance: number,
+  target: string,
+): string {
+  const targetChannels = hexChannels(target)
+  const direction = target === WHITE ? 1 : -1
+  for (let step = 1; step < 10; step++) {
+    const mixed = mixChannels(foreground, targetChannels, step / 10)
+    const mixedLuminance = luminance(mixed)
+    if (
+      direction * (mixedLuminance - backgroundLuminance) > 0 &&
+      contrast(mixedLuminance, backgroundLuminance) >= 4.5
+    ) {
+      return toHex(mixed)
+    }
   }
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+  return target
 }
 
-function contrast(a: [number, number, number], b: [number, number, number]): number {
-  const la = luminance(a)
-  const lb = luminance(b)
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
-}
-
-const readableCache = new Map<string, string>()
+const READABLE_CACHE_CAPACITY = 4096
+// Rotate generations to keep the cache bounded without scanning deleted entries.
+let readableCache = new Map<string, string>()
+let previousReadableCache = new Map<string, string>()
 
 /**
  * User-chosen colors (Twitch/Kick name colors, mentions) mixed toward white
@@ -210,24 +258,225 @@ const readableCache = new Map<string, string>()
  */
 export function readableOn(color: string, background: string): string {
   const key = `${color}|${background}`
-  const cached = readableCache.get(key)
-  if (cached) return cached
+  const cached = readableCache.get(key) ?? previousReadableCache.get(key)
+  if (cached !== undefined) return cached
 
   const fg = parseHex(color)
   const bg = parseHex(background)
   let result = color
-  if (fg && bg && contrast(fg, bg) < 4.5) {
-    const target = luminance(bg) < 0.5 ? 255 : 0
-    for (let step = 1; step <= 10; step++) {
-      const t = step / 10
-      const mix = (channel: number) => Math.round(channel + (target - channel) * t)
-      const mixed: [number, number, number] = [mix(fg[0]), mix(fg[1]), mix(fg[2])]
-      result = `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`
-      if (contrast(mixed, bg) >= 4.5) break
+  if (fg && bg) {
+    const bgLuminance = luminance(bg)
+    if (contrast(luminance(fg), bgLuminance) < 4.5) {
+      result = mixUntilReadable(fg, bgLuminance, contrastForeground(bgLuminance))
     }
+  }
+  if (readableCache.size >= READABLE_CACHE_CAPACITY) {
+    previousReadableCache = readableCache
+    readableCache = new Map()
   }
   readableCache.set(key, result)
   return result
+}
+
+interface ThemePresetDefinition {
+  readonly id: ThemePreset
+  readonly label: string
+  readonly palette: CustomPalette
+}
+
+export const DEFAULT_CUSTOM_PALETTE: CustomPalette = {
+  background: darkTheme.bg,
+  surface: darkTheme.surface,
+  text: darkTheme.text,
+  muted: darkTheme.text2,
+  accent: darkTheme.accent.primary,
+}
+
+export const THEME_PRESETS: readonly ThemePresetDefinition[] = [
+  { id: 'dark', label: 'Dark', palette: DEFAULT_CUSTOM_PALETTE },
+  {
+    id: 'light',
+    label: 'Light',
+    palette: {
+      background: lightTheme.bg,
+      surface: lightTheme.surface,
+      text: lightTheme.text,
+      muted: lightTheme.text2,
+      accent: lightTheme.navActive,
+    },
+  },
+  {
+    id: 'midnight',
+    label: 'Midnight',
+    palette: {
+      background: '#0f1322',
+      surface: '#181e32',
+      text: '#ecedf8',
+      muted: '#9ca6c3',
+      accent: '#a5a8ff',
+    },
+  },
+  {
+    id: 'ocean',
+    label: 'Ocean',
+    palette: {
+      background: '#101c26',
+      surface: '#172936',
+      text: '#e2f0f8',
+      muted: '#92b1c2',
+      accent: '#55cbe2',
+    },
+  },
+  {
+    id: 'forest',
+    label: 'Forest',
+    palette: {
+      background: '#131e19',
+      surface: '#1b2a22',
+      text: '#e4f0e8',
+      muted: '#9cb5a4',
+      accent: '#80c9a2',
+    },
+  },
+  {
+    id: 'ember',
+    label: 'Ember',
+    palette: {
+      background: '#241916',
+      surface: '#30211e',
+      text: '#f8ece5',
+      muted: '#c6a79a',
+      accent: '#ff9d70',
+    },
+  },
+  {
+    id: 'rose',
+    label: 'Rose',
+    palette: {
+      background: '#f7eef1',
+      surface: '#fff8fa',
+      text: '#382331',
+      muted: '#795b6d',
+      accent: '#a13263',
+    },
+  },
+  {
+    id: 'paper',
+    label: 'Paper',
+    palette: {
+      background: '#f3eee2',
+      surface: '#fdf9ef',
+      text: '#30281e',
+      muted: '#6c6153',
+      accent: '#8e512b',
+    },
+  },
+]
+
+function deriveTheme(palette: CustomPalette): Theme {
+  const { background: bg, accent: baseAccent } = palette
+  const neutral = contrastForeground(luminance(hexChannels(bg)))
+  const isLight = neutral === BLACK
+  // Keep each surface compatible with the canvas's foreground polarity.
+  const surface = readableOn(palette.surface, neutral)
+  const surface2 = readableOn(mixHex(surface, neutral, 0.06), neutral)
+  const navBg = isLight ? surface : mixHex(bg, BLACK, 0.15)
+  const dialog = readableOn(
+    isLight ? mixHex(surface, WHITE, 0.35) : mixHex(surface, WHITE, 0.035),
+    neutral,
+  )
+  const luminances = [bg, surface, surface2, navBg, dialog].map((color) =>
+    luminance(hexChannels(color)),
+  )
+  const limitingBackground = isLight ? Math.min(...luminances) : Math.max(...luminances)
+  const foreground = (color: string): string => {
+    const channels = hexChannels(color)
+    const lightness = luminance(channels)
+    if (
+      (isLight ? lightness < limitingBackground : lightness > limitingBackground) &&
+      contrast(lightness, limitingBackground) >= 4.5
+    ) {
+      return color
+    }
+    return mixUntilReadable(channels, limitingBackground, neutral)
+  }
+  const primary = foreground(baseAccent)
+  const deep = mixHex(primary, surface, 0.15)
+  const onDeep = contrastForeground(luminance(hexChannels(deep)))
+  const accent = {
+    primary,
+    deep,
+    deepHover: mixHex(deep, onDeep === WHITE ? BLACK : WHITE, 0.12),
+    onPrimary: contrastForeground(luminance(hexChannels(primary))),
+    onDeep,
+    tint06: withAlpha(baseAccent, 0.06),
+    tint10: withAlpha(baseAccent, 0.1),
+    tint12: withAlpha(baseAccent, 0.12),
+    tint15: withAlpha(baseAccent, 0.15),
+    tint20: withAlpha(baseAccent, 0.2),
+    tint25: withAlpha(baseAccent, 0.25),
+    tint45: withAlpha(baseAccent, 0.45),
+  }
+  const muted = foreground(palette.muted)
+  const semanticBase = isLight ? lightTheme : darkTheme
+  return {
+    accent,
+    bg,
+    surface,
+    surface2,
+    border: mixHex(surface, neutral, 0.13),
+    text: foreground(palette.text),
+    text2: muted,
+    navBg,
+    navText: muted,
+    navActive: primary,
+    navHover: withAlpha(neutral, 0.06),
+    navActiveBg: accent.tint15,
+    scrollbar: withAlpha(neutral, 0.14),
+    divider: withAlpha(neutral, 0.06),
+    rowHover: withAlpha(neutral, 0.035),
+    link: primary,
+    dialog,
+    dialogBorder: mixHex(dialog, neutral, 0.14),
+    popover: dialog,
+    fill: withAlpha(neutral, 0.05),
+    fillHover: withAlpha(neutral, 0.09),
+    hairline: withAlpha(neutral, 0.12),
+    dangerText: foreground(semanticBase.dangerText),
+    successText: foreground(semanticBase.successText),
+    warningText: foreground(semanticBase.warningText),
+    isLight,
+  }
+}
+
+const presetThemes = new Map(
+  THEME_PRESETS.map(({ id, palette }) => [
+    id,
+    id === 'dark' ? darkTheme : id === 'light' ? lightTheme : deriveTheme(palette),
+  ]),
+)
+
+let lastCustomTheme: { palette: CustomPalette; theme: Theme } | undefined
+
+export function resolveTheme(settings: Pick<AppSettings, 'theme' | 'customPalette'> | null): Theme {
+  if (!settings) return darkTheme
+  if (settings.theme !== 'custom') return presetThemes.get(settings.theme) ?? darkTheme
+  const palette = settings.customPalette
+  if (!palette) return darkTheme
+  const previous = lastCustomTheme?.palette
+  if (
+    lastCustomTheme &&
+    previous?.background === palette.background &&
+    previous.surface === palette.surface &&
+    previous.text === palette.text &&
+    previous.muted === palette.muted &&
+    previous.accent === palette.accent
+  ) {
+    return lastCustomTheme.theme
+  }
+  const theme = deriveTheme(palette)
+  lastCustomTheme = { palette, theme }
+  return theme
 }
 
 /**

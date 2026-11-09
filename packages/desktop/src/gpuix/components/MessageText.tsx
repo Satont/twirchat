@@ -130,7 +130,7 @@ export const MessageTokens = memo(function MessageTokens({
         </text>
       )
       return (
-        <EmoteTooltip key={index} emote={token.emote}>
+        <EmoteTooltip key={index} emote={token.emote} theme={theme}>
           <div
             style={{
               position: 'relative',

@@ -7,7 +7,7 @@
 
 import { useRef } from 'react'
 
-import { accent } from '../../theme'
+import { useTheme } from '../../theme-context'
 
 const SEGMENT_WIDTH = 8
 
@@ -26,6 +26,7 @@ export function Slider({
   width: number
   onChange: (value: number) => void
 }) {
+  const theme = useTheme()
   const drag = useRef<{ startX: number; startValue: number } | null>(null)
 
   const range = max - min
@@ -50,7 +51,7 @@ export function Slider({
           width,
           height: 4,
           borderRadius: 2,
-          backgroundColor: 'rgba(255, 255, 255, 0.12)',
+          backgroundColor: theme.scrollbar,
           pointerEvents: 'none',
         }}
       />
@@ -62,7 +63,7 @@ export function Slider({
           width: Math.max(4, ratio * width),
           height: 4,
           borderRadius: 2,
-          backgroundColor: accent.primary,
+          backgroundColor: theme.accent.primary,
           pointerEvents: 'none',
         }}
       />
@@ -74,13 +75,13 @@ export function Slider({
           width: 14,
           height: 14,
           borderRadius: 7,
-          backgroundColor: accent.primary,
+          backgroundColor: theme.accent.primary,
           boxShadow: {
             offsetX: 0,
             offsetY: 0,
             blurRadius: 2,
             spreadRadius: 2,
-            color: accent.tint25,
+            color: theme.accent.tint25,
           },
           pointerEvents: 'none',
         }}

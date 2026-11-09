@@ -33,7 +33,7 @@ import {
   TAB_VIEWER_MIN_WIDTH,
   TAB_MENTION_WIDTH,
 } from '../tab-counts'
-import { accent, platformColor } from '../theme'
+import { platformColor } from '../theme'
 import { useTheme } from '../theme-context'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
 import { Icon, PlatformIcon } from './ui/Icon'
@@ -356,7 +356,7 @@ function ChannelTabs({
                   top: 0,
                   bottom: 0,
                   width: 2,
-                  backgroundColor: accent.primary,
+                  backgroundColor: theme.accent.primary,
                   pointerEvents: 'none',
                 }}
               />
@@ -610,7 +610,7 @@ function Tab({
         borderTopRightRadius: 6,
         borderBottomWidth: 2,
         borderColor: active ? activeColor : 'transparent',
-        backgroundColor: active ? accent.tint10 : hovered ? theme.fillHover : undefined,
+        backgroundColor: active ? theme.accent.tint10 : hovered ? theme.fillHover : undefined,
         flexShrink: 0,
         minWidth: 0,
         maxWidth: '100%',
@@ -707,7 +707,8 @@ function TabCounts({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: unread && unread.mentions > 0 ? accent.tint20 : theme.fillHover,
+                backgroundColor:
+                  unread && unread.mentions > 0 ? theme.accent.tint20 : theme.fillHover,
               }}
             >
               <Text

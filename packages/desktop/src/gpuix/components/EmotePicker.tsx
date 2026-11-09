@@ -176,7 +176,7 @@ export function EmotePicker({
               // focused, so the picker closes itself here.
               if (event.key === 'escape') onClose()
             }}
-            theme={{ caret: '#a78bfa' }}
+            theme={{ caret: theme.accent.primary }}
             style={{ flexGrow: 1, minWidth: 0, fontSize: 13, color: theme.text }}
           />
         </div>
@@ -272,7 +272,10 @@ export function EmotePicker({
                         hover: { backgroundColor: 'rgba(255, 255, 255, 0.09)' },
                       }}
                     >
-                      <EmoteTooltip emote={{ ...emote, name: emote.alias, positions: [] }}>
+                      <EmoteTooltip
+                        theme={theme}
+                        emote={{ ...emote, name: emote.alias, positions: [] }}
+                      >
                         <div
                           onClick={() => onSelect(emote.alias)}
                           style={{

@@ -17,6 +17,7 @@ import { messageSimilarityPreferences } from '../state/message-similarity'
 import { saveStreamerMode } from '../state/streamer-mode'
 import { changeWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
+import { withAlpha } from '../theme'
 import { resolveTheme, resolveFont, ThemeContext, FontContext } from '../theme-context'
 import { ChatNotice, UpdateToast } from './App'
 import { SavedAccounts } from './SavedAccounts'
@@ -36,6 +37,7 @@ export function ChatWindow({
   const scope = useWindowScope()
   const windows = useDesktopWindows()
   const settings = useStore(settingsStore)
+  const theme = resolveTheme(settings)
   const [page, setPage] = useState<'chat' | 'settings' | 'accounts'>('chat')
   const [search, setSearch] = useState(false)
   useEffect(() => registerChatWindowNavigator(scope, () => setPage('chat')), [scope])
@@ -110,7 +112,7 @@ export function ChatWindow({
   })
   useHotkeyRoute(['window'])
   return (
-    <ThemeContext.Provider value={resolveTheme(settings)}>
+    <ThemeContext.Provider value={theme}>
       <FontContext.Provider value={resolveFont(settings)}>
         <div
           style={{
@@ -118,7 +120,8 @@ export function ChatWindow({
             flexDirection: 'column',
             width: '100%',
             height: '100%',
-            backgroundColor: resolveTheme(settings).bg,
+            backgroundColor: theme.bg,
+            selectionColor: withAlpha(theme.accent.primary, 0.35),
             position: 'relative',
           }}
         >
