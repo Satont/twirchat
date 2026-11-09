@@ -9,16 +9,13 @@ import { z } from 'zod'
 import { backendFetch, getBackendUrl } from '../runtime-config'
 import { generateCodeChallenge, generateCodeVerifier } from './pkce'
 
-const PROVIDER_ORIGINS: Record<OAuthDonationProvider, string> = {
-  donationalerts: 'https://www.donationalerts.com',
-  memealerts: 'https://memealerts.com',
-}
+const MEMEALERTS_ORIGIN = 'https://memealerts.com'
 const CALLBACK_PATH = '/auth/donations/callback'
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000
 const REQUEST_TIMEOUT_MS = 15_000
 const AVAILABILITY_TIMEOUT_MS = 4_000
 const startResponse = z.object({ url: z.url(), state: z.string().min(1).max(256) })
-const availabilityResponse = z.object({ donationalerts: z.boolean(), memealerts: z.boolean() })
+const availabilityResponse = z.object({ memealerts: z.boolean() })
 export const donationOAuthTokensSchema = z.object({
   accessToken: z
     .string()
@@ -37,13 +34,13 @@ const relayTicket = z
   .regex(/^[\w-]+$/u)
 
 interface AuthorizeDonationOptions {
-  provider: OAuthDonationProvider
+  provider: 'memealerts'
   signal: AbortSignal
   openBrowser: (url: string) => Promise<void>
 }
 
 interface RefreshDonationOptions {
-  provider: OAuthDonationProvider
+  provider: 'memealerts'
   refreshToken: string
   signal: AbortSignal
 }
@@ -90,7 +87,7 @@ export async function getDonationOAuthAvailability(): Promise<DonationOAuthAvail
 }
 
 async function requestOAuth<T>(
-  provider: OAuthDonationProvider,
+  provider: 'memealerts',
   endpoint: OAuthEndpoint,
   fields: Record<string, string | number>,
   schema: z.ZodType<T>,
@@ -180,7 +177,7 @@ export async function authorizeDonation({
     )
     const authorize = new URL(start.url)
     if (
-      authorize.origin !== PROVIDER_ORIGINS[provider] ||
+      authorize.origin !== MEMEALERTS_ORIGIN ||
       authorize.pathname !== '/oauth/authorize' ||
       authorize.username ||
       authorize.password ||

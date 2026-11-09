@@ -66,6 +66,7 @@ export const ruSettings = {
   'settings.section.players.desc':
     'Открывайте трансляции в браузере, внешнем плеере или Streamlink',
   'settings.section.plugins': 'Плагины',
+  'settings.section.donations': 'Сервисы донатов',
   'settings.section.streamer-mode': 'Режим стримера',
   'settings.section.streamer-mode.desc': 'Скрывайте личные данные во время стрима',
   'settings.section.similarity': 'Похожие сообщения',

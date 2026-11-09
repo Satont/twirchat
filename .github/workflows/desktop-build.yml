@@ -283,6 +283,7 @@ jobs:
       - name: Build production application and verify compiled runtime
         working-directory: packages/desktop
         env:
+          TWIRCHAT_DONATIONALERTS_CLIENT_ID: ${{ vars.TWIRCHAT_DONATIONALERTS_CLIENT_ID }}
           TWIRCHAT_TWITCH_CLIENT_ID: ${{ vars.TWIRCHAT_TWITCH_CLIENT_ID }}
           TWIRCHAT_YOUTUBE_CLIENT_ID: ${{ vars.TWIRCHAT_YOUTUBE_CLIENT_ID }}
           TWIRCHAT_YOUTUBE_CLIENT_SECRET: ${{ vars.TWIRCHAT_YOUTUBE_CLIENT_SECRET }}

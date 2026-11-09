@@ -2,7 +2,7 @@ import { logger } from '@twirchat/shared/logger'
 
 import { handleTwitchBadges } from './api/twitch-badges.ts'
 import { createTwitchHistoryService } from './api/twitch-history.ts'
-import { config, donationOAuthCredentials } from './config.ts'
+import { config, memeAlertsOAuthCredentials } from './config.ts'
 import { ClientStore } from './db/index.ts'
 import { runMigrations } from './db/migrations.ts'
 import { accountRoutes } from './routes/accounts.ts'
@@ -72,7 +72,7 @@ const server = Bun.serve<WsData>({
 
   routes: {
     ...authRoutes,
-    ...createDonationOAuthRoutes(donationOAuthCredentials),
+    ...createDonationOAuthRoutes(memeAlertsOAuthCredentials),
     ...accountRoutes,
     ...streamRoutes,
     ...moderationRoutes,

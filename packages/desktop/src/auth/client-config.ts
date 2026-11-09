@@ -1,7 +1,17 @@
 import { t } from '../gpuix/i18n'
+declare const embeddedDonationAlertsDesktopClientId: string | undefined
 declare const embeddedTwitchDesktopClientId: string | undefined
 declare const embeddedYouTubeDesktopClientId: string | undefined
 declare const embeddedYouTubeDesktopClientSecret: string | undefined
+
+export function getDonationAlertsDesktopClientId(): string | null {
+  const clientId =
+    process.env.TWIRCHAT_DONATIONALERTS_CLIENT_ID?.trim() ||
+    (typeof embeddedDonationAlertsDesktopClientId === 'string'
+      ? embeddedDonationAlertsDesktopClientId.trim()
+      : '')
+  return /^[1-9][0-9]*$/u.test(clientId) ? clientId : null
+}
 
 export function getTwitchDesktopClientId(): string {
   const clientId =

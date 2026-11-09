@@ -61,6 +61,7 @@ import {
   prepareKickAuth,
   requestTwitchDeviceCode,
 } from '../../auth'
+import { getDonationAlertsDesktopClientId } from '../../auth/client-config'
 import { getDonationOAuthAvailability } from '../../auth/donations'
 import { refreshTwitchToken } from '../../auth/twitch'
 import { validateTwitchUserToken } from '../../auth/twitch-user-token'
@@ -246,6 +247,7 @@ interface AuthRequest {
 
 export interface DesktopApi {
   obsRemote: typeof obsRemoteApi
+  donationAlertsOAuthAvailable: boolean
   getDonationConnections(): Promise<DonationConnections>
   getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null>
   connectDonationProvider(params: ConnectDonationProvider): Promise<void>
@@ -1002,6 +1004,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.providerRuntime?.setActiveChannel(params)
     },
     getImageUploaderSettings: imageUploader.getImageUploaderSettings,
+    donationAlertsOAuthAvailable: getDonationAlertsDesktopClientId() !== null,
     getDonationConnections: async () => donations().getConnections(),
     getDonationOAuthAvailability,
     connectDonationProvider: async (params) => {

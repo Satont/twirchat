@@ -6,7 +6,7 @@ export const DONATION_PROVIDERS = ['donationalerts', 'donatepay', 'memealerts'] 
 
 export type DonationProvider = (typeof DONATION_PROVIDERS)[number]
 export type OAuthDonationProvider = Exclude<DonationProvider, 'donatepay'>
-export type DonationOAuthAvailability = Record<OAuthDonationProvider, boolean>
+export type DonationOAuthAvailability = { memealerts: boolean }
 
 export const DONATION_PROVIDER_LABELS: Record<DonationProvider, string> = {
   donationalerts: 'DonationAlerts',

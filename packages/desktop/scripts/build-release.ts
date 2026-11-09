@@ -196,6 +196,9 @@ export async function buildRelease(args = process.argv.slice(2)): Promise<void> 
     define: {
       __APP_VERSION__: JSON.stringify(version),
       __BACKEND_URL__: JSON.stringify(backendUrl),
+      embeddedDonationAlertsDesktopClientId: JSON.stringify(
+        process.env.TWIRCHAT_DONATIONALERTS_CLIENT_ID ?? '',
+      ),
       embeddedTwitchDesktopClientId: JSON.stringify(process.env.TWIRCHAT_TWITCH_CLIENT_ID ?? ''),
       embeddedYouTubeDesktopClientId: JSON.stringify(process.env.TWIRCHAT_YOUTUBE_CLIENT_ID ?? ''),
       embeddedYouTubeDesktopClientSecret: JSON.stringify(
