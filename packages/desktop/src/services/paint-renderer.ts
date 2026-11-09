@@ -49,6 +49,8 @@ const escapeMarkup = (text: string): string =>
   )
 
 let sharpFactory: typeof import('sharp').default | null = null
+export const PAINT_GLYPH_HORIZONTAL_PADDING = 8
+export const PAINT_GLYPH_VERTICAL_PADDING = 4
 const DISK_LIMITS: ImageSweepLimits = {
   pattern: /^[a-f0-9]{32}\.webp$/,
   maxFiles: 512,
@@ -196,13 +198,19 @@ export function createPaintRenderer(
         })
           .png()
           .toBuffer({ resolveWithObject: true })
-        const width = glyph.info.width + 16,
-          height = glyph.info.height + 8
+        const width = glyph.info.width + 2 * PAINT_GLYPH_HORIZONTAL_PADDING
+        const height = glyph.info.height + 2 * PAINT_GLYPH_VERTICAL_PADDING
         if (width > 2048 || height > 128) throw new Error('Paint name dimensions are too large.')
         const mask = await sharp({
           create: { width, height, channels: 4, background: '#00000000' },
         })
-          .composite([{ input: glyph.data, left: 8, top: 4 }])
+          .composite([
+            {
+              input: glyph.data,
+              left: PAINT_GLYPH_HORIZONTAL_PADDING,
+              top: PAINT_GLYPH_VERTICAL_PADDING,
+            },
+          ])
           .png()
           .toBuffer()
         const glyphMask: Mask = {

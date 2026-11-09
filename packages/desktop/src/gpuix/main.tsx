@@ -25,7 +25,7 @@ import {
   wireBackendToStores,
   showNotice,
 } from './state/app'
-import { initCaches } from './state/caches'
+import { initAvatarCache } from './state/caches'
 import { wireChannelState } from './state/channel-state'
 import { loadChatPausePreferences } from './state/chat-pause'
 import { chatRulesPreferences } from './state/chat-rules'
@@ -66,11 +66,7 @@ void Promise.all([
   loadTranslationSettings(backend),
 ]).catch((error) => showNotice('error', `Could not load preferences: ${String(error)}`))
 
-// Session caches (avatars, mention colors) resolve through the backend bridge.
-initCaches({
-  resolveAvatar: (params) => backend.api.resolveAvatar(params),
-  getUsernameColor: (params) => backend.api.getUsernameColor(params),
-})
+initAvatarCache((params) => backend.api.resolveAvatar(params))
 
 // Wiring must survive `bun --hot`: the entry re-runs on every save, but the
 // backend singleton and its event subscriptions must be created only once.

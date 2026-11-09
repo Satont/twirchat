@@ -14,11 +14,10 @@ import type { Emote, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { chunkGraphemes, sanitizeDisplayText } from '../views/shared/utils/display-text'
 import { buildMessageParts } from '../views/shared/utils/messageParts'
-import { mentionColor } from './state/caches'
 
 export type MessageToken =
   | { kind: 'text'; text: string }
-  | { kind: 'mention'; text: string; username: string; color: string | null }
+  | { kind: 'mention'; text: string; username: string }
   | { kind: 'link'; text: string; url: string }
   | { kind: 'emote'; emote: Emote; overlays?: Emote[]; modifiers?: string[] }
 
@@ -119,7 +118,6 @@ function* wordsOf(segment: string): Generator<string> {
 function pushSegment(
   tokens: MessageToken[],
   segment: string,
-  platform: string,
   decorate: (word: string) => MessageToken,
 ): void {
   for (const word of wordsOf(segment)) {
@@ -161,15 +159,15 @@ export function buildMessageTokens(
     let cursor = 0
     for (const match of content.matchAll(URL_REGEX)) {
       const before = content.slice(cursor, match.index)
-      pushMentions(tokens, before, message.platform)
-      pushSegment(tokens, linkDisplayText(match[0]), message.platform, (word) => ({
+      pushMentions(tokens, before)
+      pushSegment(tokens, linkDisplayText(match[0]), (word) => ({
         kind: 'link',
         text: word,
         url: match[0],
       }))
       cursor = match.index + match[0].length
     }
-    pushMentions(tokens, content.slice(cursor), message.platform)
+    pushMentions(tokens, content.slice(cursor))
   }
 
   // Normalize whitespace at token boundaries: a text token following a
@@ -206,20 +204,19 @@ export function buildMessageTokens(
   )
 }
 
-function pushMentions(tokens: MessageToken[], segment: string, platform: string): void {
+function pushMentions(tokens: MessageToken[], segment: string): void {
   if (!segment) return
   let cursor = 0
   for (const match of segment.matchAll(MENTION_REGEX)) {
     const before = segment.slice(cursor, match.index)
-    pushSegment(tokens, before, platform, (word) => ({ kind: 'text', text: word }))
+    pushSegment(tokens, before, (word) => ({ kind: 'text', text: word }))
     const username = match[1] ?? ''
-    pushSegment(tokens, match[0], platform, (word) => ({
+    pushSegment(tokens, match[0], (word) => ({
       kind: 'mention',
       text: word,
       username,
-      color: mentionColor(platform, username) ?? null,
     }))
     cursor = match.index + match[0].length
   }
-  pushSegment(tokens, segment.slice(cursor), platform, (word) => ({ kind: 'text', text: word }))
+  pushSegment(tokens, segment.slice(cursor), (word) => ({ kind: 'text', text: word }))
 }

@@ -1,9 +1,7 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 
 import type { CosmeticPaint, UserCosmetics } from '../../services/cosmetics'
-import { runUiTask } from '../hooks/run-ui-task'
-import { namePaintCache, userCosmeticsCache } from '../state/cosmetics'
+import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
 import { useFont } from '../theme-context'
@@ -19,29 +17,12 @@ export function useAuthorCosmetics(message: NormalizedChatMessage, visible = tru
       state.value.paints ||
       (state.value.personal && state.value.enabled.seventv),
   )
-  const enabled = visible && configured && !!message.author.id && message.type !== 'system'
-  const input = useMemo(
-    () => ({
-      platform: message.platform,
-      platformUserId: message.author.id,
-      username: message.author.username,
-    }),
-    [message.platform, message.author.id, message.author.username],
+  return useUserCosmetics(
+    message.platform,
+    message.author.id,
+    message.author.username,
+    visible && configured && message.type !== 'system',
   )
-  const subscribe = useCallback(
-    (listener: () => void) => (enabled ? userCosmeticsCache.subscribe(input, listener) : () => {}),
-    [enabled, input],
-  )
-  const snapshot = useCallback(
-    () => (enabled ? userCosmeticsCache.snapshot(input) : undefined),
-    [enabled, input],
-  )
-  const result = useSyncExternalStore(subscribe, snapshot, snapshot)
-  useEffect(() => {
-    if (enabled && input.platformUserId && message.type !== 'system')
-      runUiTask(userCosmeticsCache.ensure(input))
-  }, [enabled, input, message.type])
-  return result?.status === 'ready' ? result.value : null
 }
 
 export function CosmeticAuthorName({
@@ -59,19 +40,7 @@ export function CosmeticAuthorName({
 }) {
   const font = useFont()
   const enabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
-  const input = useMemo(
-    () => (paint && enabled ? { name, paint, fontSize, fontFamily: font } : null),
-    [name, paint, fontSize, font, enabled],
-  )
-  const subscribe = useCallback(
-    (listener: () => void) => (input ? namePaintCache.subscribe(input, listener) : () => {}),
-    [input],
-  )
-  const snapshot = useCallback(() => (input ? namePaintCache.snapshot(input) : undefined), [input])
-  const result = useSyncExternalStore(subscribe, snapshot, snapshot)
-  useEffect(() => {
-    if (input) runUiTask(namePaintCache.ensure(input))
-  }, [input])
+  const image = usePaintImage(name, enabled ? paint : undefined, fontSize, font)
   return (
     <div
       role="button"
@@ -86,12 +55,8 @@ export function CosmeticAuthorName({
       }}
       style={{ display: 'flex', cursor: 'pointer', flexShrink: 0 }}
     >
-      {result?.status === 'ready' ? (
-        <img
-          alt={name}
-          src={result.value.path}
-          style={{ width: result.value.width, height: result.value.height }}
-        />
+      {image ? (
+        <img alt={name} src={image.path} style={{ width: image.width, height: image.height }} />
       ) : (
         <Text
           style={{

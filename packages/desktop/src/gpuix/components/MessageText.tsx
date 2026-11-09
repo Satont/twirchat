@@ -8,7 +8,7 @@ import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
  * v-html="processText(...)" inline rendering.
  */
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
-import { memo, useEffect, useMemo, useContext } from 'react'
+import { memo, useMemo } from 'react'
 
 import { authorEmoteCatalog, enrichProviderEmotes } from '../../services/provider-emotes'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
@@ -16,7 +16,6 @@ import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { buildMessageTokens, mergePlainText } from '../message-tokens'
 import { accountsStore, authorEmoteStore, emoteStore } from '../state/app'
-import { ensureMentionColors, mentionColor, mentionColorRevisionStore } from '../state/caches'
 import { chatPauseStore } from '../state/chat-pause'
 import { useStoreSelector } from '../state/create-store'
 import { emotePreferencesStore } from '../state/emote-preferences'
@@ -24,7 +23,6 @@ import { useFont, useTheme } from '../theme-context'
 import { MessageMention } from './MessageMention'
 import { EmoteArtwork } from './ui/EmoteArtwork'
 import { EmoteTooltip } from './ui/EmoteTooltip'
-import { ImageLoadingContext } from './ui/RemoteImage'
 
 const EMPTY_CATALOG: EmoteCatalogEntry[] = []
 
@@ -60,16 +58,7 @@ export const MessageTokens = memo(function MessageTokens({
   const theme = useTheme()
   const font = useFont()
   const backend = useBackend()
-  const visible = useContext(ImageLoadingContext)
   const doubleClickLinks = useStoreSelector(chatPauseStore, (state) => state.value.doubleClickLinks)
-  // Re-render when a mention color resolves for this message's mentions.
-  const mentions = useMemo(() => message.text.match(/@[a-zA-Z0-9_]+/g) ?? [], [message])
-  useStoreSelector(mentionColorRevisionStore, () =>
-    mentions.map((mention) => mentionColor(message.platform, mention.slice(1)) ?? '').join('|'),
-  )
-  useEffect(() => {
-    if (visible) ensureMentionColors(message.platform, message.text)
-  }, [message, visible])
 
   const catalog = useStoreSelector(
     emoteStore,

@@ -101,13 +101,7 @@ import type { TwitchActivityRefreshClient } from '../../services/twitch-activity
 import type { TwitchEventSubClient } from '../../services/twitch-eventsub'
 import { sevenTVService } from '../../seventv'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
-import {
-  AccountStore,
-  ChannelStore,
-  MessageStore,
-  SettingsStore,
-  UsernameColorCache,
-} from '../../store'
+import { AccountStore, ChannelStore, MessageStore, SettingsStore } from '../../store'
 import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
 import { UserAliasStore } from '../../store/user-alias-store'
 import { WatchedChannelsLayoutStore } from '../../store/watched-channels-layout-store'
@@ -362,7 +356,6 @@ export interface DesktopApi {
   getModerationSettings(): Promise<ModerationSettings>
   saveModerationSettings(settings: ModerationSettings): Promise<void>
   getStatuses(): Promise<PlatformStatusInfo[]>
-  getUsernameColor(params: { platform: Platform; username: string }): Promise<string | null>
   resolveMentionUser(params: MentionUserRequest): Promise<MentionUser | null>
   getChannelEmotes(params: { platform: Platform; channelId: string }): Promise<EmoteCatalogEntry[]>
   getEmoteProviderErrors(): Promise<Array<{ url: string; error: string }>>
@@ -1190,9 +1183,6 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     getStatuses: async () => [...currentStatuses.values()],
 
-    getUsernameColor: async ({ platform, username }) => {
-      return UsernameColorCache.get(platform, username) ?? null
-    },
     resolveMentionUser,
 
     getChannelEmotes: async ({ platform, channelId }) => {
