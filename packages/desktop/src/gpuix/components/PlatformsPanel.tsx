@@ -213,7 +213,7 @@ function PlatformCard({
                 {account.avatarUrl ? (
                   <RemoteImage
                     url={account.avatarUrl}
-                    avatarSize={32}
+                    thumbnailSize={32}
                     objectFit="cover"
                     // GPUI clips overflow to a rectangle, so the image needs
                     // its own radius to stay inside the round frame.

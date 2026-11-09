@@ -52,7 +52,7 @@ function AccountAvatar({ account, size, ring }: AccountAvatarProps) {
   return (
     <RemoteImage
       url={account.avatarUrl}
-      avatarSize={size}
+      thumbnailSize={size}
       objectFit="cover"
       style={frame}
       fallback={letter}

@@ -165,7 +165,7 @@ export function Avatar({
       {url ? (
         <RemoteImage
           url={url}
-          avatarSize={size}
+          thumbnailSize={size}
           objectFit="cover"
           style={{
             position: 'absolute',
@@ -816,7 +816,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             </div>
           ) : null}
           {props.showBadges !== false && cosmetics?.badges.length ? (
-            <CosmeticBadges badges={cosmetics.badges} size={badgeSize(fontSize)} />
+            <CosmeticBadges badges={cosmetics.badges} size={badgeSize(fontSize)} marginRight={5} />
           ) : null}
           <CosmeticAuthorName
             name={authorName}

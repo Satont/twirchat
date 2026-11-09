@@ -97,7 +97,7 @@ export function UserCardHeader({
           {!hideAvatar && target.avatarUrl ? (
             <RemoteImage
               url={target.avatarUrl}
-              avatarSize={72}
+              thumbnailSize={72}
               objectFit="cover"
               style={{
                 width: 72,

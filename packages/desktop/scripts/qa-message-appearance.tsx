@@ -23,7 +23,7 @@ const { Text } = await import('../src/gpuix/components/ui/Text')
 const { accountsStore, channelStatusStore } = await import('../src/gpuix/state/app')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
 const { imageSnapshot } = await import('../src/gpuix/state/image-cache')
-const { avatarThumbnailer } = await import('../src/services/avatar-image')
+const { imageThumbnailer } = await import('../src/services/image-thumbnail')
 const { setRuntimeConfig } = await import('../src/runtime-config')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 
@@ -206,7 +206,7 @@ try {
     if (typeof path !== 'string') throw new Error('Avatar source was not loaded.')
     return path
   })()
-  await Promise.all([18, 23, 28, 32].map((size) => avatarThumbnailer.render(sourcePath, size)))
+  await Promise.all([18, 23, 28, 32].map((size) => imageThumbnailer.render(sourcePath, size)))
   await Bun.sleep(300)
   const measurements: { width: number; fontSize: number; gap: number }[] = []
   for (const width of [900, 420]) {

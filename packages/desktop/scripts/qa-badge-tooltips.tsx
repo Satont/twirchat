@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import type { GpuixRenderer } from '@gpuix/native'
@@ -33,6 +33,7 @@ const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x1
 
 interface AutomationNode {
   id: number
+  type: string
   testId?: string
   text?: string
   children: AutomationNode[]
@@ -40,6 +41,7 @@ interface AutomationNode {
 const automationSchema: z.ZodType<AutomationNode> = z.lazy(() =>
   z.object({
     id: z.number(),
+    type: z.string(),
     testId: z.string().optional(),
     text: z.string().optional(),
     children: z.array(automationSchema).default([]),
@@ -49,6 +51,7 @@ const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session)
 const backend = getDesktopBackend()
 const imageUrl = 'https://static-cdn.jtvnw.net/badges/v1/qa-tooltip/1'
+const twirImageUrl = 'https://s3.twir.app/badges/qa-tooltip.svg'
 const cache = join(dirname(getDbPath()), 'image-cache')
 await mkdir(cache, { recursive: true })
 const sharp = (await import('sharp')).default
@@ -58,6 +61,13 @@ await Bun.write(
     .png()
     .toBuffer(),
 )
+await Bun.write(
+  join(cache, `${createHash('sha256').update(twirImageUrl).digest('hex').slice(0, 32)}.svg`),
+  `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+    <circle cx="64" cy="64" r="60" fill="#6237d6" stroke="#fff" stroke-width="3"/>
+    <path d="M22 89L41 30l23 59 23-59 19 59M34 65h60" fill="none" stroke="#fff" stroke-width="4"/>
+  </svg>`,
+)
 const providerBadges: Badge[] = [
   { id: 'qa-7tv', type: 'seventv', text: '7TV Supporter', imageUrl },
   { id: 'qa-bttv', type: 'bttv', text: 'BetterTTV Pro', imageUrl },
@@ -66,7 +76,7 @@ const providerBadges: Badge[] = [
   { id: 'qa-dankchat', type: 'dankchat', text: 'DankChat Developer', imageUrl },
   { id: 'qa-chatsen', type: 'chatsen', text: 'Chatsen Developer', imageUrl },
   { id: 'qa-homies', type: 'homies', text: 'Homies Custom Badge', imageUrl },
-  { id: 'qa-twir', type: 'twir', text: 'Twir Contributor', imageUrl },
+  { id: 'qa-twir', type: 'twir', text: 'Twir Contributor', imageUrl: twirImageUrl },
   { id: 'qa-profile-text', type: 'seventv', text: 'Profile badge without image' },
 ]
 const imageBadge: Badge = {
@@ -94,7 +104,11 @@ function message(id: string, platform: 'twitch' | 'kick', badges: Badge[]): Norm
     id,
     platform,
     channelId: 'qa',
-    author: { id: platform === 'twitch' ? 'qa-author' : '', displayName: 'Badge QA', badges },
+    author: {
+      id: platform === 'twitch' ? 'qa-author' : '',
+      displayName: platform === 'twitch' ? 'Badge QA' : 'Kick QA',
+      badges,
+    },
     text: 'Badge details remain available while live chat keeps updating.',
     emotes: [],
     timestamp: new Date('2026-11-03T09:00:00Z'),
@@ -288,8 +302,22 @@ let timer: ReturnType<typeof setInterval> | undefined
 try {
   await manager.start()
   await until(
-    () => !!renderer && nodes().some((node) => node.testId === 'badge-trigger-qa-7tv'),
-    'provider badge ready',
+    () =>
+      !!renderer &&
+      nodes().some(
+        (node) =>
+          node.testId === 'badge-trigger-qa-twir' &&
+          node.children.some((child) => child.type === 'img'),
+      ),
+    'Twir badge ready',
+  )
+  const thumbnails = join(cache, 'avatars')
+  const [thumbnail] = await readdir(thumbnails)
+  assert(thumbnail, 'Twir badge prepared a cached thumbnail.')
+  const { format, width, height, hasAlpha } = await sharp(join(thumbnails, thumbnail)).metadata()
+  assert.deepEqual(
+    { format, width, height, hasAlpha },
+    { format: 'png', width: 32, height: 32, hasAlpha: true },
   )
   await focusNativeQaWindow('TwirChat')
   let previousTick = performance.now()
@@ -312,6 +340,18 @@ try {
       configuration.set({ theme, profile: false, mounted: true })
       await Bun.sleep(300)
       await leave()
+      if (width === 900) {
+        const badge = bounds('badge-trigger-qa-twir')
+        const author = nodes().find((node) => node.text === twitchMessage.author.displayName)
+        assert(author)
+        const name = current().getElementBounds(author.id)
+        assert(name)
+        assert(badge.y < name.y + name.height && name.y < badge.y + badge.height)
+        const gap = name.x - (badge.x + badge.width)
+        assert(Math.abs(gap - 5) < 1, `${theme} nickname gap was ${gap}px`)
+        screenshots.push(await captureGuiQaDisplay(`twir-badge-spacing-${theme}`))
+        checks.push(`${theme}: Twir SVG thumbnail and ${gap}px nickname gap`)
+      }
       const requests = cosmeticsRequests
       for (const [id, title, source] of [
         ['qa-image', imageBadge.text, 'Twitch'],
