@@ -956,6 +956,7 @@ export function ChatView({
     id: splitContextId,
     category: 'split',
     handlers: {
+      cancelReply: replyTarget ? () => setReplyTarget(null) : null,
       changeChannel: onChangeChannel ?? null,
       clearMessages,
       createClip:
