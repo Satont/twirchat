@@ -695,6 +695,44 @@ describe('7TV cosmetics', () => {
     expect(calls).toBe(1)
   })
 
+  test('honors badge and paint preferences in the resolver and cache key', async () => {
+    let badgeCalls = 0
+    const service = createCosmeticsService(
+      async () => json(cosmeticResponse()),
+      async () => {
+        badgeCalls++
+        return [{ id: 'twir:contributor', type: 'twir', text: 'Twir Contributor' }]
+      },
+    )
+    const communityBadges = prefs().communityBadges
+    const disabled = await service.getUserCosmetics('twitch', '42', undefined, {
+      badges: false,
+      paints: false,
+      communityBadges,
+    })
+    expect(disabled.badges).toEqual([])
+    expect(disabled.paint).toBeUndefined()
+    expect(badgeCalls).toBe(0)
+
+    const badgesOnly = await service.getUserCosmetics('twitch', '42', undefined, {
+      badges: true,
+      paints: false,
+      communityBadges,
+    })
+    expect(badgesOnly.badges.map((badge) => badge.type)).toEqual(['seventv', 'twir'])
+    expect(badgesOnly.paint).toBeUndefined()
+    expect(badgeCalls).toBe(1)
+
+    const paintsOnly = await service.getUserCosmetics('twitch', '42', undefined, {
+      badges: false,
+      paints: true,
+      communityBadges,
+    })
+    expect(paintsOnly.badges).toEqual([])
+    expect(paintsOnly.paint?.name).toBe('Gradient')
+    expect(badgeCalls).toBe(1)
+  })
+
   test('keeps other provider badges when the 7TV endpoint is unavailable', async () => {
     const service = createCosmeticsService(
       async () => new Response('down', { status: 503 }),

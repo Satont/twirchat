@@ -136,6 +136,11 @@ test('catalog, fixed cosmetics and opted-in presence are relayed without upstrea
     'https://api.frankerfacez.com/v1/badges',
     'https://7tv.io/v3/emote-sets/global',
     'https://7tv.io/v3/users/twitch/123',
+    'https://api.ffzap.com/v1/supporters',
+    'https://flxrs.com/api/badges',
+    'https://raw.githubusercontent.com/chatsen/resources/master/assets/data.json',
+    'https://chatterinohomies.com/api/badges/list',
+    'https://twir.app/api/v1/public/badges',
   ]) {
     const result = await relay.metadata(url)
     expect(result.status).toBe(200)

@@ -4,12 +4,14 @@ import { z } from 'zod'
 
 import { sanitizeDisplayText, truncateGraphemes } from '../views/shared/utils/display-text'
 import { deleteOldestEntry } from './bounded-cache'
+import { COMMUNITY_BADGE_PROVIDERS } from './community-badges'
 import { getProviderBadges, type ProviderFetch } from './emote-providers'
 import {
   createPaintRenderer,
   PAINT_GLYPH_HORIZONTAL_PADDING,
   PAINT_GLYPH_VERTICAL_PADDING,
 } from './paint-renderer'
+import { DEFAULT_EMOTE_PREFERENCES, type EmotePreferences } from './provider-emotes'
 import { fetchProviderMetadata } from './provider-relay'
 
 const rowSchema = z.record(z.string(), z.unknown())
@@ -45,6 +47,24 @@ export interface UserCosmetics {
   badges: Badge[]
   paint?: CosmeticPaint
   lookupStatus: 'available' | 'not-found' | 'unavailable'
+}
+export type UserCosmeticPreferences = Pick<
+  EmotePreferences,
+  'badges' | 'paints' | 'communityBadges'
+>
+
+function cosmeticsCacheKey(
+  platform: Platform,
+  userId: string,
+  preferences: UserCosmeticPreferences,
+): string {
+  return JSON.stringify([
+    platform,
+    userId,
+    preferences.badges,
+    preferences.paints,
+    COMMUNITY_BADGE_PROVIDERS.map((provider) => preferences.communityBadges[provider]),
+  ])
 }
 
 export function parseCosmetics(value: unknown): UserCosmetics {
@@ -152,8 +172,9 @@ export function createCosmeticsService(
     platform: Platform,
     userId: string,
     username?: string,
+    preferences: UserCosmeticPreferences = DEFAULT_EMOTE_PREFERENCES,
   ): Promise<UserCosmetics> => {
-    const key = `${platform}:${userId}`
+    const key = cosmeticsCacheKey(platform, userId, preferences)
     const old = cache.get(key)
     if (old && old.expires > Date.now()) return Promise.resolve(old.value)
     const inflight = pending.get(key)
@@ -162,7 +183,9 @@ export function createCosmeticsService(
     const task = (async () => {
       if (active >= 4) await new Promise<void>((resolve) => waiting.push(resolve))
       else active++
-      const providerBadges = badges(platform, userId, username).catch(() => [])
+      const providerBadges = preferences.badges
+        ? badges(platform, userId, username, preferences).catch(() => [])
+        : Promise.resolve([])
       try {
         let result: UserCosmetics = { badges: [], lookupStatus: 'not-found' }
         if (platform !== 'youtube' && userId) {
@@ -183,6 +206,8 @@ export function createCosmeticsService(
             throw new Error(str(row(list(row(json).errors)[0]).message))
           result = parseCosmetics(json)
         }
+        if (!preferences.badges) result.badges = []
+        if (!preferences.paints) delete result.paint
         result.badges.push(...(await providerBadges))
         cache.set(key, { value: result, expires: Date.now() + 600_000 })
         return result
@@ -206,8 +231,11 @@ export function createCosmeticsService(
   }
   return {
     getUserCosmetics: lookup,
-    cachedUserCosmetics: (platform: Platform, userId: string) =>
-      cache.get(`${platform}:${userId}`)?.value,
+    cachedUserCosmetics: (
+      platform: Platform,
+      userId: string,
+      preferences: UserCosmeticPreferences = DEFAULT_EMOTE_PREFERENCES,
+    ) => cache.get(cosmeticsCacheKey(platform, userId, preferences))?.value,
   }
 }
 

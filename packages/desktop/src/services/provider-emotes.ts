@@ -2,6 +2,10 @@ import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 import type { Emote, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { deleteOldestEntry } from './bounded-cache'
+import {
+  DEFAULT_COMMUNITY_BADGE_PREFERENCES,
+  type CommunityBadgePreferences,
+} from './community-badges'
 
 export type EmoteProvider = 'twitch' | 'seventv' | 'bttv' | 'ffz'
 export interface EmotePreferences {
@@ -11,6 +15,7 @@ export interface EmotePreferences {
   modifiers: boolean
   badges: boolean
   paints: boolean
+  communityBadges: CommunityBadgePreferences
   personal: boolean
   sendPresence: boolean
   emojiCompletion: boolean
@@ -23,6 +28,7 @@ export const DEFAULT_EMOTE_PREFERENCES: EmotePreferences = {
   modifiers: true,
   badges: true,
   paints: true,
+  communityBadges: structuredClone(DEFAULT_COMMUNITY_BADGE_PREFERENCES),
   personal: true,
   sendPresence: false,
   emojiCompletion: true,

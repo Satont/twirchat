@@ -626,7 +626,13 @@ export function createDesktopProviderRuntime(
       sevenTVService.handleEmoteSet(platform, channel, emotes),
     badges: getChannelProviderBadges,
     sevenTvUser: async (platform, userId) =>
-      (await getUserCosmetics(platform, userId))?.sevenTvUserId,
+      (
+        await getUserCosmetics(platform, userId, undefined, {
+          badges: false,
+          paints: false,
+          communityBadges: DEFAULT_EMOTE_PREFERENCES.communityBadges,
+        })
+      )?.sevenTvUserId,
     presence: updateSevenTvPresence,
     personalSet: getPersonalEmoteSet,
     publish,

@@ -11,10 +11,12 @@ export function Switch({
   checked,
   onChange,
   small,
+  testId,
 }: {
   checked: boolean
   onChange: (next: boolean) => void
   small?: boolean
+  testId?: string
 }) {
   const theme = useTheme()
   const width = small ? 34 : 40
@@ -25,6 +27,7 @@ export function Switch({
 
   return (
     <div
+      testId={testId}
       onClick={() => onChange(!checked)}
       style={{
         width,

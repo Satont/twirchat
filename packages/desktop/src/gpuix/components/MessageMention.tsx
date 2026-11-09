@@ -1,6 +1,7 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
-import { useCallback, useContext, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 
+import { DEFAULT_COMMUNITY_BADGE_PREFERENCES } from '../../services/community-badges'
 import {
   PAINT_GLYPH_HORIZONTAL_PADDING,
   PAINT_GLYPH_VERTICAL_PADDING,
@@ -75,11 +76,20 @@ export function MessageMention({
   const appearance = useSyncExternalStore(subscribe, snapshot, snapshot)
   const visible = useContext(ImageLoadingContext)
   const paintsEnabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
+  const cosmeticPreferences = useMemo(
+    () => ({
+      badges: false,
+      paints: paintsEnabled,
+      communityBadges: DEFAULT_COMMUNITY_BADGE_PREFERENCES,
+    }),
+    [paintsEnabled],
+  )
   const cosmetics = useUserCosmetics(
     message.platform,
     appearance?.id,
     appearance?.username,
     visible && paintsEnabled,
+    cosmeticPreferences,
   )
   const name = token.text.trimEnd()
   const image = usePaintImage(name, cosmetics?.paint, fontSize, font)

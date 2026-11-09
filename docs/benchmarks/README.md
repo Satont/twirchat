@@ -85,6 +85,8 @@ absolute application throughput limit. The machine remains shared with the user'
 
 ## Saved baseline and next session
 
+[2026-11-09 community badges](2026-11-09-community-badges/report.md) records the cosmetic toggle review, complete development matrix, and paired baseline/candidate production runs.
+
 [2026-11-09 Linux window resizing](2026-11-09-linux-window-resize/report.md) records the
 windowed Wayland load comparison, the fullscreen development matrix and pointer QA.
 

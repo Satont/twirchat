@@ -5,6 +5,8 @@ import type { UserCosmetics } from '../../../services/cosmetics'
 import type { UserCardTarget } from '../../../views/main/utils/chatCommands'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
+import { useStoreSelector } from '../../state/create-store'
+import { emotePreferencesStore } from '../../state/emote-preferences'
 import { useTheme } from '../../theme-context'
 import { BadgeTooltip } from '../ui/BadgeTooltip'
 import { ActionButton } from '../ui/Form'
@@ -22,6 +24,12 @@ export function UserProfile({
 }) {
   const backend = useBackend()
   const theme = useTheme()
+  const badgesEnabled = useStoreSelector(emotePreferencesStore, (state) => state.value.badges)
+  const paintsEnabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
+  const communityBadges = useStoreSelector(
+    emotePreferencesStore,
+    (state) => state.value.communityBadges,
+  )
   const [profile, setProfile] = useState<UserProfileSnapshot | null>(null)
   const [cosmetics, setCosmetics] = useState<UserCosmetics | null>(null)
   const [paintImage, setPaintImage] = useState<{
@@ -39,20 +47,29 @@ export function UserProfile({
     setProfile(null)
     setCosmetics(null)
     setPaintImage(null)
-    const requests = [
-      backend.api.getUserCosmetics({ platform, platformUserId, username }).then(async (value) => {
-        if (!active) return
-        setCosmetics(value)
-        if (value?.paint) {
-          const image = await backend.api.getPaintNameImage({
-            name: displayName,
-            paint: value.paint,
-            fontSize: 18,
+    const requests: Promise<void>[] = []
+    if (badgesEnabled || paintsEnabled)
+      requests.push(
+        backend.api
+          .getUserCosmetics({
+            platform,
+            platformUserId,
+            username,
+            preferences: { badges: badgesEnabled, paints: paintsEnabled, communityBadges },
           })
-          if (active) setPaintImage(image)
-        }
-      }),
-    ]
+          .then(async (value) => {
+            if (!active) return
+            setCosmetics(value)
+            if (paintsEnabled && value?.paint) {
+              const image = await backend.api.getPaintNameImage({
+                name: displayName,
+                paint: value.paint,
+                fontSize: 18,
+              })
+              if (active) setPaintImage(image)
+            }
+          }),
+      )
     if (platform === 'twitch')
       requests.push(
         backend.api
@@ -76,7 +93,17 @@ export function UserProfile({
     return () => {
       active = false
     }
-  }, [backend, platform, platformUserId, username, channelSlug, displayName])
+  }, [
+    backend,
+    platform,
+    platformUserId,
+    username,
+    channelSlug,
+    displayName,
+    badgesEnabled,
+    paintsEnabled,
+    communityBadges,
+  ])
   useEffect(() => {
     onAvatarChange?.(hideAvatar ? undefined : profile?.avatarUrl)
   }, [profile?.avatarUrl, hideAvatar, onAvatarChange])
@@ -146,38 +173,40 @@ export function UserProfile({
           ))}
         </>
       ) : null}
-      {cosmetics?.sevenTvUserId ? (
+      {cosmetics?.sevenTvUserId && (badgesEnabled || paintsEnabled) ? (
         <>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            {paintImage ? (
+            {paintsEnabled && paintImage ? (
               <img
                 src={paintImage.path}
                 style={{ width: paintImage.width, height: paintImage.height }}
               />
             ) : null}
-            {cosmetics.badges.map((badge) => (
-              <BadgeTooltip key={badge.id} badge={badge}>
-                {badge.imageUrl ? (
-                  <RemoteImage
-                    url={badge.imageUrl}
-                    style={{ width: 24, height: 24, pointerEvents: 'none' }}
-                  />
-                ) : (
-                  <Text
-                    style={{
-                      color: theme.text,
-                      fontSize: 12,
-                      pointerEvents: 'none',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {badge.text}
-                  </Text>
-                )}
-              </BadgeTooltip>
-            ))}
+            {badgesEnabled
+              ? cosmetics.badges.map((badge) => (
+                  <BadgeTooltip key={badge.id} badge={badge}>
+                    {badge.imageUrl ? (
+                      <RemoteImage
+                        url={badge.imageUrl}
+                        style={{ width: 24, height: 24, pointerEvents: 'none' }}
+                      />
+                    ) : (
+                      <Text
+                        style={{
+                          color: theme.text,
+                          fontSize: 12,
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                        }}
+                      >
+                        {badge.text}
+                      </Text>
+                    )}
+                  </BadgeTooltip>
+                ))
+              : null}
           </div>
-          {cosmetics.paint ? (
+          {paintsEnabled && cosmetics.paint ? (
             <Text style={{ color: theme.text2, fontSize: 12 }}>
               7TV paint: {cosmetics.paint.name}
             </Text>
