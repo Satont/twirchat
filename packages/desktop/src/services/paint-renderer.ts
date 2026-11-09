@@ -134,7 +134,7 @@ export function createPaintRenderer(
       return Promise.reject(new Error('Invalid paint name or layers.'))
     const family = /manrope/i.test(fontFamily) ? 'Manrope' : 'Inter'
     const key = createHash('sha256')
-      .update(JSON.stringify({ version: 3, text, paint, size, family }))
+      .update(JSON.stringify({ version: 4, text, paint, size, family }))
       .digest('hex')
       .slice(0, 32)
     const pending = renders.get(key)
@@ -274,7 +274,10 @@ export function createPaintRenderer(
                   pages: 1,
                   limitInputPixels: 4_000_000,
                 })
-                  .resize(width, height, { fit: 'cover' })
+                  .resize(glyph.info.width, glyph.info.height, {
+                    fit: 'cover',
+                    position: 'left top',
+                  })
                   .png()
                   .toBuffer()
                 imageUrl = `data:image/png;base64,${pixels.toString('base64')}`

@@ -290,7 +290,8 @@ async function mentionColors(
     const r = pixels.readUInt8(offset)
     const g = pixels.readUInt8(offset + 1)
     const b = pixels.readUInt8(offset + 2)
-    if (r > 160 && r - g > 70 && r - b > 70) red++
+    // Match the fixture's #ff5f57 so subpixel fringes on white text do not count.
+    if (r > 220 && Math.abs(g - 95) < 15 && Math.abs(b - 87) < 15) red++
     if (g > 170 && g - r > 90 && g - b > 60) green++
     if (g > 170 && b > 170 && Math.min(g, b) - r > 90) cyan++
   }
