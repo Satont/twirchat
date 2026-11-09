@@ -108,6 +108,33 @@ export interface KickAdapterDependencies extends KickRealtimeDependencies {
 const kickSendAcknowledgementSchema = z.object({
   data: z.object({ is_sent: z.boolean().optional(), message_id: z.string().min(1).optional() }),
 })
+const KICK_UNCONFIRMED = 'Kick message delivery could not be confirmed. Check chat before retrying.'
+
+function kickSendBody(
+  broadcasterUserId: number,
+  text: string,
+  replyTo?: ChatReplyTarget,
+): KickSendBody {
+  const replyToMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
+  return {
+    broadcaster_user_id: broadcasterUserId,
+    content: text,
+    type: 'user',
+    ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
+  }
+}
+
+function kickSendReceipt(payload: unknown, body: KickSendBody): ChatSendReceipt {
+  const acknowledgement = kickSendAcknowledgementSchema.safeParse(payload)
+  if (!acknowledgement.success) throw new Error(KICK_UNCONFIRMED)
+  if (acknowledgement.data.data.is_sent === false) throw new Error('Kick did not send the message.')
+  if (acknowledgement.data.data.is_sent !== true && !acknowledgement.data.data.message_id)
+    throw new Error(KICK_UNCONFIRMED)
+  return {
+    channelId: String(body.broadcaster_user_id),
+    messageId: acknowledgement.data.data.message_id,
+  }
+}
 
 const defaultDependencies: KickAdapterDependencies = {
   account: () => AccountStore.findByPlatform('kick'),
@@ -358,7 +385,7 @@ export class KickAdapter extends BasePlatformAdapter {
       return await this.dependencies.send(body, token, signal)
     } catch {
       this.assertIdentity(revision, true)
-      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
+      throw new Error(KICK_UNCONFIRMED)
     }
   }
 
@@ -370,13 +397,7 @@ export class KickAdapter extends BasePlatformAdapter {
     const revision = this.identityRevision
     if (!this.broadcasterUserId)
       throw new Error('Kick channel is not ready. Reconnect chat before sending.')
-    const replyToMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
-    const body: KickSendBody = {
-      broadcaster_user_id: this.broadcasterUserId,
-      content: text,
-      type: 'user',
-      ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
-    }
+    const body = kickSendBody(this.broadcasterUserId, text, replyTo)
     let token = await this.sendToken(revision, false)
     this.assertIdentity(revision)
     let response = await this.deliver(body, token, revision)
@@ -395,20 +416,50 @@ export class KickAdapter extends BasePlatformAdapter {
       payload = await response.json()
     } catch {
       this.assertIdentity(revision, true)
-      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
+      throw new Error(KICK_UNCONFIRMED)
     }
     this.assertIdentity(revision, true)
-    const acknowledgement = kickSendAcknowledgementSchema.safeParse(payload)
-    if (!acknowledgement.success)
-      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
-    if (acknowledgement.data.data.is_sent === false)
-      throw new Error('Kick did not send the message.')
-    if (acknowledgement.data.data.is_sent !== true && !acknowledgement.data.data.message_id)
-      throw new Error('Kick message delivery could not be confirmed. Check chat before retrying.')
-    return {
-      channelId: String(body.broadcaster_user_id),
-      messageId: acknowledgement.data.data.message_id,
+    return kickSendReceipt(payload, body)
+  }
+
+  /**
+   * Sends with another saved Kick account while this chat keeps reading with its own identity.
+   * Kick broadcasts the message back over the chat's socket like any other viewer's message.
+   */
+  async sendMessageAs(
+    account: Pick<Account, 'id' | 'username'>,
+    text: string,
+    replyTo?: ChatReplyTarget,
+  ): Promise<ChatSendReceipt> {
+    if (!this.broadcasterUserId)
+      throw new Error('Kick channel is not ready. Reconnect chat before sending.')
+    const body = kickSendBody(this.broadcasterUserId, text, replyTo)
+    const deliver = async (refresh: boolean): Promise<Response> => {
+      let tokens = this.dependencies.tokens(account.id)
+      if (refresh || !tokens?.accessToken || this.expiring(tokens)) {
+        await this.dependencies.refreshToken(account.id, { channelSlug: this.channelSlug })
+        tokens = this.dependencies.tokens(account.id)
+      }
+      if (!tokens?.accessToken) throw new Error(`Sign in to Kick as @${account.username} again.`)
+      try {
+        return await this.dependencies.send(body, tokens.accessToken, AbortSignal.timeout(15000))
+      } catch {
+        throw new Error(KICK_UNCONFIRMED)
+      }
     }
+    let response = await deliver(false)
+    if (response.status === 401) response = await deliver(true)
+    if (!response.ok)
+      throw new Error(
+        `Kick rejected the message from @${account.username} (HTTP ${response.status}).`,
+      )
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch {
+      throw new Error(KICK_UNCONFIRMED)
+    }
+    return kickSendReceipt(payload, body)
   }
 
   private closeSocket(): void {

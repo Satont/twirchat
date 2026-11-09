@@ -56,6 +56,10 @@ export const settingsStore = persistentResource('settings', () =>
   createStore<AppSettings | null>(null),
 )
 export const accountsStore = persistentResource('accounts', () => createStore<Account[]>([]))
+/** Every saved identity, active or not; chats may sign in with any of them. */
+export const savedAccountsStore = persistentResource('savedAccounts', () =>
+  createStore<Account[]>([]),
+)
 export const aliasesStore = persistentResource('aliases', () => createStore<UserAlias[]>([]))
 /** platform → status */
 export const channelStatusStore = persistentResource('channelStatuses', () =>
@@ -577,14 +581,16 @@ export function showConnectionNotice(status: PlatformStatusInfo): void {
 
 export async function loadInitialData(backend: DesktopBackend): Promise<void> {
   try {
-    const [accs, aliases, setts, statList, watched] = await Promise.all([
+    const [accs, saved, aliases, setts, statList, watched] = await Promise.all([
       backend.api.getAccounts(),
+      backend.api.getSavedAccounts(),
       backend.api.getUserAliases(),
       backend.api.getSettings(),
       backend.api.getStatuses(),
       backend.api.getWatchedChannels(),
     ])
     accountsStore.set(accs)
+    savedAccountsStore.set(saved)
     aliasesStore.set(aliases)
     settingsStore.set(setts)
     const statusMap: Partial<Record<Platform, PlatformStatusInfo>> = {}
@@ -653,7 +659,14 @@ const MESSAGE_FLUSH_INTERVAL_MS = 66
 
 export interface AppStoreBackend {
   events: DesktopEvents
-  api: Pick<DesktopApi, 'getAccounts' | 'getWatchedChannelMessages' | 'getWatchedChannelStatuses'>
+  api: Pick<
+    DesktopApi,
+    | 'getAccounts'
+    | 'getSavedAccounts'
+    | 'getWatchedChannels'
+    | 'getWatchedChannelMessages'
+    | 'getWatchedChannelStatuses'
+  >
 }
 export function wireBackendToStores(backend: AppStoreBackend): () => void {
   const { events } = backend
@@ -774,20 +787,33 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   })
 
   subscribe('accounts_changed', () => {
-    void backend.api
-      .getAccounts()
-      .then((accounts) => {
+    void Promise.all([
+      backend.api.getAccounts(),
+      backend.api.getSavedAccounts(),
+      backend.api.getWatchedChannels(),
+    ])
+      .then(([accounts, saved, watched]) => {
         accountsStore.set(accounts)
+        savedAccountsStore.set(saved)
+        // Forgetting an account returns its chats to the default account.
+        watchedChannelsStore.set(watched)
         homeBuffer.modify((messages) => filterHomeChatMessages(messages, accounts))
       })
       .catch((error) => showNotice('error', String(error)))
   })
 
+  const refreshAccounts = async () => {
+    const [accs, saved] = await Promise.all([
+      backend.api.getAccounts(),
+      backend.api.getSavedAccounts(),
+    ])
+    accountsStore.set(accs)
+    savedAccountsStore.set(saved)
+  }
   subscribe('auth_success', () => {
-    void backend.api
-      .getAccounts()
-      .then((accs) => accountsStore.set(accs))
-      .catch((error) => showNotice('error', `Could not refresh accounts: ${String(error)}`))
+    refreshAccounts().catch((error) =>
+      showNotice('error', `Could not refresh accounts: ${String(error)}`),
+    )
   })
 
   subscribe('auth_error', ({ platform, error }) => {
@@ -853,6 +879,7 @@ declare module './persistent-resources' {
   interface PersistentResources {
     settings: Store<AppSettings | null>
     accounts: Store<Account[]>
+    savedAccounts: Store<Account[]>
     aliases: Store<UserAlias[]>
     channelStatuses: Store<Partial<Record<Platform, PlatformStatusInfo>>>
     watchedChannels: Store<DesktopWatchedChannel[]>
