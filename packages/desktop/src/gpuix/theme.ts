@@ -1,6 +1,7 @@
-import type { AppSettings, CustomPalette, ThemePreset } from '@twirchat/shared/types'
+import type { AppSettings, CustomPalette, ThemeMode, ThemePreset } from '@twirchat/shared/types'
 
 import { normalizePaletteColor } from '../shared/theme-palette'
+import { OPENCODE_THEME_PRESETS, type ThemePresetPalette } from './theme-presets'
 
 export { normalizePaletteColor } from '../shared/theme-palette'
 
@@ -281,7 +282,8 @@ export function readableOn(color: string, background: string): string {
 interface ThemePresetDefinition {
   readonly id: ThemePreset
   readonly label: string
-  readonly palette: CustomPalette
+  readonly palette: ThemePresetPalette
+  readonly lightPalette?: ThemePresetPalette
 }
 
 export const DEFAULT_CUSTOM_PALETTE: CustomPalette = {
@@ -371,9 +373,10 @@ export const THEME_PRESETS: readonly ThemePresetDefinition[] = [
       accent: '#8e512b',
     },
   },
+  ...OPENCODE_THEME_PRESETS,
 ]
 
-function deriveTheme(palette: CustomPalette): Theme {
+function deriveTheme(palette: ThemePresetPalette): Theme {
   const { background: bg, accent: baseAccent } = palette
   const neutral = contrastForeground(luminance(hexChannels(bg)))
   const isLight = neutral === BLACK
@@ -442,25 +445,60 @@ function deriveTheme(palette: CustomPalette): Theme {
     fill: withAlpha(neutral, 0.05),
     fillHover: withAlpha(neutral, 0.09),
     hairline: withAlpha(neutral, 0.12),
-    dangerText: foreground(semanticBase.dangerText),
-    successText: foreground(semanticBase.successText),
-    warningText: foreground(semanticBase.warningText),
+    dangerText: foreground(palette.danger ?? semanticBase.dangerText),
+    successText: foreground(palette.success ?? semanticBase.successText),
+    warningText: foreground(palette.warning ?? semanticBase.warningText),
     isLight,
   }
 }
 
-const presetThemes = new Map(
-  THEME_PRESETS.map(({ id, palette }) => [
-    id,
-    id === 'dark' ? darkTheme : id === 'light' ? lightTheme : deriveTheme(palette),
-  ]),
-)
+interface PresetThemeVariants {
+  readonly dark: Theme
+  readonly light: Theme
+}
+
+type ThemeResolutionSettings = Pick<AppSettings, 'theme' | 'customPalette'> &
+  Partial<Pick<AppSettings, 'themeMode'>>
+
+const presetThemes = new Map<ThemePreset, PresetThemeVariants>()
+const presetDefinitions = new Map<ThemePreset, ThemePresetDefinition>()
+for (const preset of THEME_PRESETS) {
+  const dark =
+    preset.id === 'dark'
+      ? darkTheme
+      : preset.id === 'light'
+        ? lightTheme
+        : deriveTheme(preset.palette)
+  const light = preset.lightPalette ? deriveTheme(preset.lightPalette) : dark
+  presetThemes.set(preset.id, { dark, light })
+  presetDefinitions.set(preset.id, preset)
+}
+
+export function resolvePresetPalette(
+  id: AppSettings['theme'],
+  mode: ThemeMode,
+): CustomPalette | undefined {
+  if (id === 'custom') return undefined
+  const preset = presetDefinitions.get(id)
+  if (!preset) return undefined
+  const palette = mode === 'light' ? (preset.lightPalette ?? preset.palette) : preset.palette
+  return {
+    background: palette.background,
+    surface: palette.surface,
+    text: palette.text,
+    muted: palette.muted,
+    accent: palette.accent,
+  }
+}
 
 let lastCustomTheme: { palette: CustomPalette; theme: Theme } | undefined
 
-export function resolveTheme(settings: Pick<AppSettings, 'theme' | 'customPalette'> | null): Theme {
+export function resolveTheme(settings: ThemeResolutionSettings | null): Theme {
   if (!settings) return darkTheme
-  if (settings.theme !== 'custom') return presetThemes.get(settings.theme) ?? darkTheme
+  if (settings.theme !== 'custom') {
+    const variants = presetThemes.get(settings.theme)
+    return variants?.[settings.themeMode ?? 'dark'] ?? darkTheme
+  }
   const palette = settings.customPalette
   if (!palette) return darkTheme
   const previous = lastCustomTheme?.palette

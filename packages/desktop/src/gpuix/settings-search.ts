@@ -149,7 +149,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     category: 'general',
     title: 'Appearance',
     saveMode: 'section',
-    keywords: `${THEME_PRESETS.map((preset) => preset.label).join(' ')} theme custom palette color hex accent font fontFamily Inter Manrope system appearance typography шрифт тема темная светлая палитра цвет акцент`,
+    keywords: `${THEME_PRESETS.map((preset) => preset.label).join(' ')} theme custom palette color mode variant hex accent font fontFamily Inter Manrope system appearance typography шрифт тема темная светлая палитра цвет акцент`,
   },
   {
     id: 'updates',

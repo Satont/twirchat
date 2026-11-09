@@ -1,14 +1,18 @@
 import { expect, test } from 'bun:test'
 
+import type { ThemeMode } from '@twirchat/shared/types'
+
 import {
   darkTheme,
   DEFAULT_CUSTOM_PALETTE,
   lightTheme,
   normalizePaletteColor,
   readableOn,
+  resolvePresetPalette,
   resolveTheme,
   THEME_PRESETS,
 } from '../src/gpuix/theme'
+import { OPENCODE_THEME_PRESETS } from '../src/gpuix/theme-presets'
 import { partialAppSettingsSchema } from '../src/services/persisted-schemas'
 
 function luminance(color: string): number {
@@ -25,19 +29,60 @@ function contrast(a: string, b: string): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
 }
 
-test('all presets persist and resolve to stable themes, including the legacy defaults', () => {
+const THEME_MODES: readonly ThemeMode[] = ['dark', 'light']
+
+test('all presets and color modes persist, resolve and keep every token readable', () => {
   expect(resolveTheme(null)).toBe(darkTheme)
   expect(resolveTheme({ theme: 'dark' })).toBe(darkTheme)
   expect(resolveTheme({ theme: 'light' })).toBe(lightTheme)
   expect(resolveTheme({ theme: 'custom' })).toBe(darkTheme)
-  expect(new Set(THEME_PRESETS.map(({ palette }) => palette.background)).size).toBe(8)
+  expect(THEME_PRESETS).toHaveLength(41)
+  expect(OPENCODE_THEME_PRESETS).toHaveLength(33)
+  expect(resolvePresetPalette('custom', 'dark')).toBeUndefined()
+  expect(new Set(THEME_PRESETS.map(({ id }) => id)).size).toBe(THEME_PRESETS.length)
+  expect(new Set(THEME_PRESETS.map(({ palette }) => palette.background)).size).toBe(
+    THEME_PRESETS.length,
+  )
 
-  for (const { id, palette } of THEME_PRESETS) {
-    const theme = resolveTheme({ theme: id })
-    expect(partialAppSettingsSchema.parse({ theme: id }).theme).toBe(id)
-    expect(theme).toBe(resolveTheme({ theme: id, customPalette: DEFAULT_CUSTOM_PALETTE }))
-    expect(theme.bg).toBe(palette.background)
-    expect(contrast(theme.link, theme.bg)).toBeGreaterThanOrEqual(4.5)
+  for (const { id, palette, lightPalette } of THEME_PRESETS) {
+    for (const mode of THEME_MODES) {
+      const theme = resolveTheme({ theme: id, themeMode: mode })
+      const expectedPalette = mode === 'light' ? (lightPalette ?? palette) : palette
+      const persisted = partialAppSettingsSchema.parse({ theme: id, themeMode: mode })
+      expect(persisted).toMatchObject({ theme: id, themeMode: mode })
+      expect(theme).toBe(
+        resolveTheme({ theme: id, themeMode: mode, customPalette: DEFAULT_CUSTOM_PALETTE }),
+      )
+      expect(theme.bg).toBe(expectedPalette.background)
+      expect(resolvePresetPalette(id, mode)).toEqual({
+        background: expectedPalette.background,
+        surface: expectedPalette.surface,
+        text: expectedPalette.text,
+        muted: expectedPalette.muted,
+        accent: expectedPalette.accent,
+      })
+      if (lightPalette) expect(theme.isLight).toBe(mode === 'light')
+      // The hand-authored legacy Light theme predates the generated-palette contrast contract.
+      const foregrounds =
+        id === 'light'
+          ? [theme.text, theme.link]
+          : [
+              theme.text,
+              theme.text2,
+              theme.link,
+              theme.accent.primary,
+              theme.dangerText,
+              theme.successText,
+              theme.warningText,
+            ]
+      for (const canvas of [theme.bg, theme.surface, theme.surface2, theme.navBg, theme.dialog]) {
+        for (const color of foregrounds) {
+          expect(contrast(color, canvas)).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+      expect(contrast(theme.accent.onPrimary, theme.accent.primary)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(theme.accent.onDeep, theme.accent.deepHover)).toBeGreaterThanOrEqual(4.5)
+    }
   }
 })
 

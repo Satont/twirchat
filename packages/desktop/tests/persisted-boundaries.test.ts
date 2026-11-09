@@ -61,9 +61,14 @@ test('theme settings recover independently and retain the custom palette across 
     }
     f.database.run('INSERT INTO settings(key,value) VALUES(?,?)', [
       'app_settings',
-      JSON.stringify({ theme: 'retired', customPalette, fontSize: 19 }),
+      JSON.stringify({ theme: 'retired', themeMode: 'system', customPalette, fontSize: 19 }),
     ])
-    expect(SettingsStore.get()).toMatchObject({ theme: 'dark', customPalette, fontSize: 19 })
+    expect(SettingsStore.get()).toMatchObject({
+      theme: 'dark',
+      themeMode: 'dark',
+      customPalette,
+      fontSize: 19,
+    })
 
     f.database.run('UPDATE settings SET value=? WHERE key=?', [
       JSON.stringify({
@@ -75,6 +80,11 @@ test('theme settings recover independently and retain the custom palette across 
     ])
     expect(SettingsStore.get()).toMatchObject({ theme: 'forest', fontSize: 18 })
     expect(SettingsStore.get().customPalette).toBeUndefined()
+
+    expect(SettingsStore.update({ theme: 'opencode', themeMode: 'light' })).toMatchObject({
+      theme: 'opencode',
+      themeMode: 'light',
+    })
 
     const settings = SettingsStore.get()
     SettingsStore.set({

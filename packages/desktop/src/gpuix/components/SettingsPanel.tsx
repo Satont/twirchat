@@ -37,7 +37,7 @@ import { useTextInputFocusTracking } from '../state/focus'
 import { formatKeyCombo, GPUIX_TO_DOM_KEY } from '../state/hotkeys'
 import { useOverlayClose } from '../state/overlays'
 import { bindSettingsSession, syncSettingsSession } from '../state/settings-session'
-import { DEFAULT_CUSTOM_PALETTE, normalizePaletteColor, THEME_PRESETS } from '../theme'
+import { DEFAULT_CUSTOM_PALETTE, normalizePaletteColor, resolvePresetPalette } from '../theme'
 import { useTheme } from '../theme-context'
 import { ChatLoggingSettings } from './ChatLoggingSettings'
 import { ChatPauseSettings } from './ChatPauseSettings'
@@ -69,6 +69,7 @@ import { Icon } from './ui/Icon'
 import { Slider } from './ui/Slider'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
+import { ToggleGroup } from './ui/ToggleGroup'
 import { ModerationSettings } from './user-card/ModerationSettings'
 
 /** AppSettings with the optional selfPing block materialized (Vue makeLocal). */
@@ -106,6 +107,7 @@ function appSectionFields(
     case 'appearance':
       return {
         theme: source.theme,
+        themeMode: source.themeMode,
         customPalette: source.customPalette,
         fontFamily: source.fontFamily,
       }
@@ -138,7 +140,7 @@ function appSectionDirty(
 function customPaletteFor(settings: AppSettings): CustomPalette {
   return (
     settings.customPalette ??
-    THEME_PRESETS.find((preset) => preset.id === settings.theme)?.palette ??
+    resolvePresetPalette(settings.theme, settings.themeMode) ??
     DEFAULT_CUSTOM_PALETTE
   )
 }
@@ -400,6 +402,13 @@ export function SettingsPanel() {
     patch((draft) => {
       if (value === 'custom') draft.customPalette = customPaletteFor(current)
       draft.theme = value
+    })
+  }
+
+  const selectThemeMode = (mode: AppSettings['themeMode']) => {
+    if (mode === localRef.current.themeMode) return
+    patch((draft) => {
+      draft.themeMode = mode
     })
   }
 
@@ -772,16 +781,19 @@ export function SettingsPanel() {
                     <SettingsRow first alignTop label="Theme">
                       <ThemeSettings
                         value={local.theme}
+                        mode={local.themeMode}
                         palette={customPaletteFor(local)}
                         inputs={paletteInputs}
                         invalid={invalidPalette}
                         onSelect={selectTheme}
+                        onModeChange={selectThemeMode}
                         onEdit={editPalette}
                         onReset={resetPalette}
                       />
                     </SettingsRow>
                     <SettingsRow last label="Font">
                       <ToggleGroup
+                        label="Font family"
                         value={local.fontFamily}
                         options={[
                           { value: 'inter', label: 'Inter' },
@@ -1220,6 +1232,7 @@ export function SettingsPanel() {
 
                     <SettingsRow label="Animation">
                       <ToggleGroup
+                        label="Overlay animation"
                         value={local.overlay.animation}
                         options={[
                           { value: 'slide', label: 'Slide' },
@@ -1236,6 +1249,7 @@ export function SettingsPanel() {
 
                     <SettingsRow label="Position">
                       <ToggleGroup
+                        label="Overlay position"
                         value={local.overlay.position}
                         options={[
                           { value: 'bottom', label: 'Bottom' },
@@ -1390,72 +1404,6 @@ export function SettingsPanel() {
         </anchored>
       ) : null}
       <SettingsLeaveDialog />
-    </div>
-  )
-}
-
-/** Segmented toggle — .toggle-group / .toggle-btn (.active = accent tint). */
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: readonly { value: T; label: string }[]
-  value: T
-  onChange: (value: T) => void
-}) {
-  const theme = useTheme()
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        maxWidth: '100%',
-        minWidth: 0,
-        borderWidth: 1,
-        borderColor: theme.border,
-        borderRadius: 8,
-        overflow: 'hidden',
-        flexShrink: 1,
-      }}
-    >
-      {options.map((option, index) => {
-        const active = option.value === value
-        return (
-          <div
-            key={option.value}
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (event.key === 'enter' || event.key === 'space') {
-                event.preventDefault()
-                onChange(option.value)
-              }
-            }}
-            onClick={() => onChange(option.value)}
-            style={{
-              paddingTop: 5,
-              paddingBottom: 5,
-              paddingLeft: 12,
-              paddingRight: 12,
-              cursor: 'pointer',
-              backgroundColor: active ? theme.accent.tint20 : undefined,
-              borderLeftWidth: index === 0 ? 0 : 1,
-              borderColor: theme.border,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: active ? theme.accent.primary : theme.text2,
-              }}
-            >
-              {option.label}
-            </Text>
-          </div>
-        )
-      })}
     </div>
   )
 }
