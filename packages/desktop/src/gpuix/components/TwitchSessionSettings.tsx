@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBackend, useBackendEvent } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton } from './ui/Form'
 import { Text } from './ui/Text'
 
 export function TwitchSessionSettings() {
@@ -82,7 +83,6 @@ export function TwitchSessionSettings() {
           ? `Connected${status.username ? ` as ${status.username}` : ''}`
           : 'No additional Twitch session connected.'}
       </Text>
-      <FormError>{error}</FormError>
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         <ActionButton primary disabled={busy} onClick={() => void connect()}>
           {busy ? 'Connecting…' : 'Connect token from clipboard'}
@@ -93,6 +93,12 @@ export function TwitchSessionSettings() {
           </ActionButton>
         ) : null}
       </div>
+      <SettingsFooter
+        sectionId="twitch-session"
+        error={error}
+        errorTestId="twitch-session-error"
+        note="Connect and disconnect apply immediately."
+      />
     </div>
   )
 }

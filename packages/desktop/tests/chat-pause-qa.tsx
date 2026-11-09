@@ -133,6 +133,7 @@ try {
     'saved pause settings hydrated',
   )
   await click('pause-hover-inside')
+  await click('save-chat-pause')
   await until(
     () => renderer.getAllText().join(' ').includes('QA pause save failed'),
     'save failure surfaced',
@@ -144,35 +145,38 @@ try {
   await click('pause-hover-timed')
   await focus('pause-hover-seconds')
   renderer.simulateKeystrokes('ctrl-a 2')
-  await until(() => durable.hoverSeconds === 2, 'seconds autosave')
+  await click('save-chat-pause')
+  await until(() => durable.hoverSeconds === 2, 'seconds save')
   renderer.simulateKeystrokes('.')
   await Bun.sleep(100)
   renderer.simulateKeystrokes('5')
-  await until(
-    () => durable.hoverSeconds === 2.5,
-    'fractional duration survives intermediate autosave',
-  )
+  await click('save-chat-pause')
+  await until(() => durable.hoverSeconds === 2.5, 'fractional duration save')
   const count = writes.length
   renderer.simulateKeystrokes('ctrl-a minus')
   await until(
     () => renderer.getAllText().join(' ').includes('Timed hover pause must'),
     'invalid duration shown',
   )
+  await click('save-chat-pause')
   assert.equal(writes.length, count, 'invalid draft never reaches storage')
   assert.equal(durable.hoverSeconds, 2.5)
   renderer.simulateKeystrokes('ctrl-a 1')
-  await until(() => durable.hoverSeconds === 1, 'repaired duration autosaves')
+  await click('save-chat-pause')
+  await until(() => durable.hoverSeconds === 1, 'repaired duration save')
   await focus('pause-modifier-alt')
   renderer.simulateKeystrokes('space')
+  await click('save-chat-pause')
   await until(() => durable.modifier === 'ctrl+alt+shift', 'modifier combination keyboard toggle')
   await focus('pause-double-click')
   renderer.simulateKeystrokes('enter')
+  await click('save-chat-pause')
   await until(() => durable.doubleClickLinks, 'double-click setting keyboard toggle')
-  assert(renderer.getAllText().join(' ').includes('Pause settings saved.'))
+  assert(renderer.getAllText().join(' ').includes('Saved'))
   console.log(
     JSON.stringify({
       result: 'pass',
-      autosave: true,
+      autosave: false,
       retry: true,
       fractionalInput: true,
       invalidDraftPreserved: true,

@@ -80,7 +80,7 @@ export const SETTINGS_CATEGORIES = defineSettingsCategories([
   },
 ])
 export type SettingsCategoryId = (typeof SETTINGS_CATEGORIES)[number]['id']
-export type SettingsSaveMode = 'app' | 'section' | 'automatic' | 'action'
+export type SettingsSaveMode = 'section' | 'action'
 export interface SettingsSectionMetadata {
   id: SettingsSectionId
   category: SettingsCategoryId
@@ -132,7 +132,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'pause',
     category: 'chat',
     title: 'Chat Pausing',
-    saveMode: 'automatic',
+    saveMode: 'section',
     keywords:
       'pause hover mouse keyboard modifier control alt shift command double click links hoverSeconds doubleClickLinks пауза наведение мышь модификатор двойной клик ссылки',
   },
@@ -148,14 +148,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'appearance',
     category: 'general',
     title: 'Appearance',
-    saveMode: 'app',
+    saveMode: 'section',
     keywords: `${THEME_PRESETS.map((preset) => preset.label).join(' ')} theme custom palette color hex accent font fontFamily Inter Manrope system appearance typography шрифт тема темная светлая палитра цвет акцент`,
   },
   {
     id: 'updates',
     category: 'general',
     title: 'Updates',
-    saveMode: 'app',
+    saveMode: 'section',
     keywords:
       'version installed release feed check now automatic auto check startup autoCheckUpdates версия обновления проверить автоматически запуск',
   },
@@ -195,7 +195,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'self-ping',
     category: 'chat',
     title: 'Self-Ping Highlight',
-    saveMode: 'app',
+    saveMode: 'section',
     keywords:
       'self ping nickname own mention enable highlights highlight color rgba preview selfPing самопинг никнейм упоминание цвет подсветки',
   },
@@ -203,7 +203,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'emotes',
     category: 'emotes',
     title: 'Emotes & Cosmetics',
-    saveMode: 'automatic',
+    saveMode: 'section',
     keywords:
       'platform emotes twitch 7TV seventv BetterTTV BTTV FrankerFaceZ FFZ provider precedence priority move up down zero width layering modifiers personal badges paints name gradients emoji shortcode completion favorite emotes presence share active channel collectibles wide flip rotate shake party cursed эмоуты смайлы провайдеры порядок косметика краска значки избранное присутствие',
   },
@@ -235,7 +235,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'twir-integration',
     category: 'commands',
     title: 'Twir Integration',
-    saveMode: 'app',
+    saveMode: 'section',
     keywords:
       'twir bot command autocomplete completion suggestions команды бота автодополнение интеграция',
   },
@@ -243,7 +243,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'plugins',
     category: 'plugins',
     title: 'Plugins',
-    saveMode: 'automatic',
+    saveMode: 'action',
     keywords:
       'install enable disable remove manifest version transport TypeScript локальные установить включить выключить удалить',
   },
@@ -251,7 +251,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'overlay',
     category: 'overlay',
     title: 'OBS Overlay',
-    saveMode: 'app',
+    saveMode: 'section',
     keywords:
       'OBS overlay browser source URL copy port background transparent chroma key text color colour font size max messages animation slide fade none position bottom top show platform icon avatars overlay.port overlay.background overlay.textColor overlay.fontSize overlay.maxMessages overlay.animation overlay.position showPlatformIcon showAvatar оверлей обс ссылка копировать порт фон прозрачный цвет размер шрифта сообщения анимация позиция аватары',
   },
@@ -259,7 +259,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     id: 'shortcuts',
     category: 'shortcuts',
     title: 'Keyboard Shortcuts',
-    saveMode: 'app',
+    saveMode: 'section',
     keywords:
       'keyboard shortcuts hotkeys recording press key newTab nextTab prevTab tabSelector open new tab next previous cycle fuzzy search Ctrl Tab Ctrl K Alt Shift arrow combination клавиатура хоткеи сочетания запись новая вкладка следующая предыдущая поиск клавиша',
   },
@@ -282,7 +282,7 @@ const normalize = (value: string) =>
 const index = SETTINGS_SECTIONS.map((section) => ({
   section,
   words: normalize(
-    `${section.title} ${section.keywords} ${section.saveMode === 'automatic' ? 'save saved automatically autosave' : section.saveMode === 'action' ? 'connect clear' : 'save settings changes'} ${SETTINGS_CATEGORIES.find((category) => category.id === section.category)!.aliases}`,
+    `${section.title} ${section.keywords} ${section.saveMode === 'action' ? 'actions apply immediately connect clear' : 'save discard unsaved changes'} ${SETTINGS_CATEGORIES.find((category) => category.id === section.category)!.aliases}`,
   ).split(/\s+/u),
 }))
 export interface SettingsSearchResult {
@@ -341,10 +341,4 @@ export function stepSettingsCategory(
   const index = ids.indexOf(current)
   if (index < 0) return direction === 1 ? ids[0]! : ids.at(-1)!
   return ids[(index + direction + ids.length) % ids.length]!
-}
-export const SETTINGS_SAVE_LABELS: Record<SettingsSaveMode, string> = {
-  app: 'Use Save app settings above to keep these changes.',
-  section: 'Use the Save button in this section to keep these changes.',
-  automatic: 'Changes in this section are saved automatically.',
-  action: 'Connect and Clear apply immediately.',
 }

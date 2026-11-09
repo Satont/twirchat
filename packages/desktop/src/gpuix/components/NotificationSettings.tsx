@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useStore } from '../state/create-store'
 import { notificationErrorStore, notificationPreferences } from '../state/highlight-notifications'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { FormError, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
@@ -32,10 +33,18 @@ export function NotificationSettings() {
   const state = useStore(notificationPreferences.store)
   const error = useStore(notificationErrorStore)
   const [draft, setDraft] = useState(state.value)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const dirty = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(state.value),
+    [draft, state.value],
+  )
   useEffect(() => {
     runUiTask(notificationPreferences.load(backend.api))
   }, [backend])
-  useEffect(() => setDraft(state.value), [state.value])
+  useEffect(() => {
+    if (!dirty) setDraft(state.value)
+  }, [dirty, state.value])
   const toggle = (key: NotificationToggle) => (
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Text style={{ fontSize: 12, color: theme.text, flexGrow: 1 }}>{toggleLabels[key]}</Text>
@@ -45,11 +54,14 @@ export function NotificationSettings() {
       />
     </div>
   )
-  async function save() {
+  async function save(): Promise<boolean> {
+    const snapshot = draft
     try {
-      await notificationPreferences.save(backend.api, draft)
+      await notificationPreferences.save(backend.api, snapshot)
+      return draftRef.current === snapshot
     } catch {
       /* Error is displayed by the preference store. */
+      return false
     }
   }
   return (
@@ -91,9 +103,15 @@ export function NotificationSettings() {
         />
       </FormField>
       <FormError>{state.error || error}</FormError>
-      <ActionButton primary disabled={state.saving} onClick={() => void save()}>
-        {state.saving ? 'Saving…' : 'Save notifications'}
-      </ActionButton>
+      <SettingsFooter
+        sectionId="notifications"
+        dirty={dirty}
+        saving={state.saving}
+        saveTestId="notifications-save"
+        errorTestId="notifications-save-error"
+        onSave={save}
+        onDiscard={() => setDraft(state.value)}
+      />
     </div>
   )
 }

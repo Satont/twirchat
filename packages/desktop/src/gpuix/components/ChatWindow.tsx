@@ -1,5 +1,5 @@
 import { useGpuixRequired } from '@gpuix/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { DesktopWindowDescriptor } from '../../services/window-session'
 import { useBackend } from '../backend/context'
@@ -14,6 +14,7 @@ import { useDesktopWindows } from '../state/desktop-windows'
 import { registerHotkeyActions } from '../state/hotkeys'
 import { allPanels, layoutStore, splitPanel, reopenClosedSplit } from '../state/layout'
 import { messageSimilarityPreferences } from '../state/message-similarity'
+import { requestLeaveSettings } from '../state/settings-session'
 import { saveStreamerMode } from '../state/streamer-mode'
 import { changeWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
@@ -40,7 +41,16 @@ export function ChatWindow({
   const theme = resolveTheme(settings)
   const [page, setPage] = useState<'chat' | 'settings' | 'accounts'>('chat')
   const [search, setSearch] = useState(false)
-  useEffect(() => registerChatWindowNavigator(scope, () => setPage('chat')), [scope])
+  const goToPage = (next: 'chat' | 'settings' | 'accounts') => {
+    if (page === 'settings' && next !== 'settings') {
+      requestLeaveSettings(() => setPage(next))
+      return
+    }
+    setPage(next)
+  }
+  const goToPageRef = useRef(goToPage)
+  goToPageRef.current = goToPage
+  useEffect(() => registerChatWindowNavigator(scope, () => goToPageRef.current('chat')), [scope])
   useEffect(() => {
     setChatWindowReading(scope, page === 'chat')
   }, [scope, page])
@@ -59,7 +69,7 @@ export function ChatWindow({
                 showNotice('error', String(error)),
               )
           },
-          openTabSelector: () => setPage('chat'),
+          openTabSelector: () => goToPageRef.current('chat'),
           openAllChatSearch: () => setSearch(true),
           isChatActive: () => page === 'chat',
         },
@@ -86,7 +96,7 @@ export function ChatWindow({
           parseHotkeyChoice(mode ?? 'toggle', ['on', 'off', 'auto', 'toggle']),
         ),
       openSettings: () => setPage('settings'),
-      openAccountSelector: () => setPage('accounts'),
+      openAccountSelector: () => goToPage('accounts'),
       reopenSplit: tabId ? () => reopenClosedSplit(backend, { scope, tabId }) : null,
       newSplit: tabId
         ? async () => {
@@ -127,7 +137,7 @@ export function ChatWindow({
         >
           {page !== 'chat' ? (
             <div style={{ padding: 8 }}>
-              <ActionButton onClick={() => setPage('chat')}>Back to chat</ActionButton>
+              <ActionButton onClick={() => goToPage('chat')}>Back to chat</ActionButton>
             </div>
           ) : null}
           {page === 'settings' ? (
@@ -139,7 +149,7 @@ export function ChatWindow({
               onClose={() => void windows?.close()}
             />
           ) : (
-            <WatchedView tabId={descriptor.tabId} onGoToPlatforms={() => setPage('accounts')} />
+            <WatchedView tabId={descriptor.tabId} onGoToPlatforms={() => goToPage('accounts')} />
           )}
           {search ? <SearchAllChatsDialog onClose={() => setSearch(false)} /> : null}
           {page === 'accounts' ? (

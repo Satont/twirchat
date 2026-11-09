@@ -1,5 +1,5 @@
 import type { Platform } from '@twirchat/shared/types'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ChatLoggingSettings as LoggingSettings } from '../backend/chat-history'
 import { useBackend } from '../backend/context'
@@ -12,6 +12,7 @@ import {
   HistoryInput as Input,
   HistoryToggle as Toggle,
 } from './ChatHistoryFields'
+import { SettingsFooter } from './settings/SettingsLayout'
 import { Text } from './ui/Text'
 
 export function ChatLoggingSettings() {
@@ -27,14 +28,27 @@ export function ChatLoggingSettings() {
   const [channelPlatform, setChannelPlatform] = useState<Platform>('twitch')
   const [channelId, setChannelId] = useState('')
   const [status, setStatus] = useState<{ error: string | null; queued: number } | null>(null)
+  const [persisted, setPersisted] = useState<LoggingSettings | null>(null)
+  const [persistedNumbers, setPersistedNumbers] = useState({
+    retention: '100000',
+    days: '0',
+    size: '32',
+  })
   const load = useCallback(async () => {
     setBusy(true)
     try {
       const value = await backend.api.getChatLoggingSettings()
+      const numbers = {
+        retention: String(value.maxMessages),
+        days: String(value.maxAgeDays),
+        size: String(value.maxFileBytes / 1024 ** 2),
+      }
       setSettings(value)
-      setRetention(String(value.maxMessages))
-      setDays(String(value.maxAgeDays))
-      setSize(String(value.maxFileBytes / 1024 ** 2))
+      setPersisted(value)
+      setPersistedNumbers(numbers)
+      setRetention(numbers.retention)
+      setDays(numbers.days)
+      setSize(numbers.size)
       setError(null)
       setStatus(await backend.api.getChatLoggingStatus())
     } catch (failure) {
@@ -50,22 +64,38 @@ export function ChatLoggingSettings() {
     setSettings((current) => (current ? { ...current, ...patch } : current))
     setNotice('')
   }
-  const save = async () => {
-    if (!settings) return
+  const numbers = { retention, days, size }
+  const draftRef = useRef({ settings, numbers })
+  draftRef.current = { settings, numbers }
+  const dirty =
+    settings !== null &&
+    persisted !== null &&
+    (JSON.stringify(settings) !== JSON.stringify(persisted) ||
+      numbers.retention !== persistedNumbers.retention ||
+      numbers.days !== persistedNumbers.days ||
+      numbers.size !== persistedNumbers.size)
+  const save = async (): Promise<boolean> => {
+    if (!settings) return false
     setBusy(true)
     setError(null)
     setNotice('')
     try {
-      await backend.api.saveChatLoggingSettings({
+      const snapshot = {
         ...settings,
         maxMessages: Number(retention),
         maxAgeDays: Number(days),
         maxFileBytes: Number(size) * 1024 ** 2,
-      })
+      }
+      const snapshotJson = JSON.stringify({ settings: snapshot, numbers })
+      await backend.api.saveChatLoggingSettings(snapshot)
+      setSettings(snapshot)
+      setPersisted(snapshot)
+      setPersistedNumbers(numbers)
       setStatus(await backend.api.getChatLoggingStatus())
-      setNotice('History and logging settings saved.')
+      return JSON.stringify(draftRef.current) === snapshotJson
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
+      return false
     } finally {
       setBusy(false)
     }
@@ -87,21 +117,8 @@ export function ChatLoggingSettings() {
   return (
     <div
       testId="chat-logging-settings"
-      style={{
-        backgroundColor: theme.surface,
-        borderWidth: 1,
-        borderColor: theme.border,
-        borderRadius: 14,
-        padding: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        marginBottom: 8,
-      }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
     >
-      <Text style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>
-        History &amp; chat logs
-      </Text>
       <Text style={{ fontSize: 12, color: theme.text2 }}>
         Local history includes watched channels. File logging is optional and starts after you
         enable it and save.
@@ -231,16 +248,27 @@ export function ChatLoggingSettings() {
               {status.error ?? `${status.queued} messages waiting to be saved.`}
             </Text>
           ) : null}
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            <Button
-              testId="chat-logging-save"
-              label={busy ? 'Working…' : 'Save history & logs'}
-              disabled={busy}
-              onClick={() => void save()}
-              primary
-            />
+          <SettingsFooter
+            sectionId="history"
+            dirty={dirty}
+            saving={busy}
+            error={error ?? undefined}
+            note={notice}
+            saveTestId="chat-logging-save"
+            errorTestId="chat-logging-error"
+            onSave={save}
+            onDiscard={() => {
+              if (!persisted) return
+              setSettings(persisted)
+              setRetention(persistedNumbers.retention)
+              setDays(persistedNumbers.days)
+              setSize(persistedNumbers.size)
+              setError(null)
+              setNotice('')
+            }}
+          >
             <Button label="Flush pending logs" disabled={busy} onClick={() => void flush()} />
-          </div>
+          </SettingsFooter>
         </>
       ) : (
         <Button
@@ -249,12 +277,6 @@ export function ChatLoggingSettings() {
           onClick={() => void load()}
         />
       )}
-      {error ? (
-        <Text testId="chat-logging-error" style={{ fontSize: 12, color: theme.dangerText }}>
-          {error}
-        </Text>
-      ) : null}
-      {notice ? <Text style={{ fontSize: 12, color: theme.successText }}>{notice}</Text> : null}
     </div>
   )
 }

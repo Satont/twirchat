@@ -11,6 +11,7 @@ import {
 } from '../state/custom-commands'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useTheme } from '../theme-context'
+import { SettingsFooter } from './settings/SettingsLayout'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
@@ -20,10 +21,10 @@ export function CustomCommandsSettings() {
   const theme = useTheme()
   const state = useStore(customCommandsStore)
   const [draft, setDraft] = useState(state.commands)
-  const [saved, setSaved] = useState(false)
   const edited = useRef(false)
   const latestDraft = useRef(draft)
   latestDraft.current = draft
+  const dirty = JSON.stringify(draft) !== JSON.stringify(state.commands)
 
   useEffect(() => {
     void loadCustomCommands(backend.api).catch(() => {})
@@ -34,7 +35,6 @@ export function CustomCommandsSettings() {
 
   const change = (commands: CustomCommandDefinition[]) => {
     edited.current = true
-    setSaved(false)
     setDraft(commands)
   }
   const patch = (id: string, values: Partial<CustomCommandDefinition>) => {
@@ -47,17 +47,17 @@ export function CustomCommandsSettings() {
     commands.splice(index + delta, 0, command!)
     change(commands)
   }
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     const snapshot = draft
     try {
       await saveCustomCommands(backend.api, snapshot)
-      if (latestDraft.current === snapshot) {
-        edited.current = false
-        setDraft(customCommandsStore.get().commands)
-        setSaved(true)
-      }
+      if (latestDraft.current !== snapshot) return false
+      edited.current = false
+      setDraft(customCommandsStore.get().commands)
+      return true
     } catch {
       /* The shared store exposes the validation or persistence error below. */
+      return false
     }
   }
 
@@ -74,11 +74,6 @@ export function CustomCommandsSettings() {
       </Text>
       {state.loading ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>Loading commands…</Text>
-      ) : null}
-      {state.error ? (
-        <Text testId="custom-commands-error" style={{ fontSize: 12, color: theme.dangerText }}>
-          {state.error}
-        </Text>
       ) : null}
       {!state.loaded && !state.loading && state.error ? (
         <CommandButton
@@ -205,15 +200,7 @@ export function CustomCommandsSettings() {
           </div>
         </div>
       ))}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-          flexWrap: 'wrap',
-        }}
-      >
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
         <CommandButton
           label="Add command"
           disabled={!state.loaded || draft.length >= 100}
@@ -224,15 +211,21 @@ export function CustomCommandsSettings() {
             ])
           }
         />
-        <CommandButton
-          testId="custom-commands-save"
-          label={state.saving ? 'Saving…' : 'Save commands'}
-          active
-          disabled={!state.loaded || state.saving}
-          onClick={() => void save()}
-        />
-        {saved ? <Text style={{ fontSize: 12, color: theme.text2 }}>Commands saved.</Text> : null}
       </div>
+      <SettingsFooter
+        sectionId="commands"
+        dirty={dirty}
+        saving={state.saving}
+        error={state.error || undefined}
+        errorTestId="custom-commands-error"
+        disabled={!state.loaded}
+        saveTestId="custom-commands-save"
+        onSave={save}
+        onDiscard={() => {
+          edited.current = false
+          setDraft(state.commands)
+        }}
+      />
     </div>
   )
 }

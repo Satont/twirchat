@@ -13,7 +13,8 @@ import {
   messageSimilarityStore,
 } from '../state/message-similarity'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 const toggles: [keyof MessageSimilaritySettings, string][] = [
@@ -70,16 +71,16 @@ export function SimilaritySettings() {
       return cause instanceof Error ? cause.message : String(cause)
     }
   }, [draft])
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     const requested = revision.current
     try {
       await messageSimilarityPreferences.save(backend.api, draft)
-      if (requested === revision.current) {
-        setDirty(false)
-        setNotice('Similarity settings saved.')
-      }
+      const current = requested === revision.current
+      if (current) setDirty(false)
+      return current
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
+      return false
     }
   }
   return (
@@ -89,7 +90,6 @@ export function SimilaritySettings() {
         are case-sensitive. Existing message flags stay fixed when settings change; hiding, gray and
         highlight options update their presentation.
       </Text>
-      <FormError>{error || state.error || validation}</FormError>
       {state.error && !dirty ? (
         <ActionButton
           onClick={() => {
@@ -133,20 +133,29 @@ export function SimilaritySettings() {
         Local R9K changes visibility only. It does not enable similarity checking. Hidden similar
         messages never trigger highlights.
       </Text>
-      {notice ? <Text style={{ color: theme.text2, fontSize: 12 }}>{notice}</Text> : null}
-      <ActionButton
-        primary
-        disabled={!state.loaded || !dirty || state.saving || Boolean(validation)}
-        onClick={() => {
-          runUiTask(save())
+      <SettingsFooter
+        sectionId="similarity"
+        dirty={dirty}
+        saving={state.saving}
+        error={error || state.error || validation}
+        note={notice}
+        disabled={!state.loaded || Boolean(validation)}
+        saveTestId="similarity-save"
+        errorTestId="similarity-save-error"
+        onSave={save}
+        onDiscard={() => {
+          revision.current++
+          setDraft(structuredClone(state.value))
+          setNumeric({
+            threshold: String(state.value.threshold),
+            maxMessages: String(state.value.maxMessages),
+            delaySeconds: String(state.value.delaySeconds),
+          })
+          setDirty(false)
+          setError('')
+          setNotice('')
         }}
-      >
-        {state.saving
-          ? 'Saving…'
-          : error || state.error
-            ? 'Retry saving similarity settings'
-            : 'Save similarity settings'}
-      </ActionButton>
+      />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import type { PluginInfo } from '../../plugins/api'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { useTheme } from '../theme-context'
+import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
 import { Text } from './ui/Text'
 
@@ -170,7 +171,6 @@ export function PluginSettings() {
           placeholder="https://example.com/plugin/manifest.json"
         />
       </FormField>
-      <FormError>{error}</FormError>
       <div style={{ display: 'flex', flexDirection: 'row' }}>
         <ActionButton
           testId="plugin-install"
@@ -186,6 +186,12 @@ export function PluginSettings() {
           {pending === 'install' ? 'Installing…' : 'Install plugin'}
         </ActionButton>
       </div>
+      <SettingsFooter
+        sectionId="plugins"
+        error={error}
+        errorTestId="plugin-settings-error"
+        note="Plugin actions apply immediately."
+      />
     </div>
   )
 }

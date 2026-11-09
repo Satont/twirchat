@@ -11,7 +11,8 @@ import { runUiTask } from '../hooks/run-ui-task'
 import { chatPausePreferences, chatPauseStore } from '../state/chat-pause'
 import { useStore } from '../state/create-store'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
@@ -56,7 +57,7 @@ export function ChatPauseSettings() {
   const state = useStore(chatPauseStore)
   const [draft, setDraft] = useState(() => draftFromSettings(state.value))
   const [dirty, setDirty] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [notice, setNotice] = useState('')
   const revision = useRef(0)
   const mounted = useRef(true)
   useEffect(() => {
@@ -84,29 +85,36 @@ export function ChatPauseSettings() {
       return error instanceof Error ? error.message : String(error)
     }
   }, [draft])
-  async function save(next = draft, requested = revision.current): Promise<void> {
+  async function save(): Promise<boolean> {
     let value: ChatPausePreferences
     try {
-      value = settingsFromDraft(next)
+      value = settingsFromDraft(draft)
     } catch {
-      return
+      return false
     }
+    const requested = revision.current
+    setNotice('')
     try {
       await chatPausePreferences.save(backend.api, value)
-      if (mounted.current && revision.current === requested) {
-        setDirty(false)
-        setSaved(true)
-      }
+      const current = mounted.current && revision.current === requested
+      if (current) setDirty(false)
+      return current
     } catch {
       // The preference store retains the failed value and exposes the save error for retry.
+      return false
     }
   }
   function change(next: Draft): void {
-    const requested = ++revision.current
+    revision.current++
     setDraft(next)
     setDirty(true)
-    setSaved(false)
-    runUiTask(save(next, requested))
+    setNotice('')
+  }
+  function discard(): void {
+    revision.current++
+    setDraft(draftFromSettings(state.value))
+    setDirty(false)
+    setNotice('')
   }
   function changeModifier(key: PauseModifierKey, enabled: boolean): void {
     const keys = new Set(draft.modifier === 'none' ? [] : draft.modifier.split('+'))
@@ -227,39 +235,24 @@ export function ChatPauseSettings() {
           </FormField>
         </>
       ) : null}
-      <FormError>{validation || state.error}</FormError>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 8,
-        }}
+      <SettingsFooter
+        sectionId="pause"
+        dirty={dirty}
+        saving={state.saving}
+        error={validation || state.error || undefined}
+        note={notice}
+        disabled={!state.loaded || Boolean(validation)}
+        saveTestId="save-chat-pause"
+        errorTestId="chat-pause-error"
+        onSave={save}
+        onDiscard={discard}
       >
-        <Text style={{ fontSize: 11, color: theme.text2 }}>
-          {state.saving
-            ? 'Saving pause settings…'
-            : saved && !dirty && !state.error
-              ? 'Pause settings saved.'
-              : 'Valid changes save automatically.'}
-        </Text>
         {state.error && !dirty ? (
           <ActionButton onClick={() => void chatPausePreferences.load(backend.api)}>
             Reload settings
           </ActionButton>
         ) : null}
-        {state.loaded ? (
-          <ActionButton
-            testId="save-chat-pause"
-            primary
-            disabled={!!validation || state.saving}
-            onClick={() => void save()}
-          >
-            {state.error ? 'Retry save' : 'Save pause settings'}
-          </ActionButton>
-        ) : null}
-      </div>
+      </SettingsFooter>
     </div>
   )
 }

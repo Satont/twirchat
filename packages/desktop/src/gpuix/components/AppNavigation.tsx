@@ -3,6 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
 import type { StreamerModeStatus } from '../../services/streamer-mode'
 import { accountsStore, activeTabStore, type MainTab } from '../state/app'
 import { useStore, useStoreSelector } from '../state/create-store'
+import { setMainTab } from '../state/settings-session'
 import { streamerModeStore } from '../state/streamer-mode'
 import { useTheme } from '../theme-context'
 import { Icon, type IconName } from './ui/Icon'
@@ -156,7 +157,7 @@ export function AppNavigation() {
           active={activeTab === item.id}
           badge={item.id === 'platforms' ? accountCount : undefined}
           streamerMode={item.id === 'settings' ? streamerMode : undefined}
-          select={() => activeTabStore.set(item.id)}
+          select={() => setMainTab(item.id)}
         />
       ))}
     </div>

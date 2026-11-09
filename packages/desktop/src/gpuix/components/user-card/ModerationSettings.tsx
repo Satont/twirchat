@@ -3,21 +3,34 @@ import {
   validateModerationSettings,
   type ModerationSettings as Settings,
 } from '@twirchat/shared/user-profile'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useBackend } from '../../backend/context'
 import { useTheme } from '../../theme-context'
-import { ActionButton, FormField, FormInput } from '../ui/Form'
+import { SettingsFooter } from '../settings/SettingsLayout'
+import { FormField, FormInput } from '../ui/Form'
 import { Text } from '../ui/Text'
 
 export function ModerationSettings() {
   const backend = useBackend()
   const theme = useTheme()
   const [settings, setSettings] = useState<Settings>(structuredClone(DEFAULT_MODERATION_SETTINGS))
+  const [persisted, setPersisted] = useState<Settings | null>(null)
   const [reasonsText, setReasonsText] = useState(DEFAULT_MODERATION_SETTINGS.reasons.join('\n'))
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [feedback, setFeedback] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const draft = useMemo(
+    () => ({
+      ...settings,
+      reasons: reasonsText.split('\n').filter((line) => line.trim()),
+    }),
+    [reasonsText, settings],
+  )
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const dirty = persisted !== null && JSON.stringify(draft) !== JSON.stringify(persisted)
   useEffect(() => {
     let active = true
     backend.api
@@ -26,12 +39,13 @@ export function ModerationSettings() {
         if (active) {
           setSettings(value)
           setReasonsText(value.reasons.join('\n'))
+          setPersisted(value)
           setLoaded(true)
         }
       })
       .catch((cause: unknown) => {
         if (active) {
-          setFeedback(String(cause))
+          setError(String(cause))
           setLoaded(true)
         }
       })
@@ -39,25 +53,38 @@ export function ModerationSettings() {
       active = false
     }
   }, [backend])
-  async function save() {
+  const edit = (mutate: (current: Settings) => Settings) => {
+    setError('')
+    setNotice('')
+    setSettings(mutate)
+  }
+  async function save(): Promise<boolean> {
     setBusy(true)
+    setError('')
+    setNotice('')
     try {
-      await backend.api.saveModerationSettings(
-        validateModerationSettings({
-          ...settings,
-          reasons: reasonsText.split('\n').filter((line) => line.trim()),
-        }),
-      )
-      setFeedback('Moderation settings saved.')
+      const next = validateModerationSettings(draft)
+      await backend.api.saveModerationSettings(next)
+      setSettings(next)
+      setReasonsText(next.reasons.join('\n'))
+      setPersisted(next)
+      return JSON.stringify(draftRef.current) === JSON.stringify(next)
     } catch (cause) {
-      setFeedback(String(cause))
+      setError(cause instanceof Error ? cause.message : String(cause))
+      return false
     } finally {
       setBusy(false)
     }
   }
+  const discard = () => {
+    if (!persisted) return
+    setSettings(persisted)
+    setReasonsText(persisted.reasons.join('\n'))
+    setError('')
+    setNotice('')
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Text style={{ color: theme.text, fontSize: 14, fontWeight: 700 }}>User card moderation</Text>
       <Text style={{ color: theme.text2, fontSize: 12 }}>
         Eight timeout buttons. Durations use seconds; Twitch allows 1–1209600. Kick requires at
         least 60 seconds.
@@ -68,7 +95,7 @@ export function ModerationSettings() {
             <FormInput
               value={item.label}
               onChange={(label) =>
-                setSettings((current) => ({
+                edit((current) => ({
                   ...current,
                   timeouts: current.timeouts.map((timeout, i) =>
                     i === index ? { ...timeout, label } : timeout,
@@ -82,7 +109,7 @@ export function ModerationSettings() {
             <FormInput
               value={String(item.seconds)}
               onChange={(seconds) =>
-                setSettings((current) => ({
+                edit((current) => ({
                   ...current,
                   timeouts: current.timeouts.map((timeout, i) =>
                     i === index ? { ...timeout, seconds: Number(seconds) } : timeout,
@@ -95,18 +122,34 @@ export function ModerationSettings() {
         </div>
       ))}
       <FormField label="Quick reasons (one per line)">
-        <FormInput multiline value={reasonsText} onChange={setReasonsText} />
+        <FormInput
+          multiline
+          value={reasonsText}
+          onChange={(value) => {
+            setError('')
+            setNotice('')
+            setReasonsText(value)
+          }}
+        />
       </FormField>
       <FormField label="Default reason">
         <FormInput
           value={settings.defaultReason}
-          onChange={(defaultReason) => setSettings((current) => ({ ...current, defaultReason }))}
+          onChange={(defaultReason) => edit((current) => ({ ...current, defaultReason }))}
         />
       </FormField>
-      <ActionButton primary disabled={!loaded || busy} onClick={() => void save()}>
-        {busy ? 'Saving…' : 'Save moderation settings'}
-      </ActionButton>
-      {feedback ? <Text style={{ color: theme.text2, fontSize: 12 }}>{feedback}</Text> : null}
+      <SettingsFooter
+        sectionId="moderation"
+        dirty={dirty}
+        saving={busy}
+        error={error}
+        note={notice}
+        disabled={!loaded}
+        saveTestId="moderation-save"
+        errorTestId="moderation-save-error"
+        onSave={save}
+        onDiscard={discard}
+      />
     </div>
   )
 }

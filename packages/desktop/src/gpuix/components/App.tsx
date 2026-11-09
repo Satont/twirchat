@@ -41,6 +41,7 @@ import { useDesktopWindows } from '../state/desktop-windows'
 import { registerHotkeyActions } from '../state/hotkeys'
 import { allPanels, layoutStore, loadLayout, splitPanel, reopenClosedSplit } from '../state/layout'
 import { messageSimilarityPreferences } from '../state/message-similarity'
+import { setMainTab } from '../state/settings-session'
 import { saveStreamerMode, streamerModeStore } from '../state/streamer-mode'
 import { visitChatTab, navigateChatTabHistory } from '../state/tab-history'
 import { clearTabUnread } from '../state/tab-unread'
@@ -366,7 +367,7 @@ export function App() {
   const selectWatchedTab = (id: string) => {
     clearTabUnread(id)
     activeWatchedTabStore.set(id)
-    activeTabStore.set('chat')
+    setMainTab('chat')
   }
 
   const onAddChannel = async (platform: WatchedPlatform, channelSlug: string) => {
@@ -544,7 +545,7 @@ export function App() {
             {activeTab === 'chat' ? (
               <WatchedView
                 tabId={activeWatchedTab}
-                onGoToPlatforms={() => activeTabStore.set('platforms')}
+                onGoToPlatforms={() => setMainTab('platforms')}
               />
             ) : null}
             {activeTab === 'platforms' ? <PlatformsPanel /> : null}
