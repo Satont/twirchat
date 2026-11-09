@@ -32,7 +32,6 @@ import {
   type CustomCommandDefinition,
 } from '../commands'
 import { emoteStore, loadEmotes } from '../state/app'
-import { mentionColor } from '../state/caches'
 import { useStore, useStoreSelector } from '../state/create-store'
 import {
   emotePreferencesStore,
@@ -272,7 +271,7 @@ export function useAutocomplete(params: {
         type: 'mention',
         label: alias || displayName,
         insertLabel: displayName,
-        color: mentionColor(msg.platform, lower) ?? null,
+        color: msg.author.color ?? null,
         description: msg.author.username
           ? `@${msg.author.username} • ${msg.platform}`
           : msg.platform,

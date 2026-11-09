@@ -6,6 +6,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 import { DEFAULT_MODERATION_SETTINGS } from '@twirchat/shared/user-profile'
 import { z } from 'zod'
 
+import type { UserCosmetics } from '../src/services/cosmetics'
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
 import type { DesktopWindowDescriptor } from '../src/services/window-session'
 import type { UserCardTarget } from '../src/views/main/utils/chatCommands'
@@ -22,11 +23,13 @@ const { UserCardDialog } = await import('../src/gpuix/components/UserCardDialog'
 const { nativeWindow } = await import('../src/gpuix/native-window')
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { createStore, useStore } = await import('../src/gpuix/state/create-store')
+const { initCosmeticCaches } = await import('../src/gpuix/state/cosmetics')
 const { emotePreferencesStore } = await import('../src/gpuix/state/emote-preferences')
 const app = await import('../src/gpuix/state/app')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x11')
+const sharp = (await import('sharp')).default
 
 interface AutomationNode {
   id: number
@@ -82,10 +85,37 @@ function message(id: string, text: string): NormalizedChatMessage {
     emotes: [],
   }
 }
-const source = message('source-message', 'Hello @KnownViewer, meet @RemoteViewer!')
+const source = message('source-message', 'Hello @KnownViewer and @RemoteViewer!')
 const known: NormalizedChatMessage = {
   ...message('known-message', 'An earlier message'),
-  author: { id: '222', username: 'knownviewer', displayName: 'Known Viewer', badges: [] },
+  author: {
+    id: '222',
+    username: 'knownviewer',
+    displayName: 'Known Viewer',
+    color: '#ff5f57',
+    badges: [],
+  },
+}
+const cosmetics: UserCosmetics = {
+  badges: [],
+  lookupStatus: 'available',
+  paint: {
+    id: 'qa-mention-gradient',
+    name: 'QA gradient',
+    shadows: [],
+    layers: [
+      {
+        type: 'linear',
+        opacity: 1,
+        angle: 90,
+        repeating: false,
+        stops: [
+          { at: 0, color: '#5aff55' },
+          { at: 1, color: '#27ddff' },
+        ],
+      },
+    ],
+  },
 }
 backend.api.resolveMentionUser = async ({ username }) => {
   lookups.push(username)
@@ -94,7 +124,9 @@ backend.api.resolveMentionUser = async ({ username }) => {
   return { platformUserId: '333', username: 'remoteviewer', displayName: 'Remote Viewer' }
 }
 backend.api.getChannelEmotes = async () => []
-backend.api.getUserCosmetics = async () => null
+backend.api.getUserCosmetics = async ({ platformUserId }) =>
+  platformUserId === known.author.id ? cosmetics : null
+initCosmeticCaches(backend.api)
 backend.api.getModerationSettings = async () => structuredClone(DEFAULT_MODERATION_SETTINGS)
 backend.api.getUserProfile = async ({ platformUserId }) => ({ id: platformUserId, errors: [] })
 backend.api.getUserChatHistory = async ({ platformUserId }) => {
@@ -149,7 +181,6 @@ emotePreferencesStore.update({
   },
 })
 const stopMessages = app.wireBackendToStores(backend)
-app.watchedMessagesStore.set(new Map([['known-channel', [known]]]))
 function open(target: UserCardTarget): void {
   opened.push(target)
   configuration.update({ target })
@@ -226,12 +257,44 @@ async function until(check: () => boolean, label: string): Promise<void> {
     await Bun.sleep(25)
   }
 }
+function findMention(username: string): AutomationNode | undefined {
+  const id = `mention-@${username}`
+  return nodes().find((node) => node.testId === id || node.testId === `painted-${id}`)
+}
 function mention(username: string): AutomationNode {
-  const found = nodes().find((node) =>
-    node.children.some((child) => child.text?.trim() === `@${username}`),
-  )
+  const found = findMention(username)
   assert(found, `Missing @${username}`)
   return found
+}
+async function mentionColors(
+  screenshot: string,
+): Promise<{ red: number; green: number; cyan: number }> {
+  const bounds = current().getElementBounds(mention('KnownViewer').id)
+  assert(bounds)
+  const window = getNativeQaWindowGeometry('TwirChat')
+  assert(bounds.x >= 0 && bounds.x + bounds.width <= window.width)
+  const pixels = await sharp(screenshot)
+    .extract({
+      left: Math.floor(window.x + bounds.x),
+      top: Math.floor(window.y + bounds.y),
+      width: Math.ceil(bounds.width),
+      height: Math.ceil(bounds.height),
+    })
+    .ensureAlpha()
+    .raw()
+    .toBuffer()
+  let red = 0
+  let green = 0
+  let cyan = 0
+  for (let offset = 0; offset < pixels.length; offset += 4) {
+    const r = pixels.readUInt8(offset)
+    const g = pixels.readUInt8(offset + 1)
+    const b = pixels.readUInt8(offset + 2)
+    if (r > 160 && r - g > 70 && r - b > 70) red++
+    if (g > 170 && g - r > 90 && g - b > 60) green++
+    if (g > 170 && b > 170 && Math.min(g, b) - r > 90) cyan++
+  }
+  return { red, green, cyan }
 }
 function nativeInput(...args: string[]): void {
   const result = Bun.spawnSync(['/usr/bin/xdotool', ...args], { env: process.env, timeout: 5000 })
@@ -272,6 +335,16 @@ try {
     'mentions painted',
   )
   await focusNativeQaWindow('TwirChat')
+  const initial = await captureGuiQaDisplay('mention-before-author')
+  assert.equal((await mentionColors(initial)).red, 0)
+  backend.events.emit('watched_channel_message', { channelId: 'known-channel', message: known })
+  await until(() => app.watchedMessagesStore.get().has('known-channel'), 'known author received')
+  await Bun.sleep(200)
+  const colored = await captureGuiQaDisplay('mention-with-color')
+  assert((await mentionColors(colored)).red > 20, 'mounted mention takes the author color')
+  screenshots.push(initial, colored)
+  checks.push('already mounted mention picks up the author color when the user first speaks')
+  emotePreferencesStore.update({ value: { ...emotePreferencesStore.get().value, paints: true } })
   let previous = performance.now()
   timer = setInterval(() => {
     const now = performance.now()
@@ -288,7 +361,18 @@ try {
     await nativeWindow(current()).setWindowBounds({ width, height })
     for (const theme of ['compact', 'modern'] satisfies Configuration['theme'][]) {
       configuration.update({ theme })
-      await Bun.sleep(200)
+      await until(
+        () => findMention('KnownViewer')?.testId === 'painted-mention-@KnownViewer',
+        'painted mention element',
+      )
+      await Bun.sleep(400)
+      const painted = await captureGuiQaDisplay(`mention-paint-${theme}-${width}`)
+      const { green, cyan } = await mentionColors(painted)
+      assert(
+        green > 20 && cyan > 20,
+        `Missing gradient pixels at ${theme} ${width}: ${green}, ${cyan}`,
+      )
+      screenshots.push(painted)
       const count = opened.length
       const lookupCount = lookups.length
       await click('KnownViewer', 3)
@@ -330,10 +414,26 @@ try {
       assert.equal(opened.at(-1)?.username, 'remoteviewer')
       await dismiss(width === 900)
       checks.push(
-        `${theme}-${width}: native click, right click, ${theme === 'compact' ? 'Enter' : 'Space'}, IDs, channel context, bounded card${width === 900 ? ', 200 history rows' : ''}`,
+        `${theme}-${width}: gradient pixels, native click, right click, ${theme === 'compact' ? 'Enter' : 'Space'}, IDs, channel context, bounded card${width === 900 ? ', 200 history rows' : ''}`,
       )
     }
   }
+  current().focusElement(mention('KnownViewer').id)
+  await Bun.sleep(100)
+  nativeInput('key', 'Return')
+  await until(
+    () => configuration.get().target?.platformUserId === '222',
+    'painted mention keyboard',
+  )
+  await dismiss()
+  emotePreferencesStore.update({ value: { ...emotePreferencesStore.get().value, paints: false } })
+  await until(() => findMention('KnownViewer')?.testId === 'mention-@KnownViewer', 'paint disabled')
+  await Bun.sleep(150)
+  const disabled = await captureGuiQaDisplay('mention-paint-disabled')
+  const fallbackColors = await mentionColors(disabled)
+  assert(fallbackColors.red > 20 && fallbackColors.green === 0 && fallbackColors.cyan === 0)
+  screenshots.push(disabled)
+  checks.push('painted mention opens by keyboard and disabling paints restores the author color')
   for (let repeat = 0; repeat < 4; repeat++) {
     await click('KnownViewer')
     await until(() => configuration.get().target?.platformUserId === '222', 'rapid reopen')

@@ -51,7 +51,7 @@ import { createStreamerModeService } from '../../services/streamer-mode'
 import { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
 import { TwitchEventSubClient } from '../../services/twitch-eventsub'
 import { sevenTVService } from '../../seventv'
-import { AccountStore, ChannelStore, SettingsStore, UsernameColorCache } from '../../store'
+import { AccountStore, ChannelStore, SettingsStore } from '../../store'
 import { getClientSecret } from '../../store/client-secret'
 import { getDb } from '../../store/db'
 import { initDb } from '../../store/db'
@@ -456,7 +456,6 @@ function boot(): DesktopBackend {
 
   aggregator.onMessage((msg) => {
     recordChatMessage(msg)
-    UsernameColorCache.addMessage(msg)
     pushOverlayMessage(msg)
     events.emit('chat_message', msg)
   })
@@ -509,7 +508,6 @@ function boot(): DesktopBackend {
 
   watchedChannelManager.onMessage((channelId, message) => {
     recordChatMessage(message)
-    UsernameColorCache.addMessage(message)
     events.emit('watched_channel_message', { channelId, message })
   })
 

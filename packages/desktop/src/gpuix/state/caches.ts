@@ -1,13 +1,7 @@
-import type { NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { runInBackground } from '../../services/background-task'
-import type { Store } from './create-store'
-/**
- * Reactive session caches for avatars and mention colors.
- * Ports useAvatarCache.ts + the mention half of useMessageParsing.ts.
- * Both bump a revision store so mounted messages re-render on resolution.
- */
-import { createStore } from './create-store'
+import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 
 type ModerationPlatform = 'twitch' | 'kick'
@@ -18,28 +12,16 @@ type AvatarLookup = (params: {
   username?: string
 }) => Promise<{ avatarUrl?: string }>
 
-type ColorLookup = (params: { platform: Platform; username: string }) => Promise<string | null>
-
 export const avatarRevisionStore = persistentResource('avatarRevision', () =>
-  createStore<number>(0),
-)
-export const mentionColorRevisionStore = persistentResource('mentionColorRevision', () =>
   createStore<number>(0),
 )
 
 const avatarUrls = new Map<string, string>()
 const avatarRequested = new Set<string>()
-const mentionColors = new Map<string, string | null>()
-
 let avatarLookup: AvatarLookup | null = null
-let colorLookup: ColorLookup | null = null
 
-export function initCaches(lookups: {
-  resolveAvatar: AvatarLookup
-  getUsernameColor: ColorLookup
-}): void {
-  avatarLookup = lookups.resolveAvatar
-  colorLookup = lookups.getUsernameColor
+export function initAvatarCache(lookup: AvatarLookup): void {
+  avatarLookup = lookup
 }
 
 // ── Avatars ─────────────────────────────────────────────────────────────────
@@ -103,40 +85,8 @@ export function ensureAvatar(message: NormalizedChatMessage): void {
   )
 }
 
-// ── Mention colors ──────────────────────────────────────────────────────────
-
-const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g
-
-export function mentionColor(platform: string, username: string): string | null | undefined {
-  return mentionColors.get(`${platform}:${username.toLowerCase()}`)
-}
-
-export function ensureMentionColors(platform: Platform, text: string): void {
-  if (!colorLookup) return
-  const mentions = text.match(MENTION_REGEX)
-  if (!mentions) return
-  const uniqueUsers = new Set(mentions.map((m) => m.slice(1)))
-  for (const username of uniqueUsers) {
-    const key = `${platform}:${username.toLowerCase()}`
-    if (mentionColors.has(key)) continue
-    if (mentionColors.size > 2000) mentionColors.clear()
-    mentionColors.set(key, null) // optimistic placeholder, replaced on resolve
-    const lookup = colorLookup
-    runInBackground(
-      lookup({ platform, username })
-        .then((color) => {
-          mentionColors.set(key, color)
-          mentionColorRevisionStore.modify((v) => v + 1)
-        })
-        .catch(() => undefined),
-      'caches background operation failed',
-    )
-  }
-}
-
 declare module './persistent-resources' {
   interface PersistentResources {
     avatarRevision: Store<number>
-    mentionColorRevision: Store<number>
   }
 }

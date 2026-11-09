@@ -4,6 +4,10 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { buildMessageTokens, mergePlainText } from '../src/gpuix/message-tokens'
 import { createStore } from '../src/gpuix/state/create-store'
+import {
+  createMentionAppearances,
+  mentionAppearanceKey,
+} from '../src/gpuix/state/mention-appearances'
 import { messageLength, messageLengthLimit } from '../src/views/main/utils/chat-send-targets'
 import {
   codePointRangeToUtf16,
@@ -27,6 +31,62 @@ function makeMessage(partial: Partial<NormalizedChatMessage>): NormalizedChatMes
     ...partial,
   }
 }
+
+describe('mention appearances', () => {
+  test('a late author and a color change notify only matching mentions', async () => {
+    const appearances = createMentionAppearances()
+    const key = mentionAppearanceKey('twitch', 'USER')
+    const otherKey = mentionAppearanceKey('kick', 'user')
+    const colors: Array<string | undefined> = []
+    const unsubscribe = appearances.subscribe(key, () => {
+      colors.push(appearances.snapshot(key)?.color)
+    })
+    const unsubscribeOther = appearances.subscribe(otherKey, () => {
+      throw new Error('Another platform should not be notified')
+    })
+    try {
+      const author = {
+        id: 'u1',
+        username: 'user',
+        displayName: 'VisibleName',
+        color: '#aabbcc',
+        badges: [],
+      }
+      expect(appearances.snapshot(key)).toBeUndefined()
+      appearances.addMessage(makeMessage({ author, timestamp: new Date(1) }))
+      const initial = appearances.snapshot(key)
+      expect(initial?.id).toBe('u1')
+      expect(appearances.snapshot(mentionAppearanceKey('twitch', 'visiblename'))).toEqual(initial)
+      expect(colors).toEqual([])
+      await Bun.sleep(1)
+      expect(colors).toEqual(['#aabbcc'])
+
+      appearances.addMessage(makeMessage({ author: { ...author }, timestamp: new Date(3) }))
+      appearances.addMessage(makeMessage({ author: { ...author, color: '#000000' } }))
+      expect(appearances.snapshot(key)).toBe(initial)
+      appearances.addMessage(
+        makeMessage({ author: { ...author, color: '#aabbdd' }, timestamp: new Date(4) }),
+      )
+      await Bun.sleep(1)
+      expect(colors).toEqual(['#aabbcc', '#aabbdd'])
+    } finally {
+      unsubscribe()
+      unsubscribeOther()
+    }
+  })
+
+  test('normalizes YouTube handles and ignores synthetic messages', () => {
+    const appearances = createMentionAppearances()
+    const author = { id: 'yt-1', username: '@Handle', displayName: 'Video Viewer', badges: [] }
+    const key = mentionAppearanceKey('youtube', 'HANDLE')
+    const message = makeMessage({ author, platform: 'youtube' })
+    appearances.addMessage({ ...message, type: 'system' })
+    appearances.addMessage({ ...message, delivery: { state: 'pending' } })
+    expect(appearances.snapshot(key)).toBeUndefined()
+    appearances.addMessage(message)
+    expect(appearances.snapshot(key)?.id).toBe('yt-1')
+  })
+})
 
 describe('buildMessageTokens', () => {
   test('plain text becomes word tokens with trailing spaces preserved', () => {
@@ -125,7 +185,6 @@ describe('buildMessageTokens', () => {
       kind: 'mention',
       text: '@someone ',
       username: 'someone',
-      color: null,
     })
   })
 
@@ -139,14 +198,13 @@ describe('buildMessageTokens', () => {
       kind: 'mention',
       text: '@Other_User ',
       username: 'Other_User',
-      color: null,
     })
   })
 
   test('handles inside a URL remain links', () => {
     const tokens = buildMessageTokens(makeMessage({ text: 'https://example.com/@someone @other' }))
     expect(tokens.filter((token) => token.kind === 'mention')).toEqual([
-      { kind: 'mention', text: '@other', username: 'other', color: null },
+      { kind: 'mention', text: '@other', username: 'other' },
     ])
   })
 
