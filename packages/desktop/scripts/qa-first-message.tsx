@@ -15,9 +15,6 @@ const {
   activeWatchedTabStore,
   accountsStore,
 } = await import('../src/state/app')
-const { ChatView } = await import('../src/gpuix/components/ChatView')
-const { useGpuixRequired } = await import('@gpuix/react')
-const { React } = await import('react')
 const { DesktopWindowManager } = await import('../src/window-manager')
 
 const channel = {
@@ -36,17 +33,20 @@ const channel = {
   },
 }
 
-const tabId = 'qa-first-tab'
-const layout = { type: 'panel' as const, id: 'pane' }
-
 const backend = {
   events: createDesktopEvents(),
   api: {
-    getUiState: async ({ key }: { key: string }) => null,
-    setUiState: async ({ key, value }: { key: string; value: string }) => {},
-    getWatchedChannelsLayout: async ({ tabId }: { tabId: string }) => null,
-    setWatchedChannelsLayout: async ({ tabId, layout }: { tabId: string; layout: unknown }) => {},
-    removeWatchedChannelsLayout: async ({ tabId }: { tabId: string }) => {},
+    getUiState: async ({ _key }: { _key: string }) => null,
+    setUiState: async ({ _key, _value }: { _key: string; _value: string }) => {},
+    getWatchedChannelsLayout: async ({ _tabId }: { _tabId: string }) => null,
+    setWatchedChannelsLayout: async ({
+      _tabId,
+      _layout,
+    }: {
+      _tabId: string
+      _layout: unknown
+    }) => {},
+    removeWatchedChannelsLayout: async ({ _tabId }: { _tabId: string }) => {},
     getChannelEmotes: async () => [],
     getModerationCapabilities: async () => ({ canModerate: false }),
     getTranslationSettings: async () => ({ settings: {}, credentials: [] }),
@@ -59,10 +59,7 @@ watchedChannelsStore.set([channel])
 activeWatchedTabStore.set('qa-first-tab')
 layoutStore.set(
   new Map([
-    [
-      'qa-first-tab',
-      { layout: { type: 'panel' as const, id: 'pane' }, isLoading: false, error: null },
-    ],
+    ['qa-first-tab', { layout: { type: 'panel', id: 'pane' }, isLoading: false, error: null }],
   ]),
 )
 watchedStatusesStore.set(
@@ -74,10 +71,7 @@ const manager = new DesktopWindowManager(
   backend,
   () => {
     const { React } = require('react')
-    const { ChatView } = require('../src/gpuix/components/ChatView')
-    const { useGpuixRequired } = require('@gpuix/react')
     function Content() {
-      const currentRenderer = require('@gpuix/react').useGpuixRequired()
       return React.createElement(
         'div',
         {
@@ -108,13 +102,6 @@ interface AutomationNode {
   children: AutomationNode[]
 }
 
-interface QaRenderer {
-  getAutomationTree(): string
-  getPaintedText(): string[]
-  getElementBounds(id: number): { x: number; y: number; width: number; height: number } | null
-  simulateClick(x: number, y: number, button: number): void
-}
-
 const automationNodeSchema: z.ZodType<AutomationNode> = z.lazy(() =>
   z.object({
     id: z.number(),
@@ -122,12 +109,6 @@ const automationNodeSchema: z.ZodType<AutomationNode> = z.lazy(() =>
     children: z.array(automationNodeSchema).default([]),
   }),
 )
-
-function find(renderer: QaRenderer, testId: string): AutomationNode | undefined {
-  const visit = (node: AutomationNode): AutomationNode | undefined =>
-    node.testId === testId ? node : node.children.map(visit).find(Boolean)
-  return visit(automationNodeSchema.parse(JSON.parse(renderer.getAutomationTree())))
-}
 
 async function until(check: () => boolean, label: string): Promise<void> {
   const deadline = performance.now() + 30_000
@@ -197,13 +178,4 @@ try {
 } catch (error) {
   console.error('ERROR:', error)
   process.exit(1)
-}
-
-async function until(check: () => boolean, label: string): Promise<void> {
-  const deadline = performance.now() + 30_000
-  while (performance.now() < deadline) {
-    if (check()) return
-    await Bun.sleep(20)
-  }
-  throw new Error(`Timed out: ${label}`)
 }
