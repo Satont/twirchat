@@ -43,6 +43,8 @@ test('a flood shares publications while quiet chat appears within a frame', asyn
   const events = createDesktopEvents()
   const api: AppStoreBackend['api'] = {
     getAccounts: () => Promise.resolve([]),
+    getSavedAccounts: () => Promise.resolve([]),
+    getWatchedChannels: () => Promise.resolve([]),
     getWatchedChannelMessages: () => Promise.resolve([]),
     getWatchedChannelStatuses: () => Promise.resolve([]),
   }

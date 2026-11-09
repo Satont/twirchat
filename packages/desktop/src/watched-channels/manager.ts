@@ -27,10 +27,12 @@ import { KickAdapter } from '../platforms/kick/adapter'
 import { TwitchAdapter } from '../platforms/twitch/adapter'
 import { YouTubeAdapter } from '../platforms/youtube/adapter'
 import { runInBackground } from '../services/background-task'
+import { chatSender } from '../services/chat-accounts'
 import { sevenTVService } from '../seventv'
 import { AccountStore } from '../store/account-store'
 import { WatchedChannelsLayoutStore } from '../store/watched-channels-layout-store'
 import { WatchedChannelStore } from '../store/watched-channels-store'
+import type { ChatAccountSender } from './account-sender'
 
 const log = logger('watched-channels')
 
@@ -42,6 +44,8 @@ export type WatchedChannelStatusHandler = (channelId: string, status: PlatformSt
 
 interface WatchedEntry {
   watchedChannel: WatchedChannel
+  /** Account whose own connection sends in this chat, while it differs from the reading one. */
+  senderId?: string
   adapter: IPlatformAdapter
   messages: NormalizedChatMessage[]
   status: PlatformStatusInfo | null
@@ -56,6 +60,7 @@ export class WatchedChannelManager {
       message,
     ) => message,
     private readonly createAdapter?: (channel: WatchedChannel) => IPlatformAdapter,
+    private readonly accountSender?: ChatAccountSender,
   ) {}
   private reconnectQueues = new Map<string, Promise<void>>()
   private entries = new Map<string, WatchedEntry>() // Keyed by WatchedChannel.id
@@ -127,6 +132,7 @@ export class WatchedChannelManager {
     if (entry) {
       this.entries.delete(id)
       this.unbindAdapter(entry)
+      if (entry.senderId) this.accountSender?.release(entry.senderId, entry.watchedChannel)
       sevenTVService
         .unsubscribeFromChannel(
           entry.watchedChannel.platform,
@@ -225,6 +231,8 @@ export class WatchedChannelManager {
         if (this.entries.get(id) !== entry) return
         this.bindAdapter(entry)
         await entry.adapter.connect(entry.watchedChannel.channelSlug)
+        // The default account may have changed and now be the chat's chosen account.
+        if (this.entries.get(id) === entry) this.syncSender(entry)
       })
     this.reconnectQueues.set(id, next)
     runInBackground(
@@ -238,6 +246,47 @@ export class WatchedChannelManager {
     return next
   }
 
+  /**
+   * Chooses the saved account a chat sends with (`null` = the default account). The chat keeps
+   * reading over its current connection; another account gets its own sending connection.
+   */
+  setChannelAccount(id: string, accountId: string | null): WatchedChannel {
+    const channel = WatchedChannelStore.findById(id)
+    if (!channel) throw new Error('This chat is no longer saved.')
+    WatchedChannelStore.setAccount(id, accountId)
+    const updated = WatchedChannelStore.findById(id) ?? channel
+    const entry = this.entries.get(id)
+    if (entry) {
+      entry.watchedChannel = updated
+      this.syncSender(entry)
+    }
+    return updated
+  }
+
+  /** Returns chats bound to a forgotten account to the default account. */
+  releaseAccount(accountId: string): void {
+    for (const id of WatchedChannelStore.releaseAccount(accountId)) {
+      const entry = this.entries.get(id)
+      const updated = WatchedChannelStore.findById(id)
+      if (!entry || !updated) continue
+      entry.watchedChannel = updated
+      this.syncSender(entry)
+    }
+  }
+
+  /** Opens the chosen account's sending connection early so the first message is not delayed. */
+  private syncSender(entry: WatchedEntry): void {
+    const sender = chatSender(entry.watchedChannel)
+    if (entry.senderId && entry.senderId !== sender?.id)
+      this.accountSender?.release(entry.senderId, entry.watchedChannel)
+    entry.senderId = sender?.id
+    if (sender && this.accountSender)
+      runInBackground(
+        this.accountSender.prepare(sender, entry.watchedChannel),
+        'Could not prepare the chat account',
+      )
+  }
+
   /** Send a message via the watched channel's adapter */
   async sendMessage(
     id: string,
@@ -248,7 +297,10 @@ export class WatchedChannelManager {
     if (!entry) {
       throw new Error(`Watched channel ${id} not found`)
     }
-    return entry.adapter.sendMessage(entry.watchedChannel.channelSlug, text, replyTo)
+    const sender = chatSender(entry.watchedChannel)
+    if (!sender) return entry.adapter.sendMessage(entry.watchedChannel.channelSlug, text, replyTo)
+    if (!this.accountSender) throw new Error('Sending as another account is unavailable.')
+    return this.accountSender.send(sender, entry.watchedChannel, entry.adapter, text, replyTo)
   }
 
   /** Register a handler for incoming messages */
@@ -323,6 +375,7 @@ export class WatchedChannelManager {
 
     this.entries.set(ch.id, entry)
     this.bindAdapter(entry)
+    this.syncSender(entry)
 
     log.info('Connecting watched channel', {
       id: ch.id,

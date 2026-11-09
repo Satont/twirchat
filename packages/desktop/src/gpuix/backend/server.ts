@@ -32,6 +32,7 @@ import {
 } from '../../overlay-server'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { TwitchAdapter } from '../../platforms/twitch/adapter'
+import { createDefaultTwitchSenderPool } from '../../platforms/twitch/sender-pool'
 import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
 import { createYouTubeChatRelay } from '../../platforms/youtube/relay'
 import { createPluginManager } from '../../plugins/manager'
@@ -56,6 +57,7 @@ import { getClientSecret } from '../../store/client-secret'
 import { getDb } from '../../store/db'
 import { initDb } from '../../store/db'
 import { TwitchWebSessionStore } from '../../store/twitch-web-session-store'
+import { createChatAccountSender } from '../../watched-channels/account-sender'
 import {
   HOME_PLUGIN_CHANNELS_KEY,
   readHomePluginChannelIds,
@@ -150,8 +152,11 @@ function boot(): DesktopBackend {
 
   startOverlayServer()
 
-  const watchedChannelManager = new WatchedChannelManager((message) =>
-    providerRuntime.enrich(message),
+  const twitchSenders = createDefaultTwitchSenderPool()
+  const watchedChannelManager = new WatchedChannelManager(
+    (message) => providerRuntime.enrich(message),
+    undefined,
+    createChatAccountSender(twitchSenders),
   )
   let twitchEventSubConnected = false
   let twitchActivityRefresh: TwitchActivityRefreshClient | undefined
@@ -679,6 +684,7 @@ function boot(): DesktopBackend {
         log.warn('Plugin shutdown failed', { error: String(error) })
       })
       twitchHistory.dispose()
+      twitchSenders.dispose()
       streamerMode.stop()
       providerRuntime.stop()
       twitchEventSub.stop()

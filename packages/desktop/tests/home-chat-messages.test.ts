@@ -100,6 +100,8 @@ test('history replaces saved Twitch echoes while preserving queued live messages
     events,
     api: {
       getAccounts: async () => accounts,
+      getSavedAccounts: async () => accounts,
+      getWatchedChannels: async () => [],
       getWatchedChannelMessages: async () => [],
       getWatchedChannelStatuses: async () => [],
     },
@@ -189,6 +191,8 @@ test('coalesces live bursts per channel without overwriting an in-flight history
     events,
     api: {
       getAccounts: async () => accounts,
+      getSavedAccounts: async () => accounts,
+      getWatchedChannels: async () => [],
       getWatchedChannelMessages: async () => [],
       getWatchedChannelStatuses: async () => [],
     },

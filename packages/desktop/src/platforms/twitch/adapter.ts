@@ -38,6 +38,7 @@ import { BasePlatformAdapter, type ChatReplyTarget } from '../base-adapter'
 import { resolveTwitchAvatarUrl } from './avatar-cache'
 import { parseTwitchBadgeCatalog } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
+import { hasPrivilegedChatRole, twitchSendLimiter } from './send-limiter'
 
 const log = logger('twitch')
 
@@ -281,6 +282,13 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     const parentMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
     const attributes = parentMessageId ? { replyTo: parentMessageId } : undefined
+    if (this.accountId)
+      await twitchSendLimiter(this.accountId).acquire(
+        channelId,
+        hasPrivilegedChatRole(this.selfTags),
+      )
+    if (revision !== this.identityRevision || !this.chatClient)
+      throw new Error('The Twitch account changed before sending. Review the draft and send again.')
     try {
       await this.chatClient.say(channelId, text, attributes)
     } catch (error) {
@@ -336,7 +344,8 @@ export class TwitchAdapter extends BasePlatformAdapter {
       this.chatClient = new ChatClient({
         authProvider,
         channels: [this.channelName],
-        isAlwaysMod: false,
+        // Limits are enforced per account by the send limiter, with the account's role here.
+        isAlwaysMod: true,
         logger: {
           custom: (level, message) => {
             if (level === LogLevel.ERROR) {

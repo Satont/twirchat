@@ -42,6 +42,7 @@ import {
 import { resolveUserCardCommand, type UserCardTarget } from '../../views/main/utils/chatCommands'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
+import { resolveChatAccount } from '../chat-account'
 import {
   commandApplies,
   runCommandActions,
@@ -57,7 +58,7 @@ import {
   useHotkeyContext,
   useHotkeyRoute,
 } from '../state/action-bindings'
-import { aliasesStore, showNotice, streamStatusStore } from '../state/app'
+import { aliasesStore, savedAccountsStore, showNotice, streamStatusStore } from '../state/app'
 import { emoteStore } from '../state/app'
 import {
   autoTranslationLanguagesStore,
@@ -84,6 +85,7 @@ import { useWindowScope } from '../state/window-scope'
 import { platformColor, withAlpha, type Theme } from '../theme'
 import { useTheme } from '../theme-context'
 import { AutocompletePopup } from './AutocompletePopup'
+import { ChatAccountControl } from './ChatAccountControl'
 import { ComposerImageUpload } from './ComposerImageUpload'
 import { EmotePicker } from './EmotePicker'
 import { ActionButton } from './ui/Form'
@@ -223,6 +225,18 @@ export function ChatInput(props: ChatInputProps) {
     }
   }, [])
   const aliases = useStore(aliasesStore)
+  const savedAccounts = useStore(savedAccountsStore)
+  // The account this chat sends with. A chosen account sends over its own connection, so it
+  // does not depend on the chat reading anonymously or not; the default account does.
+  const resolvedWatchedAccount = props.watchedChannel
+    ? resolveChatAccount(props.watchedChannel, savedAccounts, props.accounts)
+    : undefined
+  const watchedAccount =
+    resolvedWatchedAccount &&
+    (resolvedWatchedAccount.id === props.watchedChannel?.accountId ||
+      props.watchedChannelStatus?.mode === 'authenticated')
+      ? resolvedWatchedAccount
+      : undefined
   const renderer = useGpuixRequired()
   const windowScope = useWindowScope()
   const textareaRef = useRef<PublicInstance | null>(null)
@@ -367,8 +381,7 @@ export function ChatInput(props: ChatInputProps) {
   )
   const hasAnything = props.watchedChannel ? true : connectedPlatforms.length > 0
   const isDisabled = props.watchedChannel
-    ? props.watchedChannelStatus?.mode !== 'authenticated' ||
-      props.watchedChannelStatus.status !== 'connected'
+    ? !watchedAccount || props.watchedChannelStatus?.status !== 'connected'
     : !sendablePlatforms.some(
         (target) => !composer.activePlatform || target.platform === composer.activePlatform,
       )
@@ -431,9 +444,11 @@ export function ChatInput(props: ChatInputProps) {
 
   function commandContext(input: string): CommandContext {
     const target = commandTargets.length === 1 ? commandTargets[0] : undefined
-    const account = target
-      ? props.accounts.find((candidate) => candidate.platform === target.platform)
-      : undefined
+    const account = props.watchedChannel
+      ? watchedAccount
+      : target
+        ? props.accounts.find((candidate) => candidate.platform === target.platform)
+        : undefined
     const selected = props.replyTarget
     const stream = target
       ? streamStatusStore.get().get(`${target.platform}:${target.channelSlug.toLowerCase()}`)
@@ -1118,8 +1133,10 @@ export function ChatInput(props: ChatInputProps) {
 
   function placeholderText(): string {
     if (props.watchedChannel) {
-      if (props.watchedChannelStatus?.mode !== 'authenticated') return 'Log in to send messages…'
-      return `Message ${props.watchedChannel.displayName}…`
+      if (!watchedAccount) return 'Log in to send messages…'
+      return props.watchedChannel.platform === 'youtube'
+        ? `Message ${props.watchedChannel.displayName}…`
+        : `Message ${props.watchedChannel.displayName} as @${watchedAccount.username}…`
     }
     if (!hasAnything) return 'Connect an account…'
     if (isDisabled) return 'Log in to send messages…'
@@ -1600,18 +1617,32 @@ export function ChatInput(props: ChatInputProps) {
                 borderColor: theme.border,
               }}
             >
-              {props.watchedChannel ? (
+              {props.watchedChannel?.platform === 'youtube' ? (
                 <TargetControl
-                  platform={props.watchedChannel.platform}
+                  platform="youtube"
                   label={props.watchedChannel.displayName}
-                  active={props.watchedChannelStatus?.mode === 'authenticated'}
-                  anonymous={props.watchedChannelStatus?.mode !== 'authenticated'}
+                  active={!!watchedAccount}
+                  anonymous={!watchedAccount}
                   status={props.watchedChannelStatus?.status}
                   statusText={connectionStatusText(
                     props.watchedChannelStatus?.status,
                     props.watchedChannel.displayName,
                     props.watchedChannelStatus?.error,
                   )}
+                />
+              ) : props.watchedChannel ? (
+                <ChatAccountControl
+                  channel={props.watchedChannel}
+                  account={watchedAccount}
+                  statusColor={statusDotColor(props.watchedChannelStatus?.status, theme)}
+                  statusText={connectionStatusText(
+                    props.watchedChannelStatus?.status,
+                    props.watchedChannel.displayName,
+                    props.watchedChannelStatus?.error,
+                  )}
+                  onChosen={() => {
+                    if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
+                  }}
                 />
               ) : (
                 connectedPlatforms.map((target) => (

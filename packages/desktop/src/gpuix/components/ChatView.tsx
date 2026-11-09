@@ -35,6 +35,7 @@ import type { ModerationDragAction } from '../../views/main/utils/moderation-dra
 import { publicChannelURL } from '../../views/main/utils/public-channel-url'
 import { initialsOf } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
+import { resolveChatAccount } from '../chat-account'
 import { mergeChatTimeline, pluginChatSearchMessage, timelineRowKey } from '../chat-timeline'
 import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
@@ -54,6 +55,7 @@ import {
   chatMessageRate,
   homeMessagesStore,
   moderationViewStore,
+  savedAccountsStore,
   settingsStore,
   streamStatusStore,
   watchedMessagesStore,
@@ -291,6 +293,18 @@ export function ChatView({
     [baseSettings, presentation.zoom],
   )
   const accounts = useStore(accountsStore)
+  const savedAccounts = useStore(savedAccountsStore)
+  const chatAccount = watchedChannel
+    ? resolveChatAccount(watchedChannel, savedAccounts, accounts)
+    : undefined
+  // Mentions of, and messages from, the account this chat sends with count as the user's own.
+  const ownAccounts = useMemo(
+    () =>
+      chatAccount && !accounts.some((account) => account.id === chatAccount.id)
+        ? [...accounts, chatAccount]
+        : accounts,
+    [accounts, chatAccount],
+  )
   const aliases = useStore(aliasesStore)
   const rules = useStoreSelector(chatRulesStore, (state) => state.value)
   const similaritySettings = useStoreSelector(messageSimilarityStore, (state) => state.value)
@@ -331,19 +345,19 @@ export function ChatView({
   )
 
   const visibleDeliveries = useMemo(() => {
+    // Saved accounts include those chosen for a single chat.
+    const own = (message: DeliveryMessage) => (account: Account) =>
+      account.platform === message.platform && account.platformUserId === message.author.id
     const retained = deliveryMessages.filter(
       (message) =>
         message.delivery?.scope === activityKey &&
-        accounts.some(
-          (account) =>
-            account.platform === message.platform && account.platformUserId === message.author.id,
-        ),
+        (accounts.some(own(message)) || savedAccounts.some(own(message))),
     )
     return reconcilePendingMessages(
       retained.length === deliveryMessages.length ? deliveryMessages : retained,
       providerMessages,
     )
-  }, [deliveryMessages, providerMessages, accounts, activityKey])
+  }, [deliveryMessages, providerMessages, accounts, savedAccounts, activityKey])
 
   useEffect(() => {
     if (visibleDeliveries !== deliveryMessages)
@@ -357,10 +371,10 @@ export function ChatView({
 
   const ruleEngine = useMemo(
     () =>
-      compileMessageRules(rules, accounts, (message) => ({
+      compileMessageRules(rules, ownAccounts, (message) => ({
         similar: similarityReader.get(message)?.similar,
       })),
-    [rules, accounts, similarityReader],
+    [rules, ownAccounts, similarityReader],
   )
   const paneKey = paneId ? `${paneId}:${activityKey}` : activityKey
   const twitchChannel = watchedChannel
@@ -716,13 +730,12 @@ export function ChatView({
   const moderationPlatform = (platform: Platform): 'twitch' | 'kick' | undefined =>
     platform === 'twitch' || platform === 'kick' ? platform : undefined
 
-  // Refresh the watched-channel moderation capability when inputs change.
-  const accountsKey = accounts.map((a) => `${a.platform}:${a.id}`).join('|')
+  // Refresh the watched-channel moderation capability when the chat's account changes.
+  const watchedAccountId = chatAccount?.id
   useEffect(() => {
     let cancelled = false
     const platform = watchedChannel ? moderationPlatform(watchedChannel.platform) : undefined
-    const account = platform ? accounts.find((a) => a.platform === platform) : undefined
-    if (!watchedChannel || !platform || !account) {
+    if (!watchedChannel || !platform || !watchedAccountId) {
       setWatchedModerationAllowed(false)
       return
     }
@@ -738,7 +751,7 @@ export function ChatView({
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedChannel?.id, watchedChannel?.platform, watchedChannel?.channelSlug, accountsKey])
+  }, [watchedChannel?.id, watchedChannel?.platform, watchedChannel?.channelSlug, watchedAccountId])
 
   const onModerate = useCallback(
     async (message: NormalizedChatMessage, action: ModerationDragAction) => {
@@ -819,7 +832,11 @@ export function ChatView({
     replyToMessageId?: string,
     watchedChannelId?: string,
   ): Promise<void> {
-    const account = accounts.find((candidate) => candidate.platform === platform)
+    // A chat may send with its own chosen account rather than the platform default.
+    const account =
+      watchedChannelId && watchedChannel
+        ? chatAccount
+        : accounts.find((candidate) => candidate.platform === platform)
     if (!account || (platform !== 'twitch' && platform !== 'kick')) {
       console.warn(`[chat] cannot prepare ${platform} optimistic message: no authenticated account`)
       return
@@ -1870,7 +1887,7 @@ export function ChatView({
                   showBadges={settings?.showBadges}
                   fontSize={settings?.fontSize}
                   chatTheme={settings?.chatTheme}
-                  accounts={accounts}
+                  accounts={ownAccounts}
                   selfPingEnabled={settings?.selfPing?.enabled}
                   selfPingColor={
                     classification.color

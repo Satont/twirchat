@@ -37,6 +37,7 @@ import type {
   Platform,
   PlatformStatusInfo,
   SplitDirection,
+  WatchedChannel,
   WatchedChannelsLayout,
 } from '@twirchat/shared/types'
 import type {
@@ -59,10 +60,12 @@ import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
 import type { ChatReplyTarget } from '../../platforms/base-adapter'
 import { KickAdapter } from '../../platforms/kick/adapter'
+import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
 import type { PluginTransportInfo } from '../../plugins/api'
 import { backendFetch } from '../../runtime-config'
 import type { AccountSessions } from '../../services/account-sessions'
 import type { ChannelActions, PlayerSettings } from '../../services/channel-actions'
+import { channelAccount } from '../../services/chat-accounts'
 import {
   getUserCosmetics,
   getPaintNameImage,
@@ -383,6 +386,11 @@ export interface DesktopApi {
     channelSlug: string
   }): Promise<DesktopWatchedChannel>
   removeWatchedChannel(params: { id: string }): Promise<void>
+  /** Chooses the saved account a chat signs in and sends with; `null` uses the default account. */
+  setWatchedChannelAccount(params: {
+    id: string
+    accountId: string | null
+  }): Promise<WatchedChannel>
   getWatchedChannelMessages(params: { id: string }): Promise<NormalizedChatMessage[]>
   sendWatchedChannelMessage(params: {
     id: string
@@ -641,7 +649,7 @@ async function moderationBody(platform: ModerationPlatform, channelSlug: string)
   }
   if (!channelSlug) throw new Error('moderation: channel slug is required')
 
-  const account = AccountStore.findByPlatform(platform)
+  const account = channelAccount(platform, channelSlug)
   if (!account) {
     throw new Error(`moderation: authenticate with ${platform} before moderating`)
   }
@@ -663,7 +671,7 @@ async function moderationBody(platform: ModerationPlatform, channelSlug: string)
 const KICK_ACTIVE_CHATTERS_URL = 'https://web.kick.com/api/v1/channels'
 
 async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters> {
-  const account = AccountStore.findByPlatform('twitch')
+  const account = channelAccount('twitch', channelSlug)
   const tokens = account ? AccountStore.getTokens(account.id) : null
   if (!account || !tokens?.accessToken) {
     throw new Error('Connect a Twitch account with moderator access to see the chatters list.')
@@ -881,6 +889,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     forgetAccount: async ({ accountId }) => {
       if (!ctx.accountSessions) throw new Error('Account switching is not initialized.')
       await ctx.accountSessions.forget(accountId)
+      watchedChannelManager.releaseAccount(accountId)
+      forgetTwitchSendLimiter(accountId)
     },
     setProviderActiveChannel: async (params) => {
       ctx.providerRuntime?.setActiveChannel(params)
@@ -1281,6 +1291,19 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (channel) ctx.providerRuntime?.setJoined(`watched:${id}`, channel.platform, null)
       await watchedChannelManager.removeChannel(id)
       WatchedChannelsLayoutStore.remove(id)
+    },
+
+    setWatchedChannelAccount: async ({ id, accountId }) => {
+      if (accountId !== null) {
+        const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === id)
+        const account = AccountStore.findById(accountId)
+        if (!channel) throw new Error('This chat is no longer saved.')
+        if (channel.platform === 'youtube')
+          throw new Error('YouTube chats always send with the default account.')
+        if (account?.platform !== channel.platform)
+          throw new Error("Choose a saved account belonging to this chat's platform.")
+      }
+      return watchedChannelManager.setChannelAccount(id, accountId)
     },
 
     getWatchedChannelMessages: async ({ id }) => {

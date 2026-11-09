@@ -371,6 +371,8 @@ export interface WatchedChannel {
   channelSlug: string
   displayName: string
   createdAt: number
+  /** Saved account this chat signs in and sends with; absent uses the platform's default account. */
+  accountId?: string
 }
 
 // ============================================================

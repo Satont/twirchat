@@ -171,6 +171,13 @@ function runMigrations(db: Database): void {
       UNIQUE (platform, channel_slug)
     )
   `)
+  if (
+    !db
+      .query<{ name: string }, []>('PRAGMA table_info(watched_channels)')
+      .all()
+      .some((column) => column.name === 'account_id')
+  )
+    db.run('ALTER TABLE watched_channels ADD COLUMN account_id TEXT')
 
   db.run(`
     CREATE TABLE IF NOT EXISTS plugin_watched_channels (
