@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger, useGpuixRequired } from '@gpuix/react'
+import { DONATION_PROVIDER_LABELS } from '@twirchat/shared/donations'
 /**
  * Chat pane — port of ChatList.vue (header + virtualized list + composer)
  * onto GPUIX's native <virtual-list> (alignment="bottom" followTail replaces
@@ -36,7 +37,13 @@ import { publicChannelURL } from '../../views/main/utils/public-channel-url'
 import { initialsOf } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { resolveChatAccount } from '../chat-account'
-import { mergeChatTimeline, pluginChatSearchMessage, timelineRowKey } from '../chat-timeline'
+import {
+  donationSearchMessage,
+  mergeChatTimeline,
+  mergeDonationTimeline,
+  pluginChatSearchMessage,
+  timelineRowKey,
+} from '../chat-timeline'
 import { chatMessageKey, compileChatSearch, formatChatTranscript } from '../chat-tools'
 import { runUiTask } from '../hooks/run-ui-task'
 import { parseHotkeyChoice } from '../hotkey-bindings'
@@ -70,6 +77,7 @@ import { chatSearchJumpStore, finishChatSearchJump } from '../state/chat-search'
 import { composerStore, updateComposer } from '../state/composer'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
+import { donationFeed, EMPTY_DONATION_FEED, type DonationRow } from '../state/donation-feed'
 import { useTextInputFocusTracking } from '../state/focus'
 import { highlightFlashStore } from '../state/highlight-notifications'
 import { notificationPreferences } from '../state/highlight-notifications'
@@ -98,6 +106,7 @@ import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
 import { ChatMessageRow } from './ChatMessageRow'
 import { ChattersDialog } from './ChattersDialog'
+import { DonationChatRow } from './DonationChatRow'
 import { PluginChatRow } from './PluginChatRow'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
 import { TwitchAutoMod } from './TwitchAutoMod'
@@ -117,6 +126,7 @@ const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
 interface PausedChat {
   messages: NormalizedChatMessage[]
   pluginRows: readonly HomePluginRow[]
+  donations: readonly DonationRow[]
   total: number
 }
 
@@ -323,6 +333,9 @@ export function ChatView({
   const pluginFeed = useStoreSelector(homePluginFeedStore, (feed) =>
     watchedChannel ? EMPTY_PLUGIN_FEED : feed,
   )
+  const donations = useStoreSelector(donationFeed.store, (feed) =>
+    watchedChannel || layoutTabId !== 'home' ? EMPTY_DONATION_FEED : feed,
+  )
   const watchedMessages = useStoreSelector(watchedMessagesStore, (messages) =>
     watchedChannel ? (messages.get(watchedChannel.id) ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
   )
@@ -450,10 +463,11 @@ export function ChatView({
   const pendingJump = useRef<{ requestId: string; messageKey: string } | null>(null)
   const searchRef = useRef<import('@gpuix/react').PublicInstance | null>(null)
   const resumeScrollRequested = useRef(false)
-  const activityTotal = (activity?.total ?? 0) + pluginFeed.total
+  const activityTotal = (activity?.total ?? 0) + pluginFeed.total + donations.total
   const pauseSnapshot: PausedChat = {
     messages: activeMessages,
     pluginRows: pluginFeed.rows,
+    donations: donations.rows,
     total: activityTotal,
   }
   const pauseInput = useRef(pauseSnapshot)
@@ -493,6 +507,7 @@ export function ChatView({
   const search = useMemo(() => compileChatSearch(searchQuery), [searchQuery])
   const readingMessages = paused?.messages ?? activeMessages
   const readingPluginRows = paused?.pluginRows ?? pluginFeed.rows
+  const readingDonations = paused?.donations ?? donations.rows
   const displayedMessages = useMemo(
     () =>
       readingMessages.filter((message) => {
@@ -571,9 +586,27 @@ export function ChatView({
     searchQuery,
     search,
   ])
+  const displayedDonations = useMemo(() => {
+    if (
+      readingDonations.length === 0 ||
+      mentionsOnly ||
+      (settings?.platformFilter !== undefined && settings.platformFilter !== 'all')
+    )
+      return EMPTY_DONATION_FEED.rows
+    const searching = searchQuery.trim().length > 0
+    if (clearedKeys.size === 0 && !searching) return readingDonations
+    return readingDonations.filter(
+      (row) =>
+        !clearedKeys.has(row.key) && (!searching || search.matches(donationSearchMessage(row), {})),
+    )
+  }, [readingDonations, clearedKeys, mentionsOnly, settings?.platformFilter, searchQuery, search])
   const displayedTimeline = useMemo(
-    () => mergeChatTimeline(displayedMessages, displayedPluginRows),
-    [displayedMessages, displayedPluginRows],
+    () =>
+      mergeDonationTimeline(
+        mergeChatTimeline(displayedMessages, displayedPluginRows),
+        displayedDonations,
+      ),
+    [displayedMessages, displayedPluginRows, displayedDonations],
   )
   const mentionsCount = useMemo(
     () => activeMessages.filter((message) => ruleEngine.classify(message).mention).length,
@@ -605,6 +638,7 @@ export function ChatView({
   function clearMessages() {
     const keys = new Set(activeMessages.map(chatMessageKey))
     for (const row of pluginFeed.rows) keys.add(row.key)
+    for (const row of donations.rows) keys.add(row.key)
     setClearedKeys(keys)
     pauseController.clear()
   }
@@ -623,11 +657,17 @@ export function ChatView({
       .catch((error) => showNotice('error', String(error)))
   }
   function copyMessages() {
-    const transcript = displayedTimeline.map((row) =>
-      'message' in row
-        ? { ...pluginChatSearchMessage(row), timestamp: row.message.timestamp }
-        : row,
-    )
+    const transcript = displayedTimeline.map((row) => {
+      if ('message' in row)
+        return { ...pluginChatSearchMessage(row), timestamp: row.message.timestamp }
+      if ('donation' in row)
+        return {
+          ...donationSearchMessage(row),
+          platform: DONATION_PROVIDER_LABELS[row.donation.provider],
+          timestamp: row.donation.timestamp,
+        }
+      return row
+    })
     void backend.api
       .copyText({ text: formatChatTranscript(transcript) })
       .then(() =>
@@ -1766,7 +1806,7 @@ export function ChatView({
               testId="chat-search-count"
               style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}
             >
-              {`${displayedTimeline.length} / ${readingMessages.length + readingPluginRows.length}`}
+              {`${displayedTimeline.length} / ${readingMessages.length + readingPluginRows.length + readingDonations.length}`}
             </Text>
             <HeaderButton
               testId="chat-search-close"
@@ -1868,6 +1908,16 @@ export function ChatView({
             }}
           >
             {renderedTimeline.map((message, index) => {
+              if ('donation' in message)
+                return (
+                  <DonationChatRow
+                    key={message.key}
+                    donation={message.donation}
+                    fontSize={settings?.fontSize}
+                    showTimestamp={settings?.showTimestamp}
+                    chatTheme={settings?.chatTheme}
+                  />
+                )
               if ('message' in message) {
                 return (
                   <PluginChatRow
@@ -2087,7 +2137,7 @@ export function ChatView({
                   tab: layoutTabId,
                   panel: layoutPanelId,
                   channel: actionTarget,
-                  received: activeMessages.length + pluginFeed.rows.length,
+                  received: activeMessages.length + pluginFeed.rows.length + donations.rows.length,
                   shown: displayedTimeline.length,
                   paused: !!paused,
                   visibleRange,

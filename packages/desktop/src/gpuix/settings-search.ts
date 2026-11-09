@@ -62,6 +62,12 @@ export const SETTINGS_CATEGORIES = defineSettingsCategories([
     aliases: 'plugins extensions transports manifest github url плагины расширения транспорты',
   },
   {
+    id: 'donations',
+    label: 'Donations',
+    description: 'Live donation alerts in My channels',
+    aliases: 'donations tips alerts events донаты пожертвования алерты события',
+  },
+  {
     id: 'overlay',
     label: 'OBS overlay',
     description: 'Browser source appearance',
@@ -140,6 +146,7 @@ export type SettingsSectionId =
   | 'twir-integration'
   | 'players'
   | 'plugins'
+  | 'donations'
   | 'streamer-mode'
   | 'similarity'
   | 'pause'
@@ -283,6 +290,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'action',
     keywords:
       'install enable disable remove manifest version transport TypeScript локальные установить включить выключить удалить',
+  },
+  {
+    id: 'donations',
+    category: 'donations',
+    title: 'Donation Providers',
+    saveMode: 'action',
+    keywords:
+      'DonationAlerts donation alerts DonatePay DonatPay MemeAlerts MemoAlerts OAuth sign in API key clipboard events connect disconnect донаты пожертвования донаталертс донатпей мемалертс ключ подключить события',
   },
   {
     id: 'overlay',

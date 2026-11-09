@@ -27,6 +27,7 @@ import { TwitchTokenValidationError, validateTwitchUserToken } from '../../auth/
 import { BackendConnection } from '../../backend-connection'
 import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
+import { createDonationService } from '../../donations/service'
 import {
   pushOverlayEvent,
   pushOverlayMessage,
@@ -136,6 +137,15 @@ function boot(): DesktopBackend {
   setRuntimeConfig({ clientSecret })
 
   const events = createDesktopEvents()
+  const donations = createDonationService({
+    db: getDb(),
+    openBrowser: async (url) => {
+      const browser = Bun.spawn(browserCommand(url), { stdout: 'ignore', stderr: 'ignore' })
+      if ((await browser.exited) !== 0) throw new Error('Could not open the browser.')
+    },
+    onConnections: (connections) => events.emit('donation_connections', connections),
+    onDonation: (event) => events.emit('donation_received', event),
+  })
   const providerRuntime = createDesktopProviderRuntime(
     (platform, channelId, emotes) =>
       events.emit('channel_emote_catalog', { platform, channelId, emotes }),
@@ -501,6 +511,7 @@ function boot(): DesktopBackend {
   })
   const updater = createUpdater(events)
   const api: DesktopApi = createDesktopApi({
+    donations,
     updater,
     twitchHistory,
     streamerMode,
@@ -752,6 +763,7 @@ function boot(): DesktopBackend {
   void plugins.initialize().catch((error) => {
     log.error('Could not load installed plugins', { error: String(error) })
   })
+  donations.start()
   log.info('GPUIX backend ready')
   return {
     api,
@@ -761,6 +773,7 @@ function boot(): DesktopBackend {
     dispose: () => {
       disposed = true
       clearInterval(twitchValidationTimer)
+      donations.dispose()
       stopAutoChecks()
       void shutdownPlugins().catch((error) => {
         log.warn('Plugin shutdown failed', { error: String(error) })

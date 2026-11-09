@@ -35,6 +35,7 @@ import type { DesktopBackend } from '../backend/server'
 import { setLanguage, t, tPlural } from '../i18n'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
+import { donationFeed } from './donation-feed'
 import { mentionAppearances } from './mention-appearances'
 import { classifyIncomingSimilarity, hydrateSimilarityHistory } from './message-similarity'
 import { persistentResource } from './persistent-resources'
@@ -758,6 +759,8 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
     pendingHome.push(msg)
     scheduleMessages()
   })
+
+  subscribe('donation_received', donationFeed.receive)
 
   subscribe('chat_moderation', (outcome) => {
     applyModerationOutcome(outcome)
