@@ -3,6 +3,12 @@ import {
   type PlatformCommandResult,
   type RoomState,
 } from '@twirchat/shared/channel-tools'
+import type {
+  ConnectDonationProvider,
+  DonationConnections,
+  DonationOAuthAvailability,
+  DonationProvider,
+} from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
 import type {
   ChannelStatusRequest,
@@ -55,11 +61,13 @@ import {
   prepareKickAuth,
   requestTwitchDeviceCode,
 } from '../../auth'
+import { getDonationOAuthAvailability } from '../../auth/donations'
 import { refreshTwitchToken } from '../../auth/twitch'
 import { validateTwitchUserToken } from '../../auth/twitch-user-token'
 import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
+import type { DonationService } from '../../donations/service'
 import type { ChatReplyTarget } from '../../platforms/base-adapter'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
@@ -238,6 +246,10 @@ interface AuthRequest {
 
 export interface DesktopApi {
   obsRemote: typeof obsRemoteApi
+  getDonationConnections(): Promise<DonationConnections>
+  getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null>
+  connectDonationProvider(params: ConnectDonationProvider): Promise<void>
+  disconnectDonationProvider(params: { provider: DonationProvider }): Promise<void>
   getStreamerMode(): Promise<StreamerModeStatus>
   setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
   getStreamerModeSettings(): Promise<StreamerModeSettings>
@@ -469,6 +481,7 @@ export interface DesktopApi {
 }
 
 export interface DesktopApiContext {
+  donations?: DonationService
   updater?: Updater
   twitchHistory?: TwitchHistoryRuntime
   streamerMode?: StreamerModeService
@@ -819,6 +832,10 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   const { aggregator, watchedChannelManager, currentStatuses } = ctx
   const updater = ctx.updater ?? createUpdater(ctx.events)
+  function donations(): DonationService {
+    if (!ctx.donations) throw new Error('Donation integrations are unavailable.')
+    return ctx.donations
+  }
 
   let twitchAuth:
     | { controller: AbortController; windowScope: string; userCode?: string }
@@ -985,6 +1002,16 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.providerRuntime?.setActiveChannel(params)
     },
     getImageUploaderSettings: imageUploader.getImageUploaderSettings,
+    getDonationConnections: async () => donations().getConnections(),
+    getDonationOAuthAvailability,
+    connectDonationProvider: async (params) => {
+      await Bun.sleep(0)
+      donations().connect(params)
+    },
+    disconnectDonationProvider: async ({ provider }) => {
+      await Bun.sleep(0)
+      donations().disconnect(provider)
+    },
     saveImageUploaderSettings: imageUploader.saveImageUploaderSettings,
     connectTwirImageUploader: imageUploader.connectTwirImageUploader,
     disconnectTwirImageUploader: imageUploader.disconnectTwirImageUploader,

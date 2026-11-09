@@ -16,7 +16,7 @@ const ids = (query: string) => searchSettings(query).sections.map((section) => s
 
 describe('settings search index', () => {
   test('every existing section has a unique reachable category and a save contract', () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(20)
+    expect(SETTINGS_SECTIONS).toHaveLength(21)
     expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
       SETTINGS_SECTIONS.length,
     )
@@ -36,6 +36,7 @@ describe('settings search index', () => {
     expect(SETTINGS_SECTIONS.find((section) => section.id === 'overlay')?.saveMode).toBe('section')
     // Action-only sections apply each action immediately.
     expect(SETTINGS_SECTIONS.find((section) => section.id === 'plugins')?.saveMode).toBe('action')
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'donations')?.saveMode).toBe('action')
     expect(SETTINGS_SECTIONS.find((section) => section.id === 'twitch-session')?.saveMode).toBe(
       'action',
     )
@@ -67,6 +68,10 @@ describe('settings search index', () => {
       ['command template', 'commands'],
       ['Twir autocomplete', 'twir-integration'],
       ['plugin manifest', 'plugins'],
+      ['DonationAlerts', 'donations'],
+      ['DonatePay API key', 'donations'],
+      ['MemeAlerts', 'donations'],
+      ['донаты', 'donations'],
       ['save rules', 'rules'],
       ['overlay.port', 'overlay'],
       ['text colour', 'overlay'],
