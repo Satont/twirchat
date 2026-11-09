@@ -25,7 +25,7 @@ import type { DesktopEvents } from './events'
 const log = logger('updater')
 
 const GITHUB_REPO_URL = 'https://github.com/Satont/twirchat'
-const AUTO_CHECK_INTERVAL_MS = 60 * 60 * 1000
+const AUTO_CHECK_INTERVAL_MS = 10 * 60 * 1000
 const SKIPPED_UPDATE_KEY = 'gpuix_ui_skipped_update_sha256'
 
 export interface CheckForUpdateResult {
