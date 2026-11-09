@@ -6,6 +6,8 @@ type Outcome = { kind: 'sent' | 'held' | 'disconnected' } | { kind: 'rejected'; 
 
 type Settle = (outcome: Outcome) => void
 
+const AUTO_MOD_HOLD_NOTICES = new Set(['msg_automod_held', 'msg_rejected'])
+
 const REJECTIONS: Record<string, MessageKey> = {
   msg_ratelimit: 'misc.twitchSender.reject.ratelimit',
   msg_duplicate: 'misc.twitchSender.reject.duplicate',
@@ -40,7 +42,7 @@ export function onTwitchSendRejected(
   client.irc.onNotice((channel, _user, _text, message) => {
     // Twurple's onMessageFailed omits the notice for a held message.
     const reason = message.tags.get('msg-id')
-    if (reason && (reason === 'msg_rejected' || Object.hasOwn(REJECTIONS, reason)))
+    if (reason && (AUTO_MOD_HOLD_NOTICES.has(reason) || Object.hasOwn(REJECTIONS, reason)))
       handler(channel, reason)
   })
 }
@@ -83,7 +85,7 @@ export class TwitchSendOutcomes {
   rejected(channel: string, reason: string): void {
     this.settle(
       channel,
-      reason === 'msg_rejected' ? { kind: 'held' } : { kind: 'rejected', reason },
+      AUTO_MOD_HOLD_NOTICES.has(reason) ? { kind: 'held' } : { kind: 'rejected', reason },
     )
   }
 

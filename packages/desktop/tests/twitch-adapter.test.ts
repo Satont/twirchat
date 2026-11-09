@@ -372,26 +372,29 @@ describe('Twitch self message badges', () => {
     }
   })
 
-  test('an AutoMod hold returns a held receipt without echoing the message', async () => {
-    const { adapter, client, messages } = selfFixture('viewer', 'another')
-    Object.assign(adapter, { isConnected: true })
-    const say = spyOn(client, 'say').mockImplementation(async () => {
-      client.irc.receiveLine('@id=unrelated :tmi.twitch.tv USERSTATE #other')
-      client.irc.receiveLine(':tmi.twitch.tv USERSTATE #another')
-      client.irc.receiveLine(
-        '@msg-id=msg_rejected :tmi.twitch.tv NOTICE #another :Your message is being checked.',
-      )
-    })
-    try {
-      expect(await adapter.sendMessage('another', 'held text')).toEqual({
-        channelId: 'another',
-        held: true,
+  test.each(['msg_automod_held', 'msg_rejected'])(
+    'an AutoMod %s notice returns a held receipt without echoing the message',
+    async (msgId) => {
+      const { adapter, client, messages } = selfFixture('viewer', 'another')
+      Object.assign(adapter, { isConnected: true })
+      const say = spyOn(client, 'say').mockImplementation(async () => {
+        client.irc.receiveLine('@id=unrelated :tmi.twitch.tv USERSTATE #other')
+        client.irc.receiveLine(':tmi.twitch.tv USERSTATE #another')
+        client.irc.receiveLine(
+          `@msg-id=${msgId} :tmi.twitch.tv NOTICE #another :Your message is being checked.`,
+        )
       })
-      expect(messages).toEqual([])
-    } finally {
-      say.mockRestore()
-    }
-  })
+      try {
+        expect(await adapter.sendMessage('another', 'held text')).toEqual({
+          channelId: 'another',
+          held: true,
+        })
+        expect(messages).toEqual([])
+      } finally {
+        say.mockRestore()
+      }
+    },
+  )
 
   test('a mandatory moderation rejection is a send failure', async () => {
     const { adapter, client, messages } = selfFixture('viewer', 'another')
