@@ -14,6 +14,16 @@ function badgeSource(badge: Badge, platform?: Platform): string {
       return 'BetterTTV'
     case 'ffz':
       return 'FrankerFaceZ'
+    case 'ffzap':
+      return 'FFZ:AP'
+    case 'dankchat':
+      return 'DankChat'
+    case 'chatsen':
+      return 'Chatsen'
+    case 'homies':
+      return 'Homies Custom'
+    case 'twir':
+      return 'Twir'
     default:
       return platform === 'twitch'
         ? 'Twitch'

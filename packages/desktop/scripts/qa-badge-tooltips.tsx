@@ -62,6 +62,11 @@ const providerBadges: Badge[] = [
   { id: 'qa-7tv', type: 'seventv', text: '7TV Supporter', imageUrl },
   { id: 'qa-bttv', type: 'bttv', text: 'BetterTTV Pro', imageUrl },
   { id: 'qa-ffz', type: 'ffz', text: 'FrankerFaceZ Supporter', imageUrl },
+  { id: 'qa-ffzap', type: 'ffzap', text: 'FFZ:AP Supporter', imageUrl },
+  { id: 'qa-dankchat', type: 'dankchat', text: 'DankChat Developer', imageUrl },
+  { id: 'qa-chatsen', type: 'chatsen', text: 'Chatsen Developer', imageUrl },
+  { id: 'qa-homies', type: 'homies', text: 'Homies Custom Badge', imageUrl },
+  { id: 'qa-twir', type: 'twir', text: 'Twir Contributor', imageUrl },
   { id: 'qa-profile-text', type: 'seventv', text: 'Profile badge without image' },
 ]
 const imageBadge: Badge = {
@@ -134,6 +139,7 @@ app.channelStatusStore.set({
   },
 })
 emotePreferencesStore.update({
+  loaded: true,
   value: {
     ...emotePreferencesStore.get().value,
     badges: true,
@@ -314,6 +320,11 @@ try {
         ['qa-7tv', '7TV Supporter', '7TV'],
         ['qa-bttv', 'BetterTTV Pro', 'BetterTTV'],
         ['qa-ffz', 'FrankerFaceZ Supporter', 'FrankerFaceZ'],
+        ['qa-ffzap', 'FFZ:AP Supporter', 'FFZ:AP'],
+        ['qa-dankchat', 'DankChat Developer', 'DankChat'],
+        ['qa-chatsen', 'Chatsen Developer', 'Chatsen'],
+        ['qa-homies', 'Homies Custom Badge', 'Homies Custom'],
+        ['qa-twir', 'Twir Contributor', 'Twir'],
       ]) {
         assert(id && title && source)
         await hover(id)
@@ -401,7 +412,23 @@ try {
   await hover('qa-profile-text')
   assert(current().getPaintedText().includes('Profile badge without image'))
   await leave()
-  checks.push('Escape, focus/blur, rapid cancel, unmount/remount, live ChatView, user profile')
+  emotePreferencesStore.update({
+    value: { ...emotePreferencesStore.get().value, badges: false },
+  })
+  await until(
+    () => !nodes().some((node) => node.testId === 'badge-trigger-qa-7tv'),
+    'user profile badges disabled',
+  )
+  emotePreferencesStore.update({
+    value: { ...emotePreferencesStore.get().value, badges: true },
+  })
+  await until(
+    () => nodes().some((node) => node.testId === 'badge-trigger-qa-7tv'),
+    'user profile badges re-enabled',
+  )
+  checks.push(
+    'Escape, focus/blur, rapid cancel, unmount/remount, live ChatView, user profile and badge toggle',
+  )
   await Bun.write(
     join(session, 'badge-tooltips-result.json'),
     JSON.stringify(

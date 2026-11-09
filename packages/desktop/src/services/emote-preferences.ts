@@ -1,6 +1,7 @@
 import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 import { z } from 'zod'
 
+import { COMMUNITY_BADGE_PROVIDERS } from './community-badges'
 import {
   DEFAULT_EMOTE_PREFERENCES,
   emoteProvider,
@@ -21,6 +22,7 @@ export function validateEmotePreferences(value: unknown): EmotePreferences {
       modifiers: z.boolean().optional(),
       badges: z.boolean().optional(),
       paints: z.boolean().optional(),
+      communityBadges: z.record(z.string(), z.boolean()).optional(),
       personal: z.boolean().optional(),
       sendPresence: z.boolean().optional(),
       emojiCompletion: z.boolean().optional(),
@@ -36,6 +38,12 @@ export function validateEmotePreferences(value: unknown): EmotePreferences {
       if (enabled !== undefined && typeof enabled !== 'boolean')
         throw new Error(`Invalid ${provider} preference.`)
       if (typeof enabled === 'boolean') preferences.enabled[provider] = enabled
+    }
+  }
+  if (input.communityBadges !== undefined) {
+    for (const provider of COMMUNITY_BADGE_PROVIDERS) {
+      const enabled = input.communityBadges[provider]
+      if (enabled !== undefined) preferences.communityBadges[provider] = enabled
     }
   }
   if (input.precedence !== undefined) {

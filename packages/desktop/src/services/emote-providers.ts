@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { deleteOldestEntry } from './bounded-cache'
+import { createCommunityBadgeService, type CommunityBadgeSelection } from './community-badges'
 import {
   DEFAULT_EMOTE_PREFERENCES,
   mergeProviderEmotes,
@@ -202,6 +203,7 @@ export function createEmoteProviderService(fetcher: ProviderFetch = fetchProvide
     pending.set(url, task)
     return task
   }
+  const communityBadgeService = createCommunityBadgeService(request)
   const personal = async (platform: Platform, userId: string): Promise<EmoteCatalogEntry[]> => {
     if (platform === 'youtube' || !userId) return []
     const connection = row(
@@ -293,11 +295,13 @@ export function createEmoteProviderService(fetcher: ProviderFetch = fetchProvide
     platform: Platform,
     userId: string,
     username?: string,
+    preferences: CommunityBadgeSelection = DEFAULT_EMOTE_PREFERENCES,
   ): Promise<Badge[]> => {
-    if (platform !== 'twitch') return []
-    const [bttv, ffz] = await Promise.all([
+    if (platform !== 'twitch' || !preferences.badges) return []
+    const [bttv, ffz, community] = await Promise.all([
       request('https://api.betterttv.net/3/cached/badges', 1_800_000),
       request('https://api.frankerfacez.com/v1/badges', 1_800_000),
+      communityBadgeService.getBadges(platform, userId, preferences),
     ])
     const result: Badge[] = array(bttv)
       .map(row)
@@ -333,6 +337,7 @@ export function createEmoteProviderService(fetcher: ProviderFetch = fetchProvide
           imageUrl,
         })
     }
+    result.push(...community)
     return result
   }
   const channelBadges = async (

@@ -10,18 +10,17 @@ import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
 export function useAuthorCosmetics(message: NormalizedChatMessage, visible = true) {
-  const configured = useStoreSelector(
-    emotePreferencesStore,
-    (state) =>
-      state.value.badges ||
-      state.value.paints ||
-      (state.value.personal && state.value.enabled.seventv),
-  )
+  const preferences = useStoreSelector(emotePreferencesStore, (state) => state.value)
+  const configured =
+    preferences.badges ||
+    preferences.paints ||
+    (preferences.personal && preferences.enabled.seventv)
   return useUserCosmetics(
     message.platform,
     message.author.id,
     message.author.username,
     visible && configured && message.type !== 'system',
+    preferences,
   )
 }
 

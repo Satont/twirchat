@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import {
+  COMMUNITY_BADGE_PROVIDERS,
+  type CommunityBadgeProvider,
+} from '../../services/community-badges'
 import type { EmotePreferences, EmoteProvider } from '../../services/provider-emotes'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
@@ -21,6 +25,13 @@ const PROVIDER_LABELS: Record<EmoteProvider, string> = {
   seventv: '7TV',
   bttv: 'BetterTTV',
   ffz: 'FrankerFaceZ',
+}
+const COMMUNITY_BADGE_LABELS: Record<CommunityBadgeProvider, string> = {
+  ffzap: 'FFZ:AP badges',
+  dankchat: 'DankChat badges',
+  chatsen: 'Chatsen badges',
+  homies: 'Homies Custom badges',
+  twir: 'Twir badges',
 }
 
 /** Section body: edits stay local until the section is saved. */
@@ -51,8 +62,8 @@ export function EmoteProviderSettings() {
     }
   }, [backend])
   useEffect(() => {
-    if (!dirty) setDraft(structuredClone(draft))
-  }, [dirty, draft])
+    if (!dirty) setDraft(structuredClone(state.value))
+  }, [dirty, state.value])
   const change = (value: EmotePreferences) => {
     setNotice('')
     setDraft(value)
@@ -159,8 +170,42 @@ export function EmoteProviderSettings() {
           <Text style={{ fontSize: 13, color: theme.text }}>{label}</Text>
           <Switch
             small
+            testId={`emote-preference-${key}`}
             checked={draft[key]}
             onChange={(value) => change({ ...draft, [key]: value })}
+          />
+        </div>
+      ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Text style={{ fontSize: 13, color: theme.text }}>Community badge sources</Text>
+        <Text style={{ fontSize: 11, color: theme.text2 }}>
+          Individual sources are used while Provider badges is enabled.
+        </Text>
+      </div>
+      {COMMUNITY_BADGE_PROVIDERS.map((provider) => (
+        <div
+          key={provider}
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <Text style={{ fontSize: 13, color: theme.text }}>
+            {COMMUNITY_BADGE_LABELS[provider]}
+          </Text>
+          <Switch
+            small
+            testId={`community-badge-${provider}`}
+            checked={draft.communityBadges[provider]}
+            onChange={(value) =>
+              change({
+                ...draft,
+                communityBadges: { ...draft.communityBadges, [provider]: value },
+              })
+            }
           />
         </div>
       ))}

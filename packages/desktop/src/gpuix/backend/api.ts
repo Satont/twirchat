@@ -67,6 +67,7 @@ import {
   getUserCosmetics,
   getPaintNameImage,
   type UserCosmetics,
+  type UserCosmeticPreferences,
   type CosmeticPaint,
 } from '../../services/cosmetics'
 import { getProviderErrors } from '../../services/emote-providers'
@@ -363,6 +364,7 @@ export interface DesktopApi {
     platform: Platform
     platformUserId: string
     username?: string
+    preferences?: UserCosmeticPreferences
   }): Promise<UserCosmetics | null>
   getPaintNameImage(params: {
     name: string
@@ -1191,8 +1193,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return runtime.warm(platform, channelId)
     },
     getEmoteProviderErrors: async () => getProviderErrors(),
-    getUserCosmetics: async ({ platform, platformUserId, username }) => {
-      const cosmetics = await getUserCosmetics(platform, platformUserId, username)
+    getUserCosmetics: async ({ platform, platformUserId, username, preferences }) => {
+      const cosmetics = await getUserCosmetics(platform, platformUserId, username, preferences)
       if (cosmetics && cosmetics.lookupStatus !== 'unavailable')
         void ctx.providerRuntime
           ?.warmAuthorPersonal(platform, platformUserId, cosmetics.personalEmoteSetId)

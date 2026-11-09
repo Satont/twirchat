@@ -1,7 +1,7 @@
 import type { Platform } from '@twirchat/shared/types'
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 
-import type { CosmeticPaint } from '../../services/cosmetics'
+import type { CosmeticPaint, UserCosmeticPreferences } from '../../services/cosmetics'
 import { namePaintCache, userCosmeticsCache } from '../state/cosmetics'
 import { runUiTask } from './run-ui-task'
 
@@ -10,10 +10,11 @@ export function useUserCosmetics(
   platformUserId: string | undefined,
   username: string | undefined,
   enabled: boolean,
+  preferences?: UserCosmeticPreferences,
 ) {
   const input = useMemo(
-    () => (enabled && platformUserId ? { platform, platformUserId, username } : null),
-    [enabled, platform, platformUserId, username],
+    () => (enabled && platformUserId ? { platform, platformUserId, username, preferences } : null),
+    [enabled, platform, platformUserId, username, preferences],
   )
   const subscribe = useCallback(
     (listener: () => void) => (input ? userCosmeticsCache.subscribe(input, listener) : () => {}),

@@ -205,7 +205,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     title: 'Emotes & Cosmetics',
     saveMode: 'section',
     keywords:
-      'platform emotes twitch 7TV seventv BetterTTV BTTV FrankerFaceZ FFZ provider precedence priority move up down zero width layering modifiers personal badges paints name gradients emoji shortcode completion favorite emotes presence share active channel collectibles wide flip rotate shake party cursed эмоуты смайлы провайдеры порядок косметика краска значки избранное присутствие',
+      'platform emotes twitch 7TV seventv BetterTTV BTTV FrankerFaceZ FFZ FFZ:AP FFZAP DankChat Chatsen Homies Custom Twir community provider precedence priority move up down zero width layering modifiers personal badges paints name gradients emoji shortcode completion favorite emotes presence share active channel collectibles wide flip rotate shake party cursed эмоуты смайлы провайдеры порядок косметика краска значки избранное присутствие',
   },
   {
     id: 'translation',

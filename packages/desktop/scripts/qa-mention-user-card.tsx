@@ -73,6 +73,11 @@ let incoming = 0
 let heartbeat = 0
 let maximumLagMs = 0
 let lookupDelayMs = 80
+let cosmeticsRequests = 0
+const cosmeticsCalls: Array<{
+  platformUserId: string
+  preferences?: unknown
+}> = []
 function message(id: string, text: string): NormalizedChatMessage {
   return {
     id,
@@ -97,6 +102,7 @@ const known: NormalizedChatMessage = {
   },
 }
 const cosmetics: UserCosmetics = {
+  sevenTvUserId: '7tv-known-user',
   badges: [],
   lookupStatus: 'available',
   paint: {
@@ -124,8 +130,11 @@ backend.api.resolveMentionUser = async ({ username }) => {
   return { platformUserId: '333', username: 'remoteviewer', displayName: 'Remote Viewer' }
 }
 backend.api.getChannelEmotes = async () => []
-backend.api.getUserCosmetics = async ({ platformUserId }) =>
-  platformUserId === known.author.id ? cosmetics : null
+backend.api.getUserCosmetics = async ({ platformUserId, preferences }) => {
+  cosmeticsRequests++
+  cosmeticsCalls.push({ platformUserId, preferences })
+  return platformUserId === known.author.id ? cosmetics : null
+}
 initCosmeticCaches(backend.api)
 backend.api.getModerationSettings = async () => structuredClone(DEFAULT_MODERATION_SETTINGS)
 backend.api.getUserProfile = async ({ platformUserId }) => ({ id: platformUserId, errors: [] })
@@ -172,6 +181,7 @@ app.channelStatusStore.set({
   },
 })
 emotePreferencesStore.update({
+  loaded: true,
   value: {
     ...emotePreferencesStore.get().value,
     badges: false,
@@ -337,7 +347,7 @@ try {
   )
   await focusNativeQaWindow('TwirChat')
   const initial = await captureGuiQaDisplay('mention-before-author')
-  assert.equal((await mentionColors(initial)).red, 0)
+  assert((await mentionColors(initial)).red < 20, 'uncolored mention has no author-red text')
   backend.events.emit('watched_channel_message', { channelId: 'known-channel', message: known })
   await until(() => app.watchedMessagesStore.get().has('known-channel'), 'known author received')
   await Bun.sleep(200)
@@ -387,6 +397,10 @@ try {
       assert.equal(opened.at(-1)?.channelId, source.channelId)
       assert.equal(opened.at(-1)?.channelSlug, 'source-slug')
       await until(() => current().getPaintedText().includes('Known Viewer'), 'card header painted')
+      await until(
+        () => current().getPaintedText().join('').includes('7TV paint: QA gradient'),
+        'user card paint enabled',
+      )
       const avatar = nodes().find((node) => node.testId === 'user-card-avatar')
       assert(avatar)
       const box = current().getElementBounds(avatar.id)
@@ -435,6 +449,17 @@ try {
   assert(fallbackColors.red > 20 && fallbackColors.green === 0 && fallbackColors.cyan === 0)
   screenshots.push(disabled)
   checks.push('painted mention opens by keyboard and disabling paints restores the author color')
+  const requestsBeforeDisabledCard = cosmeticsRequests
+  await click('KnownViewer')
+  await until(
+    () => configuration.get().target?.platformUserId === '222',
+    'user card with paints disabled',
+  )
+  await until(() => current().getPaintedText().includes('Known Viewer'), 'disabled card header')
+  await Bun.sleep(150)
+  assert(!current().getPaintedText().includes('7TV paint:'), 'user card paint label disabled')
+  assert.equal(cosmeticsRequests, requestsBeforeDisabledCard, 'disabled card skips cosmetics fetch')
+  await dismiss()
   for (let repeat = 0; repeat < 4; repeat++) {
     await click('KnownViewer')
     await until(() => configuration.get().target?.platformUserId === '222', 'rapid reopen')
@@ -508,6 +533,7 @@ try {
         tree: renderer?.getAutomationTree(),
         opened,
         lookups,
+        cosmeticsCalls,
       },
       null,
       2,

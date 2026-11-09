@@ -122,6 +122,7 @@ const methods = {
   },
   getSavedAccounts: async () => structuredClone(saved),
   getAccounts: async () => structuredClone(active),
+  getEmoteProviderErrors: async () => [],
   setActiveAccount: async ({ accountId }) => {
     active = accountId ? saved.filter((account) => account.id === accountId) : []
     events.emit('accounts_changed', {})
@@ -406,6 +407,25 @@ try {
   assert.ok(find('image-uploader-request-url'))
   assert.equal(durableUploader.requestUrl, uploaderPreset.RequestURL)
   assert.equal(durableUploader.headers, 'Authorization: Bearer qa-token')
+  await type(find('settings-search'), 'Homies Custom')
+  assert.ok(find('settings-section-emotes'))
+  for (const provider of ['ffzap', 'dankchat', 'chatsen', 'homies', 'twir']) {
+    await clickNode(await scrollTo(`community-badge-${provider}`))
+  }
+  await clickNode(await scrollTo('emote-preference-paints'))
+  await clickNode(await scrollTo('emote-preference-badges'))
+  const cosmetics = await captureGuiQaDisplay('settings-cosmetic-toggles')
+  await click('settings-save')
+  const emotePreferences = JSON.parse(values.get('emote_preferences_v1'))
+  assert.equal(emotePreferences.badges, false)
+  assert.equal(emotePreferences.paints, false)
+  assert.deepEqual(emotePreferences.communityBadges, {
+    ffzap: false,
+    dankchat: false,
+    chatsen: false,
+    homies: false,
+    twir: false,
+  })
   mount(SavedAccounts)
   await Bun.sleep(250)
   assert.ok(hasText('Twitch · @alpha'))
@@ -454,9 +474,10 @@ try {
       appSettingsPendingEditRetained: true,
       imageUploaderImportSaveExport: true,
       twirUploaderSignInCancelRetryDisconnect: true,
+      cosmeticToggles: true,
       accountSwitchAnonymousForget: true,
       addAccountCopyLink: true,
-      screenshots: [narrow, search, palette, uploader, twir, accounts, addAccountMenu],
+      screenshots: [narrow, search, palette, uploader, twir, cosmetics, accounts, addAccountMenu],
     }),
   )
 } catch (error) {

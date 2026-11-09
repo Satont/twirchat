@@ -19,6 +19,11 @@ test('provider relay preserves exact emote formats, variant queries and provider
     'https://cdn.frankerfacez.com/emoticon/123/animated/4',
     'https://cdn.frankerfacez.com/animated/123/4',
     'https://cdn.frankerfacez.com/badge/1/4?variant=dark',
+    'https://api.ffzap.com/v1/user/badge/42/3',
+    'https://api.dank.chat/badges/ente.gif',
+    'https://raw.githubusercontent.com/chatsen/resources/master/assets/nagato.gif',
+    'https://cdn.chatterinohomies.com/badges/badge-id/72.webp',
+    'https://s3.twir.app/badges/contributor.svg',
   ]) {
     expect(providerImageSource(url)?.href).toBe(url)
     const path = providerImageProxyPath(url)
@@ -67,10 +72,22 @@ test('image and metadata boundaries reject untrusted hosts and unrelated endpoin
   expect(providerMetadataTarget('https://7tv.io/v4/gql')?.kind).toBe('cosmetics')
   expect(providerMetadataTarget('https://7tv.io/v3/users/abc/presences')?.kind).toBe('presence')
   for (const url of [
+    'https://api.ffzap.com/v1/supporters',
+    'https://flxrs.com/api/badges',
+    'https://raw.githubusercontent.com/chatsen/resources/master/assets/data.json',
+    'https://chatterinohomies.com/api/badges/list',
+    'https://twir.app/api/v1/public/badges',
+  ])
+    expect(providerMetadataTarget(url)?.kind).toBe('catalog')
+  for (const url of [
     'https://7tv.io/v3/auth',
     'https://7tv.io/v3/emote-sets/global?redirect=evil',
     'https://api.betterttv.net/3/cached/users/twitch/not-numeric',
     'https://api.frankerfacez.com/v1/room/id/../../private',
+    'https://twir.app/api/v1/private/badges',
+    'https://chatterinohomies.com/api/badges/list?redirect=evil',
+    'https://raw.githubusercontent.com/chatsen/resources/master/private/data.json',
+    'https://flxrs.com/api/private',
   ])
     expect(providerMetadataTarget(url)).toBeNull()
 })

@@ -3,6 +3,11 @@ const IMAGE_HOSTS = new Set([
   'cdn.7tv.io',
   'cdn.betterttv.net',
   'cdn.frankerfacez.com',
+  'api.ffzap.com',
+  'api.dank.chat',
+  'raw.githubusercontent.com',
+  'cdn.chatterinohomies.com',
+  's3.twir.app',
 ])
 
 function publicHttpsUrl(value: string): URL | null {
@@ -26,6 +31,20 @@ export function providerImageSource(value: string): URL | null {
     return /^\/(?:emote|badge|paint|user|cosmetic)\/[A-Za-z0-9_./-]+$/.test(path) ? url : null
   if (url.hostname === 'cdn.betterttv.net')
     return /^\/(?:emote|badges|assets\/badges)\/[A-Za-z0-9_./-]+$/.test(path) ? url : null
+  if (url.hostname === 'api.ffzap.com')
+    return /^\/v1\/user\/badge\/\d{1,20}\/[123]$/.test(path) ? url : null
+  if (url.hostname === 'api.dank.chat')
+    return /^\/badges\/[A-Za-z0-9_-]+\.(?:png|gif|webp|avif|svg)$/.test(path) ? url : null
+  if (url.hostname === 'raw.githubusercontent.com')
+    return /^\/chatsen\/resources\/master\/assets\/[A-Za-z0-9_-]+\.(?:png|gif|webp|avif|svg)$/.test(
+      path,
+    )
+      ? url
+      : null
+  if (url.hostname === 'cdn.chatterinohomies.com')
+    return /^\/badges\/[A-Za-z0-9_-]+\/(?:18|36|72)\.webp$/.test(path) ? url : null
+  if (url.hostname === 's3.twir.app')
+    return /^\/badges\/[A-Za-z0-9_-]+\.svg$/.test(path) ? url : null
   return /^\/(?:(?:emoticon|animated|static|badge|room)\/[A-Za-z0-9_./-]+|[A-Za-z0-9_-]+\.(?:png|jpe?g|gif|webp|avif|svg))$/.test(
     path,
   )
@@ -65,6 +84,19 @@ export function providerMetadataTarget(value: string): ProviderMetadataTarget | 
     return /^\/v1\/(?:set\/global|badges|room\/(?:id\/\d+|[A-Za-z0-9_]{1,30}))$/.test(url.pathname)
       ? { url, kind: 'catalog' }
       : null
+  if (url.hostname === 'api.ffzap.com' && url.pathname === '/v1/supporters')
+    return { url, kind: 'catalog' }
+  if (url.hostname === 'flxrs.com' && url.pathname === '/api/badges')
+    return { url, kind: 'catalog' }
+  if (
+    url.hostname === 'raw.githubusercontent.com' &&
+    url.pathname === '/chatsen/resources/master/assets/data.json'
+  )
+    return { url, kind: 'catalog' }
+  if (url.hostname === 'chatterinohomies.com' && url.pathname === '/api/badges/list')
+    return { url, kind: 'catalog' }
+  if (url.hostname === 'twir.app' && url.pathname === '/api/v1/public/badges')
+    return { url, kind: 'catalog' }
   if (url.hostname !== '7tv.io') return null
   if (url.pathname === '/v4/gql') return { url, kind: 'cosmetics' }
   if (/^\/v3\/users\/[A-Za-z0-9_-]{1,100}\/presences$/.test(url.pathname))

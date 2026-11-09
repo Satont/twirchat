@@ -9,7 +9,15 @@ export function initCosmeticCaches(bridge: typeof api): void {
 }
 
 export const userCosmeticsCache = createResourceCache({
-  key: (input: UserRequest) => `${input.platform}:${input.platformUserId}`,
+  key: (input: UserRequest) =>
+    JSON.stringify([
+      input.platform,
+      input.platformUserId,
+      input.username,
+      input.preferences?.badges,
+      input.preferences?.paints,
+      input.preferences?.communityBadges,
+    ]),
   load: (input) => {
     if (!api) throw new Error('Cosmetics are not initialized.')
     return api.getUserCosmetics(input)
