@@ -35,7 +35,25 @@ function find(renderer, testId) {
   return visit(JSON.parse(renderer.getAutomationTree()))
 }
 let main
-function click(testId: string) {
+async function click(testId: string) {
+  if (testId.startsWith('theme-')) {
+    const content = find(main, 'settings-content')
+    for (let attempt = 0; attempt < 12 && content; attempt++) {
+      const item = find(main, testId)
+      assert.ok(item, `Missing ${testId}`)
+      const bounds = main.getElementBounds(item.id)
+      const viewport = main.getElementBounds(content.id)
+      assert.ok(bounds && viewport, `Missing painted bounds for ${testId}`)
+      if (bounds.y >= viewport.y && bounds.y + bounds.height <= viewport.y + viewport.height) break
+      main.simulateScrollWheel(
+        viewport.x + viewport.width / 2,
+        viewport.y + viewport.height / 2,
+        0,
+        bounds.y < viewport.y ? 250 : -250,
+      )
+      await Bun.sleep(70)
+    }
+  }
   const item = find(main, testId)
   assert.ok(item, `Missing ${testId}`)
   const bounds = main.getElementBounds(item.id)
@@ -43,7 +61,7 @@ function click(testId: string) {
   main.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
 }
 async function openNavTab(tab: MainTab, contentId: string) {
-  click(`nav-${tab}`)
+  await click(`nav-${tab}`)
   await until(() => app.activeTabStore.get() === tab && !!find(main, contentId), `opens ${tab}`)
 }
 
@@ -56,7 +74,7 @@ const customPalette: CustomPalette = {
 }
 
 async function replaceHex(testId: string, hex: string) {
-  click(testId)
+  await click(testId)
   main.simulateKeystrokes('ctrl-a')
   main.simulateKeystrokes(hex.split('').join(' '))
   await Bun.sleep(100)
@@ -71,7 +89,7 @@ async function captureThemePreview(name: string) {
 async function checkColorThemes() {
   const { api } = getDesktopBackend()
   const before = await api.getSettings()
-  click('theme-preset-ocean')
+  await click('theme-preset-ocean')
   await until(() => app.settingsStore.get()?.theme === 'ocean', 'Ocean previews')
   assert.equal(
     (await api.getSettings()).theme,
@@ -88,13 +106,25 @@ async function checkColorThemes() {
   main.simulateClick(12, 100, 0)
   await captureThemePreview('theme-paper')
 
-  click('theme-preset-custom')
+  await click('theme-preset-aura')
+  await until(() => app.settingsStore.get()?.theme === 'aura', 'OpenCode theme previews')
+  assert.ok(find(main, 'theme-mode-light'))
+  await click('theme-mode-light')
+  await until(() => app.settingsStore.get()?.themeMode === 'light', 'Light mode previews')
+  assert.equal(
+    (await api.getSettings()).themeMode,
+    before.themeMode,
+    'Mode preview must leave saved settings intact',
+  )
+  await captureThemePreview('theme-aura-light')
+
+  await click('theme-preset-custom')
   await until(() => !!find(main, 'theme-color-accent'), 'custom color fields paint')
   const initialAccent = app.settingsStore.get()?.customPalette?.accent
   await replaceHex('theme-color-accent', 'xyz')
   await until(() => !!find(main, 'theme-palette-error'), 'invalid hex reports an error')
   assert.equal(app.settingsStore.get()?.customPalette?.accent, initialAccent)
-  click('settings-save')
+  await click('settings-save')
   assert.equal((await api.getSettings()).theme, before.theme, 'Invalid draft must not save')
 
   for (const [key, hex] of Object.entries(customPalette)) {
@@ -104,18 +134,19 @@ async function checkColorThemes() {
   }
   assert.deepEqual(app.settingsStore.get()?.customPalette, customPalette)
   assert.ok(!find(main, 'theme-palette-error'))
-  click('settings-save')
+  await click('settings-save')
   await until(
-    () => main.getPaintedText().some((text) => text.includes('App settings saved')),
+    () => main.getPaintedText().some((text) => text.includes('All changes are saved')),
     'custom palette saves',
   )
   const saved = await api.getSettings()
   assert.equal(saved.theme, 'custom')
+  assert.equal(saved.themeMode, 'light')
   assert.deepEqual(saved.customPalette, customPalette, 'SQLite returns the saved custom palette')
 
-  click('theme-preset-ocean')
+  await click('theme-preset-ocean')
   await until(() => app.settingsStore.get()?.theme === 'ocean', 'switches back to a preset')
-  click('theme-preset-custom')
+  await click('theme-preset-custom')
   await until(() => app.settingsStore.get()?.theme === 'custom', 'returns to the saved palette')
   assert.deepEqual(app.settingsStore.get()?.customPalette, customPalette)
   await captureThemePreview('theme-custom-editor')
@@ -210,7 +241,7 @@ try {
   await openNavTab('platforms', 'connect-twitch')
   await openNavTab('obs-remote', 'obs-remote-controller')
   assert.equal(mounts.size, 1, 'OBS Remote opens in the main window')
-  click('obs-add-profile')
+  await click('obs-add-profile')
   await until(() => !!find(main, 'obs-profile-url'), 'OBS connection editor opens')
   main.simulateKeystrokes('escape')
   await until(() => !find(main, 'obs-profile-url'), 'Escape closes the OBS connection editor')
@@ -243,6 +274,7 @@ try {
   closeTopOverlay('main')
   await Bun.sleep(100)
   await action('window', 'openTab', ['0'])
+  if (find(main, 'settings-leave-save')) await click('settings-leave-save')
   await until(
     () => app.activeWatchedTabStore.get() === 'home' && app.activeTabStore.get() === 'chat',
     'return to home',

@@ -198,8 +198,42 @@ const themeSchema = z.enum([
   'ember',
   'rose',
   'paper',
+  'aura',
+  'ayu',
+  'carbonfox',
+  'cobalt2',
+  'cursor',
+  'dracula',
+  'everforest',
+  'flexoki',
+  'catppuccin',
+  'catppuccin-frappe',
+  'catppuccin-macchiato',
+  'github',
+  'gruvbox',
+  'kanagawa',
+  'material',
+  'matrix',
+  'mercury',
+  'monokai',
+  'nightowl',
+  'nord',
+  'one-dark',
+  'opencode',
+  'orng',
+  'lucent-orng',
+  'osaka-jade',
+  'palenight',
+  'rosepine',
+  'solarized',
+  'synthwave84',
+  'tokyonight',
+  'vercel',
+  'vesper',
+  'zenburn',
   'custom',
 ])
+const themeModeSchema = z.enum(['dark', 'light'])
 const paletteColorSchema = z.string().transform((input, ctx) => {
   const color = normalizePaletteColor(input)
   if (color) return color
@@ -220,6 +254,7 @@ const customPaletteSchema = z.toZod<CustomPalette>()(
 export const appSettingsSchema = z.toZod<AppSettings>()(
   z.object({
     theme: themeSchema,
+    themeMode: themeModeSchema,
     customPalette: customPaletteSchema.optional(),
     chatTheme: z.union([z.literal('modern'), z.literal('compact')]),
     fontFamily: z.union([z.literal('inter'), z.literal('manrope'), z.literal('system')]),
@@ -476,6 +511,7 @@ export const emoteCatalogEntrySchema = z.toZod<EmoteCatalogEntry>()(
 
 export const partialAppSettingsSchema = appSettingsSchema.partial().extend({
   theme: themeSchema.optional().catch(DEFAULT_SETTINGS.theme),
+  themeMode: themeModeSchema.optional().catch(DEFAULT_SETTINGS.themeMode),
   customPalette: customPaletteSchema.optional().catch(undefined),
   overlay: overlayConfigSchema.partial().optional(),
   hotkeys: hotkeySettingsSchema.partial().optional(),

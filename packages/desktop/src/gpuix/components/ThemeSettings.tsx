@@ -1,4 +1,4 @@
-import type { AppSettings, CustomPalette } from '@twirchat/shared/types'
+import type { AppSettings, CustomPalette, ThemeMode } from '@twirchat/shared/types'
 import { useState } from 'react'
 
 import { useTextInputFocusTracking } from '../state/focus'
@@ -7,6 +7,7 @@ import { useTheme } from '../theme-context'
 import { ActionButton, FormField } from './ui/Form'
 import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'
+import { ToggleGroup, type ToggleGroupOption } from './ui/ToggleGroup'
 
 const PALETTE_FIELDS: readonly { key: keyof CustomPalette; label: string }[] = [
   { key: 'background', label: 'Background' },
@@ -14,6 +15,11 @@ const PALETTE_FIELDS: readonly { key: keyof CustomPalette; label: string }[] = [
   { key: 'text', label: 'Text' },
   { key: 'muted', label: 'Muted text' },
   { key: 'accent', label: 'Accent' },
+]
+
+const THEME_MODE_OPTIONS: readonly ToggleGroupOption<ThemeMode>[] = [
+  { value: 'dark', label: 'Dark', testId: 'theme-mode-dark' },
+  { value: 'light', label: 'Light', testId: 'theme-mode-light' },
 ]
 
 interface PaletteInput {
@@ -31,26 +37,35 @@ interface ThemeChoiceOption {
 
 interface ThemeSettingsProps {
   value: AppSettings['theme']
+  mode: ThemeMode
   palette: CustomPalette
   inputs: PaletteInputs
   invalid: boolean
   onSelect: (value: AppSettings['theme']) => void
+  onModeChange: (mode: ThemeMode) => void
   onEdit: (key: keyof CustomPalette, input: string) => void
   onReset: () => void
 }
 
 export function ThemeSettings({
   value,
+  mode,
   palette,
   inputs,
   invalid,
   onSelect,
+  onModeChange,
   onEdit,
   onReset,
 }: ThemeSettingsProps) {
   const theme = useTheme()
+  const selectedPreset = THEME_PRESETS.find((preset) => preset.id === value)
   const options: readonly ThemeChoiceOption[] = [
-    ...THEME_PRESETS,
+    ...THEME_PRESETS.map((preset) => ({
+      id: preset.id,
+      label: preset.label,
+      palette: mode === 'light' ? (preset.lightPalette ?? preset.palette) : preset.palette,
+    })),
     { id: 'custom', label: 'Custom', palette },
   ]
   return (
@@ -64,6 +79,26 @@ export function ThemeSettings({
         gap: 10,
       }}
     >
+      {selectedPreset?.lightPalette ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <Text style={{ fontSize: 12, color: theme.text2 }}>Color mode</Text>
+          <ToggleGroup
+            label="Color mode"
+            options={THEME_MODE_OPTIONS}
+            value={mode}
+            onChange={onModeChange}
+          />
+        </div>
+      ) : null}
       <div
         role="group"
         aria-label="Theme presets"
@@ -197,7 +232,15 @@ function ThemeChoice({
           gap: 3,
         }}
       >
-        <Text style={{ fontSize: 12, fontWeight: selected ? 700 : 500, color: theme.text }}>
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: selected ? 700 : 500,
+            color: theme.text,
+            flexShrink: 1,
+            minWidth: 0,
+          }}
+        >
           {label}
         </Text>
         {selected ? <Icon name="check" size={12} color={theme.link} /> : null}

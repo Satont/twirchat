@@ -197,6 +197,41 @@ export type ThemePreset =
   | 'ember'
   | 'rose'
   | 'paper'
+  | 'aura'
+  | 'ayu'
+  | 'carbonfox'
+  | 'cobalt2'
+  | 'cursor'
+  | 'dracula'
+  | 'everforest'
+  | 'flexoki'
+  | 'catppuccin'
+  | 'catppuccin-frappe'
+  | 'catppuccin-macchiato'
+  | 'github'
+  | 'gruvbox'
+  | 'kanagawa'
+  | 'material'
+  | 'matrix'
+  | 'mercury'
+  | 'monokai'
+  | 'nightowl'
+  | 'nord'
+  | 'one-dark'
+  | 'opencode'
+  | 'orng'
+  | 'lucent-orng'
+  | 'osaka-jade'
+  | 'palenight'
+  | 'rosepine'
+  | 'solarized'
+  | 'synthwave84'
+  | 'tokyonight'
+  | 'vercel'
+  | 'vesper'
+  | 'zenburn'
+
+export type ThemeMode = 'dark' | 'light'
 
 export interface CustomPalette {
   readonly background: string
@@ -208,6 +243,7 @@ export interface CustomPalette {
 
 export interface AppSettings {
   theme: ThemePreset | 'custom'
+  themeMode: ThemeMode
   customPalette?: CustomPalette
   chatTheme: 'modern' | 'compact'
   fontFamily: 'inter' | 'manrope' | 'system'
@@ -280,6 +316,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showPlatformIcon: true,
   showTimestamp: true,
   theme: 'dark',
+  themeMode: 'dark',
   twirIntegrationEnabled: true,
   chatLayout: {
     version: 1,
