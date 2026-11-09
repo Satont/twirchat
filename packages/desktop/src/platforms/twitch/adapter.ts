@@ -314,8 +314,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         hasPrivilegedChatRole(this.selfTags),
       )
     if (revision !== this.identityRevision || !this.chatClient)
-      if (revision !== this.identityRevision || !this.chatClient)
-        throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
+      throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
     const client = this.chatClient
     let outcome
     try {

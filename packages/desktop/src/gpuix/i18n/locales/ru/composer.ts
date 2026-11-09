@@ -6,6 +6,7 @@ export const ruComposer = {
   'composer.connection.error': 'Не удалось подключиться к {channel}',
 
   'composer.placeholder.message': 'Сообщение для {channel}…',
+  'composer.placeholder.messageAs': 'Сообщение для {channel} от @{username}…',
   'composer.placeholder.send': 'Отправьте сообщение…',
   'composer.placeholder.login': 'Войдите, чтобы отправлять сообщения…',
   'composer.placeholder.connectAccount': 'Подключите аккаунт…',
@@ -30,7 +31,7 @@ export const ruComposer = {
   'composer.preview.send': 'Отправить переведённое сообщение',
   'composer.preview.retry': 'Повторить перевод',
 
-  'composer.reply.replyingTo': 'Ответ {author}: {text}',
+  'composer.reply.replyingTo': 'Ответ для {author}: {text}',
 
   'composer.runningCommand': 'Выполнение команды…',
   'composer.dismiss': 'Закрыть',

@@ -178,7 +178,7 @@ export const ruSettingsEditors = {
   'chatRulesSettings.highlightOwn': 'Подсвечивать мои сообщения',
   'chatRulesSettings.highlightReplies': 'Подсвечивать ответы на мои сообщения',
   'chatRulesSettings.platformHighlights': 'Показывать подсветку платформы',
-  'chatRulesSettings.allFiltersMatch': 'Все фильтры, назначенные панели, должны совпадать.',
+  'chatRulesSettings.allFiltersMatch': 'Сообщение должно подходить под все фильтры панели.',
   'chatRulesSettings.rulesOrder': 'Правила выполняются в этом порядке.',
   'chatRulesSettings.add.highlight': 'Добавить подсветку',
   'chatRulesSettings.add.ignore': 'Добавить в игнор',

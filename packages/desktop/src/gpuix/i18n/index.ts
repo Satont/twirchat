@@ -12,6 +12,11 @@ export type MessageKey = keyof typeof en
 
 const DICTIONARIES: Record<Language, Dictionary> = { en, ru }
 
+const PLURAL_RULES: Record<Language, Intl.PluralRules> = {
+  en: new Intl.PluralRules('en'),
+  ru: new Intl.PluralRules('ru'),
+}
+
 function lookup(dictionary: Dictionary, key: string): string | undefined {
   return Object.prototype.hasOwnProperty.call(dictionary, key) ? dictionary[key] : undefined
 }
@@ -36,7 +41,7 @@ function translatePluralFor(
   params?: TranslationParams,
 ): string {
   const dictionary = DICTIONARIES[language]
-  const form = new Intl.PluralRules(language).select(count)
+  const form = PLURAL_RULES[language].select(count)
   const template =
     lookup(dictionary, `${base}.${form}`) ??
     lookup(en, `${base}.${form}`) ??

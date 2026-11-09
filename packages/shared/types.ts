@@ -44,6 +44,8 @@ export interface TwitchChatNotice {
 
 export type TwitchNoticeKind = TwitchChatNotice['kind']
 
+export type SevenTvSystemAction = 'added' | 'removed' | 'changed'
+
 export interface NormalizedChatMessage {
   id: string
   /** Desktop history ID superseded by this Twitch message. */
@@ -71,6 +73,8 @@ export interface NormalizedChatMessage {
     bits?: number
     announcement?: string
     twitchNotice?: TwitchChatNotice
+    /** What a 7TV system row reports, so its styling never depends on translated text. */
+    sevenTvAction?: SevenTvSystemAction
     subscriptionMonths?: number
     rewardCost?: number
     flags?: Record<string, boolean>

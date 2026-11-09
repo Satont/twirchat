@@ -25,8 +25,8 @@ export const ruApp = {
 
   'app.tab.menu.rename': 'Переименовать / цвет вкладки…',
   'app.tab.menu.duplicate': 'Дублировать вкладку',
-  'app.tab.menu.lock': 'Закрепить вкладку',
-  'app.tab.menu.unlock': 'Открепить вкладку',
+  'app.tab.menu.lock': 'Заблокировать вкладку',
+  'app.tab.menu.unlock': 'Разблокировать вкладку',
   'app.tab.menu.moveLeft': 'Переместить влево',
   'app.tab.menu.moveRight': 'Переместить вправо',
   'app.tab.menu.close': 'Закрыть вкладку',
@@ -136,7 +136,7 @@ export const ruApp = {
   'app.changelog.badge.improved': 'УЛУЧШЕНО',
   'app.changelog.badge.fixed': 'ИСПРАВЛЕНО',
   'app.changelog.badge.removed': 'УДАЛЕНО',
-  'app.changelog.badge.docs': 'ДОКУМЕНТАЦИЯ',
+  'app.changelog.badge.docs': 'ДОКИ',
   'app.changelog.badge.other': 'ДРУГОЕ',
   'app.changelog.viewOnGitHub': 'Открыть на GitHub',
 

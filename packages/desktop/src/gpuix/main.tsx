@@ -17,6 +17,7 @@ import { establishLinuxSingleInstance } from '../services/linux-single-instance'
 import { getDesktopBackend } from './backend/server'
 import { App } from './components/App'
 import { ChatWindow } from './components/ChatWindow'
+import { t } from './i18n'
 import { loadActionBindings } from './state/action-bindings'
 import { wireProviderChannelFocus } from './state/active-pane'
 import {
@@ -64,7 +65,9 @@ void Promise.all([
   chatRulesPreferences.load(backend.api),
   notificationPreferences.load(backend.api),
   loadTranslationSettings(backend),
-]).catch((error) => showNotice('error', `Could not load preferences: ${String(error)}`))
+]).catch((error) =>
+  showNotice('error', t('notices.startup.preferencesFailed', { error: String(error) })),
+)
 
 initAvatarCache((params) => backend.api.resolveAvatar(params))
 
@@ -87,7 +90,7 @@ if (!g.__twirchatGpuixWired) {
   g.__twirchatGpuixWired = true
   wireBackendToStores(backend)
   void loadInitialData(backend).catch((error) =>
-    showNotice('error', `Could not load chat state: ${String(error)}`),
+    showNotice('error', t('notices.startup.chatStateFailed', { error: String(error) })),
   )
 }
 if (!g.__twirchatTabUnreadWired) {

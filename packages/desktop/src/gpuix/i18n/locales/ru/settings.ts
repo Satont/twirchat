@@ -42,7 +42,7 @@ export const ruSettings = {
   'settings.category.translation': 'Перевод',
   'settings.category.translation.desc': 'Языки и провайдеры',
   'settings.category.moderation': 'Модерация',
-  'settings.category.moderation.desc': 'Таймауты и причины',
+  'settings.category.moderation.desc': 'Тайм-ауты и причины',
   'settings.category.commands': 'Команды',
   'settings.category.commands.desc': 'Свои команды и действия',
   'settings.category.plugins': 'Плагины',
@@ -81,7 +81,7 @@ export const ruSettings = {
   'settings.section.moderation': 'Модерация',
   'settings.moderation.showRail': 'Показывать ползунок модерации в чате',
   'settings.moderation.showRailHint':
-    'Потяните от левого края сообщения, чтобы удалить его, выдать таймаут автору или забанить его',
+    'Потяните от левого края сообщения, чтобы удалить его, выдать тайм-аут автору или забанить его',
   'settings.section.self-ping': 'Подсветка упоминаний',
   'settings.section.self-ping.desc': 'Подсвечивать сообщения с вашим никнеймом',
   'settings.section.updates': 'Обновления',

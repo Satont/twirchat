@@ -56,4 +56,6 @@ export const ruChatMessages = {
   'chatMessages.autoMod.senderNotice.denied': 'Модераторы не одобрили ваше сообщение.',
   'chatMessages.autoMod.senderNotice.invalid':
     'Ваше задержанное сообщение было удалено из очереди проверки и не отправлено.',
+  'chatMessages.firstMessage': 'Первое сообщение',
+  'chatMessages.autoMod.heldLocal': 'AutoMod задержал ваше сообщение для проверки модераторами.',
 } satisfies Record<keyof typeof chatMessages, string>

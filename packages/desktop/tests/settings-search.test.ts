@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
+import { translatorFor, type Language } from '../src/gpuix/i18n'
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_SECTIONS,
@@ -134,6 +135,13 @@ describe('lazy settings editors', () => {
     )
     expect(back).toBe(translating)
     expect(back.has('translation')).toBe(true)
+  })
+  test('every section is found by its translated title in either language', () => {
+    for (const section of SETTINGS_SECTIONS)
+      for (const language of ['en', 'ru'] satisfies Language[]) {
+        const title = translatorFor(language)(`settings.section.${section.id}`)
+        expect(searchSettings(title).sections.map((match) => match.id)).toContain(section.id)
+      }
   })
   test('keyboard category traversal wraps, handles filtered sets and safely handles no results', () => {
     expect(stepSettingsCategory(['general', 'chat', 'overlay'], 'general', -1)).toBe('overlay')

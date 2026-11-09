@@ -30,7 +30,7 @@ type Section = 'highlights' | 'ignores' | 'filters'
 export function ChatRulesSettings() {
   const backend = useBackend()
   const theme = useTheme()
-  const { t } = useT()
+  const { t, language } = useT()
   const persisted = useStore(chatRulesStore)
   const accounts = useStore(accountsStore)
   const home = useStore(homeMessagesStore)
@@ -53,13 +53,15 @@ export function ChatRulesSettings() {
     () => [...home, ...[...watched.values()].flat()].slice(-1000),
     [home, watched],
   )
-  const validation = (() => {
+  const validation = useMemo(() => {
     try {
       return { value: validateChatRules(draft), error: null }
     } catch (error) {
       return { value: null, error: error instanceof Error ? error.message : String(error) }
     }
-  })()
+    // Validation errors are translated: recompute them when the UI language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, language])
   const preview = useMemo(() => {
     if (!validation.value) return null
     const compiled = compileMessageRules(validation.value, accounts)
@@ -581,8 +583,8 @@ function PatternEditor({
   rule: TextRule
   onChange: (patch: Partial<TextRule>) => void
 }) {
-  const { t } = useT()
-  const error = (() => {
+  const { t, language } = useT()
+  const error = useMemo(() => {
     try {
       validateChatRules({
         highlights: [],
@@ -594,7 +596,9 @@ function PatternEditor({
     } catch (failure) {
       return failure instanceof Error ? failure.message : String(failure)
     }
-  })()
+    // Validation errors are translated: recompute them when the UI language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rule, language])
   return (
     <>
       <Toggle

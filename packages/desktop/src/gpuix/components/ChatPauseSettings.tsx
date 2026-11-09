@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   PAUSE_MODIFIER_KEYS,
@@ -55,7 +55,7 @@ function settingsFromDraft(draft: Draft): ChatPausePreferences {
 export function ChatPauseSettings() {
   const backend = useBackend()
   const theme = useTheme()
-  const { t } = useT()
+  const { t, language } = useT()
   const state = useStore(chatPauseStore)
   const [draft, setDraft] = useState(() => draftFromSettings(state.value))
   const [dirty, setDirty] = useState(false)
@@ -79,14 +79,16 @@ export function ChatPauseSettings() {
     }
     setDraft(draftFromSettings(state.value))
   }, [state.value, dirty, draft])
-  const validation = (() => {
+  const validation = useMemo(() => {
     try {
       settingsFromDraft(draft)
       return ''
     } catch (error) {
       return error instanceof Error ? error.message : String(error)
     }
-  })()
+    // Validation errors are translated: recompute them when the UI language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, language])
   async function save(): Promise<boolean> {
     let value: ChatPausePreferences
     try {

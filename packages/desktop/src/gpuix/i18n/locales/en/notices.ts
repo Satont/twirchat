@@ -218,4 +218,16 @@ export const notices = {
   'notices.accounts.reconnectFailed':
     'Account selected, but some chats could not reconnect: {failures}',
   'notices.accounts.missing': 'This saved account no longer exists.',
+  'notices.startup.preferencesFailed': 'Could not load preferences: {error}',
+  'notices.startup.chatStateFailed': 'Could not load chat state: {error}',
+  'notices.window.error': 'Window error: {error}',
+  'notices.window.trayUnavailable': 'System tray is unavailable: {error}',
+  'notices.window.saveFailed': 'Could not save windows: {error}',
+  'notices.window.restoreFailed': 'Could not restore windows: {error}',
+  'notices.window.restoreOneFailed': 'Could not restore {title}: {error}',
+  'notices.window.cleanupFailed': 'Could not remove closed window data: {error}',
+  'notices.window.clickThroughUnsupported':
+    'This compositor does not support overlay click-through.',
+  'notices.window.closeOneFirst': 'Close a window before opening another.',
+  'notices.window.noOverlay': 'There is no overlay window to change.',
 } satisfies Record<string, string>

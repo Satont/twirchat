@@ -1,4 +1,4 @@
-import { t, type MessageKey } from './i18n'
+import { t, translatorFor, type MessageKey } from './i18n'
 import { THEME_PRESETS } from './theme'
 
 interface SettingsCategoryMetadata {
@@ -316,10 +316,21 @@ const normalize = (value: string) =>
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
+const sectionTitleKey = (id: SettingsSectionId): MessageKey => `settings.section.${id}`
+const searchTranslators = [translatorFor('en'), translatorFor('ru')]
+/** Section and category names as either language shows them, so a visible title always finds its section. */
+function translatedNames(section: SettingsSectionMetadata): string {
+  return searchTranslators
+    .map(
+      (translate) =>
+        `${translate(sectionTitleKey(section.id))} ${translate(CATEGORY_LABEL_KEYS[section.category])}`,
+    )
+    .join(' ')
+}
 const index = SETTINGS_SECTIONS.map((section) => ({
   section,
   words: normalize(
-    `${section.title} ${section.keywords} ${section.saveMode === 'action' ? 'actions apply immediately connect clear' : 'save discard unsaved changes'} ${SETTINGS_CATEGORIES.find((category) => category.id === section.category)!.aliases}`,
+    `${section.title} ${translatedNames(section)} ${section.keywords} ${section.saveMode === 'action' ? 'actions apply immediately connect clear' : 'save discard unsaved changes'} ${SETTINGS_CATEGORIES.find((category) => category.id === section.category)?.aliases ?? ''}`,
   ).split(/\s+/u),
 }))
 export interface SettingsSearchResult {

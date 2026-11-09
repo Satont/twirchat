@@ -1130,9 +1130,11 @@ export function ChatInput(props: ChatInputProps) {
 
   function placeholderText(): string {
     if (props.watchedChannel) {
-      if (props.watchedChannelStatus?.mode !== 'authenticated')
-        return t('composer.placeholder.login')
-      return t('composer.placeholder.message', { channel: props.watchedChannel.displayName })
+      if (!watchedAccount) return t('composer.placeholder.login')
+      const channel = props.watchedChannel.displayName
+      return props.watchedChannel.platform === 'youtube'
+        ? t('composer.placeholder.message', { channel })
+        : t('composer.placeholder.messageAs', { channel, username: watchedAccount.username })
     }
     if (!hasAnything) return t('composer.placeholder.connectAccount')
     if (isDisabled) return t('composer.placeholder.login')

@@ -227,4 +227,16 @@ export const ruNotices = {
   'notices.accounts.reconnectFailed':
     'Аккаунт выбран, но некоторым чатам не удалось переподключиться: {failures}',
   'notices.accounts.missing': 'Этот сохранённый аккаунт больше не существует.',
+  'notices.startup.preferencesFailed': 'Не удалось загрузить настройки: {error}',
+  'notices.startup.chatStateFailed': 'Не удалось загрузить состояние чатов: {error}',
+  'notices.window.error': 'Ошибка окна: {error}',
+  'notices.window.trayUnavailable': 'Системный трей недоступен: {error}',
+  'notices.window.saveFailed': 'Не удалось сохранить окна: {error}',
+  'notices.window.restoreFailed': 'Не удалось восстановить окна: {error}',
+  'notices.window.restoreOneFailed': 'Не удалось восстановить {title}: {error}',
+  'notices.window.cleanupFailed': 'Не удалось удалить данные закрытого окна: {error}',
+  'notices.window.clickThroughUnsupported':
+    'Этот композитор не поддерживает пропуск кликов сквозь оверлей.',
+  'notices.window.closeOneFirst': 'Закройте одно из окон, прежде чем открывать новое.',
+  'notices.window.noOverlay': 'Нет окна оверлея, которое можно изменить.',
 } satisfies Record<keyof typeof notices, string>

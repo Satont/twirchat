@@ -44,7 +44,7 @@ export function ChatHistoryPanel({
 }) {
   const backend = useBackend()
   const theme = useTheme()
-  const { t, tPlural } = useT()
+  const { t, tPlural, language } = useT()
   const [platform, setPlatform] = useState<Platform | 'all'>(channel?.platform ?? 'all')
   const [channelId, setChannelId] = useState(channel?.channelId ?? '')
   const [author, setAuthor] = useState('')
@@ -76,8 +76,7 @@ export function ChatHistoryPanel({
     if (until.trim()) result.until = historyDate(until, true)
     return result
   }, [platform, channelId, author, text, since, until])
-  // Recompute on every render so the message follows the UI language.
-  const queryError = (() => {
+  const queryError = useMemo(() => {
     if (
       (query.since !== undefined && !Number.isFinite(query.since)) ||
       (query.until !== undefined && !Number.isFinite(query.until))
@@ -86,7 +85,9 @@ export function ChatHistoryPanel({
     if (query.since !== undefined && query.until !== undefined && query.since > query.until)
       return t('chat.history.dateOrder')
     return null
-  })()
+    // Validation errors are translated: recompute them when the UI language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, t, language])
   const historyNotice = (pageHistory: UserChatHistoryPage['history']): string | null => {
     if (!pageHistory) return null
     if (pageHistory.error)

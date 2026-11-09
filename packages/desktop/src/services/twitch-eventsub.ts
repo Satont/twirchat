@@ -122,16 +122,7 @@ export class TwitchEventSubClient {
       this.dependencies.autoMod({ type: 'clear', channelSlug: key })
       const ids = this.subscriptions.get(key) ?? []
       this.subscriptions.delete(key)
-      if (ids.length) {
-        try {
-          await this.dependencies.unsubscribe(ids)
-        } catch {
-          this.dependencies.status({
-            status: 'error',
-            message: t('misc.twitchEventSub.removeFailed'),
-          })
-        }
-      }
+      await this.removeSubscriptions(key, ids)
     }
   }
 
@@ -142,8 +133,7 @@ export class TwitchEventSubClient {
       if (generation === this.generation)
         this.dependencies.status({
           status: 'error',
-          message:
-            'Could not remove the Twitch event subscription. It will be discarded when the connection closes.',
+          message: t('misc.twitchEventSub.removeFailed'),
         })
     })
     this.unregistering.set(key, removing)

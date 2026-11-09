@@ -8,7 +8,12 @@
  * because parent `hover` styles do not reach children.
  */
 
-import type { Account, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
+import type {
+  Account,
+  NormalizedChatMessage,
+  Platform,
+  SevenTvSystemAction,
+} from '@twirchat/shared/types'
 import { memo, useEffect, useMemo, useState, type ReactElement } from 'react'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
@@ -22,7 +27,7 @@ import {
 } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { createMentionMatcher } from '../chat-tools'
-import { t, tPlural, useT } from '../i18n'
+import { t, tPlural, useLanguage } from '../i18n'
 import { icons } from '../icons'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
@@ -474,6 +479,24 @@ export interface ChatMessageProps {
   onSearch?: (query: string) => void
 }
 
+/** Rare row labels subscribe to the UI language themselves, so ordinary rows hold no subscription. */
+function FirstMessageLabel() {
+  useLanguage()
+  return t('chatMessages.firstMessage')
+}
+
+function DeliveryFailure({ error, style }: { error?: string; style: Record<string, unknown> }) {
+  useLanguage()
+  return <Text style={style}>{t('chatMessages.notSent', { error: error ?? '' })}</Text>
+}
+
+/** History saved before 7TV rows carried their action is English text. */
+function legacySystemAction(text: string): SevenTvSystemAction {
+  if (text.includes(' added ')) return 'added'
+  if (text.includes(' removed ')) return 'removed'
+  return 'changed'
+}
+
 function wrapTwitchMessage(
   content: ReactElement,
   id: string,
@@ -506,7 +529,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const theme = useTheme()
   const font = useFont()
   const backend = useBackend()
-  const { t } = useT()
   const [hovered, setHovered] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [ignoredRevealed, setIgnoredRevealed] = useState(false)
@@ -608,12 +630,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         />
       )
 
-    const text = message.text
-    const action = text.includes(' added ')
-      ? 'added'
-      : text.includes(' removed ')
-        ? 'removed'
-        : 'renamed'
+    const action = message.metadata?.sevenTvAction ?? legacySystemAction(message.text)
     const palette =
       action === 'added'
         ? {
@@ -836,7 +853,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
                 letterSpacing: '0.4px',
               }}
             >
-              First message
+              <FirstMessageLabel />
             </BadgeComponent>
           ) : null}
           <Text
@@ -859,9 +876,10 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             actionColor={isAction ? authorColor : undefined}
           />
           {message.delivery?.state === 'failed' ? (
-            <Text style={{ fontSize: Math.round(fontSize * 0.82), color: theme.dangerText }}>
-              {t('chatMessages.notSent', { error: message.delivery.error ?? '' })}
-            </Text>
+            <DeliveryFailure
+              error={message.delivery.error}
+              style={{ fontSize: Math.round(fontSize * 0.82), color: theme.dangerText }}
+            />
           ) : null}
           {props.moderationOutcome ? (
             <Text style={{ fontSize: Math.round(fontSize * 0.82), color: theme.text2 }}>
@@ -996,7 +1014,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
                 letterSpacing: '0.4px',
               }}
             >
-              First message
+              <FirstMessageLabel />
             </BadgeComponent>
           ) : null}
           {props.showTimestamp ? (
@@ -1039,15 +1057,10 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
         ) : null}
 
         {message.delivery?.state === 'failed' ? (
-          <Text
-            style={{
-              fontSize: Math.round(fontSize * 0.82),
-              color: theme.dangerText,
-              marginTop: 2,
-            }}
-          >
-            {t('chatMessages.notSent', { error: message.delivery.error ?? '' })}
-          </Text>
+          <DeliveryFailure
+            error={message.delivery.error}
+            style={{ fontSize: Math.round(fontSize * 0.82), color: theme.dangerText, marginTop: 2 }}
+          />
         ) : null}
         {props.moderationOutcome ? (
           <Text

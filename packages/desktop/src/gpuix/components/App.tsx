@@ -251,7 +251,7 @@ export function UpdateToast() {
 
 export function App() {
   const backend = useBackend()
-  const { t } = useT()
+  const { t, language } = useT()
   const windows = useDesktopWindows()
   const scope = useWindowScope()
   const presentation = useWindowPresentation()
@@ -355,18 +355,30 @@ export function App() {
     return anyLive ? total : undefined
   }, [accounts, streamStatuses, streamerMode])
 
-  const tabSelectorItems: TabItem[] = [{ id: 'home', label: t('app.tabs.home') }]
-  for (const ch of tabWatchedChannels) {
-    tabSelectorItems.push({
-      id: ch.id,
-      label:
-        chatTabs.value.metadata[ch.id]?.title ??
-        tabChannelNames.get(ch.id)?.join(', ') ??
-        ch.displayName,
-      platform: ch.platform,
-      isLive: watchedLiveStatuses.get(ch.id)?.isLive ?? false,
-    })
-  }
+  const tabSelectorItems = useMemo<TabItem[]>(() => {
+    const items: TabItem[] = [{ id: 'home', label: t('app.tabs.home') }]
+    for (const ch of tabWatchedChannels) {
+      items.push({
+        id: ch.id,
+        label:
+          chatTabs.value.metadata[ch.id]?.title ??
+          tabChannelNames.get(ch.id)?.join(', ') ??
+          ch.displayName,
+        platform: ch.platform,
+        isLive: watchedLiveStatuses.get(ch.id)?.isLive ?? false,
+      })
+    }
+    return items
+    // The home tab label is translated: rebuild the list when the UI language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    tabWatchedChannels,
+    tabChannelNames,
+    watchedLiveStatuses,
+    chatTabs.value.metadata,
+    t,
+    language,
+  ])
 
   const selectWatchedTab = (id: string) => {
     clearTabUnread(id)

@@ -216,7 +216,7 @@ export const ruMisc = {
   'misc.twitchSender.reject.emoteonly': 'в чате включён режим «только эмоуты»',
   'misc.twitchSender.reject.slowmode': 'в чате включён медленный режим, подождите',
   'misc.twitchSender.reject.r9k': 'в чате включён режим уникальных сообщений',
-  'misc.twitchSender.reject.timedout': 'аккаунт находится в таймауте в этом чате',
+  'misc.twitchSender.reject.timedout': 'аккаунт находится в тайм-ауте в этом чате',
   'misc.twitchSender.reject.banned': 'аккаунт забанен в этом чате',
   'misc.twitchSender.reject.verifiedEmail': 'для чата требуется подтверждённый email',
   'misc.twitchSender.reject.noPermission': 'у аккаунта нет прав для этого действия',

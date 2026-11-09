@@ -25,7 +25,7 @@ const REJECTIONS: Record<string, MessageKey> = {
 }
 
 export function twitchSendRejection(reason: string): string {
-  const key = REJECTIONS[reason]
+  const key = Object.hasOwn(REJECTIONS, reason) ? REJECTIONS[reason] : undefined
   return key ? t(key) : reason
 }
 

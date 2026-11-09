@@ -438,6 +438,24 @@ describe('Twitch EventSub lifecycle', () => {
     await rewatch
     expect(channelRegistrations).toBe(2)
   })
+
+  test('waits for a closed channel to unsubscribe before registering it again', async () => {
+    const removal = Promise.withResolvers<void>()
+    const f = fixture({ unsubscribe: () => removal.promise })
+    await f.client.watch('creator', true)
+    required(f.sockets[0]).welcome()
+    await settle()
+    expect(f.registrations).toContain('session:creator')
+    const closing = f.client.watch('creator', false)
+    await settle()
+    expect(f.removed).toEqual([['session:creator']])
+    const reopening = f.client.watch('creator', true)
+    await settle()
+    expect(f.registrations.filter((key) => key === 'session:creator')).toHaveLength(1)
+    removal.resolve()
+    await Promise.all([closing, reopening])
+    expect(f.registrations.filter((key) => key === 'session:creator')).toHaveLength(2)
+  })
 })
 
 test('routes watched channels to their selected account and closes unused alternate sockets', async () => {

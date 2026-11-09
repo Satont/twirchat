@@ -1,5 +1,5 @@
 import type { KeyEvent } from '@gpuix/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
@@ -111,7 +111,7 @@ export function HotkeySettings() {
   const backend = useBackend()
   const scope = useWindowScope()
   const theme = useTheme()
-  const { t } = useT()
+  const { t, language } = useT()
   const state = useStore(actionBindingsStore)
   const [draft, setDraft] = useState(() => structuredClone(state.value))
   const [dirty, setDirty] = useState(false)
@@ -148,14 +148,16 @@ export function HotkeySettings() {
       const entry = value.bindings.find((item) => item.id === selected)
       if (entry) update(entry)
     })
-  const validation = (() => {
+  const validation = useMemo(() => {
     try {
       validateHotkeyBindings(draft.bindings)
       return ''
     } catch (cause) {
       return cause instanceof Error ? cause.message : String(cause)
     }
-  })()
+    // Validation errors are translated: recompute them when the UI language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.bindings, language])
   capture.current = (event) => {
     event.preventDefault()
     event.stopPropagation()
