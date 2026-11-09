@@ -90,7 +90,7 @@ import { useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
 import { platformColor, semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
-import { ChatAppearancePopover } from './ChatAppearancePopover'
+import { ChatAppearanceDialog } from './ChatAppearanceDialog'
 import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
 import { ChatMessageRow } from './ChatMessageRow'
@@ -1403,7 +1403,7 @@ export function ChatView({
             </HeaderButton>
           ) : null}
 
-          {settings ? <ChatAppearancePopover settings={settings} /> : null}
+          {settings ? <ChatAppearanceDialog settings={settings} /> : null}
 
           {onSplitRight || onClosePanel || windows ? (
             <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
