@@ -254,6 +254,7 @@ export interface AppSettings {
   showAvatars: boolean
   showBadges: boolean
   showChannelLabel: boolean
+  showModerationRail?: boolean
   emoteSessionCache: boolean
   platformFilter: Platform[] | 'all'
   hotkeys: HotkeySettings
@@ -311,6 +312,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showAvatars: true,
   showBadges: true,
   showChannelLabel: true,
+  showModerationRail: true,
   emoteSessionCache: true,
   showPlatformColorStripe: true,
   showPlatformIcon: true,

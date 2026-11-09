@@ -718,6 +718,10 @@ export function ChatView({
   useOverlayClose(menuOpen, () => setMenuOpen(false))
   const [watchedModerationAllowed, setWatchedModerationAllowed] = useState(false)
   const [moderationPendingIds, setModerationPendingIds] = useState<Set<string>>(new Set())
+  const showModerationRail =
+    moderationMode &&
+    settings?.showModerationRail !== false &&
+    (!watchedChannel || watchedModerationAllowed)
 
   const getChannelSlugForPlatform = useCallback(
     (platform: Platform): string | undefined => {
@@ -1907,7 +1911,7 @@ export function ChatView({
                   onOpenUserCard={setUserCardTarget}
                   onReply={setReplyTarget}
                   onSearch={openSearch}
-                  canModerate={moderationMode && (!watchedChannel || watchedModerationAllowed)}
+                  canModerate={showModerationRail}
                   moderationPending={moderationPendingIds.has(message.id)}
                   onModerate={handleModeration}
                 />

@@ -265,6 +265,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     showAvatars: z.boolean(),
     showBadges: z.boolean(),
     showChannelLabel: z.boolean(),
+    showModerationRail: z.boolean().optional(),
     emoteSessionCache: z.boolean(),
     platformFilter: z.union([z.array(platformSchema), z.literal('all')]),
     hotkeys: hotkeySettingsSchema,
