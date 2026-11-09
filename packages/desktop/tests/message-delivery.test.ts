@@ -264,6 +264,20 @@ test('explicit acknowledgement IDs take priority over earlier same-text sends wi
   ).toEqual([])
 })
 
+test('a Twitch history replacement matches the original receipt and stays reserved for that send', () => {
+  const first = createPendingMessage({ account: twitchAccount, channelId: 'viewer', text: 'same' })
+  const second = createPendingMessage({ account: twitchAccount, channelId: 'viewer', text: 'same' })
+  const localTwitchEchoId = 'local:twitch:viewer:second'
+  const confirmed = confirmDelivery([first, second], second.id, {
+    channelId: 'viewer',
+    messageId: localTwitchEchoId,
+  })
+  const replacement = { ...providerMessage(second, 'canonical-second'), localTwitchEchoId }
+  const retained = reconcilePendingMessages(confirmed, [replacement])
+  expect(retained.map(({ id }) => id)).toEqual([first.id])
+  expect(reconcilePendingMessages(retained, [replacement])).toBe(retained)
+})
+
 test('fallback matching keeps text, author, platform, reply and channel identity exact and bounds its time window', () => {
   const pending = createPendingMessage({ account: kickAccount, channelId: '3195252', text: 'Test' })
   const original = providerMessage(pending, 'candidate')

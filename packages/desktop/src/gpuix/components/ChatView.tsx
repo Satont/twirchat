@@ -799,8 +799,8 @@ export function ChatView({
     return message.replace(/^Error:\s*/, '').replace(/^send (Twitch|Kick) message:\s*/i, '')
   }
 
-  function pendingReply(): NormalizedChatMessage['reply'] | undefined {
-    if (!replyTarget) return undefined
+  function pendingReply(replyToMessageId?: string): NormalizedChatMessage['reply'] {
+    if (!replyTarget || replyTarget.id !== replyToMessageId) return undefined
     return {
       parentMessageId: replyTarget.id,
       parentMessageText: replyTarget.text,
@@ -830,11 +830,13 @@ export function ChatView({
           ? (watchedChannelStatus?.channelId ?? channelId)
           : account.platformUserId
         : channelId
+    const reply = pendingReply(replyToMessageId)
+    const replyTo = reply ?? replyToMessageId
     const message = createPendingMessage({
       account,
       channelId: canonicalChannelId,
       text,
-      reply: pendingReply(),
+      reply,
       providerMessages,
       scope: activityKey,
     })
@@ -844,9 +846,9 @@ export function ChatView({
         ? await backend.api.sendWatchedChannelMessage({
             id: watchedChannelId,
             text,
-            replyToMessageId,
+            replyTo,
           })
-        : await backend.api.sendMessage({ channelId, platform, text, replyToMessageId })
+        : await backend.api.sendMessage({ channelId, platform, text, replyTo })
       setDeliveryMessages((current) => confirmDelivery(current, message.id, receipt))
     } catch (error) {
       setDeliveryMessages((current) =>

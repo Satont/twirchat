@@ -11,7 +11,12 @@ import { logger } from '@twirchat/shared/logger'
  * Token refresh is handled by calling the backend API when needed,
  * keeping client secrets server-side for security.
  */
-import type { Badge, NormalizedChatMessage, NormalizedEvent } from '@twirchat/shared/types'
+import type {
+  Badge,
+  ChatSendReceipt,
+  NormalizedChatMessage,
+  NormalizedEvent,
+} from '@twirchat/shared/types'
 import { StaticAuthProvider } from '@twurple/auth'
 import { ChatClient, RoomState as TwitchRoomState, UserState } from '@twurple/chat'
 import type {
@@ -29,7 +34,7 @@ import { runInBackground } from '../../services/background-task'
 import { buildTwitchSystemMessage } from '../../services/twitch-system-message'
 import { AccountStore } from '../../store/account-store'
 import { MessageStore } from '../../store/message-store'
-import { BasePlatformAdapter } from '../base-adapter'
+import { BasePlatformAdapter, type ChatReplyTarget } from '../base-adapter'
 import { resolveTwitchAvatarUrl } from './avatar-cache'
 import { parseTwitchBadgeCatalog } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
@@ -253,7 +258,11 @@ export class TwitchAdapter extends BasePlatformAdapter {
     })
   }
 
-  async sendMessage(channelId: string, text: string, replyToMessageId?: string): Promise<void> {
+  async sendMessage(
+    channelId: string,
+    text: string,
+    replyTo?: ChatReplyTarget,
+  ): Promise<void | ChatSendReceipt> {
     const revision = this.identityRevision
     if (this.anonymous) {
       throw new Error('Cannot send messages in anonymous mode. Please log in to Twitch.')
@@ -270,41 +279,27 @@ export class TwitchAdapter extends BasePlatformAdapter {
     if (revision !== this.identityRevision)
       throw new Error('The Twitch account changed before sending. Review the draft and send again.')
 
+    const parentMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
+    const attributes = parentMessageId ? { replyTo: parentMessageId } : undefined
     try {
-      await this.chatClient.say(
-        channelId,
-        text,
-        replyToMessageId ? { replyTo: replyToMessageId } : undefined,
-      )
-      if (revision === this.identityRevision)
-        this.emitLocalSentMessage(channelId, text, replyToMessageId)
+      await this.chatClient.say(channelId, text, attributes)
     } catch (error) {
-      // If we get an auth error, try to refresh and retry once
-      if (this.isAuthError(error)) {
-        log.info('[Twitch] Auth error on send, attempting refresh...')
-        const refreshed = await this.refreshTokenIfNeeded()
-        if (revision !== this.identityRevision)
-          throw new Error(
-            'The Twitch account changed while sending. Delivery could not be confirmed.',
-            { cause: error },
-          )
-        if (refreshed && this.chatClient) {
-          // Reconnect with new token
-          await this.reconnectWithNewToken()
-          if (revision !== this.identityRevision)
-            throw new Error('The Twitch account changed while reconnecting.', { cause: error })
-          await this.chatClient.say(
-            channelId,
-            text,
-            replyToMessageId ? { replyTo: replyToMessageId } : undefined,
-          )
-          if (revision === this.identityRevision)
-            this.emitLocalSentMessage(channelId, text, replyToMessageId)
-          return
-        }
-      }
-      throw error
+      if (!this.isAuthError(error)) throw error
+      log.info('[Twitch] Auth error on send, attempting refresh...')
+      const refreshed = await this.refreshTokenIfNeeded()
+      if (revision !== this.identityRevision)
+        throw new Error(
+          'The Twitch account changed while sending. Delivery could not be confirmed.',
+          { cause: error },
+        )
+      if (!refreshed || !this.chatClient) throw error
+      await this.reconnectWithNewToken()
+      if (revision !== this.identityRevision)
+        throw new Error('The Twitch account changed while reconnecting.', { cause: error })
+      await this.chatClient.say(channelId, text, attributes)
     }
+    if (revision === this.identityRevision)
+      return this.emitLocalSentMessage(channelId, text, replyTo || undefined)
   }
 
   // ============================================================
@@ -759,7 +754,11 @@ export class TwitchAdapter extends BasePlatformAdapter {
     return false
   }
 
-  private emitLocalSentMessage(channelId: string, text: string, replyToMessageId?: string): void {
+  private emitLocalSentMessage(
+    channelId: string,
+    text: string,
+    replyTo?: ChatReplyTarget,
+  ): ChatSendReceipt | undefined {
     try {
       const displayName = this.displayName ?? this.login
       if (!displayName) {
@@ -769,38 +768,36 @@ export class TwitchAdapter extends BasePlatformAdapter {
             channelId,
           },
         )
-        return
+        return undefined
       }
 
-      const reply = replyToMessageId
-        ? this.findReplyContext(channelId, replyToMessageId)
-        : undefined
-
-      this.emit(
-        'message',
-        createLocalTwitchSentMessage({
-          author: {
-            ...twitchAuthorAppearance(
-              this.selfTags,
-              this.badgeCache,
-              Boolean(this.login) &&
-                this.login?.toLowerCase() === channelId.replace(/^#/, '').toLowerCase(),
-            ),
-            avatarUrl: AccountStore.findByPlatform('twitch')?.avatarUrl,
-            displayName,
-            id: this.platformUserId ?? this.accountId ?? this.login ?? 'twitch-self',
-            username: this.login ?? undefined,
-          },
-          channelId,
-          reply,
-          text,
-        }),
-      )
+      const reply =
+        typeof replyTo === 'string' ? this.findReplyContext(channelId, replyTo) : replyTo
+      const message = createLocalTwitchSentMessage({
+        author: {
+          ...twitchAuthorAppearance(
+            this.selfTags,
+            this.badgeCache,
+            Boolean(this.login) &&
+              this.login?.toLowerCase() === channelId.replace(/^#/, '').toLowerCase(),
+          ),
+          avatarUrl: AccountStore.findByPlatform('twitch')?.avatarUrl,
+          displayName,
+          id: this.platformUserId ?? this.accountId ?? this.login ?? 'twitch-self',
+          username: this.login ?? undefined,
+        },
+        channelId,
+        reply,
+        text,
+      })
+      this.emit('message', message)
+      return { channelId: message.channelId, messageId: message.id }
     } catch (error) {
       log.error('[Twitch] Failed to emit local sent message', {
         channelId,
         error: String(error),
       })
+      return undefined
     }
   }
 

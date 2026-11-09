@@ -7,10 +7,16 @@ import {
   twitchMessageMetadata,
 } from '@desktop/platforms/twitch/adapter'
 import { AccountStore } from '@desktop/store/account-store'
-import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import { MessageStore } from '@desktop/store/message-store'
+import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 import { ChatClient } from '@twurple/chat'
 
 import { parseTwitchBadgeCatalog } from '../src/platforms/twitch/badge-data'
+import {
+  confirmDelivery,
+  createPendingMessage,
+  reconcilePendingMessages,
+} from '../src/views/main/utils/message-delivery'
 
 describe('createLocalTwitchSentMessage', () => {
   test('preserves Twitch first/returning/highlight/reward/bits/subscription/shared-chat metadata', () => {
@@ -316,6 +322,51 @@ describe('Twitch self message badges', () => {
         imageUrl: 'https://example.com/broadcaster.png',
       },
     ])
+  })
+
+  test('replaces an optimistic reply when its parent is missing from local history', async () => {
+    const { adapter, client, messages } = selfFixture()
+    Object.assign(adapter, { isConnected: true })
+    const account: Account = {
+      id: 'twitch:123',
+      platform: 'twitch',
+      platformUserId: '123',
+      username: 'satont',
+      displayName: 'satont',
+      scopes: [],
+      createdAt: 0,
+      updatedAt: 0,
+    }
+    const reply = {
+      parentAuthor: { id: '456', username: 'viewer', displayName: 'Viewer' },
+      parentMessageId: 'parent',
+      parentMessageText: 'recent parent',
+    }
+    const pending = createPendingMessage({ account, channelId: 'satont', text: 'reply', reply })
+    const write = Promise.withResolvers<void>()
+    const say = spyOn(client, 'say').mockReturnValue(write.promise)
+    const getRecent = spyOn(MessageStore, 'getRecent').mockReturnValue([])
+    try {
+      const sending = adapter.sendMessage(pending.channelId, pending.text, reply)
+      expect(reconcilePendingMessages([pending], messages)).toEqual([pending])
+      write.resolve()
+      const receipt = await sending
+
+      expect(say).toHaveBeenCalledWith('satont', 'reply', { replyTo: 'parent' })
+      expect(getRecent).not.toHaveBeenCalled()
+      expect(messages).toHaveLength(1)
+      expect(messages[0]).toMatchObject({
+        reply,
+        author: { badges: [{ id: 'broadcaster/1' }] },
+      })
+      expect(receipt).toEqual({ channelId: 'satont', messageId: messages[0]?.id })
+      expect(
+        reconcilePendingMessages(confirmDelivery([pending], pending.id, receipt), messages),
+      ).toEqual([])
+    } finally {
+      say.mockRestore()
+      getRecent.mockRestore()
+    }
   })
 
   test('a viewer does not gain broadcaster and receives actual per-channel USERSTATE roles', () => {

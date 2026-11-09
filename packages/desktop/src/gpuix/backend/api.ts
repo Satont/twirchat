@@ -57,6 +57,7 @@ import {
 import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
+import type { ChatReplyTarget } from '../../platforms/base-adapter'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import type { PluginTransportInfo } from '../../plugins/api'
 import { backendFetch } from '../../runtime-config'
@@ -316,7 +317,7 @@ export interface DesktopApi {
     platform: Platform
     channelId: string
     text: string
-    replyToMessageId?: string
+    replyTo?: ChatReplyTarget
   }): Promise<void | ChatSendReceipt>
   resolveAvatar(params: {
     platform: ModerationPlatform
@@ -393,7 +394,7 @@ export interface DesktopApi {
   sendWatchedChannelMessage(params: {
     id: string
     text: string
-    replyToMessageId?: string
+    replyTo?: ChatReplyTarget
   }): Promise<void | ChatSendReceipt>
   getWatchedChannelStatuses(): Promise<Array<{ channelId: string; status: PlatformStatusInfo }>>
   getPluginTransports(): readonly PluginTransportInfo[]
@@ -975,7 +976,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       })
     },
 
-    sendMessage: async ({ platform, channelId, text, replyToMessageId }) => {
+    sendMessage: async ({ platform, channelId, text, replyTo }) => {
       const command = text
         .trim()
         .match(/^\/([a-z]+)/i)?.[1]
@@ -985,7 +986,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       }
       const adapter = aggregator.getAdapter(platform)
       if (!adapter) throw new Error(`No ${platform} chat adapter is connected.`)
-      return adapter.sendMessage(channelId, text, replyToMessageId).catch((err) => {
+      return adapter.sendMessage(channelId, text, replyTo).catch((err) => {
         log.error('Failed to send message', { platform, error: String(err) })
         throw err
       })
@@ -1307,7 +1308,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return mergeChatMessageSnapshot(watchedChannelManager.getMessages(id), local.messages, 200)
     },
 
-    sendWatchedChannelMessage: async ({ id, text, replyToMessageId }) => {
+    sendWatchedChannelMessage: async ({ id, text, replyTo }) => {
       const command = text
         .trim()
         .match(/^\/([a-z]+)/i)?.[1]
@@ -1315,7 +1316,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (command && platformCommands.has(command)) {
         throw new Error('Use the platform command handler for slash commands.')
       }
-      return watchedChannelManager.sendMessage(id, text, replyToMessageId)
+      return watchedChannelManager.sendMessage(id, text, replyTo)
     },
 
     getWatchedChannelStatuses: async () => {
