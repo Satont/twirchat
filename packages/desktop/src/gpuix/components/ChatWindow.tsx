@@ -30,7 +30,7 @@ import { WatchedView } from './WatchedView'
 export function ChatWindow({
   descriptor,
 }: {
-  descriptor: Exclude<DesktopWindowDescriptor, { kind: 'main' }>
+  descriptor: Exclude<DesktopWindowDescriptor, { kind: 'main' | 'obs-remote' }>
 }) {
   const backend = useBackend()
   const scope = useWindowScope()

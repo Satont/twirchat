@@ -56,6 +56,7 @@ interface MountedWindow {
   stopVisibility?: () => void
 }
 export type WindowContentFactory = (descriptor: DesktopWindowDescriptor) => ReactNode
+const WINDOW_MANAGER_VERSION = 7
 
 interface WindowUiRuntime {
   createRoot(renderer: Renderer, id: string): Root
@@ -101,7 +102,7 @@ const currentUiRuntime: WindowUiRuntime = {
 
 /** Each window owns its React root, native editor, event route and lifetime. */
 export class DesktopWindowManager {
-  readonly runtimeVersion = 6
+  readonly runtimeVersion = WINDOW_MANAGER_VERSION
   private readonly mounted = new Map<string, MountedWindow>()
   private readonly session
   private readonly poller: ReturnType<typeof setInterval>
@@ -277,6 +278,7 @@ export class DesktopWindowManager {
       },
       openChat: (tabId, panelId, overlay) => this.openChat(tabId, panelId, overlay),
       openUser: (target) => this.openUser(target),
+      openObsRemote: () => this.openObsRemote(),
       close: () => this.close(descriptor.id),
       quit: () => this.quit(),
       toggleOverlayInertia: (target) => this.toggleOverlayInertia(descriptor.id, target),
@@ -315,6 +317,7 @@ export class DesktopWindowManager {
         })
       }
       const bounds = descriptor.bounds
+      const obsRemote = descriptor.kind === 'obs-remote'
       const options: NativeWindowOptions = {
         title: descriptor.title,
         appName: 'TwirChat',
@@ -322,8 +325,14 @@ export class DesktopWindowManager {
           process.env.TWIRCHAT_GUI_QA === '1' ? process.env.TWIRCHAT_QA_APP_ID : 'dev.twirchat.app',
         width:
           bounds?.width ??
-          (descriptor.kind === 'main' ? 1200 : descriptor.kind === 'user' ? 820 : 600),
-        height: bounds?.height ?? (descriptor.kind === 'main' ? 800 : 720),
+          (obsRemote
+            ? 1240
+            : descriptor.kind === 'main'
+              ? 1200
+              : descriptor.kind === 'user'
+                ? 820
+                : 600),
+        height: bounds?.height ?? (obsRemote ? 920 : descriptor.kind === 'main' ? 800 : 720),
         minWidth: 320,
         minHeight: 240,
         kind: descriptor.kind === 'overlay' || descriptor.kind === 'user' ? 'floating' : 'normal',
@@ -426,6 +435,17 @@ export class DesktopWindowManager {
     })
   }
 
+  async openObsRemote(): Promise<string> {
+    const id = 'obs-remote'
+    const current = this.mounted.get(id)
+    if (current?.renderer.isWindowOpen()) {
+      current.renderer.activateWindow()
+      return id
+    }
+    if (current) this.session.closed(id)
+    return this.open({ id, kind: 'obs-remote', title: 'TwirChat — OBS Remote' })
+  }
+
   async close(id: string): Promise<void> {
     const descriptor = this.mounted.get(id)?.descriptor
     if (descriptor && 'tabId' in descriptor) await saveLayoutNow(this.backend, descriptor.tabId)
@@ -508,7 +528,7 @@ export function mountDesktopWindows(
 ): DesktopWindowManager {
   const global = globalThis
   if (global.__twirchatWindows) {
-    if (global.__twirchatWindows.runtimeVersion !== 6)
+    if (global.__twirchatWindows.runtimeVersion !== WINDOW_MANAGER_VERSION)
       throw new Error('Restart TwirChat once to apply the hot-reload runtime upgrade.')
     global.__twirchatWindows.remount(factory, currentUiRuntime)
   } else {
