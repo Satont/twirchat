@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "0.11.0-twirchat.23",
+  "version": "0.11.0-twirchat.24",
   "repository": "https://github.com/remorses/gpuix.git",
   "revision": "2e31b47ff6432ceebe70e7fc7b0f51a76d7d30cf",
   "gpuiRevision": "f77e5cfe9dad04288566f00c66ecf3c58d6f84b3",
@@ -195,6 +195,21 @@
       "path": "patches/gpuix-linux-window-resize.patch",
       "root": "gpuix",
       "sha256": "2c35f567d7110998a983bccc1b3b64ca53f6a29249295db94e9be7f615798824"
+    },
+    {
+      "path": "patches/gpui-image-decode-budget.patch",
+      "root": "gpui",
+      "sha256": "2621d67bd129b0e406dbebedd9403ceda90be836952222b05d3efb4ce56e24ef"
+    },
+    {
+      "path": "patches/gpuix-image-decode-lock.patch",
+      "root": "gpuix",
+      "sha256": "7eae12a810011622ff57a21b38626952f0cd798a2e5e0d60e697aab827bc4ef0"
+    },
+    {
+      "path": "patches/gpuix-shared-image-resources.patch",
+      "root": "gpuix",
+      "sha256": "bd771106060117fe4cc050d6543d2b12b4c1e02628cd5a041eadc2dd9d8b3b46"
     }
   ],
   "cosmicText": {

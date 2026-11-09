@@ -1,0 +1,623 @@
+--- a/packages/native/src/image_resources.rs
++++ b/packages/native/src/image_resources.rs
+@@ -1,4 +1,4 @@
+-//! Per-view decoded images, shared by resource and retired with their atlas tiles.
++//! Process-shared decoded images with per-view budgets and atlas ownership.
+ //! The cache targets 64 MiB/256 entries; current visible images may exceed that
+ //! budget and stay pinned so painting never causes a decode/eviction loop.
+ 
+@@ -11,6 +11,10 @@
+ use std::collections::{BTreeMap, HashMap};
+ use std::rc::Rc;
+ use std::sync::Arc;
++#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++use std::sync::LazyLock;
++use std::time::Duration;
++use web_time::Instant;
+ 
+ type CapturedDataImage = (Arc<gpui::Image>, Option<Arc<RenderImage>>);
+ 
+@@ -162,6 +166,8 @@
+     });
+ }
+ 
++const COLD_TTL: Duration = Duration::from_secs(4 * 60);
++const EXPIRY_INTERVAL: Duration = Duration::from_secs(60);
+ const MAX_ENTRIES: usize = 256;
+ const MAX_DECODED_BYTES: usize = 64 * 1024 * 1024;
+ 
+@@ -200,6 +206,7 @@
+     stamp: u64,
+     epoch: u64,
+     bytes: usize,
++    last_used: Instant,
+ }
+ 
+ struct ResourceBudget {
+@@ -211,6 +218,7 @@
+     max_entries: usize,
+     max_bytes: usize,
+     draw_id: Option<u64>,
++    now: Instant,
+ }
+ 
+ impl ResourceBudget {
+@@ -224,6 +232,7 @@
+             max_entries,
+             max_bytes,
+             draw_id: None,
++            now: Instant::now(),
+         }
+     }
+ 
+@@ -246,10 +255,12 @@
+             stamp: self.stamp,
+             epoch: self.epoch,
+             bytes: 0,
++            last_used: self.now,
+         });
+         self.order.remove(&access.stamp);
+         access.stamp = self.stamp;
+         access.epoch = self.epoch;
++        access.last_used = self.now;
+         self.order.insert(self.stamp, resource.clone());
+     }
+ 
+@@ -259,6 +270,19 @@
+         }
+     }
+ 
++    fn expired(&self, resource: &Resource, now: Instant) -> bool {
++        self.entries.get(resource).is_some_and(|access| {
++            access.epoch < self.epoch && now.saturating_duration_since(access.last_used) >= COLD_TTL
++        })
++    }
++
++    fn remove(&mut self, resource: &Resource) {
++        if let Some(access) = self.entries.remove(resource) {
++            self.order.remove(&access.stamp);
++            self.bytes -= access.bytes;
++        }
++    }
++
+     fn set_bytes(&mut self, resource: &Resource, bytes: usize) {
+         if let Some(access) = self.entries.get_mut(resource) {
+             self.bytes -= access.bytes;
+@@ -294,15 +318,183 @@
+     }
+ }
+ 
++#[derive(Clone)]
+ enum ImageState {
+     Loading(ImageLoadingTask),
+     Loaded(Result<Arc<RenderImage>, ImageCacheError>),
+ }
+ 
++#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
++struct ImageOwner {
++    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++    thread: std::thread::ThreadId,
++    window: gpui::WindowId,
++}
++
++impl ImageOwner {
++    fn new(window: gpui::WindowId) -> Self {
++        Self {
++            #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++            thread: std::thread::current().id(),
++            window,
++        }
++    }
++}
++
++#[derive(Clone, Eq, Hash, PartialEq)]
++struct SharedResource {
++    resource: Resource,
++    local: Option<ImageOwner>,
++}
++
++impl SharedResource {
++    fn new(resource: &Resource, owner: ImageOwner) -> Self {
++        let process_shared = match resource {
++            Resource::Uri(_) => true,
++            Resource::Path(path) => path.is_absolute(),
++            Resource::Embedded(_) => false,
++        };
++        Self {
++            resource: resource.clone(),
++            local: (!process_shared).then_some(owner),
++        }
++    }
++}
++
++struct SharedEntry {
++    state: ImageState,
++    owners: HashMap<ImageOwner, usize>,
++}
++
++#[derive(Default)]
++struct SharedImages(HashMap<SharedResource, SharedEntry>);
++
++#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++static SHARED_IMAGES: LazyLock<parking_lot::Mutex<SharedImages>> =
++    LazyLock::new(|| parking_lot::Mutex::new(SharedImages::default()));
++
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++thread_local! {
++    static SHARED_IMAGES: RefCell<SharedImages> = RefCell::new(SharedImages::default());
++}
++
++impl SharedImages {
++    fn with<R>(action: impl FnOnce(&mut Self) -> R) -> R {
++        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++        {
++            action(&mut SHARED_IMAGES.lock())
++        }
++        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++        {
++            SHARED_IMAGES.with(|images| action(&mut images.borrow_mut()))
++        }
++    }
++
++    fn acquire(
++        &mut self,
++        resource: &Resource,
++        owner: ImageOwner,
++        cx: &mut App,
++    ) -> (ImageState, bool) {
++        let key = SharedResource::new(resource, owner);
++        if let Some(entry) = self.0.get_mut(&key) {
++            *entry.owners.entry(owner).or_default() += 1;
++            return (entry.state.clone(), false);
++        }
++        let future = AssetLogger::<ImageAssetLoader>::load(resource.clone(), cx);
++        let executor = cx.background_executor().clone();
++        let keep_alive = executor.clone();
++        // Scheduler wakeups hold a Weak reference. Keep the background dispatcher
++        // alive until decode finishes, even if the creating window/App closes.
++        let state = ImageState::Loading(
++            executor
++                .spawn(async move {
++                    let result = future.await;
++                    drop(keep_alive);
++                    result
++                })
++                .shared(),
++        );
++        self.0.insert(
++            key,
++            SharedEntry {
++                state: state.clone(),
++                owners: HashMap::from([(owner, 1)]),
++            },
++        );
++        (state, true)
++    }
++
++    // Move retired tasks/pixels outside the mutex before dropping them.
++    fn release(&mut self, resource: &Resource, owner: ImageOwner) -> (Option<SharedEntry>, bool) {
++        let key = SharedResource::new(resource, owner);
++        let Some(entry) = self.0.get_mut(&key) else {
++            return (None, false);
++        };
++        if let Some(count) = entry.owners.get_mut(&owner) {
++            *count -= 1;
++            if *count == 0 {
++                entry.owners.remove(&owner);
++            }
++        }
++        let window_owned = entry.owners.contains_key(&owner);
++        let retired = if entry.owners.is_empty() {
++            self.0.remove(&key)
++        } else {
++            None
++        };
++        (retired, window_owned)
++    }
++}
++
++struct ImageLease {
++    resource: Resource,
++    owner: ImageOwner,
++    active: bool,
++}
++
++impl ImageLease {
++    fn release(&mut self) -> (Option<SharedEntry>, bool) {
++        if !std::mem::replace(&mut self.active, false) {
++            return (None, false);
++        }
++        SharedImages::with(|images| images.release(&self.resource, self.owner))
++    }
++}
++
++impl Drop for ImageLease {
++    fn drop(&mut self) {
++        // App teardown/unwinding may skip observe_release. No atlas operation is
++        // needed then: the window owns it. The registry must still lose its lease.
++        drop(self.release());
++    }
++}
++
++fn release_image(mut entry: Entry, window: Option<&mut Window>, cx: &mut App) {
++    let (retired, window_owned) = entry.lease.release();
++    let last = retired.is_some();
++    drop(retired);
++    let ImageState::Loaded(Ok(image)) = entry.state else {
++        return;
++    };
++    if last {
++        cx.drop_image(image, window);
++    } else if !window_owned {
++        // On release the closed window disposes its own atlas. A live window
++        // can retire its tiles while another window keeps the decoded pixels.
++        if let Some(window) = window {
++            if let Err(error) = window.drop_image(image) {
++                log::error!("Failed to retire image atlas tiles: {error}");
++            }
++        }
++    }
++}
++
+ struct Entry {
++    lease: ImageLease,
+     load: u64,
+     state: ImageState,
+-    _completion: Task<()>,
++    _completion: Option<Task<()>>,
+     completing: Rc<Cell<bool>>,
+ }
+ 
+@@ -315,6 +507,7 @@
+     decodes: u64,
+     evictions: u64,
+     settle_pending: bool,
++    expiry: Option<Task<()>>,
+ }
+ 
+ impl ImageResources {
+@@ -328,18 +521,12 @@
+             decodes: 0,
+             evictions: 0,
+             settle_pending: false,
++            expiry: None,
+         });
+         cx.observe_release(&cache, |cache, cx| {
++            cache.expiry = None;
+             for (_, entry) in cache.entries.drain() {
+-                match entry.state {
+-                    ImageState::Loaded(Ok(image)) => cx.drop_image(image, None),
+-                    ImageState::Loading(task) => {
+-                        if let Some(Ok(image)) = task.now_or_never() {
+-                            cx.drop_image(image, None);
+-                        }
+-                    }
+-                    ImageState::Loaded(Err(_)) => {}
+-                }
++                release_image(entry, None, cx);
+             }
+             cache.budget.entries.clear();
+             cache.budget.order.clear();
+@@ -359,6 +546,7 @@
+ 
+     pub(crate) fn begin_frame(&mut self, window: &mut Window, cx: &mut App) {
+         if self.budget.begin_draw(window.draw_id()) {
++            self.budget.now = cx.background_executor().now();
+             self.trim(true, window, cx);
+         }
+     }
+@@ -407,16 +595,10 @@
+                 break;
+             };
+             if let Some(entry) = self.entries.remove(&resource) {
+-                match entry.state {
+-                    ImageState::Loaded(Ok(image)) => cx.drop_image(image, Some(window)),
+-                    ImageState::Loading(task) => {
+-                        self.loading -= 1;
+-                        if let Some(Ok(image)) = task.now_or_never() {
+-                            cx.drop_image(image, Some(window));
+-                        }
+-                    }
+-                    ImageState::Loaded(Err(_)) => {}
++                if matches!(entry.state, ImageState::Loading(_)) {
++                    self.loading -= 1;
+                 }
++                release_image(entry, Some(window), cx);
+                 self.evictions += 1;
+                 changed = true;
+             }
+@@ -424,11 +606,63 @@
+         if changed {
+             self.publish();
+         }
++        if self.entries.is_empty() {
++            self.expiry = None;
++        }
+         if protect_previous {
+             self.schedule_settle(window, cx);
+         }
+     }
+ 
++    fn start_expiry(&mut self, window: &Window, cx: &App) {
++        if self.expiry.is_some() {
++            return;
++        }
++        let weak = self.weak.clone();
++        self.expiry = Some(window.spawn(cx, async move |cx| {
++            loop {
++                cx.background_executor().timer(EXPIRY_INTERVAL).await;
++                let keep_running = cx.update(|window, cx| {
++                    weak.update(cx, |cache, cx| {
++                        cache.expire(cx.background_executor().now(), window, cx);
++                        !cache.entries.is_empty()
++                    })
++                });
++                if !matches!(keep_running, Ok(Ok(true))) {
++                    break;
++                }
++            }
++        }));
++    }
++
++    fn expire(&mut self, now: Instant, window: &mut Window, cx: &mut App) {
++        // Timer updates run between synchronous draws. The current epoch is the
++        // last painted scene, even while idle or minimized; it must remain pinned.
++        while let Some((_, resource)) = self.budget.order.first_key_value() {
++            if !self.budget.expired(resource, now)
++                || self
++                    .entries
++                    .get(resource)
++                    .is_some_and(|entry| entry.completing.get())
++            {
++                break;
++            }
++            let resource = resource.clone();
++            self.budget.remove(&resource);
++            if let Some(entry) = self.entries.remove(&resource) {
++                if matches!(entry.state, ImageState::Loading(_)) {
++                    self.loading -= 1;
++                }
++                release_image(entry, Some(window), cx);
++                self.evictions += 1;
++            }
++        }
++        self.publish();
++        if self.entries.is_empty() {
++            self.expiry = None;
++        }
++    }
++
+     fn schedule_settle(&mut self, window: &mut Window, _cx: &mut App) {
+         if self.budget.is_over_budget() && !self.settle_pending {
+             self.settle_pending = true;
+@@ -460,6 +694,15 @@
+             return;
+         }
+         let bytes = result.as_ref().map_or(0, |image| decoded_bytes(image));
++        let previous = SharedImages::with(|images| {
++            images
++                .0
++                .get_mut(&SharedResource::new(&resource, entry.lease.owner))
++                .map(|shared| {
++                    std::mem::replace(&mut shared.state, ImageState::Loaded(result.clone()))
++                })
++        });
++        drop(previous);
+         entry.state = ImageState::Loaded(result);
+         self.loading -= 1;
+         self.budget.set_bytes(&resource, bytes);
+@@ -491,17 +734,48 @@
+             };
+         }
+ 
+-        capture_managed(
+-            self.weak.entity_id(),
+-            window.window_handle().window_id(),
+-            resource,
+-            None,
+-        );
+-        self.decodes += 1;
++        let window_id = window.window_handle().window_id();
++        let owner = ImageOwner::new(window_id);
++        let (state, started) = SharedImages::with(|images| images.acquire(resource, owner, cx));
++        let lease = ImageLease {
++            resource: resource.clone(),
++            owner,
++            active: true,
++        };
++        self.decodes += u64::from(started);
++        // A lease gets a unique local generation even when no decode was started.
++        let load = self.budget.stamp;
++        self.start_expiry(window, cx);
++        let task = match state {
++            ImageState::Loaded(result) => {
++                self.budget.set_bytes(
++                    resource,
++                    result.as_ref().map_or(0, |image| decoded_bytes(image)),
++                );
++                self.entries.insert(
++                    resource.clone(),
++                    Entry {
++                        lease,
++                        load,
++                        state: ImageState::Loaded(result.clone()),
++                        _completion: None,
++                        completing: Rc::new(Cell::new(false)),
++                    },
++                );
++                capture_managed(
++                    self.weak.entity_id(),
++                    window_id,
++                    resource,
++                    result.is_ok().then_some(load),
++                );
++                self.publish();
++                self.trim(true, window, cx);
++                return Some(result);
++            }
++            ImageState::Loading(task) => task,
++        };
++        capture_managed(self.weak.entity_id(), window_id, resource, None);
+         self.loading += 1;
+-        let load = self.decodes;
+-        let future = AssetLogger::<ImageAssetLoader>::load(resource.clone(), cx);
+-        let task = cx.background_executor().spawn(future).shared();
+         let completion_task = task.clone();
+         let completion_resource = resource.clone();
+         let weak = self.weak.clone();
+@@ -527,9 +801,10 @@
+         self.entries.insert(
+             resource.clone(),
+             Entry {
++                lease,
+                 load,
+                 state: ImageState::Loading(task),
+-                _completion: completion,
++                _completion: Some(completion),
+                 completing,
+             },
+         );
+@@ -555,6 +830,143 @@
+     }
+ 
+     #[test]
++    fn expiry_preserves_idle_paint_and_waits_for_a_later_draw() {
++        let mut budget = ResourceBudget::new(256, usize::MAX);
++        let start = budget.now;
++        budget.begin_draw(1);
++        budget.touch(&resource("old"));
++        let expired = start + COLD_TTL;
++        assert!(!budget.expired(&resource("old"), expired));
++        assert!(!budget.begin_draw(1));
++        assert!(!budget.expired(&resource("old"), expired));
++        budget.begin_draw(2);
++        assert!(!budget.expired(&resource("old"), expired - Duration::from_millis(1)));
++        assert!(budget.expired(&resource("old"), expired));
++        budget.now = expired;
++        budget.touch_captured(&[(resource("old"), 1)]);
++        assert!(!budget.expired(&resource("old"), expired + COLD_TTL));
++        budget.begin_draw(3);
++        assert!(!budget.expired(
++            &resource("old"),
++            expired + COLD_TTL - Duration::from_millis(1)
++        ));
++        assert!(budget.expired(&resource("old"), expired + COLD_TTL));
++        budget.remove(&resource("old"));
++        assert!(budget.entries.is_empty());
++        assert!(budget.order.is_empty());
++    }
++
++    #[test]
++    fn shared_lease_keeps_identity_until_last_same_window_owner_leaves() {
++        let window = ImageOwner::new(gpui::WindowId::default());
++        let key = SharedResource::new(&resource("exact"), window);
++        let image = Arc::new(RenderImage::from_bgra(1, 1, vec![0; 4]).unwrap());
++        let state = ImageState::Loaded(Ok(image.clone()));
++        let mut shared = SharedImages::default();
++        shared.0.insert(
++            key.clone(),
++            SharedEntry {
++                state,
++                owners: HashMap::from([(window, 2)]),
++            },
++        );
++        assert!(
++            !shared
++                .0
++                .contains_key(&SharedResource::new(&resource("other"), window))
++        );
++        let (retired, owned) = shared.release(&resource("exact"), window);
++        assert!(retired.is_none() && owned);
++        let ImageState::Loaded(Ok(retained)) = &shared.0[&key].state else {
++            panic!("decoded image must remain available to the surviving lease");
++        };
++        assert!(Arc::ptr_eq(&image, retained));
++        let (retired, owned) = shared.release(&resource("exact"), window);
++        assert!(retired.is_some() && !owned);
++        assert!(shared.0.is_empty());
++    }
++
++    #[test]
++    fn last_lease_removes_loading_and_failed_registry_keys() {
++        let window = ImageOwner::new(gpui::WindowId::default());
++        let error = ImageCacheError::Asset("missing".into());
++        let mut shared = SharedImages::default();
++        for state in [
++            ImageState::Loading(Task::ready(Err(error.clone())).shared()),
++            ImageState::Loaded(Err(error)),
++        ] {
++            shared.0.insert(
++                SharedResource::new(&resource("missing"), window),
++                SharedEntry {
++                    state,
++                    owners: HashMap::from([(window, 1)]),
++                },
++            );
++            let (retired, owned) = shared.release(&resource("missing"), window);
++            assert!(retired.is_some() && !owned);
++            assert!(shared.0.is_empty());
++        }
++    }
++
++    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
++    #[test]
++    fn separate_app_threads_share_absolute_resources_but_not_local_sources() {
++        let first = ImageOwner::new(gpui::WindowId::default());
++        let second = std::thread::spawn(|| ImageOwner::new(gpui::WindowId::default()))
++            .join()
++            .unwrap();
++        assert_ne!(first, second);
++        let absolute = Resource::Path(std::env::temp_dir().join("shared-emote.png").into());
++        assert!(SharedResource::new(&absolute, first) == SharedResource::new(&absolute, second));
++        assert!(
++            SharedResource::new(&resource("embedded"), first)
++                != SharedResource::new(&resource("embedded"), second)
++        );
++        let relative = Resource::Path(std::path::PathBuf::from("emote.png").into());
++        assert!(SharedResource::new(&relative, first) != SharedResource::new(&relative, second));
++        let mut shared = SharedImages::default();
++        let key = SharedResource::new(&absolute, first);
++        let image = Arc::new(RenderImage::from_bgra(1, 1, vec![0; 4]).unwrap());
++        shared.0.insert(
++            key.clone(),
++            SharedEntry {
++                state: ImageState::Loaded(Ok(image.clone())),
++                owners: HashMap::from([(first, 1), (second, 1)]),
++            },
++        );
++        let (retired, owned) = shared.release(&absolute, first);
++        assert!(retired.is_none() && !owned);
++        let ImageState::Loaded(Ok(retained)) = &shared.0[&key].state else {
++            panic!("surviving App lost pixels");
++        };
++        assert!(Arc::ptr_eq(&image, retained));
++        let (retired, owned) = shared.release(&absolute, second);
++        assert!(retired.is_some() && !owned && shared.0.is_empty());
++    }
++
++    #[test]
++    fn dropping_a_lease_cleans_registry_without_an_app_release_observer() {
++        let owner = ImageOwner::new(gpui::WindowId::default());
++        let resource = resource("drop-without-observer");
++        let key = SharedResource::new(&resource, owner);
++        SharedImages::with(|shared| {
++            shared.0.insert(
++                key.clone(),
++                SharedEntry {
++                    state: ImageState::Loaded(Err(ImageCacheError::Asset("missing".into()))),
++                    owners: HashMap::from([(owner, 1)]),
++                },
++            );
++        });
++        drop(ImageLease {
++            resource,
++            owner,
++            active: true,
++        });
++        SharedImages::with(|shared| assert!(!shared.0.contains_key(&key)));
++    }
++
++    #[test]
+     fn revisiting_a_source_deduplicates_entries_and_lru_links() {
+         let mut budget = ResourceBudget::new(2, 100);
+         budget.begin_frame();
