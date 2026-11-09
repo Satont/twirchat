@@ -9,7 +9,11 @@ import { z } from 'zod'
 
 import { runInBackground } from './background-task'
 import { deleteOldestEntry } from './bounded-cache'
-import { parseTwitchAutoModEvent, type TwitchAutoModEvent } from './twitch-automod'
+import {
+  buildTwitchAutoModSenderNotice,
+  parseTwitchAutoModEvent,
+  type TwitchAutoModEvent,
+} from './twitch-automod'
 import { buildTwitchModerationNotice } from './twitch-moderation-notice'
 
 export interface EventSubSocket {
@@ -21,6 +25,8 @@ export interface EventSubSocket {
 
 export interface TwitchEventSubDependencies {
   hasAccount(): boolean
+  senderUserId?: string
+  receiveWhispers?: boolean
   socket?(url: string): EventSubSocket
   subscribe(
     sessionId: string,
@@ -29,6 +35,7 @@ export interface TwitchEventSubDependencies {
   unsubscribe(ids: string[]): Promise<void>
   activity(event: TwitchActivityEvent): void
   autoMod(event: TwitchAutoModEvent): void
+  senderNotice?(message: NormalizedChatMessage): void
   moderationNotice?(message: NormalizedChatMessage): void
   whisper(event: TwitchWhisper): void
   status(status: TwitchEventSubStatus): void
@@ -57,7 +64,8 @@ export class TwitchEventSubClient {
   private sessionId: string | null = null
   private channels = new Map<string, number>()
   private subscriptions = new Map<string, string[]>()
-  private registering = new Set<string>()
+  private registering = new Map<string, symbol>()
+  private unregistering = new Map<string, Promise<void>>()
   private seenMessages = new Set<string>()
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined
   private keepaliveTimer: ReturnType<typeof setTimeout> | undefined
@@ -93,8 +101,9 @@ export class TwitchEventSubClient {
     this.sessionId = null
     this.subscriptions.clear()
     this.registering.clear()
+    this.unregistering.clear()
     this.seenMessages.clear()
-    this.dependencies.autoMod({ type: 'clear' })
+    this.clearAutoMod()
     this.dependencies.status({ status: 'disconnected' })
   }
 
@@ -107,23 +116,37 @@ export class TwitchEventSubClient {
       this.start()
       if (this.sessionId && count === 0) await this.register(key)
     } else if (count > 1) this.channels.set(key, count - 1)
-    else {
+    else if (count > 0) {
       this.channels.delete(key)
       this.dependencies.autoMod({ type: 'clear', channelSlug: key })
       const ids = this.subscriptions.get(key) ?? []
       this.subscriptions.delete(key)
-      if (ids.length) {
-        try {
-          await this.dependencies.unsubscribe(ids)
-        } catch {
-          this.dependencies.status({
-            status: 'error',
-            message:
-              'Could not remove the Twitch event subscription. It will be discarded when the connection closes.',
-          })
-        }
-      }
+      await this.removeSubscriptions(key, ids)
     }
+  }
+
+  private async removeSubscriptions(key: string, ids: string[]): Promise<void> {
+    if (!ids.length) return
+    const generation = this.generation
+    const removing = this.dependencies.unsubscribe(ids).catch(() => {
+      if (generation === this.generation)
+        this.dependencies.status({
+          status: 'error',
+          message:
+            'Could not remove the Twitch event subscription. It will be discarded when the connection closes.',
+        })
+    })
+    this.unregistering.set(key, removing)
+    try {
+      await removing
+    } finally {
+      if (this.unregistering.get(key) === removing) this.unregistering.delete(key)
+    }
+  }
+
+  private clearAutoMod(): void {
+    for (const channelSlug of this.channels.keys())
+      this.dependencies.autoMod({ type: 'clear', channelSlug })
   }
 
   private connect(url: string, migration = false): void {
@@ -198,7 +221,8 @@ export class TwitchEventSubClient {
         if (!migrating) {
           this.subscriptions.clear()
           this.registering.clear()
-          runInBackground(this.register(''), 'twitch-eventsub background operation failed')
+          if (this.dependencies.receiveWhispers !== false)
+            runInBackground(this.register(''), 'twitch-eventsub background operation failed')
           for (const channel of this.channels.keys())
             runInBackground(this.register(channel), 'twitch-eventsub background operation failed')
         }
@@ -249,8 +273,9 @@ export class TwitchEventSubClient {
       this.sessionId = null
       this.generation++
       this.registering.clear()
+      this.unregistering.clear()
       clearTimeout(this.keepaliveTimer)
-      this.dependencies.autoMod({ type: 'clear' })
+      this.clearAutoMod()
       this.dependencies.status({ status: 'disconnected' })
       this.scheduleReconnect()
     }
@@ -296,17 +321,24 @@ export class TwitchEventSubClient {
   private async register(key: string): Promise<void> {
     const sessionId = this.sessionId
     if (!sessionId || this.registering.has(key) || this.subscriptions.has(key)) return
-    this.registering.add(key)
+    const registration = Symbol()
+    this.registering.set(key, registration)
     const generation = this.generation
     try {
+      const removing = this.unregistering.get(key)
+      if (removing) {
+        await removing
+        if (generation !== this.generation || (key && !this.channels.has(key))) return
+      }
       const result = await this.dependencies.subscribe(sessionId, key || undefined)
       const ids = result.subscriptions.map((subscription) => subscription.id)
-      if (
-        generation !== this.generation ||
-        sessionId !== this.sessionId ||
-        (key && !this.channels.has(key))
-      ) {
+      if (generation !== this.generation || sessionId !== this.sessionId) {
         if (ids.length) await this.dependencies.unsubscribe(ids)
+        return
+      }
+      if (key && !this.channels.has(key)) {
+        this.registering.delete(key)
+        await this.removeSubscriptions(key, ids)
         return
       }
       this.subscriptions.set(key, ids)
@@ -316,13 +348,13 @@ export class TwitchEventSubClient {
           message: result.errors.join(' ').slice(0, 500),
         })
     } catch {
-      if (!this.stopped)
+      if (generation === this.generation)
         this.dependencies.status({
           status: 'error',
           message: 'Could not subscribe to Twitch events. Reconnect Twitch to update permissions.',
         })
     } finally {
-      this.registering.delete(key)
+      if (this.registering.get(key) === registration) this.registering.delete(key)
     }
   }
 
@@ -336,6 +368,21 @@ export class TwitchEventSubClient {
       if (event && this.channels.has(event.channelSlug)) this.dependencies.autoMod(event)
       return
     }
+    if (
+      eventType === 'channel.chat.user_message_hold' ||
+      eventType === 'channel.chat.user_message_update'
+    ) {
+      const senderUserId = this.dependencies.senderUserId
+      if (!senderUserId) return
+      const notice = buildTwitchAutoModSenderNotice(
+        eventType,
+        data,
+        senderUserId,
+        envelope.metadata?.message_timestamp,
+      )
+      if (notice && this.channels.has(notice.channelId)) this.dependencies.senderNotice?.(notice)
+      return
+    }
     if (eventType === 'channel.moderate') {
       const notice = buildTwitchModerationNotice(
         data,
@@ -347,6 +394,7 @@ export class TwitchEventSubClient {
       return
     }
     if (eventType === 'user.whisper.message') {
+      if (this.dependencies.receiveWhispers === false) return
       const whisper = z.object({ text: z.string().optional() }).optional().parse(data.whisper)
       this.dependencies.whisper({
         id: String(data.whisper_id ?? envelope.metadata?.message_id ?? ''),

@@ -273,6 +273,7 @@ class FixtureClient implements TwitchSenderClient {
   onConnect(handler: () => void) {
     this.connectHandler = handler
   }
+  onDisconnect() {}
   onAuthenticationFailure(handler: () => void) {
     this.authHandler = handler
   }
@@ -295,18 +296,27 @@ test('a sending connection joins once, confirms through USERSTATE and reports NO
       return token
     },
     createClient: (value) => {
-      const client = new FixtureClient(value, (fixture, channel) =>
-        fixture.said.at(-1)?.endsWith('dupe')
-          ? fixture.rejected(channel, 'msg_duplicate')
-          : fixture.userState(`#${channel}`, new Map([['badges', 'moderator/1']])),
-      )
+      const client = new FixtureClient(value, (fixture, channel) => {
+        const sent = fixture.said.at(-1)
+        if (sent?.endsWith('silent')) return
+        if (sent?.endsWith('held')) fixture.rejected(`#${channel}`, 'msg_rejected')
+        else if (sent?.endsWith('dupe')) fixture.rejected(channel, 'msg_duplicate')
+        else
+          fixture.userState(
+            `#${channel}`,
+            new Map([
+              ['badges', 'moderator/1'],
+              ['id', 'sent-message'],
+            ]),
+          )
+      })
       clients.push(client)
       return client
     },
     acquire: async (_account, channel, privileged) => {
       acquired.push(`${channel}:${privileged}`)
     },
-    outcomeTimeoutMs: 1_000,
+    outcomeTimeoutMs: 50,
   })
   const alt = { id: 'twitch:alt', username: 'useralt' }
 
@@ -316,13 +326,24 @@ test('a sending connection joins once, confirms through USERSTATE and reports NO
   await expect(pool.send(alt, 'pixelfox', 'dupe')).rejects.toThrow(
     'Twitch did not send the message from @useralt: the same message was sent less than 30 seconds ago.',
   )
+  await pool.send(alt, 'pixelfox', 'silent')
+  expect(await pool.send(alt, 'pixelfox', 'held')).toEqual({
+    channelId: 'pixelfox',
+    held: true,
+  })
   // The first token was refused, so the pool refreshed it once and reconnected.
   expect(clients.map((client) => client.token)).toEqual(['bad', 'fresh'])
   const client = required(clients[1])
   expect(client.joins).toEqual(['pixelfox'])
-  expect(client.said).toEqual(['pixelfox:hello', 'pixelfox:again', 'pixelfox:dupe'])
+  expect(client.said).toEqual([
+    'pixelfox:hello',
+    'pixelfox:again',
+    'pixelfox:dupe',
+    'pixelfox:silent',
+    'pixelfox:held',
+  ])
   // The moderator role from the first USERSTATE lifts the spacing for later messages.
-  expect(acquired).toEqual(['pixelfox:false', 'pixelfox:true', 'pixelfox:true'])
+  expect(acquired).toEqual(['pixelfox:false', ...Array(4).fill('pixelfox:true')])
 
   pool.release(alt.id, 'pixelfox')
   await Bun.sleep(0)

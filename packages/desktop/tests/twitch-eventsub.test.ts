@@ -9,6 +9,7 @@ import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
 import type { TwitchAutoModEvent } from '../src/services/twitch-automod'
 import { TwitchEventSubClient, type EventSubSocket } from '../src/services/twitch-eventsub'
+import { createTwitchEventSubAccounts } from '../src/services/twitch-eventsub-accounts'
 import { required } from './fixture-values'
 
 class FakeSocket implements EventSubSocket {
@@ -58,6 +59,9 @@ async function settle() {
   await Bun.sleep(5)
 }
 function fixture(override?: {
+  senderUserId?: string
+  receiveWhispers?: boolean
+  unsubscribe?: (ids: string[]) => Promise<void>
   subscribe?: (
     session: string,
     channel?: string,
@@ -72,11 +76,14 @@ function fixture(override?: {
   const activities: TwitchActivityEvent[] = []
   const autoMod: TwitchAutoModEvent[] = []
   const moderationNotices: NormalizedChatMessage[] = []
+  const senderNotices: NormalizedChatMessage[] = []
   const whispers: TwitchWhisper[] = []
   const statuses: TwitchEventSubStatus[] = []
   let account = true
   const client = new TwitchEventSubClient({
     hasAccount: () => account,
+    senderUserId: override?.senderUserId,
+    receiveWhispers: override?.receiveWhispers,
     socket: (url) => {
       const socket = new FakeSocket(url)
       sockets.push(socket)
@@ -100,10 +107,12 @@ function fixture(override?: {
       }),
     unsubscribe: async (ids) => {
       removed.push(ids)
+      await override?.unsubscribe?.(ids)
     },
     activity: (event) => activities.push(event),
     autoMod: (event) => autoMod.push(event),
     moderationNotice: (message) => moderationNotices.push(message),
+    senderNotice: (message) => senderNotices.push(message),
     whisper: (event) => whispers.push(event),
     status: (status) => statuses.push(status),
     reconnectDelayMs: 1,
@@ -117,6 +126,7 @@ function fixture(override?: {
     activities,
     autoMod,
     moderationNotices,
+    senderNotices,
     whispers,
     statuses,
     setAccount: (value: boolean) => {
@@ -200,7 +210,69 @@ describe('Twitch EventSub lifecycle', () => {
     expect(f.autoMod.at(-1)).toEqual({ type: 'clear', channelSlug: 'creator' })
     expect(f.autoMod).toHaveLength(3)
     f.client.stop()
-    expect(f.autoMod.at(-1)).toEqual({ type: 'clear' })
+    expect(f.autoMod).toHaveLength(3)
+  })
+
+  test('delivers sender status privately for the authorized user and watched channel', async () => {
+    const f = fixture({ senderUserId: '100', receiveWhispers: false })
+    await f.client.watch('creator', true)
+    const socket = required(f.sockets[0])
+    socket.welcome()
+    await settle()
+    expect(f.registrations).toEqual(['session:creator'])
+
+    const event = {
+      broadcaster_user_id: '200',
+      broadcaster_user_login: 'Creator',
+      user_id: '100',
+      message_id: 'held-message',
+      message: { text: 'private text' },
+    }
+    socket.message('notification', {
+      subscription: { type: 'user.whisper.message' },
+      event: { whisper_id: 'alt-whisper' },
+    })
+    const senderHold = { type: 'channel.chat.user_message_hold' }
+    socket.message('notification', { subscription: senderHold, event }, 'hold-notification')
+    socket.message('notification', { subscription: senderHold, event }, 'hold-notification')
+    socket.message('notification', {
+      subscription: senderHold,
+      event: { ...event, user_id: '999' },
+    })
+    socket.message('notification', {
+      subscription: senderHold,
+      event: { ...event, broadcaster_user_login: 'other' },
+    })
+    for (const status of ['approved', 'denied', 'invalid', 'expired']) {
+      socket.message('notification', {
+        subscription: { type: 'channel.chat.user_message_update' },
+        event: { ...event, status },
+      })
+    }
+    expect(f.whispers).toEqual([])
+    expect(f.autoMod).toEqual([])
+    expect(f.senderNotices.map(({ id, channelId, text }) => [id, channelId, text])).toEqual([
+      [
+        'twitch:notice:automod:100:held-message:held',
+        'creator',
+        'AutoMod: Your message is being reviewed by the moderators.',
+      ],
+      [
+        'twitch:notice:automod:100:held-message:approved',
+        'creator',
+        'AutoMod: The moderators approved your message.',
+      ],
+      [
+        'twitch:notice:automod:100:held-message:denied',
+        'creator',
+        'AutoMod: The moderators did not approve your message.',
+      ],
+      [
+        'twitch:notice:automod:100:held-message:invalid',
+        'creator',
+        'AutoMod: Your held message was removed from the review queue without being sent.',
+      ],
+    ])
   })
 
   test('shares one socket and refcounts channel subscriptions', async () => {
@@ -330,20 +402,25 @@ describe('Twitch EventSub lifecycle', () => {
     expect(f.sockets).toHaveLength(1)
   })
 
-  test('cleans subscriptions that finish registering after a channel was closed', async () => {
+  test('cleans a late subscription before registering a reopened channel', async () => {
     let finish:
       | ((value: {
           subscriptions: { id: string; type: string; condition: Record<string, string> }[]
           errors: string[]
         }) => void)
       | undefined
+    const removal = Promise.withResolvers<void>()
+    let channelRegistrations = 0
     const f = fixture({
-      subscribe: async (_session, channel) =>
-        channel
-          ? new Promise((resolve) => {
-              finish = resolve
-            })
-          : { subscriptions: [], errors: [] },
+      subscribe: async (_session, channel) => {
+        if (!channel) return { subscriptions: [], errors: [] }
+        channelRegistrations++
+        if (channelRegistrations > 1) return { subscriptions: [], errors: [] }
+        return new Promise((resolve) => {
+          finish = resolve
+        })
+      },
+      unsubscribe: () => removal.promise,
     })
     await f.client.watch('creator', true)
     required(f.sockets[0]).welcome()
@@ -354,5 +431,82 @@ describe('Twitch EventSub lifecycle', () => {
     })
     await settle()
     expect(f.removed).toEqual([['late']])
+    const rewatch = f.client.watch('creator', true)
+    await settle()
+    expect(channelRegistrations).toBe(1)
+    removal.resolve()
+    await rewatch
+    expect(channelRegistrations).toBe(2)
   })
+})
+
+test('routes watched channels to their selected account and closes unused alternate sockets', async () => {
+  const first = { id: 'first', platformUserId: '100', username: 'creator' }
+  const second = { id: 'second', platformUserId: '200', username: 'moderator' }
+  let primary = first
+  const choices = new Map<string, typeof first>()
+  const connections: { accountId: string; fixture: ReturnType<typeof fixture> }[] = []
+  const cleared: string[] = []
+  const router = createTwitchEventSubAccounts({
+    activeAccount: () => primary,
+    channelAccount: (channel) => choices.get(channel) ?? primary,
+    createClient(account, isPrimary) {
+      const connection = fixture({
+        senderUserId: account.platformUserId,
+        receiveWhispers: isPrimary,
+      })
+      connections.push({ accountId: account.id, fixture: connection })
+      return connection.client
+    },
+    clearAutoMod: (channel) => cleared.push(channel),
+  })
+
+  router.watch('friend', true)
+  router.watch('#Friend', true)
+  const primaryConnection = required(connections[0]).fixture
+  const primarySocket = required(primaryConnection.sockets[0])
+  primarySocket.welcome('primary')
+  await settle()
+  expect(primaryConnection.registrations).toEqual([
+    'primary:whispers',
+    'primary:creator',
+    'primary:friend',
+  ])
+
+  choices.set('friend', second)
+  router.refresh()
+  expect(router.ownsChannel(first.id, 'friend')).toBe(false)
+  expect(router.ownsChannel(second.id, 'friend')).toBe(true)
+  expect(cleared).toEqual(['friend'])
+  primarySocket.message('notification', hold('friend'))
+  expect(primaryConnection.autoMod.filter((event) => event.type === 'hold')).toEqual([])
+  expect(primaryConnection.removed).toEqual([['primary:friend']])
+
+  choices.set('other', second)
+  router.watch('other', true)
+  const alternate = required(connections[1]).fixture
+  expect(connections.map((connection) => connection.accountId)).toEqual([first.id, second.id])
+  const alternateSocket = required(alternate.sockets[0])
+  alternateSocket.welcome('alternate')
+  await settle()
+  expect(alternate.registrations).toEqual(['alternate:friend', 'alternate:other'])
+  alternateSocket.message('notification', hold('friend'))
+  expect(alternate.autoMod.at(-1)).toMatchObject({ type: 'hold', blockedTerm: true })
+  router.watch('friend', false)
+  expect(router.ownsChannel(second.id, 'friend')).toBe(true)
+  router.watch('friend', false)
+  expect(router.ownsChannel(second.id, 'friend')).toBe(false)
+  expect(alternateSocket.closed).toBe(false)
+  router.watch('other', false)
+  expect(alternateSocket.closed).toBe(true)
+  expect(primarySocket.closed).toBe(false)
+
+  primary = second
+  router.refresh(true)
+  expect(primarySocket.closed).toBe(true)
+  const newPrimary = required(connections[2]).fixture
+  required(newPrimary.sockets[0]).welcome('new-primary')
+  await settle()
+  expect(newPrimary.registrations).toEqual(['new-primary:whispers', 'new-primary:moderator'])
+  router.stop()
 })

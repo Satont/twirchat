@@ -1,5 +1,5 @@
 import { logger } from '@twirchat/shared/logger'
-import type { Account } from '@twirchat/shared/types'
+import type { Account, ChatSendReceipt } from '@twirchat/shared/types'
 import { StaticAuthProvider } from '@twurple/auth'
 import { ChatClient, LogLevel, UserState } from '@twurple/chat'
 
@@ -7,6 +7,12 @@ import { refreshTwitchToken } from '../../auth/twitch'
 import { runInBackground } from '../../services/background-task'
 import { AccountStore } from '../../store/account-store'
 import { hasPrivilegedChatRole, twitchSendLimiter } from './send-limiter'
+import {
+  onTwitchSendRejected,
+  twitchIrcChannelName,
+  TwitchSendOutcomes,
+  twitchSendRejection,
+} from './send-outcomes'
 
 const log = logger('twitch-senders')
 
@@ -18,10 +24,11 @@ export interface TwitchSenderClient {
   part(channel: string): void
   say(channel: string, text: string, replyTo?: string): Promise<void>
   onConnect(handler: () => void): void
+  onDisconnect(handler: () => void): void
   onAuthenticationFailure(handler: () => void): void
   /** USERSTATE: Twitch's reply to a JOIN and to every accepted message. */
   onUserState(handler: (channel: string, tags: ReadonlyMap<string, string>) => void): void
-  /** A NOTICE rejecting a message, by its `msg-id`. */
+  /** A NOTICE rejecting or holding a message, by its `msg-id`. */
   onRejected(handler: (channel: string, reason: string) => void): void
 }
 
@@ -42,31 +49,10 @@ interface ChannelState {
 interface Session {
   client: TwitchSenderClient
   channels: Map<string, ChannelState>
-  /** Per channel, the sends still waiting for Twitch's USERSTATE or NOTICE, oldest first. */
-  outcomes: Map<string, Array<(rejection?: string) => void>>
+  outcomes: TwitchSendOutcomes
 }
 
 class TwitchAuthenticationError extends Error {}
-
-const REJECTIONS: Record<string, string> = {
-  msg_ratelimit: 'you are sending messages too quickly',
-  msg_duplicate: 'the same message was sent less than 30 seconds ago',
-  msg_subsonly: 'the chat is in subscribers-only mode',
-  msg_followersonly: 'the chat is in followers-only mode',
-  msg_followersonly_followed: 'the chat is in followers-only mode',
-  msg_followersonly_zero: 'the chat is in followers-only mode',
-  msg_emoteonly: 'the chat is in emote-only mode',
-  msg_slowmode: 'the chat is in slow mode, wait before sending again',
-  msg_r9k: 'the chat is in unique-chat mode and the message is not unique',
-  msg_timedout: 'the account is timed out in this chat',
-  msg_banned: 'the account is banned in this chat',
-  msg_verified_email: 'the chat requires a verified email',
-  msg_channel_blocked: 'Twitch blocked the message',
-  msg_rejected_mandatory: 'Twitch blocked the message',
-  no_permission: 'the account lacks permission for this action',
-}
-
-const channelName = (channel: string) => channel.replace(/^#/u, '').toLowerCase()
 
 /**
  * One authenticated chat connection per saved account that sends somewhere other than the
@@ -77,18 +63,17 @@ const channelName = (channel: string) => channel.replace(/^#/u, '').toLowerCase(
 export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
   const sessions = new Map<string, Promise<Session>>()
   const connectTimeoutMs = dependencies.connectTimeoutMs ?? 10_000
-  const outcomeTimeoutMs = dependencies.outcomeTimeoutMs ?? 2_500
-
-  function settle(session: Session, channel: string, rejection?: string): void {
-    session.outcomes.get(channel)?.shift()?.(rejection)
-  }
 
   async function open(account: Pick<Account, 'id'>, refreshed: boolean): Promise<Session> {
     const token = refreshed
       ? await dependencies.refreshToken(account.id)
       : await dependencies.token(account.id)
     const client = dependencies.createClient(token)
-    const session: Session = { client, channels: new Map(), outcomes: new Map() }
+    const session: Session = {
+      client,
+      channels: new Map(),
+      outcomes: new TwitchSendOutcomes(dependencies.outcomeTimeoutMs),
+    }
     const connected = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(
         () => reject(new Error('Twitch chat did not accept the connection in time.')),
@@ -104,12 +89,13 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       })
     })
     client.onUserState((channel, tags) => {
-      const name = channelName(channel)
+      const name = twitchIrcChannelName(channel)
       const state = session.channels.get(name)
       if (state) state.tags = tags
-      settle(session, name)
+      session.outcomes.userState(name, tags)
     })
-    client.onRejected((channel, reason) => settle(session, channelName(channel), reason))
+    client.onRejected((channel, reason) => session.outcomes.rejected(channel, reason))
+    client.onDisconnect(() => session.outcomes.clear())
     client.connect()
     try {
       await connected
@@ -144,8 +130,8 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
   }
 
   function close(current: Session): void {
-    for (const waiting of current.outcomes.values()) for (const resolve of waiting) resolve()
     current.outcomes.clear()
+    current.channels.clear()
     current.client.quit()
   }
 
@@ -159,7 +145,7 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
   return {
     /** Connects the account and joins the channel ahead of the first message. */
     async prepare(account: Pick<Account, 'id'>, channel: string): Promise<void> {
-      await join(await sessionFor(account), channelName(channel))
+      await join(await sessionFor(account), twitchIrcChannelName(channel))
     },
 
     async send(
@@ -167,33 +153,24 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       channel: string,
       text: string,
       replyTo?: string,
-    ): Promise<void> {
-      const name = channelName(channel)
+    ): Promise<void | ChatSendReceipt> {
+      const name = twitchIrcChannelName(channel)
       const current = await sessionFor(account)
       await join(current, name)
-      const tags = current.channels.get(name)?.tags ?? new Map<string, string>()
-      await dependencies.acquire(account.id, name, hasPrivilegedChatRole(tags))
-      const outcome = new Promise<string | undefined>((resolve) => {
-        const timer = setTimeout(() => resolve(undefined), outcomeTimeoutMs)
-        const waiting = current.outcomes.get(name) ?? []
-        waiting.push((rejection) => {
-          clearTimeout(timer)
-          resolve(rejection)
-        })
-        current.outcomes.set(name, waiting)
-      })
-      try {
-        await current.client.say(name, text, replyTo)
-      } catch (error) {
-        settle(current, name)
-        throw error
-      }
-      const rejection = await outcome
-      if (rejection)
+      const state = current.channels.get(name)
+      if (!state) throw new Error('The Twitch chat was closed before sending.')
+      await dependencies.acquire(account.id, name, hasPrivilegedChatRole(state.tags))
+      if (current.channels.get(name) !== state)
+        throw new Error('The Twitch chat was closed before sending.')
+      const outcome = await current.outcomes.send(name, () =>
+        current.client.say(name, text, replyTo),
+      )
+      if (outcome.kind === 'held') return { channelId: name, held: true }
+      if (outcome.kind === 'disconnected')
+        throw new Error('The Twitch chat disconnected before delivery could be confirmed.')
+      if (outcome.kind === 'rejected')
         throw new Error(
-          `Twitch did not send the message from @${account.username}: ${
-            REJECTIONS[rejection] ?? rejection
-          }.`,
+          `Twitch did not send the message from @${account.username}: ${twitchSendRejection(outcome.reason)}.`,
         )
     },
 
@@ -201,11 +178,11 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
     release(accountId: string, channel: string): void {
       const pending = sessions.get(accountId)
       if (!pending) return
-      const name = channelName(channel)
+      const name = twitchIrcChannelName(channel)
       const leave = async () => {
         const current = await pending
+        current.outcomes.clear(name)
         if (current.channels.delete(name)) current.client.part(name)
-        current.outcomes.delete(name)
         if (current.channels.size === 0 && sessions.get(accountId) === pending) {
           sessions.delete(accountId)
           close(current)
@@ -254,6 +231,9 @@ function twurpleSender(token: string): TwitchSenderClient {
     onConnect: (handler) => {
       client.onConnect(handler)
     },
+    onDisconnect: (handler) => {
+      client.onDisconnect(handler)
+    },
     onAuthenticationFailure: (handler) => {
       client.onAuthenticationFailure(() => handler())
     },
@@ -262,11 +242,7 @@ function twurpleSender(token: string): TwitchSenderClient {
         handler(message.channel, new Map(message.tags)),
       )
     },
-    onRejected: (handler) => {
-      client.onMessageFailed((channel, reason) => handler(channel, reason))
-      client.onMessageRatelimit((channel) => handler(channel, 'msg_ratelimit'))
-      client.onNoPermission((channel) => handler(channel, 'no_permission'))
-    },
+    onRejected: (handler) => onTwitchSendRejected(client, handler),
   }
 }
 

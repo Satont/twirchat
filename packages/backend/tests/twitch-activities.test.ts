@@ -590,6 +590,50 @@ test('registers AutoMod v2 for broadcasters and moderators with the proper scope
   ).toBe(false)
 })
 
+test('registers sender-side AutoMod for viewers with the chat EventSub scope', async () => {
+  let id = 0
+  const { service, calls } = fixture(() => Response.json({ data: [{ id: String(++id) }] }))
+  const sender = { accessToken: 'sender-token', platformUserId: '300', scopes: ['chat:read'] }
+  const withoutScope = await service.subscribe(sender, 'session', 'friend')
+  expect(withoutScope.errors).toEqual([])
+  expect(withoutScope.subscriptions.map((sub) => sub.type)).toEqual([
+    'stream.online',
+    'stream.offline',
+  ])
+
+  const withScope = await service.subscribe(
+    { ...sender, scopes: [...sender.scopes, 'user:read:chat'] },
+    'session',
+    'friend',
+  )
+  expect(withScope.errors).toEqual([])
+  const types = ['channel.chat.user_message_hold', 'channel.chat.user_message_update']
+  expect(withScope.subscriptions.map((sub) => sub.type)).toEqual([
+    'stream.online',
+    'stream.offline',
+    ...types,
+  ])
+  const registrations = calls.map(({ url, init }) => ({
+    path: url.pathname,
+    authorization: new Headers(init.headers).get('Authorization'),
+    body: JSON.parse(textBody(init.body)),
+  }))
+  expect(registrations).toEqual(
+    expect.arrayContaining(
+      types.map((type) => ({
+        path: '/helix/eventsub/subscriptions',
+        authorization: 'Bearer sender-token',
+        body: {
+          type,
+          version: '1',
+          condition: { broadcaster_user_id: '200', user_id: '300' },
+          transport: { method: 'websocket', session_id: 'session' },
+        },
+      })),
+    ),
+  )
+})
+
 test('reports EventSub registration failures without claiming a live subscription', async () => {
   const denied = fixture(() =>
     Response.json({ message: 'Missing authorization scope' }, { status: 403 }),

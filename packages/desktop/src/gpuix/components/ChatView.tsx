@@ -870,6 +870,12 @@ export function ChatView({
             replyTo,
           })
         : await backend.api.sendMessage({ channelId, platform, text, replyTo })
+      if (receipt?.held) {
+        setDeliveryMessages((current) => current.filter((entry) => entry.id !== message.id))
+        if (!account.scopes.includes('user:read:chat'))
+          showNotice('info', 'AutoMod held your Twitch message for moderator review.', 6000)
+        return
+      }
       setDeliveryMessages((current) => confirmDelivery(current, message.id, receipt))
     } catch (error) {
       setDeliveryMessages((current) =>

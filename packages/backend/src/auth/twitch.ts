@@ -22,6 +22,7 @@ import { config } from '../config.ts'
 const TWITCH_SCOPES = [
   'chat:read',
   'chat:edit',
+  'user:read:chat',
   'user:write:chat',
   'user:read:emotes',
   'channel:read:subscriptions',

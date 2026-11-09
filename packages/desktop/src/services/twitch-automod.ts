@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { buildTwitchSystemMessage } from './twitch-system-message'
+
 export interface TwitchAutoModHold {
   type: 'hold'
   channelSlug: string
@@ -30,6 +32,41 @@ const resolution = identity.extend({
     .toLowerCase()
     .pipe(z.enum(['approved', 'denied', 'expired'])),
 })
+
+export type TwitchAutoModSenderEvent =
+  | 'channel.chat.user_message_hold'
+  | 'channel.chat.user_message_update'
+
+const sender = identity.extend({ user_id: z.string().regex(/^\d+$/u) })
+const senderHold = sender.extend({ status: z.literal('held').default('held') })
+const senderUpdate = sender.extend({ status: z.enum(['approved', 'denied', 'invalid']) })
+const senderNoticeText = {
+  held: 'Your message is being reviewed by the moderators.',
+  approved: 'The moderators approved your message.',
+  denied: 'The moderators did not approve your message.',
+  invalid: 'Your held message was removed from the review queue without being sent.',
+}
+
+export function buildTwitchAutoModSenderNotice(
+  eventType: TwitchAutoModSenderEvent,
+  payload: unknown,
+  senderUserId: string,
+  at?: string,
+) {
+  const data =
+    eventType === 'channel.chat.user_message_hold'
+      ? senderHold.safeParse(payload).data
+      : senderUpdate.safeParse(payload).data
+  if (!data || data.user_id !== senderUserId) return undefined
+  const { status } = data
+  return buildTwitchSystemMessage({
+    id: `automod:${data.user_id}:${data.message_id}:${status}`,
+    channelId: data.broadcaster_user_login,
+    timestamp: at ? new Date(at) : undefined,
+    text: `AutoMod: ${senderNoticeText[status]}`,
+    notice: { kind: 'moderation' },
+  })
+}
 
 export function parseTwitchAutoModEvent(
   eventType: 'automod.message.hold' | 'automod.message.update',
