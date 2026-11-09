@@ -26,7 +26,7 @@ import { icons } from '../icons'
 import type { ResolvedModerationOutcome } from '../state/app'
 import { avatarRevisionStore, avatarUrlFor, ensureAvatar } from '../state/caches'
 import { useStoreSelector } from '../state/create-store'
-import { platformColor, readableOn, semantic } from '../theme'
+import { semantic, platformColor, readableOn, type Theme } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { ChatAnnouncement } from './ChatAnnouncement'
 import { CosmeticAuthorName, CosmeticBadges, useAuthorCosmetics } from './CosmeticAuthor'
@@ -35,7 +35,7 @@ import { MessageModerationRail } from './MessageModerationRail'
 import { MessageText, MessageTokens } from './MessageText'
 import { MessageTranslation } from './MessageTranslation'
 import { TwitchChatNotice } from './TwitchChatNotice'
-import { BadgeTooltip } from './ui/BadgeTooltip'
+import { BadgeTooltip, Badge } from './ui/BadgeTooltip'
 import { Icon, PlatformIcon } from './ui/Icon'
 import { ImageLoadingContext, RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
@@ -674,13 +674,16 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     )
   }
 
-  const rowBackground = isSelfPing
-    ? (props.selfPingColor ?? 'rgba(167, 139, 250, 0.15)')
-    : message.delivery?.state === 'failed'
-      ? 'rgba(239, 68, 68, 0.08)'
-      : hovered
-        ? theme.rowHover
-        : undefined
+  const isFirstMessage = message.metadata?.firstMessage === true
+  const rowBackground = isFirstMessage
+    ? semantic.firstMessageSofter + '15'
+    : isSelfPing
+      ? (props.selfPingColor ?? 'rgba(167, 139, 250, 0.15)')
+      : message.delivery?.state === 'failed'
+        ? 'rgba(239, 68, 68, 0.08)'
+        : hovered
+          ? theme.rowHover
+          : undefined
   const rowOpacity =
     message.delivery?.state === 'pending' ? 0.52 : props.moderationOutcome ? 0.48 : 1
   const announcement = message.platform === 'twitch' ? message.metadata?.announcement : undefined
@@ -795,6 +798,20 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             color={authorColor}
             onClick={openUserCard}
           />
+          {isFirstMessage ? (
+            <Badge
+              variant="warning"
+              size="sm"
+              style={{
+                marginLeft: 4,
+                fontSize: Math.round(fontSize * 0.7),
+                textTransform: 'uppercase',
+                letterSpacing: '0.4px',
+              }}
+            >
+              First message
+            </Badge>
+          ) : null}
           <Text
             style={{
               color: theme.text,
@@ -941,6 +958,20 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             color={authorColor}
             onClick={openUserCard}
           />
+          {isFirstMessage ? (
+            <Badge
+              variant="warning"
+              size="sm"
+              style={{
+                marginLeft: 4,
+                fontSize: Math.round(fontSize * 0.7),
+                textTransform: 'uppercase',
+                letterSpacing: '0.4px',
+              }}
+            >
+              First message
+            </Badge>
+          ) : null}
           {props.showTimestamp ? (
             <Text
               style={{

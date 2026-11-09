@@ -146,6 +146,9 @@ export const semantic = {
   cyan: '#06b6d4',
   sevenTv: '#6441a5',
   renamed: '#818cf8',
+  firstMessage: '#f59e0b',
+  firstMessageSoft: '#fbbf24',
+  firstMessageSofter: '#fcd34d',
 }
 
 /** Elevated surfaces */
