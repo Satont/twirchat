@@ -15,25 +15,6 @@ const baseInput = literal({
 })
 
 function createService() {
-  const twitch = {
-    banUser: mock(async () => ({
-      createdAt: new Date(),
-      isPermanent: false,
-      platform: literal('twitch'),
-      success: true,
-      userId: '77',
-    })),
-    deleteMessage: mock(async () => ({
-      messageId: 'message-id',
-      platform: literal('twitch'),
-      success: true,
-    })),
-    isModerator: mock(async () => ({
-      isModerator: true,
-      platform: literal('twitch'),
-      userId: '42',
-    })),
-  }
   const kick = {
     banUser: mock(async () => ({
       createdAt: new Date(),
@@ -54,23 +35,11 @@ function createService() {
     service: createModerationService({
       kick,
       resolveKickBroadcasterUserId: async () => 99,
-      resolveTwitchBroadcasterUserId: async () => '100',
-      twitch,
     }),
-    twitch,
   }
 }
 
-describe('desktop moderation service', () => {
-  test('confirms Twitch moderation only for a moderator with all rail scopes', async () => {
-    const { service, twitch } = createService()
-
-    await expect(service.getCapabilities({ ...baseInput, platform: 'twitch' })).resolves.toEqual({
-      canModerate: true,
-    })
-    expect(twitch.isModerator).toHaveBeenCalledWith('token', '100', '42')
-  })
-
+describe('Kick moderation service', () => {
   test('does not enable a watched Kick rail without both action scopes', async () => {
     const { service } = createService()
 
@@ -81,95 +50,6 @@ describe('desktop moderation service', () => {
         scopes: ['moderation:ban'],
       }),
     ).resolves.toEqual({ canModerate: false })
-  })
-
-  test('keeps broadcaster moderation available without the moderated-channels read scope', async () => {
-    const { service, twitch } = createService()
-    expect(
-      await service.getCapabilities({
-        ...baseInput,
-        platform: 'twitch',
-        platformUserId: '100',
-        scopes: ['moderator:manage:chat_messages', 'moderator:manage:banned_users'],
-      }),
-    ).toEqual({ canModerate: true })
-    expect(twitch.isModerator).not.toHaveBeenCalled()
-  })
-
-  test('requires the actual moderated-channels scope for a watched moderator check', async () => {
-    const { service, twitch } = createService()
-    expect(
-      await service.getCapabilities({
-        ...baseInput,
-        platform: 'twitch',
-        scopes: [
-          'moderator:read:moderators',
-          'moderator:manage:chat_messages',
-          'moderator:manage:banned_users',
-        ],
-      }),
-    ).toEqual({ canModerate: false })
-    expect(twitch.isModerator).not.toHaveBeenCalled()
-  })
-
-  test('requires only the relevant identity for each action and permits one-second Twitch timeouts', async () => {
-    const { service, twitch } = createService()
-    await service.execute({
-      ...baseInput,
-      platform: 'twitch',
-      action: 'delete_message',
-      messageId: 'only-message-id',
-      scopes: ['moderator:manage:chat_messages'],
-    })
-    await service.execute({
-      ...baseInput,
-      platform: 'twitch',
-      action: 'timeout',
-      targetUserId: '77',
-      durationSeconds: 1,
-      scopes: ['moderator:manage:banned_users'],
-    })
-    expect(twitch.deleteMessage).toHaveBeenCalledWith('token', '100', '42', 'only-message-id')
-    expect(twitch.banUser).toHaveBeenCalledWith('token', '100', '42', {
-      duration: 1,
-      user_id: '77',
-    })
-    await expect(
-      service.execute({
-        ...baseInput,
-        platform: 'kick',
-        action: 'timeout',
-        targetUserId: '77',
-        durationSeconds: 1,
-        scopes: ['moderation:ban'],
-      }),
-    ).rejects.toThrow('at least 60 seconds')
-  })
-
-  test('dispatches delete and timeout to distinct Twitch provider operations', async () => {
-    const { service, twitch } = createService()
-
-    await service.execute({
-      ...baseInput,
-      action: 'delete_message',
-      messageId: 'message-id',
-      platform: 'twitch',
-      targetUserId: '77',
-    })
-    await service.execute({
-      ...baseInput,
-      action: 'timeout',
-      durationSeconds: 300,
-      messageId: 'message-id',
-      platform: 'twitch',
-      targetUserId: '77',
-    })
-
-    expect(twitch.deleteMessage).toHaveBeenCalledWith('token', '100', '42', 'message-id')
-    expect(twitch.banUser).toHaveBeenCalledWith('token', '100', '42', {
-      duration: 300,
-      user_id: '77',
-    })
   })
 
   test('converts rail seconds to valid Kick minutes and preserves a permanent ban', async () => {

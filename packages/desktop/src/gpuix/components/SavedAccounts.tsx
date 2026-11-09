@@ -161,7 +161,9 @@ export function SavedAccounts() {
             </div>
             {copied === platform ? (
               <Text style={{ fontSize: 12, color: theme.text2 }}>
-                {t('app.accounts.linkCopied', { platform: platformName(platform) })}
+                {platform === 'twitch'
+                  ? t('app.accounts.twitchLinkCopied')
+                  : t('app.accounts.linkCopied', { platform: platformName(platform) })}
               </Text>
             ) : null}
             {accounts.map((account) => (

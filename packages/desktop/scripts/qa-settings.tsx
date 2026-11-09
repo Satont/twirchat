@@ -12,6 +12,8 @@ const { BackendContext } = await import('../src/gpuix/backend/context')
 const { createDesktopEvents } = await import('../src/gpuix/backend/events')
 const { SettingsPanel } = await import('../src/gpuix/components/SettingsPanel')
 const { SavedAccounts } = await import('../src/gpuix/components/SavedAccounts')
+const { TwitchDeviceDialog } = await import('../src/gpuix/components/TwitchDeviceDialog')
+const { setLanguage } = await import('../src/gpuix/i18n')
 const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_IMAGE_UPLOADER_SETTINGS } = await import('../src/services/image-uploader')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
@@ -135,9 +137,15 @@ const methods = {
   authStart: async () => {
     throw new Error('QA never starts OAuth')
   },
-  authLink: async ({ platform }) => ({
-    url: `https://auth.example.test/authorize?state=qa-${platform}`,
-  }),
+  authLink: async ({ platform }) => {
+    const url = `https://auth.example.test/authorize?state=qa-${platform}`
+    if (platform === 'twitch') events.emit('twitch_device_code', { url, userCode: 'TWIR-QA' })
+    return { url }
+  },
+  cancelTwitchAuth: async ({ userCode }) => {
+    assert.equal(userCode, 'TWIR-QA')
+    events.emit('twitch_device_code', null)
+  },
 }
 const backend = {
   events,
@@ -426,7 +434,14 @@ try {
     homies: false,
     twir: false,
   })
-  mount(SavedAccounts)
+  mount(function AccountFixture() {
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(SavedAccounts),
+      React.createElement(TwitchDeviceDialog),
+    )
+  })
   await Bun.sleep(250)
   assert.ok(hasText('Twitch · @alpha'))
   await clickNode(textNode('Switch'))
@@ -458,6 +473,16 @@ try {
   assert.ok(!flatten().some((node) => node.testId === 'add-account-twitch-menu'))
   assert.ok(hasText('Twitch sign-in link copied.'))
   assert.ok(!calls.some((call) => call.name === 'authStart'))
+  assert.ok(hasText('TWIR-QA'))
+  setLanguage('ru')
+  await Bun.sleep(140)
+  assert.ok(hasText('Подключить Twitch'))
+  assert.ok(hasText('Скопировать код'))
+  await click('twitch-device-copy')
+  assert.equal(clipboard, 'TWIR-QA')
+  await click('twitch-device-cancel')
+  assert.ok(!flatten().some((node) => node.testId === 'twitch-device-sign-in'))
+  setLanguage('en')
   await Bun.write(
     `${process.env.TWIRCHAT_QA_SESSION_DIR}/settings-calls.json`,
     JSON.stringify(calls, null, 2),

@@ -89,12 +89,28 @@ production. Default desktop ports are 10000 higher outside production, so both
 instances can run together. Explicit port overrides are used unchanged.
 The development-only injection server defaults to 55824 (`DEV_SERVER_PORT`).
 
-Register development OAuth callbacks separately from production:
-`http://localhost:55821/auth/twitch/callback`,
-`http://localhost:55821/auth/youtube/callback`, and
-`http://localhost:55821/auth/kick/callback`.
-Production callbacks keep port 45821. OBS URLs copied from settings use the active
-overlay listener port, including when an older settings file contains port 45823.
+### Desktop OAuth
+
+- **Twitch** uses Device Code Grant. Register a Twitch app with the **Public** client type and
+  set `TWIRCHAT_TWITCH_CLIENT_ID` for source runs and release builds. The backend uses a separate
+  **Confidential** Twitch app for its public Helix requests.
+- **YouTube** uses a Google **Desktop app** OAuth client with the YouTube Data API enabled.
+  Set `TWIRCHAT_YOUTUBE_CLIENT_ID` and `TWIRCHAT_YOUTUBE_CLIENT_SECRET` for source runs and
+  release builds. These installed-app credentials are distributed with the desktop. Google
+  redirects to `http://127.0.0.1:45821/auth/youtube/callback` in production and port 55821 in
+  development.
+- **Kick** uses the existing backend OAuth configuration. Register
+  `http://localhost:45821/auth/kick/callback` for production and port 55821 for development.
+
+For GitHub release builds, set all three `TWIRCHAT_` OAuth values above as repository
+variables in **Settings → Secrets and variables → Actions → Variables**.
+
+GitHub Actions reads the three desktop OAuth values from repository variables of the same name.
+
+Users with saved Twitch or YouTube sessions from older releases should reconnect those accounts
+after updating. Their existing refresh tokens belong to the previous OAuth clients.
+OBS URLs copied from settings use the active overlay listener port, including when an older
+settings file contains port 45823.
 
 ## Docker Deployment
 

@@ -1,58 +1,24 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, describe, expect, mock, test } from 'bun:test'
 
-import { config } from '../src/config.ts'
-import { ClientStore } from '../src/db/index.ts'
-import { streamRoutes } from '../src/routes/stream.ts'
-import { fetchUrl } from './literal'
+import { getTwitchChatters } from '../src/services/twitch-chatters'
+import { fetchUrl } from './fixture-values'
 
 const originalFetch = globalThis.fetch
-const originalUpsert = ClientStore.upsert
-const chattersRoute = streamRoutes['/api/twitch/chatters'].POST
 
-function request(body: unknown, signal?: AbortSignal): Request {
-  return new Request('http://localhost/api/twitch/chatters', {
-    body: JSON.stringify(body),
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Client-Secret': 'test-client-secret',
-    },
-    method: 'POST',
-    signal,
-  })
+const credentials = {
+  accessToken: 'secret-token',
+  broadcasterLogin: 'streamer',
+  clientId: 'public-client',
+  moderatorId: '456',
 }
 
 function resolvedUserResponse(): Response {
   return Response.json({ data: [{ id: '123', login: 'streamer' }] })
 }
 
-describe('POST /api/twitch/chatters', () => {
-  beforeEach(() => {
-    ClientStore.upsert = mock(async (secret: string) => ({
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-      secret,
-    }))
-  })
-
+describe('getTwitchChatters', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch
-    ClientStore.upsert = originalUpsert
-  })
-
-  test('returns 400 for missing request fields without fetching Twitch', async () => {
-    let fetchCalled = false
-    globalThis.fetch = Object.assign(
-      mock(async () => {
-        fetchCalled = true
-        return Response.json({})
-      }),
-      { preconnect: originalFetch.preconnect },
-    )
-
-    const response = await chattersRoute(request({ accessToken: 'token' }))
-
-    expect(response.status).toBe(400)
-    expect(fetchCalled).toBe(false)
   })
 
   test('returns 404 when the broadcaster cannot be resolved', async () => {
@@ -61,24 +27,15 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(404)
+    await expect(getTwitchChatters(credentials)).rejects.toMatchObject({ status: 404 })
   })
 
   test('follows every cursor and deduplicates chatters', async () => {
     const calls: { init?: RequestInit; url: string }[] = []
     const controller = new AbortController()
-    const inputRequest = request(
-      { accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' },
-      controller.signal,
-    )
-
     globalThis.fetch = Object.assign(
       mock(async (fetchInput: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-        const url = String(fetchInput)
+        const url = fetchUrl(fetchInput)
         calls.push({ init, url })
         if (url.includes('/helix/users?')) return resolvedUserResponse()
         if (!url.includes('/helix/chat/chatters?')) throw new Error(`Unexpected fetch: ${url}`)
@@ -107,10 +64,7 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(inputRequest)
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
+    await expect(getTwitchChatters(credentials, controller.signal)).resolves.toEqual({
       broadcasterId: '123',
       chatters: [
         { userId: '1', userLogin: 'one', userName: 'One' },
@@ -122,16 +76,12 @@ describe('POST /api/twitch/chatters', () => {
     expect(calls).toHaveLength(4)
     expect(calls[1]?.url).not.toContain('secret-token')
     expect(calls[2]?.url).toContain('after=next-page')
-    expect(calls[1]?.init?.signal).toBe(inputRequest.signal)
+    expect(calls[1]?.init?.signal).toBe(controller.signal)
     expect(new Headers(calls[1]?.init?.headers).get('Authorization')).toBe('Bearer secret-token')
   })
 
   test('merges avatars onto the matching chatters', async () => {
     const controller = new AbortController()
-    const inputRequest = request(
-      { accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' },
-      controller.signal,
-    )
     let avatarInit: RequestInit | undefined
 
     globalThis.fetch = Object.assign(
@@ -161,10 +111,7 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(inputRequest)
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
+    await expect(getTwitchChatters(credentials, controller.signal)).resolves.toEqual({
       broadcasterId: '123',
       chatters: [
         {
@@ -184,8 +131,8 @@ describe('POST /api/twitch/chatters', () => {
     })
     const headers = new Headers(avatarInit?.headers)
     expect(headers.get('Authorization')).toBe('Bearer secret-token')
-    expect(headers.get('Client-Id')).toBe(config.TWITCH_CLIENT_ID)
-    expect(avatarInit?.signal).toBe(inputRequest.signal)
+    expect(headers.get('Client-Id')).toBe(credentials.clientId)
+    expect(avatarInit?.signal).toBe(controller.signal)
   })
 
   test('chunks avatar lookups at 100 user IDs', async () => {
@@ -213,11 +160,7 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(200)
+    await getTwitchChatters(credentials)
     expect(avatarRequests).toHaveLength(2)
     expect(avatarRequests[0]?.searchParams.getAll('id')).toHaveLength(100)
     expect(avatarRequests[1]?.searchParams.getAll('id')).toEqual(['101'])
@@ -247,12 +190,7 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
+    await expect(getTwitchChatters(credentials)).resolves.toEqual({
       broadcasterId: '123',
       chatters: [
         {
@@ -286,12 +224,7 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'secret-token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
+    await expect(getTwitchChatters(credentials)).resolves.toEqual({
       broadcasterId: '123',
       chatters: [{ userId: '1', userLogin: 'one', userName: 'One' }],
       total: 1,
@@ -314,13 +247,9 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(502)
-    await expect(response.json()).resolves.toEqual({
-      error: 'Twitch chatters response repeated a pagination cursor',
+    await expect(getTwitchChatters(credentials)).rejects.toMatchObject({
+      status: 502,
+      message: 'Twitch chatters response repeated a pagination cursor',
     })
   })
 
@@ -340,11 +269,7 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(502)
+    await expect(getTwitchChatters(credentials)).rejects.toMatchObject({ status: 502 })
   })
 
   test.each([401, 403])('preserves Twitch upstream %i status', async (status) => {
@@ -357,11 +282,7 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(status)
+    await expect(getTwitchChatters(credentials)).rejects.toMatchObject({ status })
   })
 
   test('maps other upstream statuses to 502', async () => {
@@ -374,10 +295,6 @@ describe('POST /api/twitch/chatters', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const response = await chattersRoute(
-      request({ accessToken: 'token', broadcasterLogin: 'streamer', moderatorId: '456' }),
-    )
-
-    expect(response.status).toBe(502)
+    await expect(getTwitchChatters(credentials)).rejects.toMatchObject({ status: 502 })
   })
 })

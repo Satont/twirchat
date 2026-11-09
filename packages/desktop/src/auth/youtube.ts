@@ -1,161 +1,58 @@
-import type {
-  YouTubeBuildUrlRequest,
-  YouTubeExchangeRequest,
-  YouTubeRefreshRequest,
-} from '@twirchat/shared'
-import { YOUTUBE_REDIRECT_URI } from '@twirchat/shared/constants'
+import {
+  YOUTUBE_AUTH_URL,
+  YOUTUBE_REDIRECT_URI,
+  YOUTUBE_TOKEN_URL,
+} from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
-/**
- * YouTube OAuth — desktop side (PKCE flow).
- *
- * Flow:
- *  1. Desktop generates PKCE (codeVerifier, codeChallenge, state) — stored in-memory
- *  2. Desktop sends POST /api/auth/youtube/start { codeChallenge, state, redirectUri } to backend
- *  3. Backend builds the YouTube authUrl and returns it
- *  4. Desktop opens the URL in the browser
- *  5. YouTube redirects to http://localhost:45821/auth/youtube/callback?code=...&state=...
- *  6. Desktop validates state, grabs codeVerifier from memory
- *  7. Desktop calls POST /api/auth/youtube/exchange on backend → receives tokens
- *  8. Desktop fetches user info from YouTube API, saves account to SQLite
- *
- * Refresh:
- *  - Desktop calls POST /api/auth/youtube/refresh on backend → receives new tokens
- *  - Desktop updates the account record in SQLite
- */
-import type { Platform } from '@twirchat/shared/types'
 import { z } from 'zod'
 
-import { getBackendUrl } from '../runtime-config'
+import { t } from '../gpuix/i18n'
 import { AccountStore } from '../store/account-store'
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce'
-import { authUrlSchema, exchangedTokenSchema, refreshedTokenSchema } from './response-schemas'
+import { getYouTubeDesktopCredentials } from './client-config'
+import { postOAuthForm } from './oauth-form'
+import { createPkceSessions } from './pkce'
+import { createOAuthRefresher } from './refresh-token'
+import { expiresAt, oauthTokenSchema } from './response-schemas'
 import { successPage } from './server'
 
 const log = logger('auth-youtube')
+const sessions = createPkceSessions()
+const scopes = [
+  'openid',
+  'profile',
+  'https://www.googleapis.com/auth/youtube.readonly',
+  'https://www.googleapis.com/auth/youtube.force-ssl',
+]
 
-// ----------------------------------------------------------------
-// In-memory PKCE session store (state → { codeVerifier, expiresAt })
-// ----------------------------------------------------------------
-
-const pendingSessions = new Map<string, { codeVerifier: string; expiresAt: number }>()
-
-const SESSION_TTL_MS = 10 * 60 * 1000 // 10 minutes
-
-/** Clean up expired sessions periodically */
-function cleanupSessions(): void {
-  const now = Date.now()
-  for (const [state, session] of pendingSessions) {
-    if (now > session.expiresAt) {
-      pendingSessions.delete(state)
-    }
-  }
+export function getYouTubeAuthUrl(): string {
+  return sessions.authorize(
+    YOUTUBE_AUTH_URL,
+    getYouTubeDesktopCredentials().client_id,
+    YOUTUBE_REDIRECT_URI,
+    scopes,
+    { access_type: 'offline', prompt: 'consent select_account' },
+  )
 }
 
-// ----------------------------------------------------------------
-// Public API
-// ----------------------------------------------------------------
-
-/**
- * Generates PKCE params, stores the session in memory, and returns
- * { codeChallenge, state } so the caller can send request to backend
- * to build the YouTube auth URL.
- */
-export function prepareYouTubeAuth(): { codeChallenge: string; state: string } {
-  cleanupSessions()
-
-  const codeVerifier = generateCodeVerifier()
-  const codeChallenge = generateCodeChallenge(codeVerifier)
-  const state = generateState()
-
-  pendingSessions.set(state, {
-    codeVerifier,
-    expiresAt: Date.now() + SESSION_TTL_MS,
+export async function handleYouTubeCallback(url: URL) {
+  const { code, codeVerifier } = sessions.consume(url)
+  const exchangeRes = await postOAuthForm(YOUTUBE_TOKEN_URL, {
+    ...getYouTubeDesktopCredentials(),
+    grant_type: 'authorization_code',
+    code,
+    code_verifier: codeVerifier,
+    redirect_uri: YOUTUBE_REDIRECT_URI,
   })
-
-  return { codeChallenge, state }
-}
-
-/**
- * Requests the auth URL from backend by sending PKCE params.
- * Returns the URL to open in browser.
- */
-export async function getYouTubeAuthUrl(codeChallenge: string, state: string): Promise<string> {
-  const res = await fetch(`${getBackendUrl()}/api/auth/youtube/start`, {
-    body: JSON.stringify({
-      codeChallenge,
-      state,
-      redirectUri: YOUTUBE_REDIRECT_URI,
-    } satisfies YouTubeBuildUrlRequest),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  })
-
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`YouTube auth URL request failed: ${res.status} ${body}`)
-  }
-
-  const data = authUrlSchema.parse(await res.json())
-  return data.url
-}
-
-/**
- * Handles GET /auth/youtube/callback from the local auth server.
- * Validates state, exchanges code for tokens via the backend, fetches
- * user info from YouTube API, and persists the account in SQLite.
- */
-export async function handleYouTubeCallback(url: URL): Promise<{
-  response: Response
-  user: { platform: 'youtube'; username: string; displayName: string }
-  channelSlug: string
-}> {
-  const code = url.searchParams.get('code')
-  const state = url.searchParams.get('state')
-  const error = url.searchParams.get('error')
-
-  if (error) {
-    throw new Error(
-      `YouTube OAuth error: ${error} — ${url.searchParams.get('error_description') ?? ''}`,
-    )
-  }
-
-  if (!code || !state) {
-    throw new Error('Missing code or state in YouTube callback')
-  }
-
-  const session = pendingSessions.get(state)
-  if (!session) {
-    throw new Error('Unknown or expired OAuth state')
-  }
-  if (Date.now() > session.expiresAt) {
-    pendingSessions.delete(state)
-    throw new Error('OAuth session expired')
-  }
-  pendingSessions.delete(state)
-
-  // Exchange code for tokens via backend proxy
-  const exchangeRes = await fetch(`${getBackendUrl()}/api/auth/youtube/exchange`, {
-    body: JSON.stringify({
-      code,
-      codeVerifier: session.codeVerifier,
-      redirectUri: YOUTUBE_REDIRECT_URI,
-    } satisfies YouTubeExchangeRequest),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  })
-
-  if (!exchangeRes.ok) {
-    const body = await exchangeRes.text()
-    throw new Error(`YouTube token exchange failed: ${exchangeRes.status} ${body}`)
-  }
-
-  const tokens = exchangedTokenSchema.parse(await exchangeRes.json())
-
+  if (!exchangeRes.ok)
+    throw new Error(t('runtime.auth.youtubeExchangeFailed', { status: exchangeRes.status }))
+  const tokens = oauthTokenSchema.parse(await exchangeRes.json())
   // Fetch user info from YouTube Data API
   const userRes = await fetch(
     'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
     {
-      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+      redirect: 'error',
+      signal: AbortSignal.timeout(15000),
     },
   )
 
@@ -184,31 +81,25 @@ export async function handleYouTubeCallback(url: URL): Promise<{
       })
       .parse(await userRes.json())
 
-    if (!userData.items || userData.items.length === 0) {
-      throw new Error('YouTube user info response empty — account may have no YouTube channel')
-    }
-
-    const channel = userData.items[0]
-    if (!channel) throw new Error('YouTube channel response was empty.')
+    const channel = userData.items?.[0]
+    if (!channel) throw new Error(t('runtime.auth.youtubeChannelRequired'))
     userId = channel.id
     displayName = channel.snippet.title
     ;({ customUrl } = channel.snippet)
     avatarUrl = channel.snippet.thumbnails?.default?.url
   } else {
-    const body = await userRes.text()
-    log.warn(`YouTube channels API returned ${userRes.status}, falling back to Google userinfo`, {
-      body,
-    })
+    log.warn(`YouTube channels API returned ${userRes.status}, falling back to Google userinfo`)
 
     // Fall back to Google OpenID Connect userinfo endpoint (always available with openid + profile scopes)
     const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+      redirect: 'error',
+      signal: AbortSignal.timeout(15000),
     })
 
     if (!infoRes.ok) {
-      const infoBody = await infoRes.text()
       throw new Error(
-        `YouTube user info request failed: ${userRes.status} (channels API); ${infoRes.status} (userinfo): ${infoBody}`,
+        `YouTube user info request failed: ${userRes.status} (channels API); ${infoRes.status} (userinfo)`,
       )
     }
 
@@ -226,20 +117,18 @@ export async function handleYouTubeCallback(url: URL): Promise<{
     avatarUrl = info.picture
   }
 
-  const expiresAt = tokens.expiresIn ? Math.floor(Date.now() / 1000) + tokens.expiresIn : undefined
-
   const username = customUrl ?? userId
 
   AccountStore.upsert({
     activate: true,
-    accessToken: tokens.accessToken,
+    accessToken: tokens.access_token,
     avatarUrl,
     displayName,
-    expiresAt,
+    expiresAt: expiresAt(tokens.expires_in),
     id: `youtube:${userId}`,
     platform: 'youtube',
     platformUserId: userId,
-    refreshToken: tokens.refreshToken,
+    refreshToken: tokens.refresh_token,
     scopes: tokens.scope,
     username,
   })
@@ -253,45 +142,13 @@ export async function handleYouTubeCallback(url: URL): Promise<{
     }),
     user: {
       displayName,
-      platform: 'youtube' satisfies Platform,
       username,
     },
   }
 }
 
-/**
- * Refreshes the YouTube access token for the given accountId via the backend proxy.
- * Updates the stored tokens in SQLite and returns the new access token.
- */
-export async function refreshYouTubeToken(accountId: string): Promise<string> {
-  const stored = AccountStore.getTokens(accountId)
-  if (!stored?.refreshToken) {
-    throw new Error('No refresh token for YouTube account')
-  }
-
-  const res = await fetch(`${getBackendUrl()}/api/auth/youtube/refresh`, {
-    body: JSON.stringify({
-      refreshToken: stored.refreshToken,
-    } satisfies YouTubeRefreshRequest),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  })
-
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`YouTube token refresh failed: ${res.status} ${body}`)
-  }
-
-  const data = refreshedTokenSchema.parse(await res.json())
-
-  const expiresAt = data.expiresIn ? Math.floor(Date.now() / 1000) + data.expiresIn : undefined
-
-  AccountStore.updateTokens(
-    accountId,
-    data.accessToken,
-    data.refreshToken ?? stored.refreshToken,
-    expiresAt,
-  )
-
-  return data.accessToken
-}
+export const refreshYouTubeToken = createOAuthRefresher(
+  'YouTube',
+  YOUTUBE_TOKEN_URL,
+  getYouTubeDesktopCredentials,
+)

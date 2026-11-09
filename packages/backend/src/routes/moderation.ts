@@ -115,9 +115,9 @@ function requireStringArray(body: Record<string, unknown>, key: string): string[
   return value
 }
 
-function requirePlatform(body: Record<string, unknown>): 'twitch' | 'kick' {
+function requirePlatform(body: Record<string, unknown>): 'kick' {
   const platform = requireString(body, 'platform')
-  if (platform !== 'twitch' && platform !== 'kick') {
+  if (platform !== 'kick') {
     throw new Error(`unsupported moderation platform ${platform}`)
   }
   return platform

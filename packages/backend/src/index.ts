@@ -12,7 +12,6 @@ import { emoteCatalogRoutes } from './routes/emote-catalog.ts'
 import { moderationRoutes } from './routes/moderation.ts'
 import { providerProxyRoutes } from './routes/provider-proxy.ts'
 import { streamRoutes } from './routes/stream.ts'
-import { twitchActivitiesRoutes } from './routes/twitch-activities.ts'
 import { createTwitchHistoryRoutes } from './routes/twitch-history.ts'
 import { userCardRoutes } from './routes/user-card.ts'
 import { userProfileRoutes } from './routes/user-profile.ts'
@@ -78,7 +77,6 @@ const server = Bun.serve<WsData>({
     ...userCardRoutes,
     ...userProfileRoutes,
     ...chatToolsRoutes,
-    ...twitchActivitiesRoutes,
     ...emoteCatalogRoutes,
     ...providerProxyRoutes,
     ...twitchHistoryRoutes,

@@ -16,7 +16,7 @@ async function parseInput(req: Request): Promise<ChatToolsInput & { text: string
   }
   const parsed = z
     .object({
-      platform: z.enum(['twitch', 'kick']),
+      platform: z.literal('kick'),
       channelSlug: z.string().refine((value) => !!value.trim()),
       accessToken: z.string().refine((value) => !!value.trim()),
       platformUserId: z.string().refine((value) => !!value.trim()),
@@ -34,7 +34,9 @@ export function createChatToolsRoutes(service = createChatToolsService()) {
     if (client instanceof Response) return client
     try {
       const input = await parseInput(req)
-      return json(roomState ? await service.getRoomState(input) : await service.execute(input))
+      if (roomState)
+        throw new ChatToolsError('Room settings are unavailable through the Kick public API.')
+      return json(await service.execute(input))
     } catch (error) {
       if (error instanceof ChatToolsError) return json({ error: error.message }, error.status)
       return json({ error: 'The platform request failed. Please try again.' }, 502)

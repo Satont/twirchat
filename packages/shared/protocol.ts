@@ -124,7 +124,6 @@ export type DesktopToBackendMessage =
   | { type: 'youtube_chat_unsubscribe'; subscriptionId: string }
   | { type: 'ping' }
   | { type: 'auth_start'; platform: Exclude<Platform, 'twitch'> }
-  | { type: 'auth_start_twitch'; codeChallenge: string; state: string }
   | { type: 'auth_logout'; platform: Platform }
   | { type: 'send_message'; platform: Platform; channel: string; message: string }
   | { type: 'channel_join'; platform: Platform; channel: string }
@@ -149,37 +148,6 @@ export interface AuthStartRequest {
 
 export interface AuthStartResponse {
   url: string
-}
-
-/**
- * POST /api/auth/twitch/start
- * Desktop отправляет PKCE codeChallenge + state + redirectUri, backend формирует authUrl
- */
-export interface TwitchBuildUrlRequest {
-  codeChallenge: string
-  state: string
-  redirectUri: string
-}
-
-export interface TwitchBuildUrlResponse {
-  url: string
-}
-
-/**
- * POST /api/auth/twitch/exchange
- * Desktop получил code из callback, просит backend обменять на токены
- */
-export interface TwitchExchangeRequest {
-  code: string
-  codeVerifier: string
-  redirectUri: string
-}
-
-export interface TwitchExchangeResponse {
-  accessToken: string
-  refreshToken?: string
-  expiresIn?: number
-  scope?: string[]
 }
 
 /**
@@ -227,65 +195,6 @@ export interface KickRefreshResponse {
   expiresIn?: number
 }
 
-/**
- * POST /api/auth/twitch/refresh
- * Desktop просит backend обновить токен
- */
-export interface TwitchRefreshRequest {
-  refreshToken: string
-}
-
-export interface TwitchRefreshResponse {
-  accessToken: string
-  refreshToken?: string
-  expiresIn?: number
-}
-
-/**
- * POST /api/auth/youtube/start
- * Desktop отправляет PKCE codeChallenge + state, backend формирует authUrl
- */
-export interface YouTubeBuildUrlRequest {
-  codeChallenge: string
-  state: string
-  redirectUri: string
-}
-
-export interface YouTubeBuildUrlResponse {
-  url: string
-}
-
-/**
- * POST /api/auth/youtube/exchange
- * Desktop получил code из callback, просит backend обменять на токены
- */
-export interface YouTubeExchangeRequest {
-  code: string
-  codeVerifier: string
-  redirectUri: string
-}
-
-export interface YouTubeExchangeResponse {
-  accessToken: string
-  refreshToken?: string
-  expiresIn?: number
-  scope?: string[]
-}
-
-/**
- * POST /api/auth/youtube/refresh
- * Desktop просит backend обновить YouTube токен
- */
-export interface YouTubeRefreshRequest {
-  refreshToken: string
-}
-
-export interface YouTubeRefreshResponse {
-  accessToken: string
-  refreshToken?: string
-  expiresIn?: number
-}
-
 // ============================================================
 // HTTP API — stream status, update stream, search categories
 // ============================================================
@@ -300,11 +209,10 @@ export interface StreamStatusResponse {
 }
 
 /**
- * GET /api/channels-status
+ * POST /api/channels-status
  * Bulk stream status for all active channels, fetched in parallel.
  *
  * Request body (JSON): { channels: ChannelStatusRequest[] }
- * Optionally pass userAccessToken per-channel to use authenticated Helix calls.
  */
 export interface ChannelStatusRequest {
   platform: 'twitch' | 'kick'
@@ -316,8 +224,6 @@ export interface ChannelStatusRequest {
    * saving one API round-trip.
    */
   channelId?: string
-  /** Optional user access token — if provided, backend uses it instead of app token */
-  userAccessToken?: string
 }
 
 export interface ChannelStatus {
@@ -335,7 +241,7 @@ export interface ChannelsStatusResponse {
 
 /** POST /api/update-stream */
 export interface UpdateStreamRequest {
-  platform: 'twitch' | 'kick'
+  platform: 'kick'
   channelId: string
   /** User access token from the desktop's SQLite */
   userAccessToken: string
@@ -373,14 +279,6 @@ export interface UserCardMetadataRequest {
    */
   channelId?: string
   channelSlug?: string
-}
-
-export interface UserCardMetadataBackendRequest extends UserCardMetadataRequest {
-  twitchAuth?: {
-    accessToken: string
-    platformUserId: string
-    scopes: string[]
-  }
 }
 
 export interface UserCardAccountAgeField {

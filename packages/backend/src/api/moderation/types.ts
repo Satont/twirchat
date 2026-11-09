@@ -1,9 +1,3 @@
-/**
- * Moderation action types and interfaces shared between Twitch and Kick APIs
- */
-
-export type ModerationAction = 'ban' | 'timeout' | 'delete_message'
-
 export interface ModerationError {
   code: string
   status: number
@@ -23,46 +17,6 @@ export class ModerationException extends Error {
   }
 }
 
-// ============================================================
-// Twitch Moderation Types
-// ============================================================
-
-export interface TwitchBanRequest {
-  /** User ID of the user to ban/timeout */
-  user_id: string
-  /** Reason for the ban/timeout (optional) */
-  reason?: string
-  /** Duration in seconds (null = permanent ban, 1-604800 = timeout) */
-  duration?: number | null
-}
-
-export interface TwitchBanResponse {
-  data: Array<{
-    user_id: string
-    created_at: string
-  }>
-}
-
-export interface TwitchDeleteMessageRequest {
-  /** Message ID to delete */
-  message_id: string
-}
-
-export interface TwitchModeratorResponse {
-  data: Array<{
-    user_id: string
-    user_name: string
-    user_login: string
-  }>
-  pagination: {
-    cursor?: string
-  }
-}
-
-// ============================================================
-// Kick Moderation Types
-// ============================================================
-
 export interface KickBanRequest {
   /** Broadcaster whose chat the action applies to. */
   broadcaster_user_id: number
@@ -74,12 +28,8 @@ export interface KickBanRequest {
   reason?: string
 }
 
-// ============================================================
-// Unified Response Types
-// ============================================================
-
 export interface BanResult {
-  platform: 'twitch' | 'kick'
+  platform: 'kick'
   success: boolean
   userId: string
   isPermanent: boolean
@@ -88,31 +38,10 @@ export interface BanResult {
   error?: ModerationError
 }
 
-export interface TimeoutResult {
-  platform: 'twitch' | 'kick'
-  success: boolean
-  userId: string
-  durationSeconds: number
-  createdAt: Date
-  error?: ModerationError
-}
-
 export interface DeleteMessageResult {
-  platform: 'twitch' | 'kick'
+  platform: 'kick'
   success: boolean
   messageId: string
   deletedAt?: Date
-  error?: ModerationError
-}
-
-// ============================================================
-// Moderator Check Types
-// ============================================================
-
-export interface IsModerator {
-  platform: 'twitch' | 'kick'
-  userId: string
-  isModerator: boolean
-  isBroadcaster?: boolean
   error?: ModerationError
 }

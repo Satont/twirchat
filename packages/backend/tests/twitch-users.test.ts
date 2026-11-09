@@ -71,6 +71,8 @@ describe('twitch-users helpers', () => {
     global.fetch = Object.assign(
       mock(async (input: string | URL | Request) => {
         const url = fetchUrl(input)
+        if (url === 'https://id.twitch.tv/oauth2/token')
+          return Response.json({ access_token: 'app-token', expires_in: 3600 })
         calls.push(url)
 
         return Response.json({
@@ -83,10 +85,7 @@ describe('twitch-users helpers', () => {
       { preconnect: originalFetch.preconnect },
     )
 
-    const result = await resolveTwitchUserIdsByLogin(
-      ['@Satont', 'bad slug', 'other_user'],
-      'test-user-token',
-    )
+    const result = await resolveTwitchUserIdsByLogin(['@Satont', 'bad slug', 'other_user'])
 
     expect(calls).toHaveLength(1)
     expect(calls[0]).toContain('login=satont')
@@ -192,12 +191,15 @@ describe('twitch-users helpers', () => {
     const calls: string[] = []
     global.fetch = Object.assign(
       mock(async (input: string | URL | Request) => {
-        calls.push(fetchUrl(input))
+        const url = fetchUrl(input)
+        if (url === 'https://id.twitch.tv/oauth2/token')
+          return Response.json({ access_token: 'app-token', expires_in: 3600 })
+        calls.push(url)
         return Response.json({ data: [{ id: '987', login: '123', display_name: '123' }] })
       }),
       { preconnect: originalFetch.preconnect },
     )
-    await expect(fetchTwitchUserByLogin('@123', 'test-token')).resolves.toEqual({
+    await expect(fetchTwitchUserByLogin('@123')).resolves.toEqual({
       id: '987',
       login: '123',
       display_name: '123',
@@ -206,11 +208,18 @@ describe('twitch-users helpers', () => {
   })
 
   it('rejects invalid login lookups without fetching and returns null for unknown users', async () => {
-    const request = mock(async () => Response.json({ data: [] }))
-    global.fetch = Object.assign(request, { preconnect: originalFetch.preconnect })
-    await expect(fetchTwitchUserByLogin('bad/name', 'test-token')).resolves.toBeNull()
-    expect(request).not.toHaveBeenCalled()
-    await expect(fetchTwitchUserByLogin('unknown_user', 'test-token')).resolves.toBeNull()
-    expect(request).toHaveBeenCalledTimes(1)
+    const lookup = mock(() => Response.json({ data: [] }))
+    global.fetch = Object.assign(
+      async (input: string | URL | Request) => {
+        if (fetchUrl(input) === 'https://id.twitch.tv/oauth2/token')
+          return Response.json({ access_token: 'app-token', expires_in: 3600 })
+        return lookup()
+      },
+      { preconnect: originalFetch.preconnect },
+    )
+    await expect(fetchTwitchUserByLogin('bad/name')).resolves.toBeNull()
+    expect(lookup).not.toHaveBeenCalled()
+    await expect(fetchTwitchUserByLogin('unknown_user')).resolves.toBeNull()
+    expect(lookup).toHaveBeenCalledTimes(1)
   })
 })
