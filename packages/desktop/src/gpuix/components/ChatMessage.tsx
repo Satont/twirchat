@@ -490,6 +490,30 @@ function DeliveryFailure({ error, style }: { error?: string; style: Record<strin
   return <Text style={style}>{t('chatMessages.notSent', { error: error ?? '' })}</Text>
 }
 
+function CheerNotice({
+  id,
+  fontSize,
+  bits,
+  children,
+}: {
+  id: string
+  fontSize: number
+  bits: number
+  children: ReactElement
+}) {
+  useLanguage()
+  return (
+    <TwitchChatNotice
+      id={id}
+      kind="cheer"
+      fontSize={fontSize}
+      summary={tPlural('chatMessages.bits', bits, { count: bits.toLocaleString() })}
+    >
+      {children}
+    </TwitchChatNotice>
+  )
+}
+
 /** History saved before 7TV rows carried their action is English text. */
 function legacySystemAction(text: string): SevenTvSystemAction {
   if (text.includes(' added ')) return 'added'
@@ -512,14 +536,9 @@ function wrapTwitchMessage(
     )
   if (bits)
     return (
-      <TwitchChatNotice
-        id={id}
-        kind="cheer"
-        fontSize={fontSize}
-        summary={tPlural('chatMessages.bits', bits, { count: bits.toLocaleString() })}
-      >
+      <CheerNotice id={id} fontSize={fontSize} bits={bits}>
         {content}
-      </TwitchChatNotice>
+      </CheerNotice>
     )
   return content
 }
