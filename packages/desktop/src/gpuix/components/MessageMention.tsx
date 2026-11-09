@@ -1,15 +1,24 @@
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
-import { useEffect, useRef } from 'react'
+import { useCallback, useContext, useEffect, useRef, useSyncExternalStore } from 'react'
 
+import {
+  PAINT_GLYPH_HORIZONTAL_PADDING,
+  PAINT_GLYPH_VERTICAL_PADDING,
+} from '../../services/paint-renderer'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { resolveMentionTarget } from '../../views/main/utils/mention-user-card'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
+import { usePaintImage, useUserCosmetics } from '../hooks/use-cosmetics'
 import type { MessageToken } from '../message-tokens'
 import { accountsStore, aliasesStore, homeMessagesStore, watchedMessagesStore } from '../state/app'
+import { useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
+import { emotePreferencesStore } from '../state/emote-preferences'
+import { mentionAppearanceKey, mentionAppearances } from '../state/mention-appearances'
 import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
+import { ImageLoadingContext } from './ui/RemoteImage'
 
 type OpenUserCard = (target: UserCardTarget) => void
 
@@ -57,6 +66,32 @@ export function MessageMention({
   const windows = useDesktopWindows()
   const interactive = Boolean(onOpenUserCard || windows)
   const username = token.username
+  const key = mentionAppearanceKey(message.platform, username)
+  const subscribe = useCallback(
+    (listener: () => void) => mentionAppearances.subscribe(key, listener),
+    [key],
+  )
+  const snapshot = useCallback(() => mentionAppearances.snapshot(key), [key])
+  const appearance = useSyncExternalStore(subscribe, snapshot, snapshot)
+  const visible = useContext(ImageLoadingContext)
+  const paintsEnabled = useStoreSelector(emotePreferencesStore, (state) => state.value.paints)
+  const cosmetics = useUserCosmetics(
+    message.platform,
+    appearance?.id,
+    appearance?.username,
+    visible && paintsEnabled,
+  )
+  const name = token.text.trimEnd()
+  const image = usePaintImage(name, cosmetics?.paint, fontSize, font)
+  const spacing = token.text.slice(name.length)
+  const textStyle = {
+    color: appearance?.color ? readableOn(appearance.color, theme.bg) : baseColor,
+    fontWeight: image ? 700 : appearance?.color ? 600 : 400,
+    fontSize,
+    fontFamily: font,
+    lineHeight: Math.round(fontSize * 1.45),
+    opacity,
+  }
   const pending = useRef<MentionRequest | null>(null)
   useEffect(
     () => () => {
@@ -97,7 +132,10 @@ export function MessageMention({
   }
 
   return (
-    <text
+    <div
+      role={interactive ? 'button' : undefined}
+      aria-label={name}
+      testId={`${image ? 'painted-mention' : 'mention'}-${name}`}
       tabIndex={interactive ? 0 : undefined}
       onClick={(event) => {
         if (!interactive || (event.button ?? 0) !== 0 || event.isRightClick) return
@@ -111,16 +149,34 @@ export function MessageMention({
         }
       }}
       style={{
-        color: token.color ? readableOn(token.color, theme.bg) : baseColor,
-        fontWeight: token.color ? 600 : 400,
-        fontSize,
-        fontFamily: font,
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexShrink: 0,
+        minHeight: textStyle.lineHeight,
         cursor: interactive ? 'pointer' : 'default',
-        lineHeight: Math.round(fontSize * 1.45),
-        opacity,
       }}
     >
-      {token.text}
-    </text>
+      {image ? (
+        <>
+          <img
+            src={image.path}
+            style={{
+              width: image.width,
+              height: image.height,
+              marginLeft: -PAINT_GLYPH_HORIZONTAL_PADDING,
+              marginRight: -PAINT_GLYPH_HORIZONTAL_PADDING,
+              marginTop: -PAINT_GLYPH_VERTICAL_PADDING,
+              marginBottom: -PAINT_GLYPH_VERTICAL_PADDING,
+              pointerEvents: 'none',
+              opacity,
+            }}
+          />
+          {spacing ? <text style={textStyle}>{spacing}</text> : null}
+        </>
+      ) : (
+        <text style={textStyle}>{token.text}</text>
+      )}
+    </div>
   )
 }

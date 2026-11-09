@@ -34,12 +34,14 @@ import type { DesktopEvents } from '../backend/events'
 import type { DesktopBackend } from '../backend/server'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
+import { mentionAppearances } from './mention-appearances'
 import { classifyIncomingSimilarity, hydrateSimilarityHistory } from './message-similarity'
 import { persistentResource } from './persistent-resources'
 
-function hydrateMessageSimilarity(messages: readonly NormalizedChatMessage[]): void {
+function hydrateMessageHistory(messages: readonly NormalizedChatMessage[]): void {
   const channels = new Map<string, NormalizedChatMessage[]>()
   for (const message of messages) {
+    mentionAppearances.addMessage(message)
     const key = similarityChannelKey(message)
     const entries = channels.get(key)
     if (entries) entries.push(message)
@@ -615,7 +617,7 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
   try {
     const recent = await backend.api.getRecentMessages({})
     if (recent.length > 0) {
-      hydrateMessageSimilarity(recent)
+      hydrateMessageHistory(recent)
       appendHomeMessages(recent)
     }
   } catch (error) {
@@ -627,7 +629,7 @@ export async function loadInitialData(backend: DesktopBackend): Promise<void> {
     try {
       const msgs = await backend.api.getWatchedChannelMessages({ id: ch.id })
       if (msgs.length > 0) {
-        hydrateMessageSimilarity(msgs)
+        hydrateMessageHistory(msgs)
         watchedMessagesStore.modify((current) => {
           const next = new Map(current)
           next.set(ch.id, mergeChatMessageSnapshot(next.get(ch.id) ?? [], msgs, 200))
@@ -668,7 +670,7 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   subscribe('chat_history_snapshot', ({ messages, watchedChannelId }) => {
     clearTimeout(messageTimer)
     flushMessages()
-    hydrateMessageSimilarity(messages)
+    hydrateMessageHistory(messages)
     if (watchedChannelId) {
       if (!watchedChannelsStore.get().some((channel) => channel.id === watchedChannelId)) return
       watchedMessagesStore.modify((current) => {
@@ -728,6 +730,7 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
   }
 
   subscribe('chat_message', (msg) => {
+    mentionAppearances.addMessage(msg)
     classifyIncomingSimilarity(msg)
     pendingHome.push(msg)
     scheduleMessages()
@@ -798,10 +801,12 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
     scheduleMessages()
   }
   subscribe('watched_channel_message', ({ channelId, message }) => {
+    mentionAppearances.addMessage(message)
     classifyIncomingSimilarity(message)
     queueWatchedMessage(channelId, message)
   })
   subscribe('twitch_chat_notice', ({ message, watchedChannelId }) => {
+    mentionAppearances.addMessage(message)
     if (watchedChannelId) queueWatchedMessage(watchedChannelId, message)
     else {
       pendingHome.push(message)
@@ -816,7 +821,7 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
       void backend.api
         .getWatchedChannelMessages({ id: channelId })
         .then((msgs) => {
-          hydrateMessageSimilarity(msgs)
+          hydrateMessageHistory(msgs)
           watchedMessagesStore.modify((current) => {
             const next = new Map(current)
             next.set(channelId, mergeChatMessageSnapshot(next.get(channelId) ?? [], msgs, 200))
