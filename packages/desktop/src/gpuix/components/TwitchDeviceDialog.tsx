@@ -4,6 +4,7 @@ import { useBackend, useBackendEvent } from '../backend/context'
 import type { DesktopEventMap } from '../backend/events'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useT } from '../i18n'
+import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { ActionButton } from './ui/Form'
 import { Modal } from './ui/Modal'
@@ -13,13 +14,16 @@ export function TwitchDeviceDialog() {
   const { api } = useBackend()
   const theme = useTheme()
   const { t } = useT()
+  const windowScope = useWindowScope()
   const [prompt, setPrompt] = useState<DesktopEventMap['twitch_device_code']>(null)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
-  useBackendEvent('twitch_device_code', setPrompt)
+  useBackendEvent('twitch_device_code', (next) => {
+    setPrompt(next?.windowScope === windowScope ? next : null)
+  })
 
   if (!prompt) return null
   const { url, userCode } = prompt
-  const cancel = () => runUiTask(api.cancelTwitchAuth({ userCode }))
+  const cancel = () => runUiTask(api.cancelTwitchAuth({ userCode, windowScope }))
   const copy = () => runUiTask(api.copyText({ text: userCode }).then(() => setCopiedCode(userCode)))
 
   return (

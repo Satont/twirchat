@@ -25,6 +25,7 @@ import { ChatNotice, UpdateToast } from './App'
 import { SavedAccounts } from './SavedAccounts'
 import { SearchAllChatsDialog } from './SearchAllChatsDialog'
 import { SettingsPanel } from './SettingsPanel'
+import { TwitchDeviceDialog } from './TwitchDeviceDialog'
 import { ActionButton } from './ui/Form'
 import { Modal } from './ui/Modal'
 import { UserCardDialog } from './UserCardDialog'
@@ -44,11 +45,14 @@ export function ChatWindow({
   const [page, setPage] = useState<'chat' | 'settings' | 'accounts'>('chat')
   const [search, setSearch] = useState(false)
   const goToPage = (next: 'chat' | 'settings' | 'accounts') => {
-    if (page === 'settings' && next !== 'settings') {
-      requestLeaveSettings(() => setPage(next))
-      return
+    const navigate = () => {
+      if (next === 'accounts' && windows?.descriptor.kind === 'user' && !windows.pinned) {
+        windows.setPinned(true)
+      }
+      setPage(next)
     }
-    setPage(next)
+    if (page === 'settings' && next !== 'settings') requestLeaveSettings(navigate)
+    else navigate()
   }
   const goToPageRef = useRef(goToPage)
   goToPageRef.current = goToPage
@@ -161,6 +165,7 @@ export function ChatWindow({
               <SavedAccounts />
             </Modal>
           ) : null}
+          <TwitchDeviceDialog />
           <ChatNotice />
           <UpdateToast />
         </div>

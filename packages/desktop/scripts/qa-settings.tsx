@@ -137,13 +137,16 @@ const methods = {
   authStart: async () => {
     throw new Error('QA never starts OAuth')
   },
-  authLink: async ({ platform }) => {
+  authLink: async ({ platform, windowScope }) => {
+    assert.equal(windowScope, 'main')
     const url = `https://auth.example.test/authorize?state=qa-${platform}`
-    if (platform === 'twitch') events.emit('twitch_device_code', { url, userCode: 'TWIR-QA' })
+    if (platform === 'twitch')
+      events.emit('twitch_device_code', { url, userCode: 'TWIR-QA', windowScope })
     return { url }
   },
-  cancelTwitchAuth: async ({ userCode }) => {
+  cancelTwitchAuth: async ({ userCode, windowScope }) => {
     assert.equal(userCode, 'TWIR-QA')
+    assert.equal(windowScope, 'main')
     events.emit('twitch_device_code', null)
   },
 }

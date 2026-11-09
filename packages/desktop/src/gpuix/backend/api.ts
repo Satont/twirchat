@@ -231,6 +231,11 @@ export interface ChannelChatters {
   error?: string
 }
 
+interface AuthRequest {
+  platform: Platform
+  windowScope: string
+}
+
 export interface DesktopApi {
   obsRemote: typeof obsRemoteApi
   getStreamerMode(): Promise<StreamerModeStatus>
@@ -320,10 +325,10 @@ export interface DesktopApi {
   setUserAlias(params: { platform: Platform; platformUserId: string; alias: string }): Promise<void>
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
   getChannels(): Promise<Partial<Record<Platform, string[]>>>
-  authStart(params: { platform: Platform }): Promise<void>
+  authStart(params: AuthRequest): Promise<void>
   /** Prepares a sign-in like `authStart` and returns its link instead of opening a browser. */
-  authLink(params: { platform: Platform }): Promise<{ url: string }>
-  cancelTwitchAuth(params: { userCode: string }): Promise<void>
+  authLink(params: AuthRequest): Promise<{ url: string }>
+  cancelTwitchAuth(params: { userCode: string; windowScope: string }): Promise<void>
   authLogout(params: { platform: Platform }): Promise<void>
   joinChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
   leaveChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
@@ -815,9 +820,11 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   const { aggregator, watchedChannelManager, currentStatuses } = ctx
   const updater = ctx.updater ?? createUpdater(ctx.events)
 
-  let twitchAuth: { controller: AbortController; userCode?: string } | undefined
+  let twitchAuth:
+    | { controller: AbortController; windowScope: string; userCode?: string }
+    | undefined
 
-  async function createAuthUrl(platform: Platform): Promise<string> {
+  async function createAuthUrl({ platform, windowScope }: AuthRequest): Promise<string> {
     if (platform === 'kick') {
       const { codeChallenge, state } = prepareKickAuth()
       return getKickAuthUrl(codeChallenge, state)
@@ -826,7 +833,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     twitchAuth?.controller.abort()
     const controller = new AbortController()
-    const current: NonNullable<typeof twitchAuth> = { controller }
+    const current: NonNullable<typeof twitchAuth> = { controller, windowScope }
     twitchAuth = current
     ctx.events.emit('twitch_device_code', null)
 
@@ -841,7 +848,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       controller.signal.throwIfAborted()
       const { user_code: userCode, verification_uri: url } = attempt.code
       current.userCode = userCode
-      ctx.events.emit('twitch_device_code', { userCode, url })
+      ctx.events.emit('twitch_device_code', { userCode, url, windowScope })
       void connectTwitchDevice(attempt, controller.signal)
         .then((account) => {
           clear()
@@ -1019,14 +1026,14 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     getChannels: async () => ChannelStore.findAll(),
 
-    authStart: async ({ platform }) => {
-      ctx.openBrowser(await createAuthUrl(platform))
+    authStart: async (params) => {
+      ctx.openBrowser(await createAuthUrl(params))
     },
 
-    authLink: async ({ platform }) => ({ url: await createAuthUrl(platform) }),
+    authLink: async (params) => ({ url: await createAuthUrl(params) }),
 
-    cancelTwitchAuth: async ({ userCode }) => {
-      if (twitchAuth?.userCode !== userCode) return
+    cancelTwitchAuth: async ({ userCode, windowScope }) => {
+      if (twitchAuth?.windowScope !== windowScope || twitchAuth.userCode !== userCode) return
       twitchAuth.controller.abort()
       twitchAuth = undefined
       ctx.events.emit('twitch_device_code', null)

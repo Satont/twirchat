@@ -56,7 +56,7 @@ export type DesktopEventMap = {
   twitch_activity_capability: TwitchActivityCapability
   platform_status: PlatformStatusInfo
   auth_url: { platform: Platform; url: string }
-  twitch_device_code: { url: string; userCode: string } | null
+  twitch_device_code: { url: string; userCode: string; windowScope: string } | null
   auth_success: { platform: Platform; username: string; displayName: string }
   auth_error: { platform: Platform; error: string }
   update_status: { status: string; message: string; progress?: number; hash?: string }
