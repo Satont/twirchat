@@ -21,7 +21,8 @@ import {
 import { useStore } from '../state/create-store'
 import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
@@ -101,16 +102,16 @@ export function HotkeySettings() {
     })
     if (result.complete) setRecording(false)
   }
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     const requested = revision.current
     try {
       await actionBindingsPreferences.save(backend.api, draft)
-      if (revision.current === requested) {
-        setDirty(false)
-        setNotice('Shortcuts saved.')
-      }
+      const current = revision.current === requested
+      if (current) setDirty(false)
+      return current
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
+      return false
     }
   }
   return (
@@ -136,7 +137,6 @@ export function HotkeySettings() {
       {!state.loaded ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>Loading shortcuts…</Text>
       ) : null}
-      <FormError>{error || state.error || validation}</FormError>
       {state.error && !dirty ? (
         <ActionButton
           onClick={() => {
@@ -332,21 +332,24 @@ export function HotkeySettings() {
           ) : null}
         </div>
       ) : null}
-      {notice ? <Text style={{ fontSize: 12, color: theme.text2 }}>{notice}</Text> : null}
-      <ActionButton
-        testId="hotkey-save"
-        primary
-        disabled={!dirty || Boolean(validation) || !state.loaded || state.saving || recording}
-        onClick={() => {
-          runUiTask(save())
+      <SettingsFooter
+        sectionId="shortcuts"
+        dirty={dirty}
+        saving={state.saving}
+        error={error || state.error || validation}
+        errorTestId="hotkey-save-error"
+        note={notice}
+        disabled={!state.loaded || recording || Boolean(validation)}
+        saveTestId="hotkey-save"
+        onSave={save}
+        onDiscard={() => {
+          revision.current++
+          setDraft(structuredClone(state.value))
+          setDirty(false)
+          setError('')
+          setNotice('')
         }}
-      >
-        {state.saving
-          ? 'Saving…'
-          : state.error && dirty
-            ? 'Retry save shortcuts'
-            : 'Save action shortcuts'}
-      </ActionButton>
+      />
     </div>
   )
 }

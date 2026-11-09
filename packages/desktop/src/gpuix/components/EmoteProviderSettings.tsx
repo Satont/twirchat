@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { EmotePreferences, EmoteProvider } from '../../services/provider-emotes'
 import { useBackend } from '../backend/context'
@@ -11,7 +11,8 @@ import {
   saveEmotePreferences,
 } from '../state/emote-preferences'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
@@ -22,12 +23,20 @@ const PROVIDER_LABELS: Record<EmoteProvider, string> = {
   ffz: 'FrankerFaceZ',
 }
 
-/** Section body: changes persist immediately through the desktop facade. */
+/** Section body: edits stay local until the section is saved. */
 export function EmoteProviderSettings() {
   const backend = useBackend()
   const theme = useTheme()
   const state = useStore(emotePreferencesStore)
+  const [draft, setDraft] = useState(() => structuredClone(state.value))
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const [notice, setNotice] = useState('')
   const [providerErrors, setProviderErrors] = useState<Array<{ url: string; error: string }>>([])
+  const dirty = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(state.value),
+    [draft, state.value],
+  )
   useEffect(() => {
     runUiTask(loadEmotePreferences(backend.api))
     let active = true
@@ -41,33 +50,47 @@ export function EmoteProviderSettings() {
       active = false
     }
   }, [backend])
-  const patch = (value: EmotePreferences, refresh = true) => {
-    void saveEmotePreferences(backend.api, value)
-      .then(async () => {
-        if (!refresh) return
-        const channels = [...emoteStore.get().keys()]
-        await Promise.all(
-          channels.flatMap((key) => {
-            const separator = key.indexOf(':')
-            const platform = key.slice(0, separator)
-            const channelId = key.slice(separator + 1)
-            if (
-              (platform !== 'twitch' && platform !== 'kick' && platform !== 'youtube') ||
-              !channelId
-            )
-              return []
-            return [loadEmotes(backend, platform, channelId, false)]
-          }),
-        )
-        setProviderErrors(await backend.api.getEmoteProviderErrors())
-      })
-      .catch(() => {})
+  useEffect(() => {
+    if (!dirty) setDraft(structuredClone(draft))
+  }, [dirty, draft])
+  const change = (value: EmotePreferences) => {
+    setNotice('')
+    setDraft(value)
+  }
+  const save = async (): Promise<boolean> => {
+    const snapshot = draft
+    try {
+      await saveEmotePreferences(backend.api, snapshot)
+    } catch {
+      /* The preference store exposes the save error below. */
+      return false
+    }
+    try {
+      const channels = [...emoteStore.get().keys()]
+      await Promise.all(
+        channels.flatMap((key) => {
+          const separator = key.indexOf(':')
+          const platform = key.slice(0, separator)
+          const channelId = key.slice(separator + 1)
+          if (
+            (platform !== 'twitch' && platform !== 'kick' && platform !== 'youtube') ||
+            !channelId
+          )
+            return []
+          return [loadEmotes(backend, platform, channelId)]
+        }),
+      )
+      setProviderErrors(await backend.api.getEmoteProviderErrors())
+    } catch {
+      /* A provider refresh failure does not undo the saved preference. */
+    }
+    return draftRef.current === snapshot
   }
   const move = (index: number, delta: number) => {
-    const order = [...state.value.precedence]
+    const order = [...draft.precedence]
     const [provider] = order.splice(index, 1)
     order.splice(index + delta, 0, provider!)
-    patch({ ...state.value, precedence: order })
+    change({ ...draft, precedence: order })
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -75,8 +98,7 @@ export function EmoteProviderSettings() {
         Enabled providers are checked from top to bottom when names collide. Channel emotes win over
         globals within each provider.
       </Text>
-      <FormError>{state.error}</FormError>
-      {state.value.precedence.map((provider, index) => (
+      {draft.precedence.map((provider, index) => (
         <div
           key={provider}
           style={{
@@ -94,16 +116,16 @@ export function EmoteProviderSettings() {
             Move up
           </ActionButton>
           <ActionButton
-            disabled={index === state.value.precedence.length - 1}
+            disabled={index === draft.precedence.length - 1}
             onClick={() => move(index, 1)}
           >
             Move down
           </ActionButton>
           <Switch
             small
-            checked={state.value.enabled[provider]}
+            checked={draft.enabled[provider]}
             onChange={(value) =>
-              patch({ ...state.value, enabled: { ...state.value.enabled, [provider]: value } })
+              change({ ...draft, enabled: { ...draft.enabled, [provider]: value } })
             }
           />
         </div>
@@ -137,8 +159,8 @@ export function EmoteProviderSettings() {
           <Text style={{ fontSize: 13, color: theme.text }}>{label}</Text>
           <Switch
             small
-            checked={state.value[key]}
-            onChange={(value) => patch({ ...state.value, [key]: value }, key === 'personal')}
+            checked={draft[key]}
+            onChange={(value) => change({ ...draft, [key]: value })}
           />
         </div>
       ))}
@@ -159,17 +181,17 @@ export function EmoteProviderSettings() {
         </div>
         <Switch
           small
-          checked={state.value.sendPresence}
-          onChange={(value) => patch({ ...state.value, sendPresence: value }, false)}
+          checked={draft.sendPresence}
+          onChange={(value) => change({ ...draft, sendPresence: value })}
         />
       </div>
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Text
           style={{ fontSize: 12, color: theme.text2, flexGrow: 1 }}
-        >{`${state.value.favorites.length}/250 favorite emotes · ${state.saving ? 'Saving…' : 'Changes saved automatically'}`}</Text>
+        >{`${draft.favorites.length}/250 favorite emotes`}</Text>
         <ActionButton
-          disabled={state.value.favorites.length === 0}
-          onClick={() => patch({ ...state.value, favorites: [] }, false)}
+          disabled={draft.favorites.length === 0}
+          onClick={() => change({ ...draft, favorites: [] })}
         >
           Clear favorites
         </ActionButton>
@@ -180,6 +202,21 @@ export function EmoteProviderSettings() {
           style={{ fontSize: 11, color: theme.warningText }}
         >{`${new URL(url).hostname}: ${error}. Other providers remain available.`}</Text>
       ))}
+      <SettingsFooter
+        sectionId="emotes"
+        dirty={dirty}
+        saving={state.saving}
+        error={state.error || undefined}
+        errorTestId="emotes-save-error"
+        note={notice}
+        disabled={!state.loaded}
+        saveTestId="emotes-save"
+        onSave={save}
+        onDiscard={() => {
+          setDraft(structuredClone(state.value))
+          setNotice('')
+        }}
+      />
     </div>
   )
 }

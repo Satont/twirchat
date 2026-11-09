@@ -291,7 +291,7 @@ try {
   await type(input, 'draft')
   await click('settings-category-general')
   await click('settings-category-commands')
-  await clickNode(await scrollTo('custom-commands-save'))
+  await click('settings-save')
   assert.equal(
     JSON.parse(values.get('custom_commands_v1'))[0].name,
     'draft',
@@ -302,7 +302,7 @@ try {
     'pending',
   )
   holdCommand = true
-  await clickNode(await scrollTo('custom-commands-save'))
+  await click('settings-save')
   assert.ok(commandWrite)
   await type(
     flatten(find('custom-command-hello')).find((node) => node.type === 'input'),
@@ -312,7 +312,7 @@ try {
   holdCommand = false
   await Bun.sleep(180)
   assert.equal(JSON.parse(values.get('custom_commands_v1'))[0].name, 'pending')
-  await clickNode(await scrollTo('custom-commands-save'))
+  await click('settings-save')
   assert.equal(
     JSON.parse(values.get('custom_commands_v1'))[0].name,
     'latest',
@@ -367,7 +367,7 @@ try {
   assert.equal(durableUploader.requestUrl, '', 'Import should wait for Save')
   await click('settings-search-clear')
   await type(find('settings-search'), 'sharex headers')
-  await clickNode(await scrollTo('image-uploader-save'))
+  await click('settings-save')
   assert.deepEqual(durableUploader, {
     enabled: true,
     confirm: true,

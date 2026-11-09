@@ -16,7 +16,8 @@ import {
   translationSettingsStore,
 } from '../state/translation'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
@@ -76,16 +77,18 @@ export function TranslationSettings() {
         .slice(0, 12),
     [languages, languageQuery],
   )
-  async function save() {
+  async function save(): Promise<boolean> {
     setBusy(true)
     setError('')
     const at = revision.current
     try {
       applyTranslationSettings(await backend.api.saveTranslationSettings(draft))
-      if (at === revision.current) setDirty(false)
-      setNotice('Translation settings saved.')
+      const current = at === revision.current
+      if (current) setDirty(false)
+      return current
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
+      return false
     } finally {
       setBusy(false)
     }
@@ -432,24 +435,33 @@ export function TranslationSettings() {
       >
         Add channel override
       </ActionButton>
-      <FormError>{validation || error || state.error}</FormError>
-      {notice ? <Text style={{ fontSize: 12, color: theme.successText }}>{notice}</Text> : null}
-      <ActionButton
-        testId="translation-settings-save"
-        primary
-        disabled={busy || !dirty || !!validation}
-        onClick={() => void save()}
+      <SettingsFooter
+        sectionId="translation"
+        dirty={dirty}
+        saving={busy}
+        error={validation || error || state.error || undefined}
+        errorTestId="translation-settings-error"
+        note={notice}
+        disabled={Boolean(validation)}
+        saveTestId="translation-settings-save"
+        onSave={save}
+        onDiscard={() => {
+          revision.current++
+          setDraft(structuredClone(state.value.settings))
+          setDirty(false)
+          setError('')
+          setNotice('')
+        }}
       >
-        {busy ? 'Saving…' : 'Save translation settings'}
-      </ActionButton>
-      {state.error ? (
-        <ActionButton
-          disabled={busy}
-          onClick={() => void loadTranslationSettings(backend, true).catch(() => {})}
-        >
-          Retry loading settings
-        </ActionButton>
-      ) : null}
+        {state.error ? (
+          <ActionButton
+            disabled={busy}
+            onClick={() => void loadTranslationSettings(backend, true).catch(() => {})}
+          >
+            Retry loading settings
+          </ActionButton>
+        ) : null}
+      </SettingsFooter>
     </div>
   )
 }

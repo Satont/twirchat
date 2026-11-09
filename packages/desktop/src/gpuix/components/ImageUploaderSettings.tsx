@@ -14,6 +14,7 @@ import {
   loadImageUploaderSettings,
 } from '../state/image-uploader'
 import { useTheme } from '../theme-context'
+import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
@@ -73,7 +74,13 @@ export function ImageUploaderSettings() {
   const twir = saved?.provider === 'twir'
   const draft = twir ? twirDraft : manualDraft
   const setDraft = twir ? setTwirDraft : setManualDraft
+  const draftRef = useRef(draft)
+  draftRef.current = draft
   const current = draft ?? saved
+  const dirty = useMemo(
+    () => draft !== null && saved !== null && JSON.stringify(draft) !== JSON.stringify(saved),
+    [draft, saved],
+  )
   const validation = useMemo(() => {
     if (!draft) return ''
     try {
@@ -140,13 +147,15 @@ export function ImageUploaderSettings() {
     })
   }
 
-  async function save(settings: Settings): Promise<void> {
+  async function save(settings: Settings): Promise<boolean> {
+    let saved = false
     await run('save', async () => {
       const persisted = await api.saveImageUploaderSettings(settings)
       applyImageUploaderSettings(persisted)
       setDraft((previous) => (previous === settings ? null : previous))
-      setNotice('Image uploader settings saved.')
+      saved = draftRef.current === settings
     })
+    return saved
   }
 
   async function readImport(settings: Settings): Promise<void> {
@@ -304,15 +313,24 @@ export function ImageUploaderSettings() {
               </FormField>
             </>
           ) : null}
-          <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <ActionButton
-              primary
-              disabled={busy || !draft || !!validation}
-              testId="image-uploader-save"
-              onClick={() => void save(current)}
-            >
-              {operation === 'save' ? 'Saving…' : 'Save uploader settings'}
-            </ActionButton>
+          <SettingsFooter
+            sectionId="image-uploader"
+            dirty={dirty}
+            saving={operation === 'save'}
+            error={error || validation}
+            errorTestId="image-uploader-error"
+            note={notice}
+            disabled={busy || !draft || Boolean(validation)}
+            saveTestId="image-uploader-save"
+            onSave={() => save(current)}
+            onDiscard={() => {
+              setDraft(null)
+              setConfirmation(null)
+              setHeadersVisible(false)
+              setNotice('')
+              setError('')
+            }}
+          >
             {!twir ? (
               <>
                 <ActionButton
@@ -331,7 +349,7 @@ export function ImageUploaderSettings() {
                 </ActionButton>
               </>
             ) : null}
-          </div>
+          </SettingsFooter>
           {!twir && confirmation ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <Text style={{ fontSize: 12, color: theme.text }}>
@@ -392,8 +410,7 @@ export function ImageUploaderSettings() {
       ) : (
         <Text style={{ fontSize: 12, color: theme.text2 }}>Loading uploader settings…</Text>
       )}
-      <FormError>{error || validation}</FormError>
-      {notice ? <Text style={{ fontSize: 11, color: theme.text2 }}>{notice}</Text> : null}
+      {current ? null : <FormError>{error}</FormError>}
     </div>
   )
 }

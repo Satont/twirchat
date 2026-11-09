@@ -12,7 +12,8 @@ import {
   streamerModeStore,
 } from '../state/streamer-mode'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton } from './ui/Form'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 const privacy: [keyof Settings, string][] = [
@@ -32,6 +33,7 @@ export function StreamerModeSettings() {
   const status = useStore(streamerModeStore)
   const requests = useStore(streamerModeRequestStore)
   const [draft, setDraft] = useState(() => structuredClone(status.settings))
+  const [draftMode, setDraftMode] = useState<StreamerMode>(status.mode)
   const [dirty, setDirty] = useState(false)
   const [notice, setNotice] = useState('')
   const revision = useRef(0)
@@ -39,21 +41,21 @@ export function StreamerModeSettings() {
     runUiTask(loadStreamerMode(backend))
   }, [backend])
   useEffect(() => {
-    if (!dirty) setDraft(structuredClone(status.settings))
-  }, [dirty, status.settings])
-  const setMode = (mode: StreamerMode | 'toggle') => {
-    void saveStreamerMode(backend, mode).catch(() => {})
-  }
-  const save = async () => {
+    if (dirty) return
+    setDraft(structuredClone(status.settings))
+    setDraftMode(status.mode)
+  }, [dirty, status.mode, status.settings])
+  const save = async (): Promise<boolean> => {
     const requested = revision.current
     try {
+      if (draftMode !== status.mode) await saveStreamerMode(backend, draftMode)
       await saveStreamerModeSettings(backend, draft)
-      if (revision.current === requested) {
-        setDirty(false)
-        setNotice('Streamer privacy settings saved.')
-      }
+      const current = revision.current === requested
+      if (current) setDirty(false)
+      return current
     } catch {
       /* The request store keeps the actionable error and the draft remains editable. */
+      return false
     }
   }
   return (
@@ -65,22 +67,24 @@ export function StreamerModeSettings() {
         {(['auto', 'on', 'off'] satisfies StreamerMode[]).map((mode) => (
           <ActionButton
             key={mode}
-            primary={status.mode === mode}
+            primary={draftMode === mode}
             disabled={requests.saving}
-            onClick={() => setMode(mode)}
+            onClick={() => {
+              revision.current++
+              setDraftMode(mode)
+              setDirty(true)
+              setNotice('')
+            }}
           >
             {mode === 'auto' ? 'Auto' : mode === 'on' ? 'On' : 'Off'}
           </ActionButton>
         ))}
-        <ActionButton disabled={requests.saving} onClick={() => setMode('toggle')}>
-          Toggle effective mode
-        </ActionButton>
       </div>
       <Text style={{ color: theme.text2, fontSize: 12 }}>
         Auto checks for streaming software immediately and every 20 seconds. On and Off stop
-        automatic detection. Privacy options below apply only while streamer mode is active.
+        automatic detection. Privacy options below apply only while streamer mode is active. Mode
+        and privacy options save together.
       </Text>
-      <FormError>{requests.error || status.error}</FormError>
       {requests.error ? (
         <ActionButton
           onClick={() => {
@@ -104,20 +108,24 @@ export function StreamerModeSettings() {
           <Text style={{ color: theme.text, fontSize: 12 }}>{label}</Text>
         </div>
       ))}
-      {notice ? <Text style={{ color: theme.text2, fontSize: 12 }}>{notice}</Text> : null}
-      <ActionButton
-        primary
-        disabled={!requests.loaded || !dirty || requests.saving}
-        onClick={() => {
-          runUiTask(save())
+      <SettingsFooter
+        sectionId="streamer-mode"
+        dirty={dirty}
+        saving={requests.saving}
+        error={requests.error || status.error || undefined}
+        note={notice}
+        disabled={!requests.loaded}
+        saveTestId="streamer-mode-save"
+        errorTestId="streamer-mode-save-error"
+        onSave={save}
+        onDiscard={() => {
+          revision.current++
+          setDraft(structuredClone(status.settings))
+          setDraftMode(status.mode)
+          setDirty(false)
+          setNotice('')
         }}
-      >
-        {requests.saving
-          ? 'Saving…'
-          : requests.error
-            ? 'Retry saving streamer privacy settings'
-            : 'Save streamer privacy settings'}
-      </ActionButton>
+      />
     </div>
   )
 }

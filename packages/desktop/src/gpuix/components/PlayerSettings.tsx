@@ -8,7 +8,8 @@ import {
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useTheme } from '../theme-context'
-import { ActionButton, FormError, FormField, FormInput } from './ui/Form'
+import { SettingsFooter } from './settings/SettingsLayout'
+import { ActionButton, FormField, FormInput } from './ui/Form'
 import { Text } from './ui/Text'
 
 export function PlayerSettings() {
@@ -21,6 +22,7 @@ export function PlayerSettings() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const revision = useRef(0)
+  const savedSettings = useRef<Settings | null>(null)
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -34,6 +36,7 @@ export function PlayerSettings() {
     try {
       const settings = validatePlayerSettings(await api.getPlayerSettings())
       if (!mounted.current || revision.current !== requested) return
+      savedSettings.current = structuredClone(settings)
       setDraft(settings)
       setLoaded(true)
       setDirty(false)
@@ -65,21 +68,23 @@ export function PlayerSettings() {
       return cause instanceof Error ? cause.message : String(cause)
     }
   }, [draft])
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     const requested = revision.current
     setSaving(true)
     setError('')
     try {
-      await api.savePlayerSettings({ settings: validatePlayerSettings(draft) })
-      if (mounted.current && requested === revision.current) {
-        setDirty(false)
-        setNotice('Player settings saved.')
-      }
+      const settings = validatePlayerSettings(draft)
+      await api.savePlayerSettings({ settings })
+      savedSettings.current = structuredClone(settings)
+      const current = mounted.current && requested === revision.current
+      if (current) setDirty(false)
+      return current
     } catch (cause) {
       if (mounted.current && requested === revision.current) {
         setError(cause instanceof Error ? cause.message : String(cause))
         setLoaded(true)
       }
+      return false
     } finally {
       if (mounted.current) setSaving(false)
     }
@@ -93,7 +98,6 @@ export function PlayerSettings() {
       {!loaded && !error ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>Loading player settings…</Text>
       ) : null}
-      <FormError>{error || validation}</FormError>
       {error && !dirty ? (
         <ActionButton
           onClick={() => {
@@ -132,21 +136,24 @@ export function PlayerSettings() {
             </div>
           ))
         : null}
-      {notice ? <Text style={{ fontSize: 12, color: theme.text2 }}>{notice}</Text> : null}
-      <ActionButton
-        primary
-        testId="player-save"
-        disabled={!loaded || !dirty || saving || Boolean(validation)}
-        onClick={() => {
-          runUiTask(save())
+      <SettingsFooter
+        sectionId="players"
+        dirty={dirty}
+        saving={saving}
+        error={error || validation}
+        note={notice}
+        disabled={!loaded || Boolean(validation)}
+        saveTestId="player-save"
+        errorTestId="player-save-error"
+        onSave={save}
+        onDiscard={() => {
+          revision.current++
+          setDraft(structuredClone(savedSettings.current ?? DEFAULT_PLAYER_SETTINGS))
+          setDirty(false)
+          setError('')
+          setNotice('')
         }}
-      >
-        {saving
-          ? 'Saving…'
-          : error && dirty
-            ? 'Retry saving player settings'
-            : 'Save player settings'}
-      </ActionButton>
+      />
     </div>
   )
 }

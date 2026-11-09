@@ -19,6 +19,7 @@ import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
 import { useStore } from '../state/create-store'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useTheme } from '../theme-context'
+import { SettingsFooter } from './settings/SettingsLayout'
 import { Icon } from './ui/Icon'
 import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
@@ -128,52 +129,23 @@ export function ChatRulesSettings() {
     })
     setEditingId(id)
   }
-  const save = async () => {
-    if (!validation.value) return
+  const save = async (): Promise<boolean> => {
+    if (!validation.value) return false
     const requestedAt = editRevision.current
     try {
       await chatRulesPreferences.save(backend.api, validation.value)
-      if (requestedAt === editRevision.current) setDirty(false)
+      const current = requestedAt === editRevision.current
+      if (current) setDirty(false)
       setSaveError(null)
+      return current
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error))
+      return false
     }
   }
 
   return (
-    <div
-      testId="chat-rules-settings"
-      style={{
-        backgroundColor: theme.surface,
-        borderWidth: 1,
-        borderColor: theme.border,
-        borderRadius: 14,
-        padding: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        marginBottom: 8,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Text style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>Chat rules</Text>
-        <Button
-          testId="chat-rules-save"
-          label={persisted.saving ? 'Saving…' : dirty ? 'Save rules' : 'Rules saved'}
-          disabled={!dirty || !persisted.loaded || persisted.saving || !!validation.error}
-          onClick={() => void save()}
-          primary
-        />
-      </div>
+    <div testId="chat-rules-settings" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <Text style={{ fontSize: 12, color: theme.text2 }}>
         Highlight messages, hide unwanted chatter, and save filters for individual panes.
       </Text>
@@ -348,27 +320,28 @@ export function ChatRulesSettings() {
               style={{ fontSize: 11, color: theme.text2 }}
             >{`Preview across ${samples.length} buffered messages: ${preview.highlighted} highlighted, ${preview.hidden} hidden, ${preview.replaced} replaced.`}</Text>
           ) : null}
-          {validation.error || saveError || persisted.error ? (
-            <Text testId="chat-rules-error" style={{ fontSize: 12, color: theme.dangerText }}>
-              {validation.error ?? saveError ?? persisted.error}
-            </Text>
-          ) : null}
-          {persisted.error && !dirty ? (
-            <Button
-              label="Retry loading rules"
-              onClick={() => void chatRulesPreferences.load(backend.api)}
-            />
-          ) : null}
-          {dirty ? (
-            <Button
-              label="Discard unsaved changes"
-              onClick={() => {
-                setDraft(structuredClone(persisted.value))
-                setDirty(false)
-                setSaveError(null)
-              }}
-            />
-          ) : null}
+          <SettingsFooter
+            sectionId="rules"
+            dirty={dirty}
+            saving={persisted.saving}
+            error={validation.error ?? saveError ?? persisted.error ?? undefined}
+            errorTestId="chat-rules-error"
+            disabled={!persisted.loaded || Boolean(validation.error)}
+            saveTestId="chat-rules-save"
+            onSave={save}
+            onDiscard={() => {
+              setDraft(structuredClone(persisted.value))
+              setDirty(false)
+              setSaveError(null)
+            }}
+          >
+            {persisted.error && !dirty ? (
+              <Button
+                label="Retry loading rules"
+                onClick={() => void chatRulesPreferences.load(backend.api)}
+              />
+            ) : null}
+          </SettingsFooter>
         </>
       )}
     </div>

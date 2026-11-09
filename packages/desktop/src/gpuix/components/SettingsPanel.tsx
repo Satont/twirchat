@@ -7,23 +7,21 @@ import type {
   SelfPingConfig,
 } from '@twirchat/shared/types'
 /**
- * Settings panel — port of SettingsPanel.vue: appearance (theme + font),
- * self-ping highlight, updates, OBS overlay, and keyboard shortcuts.
+ * Settings panel — appearance, chat features, overlay and shortcuts.
  *
- * Local edits apply live by pushing straight into settingsStore (the Vue
- * `change` emit → App.settings); "Save changes" persists through
- * backend.api.saveSettings and flashes the "Saved!" check for 2s.
+ * One Save footer owns every mounted section: app-settings fields persist
+ * through saveSettings and feature sections register their draft save/discard
+ * callbacks. Dirty sections are marked in the header and category navigation,
+ * and leaving the panel with drafts triggers a save/discard warning.
  */
 import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, useId } from 'react'
-import type { ComponentType, ReactNode } from 'react'
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { ComponentType } from 'react'
 
 import { useBackend } from '../backend/context'
 import { focusPopupSearch } from '../hooks/use-popup-hotkeys'
 import { nativeWindow } from '../native-window'
 import {
-  SETTINGS_SECTIONS,
-  SETTINGS_SAVE_LABELS,
   searchSettings,
   resolveSettingsCategory,
   visibleSettingsSections,
@@ -38,6 +36,7 @@ import { useStore } from '../state/create-store'
 import { useTextInputFocusTracking } from '../state/focus'
 import { formatKeyCombo, GPUIX_TO_DOM_KEY } from '../state/hotkeys'
 import { useOverlayClose } from '../state/overlays'
+import { bindSettingsSession, syncSettingsSession } from '../state/settings-session'
 import { DEFAULT_CUSTOM_PALETTE, normalizePaletteColor, THEME_PRESETS } from '../theme'
 import { useTheme } from '../theme-context'
 import { ChatLoggingSettings } from './ChatLoggingSettings'
@@ -50,6 +49,16 @@ import { ImageUploaderSettings } from './ImageUploaderSettings'
 import { NotificationSettings } from './NotificationSettings'
 import { PlayerSettings } from './PlayerSettings'
 import { PluginSettings } from './PluginSettings'
+import {
+  SettingsDirtyReporterContext,
+  SettingsFooter,
+  SettingsRow,
+  SettingsSaveRegistryContext,
+  SettingsSection,
+  SettingsSectionContext,
+  type SettingsSectionController,
+} from './settings/SettingsLayout'
+import { SettingsLeaveDialog } from './settings/SettingsLeaveDialog'
 import { SimilaritySettings } from './SimilaritySettings'
 import { StreamerModeSettings } from './StreamerModeSettings'
 import { ThemeSettings, type PaletteInputs } from './ThemeSettings'
@@ -72,6 +81,58 @@ function makeLocal(s: AppSettings): EditableSettings {
     selfPing: { ...(s.selfPing ?? DEFAULT_SETTINGS.selfPing!) },
     hotkeys: { ...(s.hotkeys ?? DEFAULT_SETTINGS.hotkeys) },
   }
+}
+
+/** Sections that persist through the shared app-settings document. */
+type AppSettingsSectionId = Extract<
+  SettingsSectionId,
+  'appearance' | 'updates' | 'self-ping' | 'overlay' | 'shortcuts' | 'twir-integration'
+>
+
+const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
+  'appearance',
+  'updates',
+  'self-ping',
+  'overlay',
+  'shortcuts',
+  'twir-integration',
+]
+
+function appSectionFields(
+  section: AppSettingsSectionId,
+  source: EditableSettings,
+): Partial<EditableSettings> {
+  switch (section) {
+    case 'appearance':
+      return {
+        theme: source.theme,
+        customPalette: source.customPalette,
+        fontFamily: source.fontFamily,
+      }
+    case 'updates':
+      return { autoCheckUpdates: source.autoCheckUpdates }
+    case 'self-ping':
+      return { selfPing: { ...source.selfPing } }
+    case 'overlay':
+      return { overlay: { ...source.overlay } }
+    case 'shortcuts':
+      return { hotkeys: { ...source.hotkeys } }
+    case 'twir-integration':
+      return { twirIntegrationEnabled: source.twirIntegrationEnabled }
+    default:
+      return {}
+  }
+}
+
+function appSectionDirty(
+  section: AppSettingsSectionId,
+  local: EditableSettings,
+  persisted: EditableSettings,
+): boolean {
+  return (
+    JSON.stringify(appSectionFields(section, local)) !==
+    JSON.stringify(appSectionFields(section, persisted))
+  )
 }
 
 function customPaletteFor(settings: AppSettings): CustomPalette {
@@ -105,12 +166,6 @@ const MODIFIER_ONLY_KEYS = new Set([
   'fn',
   'capslock',
 ])
-
-const SectionVisibilityContext = createContext<{
-  visible: ReadonlySet<SettingsSectionId>
-  mounted: ReadonlySet<SettingsSectionId>
-  narrow: boolean
-}>({ visible: new Set(), mounted: new Set(), narrow: false })
 
 const RetainedSettingsEditor = memo(function RetainedSettingsEditor({
   component: Editor,
@@ -158,10 +213,6 @@ export function SettingsPanel() {
     () => retainMountedSettingsSections(visitedIds, visibleIds),
     [visitedIds, visibleIds],
   )
-  const visibility = useMemo(
-    () => ({ visible: new Set(visibleIds), mounted: mountedIds, narrow }),
-    [visibleIds, mountedIds, narrow],
-  )
   useEffect(() => {
     if (mountedIds !== visitedIds) setVisitedIds(mountedIds)
   }, [mountedIds, visitedIds])
@@ -178,23 +229,69 @@ export function SettingsPanel() {
   const [local, setLocal] = useState<EditableSettings>(() =>
     makeLocal(settings ?? DEFAULT_SETTINGS),
   )
-  const [paletteInputs, setPaletteInputs] = useState<PaletteInputs>({})
-  const invalidPalette = Object.values(paletteInputs).some((input) => input.invalid)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState('')
   const [baselineLoaded, setBaselineLoaded] = useState(false)
   const [actionError, setActionError] = useState('')
-  const [savedSettings, setSavedSettings] = useState(() => makeLocal(settings ?? DEFAULT_SETTINGS))
+  const [saveError, setSaveError] = useState('')
+  const [globalSaving, setGlobalSaving] = useState(false)
+  const [paletteInputs, setPaletteInputs] = useState<PaletteInputs>({})
+  const invalidPalette = Object.values(paletteInputs).some((input) => input.invalid)
+  const [editorDirty, setEditorDirty] = useState<ReadonlySet<SettingsSectionId>>(new Set())
   const localRef = useRef(local)
   localRef.current = local
-  const savingRef = useRef(false)
+  const [persisted, setPersisted] = useState<EditableSettings>(() =>
+    makeLocal(settings ?? DEFAULT_SETTINGS),
+  )
+  const persistedRef = useRef(persisted)
+  persistedRef.current = persisted
+  const globalSavingRef = useRef(false)
+  const controllersRef = useRef(new Map<string, SettingsSectionController>())
+  const saveRegistry = useMemo(
+    () => ({
+      register(key: string, controller: SettingsSectionController) {
+        controllersRef.current.set(key, controller)
+      },
+      unregister(key: string) {
+        controllersRef.current.delete(key)
+      },
+    }),
+    [],
+  )
   const baselineRevision = useRef(0)
   const ownPreview = useRef<AppSettings | null>(null)
-  const dirty = !Bun.deepEquals(local, savedSettings)
   const [recordingAction, setRecordingAction] = useState<keyof HotkeySettings | null>(null)
   useOverlayClose(recordingAction !== null, () => setRecordingAction(null))
   const [appVersion, setAppVersion] = useState('…')
+
+  const appDirty = useMemo(() => {
+    const result = new Set<SettingsSectionId>()
+    if (!baselineLoaded) return result
+    for (const section of APP_SETTINGS_SECTIONS) {
+      if (appSectionDirty(section, local, persisted)) result.add(section)
+    }
+    return result
+  }, [baselineLoaded, local, persisted])
+
+  const dirtySections = useMemo(() => {
+    if (!editorDirty.size) return appDirty
+    const result = new Set(appDirty)
+    for (const id of editorDirty) result.add(id)
+    return result
+  }, [appDirty, editorDirty])
+
+  const reportDirty = useCallback((id: SettingsSectionId, dirty: boolean) => {
+    setEditorDirty((current) => {
+      if (current.has(id) === dirty) return current
+      const next = new Set(current)
+      if (dirty) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const visibility = useMemo(
+    () => ({ visible: new Set(visibleIds), mounted: mountedIds, dirty: dirtySections, narrow }),
+    [visibleIds, mountedIds, dirtySections, narrow],
+  )
 
   useEffect(() => {
     if (selectedCategory !== 'general' || appVersion !== '…') return
@@ -217,9 +314,13 @@ export function SettingsPanel() {
     const revision = baselineRevision.current
     void backend.api
       .getSettings()
-      .then((persisted) => {
+      .then((stored) => {
         if (!active) return
-        if (revision === baselineRevision.current) setSavedSettings(makeLocal(persisted))
+        if (revision === baselineRevision.current) {
+          const next = makeLocal(stored)
+          persistedRef.current = next
+          setPersisted(() => next)
+        }
         setBaselineLoaded(true)
       })
       .catch((error) => {
@@ -235,56 +336,62 @@ export function SettingsPanel() {
 
   // Feedback-loop guard (Vue ignorePropSync): our own live-preview pushes into
   // the store must not reset local, external store changes do.
-  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   useEffect(() => {
     if (!settings || settings === ownPreview.current) return
     const next = makeLocal(settings)
     localRef.current = next
     setLocal(next)
+    persistedRef.current = next
+    setPersisted(next)
     setPaletteInputs({})
-    setSavedSettings(next)
   }, [settings])
 
-  useEffect(() => {
-    return () => {
-      if (savedTimer.current) clearTimeout(savedTimer.current)
-    }
-  }, [])
-
-  /** App settings preview immediately; only a successful save advances the durable baseline. */
+  /** App settings preview immediately; a section save advances only its persisted fields. */
   const patch = (mutate: (draft: EditableSettings) => void) => {
     const draft = makeLocal(localRef.current)
     mutate(draft)
     localRef.current = draft
     setLocal(draft)
-    setSaved(false)
     const preview = makeLocal(draft)
     ownPreview.current = preview
     settingsStore.set(preview)
   }
 
-  const save = async () => {
-    if (savingRef.current || invalidPalette) return
-    savingRef.current = true
-    setSaving(true)
+  const saveAll = useCallback(async (): Promise<boolean> => {
+    if (globalSavingRef.current || !baselineLoaded || invalidPalette) return false
+    globalSavingRef.current = true
+    setGlobalSaving(true)
     setSaveError('')
-    const snapshot = makeLocal(localRef.current)
+    let savedEverything = true
     try {
-      await backend.api.saveSettings(snapshot)
-      baselineRevision.current++
-      setSavedSettings(snapshot)
-      setBaselineLoaded(true)
-      setSaved(Bun.deepEquals(localRef.current, snapshot))
-      if (savedTimer.current) clearTimeout(savedTimer.current)
-      savedTimer.current = setTimeout(() => setSaved(false), 2000)
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error))
+      if (appDirty.size) {
+        const snapshot = makeLocal(localRef.current)
+        try {
+          await backend.api.saveSettings(snapshot)
+          baselineRevision.current++
+          persistedRef.current = snapshot
+          setPersisted(snapshot)
+          if (JSON.stringify(makeLocal(localRef.current)) !== JSON.stringify(snapshot))
+            savedEverything = false
+        } catch (error) {
+          savedEverything = false
+          setSaveError(error instanceof Error ? error.message : String(error))
+        }
+      }
+      for (const controller of [...controllersRef.current.values()]) {
+        if (!controller.dirty) continue
+        if (!(await controller.save())) savedEverything = false
+      }
     } finally {
-      savingRef.current = false
-      setSaving(false)
+      globalSavingRef.current = false
+      setGlobalSaving(false)
     }
-  }
+    if (!savedEverything)
+      setSaveError(
+        (current) => current || 'Some settings could not be saved. Your drafts are kept.',
+      )
+    return savedEverything
+  }, [appDirty, backend, baselineLoaded, invalidPalette])
 
   const selectTheme = (value: AppSettings['theme']) => {
     const current = localRef.current
@@ -311,6 +418,40 @@ export function SettingsPanel() {
       draft.customPalette = DEFAULT_CUSTOM_PALETTE
     })
   }
+
+  const discardAll = useCallback(() => {
+    const next = makeLocal(persistedRef.current)
+    localRef.current = next
+    setLocal(next)
+    ownPreview.current = next
+    settingsStore.set(next)
+    setSaveError('')
+    for (const controller of controllersRef.current.values()) {
+      if (controller.dirty) controller.discard()
+    }
+  }, [])
+
+  const saveAllRef = useRef(saveAll)
+  saveAllRef.current = saveAll
+  const discardAllRef = useRef(discardAll)
+  discardAllRef.current = discardAll
+
+  useEffect(
+    () =>
+      bindSettingsSession({
+        save: () => saveAllRef.current(),
+        discard: () => discardAllRef.current(),
+      }),
+    [],
+  )
+
+  useEffect(() => {
+    syncSettingsSession(dirtySections.size > 0, globalSaving)
+  }, [dirtySections.size, globalSaving])
+
+  const appFooter = (section: AppSettingsSectionId) => (
+    <SettingsFooter sectionId={section} dirty={appDirty.has(section)} saving={globalSaving} />
+  )
 
   // URLSearchParams is a Web API and is not available in the GPUIX runtime;
   // these values are simple enough for encodeURIComponent to match its output.
@@ -382,37 +523,48 @@ export function SettingsPanel() {
           >
             <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>Settings</Text>
             <Text style={{ fontSize: 12, color: theme.text2 }}>
-              Find an option or choose a category.
+              Find an option or choose a category. Save everything with one button.
             </Text>
           </div>
-          <ActionButton
-            testId="settings-save"
-            primary
-            disabled={saving || invalidPalette || (baselineLoaded && !dirty && !saveError)}
-            onClick={() => void save()}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              flexShrink: 0,
+            }}
           >
-            {saving
-              ? 'Saving…'
-              : saveError
-                ? 'Retry saving app settings'
-                : saved && !invalidPalette
-                  ? 'App settings saved'
-                  : 'Save app settings'}
-          </ActionButton>
+            {dirtySections.size ? (
+              <ActionButton disabled={globalSaving} onClick={discardAll}>
+                Discard
+              </ActionButton>
+            ) : null}
+            <ActionButton
+              testId="settings-save"
+              primary
+              disabled={!baselineLoaded || !dirtySections.size || globalSaving || invalidPalette}
+              onClick={() => void saveAll()}
+            >
+              {globalSaving ? 'Saving…' : saveError ? 'Retry save' : 'Save changes'}
+            </ActionButton>
+          </div>
         </div>
         <Text
           style={{
             fontSize: 11,
-            color: invalidPalette ? theme.dangerText : dirty ? theme.text : theme.text2,
+            color: dirtySections.size ? theme.accent.primary : theme.text2,
           }}
         >
           {invalidPalette
-            ? 'Fix the marked colors in Appearance → Custom to save app settings.'
-            : `${dirty ? 'Unsaved app settings · ' : ''}Appearance, self-ping, updates and OBS use Save app settings. Each feature section describes how it saves.`}
+            ? 'Fix the marked colors in Appearance → Custom to save.'
+            : dirtySections.size
+              ? `Unsaved changes in ${dirtySections.size} ${dirtySections.size === 1 ? 'section' : 'sections'}.`
+              : 'All changes are saved.'}
         </Text>
         {saveError ? (
           <Text testId="settings-save-error" style={{ color: theme.dangerText, fontSize: 12 }}>
-            {`${saveError} · Your edits are retained. Retry saving above.`}
+            {saveError}
           </Text>
         ) : null}
         {actionError ? (
@@ -485,6 +637,9 @@ export function SettingsPanel() {
           {search.categories.map((item) => {
             const active = item.id === selectedCategory
             const count = search.sections.filter((section) => section.category === item.id).length
+            const categoryDirty = search.sections.some(
+              (section) => section.category === item.id && dirtySections.has(section.id),
+            )
             return (
               <div
                 key={item.id}
@@ -527,15 +682,35 @@ export function SettingsPanel() {
                   hover: { backgroundColor: active ? theme.accent.tint12 : theme.fillHover },
                 }}
               >
-                <Text
+                <div
                   style={{
-                    color: active ? theme.link : theme.text,
-                    fontSize: 12,
-                    fontWeight: active ? 700 : 500,
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  {`${item.label}${query ? ` (${count})` : ''}`}
-                </Text>
+                  <Text
+                    style={{
+                      color: active ? theme.accent.primary : theme.text,
+                      fontSize: 12,
+                      fontWeight: active ? 700 : 500,
+                    }}
+                  >
+                    {`${item.label}${query ? ` (${count})` : ''}`}
+                  </Text>
+                  {categoryDirty ? (
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: theme.accent.primary,
+                        flexShrink: 0,
+                      }}
+                    />
+                  ) : null}
+                </div>
                 {!narrow ? (
                   <Text style={{ color: theme.text2, fontSize: 10 }}>{item.description}</Text>
                 ) : null}
@@ -589,532 +764,589 @@ export function SettingsPanel() {
                 <ActionButton onClick={clearQuery}>Clear search</ActionButton>
               </div>
             ) : null}
-            <SectionVisibilityContext.Provider value={visibility}>
-              {/* Appearance */}
-              <Section id="appearance" title="Appearance">
-                <FormRow first alignTop label="Theme">
-                  <ThemeSettings
-                    value={local.theme}
-                    palette={customPaletteFor(local)}
-                    inputs={paletteInputs}
-                    invalid={invalidPalette}
-                    onSelect={selectTheme}
-                    onEdit={editPalette}
-                    onReset={resetPalette}
-                  />
-                </FormRow>
-                <FormRow last label="Font">
-                  <ToggleGroup
-                    value={local.fontFamily}
-                    options={[
-                      { value: 'inter', label: 'Inter' },
-                      { value: 'manrope', label: 'Manrope' },
-                      { value: 'system', label: 'System' },
-                    ]}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.fontFamily = value
-                      })
-                    }
-                  />
-                </FormRow>
-              </Section>
+            <SettingsSectionContext.Provider value={visibility}>
+              <SettingsSaveRegistryContext.Provider value={saveRegistry}>
+                <SettingsDirtyReporterContext.Provider value={reportDirty}>
+                  {/* Appearance */}
+                  <SettingsSection id="appearance" title="Appearance">
+                    <SettingsRow first alignTop label="Theme">
+                      <ThemeSettings
+                        value={local.theme}
+                        palette={customPaletteFor(local)}
+                        inputs={paletteInputs}
+                        invalid={invalidPalette}
+                        onSelect={selectTheme}
+                        onEdit={editPalette}
+                        onReset={resetPalette}
+                      />
+                    </SettingsRow>
+                    <SettingsRow last label="Font">
+                      <ToggleGroup
+                        value={local.fontFamily}
+                        options={[
+                          { value: 'inter', label: 'Inter' },
+                          { value: 'manrope', label: 'Manrope' },
+                          { value: 'system', label: 'System' },
+                        ]}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.fontFamily = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('appearance')}
+                  </SettingsSection>
 
-              <Section
-                id="commands"
-                title="Custom Commands"
-                desc="Create reusable commands and message actions"
-              >
-                <RetainedSettingsEditor component={CustomCommandsSettings} />
-              </Section>
-              <Section id="twir-integration" title="Twir Integration">
-                <FormRow
-                  first
-                  last
-                  label="Suggest Twir commands"
-                  hint="Show public commands for the selected chat when you type !"
-                >
-                  <Switch
-                    checked={local.twirIntegrationEnabled !== false}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.twirIntegrationEnabled = value
-                      })
-                    }
-                  />
-                </FormRow>
-              </Section>
-              <Section
-                id="players"
-                title="Stream Players"
-                desc="Open streams in a browser, external player or Streamlink"
-              >
-                <RetainedSettingsEditor component={PlayerSettings} />
-              </Section>
-              <Section id="plugins" title="Plugins">
-                <RetainedSettingsEditor component={PluginSettings} />
-              </Section>
-              <Section
-                id="streamer-mode"
-                title="Streamer Mode"
-                desc="Protect private details while streaming"
-              >
-                <RetainedSettingsEditor component={StreamerModeSettings} />
-              </Section>
-              <Section
-                id="similarity"
-                title="Similar Messages"
-                desc="Control repeated and almost identical messages"
-              >
-                <RetainedSettingsEditor component={SimilaritySettings} />
-              </Section>
-              <Section
-                id="pause"
-                title="Chat Pausing"
-                desc="Keep chat still while reading or opening links"
-              >
-                <RetainedSettingsEditor component={ChatPauseSettings} />
-              </Section>
-              <Section id="twitch-session" title="Additional Twitch Session">
-                <RetainedSettingsEditor component={TwitchSessionSettings} />
-              </Section>
-              <Section
-                id="notifications"
-                title="Notifications"
-                desc="Choose sounds and desktop alerts for your highlight rules"
-              >
-                <RetainedSettingsEditor component={NotificationSettings} />
-              </Section>
-              <Section
-                id="rules"
-                title="Highlights, Ignores & Filters"
-                desc="Control what appears in each chat and which messages need your attention"
-              >
-                <RetainedSettingsEditor component={ChatRulesSettings} />
-              </Section>
-
-              <Section id="emotes" title="Emotes & Cosmetics">
-                <RetainedSettingsEditor component={EmoteProviderSettings} />
-              </Section>
-              <Section id="history" title="History & Logging">
-                <RetainedSettingsEditor component={ChatLoggingSettings} />
-              </Section>
-              <Section id="image-uploader" title="Image Uploader">
-                <RetainedSettingsEditor component={ImageUploaderSettings} />
-              </Section>
-              <Section id="translation" title="Translation">
-                <RetainedSettingsEditor component={TranslationSettings} />
-              </Section>
-              <Section id="moderation" title="Moderation">
-                <RetainedSettingsEditor component={ModerationSettings} />
-              </Section>
-
-              {/* Self-Ping Highlight */}
-              <Section
-                id="self-ping"
-                title="Self-Ping Highlight"
-                desc="Highlight messages that mention your own nickname"
-              >
-                <FormRow first label="Enable highlights" hint="Highlight messages mentioning you">
-                  <Switch
-                    checked={local.selfPing.enabled}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.selfPing.enabled = value
-                      })
-                    }
-                  />
-                </FormRow>
-                <FormRow label="Highlight color">
-                  <div
-                    style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                  <SettingsSection
+                    id="commands"
+                    title="Custom Commands"
+                    desc="Create reusable commands and message actions"
                   >
-                    <SmallInput
-                      width={210}
-                      value={local.selfPing.color}
-                      placeholder="rgba(167, 139, 250, 0.15)"
-                      onChange={(value) =>
-                        patch((draft) => {
-                          draft.selfPing.color = value
-                        })
-                      }
-                    />
-                    <ColorSwatch color={local.selfPing.color} />
-                  </div>
-                </FormRow>
-                <FormRow last alignTop label="Preview" hint="How a pinged message looks">
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                      paddingTop: 6,
-                      paddingBottom: 6,
-                      paddingLeft: 12,
-                      paddingRight: 12,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      minWidth: 0,
-                      maxWidth: '100%',
-                      flexWrap: 'wrap',
-                      backgroundColor: local.selfPing.enabled ? local.selfPing.color : undefined,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: theme.link,
-                        flexShrink: 0,
-                      }}
+                    <RetainedSettingsEditor component={CustomCommandsSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="twir-integration" title="Twir Integration">
+                    <SettingsRow
+                      first
+                      last
+                      label="Suggest Twir commands"
+                      hint="Show public commands for the selected chat when you type !"
                     >
-                      StreamerName:
-                    </Text>
-                    <Text style={{ fontSize: 13, color: theme.text }}>Hey</Text>
-                    <Text style={{ fontSize: 13, fontWeight: 600, color: theme.link }}>
-                      @YourName
-                    </Text>
-                    <Text style={{ fontSize: 13, color: theme.text }}>what do you think?</Text>
-                  </div>
-                </FormRow>
-              </Section>
+                      <Switch
+                        checked={local.twirIntegrationEnabled !== false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.twirIntegrationEnabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('twir-integration')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="players"
+                    title="Stream Players"
+                    desc="Open streams in a browser, external player or Streamlink"
+                  >
+                    <RetainedSettingsEditor component={PlayerSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="plugins" title="Plugins">
+                    <RetainedSettingsEditor component={PluginSettings} />
+                  </SettingsSection>
+                  <SettingsSection
+                    id="streamer-mode"
+                    title="Streamer Mode"
+                    desc="Protect private details while streaming"
+                  >
+                    <RetainedSettingsEditor component={StreamerModeSettings} />
+                  </SettingsSection>
+                  <SettingsSection
+                    id="similarity"
+                    title="Similar Messages"
+                    desc="Control repeated and almost identical messages"
+                  >
+                    <RetainedSettingsEditor component={SimilaritySettings} />
+                  </SettingsSection>
+                  <SettingsSection
+                    id="pause"
+                    title="Chat Pausing"
+                    desc="Keep chat still while reading or opening links"
+                  >
+                    <RetainedSettingsEditor component={ChatPauseSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="twitch-session" title="Additional Twitch Session">
+                    <RetainedSettingsEditor component={TwitchSessionSettings} />
+                  </SettingsSection>
+                  <SettingsSection
+                    id="notifications"
+                    title="Notifications"
+                    desc="Choose sounds and desktop alerts for your highlight rules"
+                  >
+                    <RetainedSettingsEditor component={NotificationSettings} />
+                  </SettingsSection>
+                  <SettingsSection
+                    id="rules"
+                    title="Highlights, Ignores & Filters"
+                    desc="Control what appears in each chat and which messages need your attention"
+                  >
+                    <RetainedSettingsEditor component={ChatRulesSettings} />
+                  </SettingsSection>
 
-              {/* Updates */}
-              <Section id="updates" title="Updates" desc="Automatic update settings">
-                <FormRow first label="Version" hint="Currently installed version">
-                  <Text style={{ fontSize: 13, color: theme.text2 }}>{appVersion}</Text>
-                </FormRow>
-                <FormRow label="Check now" hint="Look for updates on the release feed">
-                  <div
-                    onClick={() => {
-                      setActionError('')
-                      void backend.api
-                        .checkForUpdate()
-                        .catch((error) =>
-                          setActionError(`Could not check for updates: ${String(error)}`),
-                        )
-                    }}
-                    style={{
-                      paddingTop: 6,
-                      paddingBottom: 6,
-                      paddingLeft: 12,
-                      paddingRight: 12,
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      backgroundColor: theme.surface2,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, color: theme.text }}>Check for updates</Text>
-                  </div>
-                </FormRow>
-                <FormRow
-                  last
-                  label="Auto-check for updates"
-                  hint="Check at startup and every 10 minutes"
-                >
-                  <Switch
-                    checked={local.autoCheckUpdates ?? false}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.autoCheckUpdates = value
-                      })
-                    }
-                  />
-                </FormRow>
-              </Section>
+                  <SettingsSection id="emotes" title="Emotes & Cosmetics">
+                    <RetainedSettingsEditor component={EmoteProviderSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="history" title="History & Logging">
+                    <RetainedSettingsEditor component={ChatLoggingSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="image-uploader" title="Image Uploader">
+                    <RetainedSettingsEditor component={ImageUploaderSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="translation" title="Translation">
+                    <RetainedSettingsEditor component={TranslationSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="moderation" title="Moderation">
+                    <RetainedSettingsEditor component={ModerationSettings} />
+                  </SettingsSection>
 
-              {/* OBS Overlay */}
-              <Section
-                id="overlay"
-                title="OBS Overlay"
-                desc="Add a Browser Source in OBS with the URL below"
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                    backgroundColor: theme.surface2,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: 8,
-                    paddingTop: 10,
-                    paddingBottom: 10,
-                    paddingLeft: 14,
-                    paddingRight: 14,
-                    marginBottom: 16,
-                  }}
-                >
-                  <Text
-                    style={{
-                      flexGrow: 1,
-                      minWidth: 0,
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      color: theme.link,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
+                  {/* Self-Ping Highlight */}
+                  <SettingsSection
+                    id="self-ping"
+                    title="Self-Ping Highlight"
+                    desc="Highlight messages that mention your own nickname"
                   >
-                    {overlayUrl}
-                  </Text>
-                  <div
-                    testId="settings-copy-url"
-                    onClick={copyOverlayUrl}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 6,
-                      backgroundColor: theme.accent.tint12,
-                      borderWidth: 1,
-                      borderColor: theme.accent.tint25,
-                      borderRadius: 8,
-                      paddingTop: 5,
-                      paddingBottom: 5,
-                      paddingLeft: 10,
-                      paddingRight: 10,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      hover: { backgroundColor: theme.accent.tint20 },
-                    }}
-                  >
-                    <Icon name="copy" size={14} color={theme.link} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: theme.link,
-                        whiteSpace: 'nowrap',
-                      }}
+                    <SettingsRow
+                      first
+                      label="Enable highlights"
+                      hint="Highlight messages mentioning you"
                     >
-                      Copy
-                    </Text>
-                  </div>
-                </div>
-
-                <FormRow label="Port">
-                  <SmallInput
-                    value={String(local.overlay.port)}
-                    onChange={(value) => {
-                      if (!/^\d+$/.test(value)) return
-                      patch((draft) => {
-                        draft.overlay.port = parseInt(value, 10)
-                      })
-                    }}
-                  />
-                </FormRow>
-
-                <FormRow label="Background" hint='Use "transparent" for chroma key'>
-                  <div
-                    style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                  >
-                    <SmallInput
-                      value={local.overlay.background}
-                      placeholder="transparent"
-                      onChange={(value) =>
-                        patch((draft) => {
-                          draft.overlay.background = value
-                        })
-                      }
-                    />
-                    {local.overlay.background !== 'transparent' ? (
-                      <ColorSwatch color={local.overlay.background} />
-                    ) : null}
-                  </div>
-                </FormRow>
-
-                <FormRow label="Text colour">
-                  <div
-                    style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                  >
-                    <SmallInput
-                      value={local.overlay.textColor}
-                      onChange={(value) =>
-                        patch((draft) => {
-                          draft.overlay.textColor = value
-                        })
-                      }
-                    />
-                    <ColorSwatch color={local.overlay.textColor} />
-                  </div>
-                </FormRow>
-
-                <FormRow label="Font size">
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Slider
-                      value={local.overlay.fontSize}
-                      min={11}
-                      max={28}
-                      width={sliderWidth}
-                      onChange={(value) =>
-                        patch((draft) => {
-                          draft.overlay.fontSize = value
-                        })
-                      }
-                    />
-                    <Text
-                      style={{ fontSize: 12, color: theme.text2, width: 36, textAlign: 'right' }}
-                    >
-                      {`${local.overlay.fontSize}px`}
-                    </Text>
-                  </div>
-                </FormRow>
-
-                <FormRow label="Max messages">
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Slider
-                      value={local.overlay.maxMessages}
-                      min={1}
-                      max={50}
-                      width={sliderWidth}
-                      onChange={(value) =>
-                        patch((draft) => {
-                          draft.overlay.maxMessages = value
-                        })
-                      }
-                    />
-                    <Text
-                      style={{ fontSize: 12, color: theme.text2, width: 36, textAlign: 'right' }}
-                    >
-                      {local.overlay.maxMessages}
-                    </Text>
-                  </div>
-                </FormRow>
-
-                <FormRow label="Animation">
-                  <ToggleGroup
-                    value={local.overlay.animation}
-                    options={[
-                      { value: 'slide', label: 'Slide' },
-                      { value: 'fade', label: 'Fade' },
-                      { value: 'none', label: 'None' },
-                    ]}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.overlay.animation = value
-                      })
-                    }
-                  />
-                </FormRow>
-
-                <FormRow label="Position">
-                  <ToggleGroup
-                    value={local.overlay.position}
-                    options={[
-                      { value: 'bottom', label: 'Bottom' },
-                      { value: 'top', label: 'Top' },
-                    ]}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.overlay.position = value
-                      })
-                    }
-                  />
-                </FormRow>
-
-                <FormRow label="Show platform icon">
-                  <Switch
-                    checked={local.overlay.showPlatformIcon}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.overlay.showPlatformIcon = value
-                      })
-                    }
-                  />
-                </FormRow>
-
-                <FormRow last label="Show avatars">
-                  <Switch
-                    checked={local.overlay.showAvatar}
-                    onChange={(value) =>
-                      patch((draft) => {
-                        draft.overlay.showAvatar = value
-                      })
-                    }
-                  />
-                </FormRow>
-              </Section>
-
-              {/* Keyboard Shortcuts */}
-              <Section id="shortcuts" title="Keyboard Shortcuts">
-                <ActionHotkeySettings />
-                {HOTKEYS_CONFIG.map((config, index) => {
-                  const recording = recordingAction === config.action
-                  return (
-                    <FormRow
-                      key={config.action}
-                      first={index === 0}
-                      last={index === HOTKEYS_CONFIG.length - 1}
-                      label={config.label}
-                      hint={config.description}
-                    >
+                      <Switch
+                        checked={local.selfPing.enabled}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.selfPing.enabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    <SettingsRow label="Highlight color">
                       <div
-                        onClick={() => setRecordingAction(config.action)}
                         style={{
                           display: 'flex',
+                          flexDirection: 'row',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          minWidth: 100,
-                          paddingTop: 4,
-                          paddingBottom: 4,
-                          paddingLeft: 10,
-                          paddingRight: 10,
-                          backgroundColor: recording ? theme.accent.tint10 : theme.surface2,
-                          borderWidth: 1,
-                          borderColor: recording ? theme.accent.primary : theme.border,
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                          ...(recording
-                            ? {}
-                            : { hover: { backgroundColor: 'rgba(255, 255, 255, 0.05)' } }),
+                          gap: 8,
                         }}
                       >
-                        {recording ? (
-                          <Text style={{ fontSize: 12, color: theme.link, whiteSpace: 'nowrap' }}>
-                            Press a key…
-                          </Text>
-                        ) : (
-                          <Text
+                        <SmallInput
+                          width={210}
+                          value={local.selfPing.color}
+                          placeholder="rgba(167, 139, 250, 0.15)"
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.selfPing.color = value
+                            })
+                          }
+                        />
+                        <ColorSwatch color={local.selfPing.color} />
+                      </div>
+                    </SettingsRow>
+                    <SettingsRow last alignTop label="Preview" hint="How a pinged message looks">
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingTop: 6,
+                          paddingBottom: 6,
+                          paddingLeft: 12,
+                          paddingRight: 12,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          minWidth: 0,
+                          maxWidth: '100%',
+                          flexWrap: 'wrap',
+                          backgroundColor: local.selfPing.enabled
+                            ? local.selfPing.color
+                            : undefined,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: theme.accent.primary,
+                            flexShrink: 0,
+                          }}
+                        >
+                          StreamerName:
+                        </Text>
+                        <Text style={{ fontSize: 13, color: theme.text }}>Hey</Text>
+                        <Text
+                          style={{ fontSize: 13, fontWeight: 600, color: theme.accent.primary }}
+                        >
+                          @YourName
+                        </Text>
+                        <Text style={{ fontSize: 13, color: theme.text }}>what do you think?</Text>
+                      </div>
+                    </SettingsRow>
+                    {appFooter('self-ping')}
+                  </SettingsSection>
+
+                  {/* Updates */}
+                  <SettingsSection id="updates" title="Updates" desc="Automatic update settings">
+                    <SettingsRow first label="Version" hint="Currently installed version">
+                      <Text style={{ fontSize: 13, color: theme.text2 }}>{appVersion}</Text>
+                    </SettingsRow>
+                    <SettingsRow label="Check now" hint="Look for updates on the release feed">
+                      <div
+                        onClick={() => {
+                          setActionError('')
+                          void backend.api
+                            .checkForUpdate()
+                            .catch((error) =>
+                              setActionError(`Could not check for updates: ${String(error)}`),
+                            )
+                        }}
+                        style={{
+                          paddingTop: 6,
+                          paddingBottom: 6,
+                          paddingLeft: 12,
+                          paddingRight: 12,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.surface2,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, color: theme.text }}>Check for updates</Text>
+                      </div>
+                    </SettingsRow>
+                    <SettingsRow
+                      last
+                      label="Auto-check for updates"
+                      hint="Check at startup and every 10 minutes"
+                    >
+                      <Switch
+                        checked={local.autoCheckUpdates ?? false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.autoCheckUpdates = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('updates')}
+                  </SettingsSection>
+
+                  {/* OBS Overlay */}
+                  <SettingsSection
+                    id="overlay"
+                    title="OBS Overlay"
+                    desc="Add a Browser Source in OBS with the URL below"
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        backgroundColor: theme.surface2,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        borderRadius: 8,
+                        paddingTop: 10,
+                        paddingBottom: 10,
+                        paddingLeft: 14,
+                        paddingRight: 14,
+                        marginBottom: 16,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          flexGrow: 1,
+                          minWidth: 0,
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: theme.accent.primary,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {overlayUrl}
+                      </Text>
+                      <div
+                        testId="settings-copy-url"
+                        onClick={copyOverlayUrl}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: theme.accent.tint12,
+                          borderWidth: 1,
+                          borderColor: theme.accent.tint25,
+                          borderRadius: 8,
+                          paddingTop: 5,
+                          paddingBottom: 5,
+                          paddingLeft: 10,
+                          paddingRight: 10,
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                          hover: { backgroundColor: 'rgba(167, 139, 250, 0.22)' },
+                        }}
+                      >
+                        <Icon name="copy" size={14} color={theme.accent.primary} />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: theme.accent.primary,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Copy
+                        </Text>
+                      </div>
+                    </div>
+
+                    <SettingsRow label="Port">
+                      <SmallInput
+                        value={String(local.overlay.port)}
+                        onChange={(value) => {
+                          if (!/^\d+$/.test(value)) return
+                          patch((draft) => {
+                            draft.overlay.port = parseInt(value, 10)
+                          })
+                        }}
+                      />
+                    </SettingsRow>
+
+                    <SettingsRow label="Background" hint='Use "transparent" for chroma key'>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <SmallInput
+                          value={local.overlay.background}
+                          placeholder="transparent"
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.overlay.background = value
+                            })
+                          }
+                        />
+                        {local.overlay.background !== 'transparent' ? (
+                          <ColorSwatch color={local.overlay.background} />
+                        ) : null}
+                      </div>
+                    </SettingsRow>
+
+                    <SettingsRow label="Text colour">
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <SmallInput
+                          value={local.overlay.textColor}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.overlay.textColor = value
+                            })
+                          }
+                        />
+                        <ColorSwatch color={local.overlay.textColor} />
+                      </div>
+                    </SettingsRow>
+
+                    <SettingsRow label="Font size">
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Slider
+                          value={local.overlay.fontSize}
+                          min={11}
+                          max={28}
+                          width={sliderWidth}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.overlay.fontSize = value
+                            })
+                          }
+                        />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: theme.text2,
+                            width: 36,
+                            textAlign: 'right',
+                          }}
+                        >
+                          {`${local.overlay.fontSize}px`}
+                        </Text>
+                      </div>
+                    </SettingsRow>
+
+                    <SettingsRow label="Max messages">
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Slider
+                          value={local.overlay.maxMessages}
+                          min={1}
+                          max={50}
+                          width={sliderWidth}
+                          onChange={(value) =>
+                            patch((draft) => {
+                              draft.overlay.maxMessages = value
+                            })
+                          }
+                        />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: theme.text2,
+                            width: 36,
+                            textAlign: 'right',
+                          }}
+                        >
+                          {local.overlay.maxMessages}
+                        </Text>
+                      </div>
+                    </SettingsRow>
+
+                    <SettingsRow label="Animation">
+                      <ToggleGroup
+                        value={local.overlay.animation}
+                        options={[
+                          { value: 'slide', label: 'Slide' },
+                          { value: 'fade', label: 'Fade' },
+                          { value: 'none', label: 'None' },
+                        ]}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.overlay.animation = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+
+                    <SettingsRow label="Position">
+                      <ToggleGroup
+                        value={local.overlay.position}
+                        options={[
+                          { value: 'bottom', label: 'Bottom' },
+                          { value: 'top', label: 'Top' },
+                        ]}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.overlay.position = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+
+                    <SettingsRow label="Show platform icon">
+                      <Switch
+                        checked={local.overlay.showPlatformIcon}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.overlay.showPlatformIcon = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+
+                    <SettingsRow last label="Show avatars">
+                      <Switch
+                        checked={local.overlay.showAvatar}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.overlay.showAvatar = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('overlay')}
+                  </SettingsSection>
+
+                  {/* Keyboard Shortcuts */}
+                  <SettingsSection id="shortcuts" title="Keyboard Shortcuts">
+                    <ActionHotkeySettings />
+                    <Text
+                      style={{ fontSize: 12, fontWeight: 600, color: theme.text, marginTop: 8 }}
+                    >
+                      Navigation shortcuts
+                    </Text>
+                    <Text style={{ fontSize: 11, color: theme.text2 }}>
+                      These four shortcuts use the app settings save at the bottom of this section.
+                    </Text>
+                    {HOTKEYS_CONFIG.map((config, index) => {
+                      const recording = recordingAction === config.action
+                      return (
+                        <SettingsRow
+                          key={config.action}
+                          first={index === 0}
+                          last={index === HOTKEYS_CONFIG.length - 1}
+                          label={config.label}
+                          hint={config.description}
+                        >
+                          <div
+                            onClick={() => setRecordingAction(config.action)}
                             style={{
-                              fontSize: 12,
-                              fontFamily: 'monospace',
-                              color: theme.text,
-                              whiteSpace: 'nowrap',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minWidth: 100,
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                              paddingLeft: 10,
+                              paddingRight: 10,
+                              backgroundColor: recording ? theme.accent.tint10 : theme.surface2,
+                              borderWidth: 1,
+                              borderColor: recording ? theme.accent.primary : theme.border,
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                              ...(recording
+                                ? {}
+                                : { hover: { backgroundColor: 'rgba(255, 255, 255, 0.05)' } }),
                             }}
                           >
-                            {formatKeyCombo(local.hotkeys[config.action])}
-                          </Text>
-                        )}
-                      </div>
-                    </FormRow>
-                  )
-                })}
-              </Section>
-            </SectionVisibilityContext.Provider>
+                            {recording ? (
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  color: theme.accent.primary,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                Press a key…
+                              </Text>
+                            ) : (
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                  color: theme.text,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {formatKeyCombo(local.hotkeys[config.action])}
+                              </Text>
+                            )}
+                          </div>
+                        </SettingsRow>
+                      )
+                    })}
+                    {appFooter('shortcuts')}
+                  </SettingsSection>
+                </SettingsDirtyReporterContext.Provider>
+              </SettingsSaveRegistryContext.Provider>
+            </SettingsSectionContext.Provider>
           </div>
         </div>
       </div>
@@ -1157,99 +1389,7 @@ export function SettingsPanel() {
           />
         </anchored>
       ) : null}
-    </div>
-  )
-}
-
-/** Section card — .settings-section + .section-title + optional .section-desc. */
-function Section({
-  id,
-  title,
-  desc,
-  children,
-}: {
-  id: SettingsSectionId
-  title: string
-  desc?: string
-  children: ReactNode
-}) {
-  const theme = useTheme()
-  const visibility = useContext(SectionVisibilityContext)
-  if (!visibility.mounted.has(id)) return null
-  const visible = visibility.visible.has(id)
-  const metadata = SETTINGS_SECTIONS.find((section) => section.id === id)!
-  return (
-    <div
-      testId={`settings-section-${id}`}
-      style={{
-        backgroundColor: theme.surface,
-        borderWidth: 1,
-        borderColor: theme.border,
-        borderRadius: 14,
-        paddingTop: 20,
-        paddingBottom: 20,
-        paddingLeft: visibility.narrow ? 14 : 20,
-        paddingRight: visibility.narrow ? 14 : 20,
-        display: visible ? 'flex' : 'none',
-        flexDirection: 'column',
-        marginBottom: 8,
-      }}
-    >
-      <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text2, marginBottom: 14 }}>
-        {title.toUpperCase()}
-      </Text>
-      {desc ? (
-        <Text style={{ fontSize: 12, color: theme.text2, marginTop: -8, marginBottom: 14 }}>
-          {desc}
-        </Text>
-      ) : null}
-      <Text style={{ fontSize: 10, color: theme.text2, marginBottom: 14 }}>
-        {SETTINGS_SAVE_LABELS[metadata.saveMode]}
-      </Text>
-      {children}
-    </div>
-  )
-}
-
-/** Label + control row — .form-row / .form-label / .form-hint. */
-function FormRow({
-  first,
-  last,
-  alignTop,
-  label,
-  hint,
-  children,
-}: {
-  first?: boolean
-  last?: boolean
-  alignTop?: boolean
-  label: string
-  hint?: string
-  children: ReactNode
-}) {
-  const theme = useTheme()
-  const { narrow } = useContext(SectionVisibilityContext)
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: narrow ? 'column' : 'row',
-        alignItems: narrow ? 'stretch' : alignTop ? 'flex-start' : 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        paddingTop: first ? 0 : alignTop ? 12 : 10,
-        paddingBottom: last ? 0 : 10,
-        borderBottomWidth: last ? 0 : 1,
-        borderColor: theme.border,
-      }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Text style={{ fontSize: 14, fontWeight: 500, color: theme.text }}>{label}</Text>
-        {hint ? (
-          <Text style={{ fontSize: 11, fontWeight: 400, color: theme.text2 }}>{hint}</Text>
-        ) : null}
-      </div>
-      {children}
+      <SettingsLeaveDialog />
     </div>
   )
 }
@@ -1308,7 +1448,7 @@ function ToggleGroup<T extends string>({
               style={{
                 fontSize: 12,
                 fontWeight: 500,
-                color: active ? theme.link : theme.text2,
+                color: active ? theme.accent.primary : theme.text2,
               }}
             >
               {option.label}

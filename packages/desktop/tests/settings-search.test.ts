@@ -3,7 +3,6 @@ import { describe, expect, test } from 'bun:test'
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_SECTIONS,
-  SETTINGS_SAVE_LABELS,
   resolveSettingsCategory,
   retainMountedSettingsSections,
   searchSettings,
@@ -15,7 +14,7 @@ import {
 const ids = (query: string) => searchSettings(query).sections.map((section) => section.id)
 
 describe('settings search index', () => {
-  test('every existing section has a unique reachable category and an explicit save contract', () => {
+  test('every existing section has a unique reachable category and a save contract', () => {
     expect(SETTINGS_SECTIONS).toHaveLength(20)
     expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
       SETTINGS_SECTIONS.length,
@@ -24,16 +23,20 @@ describe('settings search index', () => {
     for (const section of SETTINGS_SECTIONS) {
       const result = searchSettings('')
       expect(visibleSettingsSections(section.category, result)).toContain(section.id)
-      expect(SETTINGS_SAVE_LABELS[section.saveMode].length).toBeGreaterThan(0)
       expect(section.keywords.length).toBeGreaterThan(10)
+      expect(['section', 'action']).toContain(section.saveMode)
     }
-    expect(SETTINGS_SECTIONS.find((section) => section.id === 'emotes')?.saveMode).toBe('automatic')
+    // Form sections all stage a draft and expose one save footer.
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'emotes')?.saveMode).toBe('section')
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'pause')?.saveMode).toBe('section')
     expect(SETTINGS_SECTIONS.find((section) => section.id === 'notifications')?.saveMode).toBe(
       'section',
     )
-    expect(SETTINGS_SECTIONS.find((section) => section.id === 'overlay')?.saveMode).toBe('app')
-    expect(SETTINGS_SECTIONS.find((section) => section.id === 'plugins')?.saveMode).toBe(
-      'automatic',
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'overlay')?.saveMode).toBe('section')
+    // Action-only sections apply each action immediately.
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'plugins')?.saveMode).toBe('action')
+    expect(SETTINGS_SECTIONS.find((section) => section.id === 'twitch-session')?.saveMode).toBe(
+      'action',
     )
   })
   test('field names, providers, aliases and Russian terms find editors outside the current category', () => {
