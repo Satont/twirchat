@@ -1,17 +1,16 @@
 import { memo } from 'react'
 
-import { accent } from '../theme'
 import { ChatMessage, type ChatMessageProps } from './ChatMessage'
 
 interface ChatMessageRowProps extends ChatMessageProps {
   gray: boolean
-  revealed: boolean
+  revealedColor?: string
   onPauseDoubleClick?: () => void
 }
 
 export const ChatMessageRow = memo(function ChatMessageRow({
   gray,
-  revealed,
+  revealedColor,
   onPauseDoubleClick,
   ...messageProps
 }: ChatMessageRowProps) {
@@ -24,11 +23,11 @@ export const ChatMessageRow = memo(function ChatMessageRow({
             }
           : undefined
       }
-      testId={revealed ? 'revealed-search-message' : undefined}
+      testId={revealedColor ? 'revealed-search-message' : undefined}
       style={{
         width: '100%',
         opacity: gray ? 0.55 : 1,
-        ...(revealed ? { borderLeftWidth: 2, borderColor: accent.primary } : {}),
+        ...(revealedColor ? { borderLeftWidth: 2, borderColor: revealedColor } : {}),
       }}
     >
       <ChatMessage {...messageProps} />

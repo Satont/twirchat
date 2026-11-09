@@ -88,7 +88,7 @@ import {
 import { windowActivityStore, updateWindowActivity } from '../state/window-activity'
 import { useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
-import { accent, platformColor, semantic, withAlpha } from '../theme'
+import { platformColor, semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { ChatAppearancePopover } from './ChatAppearancePopover'
 import { ChatHistoryPanel } from './ChatHistoryPanel'
@@ -1154,7 +1154,7 @@ export function ChatView({
         testId="chat-header"
         style={{
           backgroundColor: flash
-            ? withAlpha(flash.color?.slice(0, 7) ?? accent.primary, 0.22)
+            ? withAlpha(flash.color?.slice(0, 7) ?? theme.accent.primary, 0.22)
             : undefined,
           display: 'flex',
           flexDirection: 'row',
@@ -1368,7 +1368,7 @@ export function ChatView({
             <Icon
               name="sliders"
               size={14}
-              color={rules.paneFilters[paneKey]?.length ? accent.primary : theme.text2}
+              color={rules.paneFilters[paneKey]?.length ? theme.accent.primary : theme.text2}
             />
           </HeaderButton>
           <HeaderButton
@@ -1376,14 +1376,14 @@ export function ChatView({
             title="Search messages · Ctrl+F"
             onClick={() => openSearch()}
           >
-            <Icon name="search" size={14} color={searchOpen ? accent.primary : theme.text2} />
+            <Icon name="search" size={14} color={searchOpen ? theme.accent.primary : theme.text2} />
           </HeaderButton>
           <HeaderButton
             testId="chat-mentions-button"
             title="Show mentions and replies to you"
             onClick={() => setMentionsOnly((value) => !value)}
           >
-            <Icon name="bell" size={14} color={mentionsOnly ? accent.primary : theme.text2} />
+            <Icon name="bell" size={14} color={mentionsOnly ? theme.accent.primary : theme.text2} />
           </HeaderButton>
           <HeaderButton
             testId="chat-pause-button"
@@ -1393,7 +1393,7 @@ export function ChatView({
             <Icon
               name={paused ? 'play' : 'pause'}
               size={14}
-              color={paused ? accent.primary : theme.text2}
+              color={paused ? theme.accent.primary : theme.text2}
             />
           </HeaderButton>
 
@@ -1700,7 +1700,7 @@ export function ChatView({
                   closeSearch()
                 }
               }}
-              theme={{ caret: accent.primary }}
+              theme={{ caret: theme.accent.primary }}
               style={{
                 flexGrow: 1,
                 minWidth: 0,
@@ -1842,7 +1842,7 @@ export function ChatView({
                 <ChatMessageRow
                   key={key}
                   gray={similarityReader.get(message)?.gray ?? false}
-                  revealed={revealed}
+                  revealedColor={revealed ? theme.accent.primary : undefined}
                   onPauseDoubleClick={
                     pausePreferences.doubleClickLinks && !classification.hidden
                       ? pauseForDoubleClick
@@ -2270,19 +2270,19 @@ function EmptyState({
             onClick={onGoToPlatforms}
             style={{
               marginTop: 4,
-              backgroundColor: accent.tint15,
+              backgroundColor: theme.accent.tint15,
               borderWidth: 1,
-              borderColor: accent.tint45,
+              borderColor: theme.accent.tint45,
               borderRadius: 8,
               paddingTop: 7,
               paddingBottom: 7,
               paddingLeft: 16,
               paddingRight: 16,
               cursor: 'pointer',
-              hover: { backgroundColor: accent.tint25 },
+              hover: { backgroundColor: theme.accent.tint25 },
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: 600, color: accent.primary }}>
+            <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.primary }}>
               Go to Platforms →
             </Text>
           </div>

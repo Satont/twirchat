@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useStore } from '../../state/create-store'
-import { accent } from '../../theme'
 import { useTheme } from '../../theme-context'
 import { ActionButton, FormError } from '../ui/Form'
 import { Text } from '../ui/Text'
@@ -131,7 +130,7 @@ export function RewardQueue({
                 padding: 8,
                 borderRadius: 5,
                 cursor: state.mutating ? 'default' : 'pointer',
-                backgroundColor: state.selected.has(item.id) ? accent.tint20 : theme.fill,
+                backgroundColor: state.selected.has(item.id) ? theme.accent.tint20 : theme.fill,
               }}
             >
               <Text style={{ color: theme.text, fontSize: 13, fontWeight: 600 }}>

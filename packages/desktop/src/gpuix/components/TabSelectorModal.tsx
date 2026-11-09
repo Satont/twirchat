@@ -86,7 +86,7 @@ export function TabSelectorModal({
               }
             }}
             onSubmit={() => pick(selected)}
-            theme={{ caret: '#a78bfa' }}
+            theme={{ caret: theme.accent.primary }}
             style={{ flexGrow: 1, minWidth: 0, fontSize: 14, color: theme.text }}
           />
         </div>
@@ -118,7 +118,7 @@ export function TabSelectorModal({
                   paddingRight: 10,
                   borderRadius: 6,
                   cursor: 'pointer',
-                  backgroundColor: isSelected ? 'rgba(167, 139, 250, 0.15)' : undefined,
+                  backgroundColor: isSelected ? theme.accent.tint15 : undefined,
                 }}
               >
                 {tab.isLive ? (

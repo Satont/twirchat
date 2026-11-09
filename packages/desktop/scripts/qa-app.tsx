@@ -4,6 +4,8 @@ assertGuiQaEnvironment()
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 
+import type { Account, CustomPalette } from '@twirchat/shared/types'
+
 import type { MainTab } from '../src/gpuix/state/app'
 
 const { focusNativeQaWindow } = await import('./qa-x11')
@@ -11,6 +13,7 @@ const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot'
 process.env.TWIRCHAT_GPUIX_START_MAIN_TAB = 'events'
 await import('../src/gpuix/main')
 const app = await import('../src/gpuix/state/app')
+const { getDesktopBackend } = await import('../src/gpuix/backend/server')
 const { layoutStore, allPanels } = await import('../src/gpuix/state/layout')
 const { actionBindingsStore } = await import('../src/gpuix/state/action-bindings')
 const { windowPresentationPreferences } = await import('../src/gpuix/state/window-presentation')
@@ -43,6 +46,132 @@ async function openNavTab(tab: MainTab, contentId: string) {
   click(`nav-${tab}`)
   await until(() => app.activeTabStore.get() === tab && !!find(main, contentId), `opens ${tab}`)
 }
+
+const customPalette: CustomPalette = {
+  background: '#271c29',
+  surface: '#38283a',
+  text: '#fbe9db',
+  muted: '#c0a8b5',
+  accent: '#ffc576',
+}
+
+async function replaceHex(testId: string, hex: string) {
+  click(testId)
+  main.simulateKeystrokes('ctrl-a')
+  main.simulateKeystrokes(hex.split('').join(' '))
+  await Bun.sleep(100)
+}
+
+async function captureThemePreview(name: string) {
+  main.simulateMouseMove(8, 140)
+  await Bun.sleep(150)
+  await captureGuiQaDisplay(name)
+}
+
+async function checkColorThemes() {
+  const { api } = getDesktopBackend()
+  const before = await api.getSettings()
+  click('theme-preset-ocean')
+  await until(() => app.settingsStore.get()?.theme === 'ocean', 'Ocean previews')
+  assert.equal(
+    (await api.getSettings()).theme,
+    before.theme,
+    'Preview must leave saved theme intact',
+  )
+  await captureThemePreview('theme-ocean')
+
+  const paper = find(main, 'theme-preset-paper')
+  assert.ok(paper)
+  main.focusElement(paper.id)
+  main.simulateKeystrokes('space')
+  await until(() => app.settingsStore.get()?.theme === 'paper', 'Paper previews from keyboard')
+  main.simulateClick(12, 100, 0)
+  await captureThemePreview('theme-paper')
+
+  click('theme-preset-custom')
+  await until(() => !!find(main, 'theme-color-accent'), 'custom color fields paint')
+  const initialAccent = app.settingsStore.get()?.customPalette?.accent
+  await replaceHex('theme-color-accent', 'xyz')
+  await until(() => !!find(main, 'theme-palette-error'), 'invalid hex reports an error')
+  assert.equal(app.settingsStore.get()?.customPalette?.accent, initialAccent)
+  click('settings-save')
+  assert.equal((await api.getSettings()).theme, before.theme, 'Invalid draft must not save')
+
+  for (const [key, hex] of Object.entries(customPalette)) {
+    // Every edit focuses the next native input.
+    // eslint-disable-next-line no-await-in-loop
+    await replaceHex(`theme-color-${key}`, hex.slice(1))
+  }
+  assert.deepEqual(app.settingsStore.get()?.customPalette, customPalette)
+  assert.ok(!find(main, 'theme-palette-error'))
+  click('settings-save')
+  await until(
+    () => main.getPaintedText().some((text) => text.includes('App settings saved')),
+    'custom palette saves',
+  )
+  const saved = await api.getSettings()
+  assert.equal(saved.theme, 'custom')
+  assert.deepEqual(saved.customPalette, customPalette, 'SQLite returns the saved custom palette')
+
+  click('theme-preset-ocean')
+  await until(() => app.settingsStore.get()?.theme === 'ocean', 'switches back to a preset')
+  click('theme-preset-custom')
+  await until(() => app.settingsStore.get()?.theme === 'custom', 'returns to the saved palette')
+  assert.deepEqual(app.settingsStore.get()?.customPalette, customPalette)
+  await captureThemePreview('theme-custom-editor')
+}
+
+async function captureThemedChat() {
+  const { events } = getDesktopBackend()
+  const account = {
+    id: 'qa-theme-account',
+    platform: 'twitch',
+    platformUserId: '12345',
+    username: 'studiochat',
+    displayName: 'StudioChat',
+    scopes: [],
+    createdAt: 0,
+    updatedAt: 0,
+  } satisfies Account
+  app.accountsStore.set([account])
+  try {
+    const messages = [
+      { name: 'juniper', color: '#e894c8', text: 'Made it just in time!' },
+      { name: 'moss', color: '#b5d889', text: 'Is everyone here for the co-op run?' },
+      { name: 'reed', color: '#87b4ff', text: 'Yep, I’m in.' },
+      { name: 'mira', color: '#54d9af', text: 'Hey chat! Sound check in a minute.' },
+      { name: 'reed', color: '#87b4ff', text: 'Audio is clear on my end.' },
+      { name: 'moss', color: '#b5d889', text: 'The music is a little quiet here.' },
+      { name: 'mira', color: '#54d9af', text: 'Turned it up a bit. How’s that?' },
+      { name: 'moss', color: '#b5d889', text: 'Much better.' },
+      { name: 'juniper', color: '#e894c8', text: 'The warm colors are growing on me.' },
+      { name: 'mira', color: '#54d9af', text: 'I put the notes here: https://example.com/notes' },
+      { name: 'juniper', color: '#e894c8', text: 'Got them, thanks!' },
+      { name: 'reed', color: '#87b4ff', text: 'Ready when you are.' },
+    ]
+    for (const [index, message] of messages.entries()) {
+      events.emit('chat_message', {
+        id: `qa-theme-${index}`,
+        platform: account.platform,
+        channelId: account.username,
+        timestamp: new Date(Date.now() - (messages.length - index) * 4000),
+        type: 'message',
+        text: message.text,
+        author: { id: message.name, displayName: message.name, color: message.color, badges: [] },
+        emotes: [],
+      })
+    }
+    await until(
+      () => main.getPaintedText().join(' ').includes('Ready when you are.'),
+      'live messages paint with the custom palette',
+    )
+    await captureThemePreview('theme-custom-chat')
+  } finally {
+    app.accountsStore.set([])
+    app.homeMessagesStore.set([])
+  }
+}
+
 async function action(category, name, args = []) {
   actionBindingsStore.update({
     value: {
@@ -87,9 +216,11 @@ try {
   await until(() => !find(main, 'obs-profile-url'), 'Escape closes the OBS connection editor')
   await openNavTab('settings', 'settings-search')
   assert.equal(find(main, 'obs-remote-controller'), undefined)
+  await checkColorThemes()
   await openNavTab('obs-remote', 'obs-remote-controller')
   assert.equal(mounts.size, 1, 'Reopening OBS Remote reuses the main window')
   await openNavTab('chat', `pane-${homePane.id}`)
+  await captureThemedChat()
   await action('window', 'newSplit')
   await until(
     () => allPanels(layoutStore.get().get('home')?.layout ?? null).length === 2,

@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
 import { useTextInputFocusTracking } from '../../state/focus'
-import { accent } from '../../theme'
 import { useTheme } from '../../theme-context'
 import { Text } from './Text'
 
@@ -41,18 +40,20 @@ export function ActionButton({
         paddingRight: 10,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: primary ? accent.primary : theme.border,
-        backgroundColor: primary ? accent.primary : theme.fill,
+        borderColor: primary ? theme.accent.primary : theme.border,
+        backgroundColor: primary ? theme.accent.primary : theme.fill,
         opacity: disabled ? 0.45 : 1,
         cursor: disabled ? 'default' : 'pointer',
         flexShrink: 0,
-        hover: disabled ? {} : { backgroundColor: primary ? accent.primary : theme.fillHover },
+        hover: disabled
+          ? {}
+          : { backgroundColor: primary ? theme.accent.primary : theme.fillHover },
       }}
     >
       <Text
         style={{
           fontSize: 12,
-          color: primary ? '#ffffff' : danger ? theme.dangerText : theme.text,
+          color: primary ? theme.accent.onPrimary : danger ? theme.dangerText : theme.text,
         }}
       >
         {children}
@@ -83,7 +84,7 @@ export function FormInput({
     testId,
     ...focus,
     onChange: (event: { value?: string }) => onChange(event.value ?? ''),
-    theme: { caret: accent.primary },
+    theme: { caret: theme.accent.primary },
     style: {
       width: '100%',
       minWidth: 0,
@@ -91,7 +92,7 @@ export function FormInput({
       color: theme.text,
       backgroundColor: theme.surface2,
       borderWidth: 1,
-      borderColor: focused ? accent.primary : theme.border,
+      borderColor: focused ? theme.accent.primary : theme.border,
       borderRadius: 5,
       padding: 7,
     },

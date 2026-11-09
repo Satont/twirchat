@@ -174,7 +174,7 @@ export function AddChannelForm({
           display: 'flex',
           backgroundColor: theme.surface2,
           borderWidth: 1,
-          borderColor: inputFocused ? 'rgba(167, 139, 250, 0.5)' : theme.border,
+          borderColor: inputFocused ? withAlpha(theme.accent.primary, 0.5) : theme.border,
           borderRadius: 8,
           paddingTop: 8,
           paddingBottom: 8,
@@ -198,7 +198,7 @@ export function AddChannelForm({
           onKeyDown={(event) => {
             if (event.key === 'escape') onCancel?.()
           }}
-          theme={{ caret: '#a78bfa' }}
+          theme={{ caret: theme.accent.primary }}
           style={{ flexGrow: 1, minWidth: 0, fontSize: 13, color: theme.text }}
         />
       </div>
@@ -243,13 +243,13 @@ export function AddChannelForm({
             paddingLeft: 16,
             paddingRight: 16,
             borderRadius: 8,
-            backgroundColor: '#7c3aed',
+            backgroundColor: theme.accent.deep,
             cursor: canConfirm ? 'pointer' : 'default',
             opacity: canConfirm ? 1 : 0.4,
-            hover: { backgroundColor: canConfirm ? '#6d28d9' : '#7c3aed' },
+            hover: { backgroundColor: canConfirm ? theme.accent.deepHover : theme.accent.deep },
           }}
         >
-          <Text style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>Add</Text>
+          <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onDeep }}>Add</Text>
         </div>
       </div>
     </div>

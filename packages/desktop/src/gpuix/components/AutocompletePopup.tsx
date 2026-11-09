@@ -127,7 +127,7 @@ export function AutocompletePopup({
               paddingRight: 8,
               borderRadius: 4,
               cursor: 'pointer',
-              backgroundColor: i === selectedIndex ? 'rgba(167, 139, 250, 0.15)' : undefined,
+              backgroundColor: i === selectedIndex ? theme.accent.tint15 : undefined,
               hover: { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
             }}
           >

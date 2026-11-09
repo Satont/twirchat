@@ -392,7 +392,7 @@ function Divider({
     onDragCancel()
   }
   useDragCancellation(active, `divider-drag:${id}`, cancelDrag)
-  const hoverColor = '#a78bfa'
+  const hoverColor = theme.accent.primary
 
   return (
     <div
@@ -807,8 +807,8 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
             position: 'absolute',
             pointerEvents: 'none',
             borderWidth: 2,
-            borderColor: '#a78bfa',
-            backgroundColor: '#a78bfa30',
+            borderColor: theme.accent.primary,
+            backgroundColor: `${theme.accent.primary}30`,
             left: dropSide === 'right' ? (dropBounds?.width ?? 0) / 2 : 0,
             right: dropSide === 'left' ? (dropBounds?.width ?? 0) / 2 : 0,
             top: dropSide === 'bottom' ? (dropBounds?.height ?? 0) / 2 : 0,

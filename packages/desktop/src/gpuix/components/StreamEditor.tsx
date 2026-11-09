@@ -13,7 +13,7 @@ import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { useTextInputFocusTracking } from '../state/focus'
 import { useOverlayClose } from '../state/overlays'
-import { accent, withAlpha } from '../theme'
+import { withAlpha } from '../theme'
 import { useTheme } from '../theme-context'
 import { Icon } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
@@ -177,7 +177,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
   const inputStyle = (focused: boolean) => ({
     backgroundColor: theme.surface2,
     borderWidth: 1,
-    borderColor: focused ? accent.primary : theme.border,
+    borderColor: focused ? theme.accent.primary : theme.border,
     borderRadius: 7,
     color: theme.text,
     fontSize: 13,
@@ -252,20 +252,22 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                backgroundColor: accent.tint10,
+                backgroundColor: theme.accent.tint10,
                 borderWidth: 1,
-                borderColor: accent.tint20,
+                borderColor: theme.accent.tint20,
                 borderRadius: 6,
                 paddingTop: 3,
                 paddingBottom: 3,
                 paddingLeft: 10,
                 paddingRight: 10,
                 cursor: 'pointer',
-                hover: { backgroundColor: accent.tint20 },
+                hover: { backgroundColor: theme.accent.tint20 },
               }}
             >
-              <Icon name="edit" size={14} color={accent.primary} />
-              <Text style={{ fontSize: 12, fontWeight: 600, color: accent.primary }}>Edit</Text>
+              <Icon name="edit" size={14} color={theme.accent.primary} />
+              <Text style={{ fontSize: 12, fontWeight: 600, color: theme.accent.primary }}>
+                Edit
+              </Text>
             </div>
           </div>
           {title ? (
@@ -295,7 +297,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
             placeholder="Stream title…"
             onChange={(event) => setEditTitle((event.value ?? '').slice(0, 140))}
             {...titleFocus}
-            theme={{ caret: accent.primary, textMuted: placeholderColor }}
+            theme={{ caret: theme.accent.primary, textMuted: placeholderColor }}
             style={inputStyle(focusedField === 'title')}
           />
 
@@ -306,7 +308,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
               placeholder="Search categories…"
               onChange={(event) => onCategoryInput(event.value ?? '')}
               {...categoryFocus}
-              theme={{ caret: accent.primary, textMuted: placeholderColor }}
+              theme={{ caret: theme.accent.primary, textMuted: placeholderColor }}
               style={inputStyle(focusedField === 'category')}
             />
             {!searchLoading && categoryResults.length > 0 ? (
@@ -359,7 +361,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                         paddingRight: 10,
                         borderRadius: 6,
                         cursor: 'pointer',
-                        hover: { backgroundColor: accent.tint12 },
+                        hover: { backgroundColor: theme.accent.tint12 },
                       }}
                     >
                       {cat.thumbnailUrl ? (
@@ -397,7 +399,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
               testId="stream-cancel"
               onClick={saving ? undefined : () => setEditing(false)}
               style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                backgroundColor: theme.fill,
                 borderWidth: 1,
                 borderColor: theme.border,
                 borderRadius: 7,
@@ -407,7 +409,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                 paddingRight: 16,
                 cursor: saving ? 'not-allowed' : 'pointer',
                 opacity: saving ? 0.45 : 1,
-                hover: saving ? undefined : { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+                hover: saving ? undefined : { backgroundColor: theme.fillHover },
               }}
             >
               <Text style={{ fontSize: 13, fontWeight: 600, color: theme.text2 }}>Cancel</Text>
@@ -420,7 +422,7 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                backgroundColor: accent.primary,
+                backgroundColor: theme.accent.primary,
                 borderRadius: 7,
                 paddingTop: 6,
                 paddingBottom: 6,
@@ -431,8 +433,8 @@ export function StreamEditor({ platform, channelId }: StreamEditorProps) {
                 hover: saving ? undefined : { opacity: 0.88 },
               }}
             >
-              {saveSuccess ? <Icon name="check" size={13} color="#ffffff" /> : null}
-              <Text style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>
+              {saveSuccess ? <Icon name="check" size={13} color={theme.accent.onPrimary} /> : null}
+              <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onPrimary }}>
                 {saveSuccess ? 'Saved!' : saving ? 'Saving…' : 'Save'}
               </Text>
             </div>

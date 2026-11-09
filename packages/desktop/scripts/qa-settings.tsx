@@ -16,6 +16,8 @@ const { DEFAULT_SETTINGS } = await import('@twirchat/shared/types')
 const { DEFAULT_IMAGE_UPLOADER_SETTINGS } = await import('../src/services/image-uploader')
 const { DEFAULT_TRANSLATION_SETTINGS } = await import('../src/services/translation')
 const { accountsStore, settingsStore } = await import('../src/gpuix/state/app')
+const { useStore } = await import('../src/gpuix/state/create-store')
+const { resolveTheme, ThemeContext } = await import('../src/gpuix/theme-context')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
 const width = process.argv.includes('--wide') ? 1280 : 680
 const calls = []
@@ -160,6 +162,14 @@ renderer.init({
 })
 const root = createRoot(renderer)
 const loop = startFrameLoop(renderer)
+function ThemedFixture({ component }) {
+  const theme = resolveTheme(useStore(settingsStore))
+  return React.createElement(
+    ThemeContext.Provider,
+    { value: theme },
+    React.createElement(component),
+  )
+}
 function mount(component) {
   root.render(
     React.createElement(
@@ -179,7 +189,7 @@ function mount(component) {
               backgroundColor: '#111114',
             },
           },
-          React.createElement(component),
+          React.createElement(ThemedFixture, { component }),
         ),
       ),
     ),
@@ -331,6 +341,17 @@ try {
   assert.equal(settingsStore.get().theme, 'light')
   await click('settings-save')
   assert.equal(durableSettings.theme, 'light', 'App setting edited during save was overwritten')
+  await clickNode(await scrollTo('theme-preset-custom'))
+  const accentInput = await scrollTo('theme-color-accent')
+  const accentBounds = box(accentInput)
+  assert.ok(accentBounds.x >= 0 && accentBounds.x + accentBounds.width <= width)
+  await type(accentInput, '1a2b3c')
+  assert.equal(settingsStore.get().customPalette?.accent, '#1a2b3c')
+  renderer.scrollTo(find('settings-content').id, 0, 0)
+  await Bun.sleep(100)
+  await clickNode(await scrollTo('theme-palette-reset'))
+  assert.notEqual(settingsStore.get().customPalette?.accent, '#1a2b3c')
+  const palette = await captureGuiQaDisplay('settings-custom-palette')
   await type(find('settings-search'), 'sharex headers')
   assert.ok(find('settings-section-image-uploader'))
   assert.ok(find('image-uploader-request-url'))
@@ -435,7 +456,7 @@ try {
       twirUploaderSignInCancelRetryDisconnect: true,
       accountSwitchAnonymousForget: true,
       addAccountCopyLink: true,
-      screenshots: [narrow, search, uploader, twir, accounts, addAccountMenu],
+      screenshots: [narrow, search, palette, uploader, twir, accounts, addAccountMenu],
     }),
   )
 } catch (error) {

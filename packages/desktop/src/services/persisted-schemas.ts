@@ -15,6 +15,7 @@ import type {
   ChatLayout,
   SelfPingConfig,
   AppSettings,
+  CustomPalette,
   SplitDirection,
   SplitNode,
   PanelContent,
@@ -25,12 +26,16 @@ import type {
   ModerationAction,
   ModerationOutcome,
 } from '@twirchat/shared/types'
+import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
 import type {
   YouTubeChatBatch,
   YouTubeChatStatus,
   YouTubeChatRelayEvent,
 } from '@twirchat/shared/youtube-chat'
 import { z } from 'zod'
+
+import { normalizePaletteColor } from '../shared/theme-palette'
+
 export const platformSchema = z.toZod<Platform>()(
   z.union([z.literal('twitch'), z.literal('youtube'), z.literal('kick')]),
 )
@@ -184,9 +189,38 @@ export const chatLayoutSchema = z.toZod<ChatLayout>()(
 export const selfPingConfigSchema = z.toZod<SelfPingConfig>()(
   z.object({ enabled: z.boolean(), color: z.string() }),
 )
+const themeSchema = z.enum([
+  'dark',
+  'light',
+  'midnight',
+  'ocean',
+  'forest',
+  'ember',
+  'rose',
+  'paper',
+  'custom',
+])
+const paletteColorSchema = z.string().transform((input, ctx) => {
+  const color = normalizePaletteColor(input)
+  if (color) return color
+  ctx.addIssue({ code: 'custom', message: 'Expected a hexadecimal color.' })
+  return z.NEVER
+})
+const customPaletteSchema = z.toZod<CustomPalette>()(
+  z
+    .object({
+      background: paletteColorSchema,
+      surface: paletteColorSchema,
+      text: paletteColorSchema,
+      muted: paletteColorSchema,
+      accent: paletteColorSchema,
+    })
+    .readonly(),
+)
 export const appSettingsSchema = z.toZod<AppSettings>()(
   z.object({
-    theme: z.union([z.literal('light'), z.literal('dark')]),
+    theme: themeSchema,
+    customPalette: customPaletteSchema.optional(),
     chatTheme: z.union([z.literal('modern'), z.literal('compact')]),
     fontFamily: z.union([z.literal('inter'), z.literal('manrope'), z.literal('system')]),
     fontSize: z.number(),
@@ -441,6 +475,8 @@ export const emoteCatalogEntrySchema = z.toZod<EmoteCatalogEntry>()(
 )
 
 export const partialAppSettingsSchema = appSettingsSchema.partial().extend({
+  theme: themeSchema.optional().catch(DEFAULT_SETTINGS.theme),
+  customPalette: customPaletteSchema.optional().catch(undefined),
   overlay: overlayConfigSchema.partial().optional(),
   hotkeys: hotkeySettingsSchema.partial().optional(),
   selfPing: selfPingConfigSchema.partial().optional(),

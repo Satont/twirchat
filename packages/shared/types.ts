@@ -188,8 +188,27 @@ export interface HotkeySettings {
   tabSelector: string
 }
 
+export type ThemePreset =
+  | 'dark'
+  | 'light'
+  | 'midnight'
+  | 'ocean'
+  | 'forest'
+  | 'ember'
+  | 'rose'
+  | 'paper'
+
+export interface CustomPalette {
+  readonly background: string
+  readonly surface: string
+  readonly text: string
+  readonly muted: string
+  readonly accent: string
+}
+
 export interface AppSettings {
-  theme: 'light' | 'dark'
+  theme: ThemePreset | 'custom'
+  customPalette?: CustomPalette
   chatTheme: 'modern' | 'compact'
   fontFamily: 'inter' | 'manrope' | 'system'
   fontSize: number

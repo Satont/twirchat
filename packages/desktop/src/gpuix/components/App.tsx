@@ -46,7 +46,7 @@ import { visitChatTab, navigateChatTabHistory } from '../state/tab-history'
 import { clearTabUnread } from '../state/tab-unread'
 import { changeWindowPresentation, useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
-import { accent, withAlpha } from '../theme'
+import { withAlpha } from '../theme'
 import { resolveFont, resolveTheme, useTheme, FontContext, ThemeContext } from '../theme-context'
 import { loadPendingChangelog, type PendingChangelog } from '../update-changelog'
 import { AddChannelModal } from './AddChannelModal'
@@ -68,6 +68,7 @@ import { WatchedView } from './WatchedView'
 /** Transient top-center toast (port of ChatNotice.vue). */
 export function ChatNotice() {
   const notice = useStore(noticeStore)
+  const theme = useTheme()
   if (!notice) return null
 
   const palette =
@@ -75,7 +76,7 @@ export function ChatNotice() {
       ? { bg: 'rgba(20, 83, 45, 0.97)', text: '#bbf7d0', dot: '#22c55e' }
       : notice.kind === 'error'
         ? { bg: 'rgba(127, 29, 29, 0.97)', text: '#fecaca', dot: '#ef4444' }
-        : { bg: 'rgba(31, 41, 55, 0.97)', text: '#e5e7eb', dot: '#a78bfa' }
+        : { bg: theme.popover, text: theme.text, dot: theme.accent.primary }
 
   return (
     <div
@@ -159,7 +160,7 @@ export function UpdateToast() {
     paddingLeft: 12,
     paddingRight: 12,
     borderRadius: 6,
-    backgroundColor: accent.deep,
+    backgroundColor: theme.accent.deep,
     cursor: 'pointer',
   }
   const secondaryButtonStyle = {
@@ -209,7 +210,7 @@ export function UpdateToast() {
             style={{
               width: `${Math.round(update.progress ?? 0)}%`,
               height: '100%',
-              backgroundColor: accent.deep,
+              backgroundColor: theme.accent.deep,
             }}
           />
         </div>
@@ -217,7 +218,7 @@ export function UpdateToast() {
       {update.status === 'update-available' ? (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
           <div style={buttonStyle} onClick={() => runUiTask(backend.api.downloadUpdate())}>
-            <Text style={{ fontSize: 13, color: '#ffffff' }}>Download</Text>
+            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>Download</Text>
           </div>
           <div
             style={secondaryButtonStyle}
@@ -233,7 +234,7 @@ export function UpdateToast() {
       {update.status === 'download-complete' ? (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
           <div style={buttonStyle} onClick={() => runUiTask(backend.api.applyUpdate())}>
-            <Text style={{ fontSize: 13, color: '#ffffff' }}>Restart to apply</Text>
+            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>Restart to apply</Text>
           </div>
         </div>
       ) : null}
@@ -500,7 +501,7 @@ export function App() {
             height: '100%',
             backgroundColor: theme.bg,
             // Inherited by every text subtree (GPUI's default wash is blue).
-            selectionColor: withAlpha(accent.primary, 0.35),
+            selectionColor: withAlpha(theme.accent.primary, 0.35),
           }}
         >
           <div

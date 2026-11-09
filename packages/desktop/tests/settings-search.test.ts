@@ -89,7 +89,9 @@ describe('settings search index', () => {
   test('matching category selection remains stable and clearing search restores the preferred category', () => {
     const colors = searchSettings('color')
     expect(resolveSettingsCategory('overlay', colors)).toBe('overlay')
-    expect(resolveSettingsCategory('general', colors)).toBe('chat')
+    expect(resolveSettingsCategory('general', colors)).toBe('general')
+    expect(ids('custom palette')).toEqual(['appearance'])
+    expect(ids('ocean')).toEqual(['appearance'])
     expect(resolveSettingsCategory('general', searchSettings('Azure'))).toBe('translation')
     expect(resolveSettingsCategory('general', searchSettings(''))).toBe('general')
   })

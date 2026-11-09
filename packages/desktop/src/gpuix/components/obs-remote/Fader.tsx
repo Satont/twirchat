@@ -3,7 +3,6 @@ import { useRef, useState } from 'react'
 
 import { useDragCancellation, useDragMotion } from '../../hooks/use-drag-motion'
 import { nativeWindow, type NativePaintedElementBounds } from '../../native-window'
-import { accent } from '../../theme'
 import { useTheme } from '../../theme-context'
 
 const THUMB_WIDTH = 14
@@ -142,7 +141,7 @@ export function Fader({
           height: 6,
           width: `${percent}%`,
           borderRadius: 3,
-          backgroundColor: accent.primary,
+          backgroundColor: theme.accent.primary,
           pointerEvents: 'none',
         }}
       />

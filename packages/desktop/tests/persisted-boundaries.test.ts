@@ -49,6 +49,48 @@ test('persisted partial settings retain nested defaults and reject wrong externa
   }
 })
 
+test('theme settings recover independently and retain the custom palette across preset changes', () => {
+  const f = fixture()
+  try {
+    const customPalette = {
+      background: '#123344',
+      surface: '#234455',
+      text: '#eef0f2',
+      muted: '#bbccee',
+      accent: '#556677',
+    }
+    f.database.run('INSERT INTO settings(key,value) VALUES(?,?)', [
+      'app_settings',
+      JSON.stringify({ theme: 'retired', customPalette, fontSize: 19 }),
+    ])
+    expect(SettingsStore.get()).toMatchObject({ theme: 'dark', customPalette, fontSize: 19 })
+
+    f.database.run('UPDATE settings SET value=? WHERE key=?', [
+      JSON.stringify({
+        theme: 'forest',
+        customPalette: { ...customPalette, accent: 9 },
+        fontSize: 18,
+      }),
+      'app_settings',
+    ])
+    expect(SettingsStore.get()).toMatchObject({ theme: 'forest', fontSize: 18 })
+    expect(SettingsStore.get().customPalette).toBeUndefined()
+
+    const settings = SettingsStore.get()
+    SettingsStore.set({
+      ...settings,
+      theme: 'custom',
+      customPalette: { ...customPalette, muted: 'BCE', accent: ' #567 ' },
+    })
+    expect(SettingsStore.get()).toMatchObject({ theme: 'custom', customPalette })
+    expect(SettingsStore.update({ theme: 'ocean' }).customPalette).toEqual(customPalette)
+    expect(SettingsStore.get()).toMatchObject({ theme: 'ocean', customPalette })
+    expect(SettingsStore.update({ theme: 'custom' }).customPalette).toEqual(customPalette)
+  } finally {
+    f.dispose()
+  }
+})
+
 test('history identity columns override serialized JSON while malformed author data is skipped', () => {
   const f = fixture()
   try {

@@ -35,22 +35,17 @@ export const SettingsStore = {
     }
   },
 
-  set(settings: AppSettings): void {
+  set(settings: AppSettings): AppSettings {
+    const validated = appSettingsSchema.parse(settings)
     const db = getDb()
     db.run(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      ['app_settings', JSON.stringify(settings)],
+      ['app_settings', JSON.stringify(validated)],
     )
+    return validated
   },
 
   update(partial: Partial<AppSettings>): AppSettings {
-    const current = this.get()
-    const updated = deepMerge(current, partial)
-    const db = getDb()
-    db.run(
-      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      ['app_settings', JSON.stringify(updated)],
-    )
-    return updated
+    return this.set(deepMerge(this.get(), partial))
   },
 }
