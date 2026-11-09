@@ -78,20 +78,25 @@ export function CosmeticAuthorName({
 export function CosmeticBadges({
   badges,
   size,
+  marginRight,
 }: {
   badges: UserCosmetics['badges']
   size: number
+  marginRight?: number
 }) {
   const enabled = useStoreSelector(emotePreferencesStore, (state) => state.value.badges)
-  if (!enabled || !badges.length) return null
+  if (!enabled || !badges.some((badge) => badge.imageUrl)) return null
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', gap: 3, alignItems: 'center' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'row', gap: 3, alignItems: 'center', marginRight }}
+    >
       {badges.map((badge) =>
         badge.imageUrl ? (
           <BadgeTooltip key={badge.id} badge={badge}>
             <RemoteImage
               url={badge.imageUrl}
-              style={{ width: size, height: size, pointerEvents: 'none' }}
+              thumbnailSize={badge.type === 'twir' ? size : undefined}
+              style={{ width: size, height: size, flexShrink: 0, pointerEvents: 'none' }}
             />
           </BadgeTooltip>
         ) : null,

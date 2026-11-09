@@ -389,7 +389,7 @@ export function ChattersDialog({
                                   {user.avatarUrl ? (
                                     <RemoteImage
                                       url={user.avatarUrl}
-                                      avatarSize={24}
+                                      thumbnailSize={24}
                                       objectFit="cover"
                                       style={{
                                         width: 24,

@@ -2377,7 +2377,7 @@ function EmptyState({
                 {acc.avatarUrl ? (
                   <RemoteImage
                     url={acc.avatarUrl}
-                    avatarSize={22}
+                    thumbnailSize={22}
                     objectFit="cover"
                     style={{
                       width: 22,

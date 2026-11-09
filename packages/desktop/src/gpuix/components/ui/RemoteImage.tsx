@@ -15,8 +15,8 @@ import {
   type ReactNode,
 } from 'react'
 
-import { useAvatarImage } from '../../state/avatar-images'
 import { ensureImage, imageSnapshot, subscribeImage } from '../../state/image-cache'
+import { useImageThumbnail } from '../../state/image-thumbnails'
 export const ImageLoadingContext = createContext(true)
 
 export function RemoteImage({
@@ -24,13 +24,13 @@ export function RemoteImage({
   style,
   objectFit = 'contain',
   fallback,
-  avatarSize,
+  thumbnailSize,
 }: {
   url: string | undefined
   style?: Record<string, unknown>
   objectFit?: 'fill' | 'contain' | 'cover' | 'scaleDown' | 'none'
   fallback?: ReactNode
-  avatarSize?: number
+  thumbnailSize?: number
 }) {
   const visible = useContext(ImageLoadingContext)
   const subscribe = useCallback(
@@ -39,7 +39,12 @@ export function RemoteImage({
   )
   const snapshot = useCallback(() => imageSnapshot(url), [url])
   const localPath = useSyncExternalStore(subscribe, snapshot, snapshot)
-  const preparedPath = useAvatarImage(localPath, avatarSize, visible)
+  const preparedPath = useImageThumbnail(
+    localPath,
+    thumbnailSize,
+    objectFit === 'cover' ? 'cover' : 'inside',
+    visible,
+  )
   useEffect(() => {
     if (visible) ensureImage(url)
   }, [url, visible])
