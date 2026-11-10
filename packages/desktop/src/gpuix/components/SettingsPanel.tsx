@@ -327,8 +327,14 @@ export function SettingsPanel() {
   }, [])
 
   const visibility = useMemo(
-    () => ({ visible: new Set(visibleIds), mounted: mountedIds, dirty: dirtySections, narrow }),
-    [visibleIds, mountedIds, dirtySections, narrow],
+    () => ({
+      visible: new Set(visibleIds),
+      mounted: mountedIds,
+      dirty: dirtySections,
+      narrow,
+      query,
+    }),
+    [visibleIds, mountedIds, dirtySections, narrow, query],
   )
 
   useEffect(() => {

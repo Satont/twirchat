@@ -4,6 +4,7 @@ import { useT } from '../../i18n'
 import type { SettingsSectionId } from '../../settings-search'
 import { useTheme } from '../../theme-context'
 import { ActionButton } from '../ui/Form'
+import { HighlightText } from '../ui/HighlightText'
 import { Text } from '../ui/Text'
 
 export interface SettingsSectionVisibility {
@@ -11,6 +12,7 @@ export interface SettingsSectionVisibility {
   mounted: ReadonlySet<SettingsSectionId>
   dirty: ReadonlySet<SettingsSectionId>
   narrow: boolean
+  query: string
 }
 
 export const SettingsSectionContext = createContext<SettingsSectionVisibility>({
@@ -18,6 +20,7 @@ export const SettingsSectionContext = createContext<SettingsSectionVisibility>({
   mounted: new Set(),
   dirty: new Set(),
   narrow: false,
+  query: '',
 })
 
 type SettingsDirtyReporter = (id: SettingsSectionId, dirty: boolean) => void
@@ -97,9 +100,11 @@ export function SettingsSection({
           marginBottom: desc ? 4 : 14,
         }}
       >
-        <Text style={{ fontSize: 12, fontWeight: 700, color: theme.text2 }}>
-          {title.toUpperCase()}
-        </Text>
+        <HighlightText
+          text={title.toUpperCase()}
+          query={visibility.query}
+          style={{ fontSize: 12, fontWeight: 700, color: theme.text2 }}
+        />
         {dirty ? (
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             <div
@@ -117,7 +122,12 @@ export function SettingsSection({
         ) : null}
       </div>
       {desc ? (
-        <Text style={{ fontSize: 12, color: theme.text2, marginBottom: 14 }}>{desc}</Text>
+        <HighlightText
+          text={desc}
+          query={visibility.query}
+          style={{ fontSize: 12, color: theme.text2 }}
+          containerStyle={{ marginBottom: 14 }}
+        />
       ) : null}
       {children}
     </div>
@@ -141,7 +151,7 @@ export function SettingsRow({
   children: ReactNode
 }) {
   const theme = useTheme()
-  const { narrow } = useContext(SettingsSectionContext)
+  const { narrow, query } = useContext(SettingsSectionContext)
   return (
     <div
       style={{
@@ -157,9 +167,17 @@ export function SettingsRow({
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Text style={{ fontSize: 14, fontWeight: 500, color: theme.text }}>{label}</Text>
+        <HighlightText
+          text={label}
+          query={query}
+          style={{ fontSize: 14, fontWeight: 500, color: theme.text }}
+        />
         {hint ? (
-          <Text style={{ fontSize: 11, fontWeight: 400, color: theme.text2 }}>{hint}</Text>
+          <HighlightText
+            text={hint}
+            query={query}
+            style={{ fontSize: 11, fontWeight: 400, color: theme.text2 }}
+          />
         ) : null}
       </div>
       {children}
