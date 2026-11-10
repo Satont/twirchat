@@ -44,6 +44,7 @@ import { KickAdapter } from '../../platforms/kick/adapter'
 import { TwitchAdapter } from '../../platforms/twitch/adapter'
 import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
 import { createDefaultTwitchSenderPool } from '../../platforms/twitch/sender-pool'
+import { VkPlayAdapter } from '../../platforms/vkplay/adapter'
 import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
 import { createYouTubeChatRelay } from '../../platforms/youtube/relay'
 import { createPluginManager } from '../../plugins/manager'
@@ -181,9 +182,11 @@ function boot(): DesktopBackend {
   const twitchAdapter = new TwitchAdapter()
   const kickAdapter = new KickAdapter()
   const youtubeAdapter = new YouTubeAdapter()
+  const vkPlayAdapter = new VkPlayAdapter()
   aggregator.registerAdapter(twitchAdapter)
   aggregator.registerAdapter(kickAdapter)
   aggregator.registerAdapter(youtubeAdapter)
+  aggregator.registerAdapter(vkPlayAdapter)
 
   startOverlayServer()
 
@@ -198,7 +201,7 @@ function boot(): DesktopBackend {
     isConnected: () => backendConn.isConnected,
     identities: () =>
       AccountStore.findAllActive().flatMap((account): DonationShareIdentity[] => {
-        if (account.platform === 'youtube') return []
+        if (account.platform === 'youtube' || account.platform === 'vkplay') return []
         const accessToken = AccountStore.getTokens(account.id)?.accessToken
         return accessToken ? [{ platform: account.platform, accessToken }] : []
       }),
@@ -206,7 +209,7 @@ function boot(): DesktopBackend {
       watchedChannelManager
         .getActiveChannels()
         .flatMap((channel) =>
-          channel.platform === 'youtube'
+          channel.platform === 'youtube' || channel.platform === 'vkplay'
             ? []
             : [{ platform: channel.platform, channel: channel.channelSlug }],
         ),
@@ -848,6 +851,7 @@ function subscribeSevenTvFor(
   channelSlug: string,
   aggregator: ChatAggregator,
 ): void {
+  if (platform === 'vkplay') return
   const adapter = aggregator.getAdapter(platform)
   let sevenTvChannelId = channelSlug
   let sevenTvPlatformUserId: string | undefined

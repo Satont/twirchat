@@ -1,6 +1,6 @@
 # <img src="packages/desktop/assets/icon.iconset/icon_64x64.png" width="36" height="36" alt=""> TwirChat
 
-A desktop chat client for streamers, moderators, and viewers on Twitch, YouTube, and Kick.
+A desktop chat client for streamers, moderators, and viewers on Twitch, YouTube, Kick, and VK Play Live.
 
 **[Download TwirChat for Linux, Windows, or macOS](https://github.com/Satont/twirchat/releases/latest)**
 

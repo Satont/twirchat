@@ -106,6 +106,7 @@ export const app = {
   'app.addChannel.pluginPlaceholder': '{name} channel identifier',
   'app.addChannel.twitchPlaceholder': 'Twitch channel name',
   'app.addChannel.kickPlaceholder': 'Kick channel name',
+  'app.addChannel.vkplayPlaceholder': 'VK Play Live channel name',
   'app.addChannel.youtubePlaceholder': 'YouTube channel handle or ID',
   'app.addChannel.pluginPlatforms': 'Plugin platforms',
   'app.addChannel.usePlugin': 'Use {name}',

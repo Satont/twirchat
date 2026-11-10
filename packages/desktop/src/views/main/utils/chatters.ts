@@ -22,9 +22,11 @@ export function buildChattersTargets(
     return [{ platform: watchedChannel.platform, channelSlug: watchedChannel.channelSlug }]
   }
 
-  return ownTargets
-    .filter((target) => supportsChatters(target.platform))
-    .map((target) => ({ platform: target.platform, channelSlug: target.channelLogin }))
+  return ownTargets.flatMap((target) =>
+    supportsChatters(target.platform)
+      ? [{ platform: target.platform, channelSlug: target.channelLogin }]
+      : [],
+  )
 }
 
 export function chatterRoleLabel(role: ChatterRole): string {

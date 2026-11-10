@@ -101,6 +101,11 @@ The development-only injection server defaults to 55824 (`DEV_SERVER_PORT`).
   development.
 - **Kick** uses the existing backend OAuth configuration. Register
   `http://localhost:45821/auth/kick/callback` for production and port 55821 for development.
+- **VK Play Live** uses the backend OAuth configuration because VK requires the application
+  secret for the authorization-code exchange and refresh. Set `VKPLAY_CLIENT_ID` and
+  `VKPLAY_CLIENT_SECRET` on the backend and register
+  `http://127.0.0.1:45821/auth/vkplay/callback` (port 55821 in development) in the
+  [VK Video Live developer cabinet](https://dev.live.vkvideo.ru/).
 
 For GitHub release builds, set all three `TWIRCHAT_` OAuth values above as repository
 secrets in **Settings → Secrets and variables → Actions → Secrets**. The optional

@@ -1,7 +1,7 @@
 import type { Account, NormalizedChatMessage, Platform } from '@twirchat/shared/types'
 
 export interface ChatSendTarget {
-  platform: Extract<Platform, 'twitch' | 'kick'>
+  platform: Extract<Platform, 'twitch' | 'kick' | 'vkplay'>
   channelLogin: string
 }
 
@@ -15,11 +15,12 @@ export interface ChatMessageTarget extends ChatSendTarget {
 export function ownChatSendTargets(accounts: readonly Account[]): ChatSendTarget[] {
   return accounts.flatMap((account) => {
     if (
-      (account.platform !== 'twitch' && account.platform !== 'kick') ||
-      !account.username.trim()
-    ) {
+      account.platform !== 'twitch' &&
+      account.platform !== 'kick' &&
+      account.platform !== 'vkplay'
+    )
       return []
-    }
+    if (!account.username.trim()) return []
     return [{ platform: account.platform, channelLogin: account.username }]
   })
 }
@@ -77,6 +78,7 @@ const MESSAGE_LENGTH_LIMITS: Record<Platform, number> = {
   twitch: 500,
   kick: 500,
   youtube: 200,
+  vkplay: 500,
 }
 
 /** The tightest limit across every platform a message is about to go to. */

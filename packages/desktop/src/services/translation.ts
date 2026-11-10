@@ -133,7 +133,7 @@ export function validateTranslationSettings(value: unknown): TranslationSettings
       azureRegion: z.string(),
       channels: z.array(
         z.object({
-          platform: z.enum(['twitch', 'kick', 'youtube']),
+          platform: z.enum(['twitch', 'kick', 'youtube', 'vkplay']),
           channelId: z.string(),
           incoming: z.boolean().optional(),
           sourceLanguage: z.string().optional(),
@@ -171,7 +171,7 @@ export function validateTranslationSettings(value: unknown): TranslationSettings
   for (const channel of settings.channels) {
     if (
       !channel ||
-      !['twitch', 'kick', 'youtube'].includes(channel.platform) ||
+      !['twitch', 'kick', 'youtube', 'vkplay'].includes(channel.platform) ||
       typeof channel.channelId !== 'string' ||
       !channel.channelId.trim() ||
       channel.channelId.length > 256 ||

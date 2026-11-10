@@ -17,8 +17,12 @@ import { Icon, PlatformIcon } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
-const platformName = (platform: WatchedChannel['platform']) =>
-  platform === 'youtube' ? 'YouTube' : platform === 'twitch' ? 'Twitch' : 'Kick'
+const platformName = (platform: WatchedChannel['platform']) => {
+  if (platform === 'youtube') return 'YouTube'
+  if (platform === 'twitch') return 'Twitch'
+  if (platform === 'vkplay') return 'VK Play Live'
+  return 'Kick'
+}
 
 interface AccountAvatarProps {
   account: Account

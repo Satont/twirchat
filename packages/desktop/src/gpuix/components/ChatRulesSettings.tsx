@@ -521,6 +521,7 @@ function IgnoreEditor({
             { value: 'twitch', label: 'Twitch' },
             { value: 'kick', label: 'Kick' },
             { value: 'youtube', label: 'YouTube' },
+            { value: 'vkplay', label: 'VK Play Live' },
           ]}
           onChange={(platform) => onChange({ platform: platform === 'all' ? undefined : platform })}
         />

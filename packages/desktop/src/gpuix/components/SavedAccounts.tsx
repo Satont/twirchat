@@ -14,9 +14,13 @@ import { ActionButton, FormError } from './ui/Form'
 import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'
 
-const platforms: Platform[] = ['twitch', 'youtube', 'kick']
-const platformName = (platform: Platform) =>
-  platform === 'youtube' ? 'YouTube' : platform === 'twitch' ? 'Twitch' : 'Kick'
+const platforms: Platform[] = ['twitch', 'youtube', 'kick', 'vkplay']
+const platformName = (platform: Platform) => {
+  if (platform === 'youtube') return 'YouTube'
+  if (platform === 'twitch') return 'Twitch'
+  if (platform === 'vkplay') return 'VK Play Live'
+  return 'Kick'
+}
 
 /** Saved credentials and the currently active identity are deliberately separate. */
 export function SavedAccounts() {

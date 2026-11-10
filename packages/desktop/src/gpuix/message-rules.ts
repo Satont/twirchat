@@ -82,7 +82,7 @@ const highlightRuleSchema = textRuleSchema.extend({
 const ignoreRuleSchema = textRuleSchema
   .extend({
     target: z.enum(['message', 'user']),
-    platform: z.enum(['twitch', 'kick', 'youtube']).optional(),
+    platform: z.enum(['twitch', 'kick', 'youtube', 'vkplay']).optional(),
     userId: z.string().optional(),
     placeholder: z.boolean(),
     replacement: z.string().max(1000).optional(),

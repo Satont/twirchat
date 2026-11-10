@@ -18,7 +18,7 @@ import type { EmoteSetDeleteEvent, UserUpdateEvent, SevenTVEvent } from './event
 const log = logger('seventv:manager')
 function parseChannelKey(key: string): [Platform, string] {
   const separator = key.indexOf(':')
-  const platform = z.enum(['twitch', 'kick', 'youtube']).parse(key.slice(0, separator))
+  const platform = z.enum(['twitch', 'kick', 'youtube', 'vkplay']).parse(key.slice(0, separator))
   return [platform, key.slice(separator + 1)]
 }
 

@@ -202,6 +202,34 @@ export interface KickRefreshResponse {
   expiresIn?: number
 }
 
+/**
+ * POST /api/auth/vkplay/start
+ * Desktop sends state + redirect URI, backend builds the VK Play Live auth URL.
+ */
+export interface VkPlayBuildUrlRequest {
+  state: string
+  redirectUri: string
+}
+
+/** POST /api/auth/vkplay/exchange — backend exchanges the code with the app secret. */
+export interface VkPlayExchangeRequest {
+  code: string
+  redirectUri: string
+}
+
+/** POST /api/auth/vkplay/refresh — backend refreshes the user token. */
+export interface VkPlayRefreshRequest {
+  refreshToken: string
+  redirectUri: string
+}
+
+export interface VkPlayTokenResponse {
+  accessToken: string
+  refreshToken?: string
+  expiresIn?: number
+  scope?: string[]
+}
+
 // ============================================================
 // HTTP API — stream status, update stream, search categories
 // ============================================================

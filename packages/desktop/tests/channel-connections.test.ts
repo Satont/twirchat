@@ -7,6 +7,7 @@ test('applySavedChannels replaces every platform snapshot after OAuth', () => {
     kick: [],
     twitch: ['old-channel'],
     youtube: ['stale-channel'],
+    vkplay: ['stale-vkplay-channel'],
   }
 
   applySavedChannels(current, { kick: ['satont'], twitch: ['justovich221337'] })
@@ -15,5 +16,6 @@ test('applySavedChannels replaces every platform snapshot after OAuth', () => {
     kick: ['satont'],
     twitch: ['justovich221337'],
     youtube: [],
+    vkplay: [],
   })
 })

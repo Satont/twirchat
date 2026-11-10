@@ -3,6 +3,7 @@ import type {
   KickBuildUrlResponse,
   KickExchangeResponse,
   KickRefreshResponse,
+  VkPlayTokenResponse,
 } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
@@ -14,6 +15,12 @@ import {
   refreshKickToken,
   startKickOAuth,
 } from '../auth/kick.ts'
+import {
+  buildVkPlayAuthUrl,
+  exchangeVkPlayCode,
+  isVkPlayOAuthConfigured,
+  refreshVkPlayToken,
+} from '../auth/vkplay.ts'
 import { ClientStore } from '../db/index.ts'
 import { json } from './utils.ts'
 
@@ -30,6 +37,18 @@ const exchangeSchema = z.object({
 })
 const refreshSchema = z.object({ refreshToken: z.string().min(1) })
 const legacyStartSchema = z.object({ clientSecret: z.string().min(1) })
+const vkPlayStartSchema = z.object({
+  redirectUri: z.string().url(),
+  state: z.string().min(1),
+})
+const vkPlayExchangeSchema = z.object({
+  code: z.string().min(1),
+  redirectUri: z.string().url(),
+})
+const vkPlayRefreshSchema = z.object({
+  redirectUri: z.string().url(),
+  refreshToken: z.string().min(1),
+})
 
 export const authRoutes = {
   // ============================================================
@@ -82,6 +101,66 @@ export const authRoutes = {
         return json(tokens satisfies KickRefreshResponse)
       } catch (error) {
         log.error('kick/refresh failed', { err: String(error) })
+        return json({ error: String(error) }, 500)
+      }
+    },
+  },
+
+  // ============================================================
+  // VK Play Live OAuth — server-held app secret
+  // ============================================================
+
+  '/api/auth/vkplay/start': {
+    async POST(req: Request) {
+      if (!isVkPlayOAuthConfigured()) {
+        return json({ error: 'VK Play Live OAuth is not configured on this backend.' }, 503)
+      }
+      const parsed = vkPlayStartSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
+        return json({ error: 'state and redirectUri are required' }, 400)
+      }
+      try {
+        return json({ url: buildVkPlayAuthUrl(parsed.data.state, parsed.data.redirectUri) })
+      } catch (error) {
+        log.error('vkplay/start failed', { err: String(error) })
+        return json({ error: 'Failed to build auth URL' }, 500)
+      }
+    },
+  },
+
+  '/api/auth/vkplay/exchange': {
+    async POST(req: Request) {
+      if (!isVkPlayOAuthConfigured()) {
+        return json({ error: 'VK Play Live OAuth is not configured on this backend.' }, 503)
+      }
+      const parsed = vkPlayExchangeSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
+        return json({ error: 'code and redirectUri are required' }, 400)
+      }
+      try {
+        const tokens = await exchangeVkPlayCode(parsed.data.code, parsed.data.redirectUri)
+        return json(tokens satisfies VkPlayTokenResponse)
+      } catch (error) {
+        log.error('vkplay/exchange failed', { err: String(error) })
+        return json({ error: String(error) }, 500)
+      }
+    },
+  },
+
+  '/api/auth/vkplay/refresh': {
+    async POST(req: Request) {
+      if (!isVkPlayOAuthConfigured()) {
+        return json({ error: 'VK Play Live OAuth is not configured on this backend.' }, 503)
+      }
+      const parsed = vkPlayRefreshSchema.safeParse(await req.json().catch(() => undefined))
+      if (!parsed.success) {
+        return json({ error: 'refreshToken and redirectUri are required' }, 400)
+      }
+      try {
+        const tokens = await refreshVkPlayToken(parsed.data.refreshToken, parsed.data.redirectUri)
+        return json(tokens satisfies VkPlayTokenResponse)
+      } catch (error) {
+        log.error('vkplay/refresh failed', { err: String(error) })
         return json({ error: String(error) }, 500)
       }
     },
