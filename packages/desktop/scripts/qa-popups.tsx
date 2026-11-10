@@ -114,6 +114,22 @@ const viewerResults: Record<ChattersTarget['platform'], ChannelChatters> = {
     ],
   },
 }
+const communityViewers: ChannelChatters = {
+  platform: 'twitch',
+  channelSlug: 'community',
+  channelId: 'community',
+  source: 'community',
+  total: 1000,
+  groups: [
+    {
+      role: 'chatters',
+      users: Array.from({ length: 1000 }, (_, index) => ({
+        username: `guest${index}`,
+        displayName: `guest${index}`,
+      })),
+    },
+  ],
+}
 const backend = {
   events: createDesktopEvents(),
   api: {
@@ -139,13 +155,18 @@ const backend = {
       commands.push(command)
     },
     getChatters: async ({ targets }: { targets: ChattersTarget[] }) => ({
-      results: targets.map(({ platform }) => {
+      results: targets.map(({ platform, channelSlug }) => {
         viewerRequests.push(platform)
-        return viewerResults[platform]
+        return channelSlug === communityViewers.channelSlug
+          ? communityViewers
+          : viewerResults[platform]
       }),
     }),
-    resolveMentionUser: async ({ username }: { username: string }) => {
+    resolveMentionUser: async ({ platform, username }: { platform: string; username: string }) => {
       viewerLookups.push(username)
+      if (platform === 'twitch') {
+        return { platformUserId: '9012', displayName: 'Community Guest', username }
+      }
       await Bun.sleep(400)
       return { platformUserId: '5678', displayName: username, username }
     },
@@ -298,6 +319,16 @@ async function type(id, text) {
   await press('ctrl-a')
   await press([...text].join(' '))
 }
+function CommunityChatters() {
+  const [viewer, setViewer] = React.useState<UserCardTarget | null>(null)
+  return viewer
+    ? e(UserCardDialog, { target: viewer, onClose: () => setViewer(null) })
+    : e(ChattersDialog, {
+        targets: [{ platform: 'twitch', channelSlug: communityViewers.channelSlug }],
+        onOpenUserCard: setViewer,
+        onClose: () => {},
+      })
+}
 let closed = 0
 let nativeManager = null
 try {
@@ -398,6 +429,25 @@ try {
   assert.equal(closed, 0)
   await press('ctrl-d')
   assert.equal(closed, 1)
+  await nativeWindow(renderer).setWindowBounds({ width: 320, height: 500 })
+  await mount(CommunityChatters)
+  await until(
+    () => renderer.getPaintedText().includes('Community data from api.tackling.cc'),
+    'community chatter source',
+  )
+  assert.ok(renderer.getPaintedText().includes('Page 1 of 10'))
+  await captureGuiQaDisplay('popup-chatters-community-small')
+  await clickViewerControl('chatters-community-next')
+  assert.ok(renderer.getPaintedText().includes('Page 2 of 10'))
+  assert.ok(find('chatters-user-guest100'))
+  await type('chatters-search', 'guest999')
+  await clickViewerControl('chatters-user-guest999')
+  await until(
+    () => renderer.getPaintedText().includes('Community Guest'),
+    'Twitch user card for a viewer resolved by login',
+  )
+  assert.equal(viewerLookups.at(-1), 'guest999')
+  await nativeWindow(renderer).setWindowBounds({ width: 820, height: 850 })
   closed = 0
   app.tabChannelIdsStore.set([])
   await mount(SearchAllChatsDialog, {
@@ -705,6 +755,7 @@ try {
         passed: true,
         chooserAcceptReject: true,
         viewerTabsRolesAndCards: true,
+        communityViewerCard: true,
         searchFocusSelectAll: true,
         emoteTabsAndMeasuredPage: true,
         userCardModerationHistoryPinAvatar: true,

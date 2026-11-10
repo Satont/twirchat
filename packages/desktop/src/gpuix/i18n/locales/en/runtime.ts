@@ -49,10 +49,6 @@ export const runtime = {
     'moderation: authenticate with {platform} before moderating',
   'runtime.api.moderationCredentialsUnavailable':
     'moderation: {platform} credentials are unavailable',
-  'runtime.api.chattersConnectTwitch':
-    'Connect a Twitch account with moderator access to see the chatters list.',
-  'runtime.api.chattersTwitchRejected': 'Twitch rejected the credentials. Reconnect the account.',
-  'runtime.api.chattersModeratorRequired': 'Moderator access is required to see the chatters list.',
   'runtime.api.chattersChannelNotFound': 'Channel not found on Twitch.',
   'runtime.api.chattersTwitchUnavailable': 'Twitch chatters are currently unavailable.',
   'runtime.api.chattersKickUnavailable': 'Kick chatters are currently unavailable.',

@@ -171,6 +171,8 @@ export const ruChat = {
   'chat.chatters.loading': 'Загрузка зрителей…',
   'chat.chatters.empty': 'Сейчас в чате никого нет.',
   'chat.chatters.channelCount': '· {count} в чате',
+  'chat.chatters.communitySource': 'По данным api.tackling.cc',
+  'chat.chatters.communityPage': 'Страница {page} из {total}',
   'chat.chatters.noMatch': 'Нет зрителей, подходящих под поиск.',
   'chat.chatters.openCardFailed':
     'Не удалось открыть карточку @{username}. Нажмите на зрителя ещё раз.',

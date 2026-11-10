@@ -165,6 +165,8 @@ export const chat = {
   'chat.chatters.loading': 'Loading chatters…',
   'chat.chatters.empty': 'No active chatters right now.',
   'chat.chatters.channelCount': '· {count} chatting',
+  'chat.chatters.communitySource': 'Community data from api.tackling.cc',
+  'chat.chatters.communityPage': 'Page {page} of {total}',
   'chat.chatters.noMatch': 'No chatters match your search.',
   'chat.chatters.openCardFailed':
     'Could not open the card for @{username}. Select the viewer to retry.',

@@ -122,15 +122,12 @@ import {
   type TwitchActivitiesCredentials,
 } from '../../services/twitch-activities'
 import type { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
-import {
-  getTwitchChatters,
-  TwitchChattersError,
-  type TwitchChattersResult,
-} from '../../services/twitch-chatters'
+import { TwitchChattersError } from '../../services/twitch-chatters'
 import type { TwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
 import { loadTwitchUserCardDetails } from '../../services/twitch-user-card'
 import { enrichTwitchUserProfile } from '../../services/twitch-user-profile'
 import type { TwitchUserCredentials } from '../../services/twitch-users'
+import { getTwitchViewerList, type TwitchViewerRole } from '../../services/twitch-viewer-list'
 import { updateTwitchStream } from '../../services/update-stream'
 import { sevenTVService } from '../../seventv'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
@@ -216,7 +213,7 @@ type UpdateStreamInput = Omit<UpdateStreamRequest, 'platform' | 'userAccessToken
 
 export type ModerationPlatform = 'twitch' | 'kick'
 export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
-export type ChatterRole = 'broadcaster' | 'moderators' | 'vips' | 'ogs' | 'bots' | 'chatters'
+export type ChatterRole = TwitchViewerRole | 'ogs'
 
 export interface ChatterUser {
   userId?: string
@@ -244,7 +241,10 @@ interface ChannelChattersBase {
 }
 
 export type ChannelChatters = ChannelChattersBase &
-  ({ channelId: string; error?: never } | { channelId?: never; error: string })
+  (
+    | { channelId: string; source?: 'community'; error?: never }
+    | { channelId?: never; source?: never; error: string }
+  )
 
 interface AuthRequest {
   platform: Platform
@@ -782,53 +782,33 @@ async function fetchTwitchChatters({
     ? platformAccount('twitch', accountId)
     : channelAccount('twitch', channelSlug)
   const tokens = account ? AccountStore.getTokens(account.id) : null
-  if (!account || !tokens?.accessToken) {
-    throw new Error(t('runtime.api.chattersConnectTwitch'))
-  }
-  let data: TwitchChattersResult
-  try {
-    const { clientId, scopes, userId } = await validateTwitchUserToken(tokens.accessToken)
-    data = await getTwitchChatters({
-      accessToken: tokens.accessToken,
-      broadcasterLogin: channelSlug,
-      clientId,
-      moderatorId: userId,
-      scopes,
-    })
-  } catch (error) {
-    if (error instanceof TwitchChattersError) {
-      if (error.status === 401)
-        throw new Error(t('runtime.api.chattersTwitchRejected'), { cause: error })
-      if (error.status === 403)
-        throw new Error(t('runtime.api.chattersModeratorRequired'), { cause: error })
-      if (error.status === 404)
-        throw new Error(t('runtime.api.chattersChannelNotFound'), { cause: error })
-    }
-    throw new Error(t('runtime.api.chattersTwitchUnavailable'), { cause: error })
-  }
+  const { source, viewers } = await getTwitchViewerList({
+    broadcasterLogin: channelSlug,
+    accessToken: tokens?.accessToken,
+  }).catch((error: unknown) => {
+    const message =
+      error instanceof TwitchChattersError && error.status === 404
+        ? t('runtime.api.chattersChannelNotFound')
+        : t('runtime.api.chattersTwitchUnavailable')
+    throw new Error(message, { cause: error })
+  })
 
-  const broadcaster: ChatterGroup = { role: 'broadcaster', users: [] }
-  const moderators: ChatterGroup = { role: 'moderators', users: [] }
-  const vips: ChatterGroup = { role: 'vips', users: [] }
-  const chatters: ChatterGroup = { role: 'chatters', users: [] }
-  for (const chatter of data.chatters) {
-    const user: ChatterUser = {
-      userId: chatter.userId,
-      username: chatter.userLogin,
-      displayName: chatter.userName,
-      avatarUrl: chatter.avatarUrl,
-    }
-    if (chatter.userId === data.broadcasterId) broadcaster.users.push(user)
-    else if (chatter.role === 'moderator') moderators.users.push(user)
-    else if (chatter.role === 'vip') vips.users.push(user)
-    else chatters.users.push(user)
+  const groups: Record<TwitchViewerRole, ChatterGroup> = {
+    broadcaster: { role: 'broadcaster', users: [] },
+    moderators: { role: 'moderators', users: [] },
+    vips: { role: 'vips', users: [] },
+    bots: { role: 'bots', users: [] },
+    chatters: { role: 'chatters', users: [] },
   }
+  for (const { role, ...viewer } of viewers) groups[role].users.push(viewer)
+
   return {
     platform: 'twitch',
     channelId: channelSlug,
     channelSlug,
-    total: data.total,
-    groups: [broadcaster, moderators, vips, chatters],
+    total: viewers.length,
+    groups: Object.values(groups),
+    ...(source === 'community' ? { source } : {}),
   }
 }
 

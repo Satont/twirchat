@@ -26,6 +26,7 @@ const PLATFORM_TABS: readonly ToggleGroupOption<ChattersPlatform>[] = [
   { value: 'twitch', label: 'Twitch', testId: 'chatters-tab-twitch' },
   { value: 'kick', label: 'Kick', testId: 'chatters-tab-kick' },
 ]
+const COMMUNITY_PAGE_SIZE = 100
 
 type ChattersLoad =
   | { status: 'loaded'; targets: ChattersTarget[]; results: ChannelChatters[] }
@@ -34,6 +35,11 @@ type ChattersLoad =
 interface UserCardError {
   targets: ChattersTarget[]
   message: string
+}
+
+interface CommunityPage {
+  channel: ChannelChatters
+  index: number
 }
 
 function channelKey(channel: ChannelChatters): string {
@@ -67,6 +73,7 @@ export function ChattersDialog({
   const [selectedPlatform, setSelectedPlatform] = useState<ChattersPlatform>('twitch')
   const [load, setLoad] = useState<ChattersLoad | null>(null)
   const [query, setQuery] = useState('')
+  const [communityPage, setCommunityPage] = useState<CommunityPage | null>(null)
   const [cardError, setCardError] = useState<UserCardError | null>(null)
   const searchFocus = useTextInputFocusTracking()
   const pendingRequest = useRef<symbol | null>(null)
@@ -89,6 +96,7 @@ export function ChattersDialog({
     if (platform === activePlatform) return
     pendingRequest.current = null
     setCardError(null)
+    setCommunityPage(null)
     setSelectedPlatform(platform)
   }
 
@@ -126,8 +134,15 @@ export function ChattersDialog({
 
   function retry() {
     setCardError(null)
+    setCommunityPage(null)
     setLoad(null)
     runUiTask(reload())
+  }
+
+  function changeCommunityPage(channel: ChannelChatters, index: number) {
+    pendingRequest.current = null
+    setCardError(null)
+    setCommunityPage({ channel, index })
   }
 
   async function openUserCard(channel: ChannelChatters, user: ChatterUser) {
@@ -159,7 +174,10 @@ export function ChattersDialog({
       channelId: channel.channelId,
       channelSlug: channel.channelSlug,
       username: user.username,
-      displayName: user.displayName,
+      displayName:
+        channel.platform === 'twitch'
+          ? (resolved?.displayName ?? user.displayName)
+          : user.displayName,
       avatarUrl: user.avatarUrl ?? resolved?.avatarUrl,
     })
   }
@@ -170,11 +188,25 @@ export function ChattersDialog({
   const loading = activeTargets.length > 0 && !currentLoad
   const visibleResults = useMemo(
     () =>
-      (chatters?.results ?? []).map((channel) => ({
-        channel,
-        groups: filterChatterGroups(channel.groups, query),
-      })),
-    [chatters, query],
+      (chatters?.results ?? []).map((channel) => {
+        const groups = filterChatterGroups(channel.groups, query)
+        if (channel.source !== 'community') return { channel, groups, page: 0, pageCount: 1 }
+
+        const count = groups.reduce((total, group) => total + group.users.length, 0)
+        const pageCount = Math.ceil(count / COMMUNITY_PAGE_SIZE)
+        const page = communityPage?.channel === channel ? communityPage.index : 0
+        const first = page * COMMUNITY_PAGE_SIZE
+        let offset = 0
+        const pageGroups = groups.flatMap((group) => {
+          const start = Math.max(0, first - offset)
+          const end = Math.max(0, first + COMMUNITY_PAGE_SIZE - offset)
+          offset += group.users.length
+          const users = group.users.slice(start, end)
+          return users.length > 0 ? [{ ...group, users }] : []
+        })
+        return { channel, groups: pageGroups, page, pageCount }
+      }),
+    [chatters, communityPage, query],
   )
 
   const hasQuery = query.trim().length > 0
@@ -268,7 +300,10 @@ export function ChattersDialog({
             autoFocus
             value={query}
             placeholder={t('chat.chatters.searchPlaceholder')}
-            onChange={(event) => setQuery(event.value ?? '')}
+            onChange={(event) => {
+              setQuery(event.value ?? '')
+              setCommunityPage(null)
+            }}
             {...searchFocus}
             onKeyDown={(event) => {
               if (event.key === 'escape') close()
@@ -327,7 +362,7 @@ export function ChattersDialog({
                   </Text>
                 </ChattersState>
               ) : (
-                visibleResults.map(({ channel, groups }) => (
+                visibleResults.map(({ channel, groups, page, pageCount }) => (
                   <div
                     key={channelKey(channel)}
                     style={{ display: 'flex', flexDirection: 'column' }}
@@ -368,6 +403,41 @@ export function ChattersDialog({
                         {t('chat.chatters.channelCount', { count: channel.total })}
                       </Text>
                     </div>
+
+                    {channel.source === 'community' ? (
+                      <Text style={{ fontSize: 12, color: theme.text2, marginBottom: 8 }}>
+                        {t('chat.chatters.communitySource')}
+                      </Text>
+                    ) : null}
+
+                    {pageCount > 1 ? (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          marginBottom: 8,
+                        }}
+                      >
+                        <ActionButton
+                          disabled={page === 0}
+                          onClick={() => changeCommunityPage(channel, page - 1)}
+                        >
+                          {t('common.back')}
+                        </ActionButton>
+                        <Text style={{ fontSize: 12, color: theme.text2 }}>
+                          {t('chat.chatters.communityPage', { page: page + 1, total: pageCount })}
+                        </Text>
+                        <ActionButton
+                          testId="chatters-community-next"
+                          disabled={page + 1 === pageCount}
+                          onClick={() => changeCommunityPage(channel, page + 1)}
+                        >
+                          {t('common.next')}
+                        </ActionButton>
+                      </div>
+                    ) : null}
 
                     {channel.error ? (
                       <ChattersState small error>
