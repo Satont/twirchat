@@ -268,6 +268,7 @@ export function SettingsPanel() {
   )
   const [baselineLoaded, setBaselineLoaded] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [globalSaving, setGlobalSaving] = useState(false)
   const [paletteInputs, setPaletteInputs] = useState<PaletteInputs>({})
@@ -1106,14 +1107,17 @@ export function SettingsPanel() {
                     >
                       <div
                         onClick={() => {
+                          if (checkingUpdates) return
                           setActionError('')
-                          void backend.api
+                          setCheckingUpdates(true)
+                          backend.api
                             .checkForUpdate()
                             .catch((error) =>
                               setActionError(
                                 t('settings.error.checkUpdates', { error: String(error) }),
                               ),
                             )
+                            .finally(() => setCheckingUpdates(false))
                         }}
                         style={{
                           paddingTop: 6,
@@ -1124,11 +1128,14 @@ export function SettingsPanel() {
                           borderWidth: 1,
                           borderColor: theme.border,
                           backgroundColor: theme.surface2,
-                          cursor: 'pointer',
+                          opacity: checkingUpdates ? 0.6 : 1,
+                          cursor: checkingUpdates ? 'default' : 'pointer',
                         }}
                       >
                         <Text style={{ fontSize: 13, color: theme.text }}>
-                          {t('settings.updates.check')}
+                          {checkingUpdates
+                            ? t('settings.updates.checking')
+                            : t('settings.updates.check')}
                         </Text>
                       </div>
                     </SettingsRow>
