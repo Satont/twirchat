@@ -78,14 +78,12 @@ const donationAlertsEvent = z.object({
   currency: currencySchema,
   message_type: z.enum(['text', 'audio']).optional(),
   message: text,
-  created_at: z.string().optional(),
 })
 const donatePayEvent = z.object({
   notification: z.object({
     id: providerId,
     type: z.literal('donation'),
     vars: z.preprocess(parseJsonValue, z.object({ name: donor, sum: amountSchema, comment: text })),
-    created_at: z.string().optional(),
   }),
   transaction: z.object({ currency: currencySchema.nullish() }).nullish(),
 })
@@ -97,7 +95,6 @@ const memeAlertsEvent = z.object({
     username: donor,
     amount: amountSchema,
     message: text,
-    createdAt: z.number().int().positive().max(8_640_000_000_000_000),
     currencyName: z.string().trim().min(1).max(80).nullish(),
   }),
 })
@@ -111,13 +108,10 @@ function parseJsonValue(value: unknown): unknown {
   }
 }
 
-function parseTimestamp(value: string | undefined, receivedAt: number): number {
-  if (!value) return receivedAt
-  const dateTime = value.replace(/^(\d{4}-\d\d-\d\d) (\d\d)[:.](\d\d)[:.](\d\d)$/u, '$1T$2:$3:$4Z')
-  const time = Date.parse(dateTime)
-  return Number.isFinite(time) ? time : receivedAt
-}
-
+/**
+ * Live rows are placed by arrival time: provider `created_at` values carry no reliable timezone
+ * (DonationAlerts sends zoneless local time), so a future-dated row would stay pinned below chat.
+ */
 export function normalizeDonation(
   provider: DonationProvider,
   publication: unknown,
@@ -128,7 +122,7 @@ export function normalizeDonation(
     case 'donationalerts': {
       const result = donationAlertsEvent.safeParse(payload)
       if (!result.success) return null
-      const { id, username, amount, currency, message, message_type, created_at } = result.data
+      const { id, username, amount, currency, message, message_type } = result.data
       return {
         provider,
         id,
@@ -136,7 +130,7 @@ export function normalizeDonation(
         amount,
         currency,
         message: message_type === 'audio' ? '' : message,
-        timestamp: parseTimestamp(created_at, receivedAt),
+        timestamp: receivedAt,
       }
     }
     case 'donatepay': {
@@ -150,13 +144,13 @@ export function normalizeDonation(
         amount: notification.vars.sum,
         currency: transaction?.currency ?? 'RUB',
         message: notification.vars.comment,
-        timestamp: parseTimestamp(notification.created_at, receivedAt),
+        timestamp: receivedAt,
       }
     }
     case 'memealerts': {
       const result = memeAlertsEvent.safeParse(payload)
       if (!result.success) return null
-      const { id, username, amount, message, createdAt, currencyName, type } = result.data.data
+      const { id, username, amount, message, currencyName, type } = result.data.data
       return {
         provider,
         id,
@@ -164,7 +158,7 @@ export function normalizeDonation(
         amount,
         currency: currencyName ?? (type === 'currency' ? 'RUB' : 'coins'),
         message,
-        timestamp: createdAt,
+        timestamp: receivedAt,
       }
     }
     default:
