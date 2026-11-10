@@ -43,9 +43,11 @@ function createHarness() {
   const events = createDesktopEvents()
   const statuses: string[] = []
   const hashes: Array<string | undefined> = []
+  const progresses: Array<number | undefined> = []
   events.on('update_status', (event) => {
     statuses.push(event.status)
     hashes.push(event.hash)
+    progresses.push(event.progress)
   })
   const checks: Array<UpdateInfo | null> = [updateInfo()]
   const downloads: UpdateInfo[] = []
@@ -91,6 +93,7 @@ function createHarness() {
     updater: createUpdater(events, runtime),
     statuses,
     hashes,
+    progresses,
     checks,
     downloads,
     progressCallbacks,
@@ -169,6 +172,22 @@ test('parallel downloads share one package writer and preserve their target duri
   await harness.updater.apply()
   expect(harness.applies[0]?.[0]).toEqual(updateInfo())
   expect(harness.exitCount).toBe(1)
+})
+
+test('a manual check during a download replays its progress for a closed toast', async () => {
+  const harness = createHarness()
+  const download = Promise.withResolvers<void>()
+  harness.setDownloadResult(download.promise)
+  await harness.updater.check()
+  const downloading = harness.updater.download()
+  await Promise.resolve()
+  const before = harness.statuses.length
+  await harness.updater.check()
+  expect(harness.statuses.slice(before)).toEqual(['checking', 'downloading'])
+  expect(harness.progresses.at(-1)).toBe(50)
+  expect(harness.hashes.at(-1)).toBe('sha256-1.2.0')
+  download.resolve()
+  await downloading
 })
 
 test('a download waits for an active check before choosing the target', async () => {
