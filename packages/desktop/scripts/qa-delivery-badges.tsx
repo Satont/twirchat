@@ -41,8 +41,9 @@ const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { nativeWindow } = await import('../src/gpuix/native-window')
 import type { DesktopApi } from '../src/gpuix/backend/api'
 import type { NativeWindowControls } from '../src/gpuix/native-window'
-const { ChatView } = await import('../src/gpuix/components/ChatView')
+const { ChatNotice } = await import('../src/gpuix/components/App')
 const { ChatMessage, BadgeList } = await import('../src/gpuix/components/ChatMessage')
+const { ChatView } = await import('../src/gpuix/components/ChatView')
 const { Text } = await import('../src/gpuix/components/ui/Text')
 const app = await import('../src/gpuix/state/app')
 const { layoutStore } = await import('../src/gpuix/state/layout')
@@ -231,6 +232,7 @@ function Content() {
   return (
     <div
       style={{
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
@@ -239,7 +241,10 @@ function Content() {
       }}
     >
       {view === 'delivery' ? (
-        <ChatView paneId="qa-pane" layoutTabId="home" layoutPanelId="qa-panel" />
+        <>
+          <ChatView paneId="qa-pane" layoutTabId="home" layoutPanelId="qa-panel" />
+          <ChatNotice />
+        </>
       ) : (
         <>
           {[14, 18].flatMap((fontSize) =>
@@ -509,11 +514,57 @@ try {
   assertVisibleMessages(visible)
   screenshots.push(await captureGuiQaDisplay('incoming-chat-messages'))
 
+  const noticeGeometry = []
+  const rejectionReason =
+    'Twitch did not send the message from @oceanofapathy: the same message was sent less than 30 seconds ago.'
+  for (const width of [900, 320]) {
+    await native().setWindowBounds({ width, height: 760 })
+    await Bun.sleep(300)
+    const requests = await submit('DUPLICATE')
+    const twitch = requests.find((request) => request.params.platform === 'twitch')
+    const kick = requests.find((request) => request.params.platform === 'kick')
+    assert(twitch && kick)
+    acknowledge(kick)
+    twitch.acknowledgement.reject(new Error(rejectionReason))
+    await until(
+      () => app.noticeStore.get()?.text.includes(rejectionReason) === true,
+      'long Twitch rejection shows a notice',
+    )
+    await publish(kick)
+    visible.push(kick.id)
+    await Bun.sleep(300)
+    const card = nodes().find((node) =>
+      node.children.some((child) => child.testId === 'chat-notice-text'),
+    )
+    assert(card, 'The notice text has a card container')
+    const toast = native().getElementBounds(card.id)
+    assert(toast, 'The notice card has native bounds')
+    const text = bounds('chat-notice-text')
+    assert(toast.x >= 12 && toast.x + toast.width <= width - 12, 'Notice stays inside window')
+    assert(text.x >= toast.x && text.x + text.width <= toast.x + toast.width)
+    assert(text.y >= toast.y && text.y + text.height <= toast.y + toast.height)
+    assertVisibleMessages(visible)
+    noticeGeometry.push({ width, toast, text })
+    screenshots.push(await captureGuiQaDisplay(`chat-notice-${width}`))
+    app.noticeStore.set(null)
+    await Bun.sleep(60)
+  }
+  const [normalNotice, narrowNotice] = noticeGeometry
+  assert(normalNotice && narrowNotice)
+  assert(narrowNotice.text.height > normalNotice.text.height, 'Narrow notice wraps onto more lines')
+
   if (!sendOnly) await verifyBadgeLayout()
   await Bun.write(
     join(session, 'delivery-badges-result.json'),
     JSON.stringify(
-      { ok: true, receivedMessages: visible.length, timestampGeometry, badgePixels, screenshots },
+      {
+        ok: true,
+        receivedMessages: visible.length,
+        timestampGeometry,
+        noticeGeometry,
+        badgePixels,
+        screenshots,
+      },
       null,
       2,
     ),

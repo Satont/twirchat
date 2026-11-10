@@ -93,8 +93,8 @@ export function ChatNotice() {
       style={{
         position: 'absolute',
         top: 12,
-        left: 0,
-        right: 0,
+        left: 12,
+        right: 12,
         pointerEvents: 'none',
         display: 'flex',
         alignItems: 'center',
@@ -108,6 +108,7 @@ export function ChatNotice() {
         style={{
           display: 'flex',
           flexDirection: 'row',
+          maxWidth: '100%',
           alignItems: 'center',
           gap: 8,
           backgroundColor: palette.bg,
@@ -125,8 +126,27 @@ export function ChatNotice() {
           },
         }}
       >
-        <div style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.dot }} />
-        <Text style={{ fontSize: 13, color: palette.text }}>{notice.text}</Text>
+        <div
+          style={{
+            width: 8,
+            height: 8,
+            flexShrink: 0,
+            borderRadius: 4,
+            backgroundColor: palette.dot,
+          }}
+        />
+        <Text
+          testId="chat-notice-text"
+          style={{
+            fontSize: 13,
+            color: palette.text,
+            minWidth: 0,
+            flexShrink: 1,
+            whiteSpace: 'normal',
+          }}
+        >
+          {notice.text}
+        </Text>
       </motion.div>
     </div>
   )
