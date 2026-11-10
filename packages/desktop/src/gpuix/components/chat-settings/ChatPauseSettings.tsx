@@ -5,17 +5,17 @@ import {
   validateChatPausePreferences,
   type ChatPausePreferences,
   type PauseModifierKey,
-} from '../../services/chat-pause'
-import { useBackend } from '../backend/context'
-import { runUiTask } from '../hooks/run-ui-task'
-import { t as translate, useT } from '../i18n'
-import { chatPausePreferences, chatPauseStore } from '../state/chat-pause'
-import { useStore } from '../state/create-store'
-import { useTheme } from '../theme-context'
-import { SettingsFooter } from './settings/SettingsLayout'
-import { ActionButton, FormField, FormInput } from './ui/Form'
-import { Switch } from './ui/Switch'
-import { Text } from './ui/Text'
+} from '../../../services/chat-pause'
+import { useBackend } from '../../backend/context'
+import { runUiTask } from '../../hooks/run-ui-task'
+import { t as translate, useT } from '../../i18n'
+import { chatPausePreferences, chatPauseStore } from '../../state/chat-pause'
+import { useStore } from '../../state/create-store'
+import { useTheme } from '../../theme-context'
+import { SettingsFooter } from '../settings/SettingsLayout'
+import { ActionButton, FormField, FormInput } from '../ui/Form'
+import { Switch } from '../ui/Switch'
+import { Text } from '../ui/Text'
 
 type HoverMode = 'off' | 'inside' | 'timed'
 interface Draft {

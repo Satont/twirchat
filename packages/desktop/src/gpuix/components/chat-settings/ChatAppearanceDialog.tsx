@@ -1,26 +1,19 @@
-/**
- * Chat appearance dialog — font-size slider, seven display switches,
- * Modern/Compact theme cards and a live preview panel. The gear button opens
- * one modal: preview on the left, controls on the right. Changes apply live
- * AND persist (saveSettings) immediately, matching the Vue handler in
- * ChatList.vue.
- */
 
 import { useGpuixRequired, useWindowSize } from '@gpuix/react'
 import type { AppSettings } from '@twirchat/shared/types'
 import { useEffect, useState } from 'react'
 
-import { useBackend } from '../backend/context'
-import { useT } from '../i18n'
-import { settingsStore } from '../state/app'
-import { CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_MIN } from '../state/chat-font-size'
-import { useTheme } from '../theme-context'
+import { useBackend } from '../../backend/context'
+import { useT } from '../../i18n'
+import { settingsStore } from '../../state/app'
+import { CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_MIN } from '../../state/chat-font-size'
+import { useTheme } from '../../theme-context'
+import { Icon } from '../ui/Icon'
+import { Modal } from '../ui/Modal'
+import { Slider } from '../ui/Slider'
+import { Switch } from '../ui/Switch'
+import { Text } from '../ui/Text'
 import { ChatAppearancePreview } from './ChatAppearancePreview'
-import { Icon } from './ui/Icon'
-import { Modal } from './ui/Modal'
-import { Slider } from './ui/Slider'
-import { Switch } from './ui/Switch'
-import { Text } from './ui/Text'
 
 export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
   const theme = useTheme()

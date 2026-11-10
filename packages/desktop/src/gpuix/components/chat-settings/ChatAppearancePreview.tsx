@@ -7,12 +7,12 @@
 import type { AppSettings, Platform } from '@twirchat/shared/types'
 import { useMemo } from 'react'
 
-import { initialsOf } from '../../views/shared/utils/display-text'
-import { useT, type MessageKey } from '../i18n'
-import { platformColor, readableOn } from '../theme'
-import { useFont, useTheme } from '../theme-context'
-import { PlatformIcon } from './ui/Icon'
-import { Text } from './ui/Text'
+import { initialsOf } from '../../../views/shared/utils/display-text'
+import { useT, type MessageKey } from '../../i18n'
+import { platformColor, readableOn } from '../../theme'
+import { useFont, useTheme } from '../../theme-context'
+import { PlatformIcon } from '../ui/Icon'
+import { Text } from '../ui/Text'
 
 interface PreviewBadge {
   text: string
