@@ -7,6 +7,9 @@ import { join } from 'node:path'
 
 import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 
+import type { ChannelChatters, ChattersTarget } from '../src/gpuix/backend/api'
+import type { UserCardTarget } from '../src/views/main/utils/chatCommands'
+
 const React = await import('react')
 const { createRenderer, createRoot, startFrameLoop, TooltipProvider, useGpuixRequired } =
   await import('@gpuix/react')
@@ -28,7 +31,7 @@ const { DEFAULT_EMOTE_PREFERENCES } = await import('../src/services/provider-emo
 const { DesktopWindowManager } = await import('../src/gpuix/window-manager')
 const { UserCardDialog } = await import('../src/gpuix/components/UserCardDialog')
 const { captureGuiQaDisplay } = await import('../src/services/gui-qa-screenshot')
-const { focusNativeQaWindow } = await import('./qa-x11')
+const { focusNativeQaWindow, getNativeQaWindowGeometry } = await import('./qa-x11')
 const originalFetch = globalThis.fetch
 const requests = [],
   commands = [],
@@ -81,6 +84,36 @@ const messages = Array.from({ length: 100 }, (_, index) => ({
   timestamp: new Date(1700000000000 + index * 1000),
   type: 'message',
 }))
+const viewerRequests: ChattersTarget['platform'][] = []
+const viewerLookups: string[] = []
+const viewerResults: Record<ChattersTarget['platform'], ChannelChatters> = {
+  twitch: {
+    platform: 'twitch',
+    channelSlug: 'mock',
+    channelId: 'mock',
+    total: 3,
+    groups: [
+      { role: 'moderators', users: [{ userId: '123', username: 'mod', displayName: 'Mod' }] },
+      { role: 'vips', users: [{ userId: '456', username: 'vip', displayName: 'VIP Viewer' }] },
+      { role: 'chatters', users: [{ userId: '789', username: 'viewer', displayName: 'Viewer' }] },
+    ],
+  },
+  kick: {
+    platform: 'kick',
+    channelSlug: 'kickmock',
+    channelId: '4321',
+    total: 100,
+    groups: [
+      {
+        role: 'chatters',
+        users: Array.from({ length: 100 }, (_, index) => ({
+          username: `viewer${index}`,
+          displayName: `Kick Viewer ${index}`,
+        })),
+      },
+    ],
+  },
+}
 const backend = {
   events: createDesktopEvents(),
   api: {
@@ -105,7 +138,17 @@ const backend = {
     executePlatformCommand: async (command) => {
       commands.push(command)
     },
-    getChatters: async () => ({ results: [] }),
+    getChatters: async ({ targets }: { targets: ChattersTarget[] }) => ({
+      results: targets.map(({ platform }) => {
+        viewerRequests.push(platform)
+        return viewerResults[platform]
+      }),
+    }),
+    resolveMentionUser: async ({ username }: { username: string }) => {
+      viewerLookups.push(username)
+      await Bun.sleep(400)
+      return { platformUserId: '5678', displayName: username, username }
+    },
     copyText: async ({ text }) => {
       copies.push(text)
     },
@@ -233,6 +276,14 @@ async function click(id: string) {
   renderer.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
   await Bun.sleep(150)
 }
+async function clickViewerControl(id: string, button = '1') {
+  const bounds = boundsOf(id)
+  const window = getNativeQaWindowGeometry('TwirChat popups QA')
+  const x = Math.round(window.x + bounds.x + bounds.width / 2)
+  const y = Math.round(window.y + bounds.y + bounds.height / 2)
+  await Bun.$`/usr/bin/xdotool mousemove ${x} ${y} click ${button}`.quiet()
+  await Bun.sleep(100)
+}
 function emoteViewport() {
   const list = find('emote-popup-list')
   const popup = boundsOf('emote-popup')
@@ -296,12 +347,49 @@ try {
   assert.equal(closed, 1)
   await nativeWindow(renderer).setWindowBounds({ width: 820, height: 850 })
   closed = 0
+  const openedViewers: UserCardTarget[] = []
   await mount(ChattersDialog, {
-    targets: [{ platform: 'twitch', channelSlug: 'mock' }],
+    targets: [
+      { platform: 'kick', channelSlug: 'kickmock' },
+      { platform: 'twitch', channelSlug: 'mock' },
+    ],
+    onOpenUserCard: (viewer: UserCardTarget) => openedViewers.push(viewer),
     onClose: () => {
       closed++
     },
   })
+  assert.deepEqual(viewerRequests, ['twitch'])
+  assert.ok(renderer.getPaintedText().includes('MODERATORS'))
+  assert.ok(renderer.getPaintedText().includes('VIPS'))
+  await captureGuiQaDisplay('popup-chatters-twitch')
+  await clickViewerControl('chatters-user-vip', '3')
+  assert.equal(openedViewers.length, 0)
+  await clickViewerControl('chatters-user-vip')
+  assert.equal(openedViewers[0]?.platformUserId, '456')
+  assert.equal(openedViewers[0]?.channelId, 'mock')
+  assert.equal(closed, 0)
+  await nativeWindow(renderer).setWindowBounds({ width: 320, height: 500 })
+  await Bun.sleep(220)
+  await clickViewerControl('chatters-tab-kick')
+  await type('chatters-search', 'viewer99')
+  assert.ok(!nodes().some((node) => node.testId === 'chatters-user-vip'))
+  assert.ok(renderer.getPaintedText().includes('Kick Viewer 99'))
+  await captureGuiQaDisplay('popup-chatters-kick-small')
+  await clickViewerControl('chatters-user-viewer99')
+  await clickViewerControl('chatters-tab-twitch')
+  await Bun.sleep(300)
+  assert.equal(openedViewers.length, 1, 'A switched tab must discard the pending viewer lookup')
+  await clickViewerControl('chatters-tab-kick')
+  renderer.focusElement(find('chatters-user-viewer99').id)
+  await Bun.sleep(100)
+  await Bun.$`/usr/bin/xdotool key Return`.quiet()
+  await Bun.sleep(480)
+  assert.deepEqual(viewerLookups, ['viewer99', 'viewer99'])
+  assert.equal(openedViewers[1]?.platformUserId, '5678')
+  assert.equal(openedViewers[1]?.channelId, '4321')
+  assert.equal(openedViewers[1]?.channelSlug, 'kickmock')
+  await nativeWindow(renderer).setWindowBounds({ width: 820, height: 850 })
+  await Bun.sleep(220)
   await type('chatters-search', 'viewer')
   await press('ctrl-f')
   await press('a')
@@ -616,6 +704,7 @@ try {
       {
         passed: true,
         chooserAcceptReject: true,
+        viewerTabsRolesAndCards: true,
         searchFocusSelectAll: true,
         emoteTabsAndMeasuredPage: true,
         userCardModerationHistoryPinAvatar: true,

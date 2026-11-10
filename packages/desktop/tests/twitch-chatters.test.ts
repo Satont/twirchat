@@ -135,6 +135,114 @@ describe('getTwitchChatters', () => {
     expect(avatarInit?.signal).toBe(controller.signal)
   })
 
+  test('adds paginated moderator and VIP roles only to present chatters', async () => {
+    const moderatorCursors: (string | null)[] = []
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const url = new URL(fetchUrl(input))
+        switch (url.pathname) {
+          case '/helix/users':
+            return resolvedUserResponse()
+          case '/helix/chat/chatters':
+            return Response.json({
+              data: ['123', '1', '2', '3'].map((id) => ({
+                user_id: id,
+                user_login: `user-${id}`,
+                user_name: `User ${id}`,
+              })),
+              pagination: {},
+              total: 4,
+            })
+          case '/helix/moderation/moderators': {
+            expect(url.searchParams.get('broadcaster_id')).toBe('123')
+            expect(url.searchParams.get('first')).toBe('100')
+            expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer secret-token')
+            const cursor = url.searchParams.get('after')
+            moderatorCursors.push(cursor)
+            return cursor
+              ? Response.json({ data: [{ user_id: '1' }, { user_id: '123' }], pagination: {} })
+              : Response.json({ data: [{ user_id: '999' }], pagination: { cursor: 'next' } })
+          }
+          case '/helix/channels/vips':
+            return Response.json({ data: [{ user_id: '1' }, { user_id: '2' }], pagination: {} })
+          default:
+            throw new Error(`Unexpected fetch: ${url}`)
+        }
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
+
+    const result = await getTwitchChatters({
+      ...credentials,
+      moderatorId: '123',
+      scopes: ['moderation:read', 'channel:manage:vips'],
+    })
+    expect(result.total).toBe(4)
+    expect(result.chatters.map(({ userId, role }) => [userId, role])).toEqual([
+      ['123', undefined],
+      ['1', 'moderator'],
+      ['2', 'vip'],
+      ['3', undefined],
+    ])
+    expect(moderatorCursors).toEqual([null, 'next'])
+  })
+
+  test.each([
+    { moderatorId: '456', scopes: ['moderation:read', 'channel:read:vips'] },
+    { moderatorId: '123', scopes: ['moderator:read:chatters'] },
+  ])('skips role endpoints without owner access and matching scopes', async (auth) => {
+    const paths: string[] = []
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(fetchUrl(input))
+        paths.push(url.pathname)
+        if (url.pathname === '/helix/users') return resolvedUserResponse()
+        return Response.json({ data: [], pagination: {}, total: 0 })
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
+
+    await getTwitchChatters({ ...credentials, ...auth })
+    expect(paths).toEqual(['/helix/users', '/helix/chat/chatters'])
+  })
+
+  test('keeps VIPs and the chatter list if moderator pagination fails', async () => {
+    let moderatorPages = 0
+    globalThis.fetch = Object.assign(
+      mock(async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(fetchUrl(input))
+        switch (url.pathname) {
+          case '/helix/users':
+            return resolvedUserResponse()
+          case '/helix/chat/chatters':
+            return Response.json({
+              data: [{ user_id: '1', user_login: 'one', user_name: 'One' }],
+              pagination: {},
+              total: 1,
+            })
+          case '/helix/moderation/moderators':
+            moderatorPages++
+            return Response.json({ data: [{ user_id: '1' }], pagination: { cursor: 'repeat' } })
+          case '/helix/channels/vips':
+            return Response.json({ data: [{ user_id: '1' }], pagination: {} })
+          default:
+            throw new Error(`Unexpected fetch: ${url}`)
+        }
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
+
+    const result = await getTwitchChatters({
+      ...credentials,
+      moderatorId: '123',
+      scopes: ['channel:manage:moderators', 'channel:read:vips'],
+    })
+    expect(result.chatters).toEqual([
+      { userId: '1', userLogin: 'one', userName: 'One', role: 'vip' },
+    ])
+    expect(moderatorPages).toBe(2)
+  })
+
   test('chunks avatar lookups at 100 user IDs', async () => {
     const avatarRequests: URL[] = []
     globalThis.fetch = Object.assign(

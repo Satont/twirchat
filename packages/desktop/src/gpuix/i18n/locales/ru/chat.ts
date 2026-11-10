@@ -172,6 +172,8 @@ export const ruChat = {
   'chat.chatters.empty': 'Сейчас в чате никого нет.',
   'chat.chatters.channelCount': '· {count} в чате',
   'chat.chatters.noMatch': 'Нет зрителей, подходящих под поиск.',
+  'chat.chatters.openCardFailed':
+    'Не удалось открыть карточку @{username}. Нажмите на зрителя ещё раз.',
   'chat.chatters.role.broadcaster': 'Стример',
   'chat.chatters.role.moderators': 'Модераторы',
   'chat.chatters.role.vips': 'VIP',

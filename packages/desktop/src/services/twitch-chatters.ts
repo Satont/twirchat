@@ -1,9 +1,16 @@
+import { z } from 'zod'
+
 import { resolveTwitchUserId, type TwitchUserCredentials } from './twitch-users.ts'
 
 const MAX_USER_IDS_PER_REQUEST = 100
+const rolePageSchema = z.object({
+  data: z.array(z.object({ user_id: z.string().min(1) })),
+  pagination: z.object({ cursor: z.string().optional() }),
+})
 
 export interface TwitchChatter {
   avatarUrl?: string
+  role?: 'moderator' | 'vip'
   userId: string
   userLogin: string
   userName: string
@@ -28,6 +35,7 @@ export class TwitchChattersError extends Error {
 interface TwitchChattersInput extends TwitchUserCredentials {
   broadcasterLogin: string
   moderatorId: string
+  scopes?: readonly string[]
 }
 
 interface TwitchChattersPage {
@@ -44,6 +52,12 @@ interface FetchChattersPageInput extends TwitchUserCredentials {
 
 interface FetchTwitchUserAvatarsInput extends TwitchUserCredentials {
   ids: string[]
+  signal: AbortSignal
+}
+
+interface FetchTwitchRoleIdsInput extends TwitchUserCredentials {
+  broadcasterId: string
+  path: 'moderation/moderators' | 'channels/vips'
   signal: AbortSignal
 }
 
@@ -184,6 +198,39 @@ async function fetchTwitchUserAvatars(
   return avatars
 }
 
+async function fetchTwitchRoleIds(input: FetchTwitchRoleIdsInput): Promise<Set<string>> {
+  const ids = new Set<string>()
+  const seenCursors = new Set<string>()
+  const params = new URLSearchParams({ broadcaster_id: input.broadcasterId, first: '100' })
+  const collectPage = async (): Promise<void> => {
+    const response = await fetch(`https://api.twitch.tv/helix/${input.path}?${params}`, {
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        'Client-Id': input.clientId,
+      },
+      redirect: 'error',
+      signal: input.signal,
+    })
+    if (!response.ok) throw new Error(`Twitch role lookup failed (HTTP ${response.status}).`)
+    const page = rolePageSchema.parse(await response.json())
+    for (const user of page.data) ids.add(user.user_id)
+
+    const cursor = page.pagination.cursor
+    if (!cursor) return
+    if (seenCursors.has(cursor)) throw new Error('Twitch repeated a role pagination cursor.')
+    seenCursors.add(cursor)
+    params.set('after', cursor)
+    return collectPage()
+  }
+
+  try {
+    await collectPage()
+    return ids
+  } catch {
+    return new Set()
+  }
+}
+
 export async function getTwitchChatters(
   input: TwitchChattersInput,
   signal = AbortSignal.timeout(30000),
@@ -223,18 +270,34 @@ export async function getTwitchChatters(
     return collectPage(page.cursor)
   }
 
-  await collectPage()
-  const avatarUrls = await fetchTwitchUserAvatars({
+  const ownerScopes = input.moderatorId === broadcasterId ? input.scopes : undefined
+  const roleInput = {
     ...input,
-    ids: [...chatters.keys()],
-    signal,
-  })
+    broadcasterId,
+    signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]),
+  }
+  const [avatarUrls, moderators, vips] = await Promise.all([
+    collectPage().then(() =>
+      fetchTwitchUserAvatars({ ...input, ids: [...chatters.keys()], signal }),
+    ),
+    ownerScopes?.some(
+      (scope) => scope === 'moderation:read' || scope === 'channel:manage:moderators',
+    )
+      ? fetchTwitchRoleIds({ ...roleInput, path: 'moderation/moderators' })
+      : undefined,
+    ownerScopes?.some((scope) => scope === 'channel:read:vips' || scope === 'channel:manage:vips')
+      ? fetchTwitchRoleIds({ ...roleInput, path: 'channels/vips' })
+      : undefined,
+  ])
   const enrichedChatters = [...chatters.values()]
   for (const chatter of enrichedChatters) {
     const avatarUrl = avatarUrls.get(chatter.userId)
     if (avatarUrl) {
       chatter.avatarUrl = avatarUrl
     }
+    if (chatter.userId === broadcasterId) continue
+    if (moderators?.has(chatter.userId)) chatter.role = 'moderator'
+    else if (vips?.has(chatter.userId)) chatter.role = 'vip'
   }
 
   return {

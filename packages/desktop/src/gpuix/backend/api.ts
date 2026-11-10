@@ -233,15 +233,18 @@ export interface ChatterGroup {
 export interface ChattersTarget {
   platform: 'twitch' | 'kick'
   channelSlug: string
+  accountId?: string
 }
 
-export interface ChannelChatters {
+interface ChannelChattersBase {
   platform: 'twitch' | 'kick'
   channelSlug: string
   total: number
   groups: ChatterGroup[]
-  error?: string
 }
+
+export type ChannelChatters = ChannelChattersBase &
+  ({ channelId: string; error?: never } | { channelId?: never; error: string })
 
 interface AuthRequest {
   platform: Platform
@@ -771,18 +774,26 @@ function moderationCredentials(
 
 const KICK_ACTIVE_CHATTERS_URL = 'https://web.kick.com/api/v1/channels'
 
-async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters> {
-  const account = channelAccount('twitch', channelSlug)
+async function fetchTwitchChatters({
+  accountId,
+  channelSlug,
+}: ChattersTarget): Promise<ChannelChatters> {
+  const account = accountId
+    ? platformAccount('twitch', accountId)
+    : channelAccount('twitch', channelSlug)
   const tokens = account ? AccountStore.getTokens(account.id) : null
   if (!account || !tokens?.accessToken) {
     throw new Error(t('runtime.api.chattersConnectTwitch'))
   }
   let data: TwitchChattersResult
   try {
+    const { clientId, scopes, userId } = await validateTwitchUserToken(tokens.accessToken)
     data = await getTwitchChatters({
-      ...(await twitchUserCredentials(tokens.accessToken)),
+      accessToken: tokens.accessToken,
       broadcasterLogin: channelSlug,
-      moderatorId: account.platformUserId,
+      clientId,
+      moderatorId: userId,
+      scopes,
     })
   } catch (error) {
     if (error instanceof TwitchChattersError) {
@@ -797,8 +808,9 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
   }
 
   const broadcaster: ChatterGroup = { role: 'broadcaster', users: [] }
+  const moderators: ChatterGroup = { role: 'moderators', users: [] }
+  const vips: ChatterGroup = { role: 'vips', users: [] }
   const chatters: ChatterGroup = { role: 'chatters', users: [] }
-  const seen = new Set<string>()
   for (const chatter of data.chatters) {
     const user: ChatterUser = {
       userId: chatter.userId,
@@ -806,19 +818,17 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
       displayName: chatter.userName,
       avatarUrl: chatter.avatarUrl,
     }
-    if (chatter.userId && chatter.userId === data.broadcasterId) {
-      if (broadcaster.users.length === 0) broadcaster.users.push(user)
-      continue
-    }
-    if (user.userId && seen.has(user.userId)) continue
-    if (user.userId) seen.add(user.userId)
-    chatters.users.push(user)
+    if (chatter.userId === data.broadcasterId) broadcaster.users.push(user)
+    else if (chatter.role === 'moderator') moderators.users.push(user)
+    else if (chatter.role === 'vip') vips.users.push(user)
+    else chatters.users.push(user)
   }
   return {
     platform: 'twitch',
+    channelId: channelSlug,
     channelSlug,
-    total: broadcaster.users.length + chatters.users.length,
-    groups: [broadcaster, chatters],
+    total: data.total,
+    groups: [broadcaster, moderators, vips, chatters],
   }
 }
 
@@ -869,7 +879,7 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
     return { role, users }
   })
 
-  return { platform: 'kick', channelSlug, total, groups }
+  return { platform: 'kick', channelId: String(broadcasterId), channelSlug, total, groups }
 }
 
 // ── API factory ─────────────────────────────────────────────────────────────
@@ -1560,7 +1570,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       for (const target of targets) {
         try {
           if (target.platform === 'twitch') {
-            results.push(await fetchTwitchChatters(target.channelSlug))
+            results.push(await fetchTwitchChatters(target))
           } else if (target.platform === 'kick') {
             results.push(await fetchKickChatters(target.channelSlug))
           } else {
