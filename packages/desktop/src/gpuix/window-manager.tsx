@@ -70,6 +70,9 @@ interface WindowUiRuntime {
 const currentUiRuntime: WindowUiRuntime = {
   createRoot(renderer, id) {
     return createRoot(renderer, {
+      // Controls draw their own `focusVisible` outline. The default dims every
+      // other focusable element on any key press, graying out the whole window.
+      keyboardFocusDim: false,
       onKeyDown: (event) => {
         updateWindowActivity(id, renderer.isWindowActive(), event.modifiers)
         handleGlobalKeyDown(event, id)
