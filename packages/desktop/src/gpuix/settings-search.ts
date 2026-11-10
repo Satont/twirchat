@@ -335,7 +335,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
       'additional Twitch web session OAuth token clipboard paste connect clear encrypted credentials identity channel points rewards polls predictions pins following whispers session токен сессия аккаунт подключить очистить буфер обмена награды опросы прогнозы закрепления шепот',
   },
 ]
-const normalize = (value: string) =>
+/**
+ * Shared by the search index and result highlighting: case-, diacritic- and
+ * punctuation-insensitive word matching (`word.startsWith(token)`).
+ */
+export const normalizeSettingsSearchText = (value: string) =>
   value
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
@@ -355,7 +359,7 @@ function translatedNames(section: SettingsSectionMetadata): string {
 }
 const index = SETTINGS_SECTIONS.map((section) => ({
   section,
-  words: normalize(
+  words: normalizeSettingsSearchText(
     `${section.title} ${translatedNames(section)} ${section.keywords} ${section.saveMode === 'action' ? 'actions apply immediately connect clear' : 'save discard unsaved changes'} ${SETTINGS_CATEGORIES.find((category) => category.id === section.category)?.aliases ?? ''}`,
   ).split(/\s+/u),
 }))
@@ -365,7 +369,7 @@ export interface SettingsSearchResult {
   categories: readonly (typeof SETTINGS_CATEGORIES)[number][]
 }
 export function searchSettings(query: string): SettingsSearchResult {
-  const normalized = normalize(query)
+  const normalized = normalizeSettingsSearchText(query)
   const tokens = normalized.split(/\s+/u).filter(Boolean)
   const sections = tokens.length
     ? index
