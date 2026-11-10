@@ -217,6 +217,7 @@ export async function buildRelease(args = process.argv.slice(2)): Promise<void> 
               icon: join(desktop, 'assets/icon.ico'),
               hideConsole: true,
               title: 'TwirChat',
+              description: 'TwirChat',
             },
           }
         : {}),

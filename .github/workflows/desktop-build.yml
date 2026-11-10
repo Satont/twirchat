@@ -300,6 +300,15 @@ jobs:
           TWIRCHAT_VKPLAY_CLIENT_ID: ${{ secrets.TWIRCHAT_VKPLAY_CLIENT_ID }}
           MACOS_SIGN_APP_IDENTITY: ${{ inputs.release && inputs.signing && runner.os == 'macOS' && secrets.MACOS_SIGN_APP_IDENTITY || '' }}
         run: bun scripts/build-release.ts "$RELEASE_VERSION" "$BACKEND_URL"
+      - name: Verify Windows executable description
+        if: runner.os == 'Windows'
+        working-directory: packages/desktop
+        shell: pwsh
+        run: |
+          $description = (Get-Item -LiteralPath 'bin/twirchat.exe').VersionInfo.FileDescription
+          if ($description -cne 'TwirChat') {
+            throw "Expected twirchat.exe FileDescription to be 'TwirChat', found '$description'."
+          }
       - name: Verify Linux glibc baseline
         if: runner.os == 'Linux'
         run: |
