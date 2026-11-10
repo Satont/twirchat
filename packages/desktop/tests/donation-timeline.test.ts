@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test'
 import type { DonationEvent } from '@twirchat/shared/donations'
 import type { NormalizedChatMessage } from '@twirchat/shared/types'
 
+import { normalizeDonation } from '../src/donations/providers'
 import {
   donationSearchMessage,
   mergeDonationTimeline,
@@ -57,6 +58,30 @@ test('keeps the chat snapshot by identity without donations and merges late dona
     'donation:donationalerts:tied',
     'twitch:channel:after',
     'donation:memealerts:last',
+  ])
+})
+
+test('lets later chat messages push a future-dated provider donation up', () => {
+  const feed = createDonationFeed()
+  const donation = normalizeDonation(
+    'donationalerts',
+    {
+      id: 1,
+      username: 'Viewer',
+      amount: '123',
+      currency: 'RUB',
+      message: 'qwe',
+      created_at: '2099-01-01 12:00:00',
+    },
+    200,
+  )
+  if (!donation) throw new Error('Expected a donation')
+  feed.receive(donation)
+  const chat = [message('before', 100), message('after', 300)]
+  expect(mergeDonationTimeline(chat, feed.store.get().rows).map(timelineRowKey)).toEqual([
+    'twitch:channel:before',
+    'donation:donationalerts:1',
+    'twitch:channel:after',
   ])
 })
 

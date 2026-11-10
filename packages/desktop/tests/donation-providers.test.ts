@@ -39,14 +39,14 @@ const memeAlerts = {
 }
 
 test('normalizes provider publications without losing money precision or units', () => {
-  expect(normalizeDonation('donationalerts', donationAlerts)).toEqual({
+  expect(normalizeDonation('donationalerts', donationAlerts, 456)).toEqual({
     id: '37',
     provider: 'donationalerts',
     username: 'Daria',
     amount: '125.50',
     currency: 'RUB',
     message: 'Hello!',
-    timestamp: Date.parse('2026-11-09T12:00:00Z'),
+    timestamp: 456,
   })
   expect(normalizeDonation('donatepay', donatePay, 123)).toEqual({
     id: '42',
@@ -57,11 +57,11 @@ test('normalizes provider publications without losing money precision or units',
     message: 'Hi!',
     timestamp: 123,
   })
-  expect(normalizeDonation('memealerts', memeAlerts)).toMatchObject({
+  expect(normalizeDonation('memealerts', memeAlerts, 789)).toMatchObject({
     id: 'donation-id',
     amount: '5',
     currency: 'coins',
-    timestamp: memeAlerts.data.createdAt,
+    timestamp: 789,
   })
   expect(
     normalizeDonation('memealerts', {
