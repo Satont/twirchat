@@ -400,10 +400,16 @@ export interface SplitNode {
   minSize?: number // default 48
 }
 
+export interface WatchedPaneSource {
+  channelId: string
+  /** The saved account this pane sends with; absent follows the chat's account. */
+  accountId?: string
+}
+
 export type PanelContent =
   | { type: 'main' }
-  /** `accountId`: the saved account this pane sends with; absent follows the chat's account. */
-  | { type: 'watched'; channelId: string; accountId?: string }
+  | ({ type: 'watched' } & WatchedPaneSource)
+  | { type: 'feed'; sources: WatchedPaneSource[] }
   | { type: 'empty' }
 
 export interface PanelNode {

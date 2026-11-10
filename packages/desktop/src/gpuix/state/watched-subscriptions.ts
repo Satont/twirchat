@@ -1,7 +1,7 @@
 import type { WatchedChannelsLayout } from '@twirchat/shared/types'
 
 import { runInBackground } from '../../services/background-task'
-import { getAllPanels } from '../../views/main/utils/layout-tree'
+import { getAllPanels, panelWatchedSources } from '../../views/main/utils/layout-tree'
 import type { DesktopWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { t } from '../i18n'
@@ -32,8 +32,8 @@ export function referencedWatchedChannels(snapshot: WatchedReferenceSnapshot): s
     if (!layout) continue
     for (const panel of getAllPanels(layout.root)) {
       if (panel.content.type === 'main') hasMain = true
-      if (panel.content.type === 'watched' && known.has(panel.content.channelId))
-        active.add(panel.content.channelId)
+      for (const { channelId } of panelWatchedSources(panel.content))
+        if (known.has(channelId)) active.add(channelId)
     }
   }
   if (hasMain && snapshot.homePluginChannelIds?.length)
@@ -58,12 +58,12 @@ export function referencedPaneAccounts(
     const layout = snapshot.layouts.get(id)
     if (!layout) continue
     for (const panel of getAllPanels(layout.root)) {
-      const content = panel.content
-      if (content.type !== 'watched' || !content.accountId || !known.has(content.channelId))
-        continue
-      const ids = accounts.get(content.channelId) ?? new Set<string>()
-      ids.add(content.accountId)
-      accounts.set(content.channelId, ids)
+      for (const { channelId, accountId } of panelWatchedSources(panel.content)) {
+        if (!accountId || !known.has(channelId)) continue
+        const ids = accounts.get(channelId) ?? new Set<string>()
+        ids.add(accountId)
+        accounts.set(channelId, ids)
+      }
     }
   }
   return Object.fromEntries(

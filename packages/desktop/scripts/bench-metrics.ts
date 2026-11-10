@@ -33,6 +33,7 @@ export const benchmarkArgumentsSchema = z
     smoke: z.boolean().default(false),
     resume: z.boolean().default(false),
     pluginSubscriber: z.boolean().default(false),
+    feeds: z.boolean().default(false),
     output: z.string().optional(),
     compositor: z.enum(['xvfb', 'weston']).default('weston'),
     mode: benchmarkReactModeSchema.default('development'),
@@ -49,6 +50,7 @@ export function parseBenchmarkArguments(args: string[]): z.infer<typeof benchmar
     if (argument === '--smoke') values.smoke = true
     else if (argument === '--resume') values.resume = true
     else if (argument === '--plugin-subscriber') values.pluginSubscriber = true
+    else if (argument === '--feeds') values.feeds = true
     else if (
       argument === '--duration' ||
       argument === '--warmup' ||
@@ -63,7 +65,12 @@ export function parseBenchmarkArguments(args: string[]): z.infer<typeof benchmar
     } else throw new Error(`Unknown benchmark argument: ${argument}`)
   }
   const options = benchmarkArgumentsSchema.parse(values)
-  selectBenchmarkScenarios(options)
+  const scenarios = selectBenchmarkScenarios(options)
+  if (
+    options.feeds &&
+    (!options.scenario || scenarios.some(({ channels, panes }) => channels < 2 * panes))
+  )
+    throw new Error('--feeds requires a scenario with at least two channels per pane.')
   return options
 }
 
@@ -289,6 +296,7 @@ export const benchmarkCaseSchema = z.object({
   warmupSeconds: z.number().min(1).max(15),
   durationSeconds: z.number().min(2).max(30),
   pluginSubscriber: z.boolean().optional(),
+  feeds: z.boolean().optional(),
 })
 export type BenchmarkCase = z.infer<typeof benchmarkCaseSchema>
 export const resourceSampleSchema = z.object({

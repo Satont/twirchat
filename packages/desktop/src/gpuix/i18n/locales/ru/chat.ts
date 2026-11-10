@@ -22,6 +22,14 @@ export const ruChat = {
   'chat.menu.openOverlay': 'Открыть оверлей чата',
   'chat.menu.closePanel': 'Закрыть панель',
 
+  'chat.feed.title': 'Общая лента',
+  'chat.feed.combine': 'Объединить каналы',
+  'chat.feed.editSources': 'Управление источниками',
+  'chat.feed.moreSources': '+{count}',
+  'chat.feed.empty': 'Здесь появятся новые сообщения из выбранных каналов.',
+  'chat.feed.sendTo': 'Выберите канал для отправки',
+  'chat.feed.sendToChannel': 'В {channel}',
+
   'chat.room.slow': 'Медленный режим {seconds} с',
   'chat.room.followers': 'Только фолловеры ({minutes} мин)',
   'chat.room.subscribersOnly': 'Только для подписчиков',

@@ -3,6 +3,7 @@ import type {
   PanelNode,
   SplitDirection,
   WatchedChannelsLayout,
+  WatchedPaneSource,
 } from '@twirchat/shared/types'
 
 import { runInBackground } from '../../services/background-task'
@@ -22,7 +23,14 @@ type LayoutIOBackend = {
 }
 type LayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removePanel'> }
 type CloneLayoutBackend = { api: ChatTabApi & Pick<DesktopApi, 'removeWatchedChannelsLayout'> }
-import { findNodeById, findParentOfNode } from '../../views/main/utils/layout-tree'
+import {
+  findNodeById,
+  findParentOfNode,
+  panelContentForSources,
+  panelWatchedSources,
+  retainAvailableFeedSources,
+} from '../../views/main/utils/layout-tree'
+import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import { t } from '../i18n'
 import {
   dockPanel,
@@ -31,7 +39,7 @@ import {
   type FocusDirection,
   type DockSide,
 } from '../layout-operations'
-import { showNotice, activeWatchedTabStore } from './app'
+import { showNotice, activeWatchedTabStore, watchedChannelsStore } from './app'
 import { chatRulesPreferences, chatRulesStore } from './chat-rules'
 import {
   initializeChatTabs,
@@ -422,6 +430,11 @@ export function reopenClosedSplit(
       }
       const next = structuredClone(layout)
       const panel = { ...structuredClone(entry.panel), id: entry.restorePanelId }
+      panel.content = retainAvailableFeedSources(panel.content, (id) =>
+        watchedChannelsStore
+          .get()
+          .some((channel) => channel.id === id && !isPluginWatchedChannel(channel)),
+      )
       const parent = entry.parent && findNodeById(next.root, entry.parent.id)
       if (parent?.type === 'split' && parent.direction === entry.parent?.direction) {
         const remaining = parent.children.reduce((total, child) => total + child.flex, 0)
@@ -503,6 +516,28 @@ export async function assignChannel(
     showNotice('error', t('notices.layout.assignFailed', { error: String(error) }))
     throw error
   }
+}
+
+export function setPanelSources(
+  backend: LayoutIOBackend,
+  tabId: string,
+  panelId: string,
+  sources: WatchedPaneSource[],
+): Promise<void> {
+  return mutateLayout(backend, tabId, async () => {
+    const layout = await backend.api.getWatchedChannelsLayout({ tabId })
+    if (!layout) throw new Error(t('notices.layout.targetLayoutUnavailable'))
+    const next = structuredClone(layout)
+    const panel = findNodeById(next.root, panelId)
+    if (panel?.type !== 'panel') throw new Error(t('notices.layout.sourcePaneClosed'))
+    const existing = new Map(
+      panelWatchedSources(panel.content).map((source) => [source.channelId, source]),
+    )
+    panel.content = panelContentForSources(
+      sources.map((source) => existing.get(source.channelId) ?? source),
+    )
+    await backend.api.setWatchedChannelsLayout({ tabId, layout: next })
+  })
 }
 
 /** Chooses the saved account one pane sends with; `null` follows the chat's account again. */

@@ -39,6 +39,7 @@ import { donationFeed, sharedDonationFeeds } from './donation-feed'
 import { mentionAppearances } from './mention-appearances'
 import { classifyIncomingSimilarity, hydrateSimilarityHistory } from './message-similarity'
 import { persistentResource } from './persistent-resources'
+import { recordWatchedFeedAppend } from './watched-feed'
 
 function hydrateMessageHistory(messages: readonly NormalizedChatMessage[]): void {
   const channels = new Map<string, NormalizedChatMessage[]>()
@@ -750,6 +751,7 @@ export function wireBackendToStores(backend: AppStoreBackend): () => void {
           )
           activityCounts.set(channelId, newMessageCount)
           if (messages === existing) continue
+          recordWatchedFeedAppend(channelId, existing, messages)
           if (next === current) next = new Map(current)
           next.set(channelId, messages)
         }

@@ -1,6 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger, useGpuixRequired } from '@gpuix/react'
 import { DONATION_PROVIDER_LABELS, donationChannelKey } from '@twirchat/shared/donations'
-import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
+import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/message-identity'
 /**
  * Chat pane — port of ChatList.vue (header + virtualized list + composer)
  * onto GPUIX's native <virtual-list> (alignment="bottom" followTail replaces
@@ -102,6 +102,7 @@ import {
   twitchAutoModStore,
   type TwitchAutoModRow,
 } from '../state/twitch-automod'
+import { createWatchedFeedReader, observeWatchedFeedSources } from '../state/watched-feed'
 import { windowActivityStore, updateWindowActivity } from '../state/window-activity'
 import { useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
@@ -109,6 +110,7 @@ import { platformColor, semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
 import { PaneAccountChip } from './ChatAccountControl'
 import { ChatAppearanceDialog } from './ChatAppearanceDialog'
+import { ChatFeedHeader, ChatFeedTargetPicker } from './ChatFeedControls'
 import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
 import { ChatMessageRow } from './ChatMessageRow'
@@ -126,6 +128,7 @@ import { Text } from './ui/Text'
 import { UserCardDialog } from './UserCardDialog'
 
 const EMPTY_MESSAGES: NormalizedChatMessage[] = []
+const EMPTY_CHANNEL_IDS: readonly string[] = []
 const MIN_TAIL_ROWS = 24
 const TAIL_OVERSCAN_ROWS = 8
 const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
@@ -133,6 +136,7 @@ const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
 
 interface PausedChat {
   messages: NormalizedChatMessage[]
+  feedSources: ReadonlyMap<string, string>
   pluginRows: readonly HomePluginRow[]
   donations: readonly DonationRow[]
   autoModRows: readonly TwitchAutoModRow[]
@@ -142,6 +146,12 @@ interface PausedChat {
 interface OpenChatThread {
   activityKey: string
   message: NormalizedChatMessage
+  sourceId?: string
+}
+
+interface ChatReply {
+  message: NormalizedChatMessage
+  sourceId?: string
 }
 
 function platformName(platform: string): string {
@@ -294,12 +304,14 @@ export interface ChatViewProps {
   paneId?: string
   layoutTabId?: string
   layoutPanelId?: string
-  /** null/undefined = the combined "My channels" home pane */
+  /** Omit both channel props for the "My channels" pane. */
   watchedChannel?: WatchedChannel | null
+  feedChannels?: readonly WatchedChannel[]
   isMain?: boolean
   onGoToPlatforms?: () => void
   onSplitRight?: () => void
   onChangeChannel?: () => void
+  onEditFeed?: () => void
   onClosePanel?: () => void
 }
 
@@ -308,10 +320,12 @@ export function ChatView({
   paneId,
   layoutTabId = 'home',
   layoutPanelId,
-  watchedChannel,
+  watchedChannel: singleChannel,
+  feedChannels,
   onGoToPlatforms,
   onSplitRight,
   onChangeChannel,
+  onEditFeed,
   onClosePanel,
 }: ChatViewProps) {
   const backend = useBackend()
@@ -321,6 +335,29 @@ export function ChatView({
   const scope = useWindowScope()
   const windows = useDesktopWindows()
   const presentation = useWindowPresentation()
+  const activityKey = feedChannels ? 'feed' : (singleChannel?.id ?? 'home')
+  const paneKey = paneId ? `${paneId}:${activityKey}` : activityKey
+  const feedChannelIds = useMemo(
+    () => feedChannels?.map((channel) => channel.id) ?? EMPTY_CHANNEL_IDS,
+    [feedChannels],
+  )
+  const feedChannelsById = useMemo(
+    () => feedChannels && new Map(feedChannels.map((channel) => [channel.id, channel])),
+    [feedChannels],
+  )
+  const activeDestination = useStoreSelector(composerStore, (states) => {
+    const composer = states.get(paneKey)
+    return feedChannels ? composer?.activeWatchedChannelId : composer?.activePlatform
+  })
+  const [reply, setReply] = useState<ChatReply | null>(null)
+  const replyChannel = reply?.sourceId ? feedChannelsById?.get(reply.sourceId) : undefined
+  const replyTarget = !feedChannels || replyChannel ? (reply?.message ?? null) : null
+  const watchedChannel = feedChannels
+    ? (replyChannel ??
+      (activeDestination ? feedChannelsById?.get(activeDestination) : undefined) ??
+      feedChannels[0])
+    : singleChannel
+  const isHome = !feedChannels && !watchedChannel
 
   const baseSettings = useStore(settingsStore)
   const settings = useMemo(
@@ -345,13 +382,25 @@ export function ChatView({
   // Actions in a watched pane (sending, moderation, commands) use the pane's account.
   const paneAccountId = watchedChannel ? chatAccount?.id : undefined
   // Mentions of, and messages from, the account this chat sends with count as the user's own.
-  const ownAccounts = useMemo(
-    () =>
-      chatAccount && !accounts.some((account) => account.id === chatAccount.id)
-        ? [...accounts, chatAccount]
-        : accounts,
-    [accounts, chatAccount],
-  )
+  const feedAccounts = useMemo(() => {
+    if (!feedChannels) return undefined
+    const result = new Map<string, Account>()
+    for (const channel of feedChannels) {
+      const account = resolvePaneAccount(channel, layoutPanel, savedAccounts, accounts)
+      if (account) result.set(channel.id, account)
+    }
+    return result
+  }, [feedChannels, layoutPanel, savedAccounts, accounts])
+  const ownAccounts = useMemo(() => {
+    if (feedAccounts) {
+      const own = new Map(accounts.map((account) => [account.id, account]))
+      for (const account of feedAccounts.values()) own.set(account.id, account)
+      return [...own.values()]
+    }
+    return chatAccount && !accounts.some((account) => account.id === chatAccount.id)
+      ? [...accounts, chatAccount]
+      : accounts
+  }, [accounts, chatAccount, feedAccounts])
   const aliases = useStore(aliasesStore)
   const rules = useStoreSelector(chatRulesStore, (state) => state.value)
   const similaritySettings = useStoreSelector(messageSimilarityStore, (state) => state.value)
@@ -362,19 +411,19 @@ export function ChatView({
   const statuses = useStore(channelStatusStore)
   // A split only observes its channel; activity elsewhere must not repaint it.
   const homeMessages = useStoreSelector(homeMessagesStore, (messages) =>
-    watchedChannel ? EMPTY_MESSAGES : messages,
+    isHome ? messages : EMPTY_MESSAGES,
   )
   const pluginFeed = useStoreSelector(homePluginFeedStore, (feed) =>
-    watchedChannel ? EMPTY_PLUGIN_FEED : feed,
+    isHome ? feed : EMPTY_PLUGIN_FEED,
   )
   const ownDonations = useStoreSelector(donationFeed.store, (feed) =>
-    watchedChannel || layoutTabId !== 'home' ? EMPTY_DONATION_FEED : feed,
+    !isHome || layoutTabId !== 'home' ? EMPTY_DONATION_FEED : feed,
   )
   const sharedDonationKey =
-    watchedChannel && watchedChannel.platform !== 'youtube' && watchedChannel.platform !== 'vkplay'
+    singleChannel && singleChannel.platform !== 'youtube' && singleChannel.platform !== 'vkplay'
       ? donationChannelKey({
-          platform: watchedChannel.platform,
-          channel: watchedChannel.channelSlug,
+          platform: singleChannel.platform,
+          channel: singleChannel.channelSlug,
         })
       : null
   const sharedDonations = useStoreSelector(sharedDonationFeeds.store, (feeds) =>
@@ -384,20 +433,33 @@ export function ChatView({
   const watchedMessages = useStoreSelector(watchedMessagesStore, (messages) =>
     watchedChannel ? (messages.get(watchedChannel.id) ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
   )
-  const watchedChannelStatus = useStoreSelector(watchedStatusesStore, (statuses) =>
-    watchedChannel ? (statuses.get(watchedChannel.id) ?? null) : null,
+  const readFeed = useMemo(() => createWatchedFeedReader(feedChannelIds), [feedChannelIds])
+  const feedSnapshot = useStoreSelector(watchedMessagesStore, readFeed)
+  useEffect(
+    () => (feedChannelIds.length ? observeWatchedFeedSources(feedChannelIds) : undefined),
+    [feedChannelIds],
+  )
+  const watchedChannelStatus = useStoreSelector(watchedStatusesStore, (entries) =>
+    watchedChannel ? (entries.get(watchedChannel.id) ?? null) : null,
   )
   const streamStatuses = useStore(streamStatusStore)
   const moderationView = useStore(moderationViewStore)
-  const activityKey = watchedChannel?.id ?? 'home'
   const flash = useStoreSelector(highlightFlashStore, (entries) =>
     watchedChannel
       ? entries.get(roomKey(watchedChannel.platform, watchedChannel.channelSlug))
       : undefined,
   )
-  const activity = useStoreSelector(chatActivityStore, (entries) => entries.get(activityKey))
+  const messageTotal = useStoreSelector(chatActivityStore, (entries) =>
+    feedChannels
+      ? feedChannelIds.reduce((total, id) => total + (entries.get(id)?.total ?? 0), 0)
+      : (entries.get(activityKey)?.total ?? 0),
+  )
 
-  const activeMessages = watchedChannel ? watchedMessages : homeMessages
+  const activeMessages = feedChannels
+    ? feedSnapshot.messages
+    : watchedChannel
+      ? watchedMessages
+      : homeMessages
 
   const ruleEngine = useMemo(
     () =>
@@ -406,20 +468,21 @@ export function ChatView({
       })),
     [rules, ownAccounts, similarityReader],
   )
-  const paneKey = paneId ? `${paneId}:${activityKey}` : activityKey
   const twitchChannel = watchedChannel
     ? watchedChannel.platform === 'twitch'
       ? watchedChannel.channelSlug
       : null
-    : (accounts.find((account) => account.platform === 'twitch')?.username ?? null)
+    : isHome
+      ? (accounts.find((account) => account.platform === 'twitch')?.username ?? null)
+      : null
   const hideModActions = streamerMode.effectiveEnabled && streamerMode.settings.hideModActions
   const autoMod = useStoreSelector(twitchAutoModStore, (channels) =>
-    twitchChannel && !hideModActions
+    twitchChannel && !feedChannels && !hideModActions
       ? (channels.get(twitchChannel.toLowerCase()) ?? EMPTY_AUTOMOD_QUEUE)
       : EMPTY_AUTOMOD_QUEUE,
   )
   const room = useStoreSelector(channelRoomStore, (rooms) =>
-    twitchChannel ? rooms.get(roomKey('twitch', twitchChannel)) : undefined,
+    twitchChannel && !feedChannels ? rooms.get(roomKey('twitch', twitchChannel)) : undefined,
   )
   const twitchActivity = useStoreSelector(twitchActivitiesStore, (channels) =>
     twitchChannel
@@ -430,14 +493,10 @@ export function ChatView({
   const [activitiesTab, setActivitiesTab] = useState<'polls' | 'queue'>('polls')
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [moderationMode, setModerationMode] = useState(true)
-  const activePlatform = useStoreSelector(
-    composerStore,
-    (states) => states.get(paneKey)?.activePlatform,
-  )
   const commandRunner = useRef<((text: string) => Promise<void>) | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [bannersHidden, setBannersHidden] = useState(false)
-  const bannerSnapshot = bannersHidden ? null : twitchActivity.snapshot
+  const bannerSnapshot = bannersHidden || feedChannels ? null : twitchActivity.snapshot
   const pinnedMessage = bannerSnapshot?.pinnedMessage
   const activePolls = bannerSnapshot?.polls.filter((poll) => poll.status === 'ACTIVE')
   const visiblePredictions = bannerSnapshot?.predictions.filter(
@@ -483,9 +542,10 @@ export function ChatView({
   const pendingJump = useRef<{ requestId: string; messageKey: string } | null>(null)
   const searchRef = useRef<import('@gpuix/react').PublicInstance | null>(null)
   const resumeScrollRequested = useRef(false)
-  const activityTotal = (activity?.total ?? 0) + pluginFeed.total + donations.total + autoMod.total
+  const activityTotal = messageTotal + pluginFeed.total + donations.total + autoMod.total
   const pauseSnapshot: PausedChat = {
     messages: activeMessages,
+    feedSources: feedSnapshot.sourceByKey,
     pluginRows: pluginFeed.rows,
     donations: donations.rows,
     autoModRows: autoMod.rows,
@@ -527,6 +587,24 @@ export function ChatView({
   const searchFocus = useTextInputFocusTracking()
   const search = useMemo(() => compileChatSearch(searchQuery), [searchQuery])
   const readingMessages = paused?.messages ?? activeMessages
+  const readingFeedSources = paused?.feedSources ?? feedSnapshot.sourceByKey
+  const readingFeed = useRef(readingFeedSources)
+  readingFeed.current = readingFeedSources
+  const getFeedSource = useCallback(
+    (message: NormalizedChatMessage): WatchedChannel | undefined => {
+      if (!feedChannelsById) return undefined
+      const id = readingFeed.current.get(chatMessageIdentity(message))
+      return id === undefined ? undefined : feedChannelsById.get(id)
+    },
+    [feedChannelsById],
+  )
+  const getChannelSlugForMessage = useCallback(
+    (message: NormalizedChatMessage) =>
+      feedChannelsById
+        ? getFeedSource(message)?.channelSlug
+        : (watchedChannel?.channelSlug ?? statuses[message.platform]?.channelLogin),
+    [feedChannelsById, getFeedSource, statuses, watchedChannel?.channelSlug],
+  )
   const readingPluginRows = paused?.pluginRows ?? pluginFeed.rows
   const readingDonations = paused?.donations ?? donations.rows
   const pausedAutoModKeys = useMemo(
@@ -552,7 +630,7 @@ export function ChatView({
         if (classification.hidden && !classification.placeholder) return false
         if (
           !ruleEngine.matchesFilters(message, paneKey, {
-            channelName: watchedChannel?.channelSlug ?? statuses[message.platform]?.channelLogin,
+            channelName: getChannelSlugForMessage(message),
             deleted: moderationView.outcomeFor(message)?.isTombstone === true,
           })
         )
@@ -570,7 +648,7 @@ export function ChatView({
           highlighted,
           similar: similarityReader.get(message)?.similar,
           deleted: moderationView.outcomeFor(message)?.isTombstone === true,
-          channelName: watchedChannel?.channelSlug ?? statuses[message.platform]?.channelLogin,
+          channelName: getChannelSlugForMessage(message),
         })
       }),
     [
@@ -581,8 +659,7 @@ export function ChatView({
       search,
       aliasMap,
       moderationView,
-      watchedChannel?.channelSlug,
-      statuses,
+      getChannelSlugForMessage,
       ruleEngine,
       paneKey,
       revealedMessageKey,
@@ -738,7 +815,8 @@ export function ChatView({
           platform: 'AutoMod',
           timestamp: row.hold.timestamp,
         }
-      return row
+      const source = feedChannels ? getFeedSource(row) : undefined
+      return source ? { ...row, platform: `${row.platform}/${source.channelSlug}` } : row
     })
     void backend.api
       .copyText({ text: formatChatTranscript(transcript) })
@@ -788,7 +866,7 @@ export function ChatView({
     pauseController.add('search')
     setPaused(pauseInput.current)
     setRevealedMessageKey(searchJump.messageKey)
-  }, [searchJump, paneId, activeMessages, activity?.total, pauseController, layoutTabId, scope])
+  }, [searchJump, paneId, activeMessages, pauseController, layoutTabId, scope])
 
   useEffect(() => {
     const pending = pendingJump.current
@@ -826,38 +904,63 @@ export function ChatView({
 
   // ── Reply / moderation / dialogs ───────────────────────────────────────────
 
-  const [replyTarget, setReplyTarget] = useState<NormalizedChatMessage | null>(null)
   const [openThread, setOpenThread] = useState<OpenChatThread | null>(null)
   const threadMessage = openThread?.activityKey === activityKey ? openThread.message : null
+  const threadChannel = openThread?.sourceId
+    ? feedChannelsById?.get(openThread.sourceId)
+    : undefined
   const showThread = useCallback(
-    (message: NormalizedChatMessage) => setOpenThread({ activityKey, message }),
-    [activityKey],
+    (message: NormalizedChatMessage) => {
+      const source = getFeedSource(message)
+      if (feedChannels && !source) return
+      setOpenThread({ activityKey, message, sourceId: source?.id })
+    },
+    [activityKey, feedChannels, getFeedSource],
   )
   const closeThread = useCallback(() => setOpenThread(null), [])
-  const replyFromThread = useCallback((message: NormalizedChatMessage) => {
-    setOpenThread(null)
-    setReplyTarget(message)
-  }, [])
+  const replyFromThread = useCallback(
+    (message: NormalizedChatMessage) => {
+      setOpenThread(null)
+      setReply({ message, sourceId: threadChannel?.id })
+    },
+    [threadChannel?.id],
+  )
+  const replyFromRow = useCallback(
+    (message: NormalizedChatMessage) => {
+      const source = getFeedSource(message)
+      if (feedChannels && !source) return
+      setReply({ message, sourceId: source?.id })
+    },
+    [feedChannels, getFeedSource],
+  )
+  const pickFeedChannel = useCallback(
+    (id: string) => {
+      setReply(null)
+      updateComposer(paneKey, (current) =>
+        current.activeWatchedChannelId === id
+          ? current
+          : { ...current, activeWatchedChannelId: id },
+      )
+    },
+    [paneKey],
+  )
   const [userCardTarget, setUserCardTarget] = useState<UserCardTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   // The trigger click that dismissed the menu (mousedown closes, click toggles) must not reopen it.
   const menuDismissedAt = useRef(0)
   useOverlayClose(menuOpen, () => setMenuOpen(false))
-  const [watchedModerationAllowed, setWatchedModerationAllowed] = useState(false)
+  const [moderationCapability, setModerationCapability] = useState<{
+    channelId: string
+    accountId: string
+  } | null>(null)
   const [moderationPendingIds, setModerationPendingIds] = useState<Set<string>>(new Set())
   const showModerationRail =
     moderationMode &&
     settings?.showModerationRail !== false &&
-    (!watchedChannel || watchedModerationAllowed)
-
-  const getChannelSlugForPlatform = useCallback(
-    (platform: Platform): string | undefined => {
-      if (watchedChannel?.platform === platform) return watchedChannel.channelSlug
-      return statuses[platform]?.channelLogin
-    },
-    [watchedChannel, statuses],
-  )
+    (isHome ||
+      (moderationCapability?.channelId === watchedChannel?.id &&
+        moderationCapability?.accountId === paneAccountId))
 
   const moderationPlatform = (platform: Platform): 'twitch' | 'kick' | undefined =>
     platform === 'twitch' || platform === 'kick' ? platform : undefined
@@ -868,7 +971,7 @@ export function ChatView({
     let cancelled = false
     const platform = watchedChannel ? moderationPlatform(watchedChannel.platform) : undefined
     if (!watchedChannel || !platform || !watchedAccountId) {
-      setWatchedModerationAllowed(false)
+      setModerationCapability(null)
       return
     }
     backend.api
@@ -878,10 +981,13 @@ export function ChatView({
         accountId: watchedAccountId,
       })
       .then((cap) => {
-        if (!cancelled) setWatchedModerationAllowed(cap.canModerate)
+        if (!cancelled)
+          setModerationCapability(
+            cap.canModerate ? { channelId: watchedChannel.id, accountId: watchedAccountId } : null,
+          )
       })
       .catch(() => {
-        if (!cancelled) setWatchedModerationAllowed(false)
+        if (!cancelled) setModerationCapability(null)
       })
     return () => {
       cancelled = true
@@ -893,19 +999,22 @@ export function ChatView({
     async (message: NormalizedChatMessage, action: ModerationDragAction) => {
       const platform = moderationPlatform(message.platform)
       if (!platform) return
-      const channelSlug =
-        watchedChannel?.channelSlug ?? getChannelSlugForPlatform(platform) ?? message.channelId
+      const source = getFeedSource(message)
+      const channelSlug = feedChannels
+        ? source?.channelSlug
+        : (getChannelSlugForMessage(message) ?? message.channelId)
       if (!channelSlug) {
         showNotice('error', t('chat.notice.moderationChannelUnknown'), 3500)
         return
       }
 
-      setModerationPendingIds((current) => new Set(current).add(message.id))
+      const pendingKey = feedChannels ? chatMessageIdentity(message) : message.id
+      setModerationPendingIds((current) => new Set(current).add(pendingKey))
       try {
         await backend.api.moderateMessage({
           action: action.action,
           channelSlug,
-          accountId: paneAccountId,
+          accountId: source ? feedAccounts?.get(source.id)?.id : paneAccountId,
           messageId: message.id,
           platform,
           targetUserId: message.author.id,
@@ -930,12 +1039,20 @@ export function ChatView({
       } finally {
         setModerationPendingIds((current) => {
           const next = new Set(current)
-          next.delete(message.id)
+          next.delete(pendingKey)
           return next
         })
       }
     },
-    [backend, watchedChannel?.channelSlug, getChannelSlugForPlatform, t, paneAccountId],
+    [
+      backend,
+      feedChannels,
+      feedAccounts,
+      getFeedSource,
+      getChannelSlugForMessage,
+      t,
+      paneAccountId,
+    ],
   )
   const handleModeration = useCallback(
     (...args: Parameters<typeof onModerate>) => runUiTask(onModerate(...args)),
@@ -962,7 +1079,7 @@ export function ChatView({
       replyToMessageId?: string
     }[],
   ): void {
-    setReplyTarget(null)
+    setReply((current) => (current === reply ? null : current))
     for (const { platform, channelLogin, text, replyToMessageId } of targets) {
       const account = accounts.find((candidate) => candidate.platform === platform)
       backend.api
@@ -978,7 +1095,7 @@ export function ChatView({
     replyToMessageId?: string
   }): void {
     if (!chatAccount) return
-    setReplyTarget(null)
+    setReply((current) => (current === reply ? null : current))
     backend.api
       .sendWatchedChannelMessage({
         id: payload.channelId,
@@ -993,20 +1110,30 @@ export function ChatView({
   // ── Header data ────────────────────────────────────────────────────────────
 
   const allChannels = useMemo(() => ownChatSendTargets(accounts), [accounts])
+  const threadChannelStatus = useStoreSelector(watchedStatusesStore, (entries) =>
+    threadChannel ? entries.get(threadChannel.id) : undefined,
+  )
   const canReplyFromThread =
     settings &&
     threadMessage &&
-    (watchedChannel
-      ? chatAccount && watchedChannelStatus?.status === 'connected'
-      : allChannels.some(
-          (target) =>
-            target.platform === 'twitch' &&
-            normalizeMessageChannel('twitch', target.channelLogin) ===
-              normalizeMessageChannel('twitch', threadMessage.channelId),
-        ))
+    (feedChannels
+      ? threadChannel &&
+        feedAccounts?.has(threadChannel.id) &&
+        threadChannelStatus?.status === 'connected'
+      : watchedChannel
+        ? chatAccount && watchedChannelStatus?.status === 'connected'
+        : allChannels.some(
+            (target) =>
+              target.platform === 'twitch' &&
+              normalizeMessageChannel('twitch', target.channelLogin) ===
+                normalizeMessageChannel('twitch', threadMessage.channelId),
+          ))
   const chattersTargets = useMemo(
-    () => buildChattersTargets(watchedChannel, accounts),
-    [watchedChannel, accounts],
+    () =>
+      feedChannels
+        ? feedChannels.flatMap((channel) => buildChattersTargets(channel, accounts))
+        : buildChattersTargets(watchedChannel, accounts),
+    [feedChannels, watchedChannel, accounts],
   )
 
   const displayedChannels = allChannels.map((ch) => {
@@ -1062,17 +1189,14 @@ export function ChatView({
     if (!panels.length || panels[0]?.id === layoutPanelId)
       setActivePane({ tabId: layoutTabId, paneId: paneIdentity }, scope)
   }, [scope, layoutTabId, layoutPanelId, paneIdentity, paneLayout])
+  const ownActionChannel = isHome
+    ? (allChannels.find((channel) => channel.platform === activeDestination) ?? allChannels[0])
+    : undefined
   const actionTarget = watchedChannel
     ? { platform: watchedChannel.platform, channelSlug: watchedChannel.channelSlug }
-    : allChannels.find((channel) => channel.platform === activePlatform)
-      ? {
-          platform: activePlatform!,
-          channelSlug: allChannels.find((channel) => channel.platform === activePlatform)!
-            .channelLogin,
-        }
-      : allChannels[0]
-        ? { platform: allChannels[0].platform, channelSlug: allChannels[0].channelLogin }
-        : undefined
+    : ownActionChannel
+      ? { platform: ownActionChannel.platform, channelSlug: ownActionChannel.channelLogin }
+      : undefined
   const setEnabledArgument = (argument: string | undefined, enabled: boolean) =>
     argument === 'on' ? true : argument === 'off' ? false : !enabled
   const openTargetUrl = (url: string | undefined) => {
@@ -1083,8 +1207,8 @@ export function ChatView({
     id: splitContextId,
     category: 'split',
     handlers: {
-      cancelReply: replyTarget ? () => setReplyTarget(null) : null,
-      changeChannel: onChangeChannel ?? null,
+      cancelReply: replyTarget ? () => setReply(null) : null,
+      changeChannel: onChangeChannel ?? onEditFeed ?? null,
       clearMessages,
       createClip:
         actionTarget?.platform === 'twitch'
@@ -1143,9 +1267,16 @@ export function ChatView({
           : null,
       openViewerList: chattersTargets.length ? () => setChattersOpen(true) : null,
       pickFilters: () => setFiltersOpen(true),
-      reconnect: watchedChannel
-        ? () => backend.api.reconnectChat({ watchedChannelId: watchedChannel.id })
-        : () => backend.api.reconnectChat({}),
+      reconnect: feedChannels
+        ? () =>
+            Promise.all(
+              feedChannels.map((channel) =>
+                backend.api.reconnectChat({ watchedChannelId: channel.id }),
+              ),
+            ).then(() => undefined)
+        : watchedChannel
+          ? () => backend.api.reconnectChat({ watchedChannelId: watchedChannel.id })
+          : () => backend.api.reconnectChat({}),
       scrollToBottom: () => {
         changePause(false)
         scrollToLatest()
@@ -1227,23 +1358,35 @@ export function ChatView({
         })
       },
       changeMultichannelContext:
-        !watchedChannel && allChannels.length > 1
+        feedChannels && feedChannels.length > 1
           ? ([argument]) => {
-              updateComposer(paneKey, (current) => {
-                const index = allChannels.findIndex(
-                  (channel) => channel.platform === current.activePlatform,
-                )
-                const target =
-                  argument === 'next'
-                    ? (index + 1) % allChannels.length
-                    : argument === 'prev'
-                      ? (index - 1 + allChannels.length) % allChannels.length
-                      : Number(argument)
-                const channel = allChannels[target]
-                return channel ? { ...current, activePlatform: channel.platform } : current
-              })
+              const index = feedChannels.findIndex((channel) => channel.id === watchedChannel?.id)
+              const next =
+                argument === 'next'
+                  ? (index + 1) % feedChannels.length
+                  : argument === 'prev'
+                    ? (index - 1 + feedChannels.length) % feedChannels.length
+                    : Number(argument)
+              const channel = feedChannels[next]
+              if (channel) pickFeedChannel(channel.id)
             }
-          : null,
+          : isHome && allChannels.length > 1
+            ? ([argument]) => {
+                updateComposer(paneKey, (current) => {
+                  const index = allChannels.findIndex(
+                    (channel) => channel.platform === current.activePlatform,
+                  )
+                  const target =
+                    argument === 'next'
+                      ? (index + 1) % allChannels.length
+                      : argument === 'prev'
+                        ? (index - 1 + allChannels.length) % allChannels.length
+                        : Number(argument)
+                  const channel = allChannels[target]
+                  return channel ? { ...current, activePlatform: channel.platform } : current
+                })
+              }
+            : null,
     },
   })
   useHotkeyRoute(
@@ -1254,7 +1397,7 @@ export function ChatView({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <PaneAccountContext.Provider value={paneAccountId}>
+    <PaneAccountContext.Provider value={feedChannels ? undefined : paneAccountId}>
       <div
         testId="chat-pane"
         onMouseDown={() => setActivePane({ tabId: layoutTabId, paneId: paneIdentity }, scope)}
@@ -1303,7 +1446,9 @@ export function ChatView({
           }}
         >
           {headerLeading}
-          {watchedChannel ? (
+          {feedChannels ? (
+            <ChatFeedHeader channels={feedChannels} onEdit={onEditFeed} />
+          ) : watchedChannel ? (
             <>
               <div
                 style={{
@@ -1483,14 +1628,16 @@ export function ChatView({
               minWidth: 0,
             }}
           >
-            <MessageRate activityKey={activityKey} />
-            <HeaderButton
-              testId="chat-history-button"
-              title={t('chat.tooltip.searchHistory')}
-              onClick={() => setHistoryOpen(true)}
-            >
-              <Icon name="clock" size={14} color={theme.text2} />
-            </HeaderButton>
+            <MessageRate activityKey={activityKey} feedChannelIds={feedChannelIds} />
+            {watchedChannel || isHome ? (
+              <HeaderButton
+                testId="chat-history-button"
+                title={t('chat.tooltip.searchHistory')}
+                onClick={() => setHistoryOpen(true)}
+              >
+                <Icon name="clock" size={14} color={theme.text2} />
+              </HeaderButton>
+            ) : null}
             {twitchChannel ? (
               <HeaderButton
                 testId="twitch-activities-button"
@@ -1553,7 +1700,7 @@ export function ChatView({
 
             {settings ? <ChatAppearanceDialog settings={settings} /> : null}
 
-            {onSplitRight || onClosePanel || windows ? (
+            {onSplitRight || onClosePanel || onEditFeed || windows ? (
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', gap: 2 }}>
                 <HeaderButton testId="split-right" onClick={() => onSplitRight?.()}>
                   <Icon name="plus" size={14} color={theme.text2} />
@@ -1602,6 +1749,17 @@ export function ChatView({
                           }}
                         />
                       ) : null}
+                      {onEditFeed ? (
+                        <MenuItem
+                          icon="chat"
+                          testId="chat-edit-feed"
+                          label={t(feedChannels ? 'chat.feed.editSources' : 'chat.feed.combine')}
+                          onClick={() => {
+                            setMenuOpen(false)
+                            onEditFeed()
+                          }}
+                        />
+                      ) : null}
                       {windows ? (
                         <>
                           <MenuItem
@@ -1626,7 +1784,7 @@ export function ChatView({
                           />
                         </>
                       ) : null}
-                      {onChangeChannel || windows ? (
+                      {onChangeChannel || onEditFeed || windows ? (
                         <div
                           style={{
                             height: 1,
@@ -2020,6 +2178,7 @@ export function ChatView({
                   )
                 }
                 const key = chatMessageKey(message)
+                const source = feedChannels ? getFeedSource(message) : undefined
                 const revealed = revealedMessageKey === key
                 const outcome = moderationView.outcomeFor(message)
                 const classification = ruleEngine.classify(message)
@@ -2042,12 +2201,16 @@ export function ChatView({
                     hiddenLabel={
                       classification.hidden && !revealed ? t('chat.message.hidden') : undefined
                     }
-                    channelSlug={getChannelSlugForPlatform(message.platform)}
+                    channelSlug={
+                      feedChannels ? source?.channelSlug : getChannelSlugForMessage(message)
+                    }
+                    feedSource={source}
+                    sourceAccountId={source && feedAccounts?.get(source.id)?.id}
                     alias={aliasMap.get(`${message.platform}:${message.author.id}`)}
                     showPlatformColorStripe={
-                      watchedChannel ? false : settings?.showPlatformColorStripe
+                      singleChannel ? false : settings?.showPlatformColorStripe
                     }
-                    showPlatformIcon={watchedChannel ? false : settings?.showPlatformIcon}
+                    showPlatformIcon={!singleChannel && !feedChannels && settings?.showPlatformIcon}
                     showTimestamp={settings?.showTimestamp}
                     showAvatar={settings?.showAvatars}
                     showBadges={settings?.showBadges}
@@ -2070,11 +2233,15 @@ export function ChatView({
                     }
                     moderationOutcome={outcome}
                     onOpenUserCard={setUserCardTarget}
-                    onReply={setReplyTarget}
+                    onReply={replyFromRow}
                     onOpenThread={showThread}
                     onSearch={openSearch}
-                    canModerate={showModerationRail}
-                    moderationPending={moderationPendingIds.has(message.id)}
+                    canModerate={
+                      showModerationRail && (!feedChannels || source?.id === watchedChannel?.id)
+                    }
+                    moderationPending={moderationPendingIds.has(
+                      feedChannels ? chatMessageIdentity(message) : message.id,
+                    )}
                     onModerate={handleModeration}
                   />
                 )
@@ -2100,6 +2267,7 @@ export function ChatView({
             </div>
           ) : (
             <EmptyState
+              isFeed={Boolean(feedChannels)}
               watchedChannel={watchedChannel}
               watchedChannelStatus={watchedChannelStatus}
               accounts={accounts}
@@ -2154,27 +2322,31 @@ export function ChatView({
               </div>
             </div>
           ) : null}
-          {threadMessage ? (
-            <ChatThreadPanel
-              key={chatMessageKey(threadMessage)}
-              selected={threadMessage}
-              messages={readingMessages}
-              channelSlug={threadMessage.channelId}
-              settings={settings}
-              ruleEngine={ruleEngine}
-              moderationView={moderationView}
-              streamerMode={streamerMode}
-              clearedKeys={clearedKeys}
-              aliases={aliasMap}
-              onClose={closeThread}
-              onReply={canReplyFromThread ? replyFromThread : undefined}
-              onOpenUserCard={setUserCardTarget}
-            />
+          {threadMessage && (!feedChannels || threadChannel) ? (
+            <PaneAccountContext.Provider
+              value={threadChannel ? feedAccounts?.get(threadChannel.id)?.id : paneAccountId}
+            >
+              <ChatThreadPanel
+                key={chatMessageKey(threadMessage)}
+                selected={threadMessage}
+                messages={readingMessages}
+                channelSlug={threadChannel?.channelSlug ?? threadMessage.channelId}
+                settings={settings}
+                ruleEngine={ruleEngine}
+                moderationView={moderationView}
+                streamerMode={streamerMode}
+                clearedKeys={clearedKeys}
+                aliases={aliasMap}
+                onClose={closeThread}
+                onReply={canReplyFromThread ? replyFromThread : undefined}
+                onOpenUserCard={setUserCardTarget}
+              />
+            </PaneAccountContext.Provider>
           ) : null}
         </div>
 
         {/* Composer */}
-        {settings ? (
+        {settings && (watchedChannel || isHome) ? (
           <ChatInput
             hotkeyContextId={`input:${paneKey}`}
             hotkeyParentContextIds={[splitContextId, 'window']}
@@ -2182,6 +2354,7 @@ export function ChatView({
               commandRunner.current = runner
             }}
             composerKey={paneKey}
+            focusActivityKey={activityKey}
             accounts={accounts}
             settings={settings}
             statuses={statuses}
@@ -2189,8 +2362,21 @@ export function ChatView({
             watchedChannelStatus={watchedChannelStatus}
             pane={paneTarget}
             replyTarget={replyTarget}
-            messages={activeMessages}
-            onCancelReply={() => setReplyTarget(null)}
+            messages={feedChannels ? watchedMessages : activeMessages}
+            renderWatchedTarget={
+              feedChannels && watchedChannel
+                ? (focusEditor, disabled) => (
+                    <ChatFeedTargetPicker
+                      channels={feedChannels}
+                      selected={watchedChannel}
+                      onPick={pickFeedChannel}
+                      focusEditor={focusEditor}
+                      disabled={disabled}
+                    />
+                  )
+                : undefined
+            }
+            onCancelReply={() => setReply(null)}
             onOpenUserCard={setUserCardTarget}
             onSend={onSend}
             onSendWatched={onSendWatched}
@@ -2252,8 +2438,9 @@ export function ChatView({
             </div>
           </Modal>
         ) : null}
-        {historyOpen ? (
+        {historyOpen && (watchedChannel || isHome) ? (
           <ChatHistoryPanel
+            key={feedChannels ? watchedChannel?.id : undefined}
             channel={
               watchedChannel
                 ? {
@@ -2354,18 +2541,29 @@ function HeaderButton({
 }
 
 /** The one-second clock only repaints the tiny rate indicator. */
-const MessageRate = memo(function MessageRate({ activityKey }: { activityKey: string }) {
+const MessageRate = memo(function MessageRate({
+  activityKey,
+  feedChannelIds,
+}: {
+  activityKey: string
+  feedChannelIds: readonly string[]
+}) {
   const theme = useTheme()
   const { t } = useT()
-  const activity = useStoreSelector(chatActivityStore, (entries) => entries.get(activityKey))
   const [now, setNow] = useState(Date.now)
+  const activity = useStoreSelector(chatActivityStore, (entries) =>
+    feedChannelIds.length
+      ? feedChannelIds.reduce((total, id) => total + chatMessageRate(entries.get(id), now), 0)
+      : entries.get(activityKey),
+  )
+  const rate = typeof activity === 'number' ? activity : chatMessageRate(activity, now)
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])
   return (
     <Text testId="chat-message-rate" style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}>
-      {t('chat.rate', { rate: chatMessageRate(activity, now).toFixed(1) })}
+      {t('chat.rate', { rate: rate.toFixed(1) })}
     </Text>
   )
 })
@@ -2375,17 +2573,28 @@ function MenuItem({
   label,
   danger,
   onClick,
+  testId,
 }: {
   icon: IconName
   label: string
   danger?: boolean
   onClick?: () => void
+  testId?: string
 }) {
   const theme = useTheme()
   const color = danger ? theme.dangerText : theme.text
   return (
     <div
+      testId={testId}
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'enter' || event.key === 'space') {
+          event.preventDefault()
+          event.stopPropagation()
+          onClick?.()
+        }
+      }}
       style={{
         display: 'flex',
         flexDirection: 'row',
@@ -2398,6 +2607,7 @@ function MenuItem({
         borderRadius: 5,
         cursor: 'pointer',
         hover: { backgroundColor: danger ? 'rgba(239, 68, 68, 0.15)' : theme.navHover },
+        focusVisible: { outlineWidth: 1, outlineColor: theme.link },
       }}
     >
       <Icon name={icon} size={14} color={danger ? color : theme.text2} />
@@ -2407,12 +2617,14 @@ function MenuItem({
 }
 
 function EmptyState({
+  isFeed,
   watchedChannel,
   watchedChannelStatus,
   accounts,
   hasAnyConnection,
   onGoToPlatforms,
 }: {
+  isFeed: boolean
   watchedChannel?: WatchedChannel | null
   watchedChannelStatus?: PlatformStatusInfo | null
   accounts: Account[]
@@ -2438,7 +2650,16 @@ function EmptyState({
         <Icon name="chat" size={48} color={theme.text2} />
       </div>
 
-      {watchedChannel ? (
+      {isFeed ? (
+        <>
+          <Text style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>
+            {t('chat.empty.noMessages')}
+          </Text>
+          <Text style={{ fontSize: 13, color: theme.text2, maxWidth: 280, textAlign: 'center' }}>
+            {t('chat.feed.empty')}
+          </Text>
+        </>
+      ) : watchedChannel ? (
         <>
           <Text style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>
             {watchedChannelStatus?.status === 'connecting'

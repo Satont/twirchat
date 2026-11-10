@@ -13,6 +13,7 @@ import type {
   NormalizedChatMessage,
   Platform,
   SevenTvSystemAction,
+  WatchedChannel,
 } from '@twirchat/shared/types'
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 
@@ -487,6 +488,7 @@ function HoverActions({
 export interface ChatMessageProps {
   message: NormalizedChatMessage
   channelSlug?: string
+  feedSource?: WatchedChannel
   showPlatformColorStripe?: boolean
   showPlatformIcon?: boolean
   showTimestamp?: boolean
@@ -590,6 +592,38 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   )
 
   const fontSize = props.fontSize ?? DEFAULT_FONT_SIZE
+  const source = props.feedSource
+  const sourceLabel = source ? (
+    <div
+      testId={`chat-feed-source-${message.id}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        maxWidth: 124,
+        minWidth: 0,
+        marginRight: props.chatTheme === 'compact' ? 6 : 0,
+        paddingLeft: 4,
+        paddingRight: 5,
+        borderRadius: 4,
+        backgroundColor: theme.fill,
+      }}
+    >
+      <PlatformIcon platform={source.platform} size={platformIconSize(fontSize)} />
+      <Text
+        style={{
+          fontSize: timestampSize(fontSize),
+          color: theme.text2,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {sanitizeDisplayText(source.displayName)}
+      </Text>
+    </div>
+  ) : null
   const isSystem = message.type === 'system'
   const isAction = message.type === 'action'
   const isTombstone = props.moderationOutcome?.isTombstone === true
@@ -668,8 +702,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   // ── System message ────────────────────────────────────────────────────────
   if (isSystem) {
     const notice = message.metadata?.twitchNotice
-    if (message.platform === 'twitch' && notice)
-      return (
+    if (message.platform === 'twitch' && notice) {
+      const row = (
         <TwitchChatNotice
           id={message.id}
           kind={notice.kind}
@@ -679,6 +713,15 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           time={props.showTimestamp ? formatMessageTime(message.timestamp) : undefined}
         />
       )
+      return sourceLabel ? (
+        <div>
+          <div style={{ paddingTop: 4, paddingLeft: 12 }}>{sourceLabel}</div>
+          {row}
+        </div>
+      ) : (
+        row
+      )
+    }
 
     const action = message.metadata?.sevenTvAction ?? legacySystemAction(message.text)
     const palette =
@@ -720,6 +763,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           position: 'relative',
         }}
       >
+        {sourceLabel}
         <div
           style={{
             width: 17,
@@ -853,6 +897,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               {formatMessageTime(message.timestamp)}
             </Text>
           ) : null}
+          {sourceLabel}
           {props.showAvatar !== false ? (
             <div style={{ marginRight: 5, flexShrink: 0, display: 'flex' }}>
               <Avatar
@@ -1029,6 +1074,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             flexWrap: 'wrap',
           }}
         >
+          {sourceLabel}
           {props.showBadges !== false ? (
             <BadgeList
               badges={message.author.badges ?? []}

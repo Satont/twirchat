@@ -1,3 +1,4 @@
+import { chatMessageIdentity } from '@twirchat/shared/message-identity'
 import type {
   NormalizedChatMessage,
   Platform,
@@ -5,6 +6,7 @@ import type {
   WatchedChannelsLayout,
 } from '@twirchat/shared/types'
 
+import { panelWatchedSources } from '../../views/main/utils/layout-tree'
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { chatMessageKey, compileChatSearch, type SearchDetails } from '../chat-tools'
@@ -30,12 +32,14 @@ import { allPanels, layoutStore } from './layout'
 import { getMessageSimilarity } from './message-similarity'
 import { persistentResource } from './persistent-resources'
 import { requestLeaveSettings, setMainTab } from './settings-session'
+import { readWatchedFeed } from './watched-feed'
 
 export interface ChatSearchLocation {
   tabId: string
   windowId?: string
   paneId?: string
   watchedChannelId: string | null
+  feedSourceIds?: readonly string[]
 }
 export interface ChatSearchResult {
   key: string
@@ -71,18 +75,50 @@ export function openChatSearchLocations(input: ChatSearchInput): ChatSearchLocat
     ...input.tabIds,
   ])) {
     for (const panel of allPanels(input.layouts.get(tabId) ?? null)) {
-      if (panel.content.type === 'empty') continue
-      const id = panel.content.type === 'watched' ? panel.content.channelId : null
-      if (id !== null && !knownChannels.has(id)) continue
-      locations.push({
+      const pane = {
         tabId,
         paneId: `${tabId}:${panel.id}`,
-        watchedChannelId: id,
         ...(input.windowIds?.has(tabId) ? { windowId: input.windowIds.get(tabId) } : {}),
-      })
+      }
+      if (panel.content.type === 'main') {
+        locations.push({ ...pane, watchedChannelId: null })
+        continue
+      }
+      const sources = panelWatchedSources(panel.content)
+        .map(({ channelId }) => channelId)
+        .filter((id) => knownChannels.has(id))
+      for (const id of sources)
+        locations.push({
+          ...pane,
+          watchedChannelId: id,
+          ...(panel.content.type === 'feed' ? { feedSourceIds: sources } : {}),
+        })
     }
   }
   return locations
+}
+
+function searchMessageReader(input: ChatSearchInput) {
+  const feeds = new Map<string, Map<string, NormalizedChatMessage[]>>()
+  return (location: ChatSearchLocation): readonly NormalizedChatMessage[] => {
+    const { watchedChannelId, feedSourceIds, paneId } = location
+    if (watchedChannelId === null) return input.homeMessages
+    if (!feedSourceIds || !paneId) return input.watchedMessages.get(watchedChannelId) ?? []
+    let bySource = feeds.get(paneId)
+    if (!bySource) {
+      bySource = new Map()
+      const feed = readWatchedFeed(feedSourceIds, input.watchedMessages)
+      for (const message of feed.messages) {
+        const id = feed.sourceByKey.get(chatMessageIdentity(message))
+        if (id === undefined) continue
+        const messages = bySource.get(id)
+        if (messages) messages.push(message)
+        else bySource.set(id, [message])
+      }
+      feeds.set(paneId, bySource)
+    }
+    return bySource.get(watchedChannelId) ?? []
+  }
 }
 
 export function buildChatSearchSnapshot(
@@ -91,13 +127,10 @@ export function buildChatSearchSnapshot(
 ): ChatSearchSnapshot {
   const entries = new Map<string, ChatSearchResult>()
   const locations = openChatSearchLocations(input)
+  const messagesFor = searchMessageReader(input)
   for (const location of locations) {
     const channel = input.channels.find((item) => item.id === location.watchedChannelId)
-    const messages =
-      location.watchedChannelId === null
-        ? input.homeMessages
-        : (input.watchedMessages.get(location.watchedChannelId) ?? [])
-    for (const message of messages) {
+    for (const message of messagesFor(location)) {
       const key = chatMessageKey(message)
       const previous = entries.get(key)
       if (previous) {
@@ -233,26 +266,21 @@ export function resolveChatSearchJump(
   preferredWindowId = 'main',
 ): ChatSearchLocation | null {
   const available = openChatSearchLocations(input)
+  const messagesFor = searchMessageReader(input)
   const targets = result.locations.toSorted(
     (a, b) =>
       Number((b.windowId ?? 'main') === preferredWindowId) -
       Number((a.windowId ?? 'main') === preferredWindowId),
   )
   for (const target of targets) {
-    if (
-      !available.some(
-        (location) =>
-          location.tabId === target.tabId &&
-          location.paneId === target.paneId &&
-          location.watchedChannelId === target.watchedChannelId,
-      )
+    const location = available.find(
+      (candidate) =>
+        candidate.tabId === target.tabId &&
+        candidate.paneId === target.paneId &&
+        candidate.watchedChannelId === target.watchedChannelId,
     )
-      continue
-    const messages =
-      target.watchedChannelId === null
-        ? input.homeMessages
-        : (input.watchedMessages.get(target.watchedChannelId) ?? [])
-    if (messages.some((message) => chatMessageKey(message) === result.key)) return { ...target }
+    if (location && messagesFor(location).some((message) => chatMessageKey(message) === result.key))
+      return location
   }
   return null
 }

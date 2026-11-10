@@ -9,6 +9,7 @@ import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import type { LayoutNode, PanelNode, SplitNode } from '@twirchat/shared/types'
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
+import { layoutChannelNames, panelWatchedSources } from '../../views/main/utils/layout-tree'
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
@@ -44,12 +45,15 @@ import {
   registerLayoutPanelFocus,
   rememberLayoutPanelFocus,
   focusLayoutPanel,
+  setPanelSources,
 } from '../state/layout'
 import { useWindowScope } from '../state/window-scope'
 import { useTheme } from '../theme-context'
 import { AddChannelForm } from './AddChannelForm'
 import { ChatView } from './ChatView'
+import { FeedSourcesModal } from './FeedSourcesModal'
 import { PluginChatPane } from './PluginChatPane'
+import { ActionButton } from './ui/Form'
 import { Icon } from './ui/Icon'
 import { StreamerModeIndicator } from './ui/StreamerModeIndicator'
 import { Text } from './ui/Text'
@@ -69,7 +73,10 @@ interface PaneDragContextValue {
 }
 const PaneDragContext = createContext<PaneDragContextValue | null>(null)
 
-const GoToPlatformsContext = createContext<(() => void) | undefined>(undefined)
+const PaneControlsContext = createContext<{
+  goToPlatforms?: () => void
+  editFeed: (panelId: string) => void
+} | null>(null)
 
 export function WatchedView({
   tabId,
@@ -87,6 +94,14 @@ export function WatchedView({
   const renderer = useGpuixRequired()
   const native = nativeWindow(renderer)
   const elements = useMemo(() => new Map<string, number>(), [])
+  const [feedEditor, setFeedEditor] = useState<{ tabId: string; panelId: string } | null>(null)
+  const controls = useMemo(
+    () => ({
+      goToPlatforms: onGoToPlatforms,
+      editFeed: (panelId: string) => setFeedEditor({ tabId, panelId }),
+    }),
+    [onGoToPlatforms, tabId],
+  )
   const [preview, setPreview] = useState<DockPreview | null>(null)
   const previewRef = useRef<DockPreview | null>(null)
   const dragContext: PaneDragContextValue = {
@@ -141,20 +156,22 @@ export function WatchedView({
 
   // Publish the tab's channel names for the tab bar label.
   const layout = state?.layout ?? null
+  if (feedEditor && feedEditor.tabId !== tabId) setFeedEditor(null)
   useEffect(() => {
     if (!layout) return
-    const names = allPanels(layout)
-      .filter((p) => p.content.type === 'watched')
-      .map((p) => {
-        const ch = watchedChannels.find(
-          (c) => p.content.type === 'watched' && c.id === p.content.channelId,
-        )
-        return ch?.displayName ?? null
-      })
-      .filter((n): n is string => n !== null)
-    if (names.length > 0) {
-      tabChannelNamesStore.modify((current) => new Map(current).set(tabId, names))
-    }
+    const names = layoutChannelNames(layout, watchedChannels)
+    tabChannelNamesStore.modify((current) => {
+      const previous = current.get(tabId)
+      if (
+        previous?.length === names.length &&
+        previous.every((name, index) => name === names[index])
+      )
+        return current
+      const next = new Map(current)
+      if (names.length) next.set(tabId, names)
+      else next.delete(tabId)
+      return next
+    })
   }, [layout, watchedChannels, tabId])
 
   if (!state || (state.isLoading && !layout)) {
@@ -181,8 +198,11 @@ export function WatchedView({
     )
   }
 
+  const editingPanel = feedEditor
+    ? allPanels(layout).find((panel) => panel.id === feedEditor.panelId)
+    : undefined
   return (
-    <GoToPlatformsContext.Provider value={onGoToPlatforms}>
+    <PaneControlsContext.Provider value={controls}>
       <PaneDragContext.Provider value={dragContext}>
         <div
           style={{
@@ -227,7 +247,16 @@ export function WatchedView({
           </div>
         </div>
       </PaneDragContext.Provider>
-    </GoToPlatformsContext.Provider>
+      {editingPanel ? (
+        <FeedSourcesModal
+          key={editingPanel.id}
+          initialSources={panelWatchedSources(editingPanel.content)}
+          editing={editingPanel.content.type === 'feed'}
+          onSave={(sources) => setPanelSources(backend, tabId, editingPanel.id, sources)}
+          onClose={() => setFeedEditor(null)}
+        />
+      ) : null}
+    </PaneControlsContext.Provider>
   )
 }
 
@@ -473,7 +502,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
   const docking = useContext(PaneDragContext)
   const renderer = useGpuixRequired()
   const scope = useWindowScope()
-  const goToPlatforms = useContext(GoToPlatformsContext)
+  const controls = useContext(PaneControlsContext)
   const windows = useDesktopWindows()
   const activePane = useStoreSelector(activePaneByWindowStore, (entries) => entries.get(scope))
   const currentLayout = useStoreSelector(layoutStore, (entries) => entries.get(tabId)?.layout)
@@ -523,6 +552,14 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
   const watchedChannel = channelId
     ? (watchedChannels.find((ch) => ch.id === channelId) ?? null)
     : null
+  const feedChannels = useMemo(() => {
+    if (panel.content.type !== 'feed') return undefined
+    const byId = new Map(watchedChannels.map((channel) => [channel.id, channel]))
+    return panel.content.sources.flatMap((source) => {
+      const channel = byId.get(source.channelId)
+      return channel && !isPluginWatchedChannel(channel) ? [channel] : []
+    })
+  }, [panel.content, watchedChannels])
 
   const showForm = isEmpty || showAddForm
   const paneIdentity = `${tabId}:${panel.id}`
@@ -707,7 +744,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
         position: 'relative',
       }}
     >
-      {(showForm || (!isMain && !watchedChannel)) && headerLeading ? (
+      {(showForm || (!isMain && !watchedChannel && !feedChannels)) && headerLeading ? (
         <div style={{ position: 'absolute', top: 6, right: 6 }}>{headerLeading}</div>
       ) : null}
       {/* Absolute content keeps the split layout from measuring the whole chat pane at every
@@ -767,6 +804,17 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
                   else setShowAddForm(false)
                 }}
               />
+              {isEmpty ? (
+                <div style={{ alignSelf: 'flex-start', paddingTop: 12 }}>
+                  <ActionButton
+                    testId="empty-pane-create-feed"
+                    onClick={() => controls?.editFeed(panel.id)}
+                    style={{ focusVisible: { outlineWidth: 1, outlineColor: theme.link } }}
+                  >
+                    {t('app.feed.createTitle')}
+                  </ActionButton>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : isMain ? (
@@ -777,7 +825,7 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
             layoutPanelId={panel.id}
             onChangeChannel={() => setShowAddForm(true)}
             paneId={`${tabId}:${panel.id}`}
-            onGoToPlatforms={goToPlatforms}
+            onGoToPlatforms={controls?.goToPlatforms}
             onSplitRight={() => void splitPanel(backend, tabId, panel.id, 'vertical', scope)}
             onClosePanel={() => void closePane()}
           />
@@ -792,15 +840,17 @@ function PanelView({ panel, tabId }: { panel: PanelNode; tabId: string }) {
             onClosePanel={() => runUiTask(closePane())}
             onMoveToHome={() => moveToHome(watchedChannel.id)}
           />
-        ) : watchedChannel ? (
+        ) : watchedChannel || feedChannels ? (
           <ChatView
             headerLeading={headerLeading}
             layoutTabId={tabId}
             layoutPanelId={panel.id}
             paneId={`${tabId}:${panel.id}`}
             watchedChannel={watchedChannel}
+            feedChannels={feedChannels}
+            onEditFeed={() => controls?.editFeed(panel.id)}
             onSplitRight={() => void splitPanel(backend, tabId, panel.id, 'vertical', scope)}
-            onChangeChannel={() => setShowAddForm(true)}
+            onChangeChannel={feedChannels ? undefined : () => setShowAddForm(true)}
             onClosePanel={() => void closePane()}
           />
         ) : null}

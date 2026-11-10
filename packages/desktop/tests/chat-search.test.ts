@@ -235,6 +235,37 @@ test('captures actual open layout assignments, home panes and excludes unopened 
   ).toHaveLength(2)
 })
 
+test('combined feed search uses the source channel identity and navigates to the shared pane', () => {
+  const source = input()
+  source.tabIds = ['feed']
+  source.layouts = new Map<string, WatchedChannelsLayout>([
+    [
+      'feed',
+      {
+        version: 2,
+        root: {
+          type: 'panel',
+          id: 'combined',
+          flex: 100,
+          content: { type: 'feed', sources: [{ channelId: 'room' }, { channelId: 'other' }] },
+        },
+      },
+    ],
+  ])
+  source.watchedMessages = new Map(source.watchedMessages).set('other', [
+    message('m', '1234', 'kick'),
+  ])
+  const snapshot = buildChatSearchSnapshot(source)
+  const kick = required(snapshot.results.find((result) => result.message.platform === 'kick'))
+  expect(snapshot.sourceCount).toBe(3)
+  expect(kick.details.channelName).toBe('other')
+  expect(resolveChatSearchJump(kick, source)).toMatchObject({
+    tabId: 'feed',
+    paneId: 'feed:combined',
+    watchedChannelId: 'other',
+  })
+})
+
 test('freezes nested messages, metadata and aliases until explicit new capture', () => {
   const source = input()
   source.detailsFor = () => ({ alias: 'Friendly Alice', highlighted: true })

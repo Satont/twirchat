@@ -35,6 +35,7 @@ import {
   openChannelChatTab,
   tabsForChannels,
   createEmptyChatTab,
+  createChatFeedTab,
   reorderChatTab,
 } from '../state/chat-tabs'
 import { useStore } from '../state/create-store'
@@ -324,6 +325,7 @@ export function App() {
   const chatTabs = useStore(chatTabsStore)
   const activeWatchedTab = useStore(activeWatchedTabStore)
   const tabChannelNames = useStore(tabChannelNamesStore)
+  const layouts = useStore(layoutStore)
   const streamStatuses = useStore(streamStatusStore)
 
   const [showAddModal, setShowAddModal] = useState(false)
@@ -372,16 +374,16 @@ export function App() {
   useEffect(() => visitChatTab(activeWatchedTab, scope), [activeWatchedTab, scope])
 
   const tabWatchedChannels = useMemo(
-    () => tabsForChannels(watchedChannels, tabChannelIds, chatTabs.value.metadata),
-    [watchedChannels, tabChannelIds, chatTabs.value.metadata],
+    () => tabsForChannels(watchedChannels, tabChannelIds, chatTabs.value.metadata, layouts),
+    [watchedChannels, tabChannelIds, chatTabs.value.metadata, layouts],
   )
 
   const watchedLiveStatuses = useMemo(() => {
-    const map = new Map<string, WatchedLiveStatus>()
+    const channels = new Map<string, WatchedLiveStatus>()
     for (const ch of watchedChannels) {
       if (isPluginWatchedChannel(ch) || ch.platform === 'youtube') continue
       const status = streamStatuses.get(`${ch.platform}:${ch.channelSlug.toLowerCase()}`)
-      map.set(ch.id, {
+      channels.set(ch.id, {
         isLive: status?.isLive ?? false,
         viewerCount:
           streamerMode.effectiveEnabled && streamerMode.settings.hideViewerCountAndDuration
@@ -389,11 +391,17 @@ export function App() {
             : status?.viewerCount,
       })
     }
+    const tabs = new Map(channels)
     for (const tab of tabWatchedChannels) {
-      const status = map.get(tab.sourceChannelId)
-      if (status) map.set(tab.id, status)
+      const status = tab.sourceChannelIds
+        ? {
+            isLive: tab.sourceChannelIds.some((id) => channels.get(id)?.isLive),
+            viewerCount: undefined,
+          }
+        : channels.get(tab.sourceChannelId)
+      if (status) tabs.set(tab.id, status)
     }
-    return map
+    return tabs
   }, [watchedChannels, streamStatuses, tabWatchedChannels, streamerMode])
 
   const homeViewerCount = useMemo(() => {
@@ -630,6 +638,7 @@ export function App() {
           {showAddModal ? (
             <AddChannelModal
               onConfirm={(platform, slug) => void onAddChannel(platform, slug)}
+              onCreateFeed={(sources) => createChatFeedTab(backend, sources)}
               onCancel={() => setShowAddModal(false)}
             />
           ) : null}
