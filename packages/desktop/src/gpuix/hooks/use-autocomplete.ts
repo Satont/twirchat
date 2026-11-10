@@ -37,6 +37,7 @@ import {
   parseBotInvocation,
   resolveArgumentPosition,
   suggestedCommandName,
+  twitchMentionArguments,
   type SignaturePart,
 } from '../../views/main/utils/botCommandArguments'
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
@@ -458,16 +459,8 @@ export function useAutocomplete(params: {
       )
     }
     if (!activeArgument) return EMPTY_ARGUMENT_SUGGESTIONS
-    if (activeArgument.type === 'mention') {
-      return fuzzyFilter(mentionSuggestions, partialArgument.replace(/^@/u, ''))
-        .slice(0, MENTION_LIMIT)
-        .map((mention) => ({
-          type: 'argument',
-          label: mention.label,
-          insertText: `@${mention.insertLabel}`,
-          description: mention.description ?? '',
-        }))
-    }
+    if (activeArgument.type === 'mention')
+      return twitchMentionArguments(mentionSuggestions, partialArgument).slice(0, MENTION_LIMIT)
     return matchArgumentOptions(activeArgument.options, partialArgument).map((option) => ({
       type: 'argument',
       label: sanitizeDisplayText(option.label),

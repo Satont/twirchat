@@ -6,6 +6,7 @@ import {
   replaceToken,
   type BotCommandSource,
   type CommandSuggestion,
+  type MentionSuggestion,
 } from '../src/views/main/utils/autocompleteUtils'
 import {
   argumentHintText,
@@ -17,6 +18,7 @@ import {
   parseBotInvocation,
   resolveArgumentPosition,
   suggestedCommandName,
+  twitchMentionArguments,
   type BotArgumentPosition,
 } from '../src/views/main/utils/botCommandArguments'
 
@@ -187,6 +189,40 @@ describe('mergeBotCommandMatches', () => {
       '!top:jeetbot',
       '!a:twir',
       '!z:jeetbot',
+    ])
+  })
+})
+
+describe('twitchMentionArguments', () => {
+  const author = (
+    platform: string,
+    displayName: string,
+    username?: string,
+    label = displayName,
+  ): MentionSuggestion => ({
+    type: 'mention',
+    label,
+    insertLabel: displayName,
+    color: null,
+    platform,
+    platformUserId: `${platform}:${displayName}`,
+    displayName,
+    username,
+  })
+
+  test('offers Twitch chatters only, inserted by login and labelled as in chat', () => {
+    const mentions = [
+      author('youtube', 'Alice Smith'),
+      author('kick', 'alice'),
+      author('twitch', '앨리스', 'alice_kr'),
+      author('twitch', 'AliceTV', 'alicetv', 'Alice (friend)'),
+    ]
+    expect(twitchMentionArguments(mentions, '@ali')).toEqual([
+      { type: 'argument', label: 'Alice (friend)', insertText: '@alicetv', description: '' },
+    ])
+    expect(twitchMentionArguments(mentions, '').map((item) => item.insertText)).toEqual([
+      '@alice_kr',
+      '@alicetv',
     ])
   })
 })

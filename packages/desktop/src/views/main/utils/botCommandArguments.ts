@@ -4,6 +4,8 @@ import type {
   JeetbotCommand,
   JeetbotSubcommand,
 } from '../../../services/jeetbot-commands'
+import type { ArgumentSuggestion, MentionSuggestion } from './autocompleteUtils'
+import { fuzzyFilter } from './fuzzyFilter'
 
 /** A `!command` followed by whitespace: the arguments typed so far and the word being typed. */
 export interface BotInvocation {
@@ -147,4 +149,24 @@ export function matchSubcommands(
 ): JeetbotSubcommand[] {
   const query = partial.toLowerCase()
   return subcommands.filter((subcommand) => subcommand.name.toLowerCase().startsWith(query))
+}
+
+/**
+ * Recent chatters for a username argument of a Twitch-only bot: Twitch authors only, inserted by
+ * login (a display name may hold spaces or differ from the login) and labelled as in chat.
+ */
+export function twitchMentionArguments(
+  mentions: readonly MentionSuggestion[],
+  partial: string,
+): ArgumentSuggestion[] {
+  const twitch = mentions.flatMap((mention) => {
+    const login = mention.username ?? mention.displayName
+    return mention.platform === 'twitch' && /^[^\s@]+$/u.test(login) ? [{ ...mention, login }] : []
+  })
+  return fuzzyFilter(twitch, partial.replace(/^@/u, '')).map((mention) => ({
+    type: 'argument',
+    label: mention.label,
+    insertText: `@${mention.login}`,
+    description: mention.description ?? '',
+  }))
 }
