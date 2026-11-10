@@ -13,7 +13,12 @@ import { useTheme } from '../theme-context'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
-const BOT_SOURCE_LABELS: Record<BotCommandSource, string> = { twir: 'Twir', jeetbot: 'jeetbot' }
+const BOT_SOURCE_LABELS: Record<BotCommandSource, string> = {
+  twir: 'Twir',
+  jeetbot: 'jeetbot',
+  fossabot: 'Fossabot',
+  nightbot: 'Nightbot',
+}
 
 function suggestionKey(suggestion: AutocompleteSuggestion): string {
   if (suggestion.type === 'mention') return `${suggestion.label}:${suggestion.insertLabel}`

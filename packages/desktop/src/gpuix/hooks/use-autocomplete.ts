@@ -12,7 +12,9 @@ import type {
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { emojiShortcodeSuggestions } from '../../services/emoji-shortcodes'
+import type { FossabotCommandTarget } from '../../services/fossabot-commands'
 import type { JeetbotCommand, JeetbotCommandTarget } from '../../services/jeetbot-commands'
+import type { PublicBotCommand } from '../../services/public-bot-commands'
 import { AUTO_TRANSLATION_COMMAND, isAutoTranslationCommand } from '../../services/translation'
 import type { TwirCommand, TwirCommandTarget } from '../../services/twir-commands'
 import {
@@ -21,6 +23,7 @@ import {
   replaceToken,
   type ArgumentSuggestion,
   type AutocompleteSuggestion,
+  type BotCommandSource,
   type CommandSuggestion,
   type EmoteSuggestion,
   type MentionSuggestion,
@@ -75,6 +78,11 @@ interface JeetbotSuggestions {
   target: JeetbotCommandTarget
   commands: readonly JeetbotCommand[]
   revision: number
+}
+
+interface PublicBotSuggestions<Target> {
+  target: Target
+  commands: readonly PublicBotCommand[]
 }
 
 /** Signature help for the bot-command argument being typed. */
@@ -163,6 +171,46 @@ function jeetbotCommandSuggestion(name: string, command: JeetbotCommand): Comman
     insertText: `!${name}`,
     description: summary && description ? `${summary} · ${description}` : summary || description,
     source: 'jeetbot',
+  }
+}
+
+function usePublicBotCommands<Target>(
+  getCommands: (target: Target) => Promise<readonly PublicBotCommand[]>,
+  target: Target | undefined,
+): readonly PublicBotCommand[] | undefined {
+  const [suggestions, setSuggestions] = useState<PublicBotSuggestions<Target>>()
+  useEffect(() => {
+    if (target === undefined) return undefined
+    let current = true
+    const load = async () => {
+      const commands = await getCommands(target)
+      if (current) setSuggestions({ target, commands })
+    }
+    runUiTask(load())
+    return () => {
+      current = false
+    }
+  }, [getCommands, target])
+  return suggestions?.target === target ? suggestions?.commands : undefined
+}
+
+function appendPublicBotCommandMatches(
+  matches: CommandSuggestion[],
+  commands: readonly PublicBotCommand[] | undefined,
+  source: BotCommandSource,
+  query: string,
+): void {
+  if (!commands) return
+  for (const { name, aliasFor } of commands) {
+    if (!name.toLowerCase().startsWith(query)) continue
+    const label = `!${name}`
+    matches.push({
+      type: 'command',
+      label,
+      insertText: label,
+      description: aliasFor ? `!${aliasFor}` : '',
+      source,
+    })
   }
 }
 
@@ -282,6 +330,9 @@ export function useAutocomplete(params: {
   jeetbotChannelLogin?: string
   /** Twitch user ID of the account this chat sends with: jeetbot lists what it may run. */
   jeetbotUserId?: string
+  fossabotChannelLogin?: string
+  fossabotTwitchChannelId?: string
+  nightbotChannelLogin?: string
 }) {
   const { text, setText, messages, watchedChannel, statuses, aliasMap } = params
   const backend = useBackend()
@@ -394,6 +445,20 @@ export function useAutocomplete(params: {
       ? twirSuggestions.commands
       : undefined
   const botQuery = token.mode === 'bot-command' ? token.query : undefined
+  const fossabotLogin = botQuery === undefined ? undefined : params.fossabotChannelLogin
+  const fossabotChannelId = fossabotLogin ? params.fossabotTwitchChannelId : undefined
+  const fossabotTarget = useMemo(
+    (): FossabotCommandTarget | undefined =>
+      fossabotLogin
+        ? { channelLogin: fossabotLogin, twitchChannelId: fossabotChannelId }
+        : undefined,
+    [fossabotLogin, fossabotChannelId],
+  )
+  const fossabotCommands = usePublicBotCommands(backend.api.getFossabotCommands, fossabotTarget)
+  const nightbotCommands = usePublicBotCommands(
+    backend.api.getNightbotCommands,
+    botQuery === undefined ? undefined : params.nightbotChannelLogin,
+  )
   const twirMatches = useMemo(() => {
     if (!twirCommands || botQuery === undefined) return EMPTY_BOT_SUGGESTIONS
     const matches: CommandSuggestion[] = []
@@ -417,10 +482,13 @@ export function useAutocomplete(params: {
       return name === undefined ? [] : [jeetbotCommandSuggestion(name, command)]
     })
   }, [jeetbotCommands, botQuery])
-  const botCommandMatches = useMemo(
-    () => mergeBotCommandMatches(twirMatches, jeetbotMatches),
-    [twirMatches, jeetbotMatches],
-  )
+  const botCommandMatches = useMemo(() => {
+    const matches = mergeBotCommandMatches(twirMatches, jeetbotMatches)
+    if (botQuery === undefined) return matches
+    appendPublicBotCommandMatches(matches, fossabotCommands, 'fossabot', botQuery)
+    appendPublicBotCommandMatches(matches, nightbotCommands, 'nightbot', botQuery)
+    return matches
+  }, [twirMatches, jeetbotMatches, fossabotCommands, nightbotCommands, botQuery])
   const completingCommand = token.mode === 'command'
   const [pluginCommands, setPluginCommands] = useState(EMPTY_PLUGIN_COMMANDS)
   useEffect(() => {

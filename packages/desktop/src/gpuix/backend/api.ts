@@ -89,6 +89,10 @@ import {
 } from '../../services/cosmetics'
 import { getProviderErrors } from '../../services/emote-providers'
 import {
+  createFossabotCommandsClient,
+  type FossabotCommandTarget,
+} from '../../services/fossabot-commands'
+import {
   readClipboardUploadFile,
   type ClipboardImageUpload,
   type ClipboardUploadImage,
@@ -107,7 +111,9 @@ import {
   type MentionUserRequest,
 } from '../../services/mention-user'
 import { createModerationService } from '../../services/moderation/service'
+import { createNightbotCommandsClient } from '../../services/nightbot-commands'
 import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
+import type { PublicBotCommand } from '../../services/public-bot-commands'
 import { createSnapshotRequests } from '../../services/snapshot-requests'
 import type {
   StreamerMode,
@@ -362,6 +368,8 @@ export interface DesktopApi {
     target: JeetbotCommandTarget,
     options?: JeetbotCommandsOptions,
   ): Promise<readonly JeetbotCommand[]>
+  getFossabotCommands: (target: FossabotCommandTarget) => Promise<readonly PublicBotCommand[]>
+  getNightbotCommands: (channelLogin: string) => Promise<readonly PublicBotCommand[]>
   getUserAliases(): Promise<UserAlias[]>
   setUserAlias(params: { platform: Platform; platformUserId: string; alias: string }): Promise<void>
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
@@ -970,6 +978,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     obsRemote: obsRemoteApi,
     getTwirCommands: createTwirCommandsClient(),
     getJeetbotCommands: createJeetbotCommandsClient(),
+    getFossabotCommands: createFossabotCommandsClient(),
+    getNightbotCommands: createNightbotCommandsClient(),
     getTwitchActivities: async (params) => {
       const snapshot = await requestTwitchActivitiesSnapshot(params)
       ctx.twitchActivityRefresh?.observeSnapshot(snapshot)

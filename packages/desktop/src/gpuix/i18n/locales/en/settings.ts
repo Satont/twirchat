@@ -62,6 +62,8 @@ export const settings = {
   'settings.section.commands.desc': 'Create reusable commands and message actions',
   'settings.section.twir-integration': 'Twir Integration',
   'settings.section.jeetbot-integration': 'jeetbot Integration',
+  'settings.section.fossabot-integration': 'Fossabot Integration',
+  'settings.section.nightbot-integration': 'Nightbot Integration',
   'settings.section.players': 'Stream Players',
   'settings.section.players.desc': 'Open streams in a browser, external player or Streamlink',
   'settings.section.plugins': 'Plugins',
@@ -109,6 +111,11 @@ export const settings = {
   'settings.jeetbot.suggest': 'Suggest jeetbot commands',
   'settings.jeetbot.suggestHint':
     'Show jeetbot commands and their arguments for the selected Twitch chat when you type !',
+  'settings.fossabot.suggest': 'Suggest Fossabot commands',
+  'settings.fossabot.suggestHint':
+    'Show public Fossabot commands and aliases when you type ! in Twitch chat',
+  'settings.nightbot.suggest': 'Suggest Nightbot commands',
+  'settings.nightbot.suggestHint': 'Show public Nightbot commands when you type ! in Twitch chat',
 
   'settings.selfPing.enable': 'Enable highlights',
   'settings.selfPing.enableHint': 'Highlight messages mentioning you',

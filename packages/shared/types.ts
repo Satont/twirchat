@@ -268,6 +268,8 @@ export interface AppSettings {
   autoCheckUpdates?: boolean
   twirIntegrationEnabled?: boolean
   jeetbotIntegrationEnabled?: boolean
+  fossabotIntegrationEnabled?: boolean
+  nightbotIntegrationEnabled?: boolean
   /** Chat layout configuration (combined / split) */
   chatLayout?: ChatLayout
   /** Self-ping highlight settings */
@@ -328,6 +330,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   themeMode: 'dark',
   twirIntegrationEnabled: true,
   jeetbotIntegrationEnabled: true,
+  fossabotIntegrationEnabled: true,
+  nightbotIntegrationEnabled: true,
   chatLayout: {
     version: 1,
     mode: 'combined',
