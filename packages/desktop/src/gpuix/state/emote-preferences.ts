@@ -19,20 +19,32 @@ export const emotePreferencesStore = emotePreferences.store
 export const loadEmotePreferences = emotePreferences.load
 export const saveEmotePreferences = emotePreferences.save
 
-export function favoriteEntry(emote: Emote): EmoteCatalogEntry {
-  const entry: EmoteCatalogEntry = {
+export function favoriteEntry(
+  emote: Omit<Emote, 'positions'>,
+  alias: string,
+  catalog: readonly EmoteCatalogEntry[],
+): EmoteCatalogEntry {
+  const source = emote.source ?? 'channel'
+  const provider = emoteProvider({ source, provider: emote.provider, imageUrl: emote.imageUrl })
+  const originalName =
+    alias === emote.name
+      ? (catalog.find(
+          (entry) =>
+            entry.id === emote.id && entry.alias === alias && emoteProvider(entry) === provider,
+        )?.name ?? emote.name)
+      : emote.name
+  return {
     id: emote.id,
-    alias: emote.name,
-    name: emote.name,
+    alias,
+    name: originalName,
     imageUrl: emote.imageUrl,
-    source: emote.source ?? 'channel',
-    provider: emote.provider,
+    source,
+    provider,
     animated: emote.animated ?? false,
     zeroWidth: emote.zeroWidth ?? false,
     modifier: emote.modifier,
     aspectRatio: emote.aspectRatio ?? 1,
   }
-  return { ...entry, provider: emoteProvider(entry) }
 }
 
 export async function toggleFavoriteEmote(

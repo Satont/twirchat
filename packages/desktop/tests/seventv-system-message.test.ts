@@ -51,9 +51,11 @@ for (const action of actions) {
     ])
     const enriched = enrichProviderEmotes(message, [{ ...emote, source: 'seventv' }])
     const tokens = buildMessageTokens(enriched)
-    expect(tokens.filter((token) => token.kind === 'emote')).toEqual([
+    const emoteTokens = tokens.filter((token) => token.kind === 'emote')
+    expect(emoteTokens).toEqual([
       expect.objectContaining({ emote: expect.objectContaining({ imageUrl: emote.imageUrl }) }),
     ])
+    expect(emoteTokens[0]?.alias).toBeUndefined()
     const visibleText = tokens
       .flatMap((token) => (token.kind === 'text' ? token.text : ''))
       .join('')

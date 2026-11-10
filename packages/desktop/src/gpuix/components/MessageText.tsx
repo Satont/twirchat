@@ -12,6 +12,7 @@ import { memo, useMemo } from 'react'
 
 import { authorEmoteCatalog, enrichProviderEmotes } from '../../services/provider-emotes'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
+import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import { runUiTask } from '../hooks/run-ui-task'
 import { buildMessageTokens, mergePlainText } from '../message-tokens'
@@ -115,11 +116,17 @@ export const MessageTokens = memo(function MessageTokens({
             opacity: textOpacity,
           }}
         >
-          {token.emote.name}
+          {token.alias ? sanitizeDisplayText(token.alias) : token.emote.name}
         </text>
       )
       return (
-        <EmoteTooltip key={index} emote={token.emote} theme={theme}>
+        <EmoteTooltip
+          key={index}
+          emote={token.emote}
+          alias={token.alias}
+          catalog={authorCatalog}
+          theme={theme}
+        >
           <div
             style={{
               position: 'relative',

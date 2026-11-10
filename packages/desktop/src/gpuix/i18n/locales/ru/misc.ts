@@ -2,6 +2,7 @@ import { misc } from '../en/misc'
 
 export const ruMisc = {
   'misc.emote.openImage': 'Открыть изображение',
+  'misc.emote.originalName': 'Оригинальное название: {name}',
   'misc.emote.viewOn': 'Открыть на {provider}',
   'misc.emote.removeFavorite': 'Убрать из избранного',
   'misc.emote.addFavorite': 'Добавить в избранное',
