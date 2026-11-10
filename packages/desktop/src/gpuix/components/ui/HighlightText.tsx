@@ -34,7 +34,6 @@ export function HighlightText({
       style={{
         display: 'flex',
         flexDirection: 'row',
-        flexWrap: 'wrap',
         ...containerStyle,
       }}
     >

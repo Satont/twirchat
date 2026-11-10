@@ -103,7 +103,7 @@ export function SettingsSection({
         <HighlightText
           text={title.toUpperCase()}
           query={visibility.query}
-          style={{ fontSize: 12, fontWeight: 700, color: theme.text2 }}
+          style={{ fontSize: 16, fontWeight: 900, color: theme.text2 }}
         />
         {dirty ? (
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -125,7 +125,7 @@ export function SettingsSection({
         <HighlightText
           text={desc}
           query={visibility.query}
-          style={{ fontSize: 12, color: theme.text2 }}
+          style={{ fontSize: 16, fontWeight: 900, color: theme.text2 }}
           containerStyle={{ marginBottom: 14 }}
         />
       ) : null}
