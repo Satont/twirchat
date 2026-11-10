@@ -224,17 +224,16 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
       if (!mgr || state.kind !== 'available')
         return { success: false, error: t('runtime.updater.noUpdateToDownload') }
       const info = state.info
+      const hash = info.TargetFullRelease.SHA256
       const result = Promise.resolve().then(async (): Promise<DownloadResult> => {
-        emit('downloading', t('runtime.updater.downloading'), { progress: 0 })
+        emit('downloading', t('runtime.updater.downloading'), { progress: 0, hash })
         try {
           await mgr.downloadUpdateAsync(info, (perc) => {
             if (state.kind === 'downloading' && state.info === info && state.result === result)
-              emit('downloading', t('runtime.updater.downloading'), { progress: perc })
+              emit('downloading', t('runtime.updater.downloading'), { progress: perc, hash })
           })
           state = { kind: 'ready', info }
-          emit('download-complete', t('runtime.updater.downloaded'), {
-            hash: info.TargetFullRelease.SHA256,
-          })
+          emit('download-complete', t('runtime.updater.downloaded'), { hash })
           return { success: true }
         } catch (error) {
           state = { kind: 'available', info }

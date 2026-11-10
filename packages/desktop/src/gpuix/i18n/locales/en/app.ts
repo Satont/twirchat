@@ -20,6 +20,7 @@ export const app = {
   'app.update.download': 'Download',
   'app.update.skip': 'Skip',
   'app.update.restartToApply': 'Restart to apply',
+  'app.update.notNow': 'Not now',
 
   'app.tab.menu.rename': 'Rename / tab color…',
   'app.tab.menu.duplicate': 'Duplicate tab',
