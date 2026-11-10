@@ -29,12 +29,7 @@ export class SevenTVEventClient {
   private ws: WebSocket | null = null
   private heartbeatTimer: Timer | null = null
   private reconnectTimer: Timer | null = null
-  private sessionId: string | null = null
-  // Saved before cleanup so reconnect can attempt session resume (op 34)
-  private previousSessionId: string | null = null
-  // Set while waiting for server to ack a resume attempt; cleared on Ack/RESUME or Error
-  private resumePending = false
-  private subscriptionLimit = 0
+  private receivedHello = false
   private heartbeatInterval = 0
   private lastHeartbeat = 0
   private isConnecting = false
@@ -49,6 +44,8 @@ export class SevenTVEventClient {
   onConnected: (() => void) | null = null
   onDisconnected: (() => void) | null = null
 
+  constructor(private readonly url = SEVENTV_EVENT_API_URL) {}
+
   async connect(): Promise<void> {
     if (this.isConnecting || this.ws) {
       return
@@ -58,18 +55,21 @@ export class SevenTVEventClient {
     log.info('Connecting to 7TV EventAPI...')
 
     try {
-      this.ws = new WebSocket(SEVENTV_EVENT_API_URL)
+      const ws = new WebSocket(this.url)
+      this.ws = ws
 
-      this.ws.onopen = () => {
+      ws.onopen = () => {
+        if (this.ws !== ws) return
         this.isConnecting = false
         log.info('WebSocket connected')
       }
 
-      this.ws.onmessage = (event) => {
-        if (typeof event.data === 'string') this.handleMessage(event.data)
+      ws.onmessage = (event) => {
+        if (this.ws === ws && typeof event.data === 'string') this.handleMessage(event.data)
       }
 
-      this.ws.onclose = (event) => {
+      ws.onclose = (event) => {
+        if (this.ws !== ws) return
         log.info('WebSocket closed', { code: event.code, reason: event.reason })
         this.cleanup()
 
@@ -78,7 +78,8 @@ export class SevenTVEventClient {
         }
       }
 
-      this.ws.onerror = (error) => {
+      ws.onerror = (error) => {
+        if (this.ws !== ws) return
         log.error('WebSocket error', { error: error.type })
       }
     } catch (error) {
@@ -96,7 +97,7 @@ export class SevenTVEventClient {
 
   private cleanup(): void {
     this.isConnecting = false
-    this.resumePending = false
+    this.receivedHello = false
 
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
@@ -109,13 +110,14 @@ export class SevenTVEventClient {
       this.reconnectTimer = null
     }
 
-    if (this.ws) {
+    const ws = this.ws
+    this.ws = null
+    if (ws) {
       try {
-        this.ws.close()
+        ws.close()
       } catch {
         // Ignore
       }
-      this.ws = null
     }
 
     this.onDisconnected?.()
@@ -158,7 +160,7 @@ export class SevenTVEventClient {
           break
         }
         case 4: {
-          // Reconnect — server wants us to reconnect (possibly resume)
+          // Reconnect
           log.info('Server requested reconnect')
           this.reconnect()
           break
@@ -169,22 +171,11 @@ export class SevenTVEventClient {
             .object({ command: z.string(), data: z.unknown().optional() })
             .parse(message.d)
           log.info('Server ack', { command: ack.command })
-          if (ack.command === 'RESUME') {
-            log.info('Session resumed successfully — server will replay missed events')
-            this.resumePending = false
-          }
           break
         }
         case 6: {
           // Error
           log.error('Server error', { data: message.d })
-          if (this.resumePending) {
-            log.warn('Resume rejected by server, falling back to full resubscribe')
-            this.resumePending = false
-            for (const [, sub] of this.subscriptions) {
-              this.sendSubscribe(sub.type, sub.condition)
-            }
-          }
           break
         }
         case 7: {
@@ -209,23 +200,16 @@ export class SevenTVEventClient {
       subscriptionLimit: hello.subscription_limit,
     })
 
-    this.sessionId = hello.session_id
-    this.subscriptionLimit = hello.subscription_limit
+    this.receivedHello = true
     this.heartbeatInterval = hello.heartbeat_interval
     this.lastHeartbeat = Date.now()
 
     // Start heartbeat watchdog
     this.startHeartbeat()
 
-    // Attempt session resume if we have a previous session id;
-    // otherwise resubscribe to all tracked subscriptions from scratch.
-    if (this.previousSessionId) {
-      this.sendResume(this.previousSessionId)
-      this.previousSessionId = null
-    } else {
-      for (const [, sub] of this.subscriptions) {
-        this.sendSubscribe(sub.type, sub.condition)
-      }
+    // 7TV v3 acknowledges RESUME but does not restore subscriptions.
+    for (const { type, condition } of this.subscriptions.values()) {
+      this.sendSubscribe(type, condition)
     }
 
     this.reconnectAttempts = 0
@@ -261,28 +245,15 @@ export class SevenTVEventClient {
 
     this.subscriptions.set(subId, { condition, type })
 
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.receivedHello && this.isConnected) {
       this.sendSubscribe(type, condition)
     }
   }
 
-  unsubscribe(type: string, condition?: Record<string, string>): void {
-    const subId = condition ? `${type}:${JSON.stringify(condition)}` : `${type}:*`
-
-    if (condition) {
-      this.subscriptions.delete(subId)
-    } else {
-      // Unsubscribe all of this type
-      for (const [id, sub] of this.subscriptions) {
-        if (sub.type === type) {
-          this.subscriptions.delete(id)
-        }
-      }
-    }
-
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.sendUnsubscribe(type, condition)
-    }
+  unsubscribe(type: string, condition: Record<string, string>): void {
+    const subId = `${type}:${JSON.stringify(condition)}`
+    if (!this.subscriptions.delete(subId)) return
+    this.send({ op: 36, d: { condition, type } })
   }
 
   private sendSubscribe(type: string, condition: Record<string, string>): void {
@@ -294,34 +265,13 @@ export class SevenTVEventClient {
     this.send(payload)
   }
 
-  private sendUnsubscribe(type: string, condition?: Record<string, string>): void {
-    const payload: { op: number; d: { type: string; condition?: Record<string, string> } } = {
-      d: { type },
-      op: 36,
-    }
-
-    if (condition) {
-      payload.d.condition = condition
-    }
-
-    this.send(payload)
-  }
-
-  private sendResume(sessionId: string): void {
-    log.info('Attempting session resume', { sessionId })
-    this.resumePending = true
-    this.send({ op: 34, d: { session_id: sessionId } })
-  }
-
   private send(message: SevenTVEventMessage): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.receivedHello && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
     }
   }
 
   private reconnect(): void {
-    // Save current session so handleHello can attempt resume
-    this.previousSessionId = this.sessionId
     this.cleanup()
     this.connect().catch((error: unknown) =>
       log.error('Connection failed', { error: String(error) }),
@@ -343,12 +293,6 @@ export class SevenTVEventClient {
     if (closeCode === 4001 || closeCode === 4002 || closeCode === 4003 || closeCode === 4004) {
       log.error('Fatal close code, not reconnecting', { code: closeCode })
       return
-    }
-
-    // Preserve session for resume attempt — scheduleReconnect is called after cleanup()
-    // which has already nulled this.sessionId, so guard against double-save
-    if (!this.previousSessionId) {
-      this.previousSessionId = this.sessionId
     }
 
     // Add ±50% jitter to spread reconnect storms
