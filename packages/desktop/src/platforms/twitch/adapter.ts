@@ -11,14 +11,9 @@ import { logger } from '@twirchat/shared/logger'
  * Token refresh is handled by calling the backend API when needed,
  * keeping client secrets server-side for security.
  */
-import type {
-  Badge,
-  ChatSendReceipt,
-  NormalizedChatMessage,
-  NormalizedEvent,
-} from '@twirchat/shared/types'
+import type { Badge, ChatSendReceipt, NormalizedEvent } from '@twirchat/shared/types'
 import { StaticAuthProvider } from '@twurple/auth'
-import { ChatClient, RoomState as TwitchRoomState, UserState } from '@twurple/chat'
+import { ChatClient, RoomState as TwitchRoomState } from '@twurple/chat'
 import type {
   ChatMessage,
   ChatRaidInfo,
@@ -34,18 +29,12 @@ import { getBackendUrl } from '../../runtime-config'
 import { runInBackground } from '../../services/background-task'
 import { buildTwitchSystemMessage } from '../../services/twitch-system-message'
 import { AccountStore } from '../../store/account-store'
-import { MessageStore } from '../../store/message-store'
-import { BasePlatformAdapter, type ChatReplyTarget } from '../base-adapter'
+import { BasePlatformAdapter } from '../base-adapter'
 import { resolveTwitchAvatarUrl } from './avatar-cache'
 import { parseTwitchBadgeCatalog } from './badge-data'
 import { normalizeTwitchChatMessage, twitchAuthorAppearance } from './normalize-message'
-import { hasPrivilegedChatRole, twitchSendLimiter } from './send-limiter'
-import {
-  onTwitchSendRejected,
-  twitchIrcChannelName,
-  TwitchSendOutcomes,
-  twitchSendRejection,
-} from './send-outcomes'
+import { twitchIrcChannelName } from './send-outcomes'
+import { createDefaultTwitchSenderPool, type TwitchSenderPool } from './sender-pool'
 
 const log = logger('twitch')
 
@@ -79,50 +68,10 @@ function roomDuration(tag: string | undefined): number | undefined {
   return Number.isSafeInteger(value) ? value : undefined
 }
 
-interface LocalTwitchSentMessageParams {
-  channelId: string
-  text: string
-  author: {
-    avatarUrl?: string
-    badges?: Badge[]
-    color?: string
-    displayName: string
-    id: string
-    username?: string
-  }
-  id?: string
-  reply?: NormalizedChatMessage['reply']
-  timestamp?: Date
-}
-
 type TwitchIrcNotice = Pick<
   Parameters<typeof buildTwitchSystemMessage>[0],
   'text' | 'notice' | 'author'
 >
-
-export function createLocalTwitchSentMessage(
-  params: LocalTwitchSentMessageParams,
-): NormalizedChatMessage {
-  const channelId = params.channelId.trim().replace(/^#/, '').toLowerCase()
-  return {
-    author: {
-      avatarUrl: params.author.avatarUrl,
-      badges: params.author.badges ?? [],
-      color: params.author.color,
-      displayName: params.author.displayName,
-      id: params.author.id,
-      username: params.author.username,
-    },
-    channelId,
-    emotes: [],
-    id: params.id ?? `local:twitch:${channelId}:${crypto.randomUUID()}`,
-    platform: 'twitch',
-    text: params.text,
-    timestamp: params.timestamp ?? new Date(),
-    type: 'message',
-    ...(params.reply ? { reply: params.reply } : {}),
-  }
-}
 
 export { twitchAuthorAppearance, twitchMessageMetadata } from './normalize-message'
 
@@ -171,19 +120,19 @@ export class TwitchAdapter extends BasePlatformAdapter {
   private anonymous = true
   private accessToken: string | null = null
   private accountId: string | null = null
-  private displayName: string | null = null
   private login: string | null = null
-  private platformUserId: string | null = null
-  private selfTags: ReadonlyMap<string, string> = new Map()
-  private readonly sendOutcomes = new TwitchSendOutcomes()
+  private writerRetained = false
 
   private identityRevision = 0
 
+  constructor(private readonly senders: TwitchSenderPool = createDefaultTwitchSenderPool()) {
+    super()
+  }
+
   async connect(channelName: string): Promise<void> {
     const revision = ++this.identityRevision
-    this.sendOutcomes.clear()
-    this.channelName = channelName.trim().replace(/^#/, '').toLowerCase()
-    this.selfTags = new Map()
+    this.releaseWriter()
+    this.channelName = twitchIrcChannelName(channelName)
     this.badgeCache = new Map()
     this.roomState = undefined
     this.shouldReconnect = true
@@ -196,9 +145,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
     this.anonymous = true
     this.accessToken = null
     this.accountId = null
-    this.displayName = null
     this.login = null
-    this.platformUserId = null
 
     // Check for stored account
     const account = AccountStore.findByPlatform('twitch')
@@ -208,9 +155,7 @@ export class TwitchAdapter extends BasePlatformAdapter {
         this.anonymous = false
         this.accessToken = tokens.accessToken
         this.accountId = account.id
-        this.displayName = account.displayName
         this.login = account.username
-        this.platformUserId = account.platformUserId
 
         // Check if token needs refresh before connecting
         const now = Math.floor(Date.now() / 1000)
@@ -261,12 +206,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   async disconnect(): Promise<void> {
     this.identityRevision++
-    this.sendOutcomes.clear()
-    this.selfTags = new Map()
+    this.releaseWriter()
     this.accountId = null
     this.accessToken = null
     this.anonymous = true
-    this.platformUserId = null
     this.shouldReconnect = false
     this.clearTimers()
 
@@ -288,64 +231,30 @@ export class TwitchAdapter extends BasePlatformAdapter {
   async sendMessage(
     channelId: string,
     text: string,
-    replyTo?: ChatReplyTarget,
+    replyTo?: string,
   ): Promise<void | ChatSendReceipt> {
-    const revision = this.identityRevision
-    if (this.anonymous) {
+    const { accountId, login, identityRevision } = this
+    if (this.anonymous || !accountId || !login)
       throw new Error(t('misc.twitchAdapter.anonymousSend'))
-    }
-    if (!this.chatClient) {
-      throw new Error(t('misc.twitchAdapter.clientNotInitialized'))
-    }
-    if (!this.isConnected) {
-      throw new Error(t('misc.twitchAdapter.notConnected'))
-    }
+    if (!this.chatClient) throw new Error(t('misc.twitchAdapter.clientNotInitialized'))
+    if (!this.isConnected) throw new Error(t('misc.twitchAdapter.notConnected'))
 
-    // Ensure token is fresh before sending
-    await this.refreshTokenIfNeeded()
-    if (revision !== this.identityRevision)
-      throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
-
-    const parentMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
-    const attributes = parentMessageId ? { replyTo: parentMessageId } : undefined
-    if (this.accountId)
-      await twitchSendLimiter(this.accountId).acquire(
-        channelId,
-        hasPrivilegedChatRole(this.selfTags),
-      )
-    if (revision !== this.identityRevision || !this.chatClient)
-      throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
-    const client = this.chatClient
-    let outcome
-    try {
-      outcome = await this.sendOutcomes.send(channelId, () =>
-        client.say(channelId, text, attributes),
-      )
-    } catch (error) {
-      if (!this.isAuthError(error)) throw error
-      log.info('[Twitch] Auth error on send, attempting refresh...')
-      const refreshed = await this.refreshTokenIfNeeded()
-      if (revision !== this.identityRevision)
-        throw new Error(t('misc.twitchAdapter.accountChangedWhileSending'), { cause: error })
-      if (!refreshed || !this.chatClient) throw error
-      await this.reconnectWithNewToken()
-      const retryClient = this.chatClient
-      if (revision !== this.identityRevision || !retryClient)
-        throw new Error(t('misc.twitchAdapter.accountChangedWhileReconnecting'), { cause: error })
-      outcome = await this.sendOutcomes.send(channelId, () =>
-        retryClient.say(channelId, text, attributes),
-      )
+    const channel = twitchIrcChannelName(channelId)
+    if (channel === this.channelName && !this.writerRetained) {
+      this.senders.retain(accountId, channel)
+      this.writerRetained = true
     }
-    if (outcome.kind === 'disconnected')
-      throw new Error(t('misc.twitchAdapter.disconnectedBeforeDelivery'))
-    if (revision !== this.identityRevision)
-      throw new Error(t('misc.twitchAdapter.accountChangedDeliveryUnconfirmed'))
-    if (outcome.kind === 'rejected')
-      throw new Error(
-        t('misc.twitchAdapter.notSent', { reason: twitchSendRejection(outcome.reason) }),
-      )
-    if (outcome.kind === 'held') return { channelId: twitchIrcChannelName(channelId), held: true }
-    return this.emitLocalSentMessage(channelId, text, replyTo || undefined)
+    return this.senders.send({ id: accountId, username: login }, channel, text, replyTo, () => {
+      if (identityRevision !== this.identityRevision)
+        throw new Error(t('misc.twitchAdapter.accountChangedBeforeSend'))
+      if (!this.isConnected) throw new Error(t('misc.twitchAdapter.notConnected'))
+    })
+  }
+
+  private releaseWriter(): void {
+    if (this.writerRetained && this.accountId)
+      this.senders.release(this.accountId, this.channelName)
+    this.writerRetained = false
   }
 
   // ============================================================
@@ -354,8 +263,6 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
   private async connectChatClient(): Promise<void> {
     const revision = this.identityRevision
-    this.selfTags = new Map()
-    this.sendOutcomes.clear()
     try {
       if (this.chatClient) {
         try {
@@ -376,15 +283,14 @@ export class TwitchAdapter extends BasePlatformAdapter {
         authProvider = new StaticAuthProvider(
           'twirchat-desktop', // Placeholder client ID - actual validation on backend
           this.accessToken,
-          ['chat:read', 'chat:edit'],
+          ['chat:read'],
         )
       }
 
       this.chatClient = new ChatClient({
         authProvider,
         channels: [this.channelName],
-        // Limits are enforced per account by the send limiter, with the account's role here.
-        isAlwaysMod: true,
+        readOnly: true,
         logger: {
           custom: (level, message) => {
             if (level === LogLevel.ERROR) {
@@ -415,20 +321,6 @@ export class TwitchAdapter extends BasePlatformAdapter {
     const client = this.chatClient
     const revision = this.identityRevision
     const current = () => this.chatClient === client && this.identityRevision === revision
-
-    client.irc.onTypedMessage(UserState, (message) => {
-      if (
-        current() &&
-        !this.anonymous &&
-        twitchIrcChannelName(message.channel) === this.channelName
-      ) {
-        this.selfTags = new Map(message.tags)
-        this.sendOutcomes.userState(message.channel, message.tags)
-      }
-    })
-    onTwitchSendRejected(client, (channel, reason) => {
-      if (current()) this.sendOutcomes.rejected(channel, reason)
-    })
 
     // Connection successful
     client.onConnect(() => {
@@ -463,7 +355,6 @@ export class TwitchAdapter extends BasePlatformAdapter {
     // Disconnected
     client.onDisconnect((manually, reason) => {
       if (!current()) return
-      this.sendOutcomes.clear()
       log.warn(`[Twitch] Disconnected${reason ? `: ${reason}` : ''}`)
       this.isConnected = false
 
@@ -504,10 +395,10 @@ export class TwitchAdapter extends BasePlatformAdapter {
     })
     client.onAnnouncement((channel, user, info, msg) => {
       if (!current()) return
-      const message = createLocalTwitchSentMessage({
-        channelId: channel,
+      this.emit('message', {
+        channelId: twitchIrcChannelName(channel),
         text: msg.text ?? '',
-        id: msg.tags.get('id'),
+        id: msg.tags.get('id') ?? `twitch:announcement:${crypto.randomUUID()}`,
         timestamp: msg.date,
         author: {
           ...twitchAuthorAppearance(msg.tags, this.badgeCache),
@@ -515,9 +406,11 @@ export class TwitchAdapter extends BasePlatformAdapter {
           username: user,
           displayName: msg.tags.get('display-name') ?? user,
         },
+        emotes: [],
+        metadata: { announcement: info.color.toLowerCase() },
+        platform: 'twitch',
+        type: 'message',
       })
-      message.metadata = { announcement: info.color.toLowerCase() }
-      this.emit('message', message)
     })
 
     // Subscriptions
@@ -767,122 +660,6 @@ export class TwitchAdapter extends BasePlatformAdapter {
 
     // Reconnect with new token
     await this.connectChatClient()
-  }
-
-  private async refreshTokenIfNeeded(): Promise<boolean> {
-    if (this.anonymous || !this.accountId) {
-      return false
-    }
-
-    const tokens = AccountStore.getTokens(this.accountId)
-    if (!tokens?.refreshToken) {
-      return false
-    }
-
-    const now = Math.floor(Date.now() / 1000)
-    if (tokens.expiresAt && tokens.expiresAt < now + 300) {
-      log.info('[Twitch] Token expired or expiring soon, refreshing...')
-      try {
-        const accountId = this.accountId
-        const token = await refreshTwitchToken(accountId)
-        if (this.accountId !== accountId || AccountStore.findByPlatform('twitch')?.id !== accountId)
-          return false
-        this.accessToken = token
-        log.info('[Twitch] Token refreshed successfully')
-        return true
-      } catch (error) {
-        log.error('[Twitch] Failed to refresh token', { error: String(error) })
-        return false
-      }
-    }
-    return false
-  }
-
-  private isAuthError(err: unknown): boolean {
-    if (err instanceof Error) {
-      const msg = err.message.toLowerCase()
-      return (
-        msg.includes('401') ||
-        msg.includes('authentication') ||
-        msg.includes('auth') ||
-        msg.includes('token') ||
-        msg.includes('unauthorized')
-      )
-    }
-    return false
-  }
-
-  private emitLocalSentMessage(
-    channelId: string,
-    text: string,
-    replyTo?: ChatReplyTarget,
-  ): ChatSendReceipt | undefined {
-    try {
-      const displayName = this.displayName ?? this.login
-      if (!displayName) {
-        log.warn(
-          '[Twitch] Sent message succeeded but account identity is unavailable for local echo',
-          {
-            channelId,
-          },
-        )
-        return undefined
-      }
-
-      const reply =
-        typeof replyTo === 'string' ? this.findReplyContext(channelId, replyTo) : replyTo
-      const message = createLocalTwitchSentMessage({
-        author: {
-          ...twitchAuthorAppearance(
-            this.selfTags,
-            this.badgeCache,
-            Boolean(this.login) &&
-              this.login?.toLowerCase() === channelId.replace(/^#/, '').toLowerCase(),
-          ),
-          avatarUrl: AccountStore.findByPlatform('twitch')?.avatarUrl,
-          displayName,
-          id: this.platformUserId ?? this.accountId ?? this.login ?? 'twitch-self',
-          username: this.login ?? undefined,
-        },
-        channelId,
-        reply,
-        text,
-      })
-      this.emit('message', message)
-      return { channelId: message.channelId, messageId: message.id }
-    } catch (error) {
-      log.error('[Twitch] Failed to emit local sent message', {
-        channelId,
-        error: String(error),
-      })
-      return undefined
-    }
-  }
-
-  private findReplyContext(
-    channelId: string,
-    replyToMessageId: string,
-  ): NormalizedChatMessage['reply'] | undefined {
-    const replyTarget = MessageStore.getRecent(250).find(
-      (message) =>
-        message.platform === 'twitch' &&
-        message.channelId === channelId.toLowerCase() &&
-        message.id === replyToMessageId,
-    )
-
-    if (!replyTarget) {
-      return undefined
-    }
-
-    return {
-      parentAuthor: {
-        displayName: replyTarget.author.displayName,
-        id: replyTarget.author.id,
-        username: replyTarget.author.username ?? '',
-      },
-      parentMessageId: replyTarget.id,
-      parentMessageText: replyTarget.text,
-    }
   }
 
   private async handleChatMessage(msg: ChatMessage, isAction = false): Promise<void> {

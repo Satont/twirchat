@@ -109,15 +109,6 @@ export const misc = {
   'misc.twitchAdapter.notConnected': 'Twitch chat not connected',
   'misc.twitchAdapter.accountChangedBeforeSend':
     'The Twitch account changed before sending. Review the draft and send again.',
-  'misc.twitchAdapter.accountChangedWhileSending':
-    'The Twitch account changed while sending. Delivery could not be confirmed.',
-  'misc.twitchAdapter.accountChangedWhileReconnecting':
-    'The Twitch account changed while reconnecting.',
-  'misc.twitchAdapter.disconnectedBeforeDelivery':
-    'The Twitch chat disconnected before delivery could be confirmed.',
-  'misc.twitchAdapter.accountChangedDeliveryUnconfirmed':
-    'The Twitch account changed while sending. Delivery could not be confirmed.',
-  'misc.twitchAdapter.notSent': 'Twitch did not send the message: {reason}.',
   'misc.twitchAdapter.communityGift.one': '{name} gifted {count} subscription to the community.',
   'misc.twitchAdapter.communityGift.few': '{name} gifted {count} subscriptions to the community.',
   'misc.twitchAdapter.communityGift.many': '{name} gifted {count} subscriptions to the community.',

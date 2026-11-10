@@ -72,7 +72,6 @@ import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
 import type { DonationService } from '../../donations/service'
-import type { ChatReplyTarget } from '../../platforms/base-adapter'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
 import type { PluginTransportInfo } from '../../plugins/api'
@@ -368,7 +367,7 @@ export interface DesktopApi {
     platform: Platform
     channelId: string
     text: string
-    replyTo?: ChatReplyTarget
+    replyTo?: string
   }): Promise<void | ChatSendReceipt>
   resolveAvatar(params: {
     platform: ModerationPlatform
@@ -461,7 +460,7 @@ export interface DesktopApi {
   sendWatchedChannelMessage(params: {
     id: string
     text: string
-    replyTo?: ChatReplyTarget
+    replyTo?: string
     /** The sending pane's account; absent sends with the chat's account. */
     accountId?: string
   }): Promise<void | ChatSendReceipt>

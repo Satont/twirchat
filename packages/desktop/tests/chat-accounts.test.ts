@@ -4,12 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type {
-  Account,
-  NormalizedChatMessage,
-  Platform,
-  WatchedChannelsLayout,
-} from '@twirchat/shared/types'
+import type { Account, Platform, WatchedChannelsLayout } from '@twirchat/shared/types'
 
 import { resolveChatAccount } from '../src/gpuix/chat-account'
 import { tabSenderAccounts } from '../src/gpuix/state/pane-accounts'
@@ -28,10 +23,6 @@ import { sevenTVService } from '../src/seventv'
 import { AccountStore } from '../src/store/account-store'
 import { getDb, initDb } from '../src/store/db'
 import { WatchedChannelStore } from '../src/store/watched-channels-store'
-import {
-  createPendingMessage,
-  reconcilePendingMessages,
-} from '../src/views/main/utils/message-delivery'
 import type { ChatAccountSender } from '../src/watched-channels/account-sender'
 import { WatchedChannelManager } from '../src/watched-channels/manager'
 import { literal, required } from './fixture-values'
@@ -95,7 +86,7 @@ test('only a chosen account other than the default gets its own sending connecti
   expect(chatSender({ platform: 'twitch', accountId: kick.id })).toBeNull()
   expect(chatSender({ platform: 'twitch', accountId: 'twitch:gone' })).toBeNull()
   expect(chatSender({ platform: 'youtube', accountId: alt.id })).toBeNull()
-  // Making the chosen account the default moves its sends back to the reading connection.
+  // Making the chosen account the default moves its sends back through the adapter.
   AccountStore.setActive('twitch', alt.id)
   expect(chatSender({ platform: 'twitch', accountId: alt.id })).toBeNull()
 })
@@ -326,6 +317,7 @@ test('a sending connection joins once, confirms through USERSTATE and reports NO
   })
   const alt = { id: 'twitch:alt', username: 'useralt' }
 
+  pool.retain(alt.id, 'pixelfox')
   await pool.prepare(alt, '#Pixelfox')
   await pool.send(alt, 'pixelfox', 'hello')
   await pool.send(alt, 'pixelfox', 'again')
@@ -353,24 +345,23 @@ test('a sending connection joins once, confirms through USERSTATE and reports NO
 
   pool.release(alt.id, 'pixelfox')
   await Bun.sleep(0)
-  expect(client.parts).toEqual(['pixelfox'])
-  expect(client.closed).toBe(true)
-})
+  expect(client.parts).toEqual([])
+  expect(client.closed).toBe(false)
 
-test('an optimistic message from the chat account is replaced by its echo, not duplicated', () => {
-  const alt = save('twitch', 'alt', false)
-  const pending = createPendingMessage({ account: alt, channelId: 'pixelfox', text: '321' })
-  const echo: NormalizedChatMessage = {
-    id: 'irc-1',
-    platform: 'twitch',
-    channelId: 'pixelfox',
-    author: { id: alt.platformUserId, displayName: alt.displayName, badges: [] },
-    text: '321',
-    emotes: [],
-    timestamp: new Date(),
-    type: 'message',
-  }
-  expect(reconcilePendingMessages([pending], [echo])).toEqual([])
+  pool.retain(alt.id, 'other')
+  pool.release(alt.id, 'pixelfox')
+  await Bun.sleep(0)
+  expect(client.parts).toEqual(['pixelfox'])
+  expect(client.closed).toBe(false)
+
+  await pool.send(alt, 'temporary', 'hello')
+  await Bun.sleep(0)
+  expect(client.parts).toEqual(['pixelfox', 'temporary'])
+  expect(client.closed).toBe(false)
+
+  pool.release(alt.id, 'other')
+  await Bun.sleep(0)
+  expect(client.closed).toBe(true)
 })
 
 test('the UI shows the same account the backend sends with', () => {

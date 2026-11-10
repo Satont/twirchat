@@ -113,15 +113,6 @@ export const ruMisc = {
   'misc.twitchAdapter.notConnected': 'Чат Twitch не подключён',
   'misc.twitchAdapter.accountChangedBeforeSend':
     'Аккаунт Twitch изменился перед отправкой. Проверьте черновик и отправьте снова.',
-  'misc.twitchAdapter.accountChangedWhileSending':
-    'Аккаунт Twitch изменился во время отправки. Доставку не удалось подтвердить.',
-  'misc.twitchAdapter.accountChangedWhileReconnecting':
-    'Аккаунт Twitch изменился во время переподключения.',
-  'misc.twitchAdapter.disconnectedBeforeDelivery':
-    'Чат Twitch отключился до подтверждения доставки.',
-  'misc.twitchAdapter.accountChangedDeliveryUnconfirmed':
-    'Аккаунт Twitch изменился во время отправки. Доставку не удалось подтвердить.',
-  'misc.twitchAdapter.notSent': 'Twitch не отправил сообщение: {reason}.',
   'misc.twitchAdapter.communityGift.one': 'Сообществу подарена {count} подписка от {name}',
   'misc.twitchAdapter.communityGift.few': 'Сообществу подарены {count} подписки от {name}',
   'misc.twitchAdapter.communityGift.many': 'Сообществу подарено {count} подписок от {name}',

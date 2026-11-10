@@ -190,8 +190,6 @@ export function compileChatSearch(query: string): {
               case 'action':
               case 'system':
                 return m.type === flag
-              case 'failed':
-                return m.delivery?.state === 'failed'
               case 'first_message':
                 return m.metadata?.firstMessage ?? flags.first_message ?? false
               case 'cheer_message':

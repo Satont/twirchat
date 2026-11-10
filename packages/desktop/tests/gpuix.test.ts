@@ -75,13 +75,12 @@ describe('mention appearances', () => {
     }
   })
 
-  test('normalizes YouTube handles and ignores synthetic messages', () => {
+  test('normalizes YouTube handles and ignores system messages', () => {
     const appearances = createMentionAppearances()
     const author = { id: 'yt-1', username: '@Handle', displayName: 'Video Viewer', badges: [] }
     const key = mentionAppearanceKey('youtube', 'HANDLE')
     const message = makeMessage({ author, platform: 'youtube' })
     appearances.addMessage({ ...message, type: 'system' })
-    appearances.addMessage({ ...message, delivery: { state: 'pending' } })
     expect(appearances.snapshot(key)).toBeUndefined()
     appearances.addMessage(message)
     expect(appearances.snapshot(key)?.id).toBe('yt-1')

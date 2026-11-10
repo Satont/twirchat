@@ -1,6 +1,6 @@
 /**
  * One chat message row — port of ChatMessage.vue with its three layouts
- * (modern / compact / system) plus hover actions, delivery states,
+ * (modern / compact / system) plus hover actions,
  * moderation outcomes and the self-ping highlight.
  *
  * GPUIX deltas: no italics (action messages use opacity only), no
@@ -88,11 +88,6 @@ interface ModernLeading {
   avatar?: LeadingBox
   contentLeft: number
   minHeight: number
-}
-
-enum MessageDiliveryState {
-  Failed = 'failed',
-  Pending = 'pending',
 }
 
 /** Absolute placement of the modern row's icon and avatar, matching a gapped flex row. */
@@ -485,11 +480,6 @@ function FirstMessageLabel() {
   return t('chatMessages.firstMessage')
 }
 
-function DeliveryFailure({ error, style }: { error?: string; style: Record<string, unknown> }) {
-  useLanguage()
-  return <Text style={style}>{t('chatMessages.notSent', { error: error ?? '' })}</Text>
-}
-
 function CheerNotice({
   id,
   fontSize,
@@ -569,7 +559,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     props.onModerate &&
     (message.platform === 'twitch' || message.platform === 'kick') &&
     !isSystem &&
-    !message.delivery &&
     message.id &&
     message.author.id &&
     (!props.moderationOutcome || isTombstone) ? (
@@ -727,7 +716,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const FIRST_MESSAGE_BACKGROUND_OPACITY = 0.15
 
   const SELF_PING_BACKGROUND_FALLBACK = 'rgba(167, 139, 250, 0.15)'
-  const FAILED_MESSAGE_BACKGROUND = 'rgba(239, 68, 68, 0.08)'
 
   const isFirstMessage = message.metadata?.firstMessage === true
 
@@ -737,18 +725,11 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     rowBackground = hexMix(semantic.firstMessageSofter, theme.bg, FIRST_MESSAGE_BACKGROUND_OPACITY)
   } else if (isSelfPing) {
     rowBackground = props.selfPingColor ?? SELF_PING_BACKGROUND_FALLBACK
-  } else if (message.delivery?.state === MessageDiliveryState.Failed) {
-    rowBackground = FAILED_MESSAGE_BACKGROUND
   } else if (hovered) {
     rowBackground = theme.rowHover
   }
 
-  const rowOpacity =
-    message.delivery?.state === MessageDiliveryState.Failed
-      ? 0.52
-      : props.moderationOutcome
-        ? 0.48
-        : 1
+  const rowOpacity = props.moderationOutcome ? 0.48 : 1
   const announcement = message.platform === 'twitch' ? message.metadata?.announcement : undefined
   const bits = message.platform === 'twitch' && !isTombstone ? message.metadata?.bits : undefined
 
@@ -764,8 +745,7 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           bottom: 0,
           width: 2,
           opacity: 0.55,
-          backgroundColor:
-            message.delivery?.state === 'failed' ? semantic.error : platformColor(message.platform),
+          backgroundColor: platformColor(message.platform),
         }}
       />
     ) : null
@@ -894,12 +874,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
             isAction={isAction}
             actionColor={isAction ? authorColor : undefined}
           />
-          {message.delivery?.state === 'failed' ? (
-            <DeliveryFailure
-              error={message.delivery.error}
-              style={{ fontSize: Math.round(fontSize * 0.82), color: theme.dangerText }}
-            />
-          ) : null}
           {props.moderationOutcome ? (
             <Text style={{ fontSize: Math.round(fontSize * 0.82), color: theme.text2 }}>
               {props.moderationOutcome.label}
@@ -1075,12 +1049,6 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           <MessageTranslation message={message} channelId={props.channelSlug} fontSize={fontSize} />
         ) : null}
 
-        {message.delivery?.state === 'failed' ? (
-          <DeliveryFailure
-            error={message.delivery.error}
-            style={{ fontSize: Math.round(fontSize * 0.82), color: theme.dangerText, marginTop: 2 }}
-          />
-        ) : null}
         {props.moderationOutcome ? (
           <Text
             style={{ fontSize: Math.round(fontSize * 0.82), color: theme.text2, marginLeft: 4 }}

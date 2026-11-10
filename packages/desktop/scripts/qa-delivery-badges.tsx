@@ -80,16 +80,19 @@ interface PostedMessage {
 type Renderer = GpuixRenderer & NativeWindowControls
 const session = process.env.TWIRCHAT_QA_SESSION_DIR
 assert(session, 'Private artifact directory is required.')
+const sendOnly = Bun.argv.includes('--send-only')
 const mode = createStore<'delivery' | 'appearance'>('delivery')
 let renderer: Renderer | undefined
 const backend = getDesktopBackend()
-const cacheDirectory = join(dirname(getDbPath()), 'image-cache')
-await mkdir(cacheDirectory, { recursive: true })
-for (const asset of assets) {
-  const source = Bun.file(join(fixtureDirectory, `${asset.name}.png`))
-  assert(await source.exists(), 'Run this script with --prepare-fixtures before isolated QA.')
-  const hash = createHash('sha256').update(asset.url).digest('hex').slice(0, 32)
-  await Bun.write(join(cacheDirectory, `${hash}.png`), await source.bytes())
+if (!sendOnly) {
+  const cacheDirectory = join(dirname(getDbPath()), 'image-cache')
+  await mkdir(cacheDirectory, { recursive: true })
+  for (const asset of assets) {
+    const source = Bun.file(join(fixtureDirectory, `${asset.name}.png`))
+    assert(await source.exists(), 'Run this script with --prepare-fixtures before isolated QA.')
+    const hash = createHash('sha256').update(asset.url).digest('hex').slice(0, 32)
+    await Bun.write(join(cacheDirectory, `${hash}.png`), await source.bytes())
+  }
 }
 const avatarUrl = `data:image/png;base64,${(
   await sharp({ create: { width: 128, height: 128, channels: 4, background: '#9176bd' } })
@@ -297,17 +300,22 @@ async function until(check: () => boolean, label: string): Promise<void> {
     await Bun.sleep(25)
   }
 }
-function pendingNodes(): AutomationNode[] {
-  return nodes().filter((node) => node.testId?.startsWith('chat-timestamp-pending:'))
+function assertVisibleMessages(ids: readonly string[]): void {
+  const timestamps = nodes().flatMap((node) =>
+    node.testId?.startsWith('chat-timestamp-') ? [node.testId] : [],
+  )
+  assert.deepEqual(timestamps.sort(), ids.map((id) => `chat-timestamp-${id}`).sort())
 }
-async function submit(text: string): Promise<PostedMessage[]> {
+
+async function submit(text: string, targets = 2): Promise<PostedMessage[]> {
   const count = posted.length
   updateComposer('qa-pane:home', (state) => editComposer(state, text))
   await Bun.sleep(60)
   native().focusElement(find('chat-input').id)
   await Bun.sleep(30)
   native().simulateKeystrokes('enter')
-  await until(() => posted.length === count + 2, 'native Enter submits to both platforms')
+  await until(() => posted.length === count + targets, 'native Enter submits to expected targets')
+  await until(() => composerStore.get().get('qa-pane:home')?.text === '', 'composer clears')
   return posted.slice(count)
 }
 function acknowledge(request: PostedMessage): void {
@@ -316,7 +324,10 @@ function acknowledge(request: PostedMessage): void {
     messageId: request.id,
   })
 }
-async function publish(request: PostedMessage): Promise<void> {
+async function publish(
+  request: PostedMessage,
+  reply?: NormalizedChatMessage['reply'],
+): Promise<void> {
   const message: NormalizedChatMessage =
     request.params.platform === 'kick'
       ? await normalizeKickChatMessage(
@@ -354,6 +365,7 @@ async function publish(request: PostedMessage): Promise<void> {
           text: request.params.text,
           emotes: [],
           type: 'message',
+          reply,
         }
   backend.events.emit('chat_message', message)
   await until(
@@ -364,65 +376,7 @@ async function publish(request: PostedMessage): Promise<void> {
 const screenshots: string[] = []
 const timestampGeometry: Array<{ width: number; fontSize: number; x: number; gap: number }> = []
 const badgePixels: Array<{ name: string; painted: number; colorful: number }> = []
-try {
-  await manager.start()
-  await until(
-    () => renderer !== undefined && nodes().some((node) => node.testId === 'chat-input'),
-    'chat view',
-  )
-  await native().setWindowBounds({ width: 900, height: 760 })
-  await focusNativeQaWindow('TwirChat')
-  const beforeAck = await submit('BEFORE_ACK')
-  await until(() => pendingNodes().length === 2, 'two optimistic messages')
-  for (const request of beforeAck) await publish(request)
-  await until(() => pendingNodes().length === 0, 'provider-before-ACK removes echoes')
-  for (const request of beforeAck) acknowledge(request)
-  await Bun.sleep(70)
-  assert.equal(pendingNodes().length, 0, 'Late ACK cannot resurrect an echo.')
-
-  const afterAck = await submit('AFTER_ACK')
-  for (const request of afterAck) acknowledge(request)
-  await until(() => pendingNodes().length === 2, 'confirmed sends await provider events')
-  const tail = timedMessage('12:00:00', 14)
-  backend.events.emit('chat_message', {
-    ...tail,
-    id: 'later-twitch',
-    platform: 'twitch',
-    channelId: 'oceanofapathy',
-    timestamp: new Date(Date.now() + 1000),
-    text: 'LATER_TWITCH_TRAFFIC',
-  })
-  await until(
-    () => nodes().some((node) => node.testId === 'chat-timestamp-later-twitch'),
-    'later traffic',
-  )
-  const laterY = bounds('chat-timestamp-later-twitch').y
-  assert(
-    pendingNodes().every((node) => bounds(node.testId ?? '').y < laterY),
-    'Pending messages keep chronological position.',
-  )
-  for (const request of afterAck) await publish(request)
-  await until(() => pendingNodes().length === 0, 'ACK-before-provider removes echoes')
-
-  const repeatedA = await submit('REPEATED')
-  for (const request of repeatedA) acknowledge(request)
-  const repeatedB = await submit('REPEATED')
-  for (const request of repeatedB) acknowledge(request)
-  await until(() => pendingNodes().length === 4, 'four separate repeated sends')
-  const firstKick = repeatedA.find((request) => request.params.platform === 'kick')
-  assert(firstKick)
-  await publish(firstKick)
-  await until(() => pendingNodes().length === 3, 'one provider consumes one echo')
-  for (const request of [...repeatedA, ...repeatedB])
-    if (request !== firstKick) await publish(request)
-  await until(() => pendingNodes().length === 0, 'all repeated echoes reconcile')
-  assert.equal(
-    nodes().filter((node) => node.testId?.startsWith('chat-timestamp-provider-')).length,
-    8,
-  )
-  assert.equal(composerStore.get().get('qa-pane:home')?.text, '')
-  screenshots.push(await captureGuiQaDisplay('delivery-confirmed'))
-
+async function verifyBadgeLayout(): Promise<void> {
   mode.set('appearance')
   await until(() => nodes().some((node) => node.testId === 'badge-broadcaster'), 'badge fixtures')
   for (const width of [900, 420]) {
@@ -475,15 +429,98 @@ try {
       assert(colorful > 8, 'The broadcaster SVG must retain official colors.')
     badgePixels.push({ name: fixture.name, painted, colorful })
   }
+}
+
+try {
+  await manager.start()
+  await until(
+    () => renderer !== undefined && nodes().some((node) => node.testId === 'chat-input'),
+    'chat view',
+  )
+  await native().setWindowBounds({ width: 900, height: 760 })
+  await focusNativeQaWindow('TwirChat')
+
+  const beforeAck = await submit('REPEATED')
+  const afterAck = await submit('REPEATED')
+  assertVisibleMessages([])
+  for (const request of beforeAck) await publish(request)
+  const visible = beforeAck.map((request) => request.id)
+  for (const request of [...beforeAck, ...afterAck]) acknowledge(request)
+  await Bun.sleep(100)
+  assertVisibleMessages(visible)
+  for (const request of afterAck) await publish(request)
+  visible.push(...afterAck.map((request) => request.id))
+  assertVisibleMessages(visible)
+  assert(
+    app.homeMessagesStore
+      .get()
+      .some(
+        (message) =>
+          message.platform === 'kick' &&
+          message.author.badges.some((badge) => badge.type === 'broadcaster'),
+      ),
+    'The incoming Kick event supplies the broadcaster badge.',
+  )
+
+  await native().setWindowBounds({ width: 420, height: 760 })
+  await Bun.sleep(300)
+  const parent = afterAck.find((request) => request.params.platform === 'twitch')
+  assert(parent)
+  const timestamp = bounds(`chat-timestamp-${parent.id}`)
+  const rowY = timestamp.y + timestamp.height / 2
+  const button = nodes()
+    .filter((node) => node.testId === 'msg-reply')
+    .map((node) => native().getElementBounds(node.id))
+    .find((box) => box && box.y <= rowY && rowY <= box.y + box.height)
+  assert(button, 'The provider row has a reply action.')
+  native().simulateClick(button.x + button.width / 2, button.y + button.height / 2, 0)
+  await until(() => nodes().some((node) => node.testId === 'cancel-reply'), 'composer reply')
+  const [reply] = await submit('REPLY', 1)
+  assert(reply)
+  assert.equal(reply.params.platform, 'twitch')
+  assert.equal(reply.params.replyTo, parent.id)
+  assertVisibleMessages(visible)
+  acknowledge(reply)
+  await publish(reply, {
+    parentMessageId: parent.id,
+    parentMessageText: 'Provider parent text',
+    parentAuthor: { id: '12345', username: 'oceanofapathy', displayName: 'OceanOfApathy' },
+  })
+  visible.push(reply.id)
+  assertVisibleMessages(visible)
+  await until(
+    () => native().getPaintedText().join(' ').includes('Provider parent text'),
+    'reply preview uses provider metadata',
+  )
+
+  const refused = await submit('REFUSED')
+  const held = refused.find((request) => request.params.platform === 'twitch')
+  const rejected = refused.find((request) => request.params.platform === 'kick')
+  assert(held && rejected)
+  held.acknowledgement.resolve({ channelId: 'oceanofapathy', held: true })
+  await until(() => app.noticeStore.get()?.kind === 'info', 'AutoMod hold shows a notice')
+  assertVisibleMessages(visible)
+  rejected.acknowledgement.reject(new Error('Rejected by the fixture provider'))
+  await until(
+    () => app.noticeStore.get()?.text.includes('Rejected by the fixture provider') === true,
+    'rejection shows a notice',
+  )
+  assert.equal(app.noticeStore.get()?.kind, 'error')
+  assertVisibleMessages(visible)
+  screenshots.push(await captureGuiQaDisplay('incoming-chat-messages'))
+
+  if (!sendOnly) await verifyBadgeLayout()
   await Bun.write(
     join(session, 'delivery-badges-result.json'),
     JSON.stringify(
-      { ok: true, deliveryMessages: 8, timestampGeometry, badgePixels, screenshots },
+      { ok: true, receivedMessages: visible.length, timestampGeometry, badgePixels, screenshots },
       null,
       2,
     ),
   )
-  console.log('Native delivery, official badges and timestamp alignment passed.')
+  console.log(
+    sendOnly ? 'Native incoming-only chat passed.' : 'Native chat, badges and timestamps passed.',
+  )
 } catch (error) {
   await captureGuiQaDisplay('delivery-badges-failure').catch(() => {})
   await Bun.write(

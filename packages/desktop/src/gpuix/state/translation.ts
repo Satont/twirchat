@@ -145,7 +145,7 @@ export function wireAutoTranslations(backend: DesktopBackend): () => void {
     'translation background operation failed',
   )
   const receive = async (message: NormalizedChatMessage, channelId?: string) => {
-    if (disposed || message.type === 'system' || message.delivery) return
+    if (disposed || message.type === 'system') return
     try {
       const view = await loadTranslationSettings(backend)
       if (

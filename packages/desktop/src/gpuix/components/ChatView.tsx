@@ -7,6 +7,7 @@ import { DONATION_PROVIDER_LABELS, donationChannelKey } from '@twirchat/shared/d
  */
 import type {
   Account,
+  ChatSendReceipt,
   NormalizedChatMessage,
   Platform,
   PlatformStatusInfo,
@@ -20,20 +21,12 @@ import {
   hoverPauseDurationMs,
   DOUBLE_CLICK_PAUSE_MS,
 } from '../../services/chat-pause'
-import { appendLiveChatMessages } from '../../views/main/utils/chat-message-buffer'
 import { ownChatSendTargets } from '../../views/main/utils/chat-send-targets'
 import type { UserCardTarget } from '../../views/main/utils/chatCommands'
 import { buildChattersTargets } from '../../views/main/utils/chatters'
-import {
-  confirmDelivery,
-  createPendingMessage,
-  failDelivery,
-  reconcilePendingMessages,
-  type DeliveryMessage,
-} from '../../views/main/utils/message-delivery'
 import type { ModerationDragAction } from '../../views/main/utils/moderation-drag'
 import { publicChannelURL } from '../../views/main/utils/public-channel-url'
-import { initialsOf } from '../../views/shared/utils/display-text'
+import { initialsOf, sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import {
   autoModSearchMessage,
@@ -397,38 +390,7 @@ export function ChatView({
   )
   const activity = useStoreSelector(chatActivityStore, (entries) => entries.get(activityKey))
 
-  // ── Messages + optimistic delivery ─────────────────────────────────────────
-
-  const [deliveryMessages, setDeliveryMessages] = useState<DeliveryMessage[]>([])
-  const providerMessages = useMemo(
-    () => (watchedChannel ? watchedMessages : homeMessages),
-    [watchedChannel, watchedMessages, homeMessages],
-  )
-
-  const visibleDeliveries = useMemo(() => {
-    // Saved accounts include those chosen for a single chat.
-    const own = (message: DeliveryMessage) => (account: Account) =>
-      account.platform === message.platform && account.platformUserId === message.author.id
-    const retained = deliveryMessages.filter(
-      (message) =>
-        message.delivery?.scope === activityKey &&
-        (accounts.some(own(message)) || savedAccounts.some(own(message))),
-    )
-    return reconcilePendingMessages(
-      retained.length === deliveryMessages.length ? deliveryMessages : retained,
-      providerMessages,
-    )
-  }, [deliveryMessages, providerMessages, accounts, savedAccounts, activityKey])
-
-  useEffect(() => {
-    if (visibleDeliveries !== deliveryMessages)
-      setDeliveryMessages((current) => (current === deliveryMessages ? visibleDeliveries : current))
-  }, [visibleDeliveries, deliveryMessages])
-
-  const activeMessages = useMemo(
-    () => appendLiveChatMessages(providerMessages, visibleDeliveries, 0),
-    [providerMessages, visibleDeliveries],
-  )
+  const activeMessages = watchedChannel ? watchedMessages : homeMessages
 
   const ruleEngine = useMemo(
     () =>
@@ -962,112 +924,52 @@ export function ChatView({
     [onModerate],
   )
 
-  // ── Sending (optimistic) ───────────────────────────────────────────────────
+  // ── Sending ───────────────────────────────────────────────────────────────
 
-  function deliveryErrorMessage(error: unknown): string {
+  function showSendError(error: unknown): void {
     const message = error instanceof Error ? error.message : String(error)
-    return message.replace(/^Error:\s*/, '').replace(/^send (Twitch|Kick) message:\s*/i, '')
+    showNotice('error', t('chatMessages.notSent', { error: sanitizeDisplayText(message) }), 6000)
   }
 
-  function pendingReply(replyToMessageId?: string): NormalizedChatMessage['reply'] {
-    if (!replyTarget || replyTarget.id !== replyToMessageId) return undefined
-    return {
-      parentMessageId: replyTarget.id,
-      parentMessageText: replyTarget.text,
-      parentAuthor: {
-        id: replyTarget.author.id,
-        username: replyTarget.author.username ?? replyTarget.author.displayName,
-        displayName: replyTarget.author.displayName,
-      },
-    }
+  function showHeldNotice(receipt: ChatSendReceipt | void, account: Account | undefined): void {
+    if (receipt?.held && account && !account.scopes.includes('user:read:chat'))
+      showNotice('info', t('chatMessages.autoMod.heldLocal'), 6000)
   }
 
-  async function submitDelivery(
-    platform: Platform,
-    channelId: string,
-    text: string,
-    replyToMessageId?: string,
-    watchedChannelId?: string,
-  ): Promise<void> {
-    // A chat may send with its own chosen account rather than the platform default.
-    const account =
-      watchedChannelId && watchedChannel
-        ? chatAccount
-        : accounts.find((candidate) => candidate.platform === platform)
-    if (!account || (platform !== 'twitch' && platform !== 'kick' && platform !== 'vkplay')) {
-      console.warn(`[chat] cannot prepare ${platform} optimistic message: no authenticated account`)
-      return
-    }
-    const canonicalChannelId =
-      platform === 'kick'
-        ? watchedChannelId
-          ? (watchedChannelStatus?.channelId ?? channelId)
-          : account.platformUserId
-        : channelId
-    const reply = pendingReply(replyToMessageId)
-    const replyTo = reply ?? replyToMessageId
-    const message = createPendingMessage({
-      account,
-      channelId: canonicalChannelId,
-      text,
-      reply,
-      providerMessages,
-      scope: activityKey,
-    })
-    setDeliveryMessages((current) => [...current, message])
-    try {
-      const receipt = watchedChannelId
-        ? await backend.api.sendWatchedChannelMessage({
-            id: watchedChannelId,
-            text,
-            replyTo,
-            accountId: account.id,
-          })
-        : await backend.api.sendMessage({ channelId, platform, text, replyTo })
-      if (receipt?.held) {
-        setDeliveryMessages((current) => current.filter((entry) => entry.id !== message.id))
-        if (!account.scopes.includes('user:read:chat'))
-          showNotice('info', t('chatMessages.autoMod.heldLocal'), 6000)
-        return
-      }
-      setDeliveryMessages((current) => confirmDelivery(current, message.id, receipt))
-    } catch (error) {
-      setDeliveryMessages((current) =>
-        failDelivery(current, message.id, deliveryErrorMessage(error)),
-      )
-    }
-  }
-
-  async function onSend(
+  function onSend(
     targets: {
       platform: Platform
       channelLogin: string
       text: string
       replyToMessageId?: string
     }[],
-  ) {
-    await Promise.all(
-      targets.map((target) =>
-        submitDelivery(target.platform, target.channelLogin, target.text, target.replyToMessageId),
-      ),
-    )
+  ): void {
     setReplyTarget(null)
+    for (const { platform, channelLogin, text, replyToMessageId } of targets) {
+      const account = accounts.find((candidate) => candidate.platform === platform)
+      backend.api
+        .sendMessage({ channelId: channelLogin, platform, text, replyTo: replyToMessageId })
+        .then((receipt) => showHeldNotice(receipt, account))
+        .catch(showSendError)
+    }
   }
 
-  async function onSendWatched(payload: {
+  function onSendWatched(payload: {
     text: string
     channelId: string
     replyToMessageId?: string
-  }) {
-    if (!watchedChannel) return
-    await submitDelivery(
-      watchedChannel.platform,
-      watchedChannel.channelSlug,
-      payload.text,
-      payload.replyToMessageId,
-      watchedChannel.id,
-    )
+  }): void {
+    if (!chatAccount) return
     setReplyTarget(null)
+    backend.api
+      .sendWatchedChannelMessage({
+        id: payload.channelId,
+        text: payload.text,
+        replyTo: payload.replyToMessageId,
+        accountId: chatAccount.id,
+      })
+      .then((receipt) => showHeldNotice(receipt, chatAccount))
+      .catch(showSendError)
   }
 
   // ── Header data ────────────────────────────────────────────────────────────
@@ -2240,11 +2142,11 @@ export function ChatView({
             watchedChannelStatus={watchedChannelStatus}
             pane={paneTarget}
             replyTarget={replyTarget}
-            messages={providerMessages}
+            messages={activeMessages}
             onCancelReply={() => setReplyTarget(null)}
             onOpenUserCard={setUserCardTarget}
-            onSend={(targets) => void onSend(targets)}
-            onSendWatched={(payload) => void onSendWatched(payload)}
+            onSend={onSend}
+            onSendWatched={onSendWatched}
             onClearMessages={clearMessages}
             onCopyMessages={copyMessages}
             onPauseChange={changePause}
