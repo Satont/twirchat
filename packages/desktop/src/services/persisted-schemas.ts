@@ -42,6 +42,7 @@ import { z } from 'zod'
 
 import { t } from '../gpuix/i18n'
 import { normalizePaletteColor } from '../shared/theme-palette'
+import { MAX_FEED_SOURCES } from '../views/main/utils/layout-tree'
 
 export const platformSchema = z.toZod<Platform>()(
   z.union([z.literal('twitch'), z.literal('youtube'), z.literal('kick'), z.literal('vkplay')]),
@@ -306,8 +307,18 @@ export const panelContentSchema = z.toZod<PanelContent>()(
     z.object({ type: z.literal('main') }),
     z.object({
       type: z.literal('watched'),
-      channelId: z.string(),
+      channelId: z.string().min(1),
       accountId: z.string().optional(),
+    }),
+    z.object({
+      type: z.literal('feed'),
+      sources: z
+        .array(z.object({ channelId: z.string().min(1), accountId: z.string().optional() }))
+        .min(2)
+        .max(MAX_FEED_SOURCES)
+        .refine(
+          (sources) => new Set(sources.map(({ channelId }) => channelId)).size === sources.length,
+        ),
     }),
     z.object({ type: z.literal('empty') }),
   ]),

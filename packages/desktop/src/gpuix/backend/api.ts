@@ -1485,7 +1485,6 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === id)
       if (channel) ctx.providerRuntime?.setJoined(`watched:${id}`, channel.platform, null)
       await watchedChannelManager.removeChannel(id)
-      WatchedChannelsLayoutStore.remove(id)
     },
 
     setWatchedChannelAccount: async ({ id, accountId }) => {

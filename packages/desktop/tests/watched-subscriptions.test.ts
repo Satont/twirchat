@@ -145,6 +145,37 @@ test('pane accounts count only live layouts, including detached windows', () => 
   ).toEqual(['home', 'a', 'window:popup'])
 })
 
+test('a feed joins every available channel and preserves per-source sender accounts', () => {
+  const snapshot: WatchedReferenceSnapshot = {
+    ready: true,
+    tabIds: ['feed'],
+    channels: [channel('twitch'), { ...channel('kick'), platform: 'kick' }],
+    layouts: new Map<string, WatchedChannelsLayout>([
+      [
+        'feed',
+        {
+          version: 2,
+          root: {
+            type: 'panel',
+            id: 'combined',
+            flex: 100,
+            content: {
+              type: 'feed',
+              sources: [
+                { channelId: 'twitch', accountId: 'twitch:bot' },
+                { channelId: 'kick', accountId: 'kick:bot' },
+                { channelId: 'gone', accountId: 'twitch:old' },
+              ],
+            },
+          },
+        },
+      ],
+    ]),
+  }
+  expect(referencedWatchedChannels(snapshot)).toEqual(['kick', 'twitch'])
+  expect(referencedPaneAccounts(snapshot)).toEqual({ kick: ['kick:bot'], twitch: ['twitch:bot'] })
+})
+
 test('a closed tab cannot reconnect after its slow initial layout load completes', async () => {
   const gate = Promise.withResolvers<void>()
   const published: string[][] = []

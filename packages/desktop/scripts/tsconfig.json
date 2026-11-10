@@ -4,6 +4,7 @@
     "qa-autocomplete.tsx",
     "qa-painted-geometry.tsx",
     "qa-drag-interactions.tsx",
+    "qa-custom-feed.tsx",
     "qa-seventv-notices.tsx",
     "qa-background-images.tsx",
     "qa-history-logs.tsx",

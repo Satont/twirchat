@@ -1,13 +1,24 @@
 import type { LayoutNode, WatchedChannel, WatchedChannelsLayout } from '@twirchat/shared/types'
-import type { PanelNode, SplitDirection } from '@twirchat/shared/types'
+import type {
+  PanelContent,
+  PanelNode,
+  SplitDirection,
+  WatchedPaneSource,
+} from '@twirchat/shared/types'
 import { z } from 'zod'
 
 import { panelNodeSchema, watchedChannelsLayoutSchema } from '../../services/persisted-schemas'
-import { getAllPanels } from '../../views/main/utils/layout-tree'
+import {
+  getAllPanels,
+  layoutChannelNames,
+  layoutWatchedSourceIds,
+  retainAvailableFeedSources,
+} from '../../views/main/utils/layout-tree'
 import { sanitizeDisplayText, truncateGraphemes } from '../../views/shared/utils/display-text'
-import type {
-  DesktopWatchedChannel,
-  WatchedPlatform,
+import {
+  isPluginWatchedChannel,
+  type DesktopWatchedChannel,
+  type WatchedPlatform,
 } from '../../watched-channels/plugin-channel-types'
 import type { DesktopApi } from '../backend/api'
 import { t } from '../i18n'
@@ -19,7 +30,7 @@ import {
 } from './app'
 import { chatRulesPreferences, chatRulesStore } from './chat-rules'
 import { createStore, type Store } from './create-store'
-import { layoutStore, saveLayoutNow } from './layout'
+import { layoutStore, saveLayoutNow, type LayoutState } from './layout'
 import { persistentResource } from './persistent-resources'
 import { setMainTab } from './settings-session'
 import { clearTabUnread } from './tab-unread'
@@ -161,14 +172,7 @@ function validLayout(value: unknown): value is WatchedChannelsLayout {
       ids.add(node.id)
       if (node.type === 'panel') {
         panels++
-        if (panels > 64 || !node.content || typeof node.content !== 'object') return false
-        return (
-          node.content.type === 'main' ||
-          node.content.type === 'empty' ||
-          (node.content.type === 'watched' &&
-            typeof node.content.channelId === 'string' &&
-            node.content.channelId.length > 0)
-        )
+        return panels <= 64
       }
       return (
         node.type === 'split' &&
@@ -293,15 +297,7 @@ export function createChatTabController(
               const layout = await api.getWatchedChannelsLayout({ tabId: id })
               if (!layout || !validLayout(layout)) continue
               environment.publishLayout(id, layout)
-              const names = getAllPanels(layout.root).flatMap((panel) => {
-                const content = panel.content
-                return content.type === 'watched'
-                  ? environment
-                      .channels()
-                      .filter((channel) => channel.id === content.channelId)
-                      .map((channel) => channel.displayName)
-                  : []
-              })
+              const names = layoutChannelNames(layout, environment.channels())
               if (names.length) labels.set(id, names)
             } catch {
               /* The pane loader exposes its own retry/error when this tab is opened. */
@@ -362,6 +358,22 @@ export function createChatTabController(
     if (!layout || !validLayout(layout)) throw new Error(t('notices.chatTabs.layoutUnavailable'))
     return structuredClone(layout)
   }
+  const createTab = (content: PanelContent) =>
+    change(async (value) => {
+      if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeOpen'))
+      const id = `tab:${crypto.randomUUID()}`
+      const layout: WatchedChannelsLayout = {
+        version: 2,
+        root: { type: 'panel', id: crypto.randomUUID(), flex: 100, content },
+      }
+      await api.setWatchedChannelsLayout({ tabId: id, layout })
+      value.openIds.push(id)
+      value.metadata[id] = { locked: false }
+      await persist(value)
+      environment.publishLayout(id, layout)
+      environment.activate(id)
+      return id
+    })
   return {
     store,
     initialize,
@@ -388,6 +400,11 @@ export function createChatTabController(
         const closed = index < 0 ? undefined : value.closed.splice(index, 1)[0]
         if (!closed) return null
         if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeRestore'))
+        const channels = environment.channels()
+        for (const panel of getAllPanels(closed.layout.root))
+          panel.content = retainAvailableFeedSources(panel.content, (sourceId) =>
+            channels.some((channel) => channel.id === sourceId && !isPluginWatchedChannel(channel)),
+          )
         await api.setWatchedChannelsLayout({ tabId: closed.id, layout: closed.layout })
         value.openIds.splice(Math.min(closed.index, value.openIds.length), 0, closed.id)
         value.metadata[closed.id] = closed.metadata
@@ -396,22 +413,9 @@ export function createChatTabController(
         environment.activate(closed.id)
         return closed.id
       }),
-    createEmpty: () =>
-      change(async (value) => {
-        if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeOpen'))
-        const id = `tab:${crypto.randomUUID()}`
-        const layout: WatchedChannelsLayout = {
-          version: 2,
-          root: { type: 'panel', id: crypto.randomUUID(), flex: 100, content: { type: 'empty' } },
-        }
-        await api.setWatchedChannelsLayout({ tabId: id, layout })
-        value.openIds.push(id)
-        value.metadata[id] = { locked: false }
-        await persist(value)
-        environment.publishLayout(id, layout)
-        environment.activate(id)
-        return id
-      }),
+    createEmpty: () => createTab({ type: 'empty' }),
+    createFeed: (sources: WatchedPaneSource[]) =>
+      createTab({ type: 'feed', sources: structuredClone(sources) }),
     rememberSplit: (entry: ClosedSplit) =>
       change(async (value) => {
         value.closedSplits = [
@@ -577,6 +581,8 @@ export const restoreClosedChatTab = (backend: { api: ChatTabApi }, id?: string) 
   controller(backend.api).restore(id)
 export const createEmptyChatTab = (backend: { api: ChatTabApi }) =>
   controller(backend.api).createEmpty()
+export const createChatFeedTab = (backend: { api: ChatTabApi }, sources: WatchedPaneSource[]) =>
+  controller(backend.api).createFeed(sources)
 export const rememberClosedSplit = (backend: { api: ChatTabApi }, entry: ClosedSplit) =>
   controller(backend.api).rememberSplit(entry)
 export const consumeClosedSplit = (backend: { api: ChatTabApi }, id: string) =>
@@ -601,23 +607,41 @@ export interface ChatTabView extends Omit<WatchedChannel, 'platform'> {
   platform?: WatchedPlatform
   empty?: boolean
   sourceChannelId: string
+  sourceChannelIds?: string[]
 }
 export function tabsForChannels(
   channels: DesktopWatchedChannel[],
   ids: string[],
   entries: Record<string, ChatTabMetadata>,
+  layouts: ReadonlyMap<string, LayoutState> = layoutStore.get(),
 ): ChatTabView[] {
+  const byId = new Map(channels.map((channel) => [channel.id, channel]))
   return ids.flatMap<ChatTabView>((id) => {
     const entry = entries[id]
-    const layout = layoutStore.get().get(id)?.layout
-    const assigned = layout
-      ? getAllPanels(layout.root).find((panel) => panel.content.type === 'watched')
-      : undefined
-    const assignedId = assigned?.content.type === 'watched' ? assigned.content.channelId : undefined
+    const layout = layouts.get(id)?.layout
+    const panels = layout ? getAllPanels(layout.root) : []
+    const assignedIds = layoutWatchedSourceIds(panels)
+    if (layout && panels.some((panel) => panel.content.type === 'feed')) {
+      const sourceChannelIds = assignedIds.filter((sourceId) => byId.has(sourceId))
+      if (sourceChannelIds.length)
+        return [
+          {
+            id,
+            displayName:
+              entry?.title ??
+              sourceChannelIds.map((sourceId) => byId.get(sourceId)?.displayName).join(', '),
+            channelSlug: '',
+            createdAt: 0,
+            sourceChannelId: '',
+            sourceChannelIds,
+          },
+        ]
+    }
+    const assignedId = assignedIds[0]
     const channel =
-      channels.find((candidate) => candidate.id === entry?.channelId) ??
-      channels.find((candidate) => candidate.id === id) ??
-      channels.find((candidate) => candidate.id === assignedId)
+      (entry?.channelId ? byId.get(entry.channelId) : undefined) ??
+      byId.get(id) ??
+      (assignedId ? byId.get(assignedId) : undefined)
     return channel
       ? [
           {

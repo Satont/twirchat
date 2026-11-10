@@ -20,6 +20,14 @@ export const chat = {
   'chat.menu.openOverlay': 'Open chat overlay',
   'chat.menu.closePanel': 'Close panel',
 
+  'chat.feed.title': 'Combined feed',
+  'chat.feed.combine': 'Combine channels',
+  'chat.feed.editSources': 'Manage sources',
+  'chat.feed.moreSources': '+{count}',
+  'chat.feed.empty': 'New messages from your selected channels will appear here.',
+  'chat.feed.sendTo': 'Choose a channel to send to',
+  'chat.feed.sendToChannel': 'To {channel}',
+
   'chat.room.slow': 'Slow {seconds}s',
   'chat.room.followers': 'Followers {minutes}m',
   'chat.room.subscribersOnly': 'Subscribers only',

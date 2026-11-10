@@ -38,6 +38,7 @@ if (
     (result) =>
       result.config.warmupSeconds !== options.warmup ||
       Boolean(result.config.pluginSubscriber) !== options.pluginSubscriber ||
+      Boolean(result.config.feeds) !== options.feeds ||
       result.config.durationSeconds !== options.duration ||
       result.compositor !== options.compositor ||
       result.reactMode !== options.mode ||
@@ -120,6 +121,7 @@ for (const [index, scenario] of selected.entries()) {
     warmupSeconds: options.warmup,
     durationSeconds: options.duration,
     pluginSubscriber: options.pluginSubscriber || undefined,
+    feeds: options.feeds || undefined,
   })
   if (
     results.some(
@@ -243,6 +245,11 @@ const report = [
   ...(options.pluginSubscriber
     ? [
         'One enabled TypeScript plugin subscribes to every chat message. The app metrics exclude the plugin process. Per-case JSON includes the plugin delivery count, CPU time and final RSS.',
+      ]
+    : []),
+  ...(options.feeds
+    ? [
+        'Combined-feed experiment: all channels are distributed across the visible panes. Each pane shows a combined feed and each channel still retains 200 messages.',
       ]
     : []),
   '',

@@ -57,7 +57,10 @@ const channels: WatchedChannel[] = Array.from({ length: config.channels }, (_, i
   displayName: `Benchmark ${index + 1}`,
   createdAt: 0,
 }))
-const visibleChannels = channels.slice(0, config.panes)
+const visiblePanes = channels.slice(0, config.panes).map((channel, pane) => ({
+  channel,
+  feed: config.feeds ? channels.filter((_, index) => index % config.panes === pane) : undefined,
+}))
 const layout: WatchedChannelsLayout = {
   version: 2,
   root: {
@@ -65,11 +68,13 @@ const layout: WatchedChannelsLayout = {
     id: 'benchmark-root',
     direction: 'horizontal',
     flex: 100,
-    children: visibleChannels.map((channel) => ({
+    children: visiblePanes.map(({ channel, feed }) => ({
       type: 'panel',
       id: channel.id,
-      flex: 100 / visibleChannels.length,
-      content: { type: 'watched', channelId: channel.id },
+      flex: 100 / visiblePanes.length,
+      content: feed
+        ? { type: 'feed', sources: feed.map(({ id }) => ({ channelId: id })) }
+        : { type: 'watched', channelId: channel.id },
     })),
   },
 }
@@ -117,7 +122,7 @@ function Content() {
         backgroundColor: '#16161c',
       },
     },
-    ...visibleChannels.map((channel) =>
+    ...visiblePanes.map(({ channel, feed }) =>
       React.createElement(
         'div',
         {
@@ -128,7 +133,7 @@ function Content() {
           paneId: `benchmark:${channel.id}`,
           layoutTabId: 'benchmark',
           layoutPanelId: channel.id,
-          watchedChannel: channel,
+          ...(feed ? { feedChannels: feed } : { watchedChannel: channel }),
         }),
       ),
     ),

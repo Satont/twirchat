@@ -32,6 +32,7 @@ import { runInBackground } from '../services/background-task'
 import { chatSender, separateSender } from '../services/chat-accounts'
 import { sevenTVService } from '../seventv'
 import { AccountStore } from '../store/account-store'
+import { getDb } from '../store/db'
 import { WatchedChannelsLayoutStore } from '../store/watched-channels-layout-store'
 import { WatchedChannelStore } from '../store/watched-channels-store'
 import type { ChatAccountSender } from './account-sender'
@@ -123,14 +124,12 @@ export class WatchedChannelManager {
   }
 
   async removeChannel(id: string): Promise<void> {
+    getDb().transaction(() => {
+      WatchedChannelStore.remove(id)
+      WatchedChannelsLayoutStore.cleanupRemovedChannel(id)
+    })()
     if (this.activeIds.delete(id)) this.notifyActiveChannels()
     await this.stopChannel(id)
-    WatchedChannelStore.remove(id)
-    WatchedChannelsLayoutStore.remove(id)
-    const remaining = WatchedChannelStore.findAll()
-    for (const ch of remaining) {
-      WatchedChannelsLayoutStore.cleanupStaleAssignments(ch.id, [id])
-    }
   }
 
   private async stopChannel(id: string): Promise<void> {

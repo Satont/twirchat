@@ -18,6 +18,7 @@ import { chatRulesStore } from '../src/gpuix/state/chat-rules'
 import {
   chatTabsStore,
   closeChatTab,
+  createChatFeedTab,
   createEmptyChatTab,
   restoreClosedChatTab,
   tabsForChannels,
@@ -35,6 +36,7 @@ import {
   removePanel,
   reopenClosedSplit,
   saveLayoutNow,
+  setPanelSources,
   updateSplitFlexes,
 } from '../src/gpuix/state/layout'
 import { getDb, initDb } from '../src/store/db'
@@ -146,6 +148,70 @@ test('generic empty tabs and home retain truthful content through SQLite restart
   })
   expect(WatchedChannelsLayoutStore.get(watched.id).root).toMatchObject({
     content: { type: 'watched', channelId: watched.id },
+  })
+})
+
+test('a mixed-platform feed survives close and restore with its remaining saved source', async () => {
+  const twitch = WatchedChannelStore.upsert('twitch', 'alice', 'Alice')
+  const kick = WatchedChannelStore.upsert('kick', 'bob', 'Bob')
+  const sources = [{ channelId: twitch.id }, { channelId: kick.id, accountId: 'kick:bot' }]
+  watchedChannelsStore.set([twitch, kick])
+  const tabId = await createChatFeedTab(backend, sources)
+  expect(WatchedChannelsLayoutStore.get(tabId).root).toMatchObject({
+    content: { type: 'feed', sources },
+  })
+  expect(tabsForChannels([twitch, kick], [tabId], {})).toMatchObject([
+    { displayName: 'Alice, Bob', sourceChannelIds: [twitch.id, kick.id] },
+  ])
+  await closeChatTab(backend, tabId)
+  const raw = await backend.api.getUiState({ key: 'chat_tabs_v1' })
+  const saved = validateChatTabs(JSON.parse(required(raw)))
+  expect(saved.closed[0]?.layout.root).toMatchObject({ content: { type: 'feed', sources } })
+
+  WatchedChannelStore.remove(twitch.id)
+  WatchedChannelsLayoutStore.cleanupRemovedChannel(twitch.id)
+  watchedChannelsStore.set([kick])
+  expect(await restoreClosedChatTab(backend, tabId)).toBe(tabId)
+  expect(WatchedChannelsLayoutStore.get(tabId).root).toMatchObject({
+    content: { type: 'watched', channelId: kick.id, accountId: 'kick:bot' },
+  })
+})
+
+test('combining a legacy watched pane keeps its account choice and does not drop the other source on removal', async () => {
+  const twitch = WatchedChannelStore.upsert('twitch', 'alice', 'Alice')
+  const kick = WatchedChannelStore.upsert('kick', 'bob', 'Bob')
+  const panelId = 'existing-pane'
+  WatchedChannelsLayoutStore.set(twitch.id, {
+    version: 2,
+    root: {
+      type: 'panel',
+      id: panelId,
+      flex: 100,
+      content: { type: 'watched', channelId: twitch.id, accountId: 'twitch:bot' },
+    },
+  })
+  const sources = [{ channelId: twitch.id }, { channelId: kick.id }]
+  await setPanelSources(backend, twitch.id, panelId, sources)
+  expect(WatchedChannelsLayoutStore.get(twitch.id).root).toMatchObject({
+    id: panelId,
+    content: {
+      type: 'feed',
+      sources: [{ channelId: twitch.id, accountId: 'twitch:bot' }, { channelId: kick.id }],
+    },
+  })
+  await expect(
+    setPanelSources(backend, twitch.id, panelId, [
+      { channelId: twitch.id },
+      { channelId: twitch.id },
+    ]),
+  ).rejects.toThrow()
+
+  WatchedChannelStore.remove(twitch.id)
+  WatchedChannelsLayoutStore.cleanupRemovedChannel(twitch.id)
+  WatchedChannelsLayoutStore.cleanupRemovedChannel(twitch.id)
+  expect(WatchedChannelsLayoutStore.get(twitch.id).root).toMatchObject({
+    id: panelId,
+    content: { type: 'watched', channelId: kick.id },
   })
 })
 

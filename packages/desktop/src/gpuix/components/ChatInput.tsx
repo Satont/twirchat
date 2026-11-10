@@ -23,7 +23,7 @@ import type {
   PlatformStatusInfo,
   WatchedChannel,
 } from '@twirchat/shared/types'
-import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import type { JeetbotCommandTarget } from '../../services/jeetbot-commands'
 import { normalizePrivateCommand } from '../../services/private-commands'
@@ -173,6 +173,8 @@ export interface ChatInputProps {
   replyTarget?: NormalizedChatMessage | null
   messages?: NormalizedChatMessage[]
   composerKey?: string
+  focusActivityKey?: string
+  renderWatchedTarget?: (focusEditor: () => void, disabled: boolean) => ReactNode
   hotkeyContextId?: string
   hotkeyParentContextIds?: readonly string[]
   onCommandRunnerReady?: (runner: ComposerCommandRunner | null) => void
@@ -258,7 +260,7 @@ export function ChatInput(props: ChatInputProps) {
     composerKey,
     renderer,
     textareaRef,
-    props.watchedChannel?.id ?? 'home',
+    props.focusActivityKey ?? props.watchedChannel?.id ?? 'home',
   )
   const composer = useStoreSelector(
     composerStore,
@@ -1717,7 +1719,11 @@ export function ChatInput(props: ChatInputProps) {
                 borderColor: theme.border,
               }}
             >
-              {props.watchedChannel?.platform === 'youtube' ? (
+              {props.renderWatchedTarget ? (
+                props.renderWatchedTarget(() => {
+                  if (textareaRef.current) renderer.focusElement?.(textareaRef.current.id)
+                }, executing)
+              ) : props.watchedChannel?.platform === 'youtube' ? (
                 <TargetControl
                   platform="youtube"
                   label={props.watchedChannel.displayName}

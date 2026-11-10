@@ -12,6 +12,7 @@ export interface ComposerState {
   savedDraft: string | null
   translateOnSend?: boolean
   activePlatform?: Platform
+  activeWatchedChannelId?: string
   disabledPlatforms?: ReadonlySet<Platform>
 }
 

@@ -26,6 +26,8 @@ export function AddChannelForm({
   autoFocus = true,
   popup = false,
   popupContextId,
+  builtInOnly = false,
+  confirmLabel,
   inputRef,
   onFocus,
   onConfirm,
@@ -35,6 +37,8 @@ export function AddChannelForm({
   autoFocus?: boolean
   popup?: boolean
   popupContextId?: string
+  builtInOnly?: boolean
+  confirmLabel?: string
   inputRef?: Ref<PublicInstance>
   onFocus?: () => void
   onConfirm: (platform: WatchedPlatform, channelSlug: string) => void
@@ -43,7 +47,8 @@ export function AddChannelForm({
   const theme = useTheme()
   const { t } = useT()
   const { api, plugins } = useBackend()
-  const readTransports = () => (plugins ? api.getPluginTransports() : noPluginTransports)
+  const readTransports = () =>
+    plugins && !builtInOnly ? api.getPluginTransports() : noPluginTransports
   const [transports, setTransports] = useState(readTransports)
   useBackendEvent('plugins_changed', () => setTransports(readTransports()))
   const [platform, setPlatform] = useState<WatchedPlatform>('twitch')
@@ -91,7 +96,17 @@ export function AddChannelForm({
             <div
               key={p}
               testId={`add-platform-${p}`}
+              tabIndex={0}
+              role="radio"
+              aria-checked={active}
               onClick={() => setPlatform(p)}
+              onKeyDown={(event) => {
+                if (event.key === 'enter' || event.key === 'space') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setPlatform(p)
+                }
+              }}
               style={{
                 flexGrow: 1,
                 display: 'flex',
@@ -110,6 +125,7 @@ export function AddChannelForm({
                 cursor: 'pointer',
                 userSelect: 'none',
                 hover: active ? undefined : { backgroundColor: theme.fillHover },
+                focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 },
               }}
             >
               <PlatformIcon platform={p} size={14} color={active ? color : theme.text2} />
@@ -230,7 +246,15 @@ export function AddChannelForm({
       >
         {cancelable ? (
           <div
+            tabIndex={0}
             onClick={onCancel}
+            onKeyDown={(event) => {
+              if (event.key === 'enter' || event.key === 'space') {
+                event.preventDefault()
+                event.stopPropagation()
+                onCancel?.()
+              }
+            }}
             style={{
               paddingTop: 7,
               paddingBottom: 7,
@@ -241,6 +265,7 @@ export function AddChannelForm({
               borderColor: theme.hairline,
               cursor: 'pointer',
               hover: { backgroundColor: theme.fillHover },
+              focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 },
             }}
           >
             <Text style={{ fontSize: 13, fontWeight: 500, color: theme.text2 }}>
@@ -250,7 +275,15 @@ export function AddChannelForm({
         ) : null}
         <div
           testId="add-channel-confirm"
+          tabIndex={canConfirm ? 0 : undefined}
           onClick={confirm}
+          onKeyDown={(event) => {
+            if (event.key === 'enter' || event.key === 'space') {
+              event.preventDefault()
+              event.stopPropagation()
+              confirm()
+            }
+          }}
           style={{
             paddingTop: 7,
             paddingBottom: 7,
@@ -261,10 +294,11 @@ export function AddChannelForm({
             cursor: canConfirm ? 'pointer' : 'default',
             opacity: canConfirm ? 1 : 0.4,
             hover: { backgroundColor: canConfirm ? theme.accent.deepHover : theme.accent.deep },
+            focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 },
           }}
         >
           <Text style={{ fontSize: 13, fontWeight: 600, color: theme.accent.onDeep }}>
-            {t('common.add')}
+            {confirmLabel ?? t('common.add')}
           </Text>
         </div>
       </div>

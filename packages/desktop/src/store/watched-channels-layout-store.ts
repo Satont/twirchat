@@ -1,6 +1,7 @@
 import type { LayoutNode, PanelNode, WatchedChannelsLayout } from '@twirchat/shared/types'
 
 import { watchedChannelsLayoutSchema } from '../services/persisted-schemas'
+import { getAllPanels, retainAvailableFeedSources } from '../views/main/utils/layout-tree'
 import { getDb } from './db'
 import { PluginWatchedChannelsStore } from './plugin-watched-channels-store'
 import { WatchedChannelStore } from './watched-channels-store'
@@ -86,11 +87,18 @@ export const WatchedChannelsLayoutStore = {
     validateLayout(layout)
 
     const db = getDb()
+    const parsed = watchedChannelsLayoutSchema.parse(layout)
+    let channelIds: Set<string> | undefined
+    for (const panel of getAllPanels(parsed.root)) {
+      if (panel.content.type !== 'feed') continue
+      const known = (channelIds ??= new Set(WatchedChannelStore.findAll().map(({ id }) => id)))
+      panel.content = retainAvailableFeedSources(panel.content, (id) => known.has(id))
+    }
     const layoutWithMeta: WatchedChannelsLayout = {
-      ...layout,
+      ...parsed,
       meta: {
-        createdAt: layout.meta?.createdAt ?? Date.now(),
-        ...layout.meta,
+        createdAt: parsed.meta?.createdAt ?? Date.now(),
+        ...parsed.meta,
         updatedAt: Date.now(),
       },
     }
@@ -116,31 +124,33 @@ export const WatchedChannelsLayoutStore = {
     const keys = getDb()
       .query<{ key: string }, [string]>('SELECT key FROM settings WHERE key GLOB ?')
       .all(`${prefix}*`)
-    for (const { key } of keys) this.cleanupStaleAssignments(key.slice(prefix.length), [channelId])
-  },
-
-  cleanupStaleAssignments(tabId: string, removedChannelIds: string[]): void {
-    if (removedChannelIds.includes(tabId)) {
-      this.remove(tabId)
-      return
-    }
-
-    const layout = this.get(tabId)
-    let changed = false
-
-    const cleanNode = (node: LayoutNode): void => {
-      if (node.type === 'panel' && node.content.type === 'watched') {
-        if (removedChannelIds.includes(node.content.channelId)) {
-          node.content = { type: 'empty' }
-          changed = true
-        }
-      } else if (node.type === 'split') {
-        node.children.forEach(cleanNode)
+    for (const { key } of keys) {
+      const tabId = key.slice(prefix.length)
+      const layout = this.get(tabId)
+      const panels = getAllPanels(layout.root)
+      // A legacy tab can now hold a feed with sources independent of its original ID.
+      if (
+        tabId === channelId &&
+        panels.every(
+          ({ content }) =>
+            content.type !== 'feed' &&
+            (content.type !== 'watched' || content.channelId === channelId),
+        )
+      ) {
+        this.remove(tabId)
+        continue
       }
+      let changed = false
+      for (const panel of panels) {
+        const content = panel.content
+        panel.content =
+          content.type === 'watched' && content.channelId === channelId
+            ? { type: 'empty' }
+            : retainAvailableFeedSources(content, (id) => id !== channelId)
+        changed ||= panel.content !== content
+      }
+      if (changed) this.set(tabId, layout)
     }
-
-    cleanNode(layout.root)
-    if (changed) this.set(tabId, layout)
   },
 
   getPanelNode(layout: WatchedChannelsLayout, panelId: string): PanelNode | null {

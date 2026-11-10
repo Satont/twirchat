@@ -2,6 +2,7 @@ import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import { filterHomeChatMessages } from '../../views/main/utils/chat-send-targets'
+import { panelWatchedSources } from '../../views/main/utils/layout-tree'
 import type { DesktopBackend } from '../backend/server'
 import { chatMessageKey } from '../chat-tools'
 import { compileMessageRules } from '../message-rules'
@@ -81,15 +82,15 @@ export function wireTabUnread(backend: Pick<DesktopBackend, 'events'>): () => vo
       }
       routes.add(tabId)
     }
-    for (const tabId of tabs) {
+    for (const tabId of ['home', ...tabs]) {
       const layout = layouts.get(tabId)?.layout
       if (!layout) {
         add(tabId, tabId)
         continue
       }
       for (const panel of allPanels(layout)) {
-        if (panel.content.type === 'watched') add(panel.content.channelId, tabId)
-        else if (panel.content.type === 'main') homeRoutes.add(tabId)
+        if (panel.content.type === 'main') homeRoutes.add(tabId)
+        else for (const { channelId } of panelWatchedSources(panel.content)) add(channelId, tabId)
       }
     }
   }

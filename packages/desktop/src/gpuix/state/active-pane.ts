@@ -1,4 +1,5 @@
 import { runInBackground } from '../../services/background-task'
+import { panelWatchedSources } from '../../views/main/utils/layout-tree'
 import { isPluginWatchedChannel } from '../../watched-channels/plugin-channel-types'
 import type { DesktopBackend } from '../backend/server'
 import { accountsStore, activeTabStore, activeWatchedTabStore, watchedChannelsStore } from './app'
@@ -53,8 +54,13 @@ export function wireProviderChannelFocus(backend: DesktopBackend): () => void {
     const panels = allPanels(layoutStore.get().get(tabId)?.layout ?? null)
     const panel =
       panels.find((candidate) => `${tabId}:${candidate.id}` === active?.paneId) ?? panels[0]
-    const watchedId = panel?.content.type === 'watched' ? panel.content.channelId : tabId
-    const watched = watchedChannelsStore.get().find((channel) => channel.id === watchedId)
+    const sources = panel ? panelWatchedSources(panel.content) : []
+    const channels = watchedChannelsStore.get()
+    const watched = sources.length
+      ? sources
+          .map(({ channelId }) => channels.find((channel) => channel.id === channelId))
+          .find(Boolean)
+      : channels.find((channel) => channel.id === tabId)
     const account =
       accountsStore.get().find((candidate) => candidate.platform === 'twitch') ??
       accountsStore.get().find((candidate) => candidate.platform === 'kick')

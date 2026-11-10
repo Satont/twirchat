@@ -15,7 +15,7 @@ function messageKey(message: NormalizedChatMessage): string {
   return chatMessageIdentity(message)
 }
 
-function compareMessages(left: NormalizedChatMessage, right: NormalizedChatMessage): number {
+export function compareMessages(left: NormalizedChatMessage, right: NormalizedChatMessage): number {
   const byTimestamp = messageTimestamp(left) - messageTimestamp(right)
   if (byTimestamp !== 0) return byTimestamp
   const leftKey = messageKey(left)
