@@ -103,7 +103,8 @@ The development-only injection server defaults to 55824 (`DEV_SERVER_PORT`).
   `http://localhost:45821/auth/kick/callback` for production and port 55821 for development.
 
 For GitHub release builds, set all three `TWIRCHAT_` OAuth values above as repository
-variables in **Settings → Secrets and variables → Actions → Variables**.
+secrets in **Settings → Secrets and variables → Actions → Secrets**. The optional
+`TWIRCHAT_DONATIONALERTS_CLIENT_ID` is also configured as a repository secret.
 
 The first launch after upgrading signs out all saved Twitch accounts and clears their stored
 Twitch web sessions. Sign in again through Device Code Grant. The reset runs once per local
