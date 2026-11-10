@@ -79,6 +79,13 @@ function resolveRow(
   return resolved === next.resolved ? next : { ...next, resolved }
 }
 
+/** Decision history gives way before messages that still need a decision. */
+function trimRows(rows: readonly TwitchAutoModRow[]): readonly TwitchAutoModRow[] {
+  if (rows.length <= MAX_ROWS) return rows
+  const resolved = rows.findIndex((row) => row.state === 'resolved')
+  return rows.toSpliced(resolved < 0 ? 0 : resolved, 1)
+}
+
 export function applyTwitchAutoModEvent(event: TwitchAutoModEvent): void {
   if (event.type === 'clear') {
     const { channelSlug } = event
@@ -108,7 +115,7 @@ export function applyTwitchAutoModEvent(event: TwitchAutoModEvent): void {
     const index = queue.rows.findLastIndex((entry) => entry.hold.timestamp <= event.timestamp) + 1
     return {
       ...queue,
-      rows: queue.rows.toSpliced(index, 0, row).slice(-MAX_ROWS),
+      rows: trimRows(queue.rows.toSpliced(index, 0, row)),
       total: queue.total + 1,
     }
   })

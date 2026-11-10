@@ -59,6 +59,22 @@ test('keeps resolved holds in place with the deciding moderator', () => {
   expect(queue()?.total).toBe(3)
 })
 
+test('evicts decided holds before ones still waiting for a decision', () => {
+  applyTwitchAutoModEvent(held)
+  for (let index = 0; index < 100; index++) {
+    const id = `resolved-${index}`
+    applyTwitchAutoModEvent({ ...held, messageId: id, timestamp: 3000 + index })
+    applyTwitchAutoModEvent({ type: 'resolve', channelSlug, messageId: id, status: 'approved' })
+  }
+  applyTwitchAutoModEvent({ ...held, messageId: 'newest', timestamp: 9000 })
+  expect(queue()?.rows).toHaveLength(100)
+  expect(entry()?.state).toBe('pending')
+  expect(entry('newest')?.state).toBe('pending')
+  expect(entry('resolved-0')).toBeUndefined()
+  expect(entry('resolved-1')).toBeUndefined()
+  expect(entry('resolved-2')?.state).toBe('resolved')
+})
+
 test('serializes decisions per held message and lets a failed decision be retried', async () => {
   applyTwitchAutoModEvent(held)
   const pending = Promise.withResolvers<Awaited<ReturnType<DesktopApi['executePlatformCommand']>>>()
