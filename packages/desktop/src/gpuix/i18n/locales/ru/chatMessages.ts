@@ -45,12 +45,20 @@ export const ruChatMessages = {
   'chatMessages.notice.moderation': 'Модерация',
 
   'chatMessages.autoMod.submitting': 'Отправка…',
-  'chatMessages.autoMod.held.one': '{count} сообщение на модерации',
-  'chatMessages.autoMod.held.few': '{count} сообщения на модерации',
-  'chatMessages.autoMod.held.many': '{count} сообщений на модерации',
-  'chatMessages.autoMod.held.other': '{count} сообщений на модерации',
-  'chatMessages.autoMod.approve': 'Одобрить',
+  'chatMessages.autoMod.reason.category':
+    'Сообщение задержано по причине: {category}. Если разрешить, оно появится в чате.',
+  'chatMessages.autoMod.reason.blockedTerm':
+    'Сообщение задержано из-за запрещённых слов канала. Если разрешить, оно появится в чате.',
+  'chatMessages.autoMod.reason.generic':
+    'Сообщение задержано для проверки. Если разрешить, оно появится в чате.',
+  'chatMessages.autoMod.hiddenBlockedTerm': '[сообщение с запрещёнными словами скрыто]',
+  'chatMessages.autoMod.approve': 'Разрешить',
   'chatMessages.autoMod.deny': 'Отклонить',
+  'chatMessages.autoMod.allowed': 'Разрешено',
+  'chatMessages.autoMod.allowedBy': 'Разрешил(а) {name}',
+  'chatMessages.autoMod.denied': 'Отклонено',
+  'chatMessages.autoMod.deniedBy': 'Отклонил(а) {name}',
+  'chatMessages.autoMod.expired': 'Время истекло',
   'chatMessages.autoMod.senderNotice.held': 'Ваше сообщение проверяют модераторы.',
   'chatMessages.autoMod.senderNotice.approved': 'Модераторы одобрили ваше сообщение.',
   'chatMessages.autoMod.senderNotice.denied': 'Модераторы не одобрили ваше сообщение.',

@@ -1,45 +1,82 @@
 import { deleteOldestEntry } from '../../services/bounded-cache'
-import type { TwitchAutoModEvent, TwitchAutoModHold } from '../../services/twitch-automod'
+import type {
+  TwitchAutoModEvent,
+  TwitchAutoModHold,
+  TwitchAutoModResolution,
+} from '../../services/twitch-automod'
 import type { DesktopApi } from '../backend/api'
 import type { DesktopEvents } from '../backend/events'
 import { t } from '../i18n'
 import { createStore, type Store } from './create-store'
 import { persistentResource } from './persistent-resources'
 
-type HeldMessage = { hold: TwitchAutoModHold } & (
-  | { state: 'pending'; error?: string }
-  | { state: 'deciding' }
-)
 type Decision = 'approve' | 'deny'
 
-interface ChannelQueue {
-  held: ReadonlyMap<string, HeldMessage>
-  resolved: ReadonlySet<string>
-}
-
-const MAX_HELD = 50
-const MAX_RESOLVED = 200
-const emptyQueue: ChannelQueue = { held: new Map(), resolved: new Set() }
-
-export const twitchAutoModStore = persistentResource('twitchAutoMod', () =>
-  createStore<ReadonlyMap<string, ChannelQueue>>(new Map()),
+export type TwitchAutoModRow = { key: string; hold: TwitchAutoModHold } & (
+  | { state: 'pending'; error?: string }
+  | { state: 'deciding' }
+  | { state: 'resolved'; resolution: TwitchAutoModResolution; moderatorName?: string }
 )
 
-function updateChannel(channelSlug: string, update: (queue: ChannelQueue) => ChannelQueue) {
+export interface TwitchAutoModQueue {
+  /** Ordered by hold time so the rows can be merged into the chat timeline. */
+  rows: readonly TwitchAutoModRow[]
+  resolved: ReadonlySet<string>
+  total: number
+}
+
+const MAX_ROWS = 100
+const MAX_RESOLVED = 200
+export const EMPTY_AUTOMOD_QUEUE: TwitchAutoModQueue = { rows: [], resolved: new Set(), total: 0 }
+
+export const twitchAutoModStore = persistentResource('twitchAutoMod', () =>
+  createStore<ReadonlyMap<string, TwitchAutoModQueue>>(new Map()),
+)
+
+function updateChannel(
+  channelSlug: string,
+  update: (queue: TwitchAutoModQueue) => TwitchAutoModQueue,
+) {
   twitchAutoModStore.modify((channels) => {
-    const current = channels.get(channelSlug) ?? emptyQueue
+    const current = channels.get(channelSlug) ?? EMPTY_AUTOMOD_QUEUE
     const next = update(current)
     return next === current ? channels : new Map(channels).set(channelSlug, next)
   })
 }
 
-function resolveMessage(queue: ChannelQueue, messageId: string): ChannelQueue {
-  if (queue.resolved.has(messageId)) return queue
-  const held = new Map(queue.held)
-  held.delete(messageId)
+function replaceRow(
+  queue: TwitchAutoModQueue,
+  messageId: string,
+  update: (row: TwitchAutoModRow) => TwitchAutoModRow | undefined,
+): TwitchAutoModQueue {
+  const index = queue.rows.findIndex((row) => row.hold.messageId === messageId)
+  const current = queue.rows[index]
+  const next = current && update(current)
+  return next ? { ...queue, rows: queue.rows.with(index, next) } : queue
+}
+
+function markResolved(queue: TwitchAutoModQueue, messageId: string): ReadonlySet<string> {
+  if (queue.resolved.has(messageId)) return queue.resolved
   const resolved = new Set(queue.resolved).add(messageId)
   if (resolved.size > MAX_RESOLVED) deleteOldestEntry(resolved)
-  return { held, resolved }
+  return resolved
+}
+
+function resolveRow(
+  queue: TwitchAutoModQueue,
+  messageId: string,
+  resolution: TwitchAutoModResolution,
+  moderatorName?: string,
+): TwitchAutoModQueue {
+  const next = replaceRow(queue, messageId, ({ key, hold }) => ({
+    key,
+    hold,
+    state: 'resolved',
+    resolution,
+    ...(moderatorName ? { moderatorName } : {}),
+  }))
+  const resolved = markResolved(next, messageId)
+  return resolved === next.resolved ? next : { ...next, resolved }
 }
 
 export function applyTwitchAutoModEvent(event: TwitchAutoModEvent): void {
@@ -56,17 +93,36 @@ export function applyTwitchAutoModEvent(event: TwitchAutoModEvent): void {
   }
 
   updateChannel(event.channelSlug, (queue) => {
-    if (event.type === 'resolve') return resolveMessage(queue, event.messageId)
-    if (queue.resolved.has(event.messageId) || queue.held.has(event.messageId)) return queue
-    const held = new Map(queue.held)
-    held.set(event.messageId, { hold: event, state: 'pending' })
-    if (held.size > MAX_HELD) deleteOldestEntry(held)
-    return { ...queue, held }
+    if (event.type === 'resolve')
+      return resolveRow(queue, event.messageId, event.status, event.moderatorName)
+    if (
+      queue.resolved.has(event.messageId) ||
+      queue.rows.some((row) => row.hold.messageId === event.messageId)
+    )
+      return queue
+    const row: TwitchAutoModRow = {
+      key: `automod:${event.channelSlug}:${event.messageId}`,
+      hold: event,
+      state: 'pending',
+    }
+    const index = queue.rows.findLastIndex((entry) => entry.hold.timestamp <= event.timestamp) + 1
+    return {
+      ...queue,
+      rows: queue.rows.toSpliced(index, 0, row).slice(-MAX_ROWS),
+      total: queue.total + 1,
+    }
   })
 }
 
 export function wireTwitchAutoMod(events: DesktopEvents): () => void {
   return events.on('twitch_automod', applyTwitchAutoModEvent)
+}
+
+function findRow(channelSlug: string, messageId: string) {
+  return twitchAutoModStore
+    .get()
+    .get(channelSlug)
+    ?.rows.find((row) => row.hold.messageId === messageId)
 }
 
 export async function decideTwitchAutoModMessage(
@@ -81,13 +137,11 @@ export async function decideTwitchAutoModMessage(
     decision: Decision
   },
 ): Promise<void> {
-  const message = twitchAutoModStore.get().get(channelSlug)?.held.get(messageId)
-  if (message?.state !== 'pending') return
-  const deciding: HeldMessage = { hold: message.hold, state: 'deciding' }
-  updateChannel(channelSlug, (queue) => ({
-    ...queue,
-    held: new Map(queue.held).set(messageId, deciding),
-  }))
+  const row = findRow(channelSlug, messageId)
+  if (row?.state !== 'pending') return
+  const deciding: TwitchAutoModRow = { key: row.key, hold: row.hold, state: 'deciding' }
+  updateChannel(channelSlug, (queue) => replaceRow(queue, messageId, () => deciding))
+  const isCurrent = (current: TwitchAutoModRow) => current === deciding
 
   const command = decision === 'approve' ? 'automodallow' : 'automoddeny'
   try {
@@ -97,25 +151,28 @@ export async function decideTwitchAutoModMessage(
       text: `/${command} ${messageId}`,
     })
     updateChannel(channelSlug, (queue) =>
-      queue.held.get(messageId) === deciding ? resolveMessage(queue, messageId) : queue,
+      queue.rows.some(isCurrent)
+        ? resolveRow(queue, messageId, decision === 'approve' ? 'approved' : 'denied')
+        : queue,
     )
   } catch (error) {
     updateChannel(channelSlug, (queue) =>
-      queue.held.get(messageId) === deciding
-        ? {
-            ...queue,
-            held: new Map(queue.held).set(messageId, {
-              ...message,
+      replaceRow(queue, messageId, (current) =>
+        isCurrent(current)
+          ? {
+              key: row.key,
+              hold: row.hold,
+              state: 'pending',
               error: error instanceof Error ? error.message : t('notices.autoMod.decisionFailed'),
-            }),
-          }
-        : queue,
+            }
+          : undefined,
+      ),
     )
   }
 }
 
 declare module './persistent-resources' {
   interface PersistentResources {
-    twitchAutoMod: Store<ReadonlyMap<string, ChannelQueue>>
+    twitchAutoMod: Store<ReadonlyMap<string, TwitchAutoModQueue>>
   }
 }

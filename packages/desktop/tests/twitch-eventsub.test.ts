@@ -58,6 +58,7 @@ const hold = (channel: string, messageId = 'held-message') => ({
     user_name: 'Viewer',
     message: { text: 'Held text' },
     reason: 'blocked_term',
+    held_at: '2026-11-10T03:56:00Z',
   },
 })
 afterEach(() => {
@@ -209,9 +210,10 @@ describe('Twitch EventSub lifecycle', () => {
         messageId: 'held-message',
         displayName: 'Viewer',
         text: 'Held text',
+        timestamp: Date.parse('2026-11-10T03:56:00Z'),
         blockedTerm: true,
       },
-      { type: 'resolve', channelSlug: 'creator', messageId: 'held-message' },
+      { type: 'resolve', channelSlug: 'creator', messageId: 'held-message', status: 'approved' },
     ])
     await f.client.watch('creator', false)
     socket.message('notification', hold('creator'))

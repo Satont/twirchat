@@ -37,7 +37,9 @@ import { publicChannelURL } from '../../views/main/utils/public-channel-url'
 import { initialsOf } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import {
+  autoModSearchMessage,
   donationSearchMessage,
+  mergeAutoModTimeline,
   mergeChatTimeline,
   mergeDonationTimeline,
   pluginChatSearchMessage,
@@ -97,6 +99,11 @@ import {
   loadTwitchActivities,
   twitchActivitiesStore,
 } from '../state/twitch-activities'
+import {
+  EMPTY_AUTOMOD_QUEUE,
+  twitchAutoModStore,
+  type TwitchAutoModRow,
+} from '../state/twitch-automod'
 import { windowActivityStore, updateWindowActivity } from '../state/window-activity'
 import { useWindowPresentation } from '../state/window-presentation'
 import { useWindowScope } from '../state/window-scope'
@@ -111,7 +118,7 @@ import { ChattersDialog } from './ChattersDialog'
 import { DonationChatRow } from './DonationChatRow'
 import { PluginChatRow } from './PluginChatRow'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
-import { TwitchAutoMod } from './TwitchAutoMod'
+import { TwitchAutoModChatRow } from './TwitchAutoModChatRow'
 import { Icon, PlatformIcon, type IconName } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { RemoteImage } from './ui/RemoteImage'
@@ -129,6 +136,7 @@ interface PausedChat {
   messages: NormalizedChatMessage[]
   pluginRows: readonly HomePluginRow[]
   donations: readonly DonationRow[]
+  autoModRows: readonly TwitchAutoModRow[]
   total: number
 }
 
@@ -409,6 +417,12 @@ export function ChatView({
       ? watchedChannel.channelSlug
       : null
     : (accounts.find((account) => account.platform === 'twitch')?.username ?? null)
+  const hideModActions = streamerMode.effectiveEnabled && streamerMode.settings.hideModActions
+  const autoMod = useStoreSelector(twitchAutoModStore, (channels) =>
+    twitchChannel && !hideModActions
+      ? (channels.get(twitchChannel.toLowerCase()) ?? EMPTY_AUTOMOD_QUEUE)
+      : EMPTY_AUTOMOD_QUEUE,
+  )
   const room = useStoreSelector(channelRoomStore, (rooms) =>
     twitchChannel ? rooms.get(roomKey('twitch', twitchChannel)) : undefined,
   )
@@ -474,11 +488,12 @@ export function ChatView({
   const pendingJump = useRef<{ requestId: string; messageKey: string } | null>(null)
   const searchRef = useRef<import('@gpuix/react').PublicInstance | null>(null)
   const resumeScrollRequested = useRef(false)
-  const activityTotal = (activity?.total ?? 0) + pluginFeed.total + donations.total
+  const activityTotal = (activity?.total ?? 0) + pluginFeed.total + donations.total + autoMod.total
   const pauseSnapshot: PausedChat = {
     messages: activeMessages,
     pluginRows: pluginFeed.rows,
     donations: donations.rows,
+    autoModRows: autoMod.rows,
     total: activityTotal,
   }
   const pauseInput = useRef(pauseSnapshot)
@@ -519,6 +534,18 @@ export function ChatView({
   const readingMessages = paused?.messages ?? activeMessages
   const readingPluginRows = paused?.pluginRows ?? pluginFeed.rows
   const readingDonations = paused?.donations ?? donations.rows
+  const pausedAutoModKeys = useMemo(
+    () => (paused ? new Set(paused.autoModRows.map((row) => row.key)) : null),
+    [paused],
+  )
+  // Paused readers keep the rows they saw, but decisions on them still update live.
+  const readingAutoMod = useMemo(
+    () =>
+      pausedAutoModKeys
+        ? autoMod.rows.filter((row) => pausedAutoModKeys.has(row.key))
+        : autoMod.rows,
+    [autoMod.rows, pausedAutoModKeys],
+  )
   const displayedMessages = useMemo(
     () =>
       readingMessages.filter((message) => {
@@ -611,13 +638,45 @@ export function ChatView({
         !clearedKeys.has(row.key) && (!searching || search.matches(donationSearchMessage(row), {})),
     )
   }, [readingDonations, clearedKeys, mentionsOnly, settings?.platformFilter, searchQuery, search])
+  const oldestRetained = readingMessages[0]?.timestamp.getTime()
+  const displayedAutoMod = useMemo(() => {
+    if (
+      readingAutoMod.length === 0 ||
+      mentionsOnly ||
+      (settings?.platformFilter !== undefined &&
+        settings.platformFilter !== 'all' &&
+        !settings.platformFilter.includes('twitch'))
+    )
+      return EMPTY_AUTOMOD_QUEUE.rows
+    const searching = searchQuery.trim().length > 0
+    return readingAutoMod.filter(
+      (row) =>
+        // Decided rows leave with the chat history around them; pending ones stay actionable.
+        (row.state !== 'resolved' ||
+          oldestRetained === undefined ||
+          row.hold.timestamp >= oldestRetained) &&
+        !clearedKeys.has(row.key) &&
+        (!searching || search.matches(autoModSearchMessage(row), {})),
+    )
+  }, [
+    readingAutoMod,
+    oldestRetained,
+    clearedKeys,
+    mentionsOnly,
+    settings?.platformFilter,
+    searchQuery,
+    search,
+  ])
   const displayedTimeline = useMemo(
     () =>
-      mergeDonationTimeline(
-        mergeChatTimeline(displayedMessages, displayedPluginRows),
-        displayedDonations,
+      mergeAutoModTimeline(
+        mergeDonationTimeline(
+          mergeChatTimeline(displayedMessages, displayedPluginRows),
+          displayedDonations,
+        ),
+        displayedAutoMod,
       ),
-    [displayedMessages, displayedPluginRows, displayedDonations],
+    [displayedMessages, displayedPluginRows, displayedDonations, displayedAutoMod],
   )
   const mentionsCount = useMemo(
     () => activeMessages.filter((message) => ruleEngine.classify(message).mention).length,
@@ -650,6 +709,7 @@ export function ChatView({
     const keys = new Set(activeMessages.map(chatMessageKey))
     for (const row of pluginFeed.rows) keys.add(row.key)
     for (const row of donations.rows) keys.add(row.key)
+    for (const row of autoMod.rows) keys.add(row.key)
     setClearedKeys(keys)
     pauseController.clear()
   }
@@ -676,6 +736,12 @@ export function ChatView({
           ...donationSearchMessage(row),
           platform: DONATION_PROVIDER_LABELS[row.donation.provider],
           timestamp: row.donation.timestamp,
+        }
+      if ('hold' in row)
+        return {
+          ...autoModSearchMessage(row),
+          platform: 'AutoMod',
+          timestamp: row.hold.timestamp,
         }
       return row
     })
@@ -1855,7 +1921,7 @@ export function ChatView({
                 testId="chat-search-count"
                 style={{ fontSize: 11, color: theme.text2, flexShrink: 0 }}
               >
-                {`${displayedTimeline.length} / ${readingMessages.length + readingPluginRows.length + readingDonations.length}`}
+                {`${displayedTimeline.length} / ${readingMessages.length + readingPluginRows.length + readingDonations.length + readingAutoMod.length}`}
               </Text>
               <HeaderButton
                 testId="chat-search-close"
@@ -1957,6 +2023,19 @@ export function ChatView({
               }}
             >
               {renderedTimeline.map((message, index) => {
+                if ('hold' in message)
+                  return (
+                    <TwitchAutoModChatRow
+                      key={message.key}
+                      row={message}
+                      hideBlockedTerms={
+                        streamerMode.effectiveEnabled && streamerMode.settings.hideBlockedTermText
+                      }
+                      fontSize={settings?.fontSize}
+                      showTimestamp={settings?.showTimestamp}
+                      chatTheme={settings?.chatTheme}
+                    />
+                  )
                 if ('donation' in message)
                   return (
                     <DonationChatRow
@@ -2120,15 +2199,6 @@ export function ChatView({
         </div>
 
         {/* Composer */}
-        {twitchChannel &&
-        !(streamerMode.effectiveEnabled && streamerMode.settings.hideModActions) ? (
-          <TwitchAutoMod
-            channelSlug={twitchChannel}
-            hideBlockedTerms={
-              streamerMode.effectiveEnabled && streamerMode.settings.hideBlockedTermText
-            }
-          />
-        ) : null}
         {settings ? (
           <ChatInput
             hotkeyContextId={`input:${paneKey}`}
@@ -2191,7 +2261,10 @@ export function ChatView({
                     panel: layoutPanelId,
                     channel: actionTarget,
                     received:
-                      activeMessages.length + pluginFeed.rows.length + donations.rows.length,
+                      activeMessages.length +
+                      pluginFeed.rows.length +
+                      donations.rows.length +
+                      autoMod.rows.length,
                     shown: displayedTimeline.length,
                     paused: !!paused,
                     visibleRange,
