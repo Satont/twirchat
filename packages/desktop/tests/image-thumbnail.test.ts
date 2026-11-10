@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { z } from 'zod'
 
-import { avatarRasterSize, createAvatarThumbnailer } from '../src/services/avatar-image'
+import { createImageThumbnailer, thumbnailRasterSize } from '../src/services/image-thumbnail'
 import { loadSharp } from '../src/services/paint-renderer'
 import { createPaintWorkerClient } from '../src/services/paint-worker-client'
 
@@ -15,16 +15,16 @@ afterEach(() => {
 })
 
 function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), 'twirchat-avatar-'))
+  const directory = mkdtempSync(join(tmpdir(), 'twirchat-thumbnail-'))
   directories.push(directory)
   return {
     directory,
     source: join(directory, 'source.png'),
-    cache: createAvatarThumbnailer({ directory: () => join(directory, 'thumbnails') }),
+    cache: createImageThumbnailer({ directory: () => join(directory, 'thumbnails') }),
   }
 }
 
-describe('avatar thumbnails', () => {
+describe('image thumbnails', () => {
   test('prefilters large detailed avatars into lossless PNG at 1× and 2× without changing the original', async () => {
     const f = fixture()
     const sharp = loadSharp()
@@ -40,8 +40,8 @@ describe('avatar thumbnails', () => {
       .toBuffer()
     await Bun.write(f.source, original)
     const [one, two] = await Promise.all([
-      f.cache.render(f.source, 18, 1),
-      f.cache.render(f.source, 18, 2),
+      f.cache.render(f.source, 18, { scale: 1 }),
+      f.cache.render(f.source, 18),
     ])
     expect(one).not.toBe(two)
     const [metadataOne, metadataTwo, filtered] = await Promise.all([
@@ -69,10 +69,33 @@ describe('avatar thumbnails', () => {
     expect(f.cache.render(f.source, 32)).toBe(first)
     const path = await first
     const oldMtime = Bun.file(path).lastModified
-    const next = createAvatarThumbnailer({ directory: () => join(f.directory, 'thumbnails') })
+    const next = createImageThumbnailer({ directory: () => join(f.directory, 'thumbnails') })
     expect(await next.render(f.source, 32)).toBe(path)
     expect(Bun.file(path).lastModified).toBe(oldMtime)
     expect(await sharp(path).metadata()).toMatchObject({ width: 64, height: 64 })
+  })
+
+  test('fits transparent SVG badges inside the thumbnail without reusing a cover crop', async () => {
+    const f = fixture()
+    const source = join(f.directory, 'badge.svg')
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="96" viewBox="0 0 128 96"><rect x="12" y="10" width="104" height="76" rx="24" fill="#6237d6" stroke="white" stroke-width="4"/></svg>'
+    await Bun.write(source, svg)
+    const cover = await f.cache.render(source, 16)
+    const inside = await f.cache.render(source, 16, { fit: 'inside' })
+    const sharp = loadSharp()
+    expect(inside).not.toBe(cover)
+    expect(await sharp(cover).metadata()).toMatchObject({ width: 32, height: 32, format: 'png' })
+    expect(await sharp(inside).metadata()).toMatchObject({
+      width: 32,
+      height: 24,
+      format: 'png',
+      hasAlpha: true,
+    })
+    const alpha = await sharp(inside).extractChannel('alpha').raw().toBuffer()
+    expect(alpha[0]).toBe(0)
+    expect(alpha[12 * 32 + 16]).toBe(255)
+    expect(await Bun.file(source).text()).toBe(svg)
   })
 
   test('never deletes a thumbnail it has handed out, even past the disk limit', async () => {
@@ -91,7 +114,7 @@ describe('avatar thumbnails', () => {
     const thumbnails = join(f.directory, 'thumbnails')
     for (let index = 0; index < 2100; index++)
       writeFileSync(join(thumbnails, `${index.toString(16).padStart(32, '0')}.png`), 'x')
-    const next = createAvatarThumbnailer({ directory: () => thumbnails })
+    const next = createImageThumbnailer({ directory: () => thumbnails })
     await next.render(f.source, 20)
     expect(await Bun.file(handedOut).exists()).toBe(true)
     expect(readdirSync(thumbnails).length).toBe(2102)
@@ -100,9 +123,9 @@ describe('avatar thumbnails', () => {
   test('rejects invalid dimensions, excessive encoded bytes and excessive decoded pixels', async () => {
     const f = fixture()
     for (const size of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 513])
-      expect(() => f.cache.render(f.source, size)).toThrow('Invalid avatar dimensions')
+      expect(() => f.cache.render(f.source, size)).toThrow('Invalid thumbnail dimensions')
     for (const scale of [0, -1, Number.NaN, 5])
-      expect(() => avatarRasterSize(18, scale)).toThrow('Invalid avatar dimensions')
+      expect(() => thumbnailRasterSize(18, scale)).toThrow('Invalid thumbnail dimensions')
     await Bun.write(f.source, Buffer.alloc(20 * 1024 * 1024 + 1))
     await expect(f.cache.render(f.source, 18)).rejects.toThrow('byte budget')
     await Bun.write(
@@ -147,11 +170,11 @@ describe('avatar thumbnails', () => {
     expect(await Bun.file(f.source).bytes()).toEqual(new Uint8Array(gif))
   })
 
-  test('the packaged image worker accepts the avatar job boundary', async () => {
+  test('the packaged image worker accepts both thumbnail fits', async () => {
     const f = fixture()
     await Bun.write(
       f.source,
-      await loadSharp()({ create: { width: 100, height: 100, channels: 3, background: '#123456' } })
+      await loadSharp()({ create: { width: 100, height: 75, channels: 3, background: '#123456' } })
         .png()
         .toBuffer(),
     )
@@ -161,11 +184,11 @@ describe('avatar thumbnails', () => {
     try {
       const dbPath = join(f.directory, 'test.db')
       // Both jobs share one long-lived process.
-      const outputs = await Promise.all(
-        [28, 14].map((size) =>
-          worker.run({ kind: 'avatar', path: f.source, size, scale: 2, dbPath }),
-        ),
-      )
+      const job = { path: f.source, size: 28, scale: 2, dbPath }
+      const outputs = await Promise.all([
+        worker.run({ ...job, kind: 'thumbnail', fit: 'cover' }),
+        worker.run({ ...job, kind: 'thumbnail', fit: 'inside' }),
+      ])
       const sizes = await Promise.all(
         outputs.map(async (output) => {
           const { path } = z.object({ path: z.string() }).parse(output)
@@ -174,7 +197,7 @@ describe('avatar thumbnails', () => {
       )
       expect(sizes).toMatchObject([
         { width: 56, height: 56, format: 'png' },
-        { width: 28, height: 28, format: 'png' },
+        { width: 56, height: 42, format: 'png' },
       ])
     } finally {
       await worker.close()

@@ -20,13 +20,6 @@ export const userCardRoutes = {
             username: z.string().optional(),
             channelId: z.string().optional(),
             channelSlug: z.string().optional(),
-            twitchAuth: z
-              .object({
-                accessToken: z.string(),
-                platformUserId: z.string(),
-                scopes: z.array(z.string()),
-              })
-              .optional(),
           })
           .parse(await req.json())
         const { platform, platformUserId } = body

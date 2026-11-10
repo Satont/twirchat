@@ -92,6 +92,16 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
+      - name: Require desktop OAuth clients for release builds
+        if: inputs.release
+        env:
+          TWIRCHAT_TWITCH_CLIENT_ID: ${{ vars.TWIRCHAT_TWITCH_CLIENT_ID }}
+          TWIRCHAT_YOUTUBE_CLIENT_ID: ${{ vars.TWIRCHAT_YOUTUBE_CLIENT_ID }}
+          TWIRCHAT_YOUTUBE_CLIENT_SECRET: ${{ vars.TWIRCHAT_YOUTUBE_CLIENT_SECRET }}
+        run: |
+          : "${TWIRCHAT_TWITCH_CLIENT_ID:?Set the Twitch Public client ID repository variable}"
+          : "${TWIRCHAT_YOUTUBE_CLIENT_ID:?Set the Google Desktop client ID repository variable}"
+          : "${TWIRCHAT_YOUTUBE_CLIENT_SECRET:?Set the Google Desktop client secret repository variable}"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
@@ -273,6 +283,10 @@ jobs:
       - name: Build production application and verify compiled runtime
         working-directory: packages/desktop
         env:
+          TWIRCHAT_DONATIONALERTS_CLIENT_ID: ${{ vars.TWIRCHAT_DONATIONALERTS_CLIENT_ID }}
+          TWIRCHAT_TWITCH_CLIENT_ID: ${{ vars.TWIRCHAT_TWITCH_CLIENT_ID }}
+          TWIRCHAT_YOUTUBE_CLIENT_ID: ${{ vars.TWIRCHAT_YOUTUBE_CLIENT_ID }}
+          TWIRCHAT_YOUTUBE_CLIENT_SECRET: ${{ vars.TWIRCHAT_YOUTUBE_CLIENT_SECRET }}
           MACOS_SIGN_APP_IDENTITY: ${{ inputs.release && inputs.signing && runner.os == 'macOS' && secrets.MACOS_SIGN_APP_IDENTITY || '' }}
         run: bun scripts/build-release.ts "$RELEASE_VERSION" "$BACKEND_URL"
       - name: Verify Linux glibc baseline

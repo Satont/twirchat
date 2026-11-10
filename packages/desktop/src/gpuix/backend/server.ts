@@ -21,9 +21,13 @@ import type { NormalizedChatMessage, Platform, PlatformStatusInfo } from '@twirc
 import { z } from 'zod'
 
 import { setAuthServerRpcSender, setOnAuthSuccessCallback, startAuthServer } from '../../auth'
+import { OAuthRefreshError } from '../../auth/refresh-token'
+import { refreshTwitchToken } from '../../auth/twitch'
+import { TwitchTokenValidationError, validateTwitchUserToken } from '../../auth/twitch-user-token'
 import { BackendConnection } from '../../backend-connection'
 import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
+import { createDonationService } from '../../donations/service'
 import {
   pushOverlayEvent,
   pushOverlayMessage,
@@ -32,6 +36,7 @@ import {
 } from '../../overlay-server'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { TwitchAdapter } from '../../platforms/twitch/adapter'
+import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
 import { createDefaultTwitchSenderPool } from '../../platforms/twitch/sender-pool'
 import { YouTubeAdapter, configureYouTubeChatRelay } from '../../platforms/youtube/adapter'
 import { createYouTubeChatRelay } from '../../platforms/youtube/relay'
@@ -70,11 +75,11 @@ import { createPluginChannels } from '../../watched-channels/plugin-channels'
 import { setLanguage, t } from '../i18n'
 import {
   createDesktopApi,
-  twitchActivitiesRequest,
+  subscribeTwitchActivities,
+  unsubscribeTwitchActivities,
   requestTwitchActivitiesSnapshot,
   type DesktopApi,
 } from './api'
-import { twitchEventSubscriptionSchema } from './api-schemas'
 import { recordChatMessage } from './chat-history'
 import { createDesktopEvents, type DesktopEvents } from './events'
 import { readUiState } from './layout-api'
@@ -135,6 +140,15 @@ function boot(): DesktopBackend {
   setRuntimeConfig({ clientSecret })
 
   const events = createDesktopEvents()
+  const donations = createDonationService({
+    db: getDb(),
+    openBrowser: async (url) => {
+      const browser = Bun.spawn(browserCommand(url), { stdout: 'ignore', stderr: 'ignore' })
+      if ((await browser.exited) !== 0) throw new Error('Could not open the browser.')
+    },
+    onConnections: (connections) => events.emit('donation_connections', connections),
+    onDonation: (event) => events.emit('donation_received', event),
+  })
   const providerRuntime = createDesktopProviderRuntime(
     (platform, channelId, emotes) =>
       events.emit('channel_emote_catalog', { platform, channelId, emotes }),
@@ -192,23 +206,8 @@ function boot(): DesktopBackend {
         senderUserId: account.platformUserId,
         receiveWhispers: primary,
         subscribe: (sessionId, channelSlug) =>
-          twitchActivitiesRequest(
-            'subscribe',
-            { sessionId, channelSlug },
-            z.object({
-              subscriptions: z.array(twitchEventSubscriptionSchema),
-              errors: z.array(z.string()),
-            }),
-            account.id,
-          ),
-        unsubscribe: async (ids) => {
-          await twitchActivitiesRequest(
-            'unsubscribe',
-            { ids },
-            z.object({ success: z.boolean() }),
-            account.id,
-          )
-        },
+          subscribeTwitchActivities(account.id, sessionId, channelSlug),
+        unsubscribe: (ids) => unsubscribeTwitchActivities(account.id, ids),
         activity: (event) => {
           if (event.eventType === 'stream.online' || event.eventType === 'stream.offline')
             twitchActivityRefresh.setChannelOnline(
@@ -322,6 +321,69 @@ function boot(): DesktopBackend {
     changed: (platform, identityChanged) =>
       events.emit('accounts_changed', { platform, identityChanged }),
   })
+
+  let validatingTwitchSessions = false
+  let disposed = false
+  async function validateTwitchSessions() {
+    if (validatingTwitchSessions) return
+    validatingTwitchSessions = true
+    try {
+      const accounts = AccountStore.findAllSaved().filter(
+        (account) => account.platform === 'twitch',
+      )
+      const results = await Promise.allSettled(
+        accounts.map(async (account) => {
+          const tokens = AccountStore.getTokens(account.id)
+          if (!tokens?.accessToken) return
+          try {
+            await validateTwitchUserToken(tokens.accessToken, true)
+            return
+          } catch (error) {
+            if (!(error instanceof TwitchTokenValidationError) || error.status !== 401) throw error
+          }
+
+          if (disposed || AccountStore.getTokens(account.id)?.accessToken !== tokens.accessToken)
+            return
+          if (tokens.refreshToken) {
+            try {
+              const refreshed = await refreshTwitchToken(account.id)
+              await validateTwitchUserToken(refreshed)
+              return
+            } catch (error) {
+              if (!(error instanceof OAuthRefreshError) || ![400, 401].includes(error.status))
+                throw error
+            }
+          }
+
+          await accountSessions.forget(account.id, () => {
+            const current = AccountStore.getTokens(account.id)
+            return (
+              !disposed &&
+              current?.accessToken === tokens.accessToken &&
+              current.refreshToken === tokens.refreshToken
+            )
+          })
+          if (disposed || AccountStore.findById(account.id)) return
+          watchedChannelManager.releaseAccount(account.id)
+          twitchEventSub.refresh()
+          forgetTwitchSendLimiter(account.id)
+          events.emit('auth_error', {
+            platform: 'twitch',
+            error: t('runtime.auth.twitchReconnect', { username: account.username }),
+          })
+        }),
+      )
+      const failed = results.filter((result) => result.status === 'rejected').length
+      if (failed) log.warn('Could not validate some Twitch sessions', { failed })
+    } finally {
+      validatingTwitchSessions = false
+    }
+  }
+  const checkTwitchSessions = () => {
+    validateTwitchSessions().catch(() => log.warn('Could not validate Twitch sessions'))
+  }
+  checkTwitchSessions()
+  const twitchValidationTimer = setInterval(checkTwitchSessions, 60 * 60 * 1000)
 
   // OAuth saves and selects atomically, then rejoins through the manual-switch queue.
   setOnAuthSuccessCallback(async (platform, _channelSlug, accountId) => {
@@ -453,6 +515,7 @@ function boot(): DesktopBackend {
   })
   const updater = createUpdater(events)
   const api: DesktopApi = createDesktopApi({
+    donations,
     updater,
     twitchHistory,
     streamerMode,
@@ -704,6 +767,7 @@ function boot(): DesktopBackend {
   void plugins.initialize().catch((error) => {
     log.error('Could not load installed plugins', { error: String(error) })
   })
+  donations.start()
   log.info('GPUIX backend ready')
   return {
     api,
@@ -711,6 +775,9 @@ function boot(): DesktopBackend {
     plugins,
     shutdownPlugins,
     dispose: () => {
+      disposed = true
+      clearInterval(twitchValidationTimer)
+      donations.dispose()
       stopAutoChecks()
       void shutdownPlugins().catch((error) => {
         log.warn('Plugin shutdown failed', { error: String(error) })

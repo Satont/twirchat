@@ -31,9 +31,14 @@ function client(options: { jobTimeoutMs?: number; idleExitMs?: number } = {}) {
 }
 
 function job(path: string) {
-  return { kind: 'avatar', path, size: 28, scale: 2, dbPath: 'unused' } satisfies Parameters<
-    ReturnType<typeof client>['run']
-  >[0]
+  return {
+    kind: 'thumbnail',
+    path,
+    size: 28,
+    fit: 'cover',
+    scale: 2,
+    dbPath: 'unused',
+  } satisfies Parameters<ReturnType<typeof client>['run']>[0]
 }
 
 const pid = z.number().int()

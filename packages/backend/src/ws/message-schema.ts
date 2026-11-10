@@ -18,11 +18,6 @@ export const desktopMessageSchema = z.toZod<DesktopToBackendMessage>()(
     z.object({ type: z.literal('youtube_chat_unsubscribe'), subscriptionId: z.string() }),
     z.object({ type: z.literal('ping') }),
     z.object({ type: z.literal('auth_start'), platform: z.enum(['kick', 'youtube']) }),
-    z.object({
-      type: z.literal('auth_start_twitch'),
-      codeChallenge: z.string(),
-      state: z.string(),
-    }),
     z.object({ type: z.literal('auth_logout'), platform }),
     z.object({
       type: z.literal('send_message'),

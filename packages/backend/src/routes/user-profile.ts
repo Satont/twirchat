@@ -20,13 +20,6 @@ export function createUserProfileRoutes(service = createUserProfileService()) {
                 .string()
                 .regex(/^[#a-zA-Z0-9_]{1,32}$/)
                 .optional(),
-              twitchAuth: z
-                .object({
-                  accessToken: z.string(),
-                  platformUserId: z.string(),
-                  scopes: z.array(z.string()),
-                })
-                .optional(),
             })
             .safeParse(JSON.parse(raw))
           if (!parsed.success) return json({ error: 'Invalid Twitch profile request.' }, 400)

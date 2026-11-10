@@ -5,11 +5,11 @@ import { join } from 'node:path'
 
 const snapshot = `
 import { AUTH_SERVER_PORT, KICK_WEBHOOK_PORT, OVERLAY_SERVER_PORT, DEV_SERVER_PORT,
-  TWITCH_REDIRECT_URI, YOUTUBE_REDIRECT_URI, KICK_REDIRECT_URI } from ${JSON.stringify(join(import.meta.dir, '../constants.ts'))}
+  YOUTUBE_REDIRECT_URI, KICK_REDIRECT_URI } from ${JSON.stringify(join(import.meta.dir, '../constants.ts'))}
 import { DEFAULT_SETTINGS } from ${JSON.stringify(join(import.meta.dir, '../types.ts'))}
 console.log(JSON.stringify({
   ports: [AUTH_SERVER_PORT, KICK_WEBHOOK_PORT, OVERLAY_SERVER_PORT, DEV_SERVER_PORT],
-  callbacks: [TWITCH_REDIRECT_URI, YOUTUBE_REDIRECT_URI, KICK_REDIRECT_URI],
+  callbacks: [YOUTUBE_REDIRECT_URI, KICK_REDIRECT_URI],
   overlayPort: DEFAULT_SETTINGS.overlay.port,
 }))
 `
@@ -38,9 +38,10 @@ function readPorts(overrides: Record<string, string | undefined>, script = snaps
 function expectedPorts(auth: number, kick: number, overlay: number, dev: number) {
   return {
     ports: [auth, kick, overlay, dev],
-    callbacks: ['twitch', 'youtube', 'kick'].map(
-      (platform) => `http://localhost:${auth}/auth/${platform}/callback`,
-    ),
+    callbacks: [
+      `http://127.0.0.1:${auth}/auth/youtube/callback`,
+      `http://localhost:${auth}/auth/kick/callback`,
+    ],
     overlayPort: overlay,
   }
 }
@@ -51,7 +52,7 @@ test('development and plain source runs use separate listeners and matching OAut
   }
 })
 
-test('production keeps the existing listener ports and callback URLs', () => {
+test('production uses the production listener ports and callback URLs', () => {
   expect(readPorts({ NODE_ENV: 'production' })).toEqual(expectedPorts(45821, 45822, 45823, 45824))
 })
 

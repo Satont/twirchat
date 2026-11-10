@@ -1,6 +1,13 @@
 import { z } from 'zod'
 
 import { parseTwitchHistoryProviders } from './api/twitch-history'
+import { memeAlertsRedirectUri, type DonationOAuthCredentials } from './auth/donations'
+
+const optionalValue = z
+  .string()
+  .trim()
+  .transform((value) => value || undefined)
+  .optional()
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
@@ -26,12 +33,12 @@ const envSchema = z.object({
   KICK_WEBHOOK_SECRET: z.string().min(1, 'KICK_WEBHOOK_SECRET is required'),
   TWITCH_CLIENT_ID: z.string().min(1, 'TWITCH_CLIENT_ID is required'),
   TWITCH_CLIENT_SECRET: z.string().min(1, 'TWITCH_CLIENT_SECRET is required'),
-  TWITCH_REDIRECT_URI: z.string().url().default('http://localhost:3000/auth/twitch/callback'),
-  YOUTUBE_CLIENT_ID: z.string().min(1, 'YOUTUBE_CLIENT_ID is required'),
-  YOUTUBE_CLIENT_SECRET: z.string().min(1, 'YOUTUBE_CLIENT_SECRET is required'),
   // Optional — enables channel resolution and the shared anonymous gRPC chat relay.
   // Get one at https://console.cloud.google.com/ → Credentials → API key.
   YOUTUBE_API_KEY: z.string().optional(),
+  MEMEALERTS_CLIENT_ID: optionalValue,
+  MEMEALERTS_CLIENT_SECRET: optionalValue,
+  MEMEALERTS_REDIRECT_URI: optionalValue.pipe(memeAlertsRedirectUri.optional()),
 })
 
 const result = envSchema.safeParse(process.env)
@@ -45,3 +52,12 @@ if (!result.success) {
 }
 
 export const config = result.data
+
+const {
+  MEMEALERTS_CLIENT_ID: clientId,
+  MEMEALERTS_CLIENT_SECRET: clientSecret,
+  MEMEALERTS_REDIRECT_URI: redirectUri,
+} = config
+
+export const memeAlertsOAuthCredentials: DonationOAuthCredentials | undefined =
+  clientId && clientSecret && redirectUri ? { clientId, clientSecret, redirectUri } : undefined

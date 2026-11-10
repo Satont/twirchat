@@ -3,12 +3,6 @@ import type {
   KickBuildUrlResponse,
   KickExchangeResponse,
   KickRefreshResponse,
-  TwitchBuildUrlResponse,
-  TwitchExchangeResponse,
-  TwitchRefreshResponse,
-  YouTubeBuildUrlResponse,
-  YouTubeExchangeResponse,
-  YouTubeRefreshResponse,
 } from '@twirchat/shared'
 import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
@@ -20,8 +14,6 @@ import {
   refreshKickToken,
   startKickOAuth,
 } from '../auth/kick.ts'
-import { buildTwitchAuthUrl, exchangeTwitchCode, refreshTwitchToken } from '../auth/twitch.ts'
-import { buildYouTubeAuthUrl, exchangeYouTubeCode, refreshYouTubeToken } from '../auth/youtube.ts'
 import { ClientStore } from '../db/index.ts'
 import { json } from './utils.ts'
 
@@ -137,116 +129,6 @@ export const authRoutes = {
           headers: { 'Content-Type': 'text/html' },
           status: 500,
         })
-      }
-    },
-  },
-
-  // ============================================================
-  // Twitch OAuth — HTTP-based flow
-  // ============================================================
-
-  '/api/auth/twitch/start': {
-    async POST(req: Request) {
-      const parsed = buildUrlSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'codeChallenge, state, and redirectUri are required' }, 400)
-      }
-      const body = parsed.data
-      try {
-        const { url } = buildTwitchAuthUrl(body.codeChallenge, body.state, body.redirectUri)
-        return json({ url } satisfies TwitchBuildUrlResponse)
-      } catch (error) {
-        log.error('twitch/start failed', { err: String(error) })
-        return json({ error: 'Failed to build auth URL' }, 500)
-      }
-    },
-  },
-
-  '/api/auth/twitch/exchange': {
-    async POST(req: Request) {
-      const parsed = exchangeSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'code, codeVerifier, and redirectUri are required' }, 400)
-      }
-      const body = parsed.data
-      try {
-        const tokens = await exchangeTwitchCode(body.code, body.codeVerifier, body.redirectUri)
-        return json(tokens satisfies TwitchExchangeResponse)
-      } catch (error) {
-        log.error('twitch/exchange failed', { err: String(error) })
-        return json({ error: String(error) }, 500)
-      }
-    },
-  },
-
-  '/api/auth/twitch/refresh': {
-    async POST(req: Request) {
-      const parsed = refreshSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'refreshToken is required' }, 400)
-      }
-      const body = parsed.data
-      try {
-        const tokens = await refreshTwitchToken(body.refreshToken)
-        return json(tokens satisfies TwitchRefreshResponse)
-      } catch (error) {
-        log.error('twitch/refresh failed', { err: String(error) })
-        return json({ error: String(error) }, 500)
-      }
-    },
-  },
-
-  // ============================================================
-  // YouTube OAuth — HTTP-based flow
-  // ============================================================
-
-  '/api/auth/youtube/start': {
-    async POST(req: Request) {
-      const parsed = buildUrlSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'codeChallenge, state, and redirectUri are required' }, 400)
-      }
-      const body = parsed.data
-      try {
-        const { url } = buildYouTubeAuthUrl(body.codeChallenge, body.state, body.redirectUri)
-        return json({ url } satisfies YouTubeBuildUrlResponse)
-      } catch (error) {
-        log.error('youtube/start failed', { err: String(error) })
-        return json({ error: 'Failed to build auth URL' }, 500)
-      }
-    },
-  },
-
-  '/api/auth/youtube/exchange': {
-    async POST(req: Request) {
-      const parsed = exchangeSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'code, codeVerifier, and redirectUri are required' }, 400)
-      }
-      const body = parsed.data
-      try {
-        const tokens = await exchangeYouTubeCode(body.code, body.codeVerifier, body.redirectUri)
-        return json(tokens satisfies YouTubeExchangeResponse)
-      } catch (error) {
-        log.error('youtube/exchange failed', { err: String(error) })
-        return json({ error: String(error) }, 500)
-      }
-    },
-  },
-
-  '/api/auth/youtube/refresh': {
-    async POST(req: Request) {
-      const parsed = refreshSchema.safeParse(await req.json().catch(() => undefined))
-      if (!parsed.success) {
-        return json({ error: 'refreshToken is required' }, 400)
-      }
-      const body = parsed.data
-      try {
-        const tokens = await refreshYouTubeToken(body.refreshToken)
-        return json(tokens satisfies YouTubeRefreshResponse)
-      } catch (error) {
-        log.error('youtube/refresh failed', { err: String(error) })
-        return json({ error: String(error) }, 500)
       }
     },
   },

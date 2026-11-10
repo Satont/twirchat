@@ -51,7 +51,8 @@ versions always come from the release tag, rather than these local defaults.
 1. Merge a pull request after its required checks pass.
 2. Check that the repository `BACKEND_URL` variable identifies the intended public HTTPS backend.
    The current endpoint is `https://chat.twir.app`. The WebSocket URL is derived from this URL.
-   OAuth client secrets belong on the backend and are never compiled into the desktop.
+   Set the desktop OAuth build configuration described in [Desktop OAuth](../RELEASE.md#desktop-oauth).
+   Keep the backend Twitch and Kick app secrets in the deployment environment.
 3. Create and push a new stable tag on the intended `main` commit:
 
    ```bash
@@ -162,9 +163,8 @@ of this canonical configuration and requires Docker Compose 2.20 or newer.
    - `DATABASE_URL` pointing at `twirchat-postgres:5432`, with URL-encoded credentials.
    - `KICK_CLIENT_ID`, `KICK_CLIENT_SECRET`, `KICK_WEBHOOK_URL`, `KICK_WEBHOOK_SECRET`.
    - `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`.
-   - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`.
 
-   Set the public OAuth redirect URIs for Kick and Twitch and the optional `YOUTUBE_API_KEY`
+   Set the public Kick OAuth redirect URI and the optional `YOUTUBE_API_KEY`
    when using the anonymous gRPC relay. Choose a strong `POSTGRES_PASSWORD` in the
    same file; `POSTGRES_USER` and `POSTGRES_DB` default to `twirchat`. `DATABASE_URL` must use
    the same user, database and password. Keep `PORT=3000` inside the container. Set
@@ -172,7 +172,7 @@ of this canonical configuration and requires Docker Compose 2.20 or newer.
    `BACKEND_BIND_ADDRESS` change only the host-side binding.
 
 2. Put a reverse proxy with HTTPS in front of the backend and forward WebSocket upgrades on
-   `/ws`. OAuth callbacks and Kick webhooks must reach their configured public URLs.
+   `/ws`. The legacy Kick OAuth callback and webhooks must reach their configured public URLs.
 3. Before replacing an existing backend, save the current image digest and take a database backup:
 
    ```bash
@@ -193,6 +193,11 @@ of this canonical configuration and requires Docker Compose 2.20 or newer.
    On a first deployment, run the pull/start commands before attempting the backup. Backend
    migrations execute automatically on startup. `/health` confirms HTTP responsiveness;
    inspect migration logs and verify OAuth/chat connections before considering rollout complete.
+
+The client-side OAuth release removes the Twitch and YouTube OAuth endpoints and the Twitch
+routes that accepted user credentials. Upgrade desktop clients alongside the backend. The
+desktop signs Twitch accounts out once on upgrade. Users sign in again with Device Code Grant
+and reconnect YouTube accounts authorized with a previous OAuth client.
 
 For application rollback, select the previous version or digest and repeat pull/start. A binary
 rollback is safe only when that version supports the current database schema. For an incompatible

@@ -2,17 +2,17 @@ import { logger } from '@twirchat/shared/logger'
 
 import { handleTwitchBadges } from './api/twitch-badges.ts'
 import { createTwitchHistoryService } from './api/twitch-history.ts'
-import { config } from './config.ts'
+import { config, memeAlertsOAuthCredentials } from './config.ts'
 import { ClientStore } from './db/index.ts'
 import { runMigrations } from './db/migrations.ts'
 import { accountRoutes } from './routes/accounts.ts'
 import { authRoutes } from './routes/auth.ts'
 import { chatToolsRoutes } from './routes/chat-tools.ts'
+import { createDonationOAuthRoutes } from './routes/donations.ts'
 import { emoteCatalogRoutes } from './routes/emote-catalog.ts'
 import { moderationRoutes } from './routes/moderation.ts'
 import { providerProxyRoutes } from './routes/provider-proxy.ts'
 import { streamRoutes } from './routes/stream.ts'
-import { twitchActivitiesRoutes } from './routes/twitch-activities.ts'
 import { createTwitchHistoryRoutes } from './routes/twitch-history.ts'
 import { userCardRoutes } from './routes/user-card.ts'
 import { userProfileRoutes } from './routes/user-profile.ts'
@@ -72,13 +72,13 @@ const server = Bun.serve<WsData>({
 
   routes: {
     ...authRoutes,
+    ...createDonationOAuthRoutes(memeAlertsOAuthCredentials),
     ...accountRoutes,
     ...streamRoutes,
     ...moderationRoutes,
     ...userCardRoutes,
     ...userProfileRoutes,
     ...chatToolsRoutes,
-    ...twitchActivitiesRoutes,
     ...emoteCatalogRoutes,
     ...providerProxyRoutes,
     ...twitchHistoryRoutes,

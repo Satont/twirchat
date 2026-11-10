@@ -1,4 +1,5 @@
 import type { ChatClear, RoomState } from '@twirchat/shared/channel-tools'
+import type { DonationConnections, DonationEvent } from '@twirchat/shared/donations'
 /**
  * GPUIX backend bridge — event bus.
  *
@@ -45,6 +46,8 @@ export type DesktopEventMap = {
     watchedChannelId?: string
   }
   chat_event: NormalizedEvent
+  donation_received: DonationEvent
+  donation_connections: DonationConnections
   chat_moderation: ModerationOutcome
   channel_room_state: RoomState
   chat_clear: ChatClear
@@ -56,6 +59,7 @@ export type DesktopEventMap = {
   twitch_activity_capability: TwitchActivityCapability
   platform_status: PlatformStatusInfo
   auth_url: { platform: Platform; url: string }
+  twitch_device_code: { url: string; userCode: string; windowScope: string } | null
   auth_success: { platform: Platform; username: string; displayName: string }
   auth_error: { platform: Platform; error: string }
   update_status: { status: string; message: string; progress?: number; hash?: string }
@@ -102,6 +106,8 @@ export function createDesktopEvents(): DesktopEvents {
     twitch_chat_notice: new Set(),
     chat_history_snapshot: new Set(),
     chat_event: new Set(),
+    donation_received: new Set(),
+    donation_connections: new Set(),
     chat_moderation: new Set(),
     channel_room_state: new Set(),
     chat_clear: new Set(),
@@ -113,6 +119,7 @@ export function createDesktopEvents(): DesktopEvents {
     twitch_activity_capability: new Set(),
     platform_status: new Set(),
     auth_url: new Set(),
+    twitch_device_code: new Set(),
     auth_success: new Set(),
     auth_error: new Set(),
     update_status: new Set(),

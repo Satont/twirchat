@@ -3,6 +3,12 @@ import {
   type PlatformCommandResult,
   type RoomState,
 } from '@twirchat/shared/channel-tools'
+import type {
+  ConnectDonationProvider,
+  DonationConnections,
+  DonationOAuthAvailability,
+  DonationProvider,
+} from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
 import type {
   ChannelStatusRequest,
@@ -48,17 +54,21 @@ import type {
 import { z } from 'zod'
 
 import {
+  connectTwitchDevice,
+  finishDesktopSignIn,
   getKickAuthUrl,
-  getTwitchAuthUrl,
   getYouTubeAuthUrl,
   prepareKickAuth,
-  prepareTwitchAuth,
-  prepareYouTubeAuth,
+  requestTwitchDeviceCode,
 } from '../../auth'
+import { getDonationAlertsDesktopClientId } from '../../auth/client-config'
+import { getDonationOAuthAvailability } from '../../auth/donations'
 import { refreshTwitchToken } from '../../auth/twitch'
+import { validateTwitchUserToken } from '../../auth/twitch-user-token'
 import type { BackendConnection } from '../../backend-connection'
 import { APP_VERSION } from '../../build-info'
 import type { ChatAggregator } from '../../chat/aggregator'
+import type { DonationService } from '../../donations/service'
 import type { ChatReplyTarget } from '../../platforms/base-adapter'
 import { KickAdapter } from '../../platforms/kick/adapter'
 import { forgetTwitchSendLimiter } from '../../platforms/twitch/send-limiter'
@@ -67,6 +77,7 @@ import { backendFetch } from '../../runtime-config'
 import type { AccountSessions } from '../../services/account-sessions'
 import type { ChannelActions, PlayerSettings } from '../../services/channel-actions'
 import { channelAccount, platformAccount } from '../../services/chat-accounts'
+import { ChatToolsError, createChatToolsService } from '../../services/chat-tools'
 import {
   getUserCosmetics,
   getPaintNameImage,
@@ -87,6 +98,7 @@ import {
   type MentionUser,
   type MentionUserRequest,
 } from '../../services/mention-user'
+import { createModerationService } from '../../services/moderation/service'
 import { createDesktopProviderRuntime, type ProviderRuntime } from '../../services/provider-runtime'
 import { createSnapshotRequests } from '../../services/snapshot-requests'
 import type {
@@ -102,8 +114,21 @@ import {
   type TwirCommandsOptions,
   type TwirCommandTarget,
 } from '../../services/twir-commands'
+import {
+  createTwitchActivitiesService,
+  type TwitchActivitiesCredentials,
+} from '../../services/twitch-activities'
 import type { TwitchActivityRefreshClient } from '../../services/twitch-activity-refresh'
+import {
+  getTwitchChatters,
+  TwitchChattersError,
+  type TwitchChattersResult,
+} from '../../services/twitch-chatters'
 import type { TwitchEventSubAccounts } from '../../services/twitch-eventsub-accounts'
+import { loadTwitchUserCardDetails } from '../../services/twitch-user-card'
+import { enrichTwitchUserProfile } from '../../services/twitch-user-profile'
+import type { TwitchUserCredentials } from '../../services/twitch-users'
+import { updateTwitchStream } from '../../services/update-stream'
 import { sevenTVService } from '../../seventv'
 import type { UserChatHistoryCursor, UserChatHistoryPage } from '../../shared/rpc'
 import { AccountStore, ChannelStore, MessageStore, SettingsStore } from '../../store'
@@ -120,20 +145,13 @@ import {
 import type { PluginChannels } from '../../watched-channels/plugin-channels'
 import { t } from '../i18n'
 import {
-  twitchActivitiesSnapshotSchema,
-  twitchRewardQueueSummarySchema,
-  twitchRedemptionsPageSchema,
-  twitchFollowingPageSchema,
-  twitchWebSessionSchema,
   platformCommandResultSchema,
-  roomStateSchema,
   streamStatusResponseSchema,
   updateStreamResponseSchema,
   searchCategoriesResponseSchema,
   channelsStatusResponseSchema,
   userProfileSnapshotSchema,
   userCardMetadataResponseSchema,
-  twitchChattersSchema,
   kickChatroomSchema,
   kickChattersSchema,
 } from './api-schemas'
@@ -189,6 +207,10 @@ export interface UserAlias {
   updatedAt: number
 }
 
+type UpdateStreamInput = Omit<UpdateStreamRequest, 'platform' | 'userAccessToken'> & {
+  platform: 'twitch' | 'kick'
+}
+
 export type ModerationPlatform = 'twitch' | 'kick'
 export type ModerationAction = 'delete_message' | 'timeout' | 'ban'
 export type ChatterRole = 'broadcaster' | 'moderators' | 'vips' | 'ogs' | 'bots' | 'chatters'
@@ -218,8 +240,18 @@ export interface ChannelChatters {
   error?: string
 }
 
+interface AuthRequest {
+  platform: Platform
+  windowScope: string
+}
+
 export interface DesktopApi {
   obsRemote: typeof obsRemoteApi
+  donationAlertsOAuthAvailable: boolean
+  getDonationConnections(): Promise<DonationConnections>
+  getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null>
+  connectDonationProvider(params: ConnectDonationProvider): Promise<void>
+  disconnectDonationProvider(params: { provider: DonationProvider }): Promise<void>
   getStreamerMode(): Promise<StreamerModeStatus>
   setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
   getStreamerModeSettings(): Promise<StreamerModeSettings>
@@ -314,9 +346,10 @@ export interface DesktopApi {
   setUserAlias(params: { platform: Platform; platformUserId: string; alias: string }): Promise<void>
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
   getChannels(): Promise<Partial<Record<Platform, string[]>>>
-  authStart(params: { platform: Platform }): Promise<void>
+  authStart(params: AuthRequest): Promise<void>
   /** Prepares a sign-in like `authStart` and returns its link instead of opening a browser. */
-  authLink(params: { platform: Platform }): Promise<{ url: string }>
+  authLink(params: AuthRequest): Promise<{ url: string }>
+  cancelTwitchAuth(params: { userCode: string; windowScope: string }): Promise<void>
   authLogout(params: { platform: Platform }): Promise<void>
   joinChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
   leaveChannel(params: { platform: Platform; channelSlug: string }): Promise<void>
@@ -351,7 +384,7 @@ export interface DesktopApi {
     platform: 'twitch' | 'kick'
     channelId: string
   }): Promise<StreamStatusResponse>
-  updateStream(params: Omit<UpdateStreamRequest, 'userAccessToken'>): Promise<UpdateStreamResponse>
+  updateStream(params: UpdateStreamInput): Promise<UpdateStreamResponse>
   searchCategories(params: {
     platform: 'twitch' | 'kick'
     query: string
@@ -472,6 +505,7 @@ export interface DesktopApi {
 }
 
 export interface DesktopApiContext {
+  donations?: DonationService
   updater?: Updater
   twitchHistory?: TwitchHistoryRuntime
   streamerMode?: StreamerModeService
@@ -492,89 +526,98 @@ export interface DesktopApiContext {
 
 const activitySnapshots = createSnapshotRequests<TwitchActivitiesSnapshot>(2)
 
-/** Starts a pending PKCE sign-in and returns the provider link that completes it. */
-async function createAuthUrl(platform: Platform): Promise<string> {
-  if (platform === 'twitch') {
-    const { codeChallenge, state } = prepareTwitchAuth()
-    return getTwitchAuthUrl(codeChallenge, state)
-  }
-  if (platform === 'kick') {
-    const { codeChallenge, state } = prepareKickAuth()
-    return getKickAuthUrl(codeChallenge, state)
-  }
-  const { codeChallenge, state } = prepareYouTubeAuth()
-  return getYouTubeAuthUrl(codeChallenge, state)
+const twitchActivities = createTwitchActivitiesService()
+const twitchChatTools = createChatToolsService()
+const twitchModeration = createModerationService()
+
+async function twitchUserCredentials(accessToken: string): Promise<TwitchUserCredentials> {
+  const { clientId } = await validateTwitchUserToken(accessToken)
+  return { accessToken, clientId }
 }
 
-async function prepareTwitchActivitiesRequest(
-  operation: string,
-  params: Record<string, unknown> = {},
-  eventSubAccountId?: string,
-) {
-  let credentials: Record<string, unknown> = {}
-  let selectedAccountId: string | null = null
+async function twitchRequest<T>(action: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (error instanceof ChatToolsError) {
+      if (error.status === 401)
+        throw new Error(t('runtime.api.authExpired', { action }), { cause: error })
+      throw new Error(`${action}: ${error.message}`, { cause: error })
+    }
+    throw error
+  }
+}
+
+async function prepareTwitchActivitiesRequest(eventSubAccountId?: string) {
   const getAccount = () =>
     eventSubAccountId
       ? AccountStore.findById(eventSubAccountId)
       : AccountStore.findByPlatform('twitch')
+  const account = getAccount()
+  const tokens = account ? AccountStore.getTokens(account.id) : null
+  if (account?.platform !== 'twitch' || !tokens?.accessToken)
+    throw new Error(t('runtime.api.connectTwitchFirst'))
+  const accessToken =
+    eventSubAccountId &&
+    tokens.refreshToken &&
+    tokens.expiresAt &&
+    tokens.expiresAt < Date.now() / 1000 + 300
+      ? await refreshTwitchToken(eventSubAccountId)
+      : tokens.accessToken
+  const credentials: TwitchActivitiesCredentials = {
+    ...(await twitchUserCredentials(accessToken)),
+    platformUserId: account.platformUserId,
+    scopes: account.scopes,
+    webSession: eventSubAccountId ? undefined : await TwitchWebSessionStore.get(),
+  }
   const checkIdentity = () => {
-    if (selectedAccountId && getAccount()?.id !== selectedAccountId)
+    if (getAccount()?.id !== account.id)
       throw new Error(t('runtime.api.activeTwitchAccountChanged'))
   }
-  if (operation !== 'validate_session') {
-    const account = getAccount()
-    const tokens = account ? AccountStore.getTokens(account.id) : null
-    if (account?.platform !== 'twitch' || !tokens?.accessToken)
-      throw new Error(t('runtime.api.connectTwitchFirst'))
-    selectedAccountId = account.id
-    const accessToken =
-      eventSubAccountId &&
-      tokens.refreshToken &&
-      tokens.expiresAt &&
-      tokens.expiresAt < Date.now() / 1000 + 300
-        ? await refreshTwitchToken(eventSubAccountId)
-        : tokens.accessToken
-    credentials = {
-      accessToken,
-      platformUserId: account.platformUserId,
-      scopes: account.scopes,
-      ...(eventSubAccountId ? {} : { webSession: await TwitchWebSessionStore.get() }),
-    }
-  }
-  const run = async (): Promise<unknown> => {
+  const run = async <T>(
+    operation: (credentials: TwitchActivitiesCredentials) => Promise<T>,
+  ): Promise<T> => {
     checkIdentity()
-    const response = await backendFetch('/api/twitch/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...credentials, ...params, operation }),
-    })
-    if (!response.ok)
-      throw await backendFailure(t('runtime.api.action.twitchActivityFailed'), response)
-    const result: unknown = await response.json()
+    const result = await twitchRequest(t('runtime.api.action.twitchActivityFailed'), () =>
+      operation(credentials),
+    )
     checkIdentity()
     return result
   }
-  const key = `${credentials.platformUserId}:${String(params.channelSlug).toLowerCase()}:${credentials.webSession ? 'web' : 'oauth'}`
-  return { key, run }
+  return { credentials, run }
 }
 
-export async function twitchActivitiesRequest<T>(
-  operation: string,
-  params: Record<string, unknown>,
-  responseSchema: z.ZodType<T>,
+async function twitchActivity<T>(
+  operation: (credentials: TwitchActivitiesCredentials) => Promise<T>,
   eventSubAccountId?: string,
 ): Promise<T> {
-  const request = await prepareTwitchActivitiesRequest(operation, params, eventSubAccountId)
-  return responseSchema.parse(await request.run())
+  const request = await prepareTwitchActivitiesRequest(eventSubAccountId)
+  return request.run(operation)
+}
+
+export function subscribeTwitchActivities(
+  accountId: string,
+  sessionId: string,
+  channelSlug?: string,
+) {
+  return twitchActivity(
+    (credentials) => twitchActivities.subscribe(credentials, sessionId, channelSlug),
+    accountId,
+  )
+}
+
+export function unsubscribeTwitchActivities(accountId: string, ids: string[]) {
+  return twitchActivity((credentials) => twitchActivities.unsubscribe(credentials, ids), accountId)
 }
 
 export async function requestTwitchActivitiesSnapshot(params: {
   channelSlug: string
   sections?: TwitchActivitySnapshotPart[]
 }): Promise<TwitchActivitiesSnapshot> {
-  const request = await prepareTwitchActivitiesRequest('snapshot', params)
-  return activitySnapshots.request(request.key, params.sections, async () =>
-    twitchActivitiesSnapshotSchema.parse(await request.run()),
+  const { credentials, run } = await prepareTwitchActivitiesRequest()
+  const key = `${credentials.platformUserId}:${params.channelSlug.toLowerCase()}:${credentials.webSession ? 'web' : 'oauth'}`
+  return activitySnapshots.request(key, params.sections, () =>
+    run((account) => twitchActivities.snapshot(account, params.channelSlug, params.sections)),
   )
 }
 
@@ -681,7 +724,7 @@ async function backendFailure(action: string, res: Response): Promise<Error> {
   )
 }
 
-async function moderationBody(
+function moderationCredentials(
   platform: ModerationPlatform,
   channelSlug: string,
   accountId?: string,
@@ -702,7 +745,6 @@ async function moderationBody(
     throw new Error(t('runtime.api.moderationCredentialsUnavailable', { platform }))
   }
   return {
-    platform,
     channelSlug,
     accessToken: tokens.accessToken,
     platformUserId: account.platformUserId,
@@ -720,31 +762,33 @@ async function fetchTwitchChatters(channelSlug: string): Promise<ChannelChatters
   if (!account || !tokens?.accessToken) {
     throw new Error(t('runtime.api.chattersConnectTwitch'))
   }
-  const res = await backendFetch('/api/twitch/chatters', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      accessToken: tokens.accessToken,
+  let data: TwitchChattersResult
+  try {
+    data = await getTwitchChatters({
+      ...(await twitchUserCredentials(tokens.accessToken)),
       broadcasterLogin: channelSlug,
       moderatorId: account.platformUserId,
-    }),
-  })
-  if (!res.ok) {
-    if (res.status === 401) throw new Error(t('runtime.api.chattersTwitchRejected'))
-    if (res.status === 403) throw new Error(t('runtime.api.chattersModeratorRequired'))
-    if (res.status === 404) throw new Error(t('runtime.api.chattersChannelNotFound'))
-    throw new Error(t('runtime.api.chattersTwitchUnavailable'))
+    })
+  } catch (error) {
+    if (error instanceof TwitchChattersError) {
+      if (error.status === 401)
+        throw new Error(t('runtime.api.chattersTwitchRejected'), { cause: error })
+      if (error.status === 403)
+        throw new Error(t('runtime.api.chattersModeratorRequired'), { cause: error })
+      if (error.status === 404)
+        throw new Error(t('runtime.api.chattersChannelNotFound'), { cause: error })
+    }
+    throw new Error(t('runtime.api.chattersTwitchUnavailable'), { cause: error })
   }
-  const data = twitchChattersSchema.parse(await res.json())
 
   const broadcaster: ChatterGroup = { role: 'broadcaster', users: [] }
   const chatters: ChatterGroup = { role: 'chatters', users: [] }
   const seen = new Set<string>()
-  for (const chatter of data.chatters ?? []) {
+  for (const chatter of data.chatters) {
     const user: ChatterUser = {
       userId: chatter.userId,
-      username: chatter.userLogin ?? '',
-      displayName: chatter.userName ?? chatter.userLogin ?? '',
+      username: chatter.userLogin,
+      displayName: chatter.userName,
       avatarUrl: chatter.avatarUrl,
     }
     if (chatter.userId && chatter.userId === data.broadcasterId) {
@@ -818,6 +862,59 @@ async function fetchKickChatters(channelSlug: string): Promise<ChannelChatters> 
 export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   const { aggregator, watchedChannelManager, currentStatuses } = ctx
   const updater = ctx.updater ?? createUpdater(ctx.events)
+  function donations(): DonationService {
+    if (!ctx.donations) throw new Error('Donation integrations are unavailable.')
+    return ctx.donations
+  }
+
+  let twitchAuth:
+    | { controller: AbortController; windowScope: string; userCode?: string }
+    | undefined
+
+  async function createAuthUrl({ platform, windowScope }: AuthRequest): Promise<string> {
+    if (platform === 'kick') {
+      const { codeChallenge, state } = prepareKickAuth()
+      return getKickAuthUrl(codeChallenge, state)
+    }
+    if (platform === 'youtube') return getYouTubeAuthUrl()
+
+    twitchAuth?.controller.abort()
+    const controller = new AbortController()
+    const current: NonNullable<typeof twitchAuth> = { controller, windowScope }
+    twitchAuth = current
+    ctx.events.emit('twitch_device_code', null)
+
+    const clear = () => {
+      if (twitchAuth !== current) return
+      twitchAuth = undefined
+      ctx.events.emit('twitch_device_code', null)
+    }
+
+    try {
+      const attempt = await requestTwitchDeviceCode(controller.signal)
+      controller.signal.throwIfAborted()
+      const { user_code: userCode, verification_uri: url } = attempt.code
+      current.userCode = userCode
+      ctx.events.emit('twitch_device_code', { userCode, url, windowScope })
+      void connectTwitchDevice(attempt, controller.signal)
+        .then((account) => {
+          clear()
+          return finishDesktopSignIn('twitch', account)
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return
+          ctx.events.emit('auth_error', {
+            platform: 'twitch',
+            error: error instanceof Error ? error.message : t('runtime.auth.twitchSignInFailed'),
+          })
+        })
+        .finally(clear)
+      return url
+    } catch (error) {
+      clear()
+      throw error
+    }
+  }
 
   const getSevenTvTwitchPlatformUserId = (channelSlug: string): string | undefined => {
     const twitchAccount = AccountStore.findByPlatform('twitch')
@@ -862,24 +959,24 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return snapshot
     },
     getTwitchRewardQueueSummary: (params) =>
-      twitchActivitiesRequest('reward_queue_summary', params, twitchRewardQueueSummarySchema),
+      twitchActivity((credentials) =>
+        twitchActivities.rewardQueueSummary(credentials, params.channelSlug),
+      ),
     getTwitchActivityCapability: async ({ channelSlug }) => {
       if (!ctx.twitchActivityRefresh)
         throw new Error(t('runtime.api.twitchActivitiesNotInitialized'))
       return ctx.twitchActivityRefresh.capability(channelSlug)
     },
     executeTwitchActivityAction: (action) =>
-      twitchActivitiesRequest('action', { action }, platformCommandResultSchema),
+      twitchActivity((credentials) => twitchActivities.execute(credentials, action)),
     getTwitchRewardRedemptions: (params) =>
-      twitchActivitiesRequest('redemptions', params, twitchRedemptionsPageSchema),
+      twitchActivity((credentials) => twitchActivities.redemptions(credentials, params)),
     getTwitchFollowing: (params = {}) =>
-      twitchActivitiesRequest('following', params, twitchFollowingPageSchema),
+      twitchActivity((credentials) => twitchActivities.following(credentials, params)),
     getTwitchWebSessionStatus: () => TwitchWebSessionStore.status(),
     setTwitchWebSession: async ({ token }) => {
-      const session = await twitchActivitiesRequest(
-        'validate_session',
-        { token },
-        twitchWebSessionSchema,
+      const session = await twitchRequest(t('runtime.api.action.twitchActivityFailed'), () =>
+        twitchActivities.validateWebSession(token),
       )
       const account = AccountStore.findByPlatform('twitch')
       if (account && account.platformUserId !== session.userId)
@@ -935,6 +1032,17 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       ctx.providerRuntime?.setActiveChannel(params)
     },
     getImageUploaderSettings: imageUploader.getImageUploaderSettings,
+    donationAlertsOAuthAvailable: getDonationAlertsDesktopClientId() !== null,
+    getDonationConnections: async () => donations().getConnections(),
+    getDonationOAuthAvailability,
+    connectDonationProvider: async (params) => {
+      await Bun.sleep(0)
+      donations().connect(params)
+    },
+    disconnectDonationProvider: async ({ provider }) => {
+      await Bun.sleep(0)
+      donations().disconnect(provider)
+    },
     saveImageUploaderSettings: imageUploader.saveImageUploaderSettings,
     connectTwirImageUploader: imageUploader.connectTwirImageUploader,
     disconnectTwirImageUploader: imageUploader.disconnectTwirImageUploader,
@@ -976,11 +1084,18 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     getChannels: async () => ChannelStore.findAll(),
 
-    authStart: async ({ platform }) => {
-      ctx.openBrowser(await createAuthUrl(platform))
+    authStart: async (params) => {
+      ctx.openBrowser(await createAuthUrl(params))
     },
 
-    authLink: async ({ platform }) => ({ url: await createAuthUrl(platform) }),
+    authLink: async (params) => ({ url: await createAuthUrl(params) }),
+
+    cancelTwitchAuth: async ({ userCode, windowScope }) => {
+      if (twitchAuth?.windowScope !== windowScope || twitchAuth.userCode !== userCode) return
+      twitchAuth.controller.abort()
+      twitchAuth = undefined
+      ctx.events.emit('twitch_device_code', null)
+    },
 
     authLogout: async ({ platform }) => {
       if (!ctx.accountSessions) throw new Error(t('runtime.api.accountSwitchingUnavailable'))
@@ -1039,11 +1154,17 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     executePlatformCommand: async ({ platform, channelSlug, text, accountId }) => {
       if (platform !== 'twitch' && platform !== 'kick')
         throw new Error(t('runtime.api.platformCommandsUnavailable', { platform }))
-      const body = await moderationBody(platform, channelSlug, accountId)
+      const body = moderationCredentials(platform, channelSlug, accountId)
+      if (platform === 'twitch') {
+        const credentials = await twitchUserCredentials(body.accessToken)
+        return twitchRequest(t('runtime.api.action.platformCommandFailed'), () =>
+          twitchChatTools.execute({ ...body, ...credentials, text }),
+        )
+      }
       const res = await backendFetch('/api/chat-tools/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...body, text }),
+        body: JSON.stringify({ ...body, platform, text }),
       })
       if (!res.ok) throw await backendFailure(t('runtime.api.action.platformCommandFailed'), res)
       return platformCommandResultSchema.parse(await res.json())
@@ -1058,22 +1179,27 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (current) return current
       if (platform !== 'twitch')
         throw new Error(t('runtime.api.roomSettingsUnavailable', { platform }))
-      const body = await moderationBody(platform, channelSlug, accountId)
-      const res = await backendFetch('/api/chat-tools/room-state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) throw await backendFailure(t('runtime.api.action.loadChatSettings'), res)
-      return roomStateSchema.parse(await res.json())
+      const body = moderationCredentials(platform, channelSlug, accountId)
+      const credentials = await twitchUserCredentials(body.accessToken)
+      return twitchRequest(t('runtime.api.action.loadChatSettings'), () =>
+        twitchChatTools.getRoomState({ ...body, ...credentials }),
+      )
     },
 
     getModerationCapabilities: async ({ platform, channelSlug, accountId }) => {
-      const body = await moderationBody(platform, channelSlug, accountId)
+      const body = moderationCredentials(platform, channelSlug, accountId)
+      if (platform === 'twitch') {
+        try {
+          const credentials = await twitchUserCredentials(body.accessToken)
+          return await twitchModeration.getCapabilities({ ...body, ...credentials })
+        } catch {
+          return { canModerate: false }
+        }
+      }
       const res = await backendFetch('/api/moderation/capabilities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, platform }),
       })
       if (!res.ok)
         throw await backendFailure(t('runtime.api.action.checkModerationPermissions'), res)
@@ -1081,12 +1207,20 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     moderateMessage: async (params) => {
-      const body = await moderationBody(params.platform, params.channelSlug, params.accountId)
+      const body = moderationCredentials(params.platform, params.channelSlug, params.accountId)
+      if (params.platform === 'twitch') {
+        const credentials = await twitchUserCredentials(body.accessToken)
+        const result = await twitchModeration.execute({ ...body, ...credentials, ...params })
+        if (!result.success)
+          throw new Error(result.error?.message || t('runtime.api.moderationRejected'))
+        return { success: true }
+      }
       const res = await backendFetch('/api/moderation/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...body,
+          platform: params.platform,
           messageId: params.messageId,
           targetUserId: params.targetUserId,
           action: params.action,
@@ -1115,13 +1249,26 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     updateStream: async (params) => {
-      const account = AccountStore.findByPlatform(params.platform)
-      if (!account) throw new Error(t('runtime.api.noAccountFound', { platform: params.platform }))
+      const { platform, channelId, title, categoryId } = params
+      if (platform !== 'twitch' && platform !== 'kick') {
+        throw new Error('Stream updates are unavailable for this platform.')
+      }
+      const account = AccountStore.findByPlatform(platform)
+      if (!account) throw new Error(t('runtime.api.noAccountFound', { platform }))
       const tokens = AccountStore.getTokens(account.id)
-      if (!tokens?.accessToken)
-        throw new Error(t('runtime.api.noAccessToken', { platform: params.platform }))
+      if (!tokens?.accessToken) throw new Error(t('runtime.api.noAccessToken', { platform }))
 
-      const body: UpdateStreamRequest = { ...params, userAccessToken: tokens.accessToken }
+      if (platform === 'twitch') {
+        const credentials = await twitchUserCredentials(tokens.accessToken)
+        return updateTwitchStream({ channelId, title, categoryId }, credentials)
+      }
+      const body: UpdateStreamRequest = {
+        platform,
+        channelId,
+        title,
+        categoryId,
+        userAccessToken: tokens.accessToken,
+      }
       const res = await backendFetch(`/api/update-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1140,21 +1287,16 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     getChannelsStatus: async ({ channels }) => {
-      const enriched = channels.map((ch) => {
-        const account = AccountStore.findByPlatform(ch.platform)
-        if (account) {
-          const tokens = AccountStore.getTokens(account.id)
-          if (tokens?.accessToken) {
-            return { ...ch, userAccessToken: tokens.accessToken }
-          }
-        }
-        return ch
-      })
-
       const res = await backendFetch(`/api/channels-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channels: enriched }),
+        body: JSON.stringify({
+          channels: channels.map(({ platform, channelId, channelLogin }) => ({
+            platform,
+            channelId,
+            channelLogin,
+          })),
+        }),
       })
       if (!res.ok) throw await backendFailure(t('runtime.api.action.loadChannelStatus'), res)
       return channelsStatusResponseSchema.parse(await res.json())
@@ -1182,24 +1324,21 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     getUserProfile: async (params) => {
+      const { platform, platformUserId, channelSlug } = params
+      const request = { platform, platformUserId, channelSlug }
       const account = AccountStore.findByPlatform('twitch')
-      const tokens = account ? AccountStore.getTokens(account.id) : undefined
-      const twitchAuth =
-        account && tokens?.accessToken
-          ? {
-              accessToken: tokens.accessToken,
-              platformUserId: account.platformUserId,
-              scopes: account.scopes,
-            }
-          : undefined
+      const accessToken = account && AccountStore.getTokens(account.id)?.accessToken
       const response = await backendFetch('/api/user-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...params, twitchAuth }),
+        body: JSON.stringify(request),
       })
       if (!response.ok)
         throw await backendFailure(t('runtime.api.action.loadUserProfile'), response)
-      return userProfileSnapshotSchema.parse(await response.json())
+      const profile = userProfileSnapshotSchema.parse(await response.json())
+      return accessToken
+        ? enrichTwitchUserProfile(request, profile, accessToken).catch(() => profile)
+        : profile
     },
     getUserNotes: async (params) => getUserNotes(params),
     setUserNotes: async (params) => setUserNotes(params),
@@ -1207,31 +1346,20 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     saveModerationSettings: async (settings) => saveModerationSettings(settings),
 
     getUserCardMetadata: async ({ platform, platformUserId, username, channelId, channelSlug }) => {
-      const body: Record<string, unknown> = {
-        platform,
-        platformUserId,
-        username,
-        channelId,
-        channelSlug,
-      }
-      const account = AccountStore.findByPlatform(platform)
-      if (platform === 'twitch' && account) {
-        const tokens = AccountStore.getTokens(account.id)
-        if (tokens?.accessToken) {
-          body['twitchAuth'] = {
-            accessToken: tokens.accessToken,
-            platformUserId: account.platformUserId,
-            scopes: account.scopes,
-          }
-        }
-      }
+      const request = { platform, platformUserId, username, channelId, channelSlug }
+      const account = platform === 'twitch' && AccountStore.findByPlatform(platform)
+      const accessToken = account && AccountStore.getTokens(account.id)?.accessToken
+      const details = accessToken
+        ? loadTwitchUserCardDetails(request, accessToken).catch(() => undefined)
+        : undefined
       const res = await backendFetch('/api/user-card-metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(request),
       })
       if (!res.ok) throw await backendFailure(t('runtime.api.action.loadAccountDetails'), res)
-      return userCardMetadataResponseSchema.parse(await res.json())
+      const metadata = userCardMetadataResponseSchema.parse(await res.json())
+      return { ...metadata, ...(await details) }
     },
 
     getStatuses: async () => [...currentStatuses.values()],

@@ -1,8 +1,8 @@
 import { setRuntimeConfig } from '../runtime-config'
-import { avatarThumbnailer } from './avatar-image'
 import { getPaintNameImage, cosmeticPaintSchema } from './cosmetics'
 import { modifiedEmoteImage } from './emote-image'
 import { disableImageSweeps } from './image-cache-sweep'
+import { imageThumbnailer } from './image-thumbnail'
 import {
   paintWorkerJobSchema,
   paintWorkerRequestSchema,
@@ -19,11 +19,13 @@ async function runJob(input: unknown): Promise<unknown> {
   const job = paintWorkerJobSchema.parse(input)
   setRuntimeConfig({
     dbPath: job.dbPath,
-    ...(job.kind !== 'avatar' && job.backendUrl ? { backendUrl: job.backendUrl } : {}),
+    ...(job.kind !== 'thumbnail' && job.backendUrl ? { backendUrl: job.backendUrl } : {}),
   })
   switch (job.kind) {
-    case 'avatar':
-      return { path: await avatarThumbnailer.render(job.path, job.size, job.scale) }
+    case 'thumbnail':
+      return {
+        path: await imageThumbnailer.render(job.path, job.size, { fit: job.fit, scale: job.scale }),
+      }
     case 'emote':
       return { path: await modifiedEmoteImage(job.path, job.width, job.height, job.modifiers) }
     case 'paint':

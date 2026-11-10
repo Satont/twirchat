@@ -8,11 +8,15 @@ const JOB_TIMEOUT_MS = 30_000
 const IDLE_EXIT_MS = 60_000
 const MAX_PENDING_JOBS = 300
 
+const thumbnailFitSchema = z.enum(['cover', 'inside'])
+export type ThumbnailFit = z.infer<typeof thumbnailFitSchema>
+
 export const paintWorkerJobSchema = z.discriminatedUnion('kind', [
   z.object({
-    kind: z.literal('avatar'),
+    kind: z.literal('thumbnail'),
     path: z.string(),
     size: z.number(),
+    fit: thumbnailFitSchema,
     scale: z.number(),
     dbPath: z.string(),
   }),

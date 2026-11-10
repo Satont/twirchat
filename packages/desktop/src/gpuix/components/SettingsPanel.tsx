@@ -46,6 +46,7 @@ import { ChatLoggingSettings } from './ChatLoggingSettings'
 import { ChatPauseSettings } from './ChatPauseSettings'
 import { ChatRulesSettings } from './ChatRulesSettings'
 import { CustomCommandsSettings } from './CustomCommandsSettings'
+import { DonationSettings } from './DonationSettings'
 import { EmoteProviderSettings } from './EmoteProviderSettings'
 import { HotkeySettings as ActionHotkeySettings } from './HotkeySettings'
 import { ImageUploaderSettings } from './ImageUploaderSettings'
@@ -900,6 +901,9 @@ export function SettingsPanel() {
                   </SettingsSection>
                   <SettingsSection id="plugins" title={t('settings.section.plugins')}>
                     <RetainedSettingsEditor component={PluginSettings} />
+                  </SettingsSection>
+                  <SettingsSection id="donations" title={t('settings.section.donations')}>
+                    <RetainedSettingsEditor component={DonationSettings} />
                   </SettingsSection>
                   <SettingsSection
                     id="streamer-mode"

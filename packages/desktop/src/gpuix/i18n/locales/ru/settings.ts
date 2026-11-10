@@ -47,6 +47,10 @@ export const ruSettings = {
   'settings.category.commands.desc': 'Свои команды и действия',
   'settings.category.plugins': 'Плагины',
   'settings.category.plugins.desc': 'Локальные и удалённые расширения, транспорты каналов',
+  'settings.category.donations': 'Донаты',
+  'settings.category.donations.desc': 'Оповещения о донатах во вкладке «Мои каналы»',
+  'settings.donations.checking': 'Проверяем доступность…',
+  'settings.donations.notEnabled': 'Пока не включено',
   'settings.category.overlay': 'Оверлей OBS',
   'settings.category.overlay.desc': 'Внешний вид источника браузера',
   'settings.category.shortcuts': 'Сочетания клавиш',
@@ -62,6 +66,7 @@ export const ruSettings = {
   'settings.section.players.desc':
     'Открывайте трансляции в браузере, внешнем плеере или Streamlink',
   'settings.section.plugins': 'Плагины',
+  'settings.section.donations': 'Сервисы донатов',
   'settings.section.streamer-mode': 'Режим стримера',
   'settings.section.streamer-mode.desc': 'Скрывайте личные данные во время стрима',
   'settings.section.similarity': 'Похожие сообщения',

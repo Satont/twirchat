@@ -10,7 +10,7 @@ import { logger } from '@twirchat/shared/logger'
  */
 import { z } from 'zod'
 
-import { config } from '../../config.ts'
+import type { TwitchUserCredentials } from '../twitch-users.ts'
 import {
   ModerationException,
   type TwitchBanRequest,
@@ -38,7 +38,7 @@ function isHelixError(data: unknown): data is HelixErrorResponse {
 /**
  * Ban or timeout a user in a channel.
  *
- * @param broadcasterToken - Access token with `moderator:manage:banned_users` scope
+ * @param credentials - Access token with `moderator:manage:banned_users` scope
  * @param broadcasterUserId - The channel owner ID (from token)
  * @param moderatorUserId - The moderator performing the action (from token)
  * @param request - Ban request (user_id, reason?, duration?)
@@ -50,7 +50,7 @@ function isHelixError(data: unknown): data is HelixErrorResponse {
  * - 422: Invalid user_id, duration out of range, etc.
  */
 export async function banUser(
-  broadcasterToken: string,
+  credentials: TwitchUserCredentials,
   broadcasterUserId: string,
   moderatorUserId: string,
   request: TwitchBanRequest,
@@ -71,18 +71,21 @@ export async function banUser(
       duration: request.duration,
     })
 
-    const res = await fetch(
-      `https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${broadcasterUserId}&moderator_id=${moderatorUserId}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${broadcasterToken}`,
-          'Client-Id': config.TWITCH_CLIENT_ID,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
+    const query = new URLSearchParams({
+      broadcaster_id: broadcasterUserId,
+      moderator_id: moderatorUserId,
+    })
+    const res = await fetch(`https://api.twitch.tv/helix/moderation/bans?${query}`, {
+      method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        Authorization: `Bearer ${credentials.accessToken}`,
+        'Client-Id': credentials.clientId,
+        'Content-Type': 'application/json',
       },
-    )
+      body: JSON.stringify(body),
+    })
 
     const data = z
       .union([
@@ -153,7 +156,7 @@ export async function banUser(
 /**
  * Delete a single chat message by ID.
  *
- * @param broadcasterToken - Access token with `moderation:manage:messages` scope
+ * @param credentials - Access token with `moderation:manage:messages` scope
  * @param broadcasterUserId - The channel owner ID
  * @param moderatorUserId - The moderator performing the action
  * @param messageId - The message ID to delete
@@ -165,7 +168,7 @@ export async function banUser(
  * - 404: Message not found
  */
 export async function deleteMessage(
-  broadcasterToken: string,
+  credentials: TwitchUserCredentials,
   broadcasterUserId: string,
   moderatorUserId: string,
   messageId: string,
@@ -176,16 +179,20 @@ export async function deleteMessage(
       messageId,
     })
 
-    const res = await fetch(
-      `https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${broadcasterUserId}&moderator_id=${moderatorUserId}&message_id=${messageId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${broadcasterToken}`,
-          'Client-Id': config.TWITCH_CLIENT_ID,
-        },
+    const query = new URLSearchParams({
+      broadcaster_id: broadcasterUserId,
+      moderator_id: moderatorUserId,
+      message_id: messageId,
+    })
+    const res = await fetch(`https://api.twitch.tv/helix/moderation/chat?${query}`, {
+      method: 'DELETE',
+      redirect: 'error',
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        Authorization: `Bearer ${credentials.accessToken}`,
+        'Client-Id': credentials.clientId,
       },
-    )
+    })
 
     if (!res.ok) {
       const errorCode = mapHelixError(res.status, res.statusText)
@@ -236,13 +243,13 @@ export async function deleteMessage(
  * Note: This only returns users with moderator badge. To check if someone is the broadcaster,
  * you need to compare against the broadcaster_id separately.
  *
- * @param broadcasterToken - User token with user:read:moderated_channels for userId
+ * @param credentials - User token with user:read:moderated_channels for userId
  * @param broadcasterUserId - The channel owner ID
  * @param userId - The user ID to check
  * @returns IsModerator with moderator status
  */
 export async function isModerator(
-  broadcasterToken: string,
+  credentials: TwitchUserCredentials,
   broadcasterUserId: string,
   userId: string,
 ): Promise<IsModerator> {
@@ -261,10 +268,11 @@ export async function isModerator(
       // eslint-disable-next-line no-await-in-loop
       const res = await fetch(`https://api.twitch.tv/helix/moderation/channels?${query}`, {
         headers: {
-          Authorization: `Bearer ${broadcasterToken}`,
-          'Client-Id': config.TWITCH_CLIENT_ID,
+          Authorization: `Bearer ${credentials.accessToken}`,
+          'Client-Id': credentials.clientId,
         },
         signal: AbortSignal.timeout(15000),
+        redirect: 'error',
       })
       if (!res.ok) {
         throw new ModerationException(

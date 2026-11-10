@@ -77,12 +77,19 @@ export const ruApp = {
   'app.platforms.connect': 'Подключить аккаунт',
   'app.platforms.connectedAs': 'Подключено как {name}',
 
+  'app.platforms.twitchDevice.title': 'Подключить Twitch',
+  'app.platforms.twitchDevice.description':
+    'Подтвердите код на Twitch и разрешите доступ TwirChat в браузере.',
+  'app.platforms.twitchDevice.open': 'Открыть Twitch',
+  'app.platforms.twitchDevice.copyCode': 'Скопировать код',
+
   'app.accounts.title': 'Сохранённые аккаунты',
   'app.accounts.description':
     'Выберите один активный аккаунт для каждой платформы. При переключении сохраняются отслеживаемые каналы, сообщения и раскладки вкладок. Анонимный режим сохраняет учётные данные на будущее.',
   'app.accounts.loading': 'Загрузка сохранённых аккаунтов…',
   'app.accounts.anonymous': 'Анонимно',
   'app.accounts.useAnonymously': 'Использовать анонимно',
+  'app.accounts.twitchLinkCopied': 'Ссылка для входа в Twitch скопирована.',
   'app.accounts.linkCopied':
     'Ссылка для входа в {platform} скопирована. Откройте её в другом браузере или приватном окне на этом компьютере в течение 10 минут.',
   'app.accounts.active': 'Активный',

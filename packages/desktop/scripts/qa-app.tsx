@@ -35,17 +35,17 @@ function find(renderer, testId) {
   return visit(JSON.parse(renderer.getAutomationTree()))
 }
 let main
-async function click(testId: string) {
+async function click(testId: string, renderer = main) {
   if (testId.startsWith('theme-')) {
-    const content = find(main, 'settings-content')
+    const content = find(renderer, 'settings-content')
     for (let attempt = 0; attempt < 12 && content; attempt++) {
-      const item = find(main, testId)
+      const item = find(renderer, testId)
       assert.ok(item, `Missing ${testId}`)
-      const bounds = main.getElementBounds(item.id)
-      const viewport = main.getElementBounds(content.id)
+      const bounds = renderer.getElementBounds(item.id)
+      const viewport = renderer.getElementBounds(content.id)
       assert.ok(bounds && viewport, `Missing painted bounds for ${testId}`)
       if (bounds.y >= viewport.y && bounds.y + bounds.height <= viewport.y + viewport.height) break
-      main.simulateScrollWheel(
+      renderer.simulateScrollWheel(
         viewport.x + viewport.width / 2,
         viewport.y + viewport.height / 2,
         0,
@@ -54,11 +54,11 @@ async function click(testId: string) {
       await Bun.sleep(70)
     }
   }
-  const item = find(main, testId)
+  const item = find(renderer, testId)
   assert.ok(item, `Missing ${testId}`)
-  const bounds = main.getElementBounds(item.id)
+  const bounds = renderer.getElementBounds(item.id)
   assert.ok(bounds, `Missing painted bounds for ${testId}`)
-  main.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
+  renderer.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
 }
 async function openNavTab(tab: MainTab, contentId: string) {
   await click(`nav-${tab}`)
@@ -203,7 +203,7 @@ async function captureThemedChat() {
   }
 }
 
-async function action(category, name, args = []) {
+async function action(category, name, args = [], renderer = main) {
   actionBindingsStore.update({
     value: {
       bindings: [
@@ -221,8 +221,74 @@ async function action(category, name, args = []) {
     },
   })
   await Bun.sleep(30)
-  main.simulateKeystrokes('ctrl-f12')
+  renderer.simulateKeystrokes('ctrl-f12')
   await Bun.sleep(150)
+}
+
+async function checkDetachedTwitchSignIn(child) {
+  const { api } = getDesktopBackend()
+  const originalFetch = globalThis.fetch
+  const originalCopyText = api.copyText
+  const clipboard: string[] = []
+  let attempts = 0
+  process.env.TWIRCHAT_TWITCH_CLIENT_ID = 'qa-public-client'
+  globalThis.fetch = Object.assign(
+    (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : input)
+      if (url.href !== 'https://id.twitch.tv/oauth2/device') return originalFetch(input, init)
+      attempts++
+      return Promise.resolve(
+        Response.json({
+          device_code: `qa-device-${attempts}`,
+          user_code: `TWIR-QA${attempts}`,
+          verification_uri: 'https://www.twitch.tv/activate',
+          expires_in: 60,
+          interval: 10,
+        }),
+      )
+    },
+    { preconnect: originalFetch.preconnect },
+  )
+  api.copyText = async ({ text }) => {
+    clipboard.push(text)
+  }
+  const renderer = child.renderer
+  const start = async (userCode: string) => {
+    await click('add-account-twitch-more', renderer)
+    await until(() => !!find(renderer, 'add-account-twitch-copy'), 'account sign-in menu')
+    await click('add-account-twitch-copy', renderer)
+    await until(
+      () =>
+        !!find(renderer, 'twitch-device-code') &&
+        renderer.getPaintedText().some((text) => text.includes(userCode)),
+      'device code paints in the detached account window',
+    )
+  }
+  try {
+    await focusNativeQaWindow(child.descriptor.title)
+    await action('window', 'openAccountSelector', [], renderer)
+    await until(() => !!find(renderer, 'add-account-twitch'), 'detached account selector')
+    await start('TWIR-QA1')
+    assert.equal(find(main, 'twitch-device-sign-in'), undefined)
+    renderer.simulateKeystrokes('escape')
+    await until(() => !find(renderer, 'twitch-device-sign-in'), 'Escape cancels Twitch sign-in')
+
+    await manager.close('main')
+    await until(() => !mounts.has('main'), 'main closes independently')
+    assert.equal(renderer.isWindowOpen(), true)
+    await renderer.setWindowBounds({ width: 420, height: 480 })
+    await until(() => renderer.getWindowBounds()?.width === 420, 'compact detached window')
+    await focusNativeQaWindow(child.descriptor.title)
+    await start('TWIR-QA2')
+    await click('twitch-device-copy', renderer)
+    await until(() => clipboard.includes('TWIR-QA2'), 'detached window can copy the device code')
+    await click('twitch-device-cancel', renderer)
+    await until(() => !find(renderer, 'twitch-device-sign-in'), 'detached cancel closes the prompt')
+    assert.equal(attempts, 2)
+  } finally {
+    api.copyText = originalCopyText
+    globalThis.fetch = originalFetch
+  }
 }
 try {
   await until(
@@ -291,12 +357,14 @@ try {
   await until(() => !!find(child.renderer, 'chat-pane'), 'standalone pane paints')
   assert.equal(allPanels(layoutStore.get().get(child.descriptor.tabId)?.layout ?? null).length, 2)
   const screenshot = await captureGuiQaDisplay('app-windows')
-  await manager.close('main')
-  await until(() => !mounts.has('main'), 'main closes independently')
-  assert.equal(child.renderer.isWindowOpen(), true)
+  await checkDetachedTwitchSignIn(child)
   await Bun.write(
     join(directory, 'app-result.json'),
-    JSON.stringify({ ok: true, emptyTab, childId: child.descriptor.id, screenshot }, null, 2),
+    JSON.stringify(
+      { ok: true, emptyTab, childId: child.descriptor.id, detachedTwitchSignIn: true, screenshot },
+      null,
+      2,
+    ),
   )
   console.log('Real app native action QA passed.')
   await manager.quit()

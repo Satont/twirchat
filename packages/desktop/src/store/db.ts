@@ -96,6 +96,14 @@ function runMigrations(db: Database): void {
         SELECT id FROM accounts WHERE platform = candidate.platform
         ORDER BY updated_at DESC, created_at DESC, id ASC LIMIT 1
       )`)
+
+    const migration = db.run(`INSERT OR IGNORE INTO client_identity(key, value)
+      VALUES ('migration:twitch-device-auth-v1', '1')`)
+    if (migration.changes) {
+      db.run("DELETE FROM accounts WHERE platform = 'twitch'")
+      db.run(`DELETE FROM client_identity
+        WHERE key = 'secret:twitch-web-session' OR key GLOB 'secret:twitch-web-session:*'`)
+    }
   })()
 
   db.run(`

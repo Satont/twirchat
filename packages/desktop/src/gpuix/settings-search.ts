@@ -62,6 +62,12 @@ export const SETTINGS_CATEGORIES = defineSettingsCategories([
     aliases: 'plugins extensions transports manifest github url плагины расширения транспорты',
   },
   {
+    id: 'donations',
+    label: 'Donations',
+    description: 'Live donation alerts in My channels',
+    aliases: 'donations tips alerts events донаты пожертвования алерты события',
+  },
+  {
     id: 'overlay',
     label: 'OBS overlay',
     description: 'Browser source appearance',
@@ -92,6 +98,7 @@ const CATEGORY_LABEL_KEYS: Record<SettingsCategoryId, MessageKey> = {
   moderation: 'settings.category.moderation',
   commands: 'settings.category.commands',
   plugins: 'settings.category.plugins',
+  donations: 'settings.category.donations',
   overlay: 'settings.category.overlay',
   shortcuts: 'settings.category.shortcuts',
   'twitch-session': 'settings.category.twitch-session',
@@ -106,6 +113,7 @@ const CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategoryId, MessageKey> = {
   moderation: 'settings.category.moderation.desc',
   commands: 'settings.category.commands.desc',
   plugins: 'settings.category.plugins.desc',
+  donations: 'settings.category.donations.desc',
   overlay: 'settings.category.overlay.desc',
   shortcuts: 'settings.category.shortcuts.desc',
   'twitch-session': 'settings.category.twitch-session.desc',
@@ -140,6 +148,7 @@ export type SettingsSectionId =
   | 'twir-integration'
   | 'players'
   | 'plugins'
+  | 'donations'
   | 'streamer-mode'
   | 'similarity'
   | 'pause'
@@ -283,6 +292,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'action',
     keywords:
       'install enable disable remove manifest version transport TypeScript локальные установить включить выключить удалить',
+  },
+  {
+    id: 'donations',
+    category: 'donations',
+    title: 'Donation Providers',
+    saveMode: 'action',
+    keywords:
+      'DonationAlerts donation alerts DonatePay DonatPay MemeAlerts MemoAlerts OAuth sign in API key clipboard events connect disconnect донаты пожертвования донаталертс донатпей мемалертс ключ подключить события',
   },
   {
     id: 'overlay',

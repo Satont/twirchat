@@ -1,6 +1,6 @@
 import type {
   UserCardAccountAgeField,
-  UserCardMetadataBackendRequest,
+  UserCardMetadataRequest,
   UserCardFollowAgeField,
   UserCardMetadataResponse,
   UserCardSubAgeField,
@@ -8,15 +8,7 @@ import type {
 } from '@twirchat/shared'
 import { z } from 'zod'
 
-import { config } from '../config.ts'
 import { fetchTwitchHelixWithAppToken } from './stream-status.ts'
-import { resolveTwitchUserId } from './twitch-users.ts'
-
-interface TwitchAuthContext {
-  accessToken: string
-  platformUserId: string
-  scopes: string[]
-}
 
 interface KickChannelUserIdentityResponse {
   id?: number | string
@@ -80,17 +72,6 @@ function unavailableSubAge(
   return { status, months: null, message }
 }
 
-async function resolveTwitchBroadcasterId(
-  channelId: string | undefined,
-  auth: TwitchAuthContext | undefined,
-): Promise<string | null> {
-  if (!channelId || !auth) {
-    return null
-  }
-
-  return resolveTwitchUserId(channelId, auth.accessToken)
-}
-
 async function fetchTwitchAccountAge(platformUserId: string): Promise<UserCardAccountAgeField> {
   const response = await fetchTwitchHelixWithAppToken(
     `https://api.twitch.tv/helix/users?id=${encodeURIComponent(platformUserId)}`,
@@ -110,155 +91,6 @@ async function fetchTwitchAccountAge(platformUserId: string): Promise<UserCardAc
   }
 
   return availableAccountAge(user.created_at)
-}
-
-async function fetchTwitchFollowAge(
-  targetUserId: string,
-  channelId: string | undefined,
-  auth: TwitchAuthContext | undefined,
-): Promise<UserCardFollowAgeField> {
-  if (!auth) {
-    return unavailableFollowAge(
-      'unavailable',
-      'Follow age requires an authenticated Twitch account.',
-    )
-  }
-
-  if (!auth.scopes.includes('moderator:read:followers')) {
-    return unavailableFollowAge(
-      'missing_permission',
-      'Follow age requires Twitch broadcaster auth with moderator:read:followers.',
-    )
-  }
-
-  const broadcasterId = await resolveTwitchBroadcasterId(channelId, auth)
-  if (!broadcasterId) {
-    return unavailableFollowAge(
-      'unavailable',
-      'Could not resolve the Twitch channel for this message.',
-    )
-  }
-
-  const response = await fetch(
-    `https://api.twitch.tv/helix/channels/followers?broadcaster_id=${encodeURIComponent(
-      broadcasterId,
-    )}&user_id=${encodeURIComponent(targetUserId)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${auth.accessToken}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-      },
-    },
-  )
-
-  if (response.status === 401 || response.status === 403) {
-    return unavailableFollowAge(
-      'missing_permission',
-      'Twitch denied follow lookup for this broadcaster token.',
-    )
-  }
-
-  if (!response.ok) {
-    return unavailableFollowAge('unavailable', `Twitch follow lookup failed (${response.status}).`)
-  }
-
-  const body = z
-    .object({ data: z.array(z.object({ followed_at: z.string() })) })
-    .parse(await response.json())
-  const follow = body.data[0]
-
-  if (!follow?.followed_at) {
-    return unavailableFollowAge('unavailable', 'This user is not currently following this channel.')
-  }
-
-  return availableFollowAge(follow.followed_at)
-}
-
-async function fetchTwitchSubscriptionDuration(
-  targetUserId: string,
-  channelId: string | undefined,
-  auth: TwitchAuthContext | undefined,
-): Promise<UserCardSubscriptionDurationField> {
-  if (!auth) {
-    return unavailableSubscriptionDuration(
-      'unavailable',
-      'Subscription status requires an authenticated Twitch account.',
-    )
-  }
-
-  if (!auth.scopes.includes('channel:read:subscriptions')) {
-    return unavailableSubscriptionDuration(
-      'missing_permission',
-      'Subscription status requires Twitch broadcaster auth with channel:read:subscriptions.',
-    )
-  }
-
-  const broadcasterId = await resolveTwitchBroadcasterId(channelId, auth)
-  if (!broadcasterId) {
-    return unavailableSubscriptionDuration(
-      'unavailable',
-      'Could not resolve the Twitch channel for this message.',
-    )
-  }
-
-  if (broadcasterId !== auth.platformUserId) {
-    return unavailableSubscriptionDuration(
-      'unavailable',
-      'Subscription status is only available for your authenticated Twitch channel.',
-    )
-  }
-
-  const response = await fetch(
-    `https://api.twitch.tv/helix/subscriptions?broadcaster_id=${encodeURIComponent(
-      broadcasterId,
-    )}&user_id=${encodeURIComponent(targetUserId)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${auth.accessToken}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-      },
-    },
-  )
-
-  if (response.status === 401 || response.status === 403) {
-    return unavailableSubscriptionDuration(
-      'missing_permission',
-      'Twitch denied subscription lookup for this broadcaster token.',
-    )
-  }
-
-  if (!response.ok) {
-    return unavailableSubscriptionDuration(
-      'unavailable',
-      `Twitch subscription lookup failed (${response.status}).`,
-    )
-  }
-
-  const body = z
-    .object({
-      data: z.array(
-        z.object({
-          tier: z.string().optional(),
-          is_gift: z.boolean().optional(),
-          gifter_name: z.string().optional(),
-        }),
-      ),
-    })
-    .parse(await response.json())
-  const subscription = body.data[0]
-
-  if (!subscription) {
-    return availableSubscriptionDuration(false, {
-      message: 'Not currently subscribed to this channel.',
-    })
-  }
-
-  return availableSubscriptionDuration(true, {
-    tier: subscription.tier,
-    isGift: subscription.is_gift,
-    gifterDisplayName: subscription.gifter_name,
-    message: 'Current subscription status is available, but on-demand tenure is not.',
-  })
 }
 
 function emptyKickMetadata(
@@ -359,27 +191,28 @@ async function fetchKickUserMetadata(
 }
 
 export async function fetchUserCardMetadata(
-  params: UserCardMetadataBackendRequest,
+  params: UserCardMetadataRequest,
 ): Promise<UserCardMetadataResponse> {
-  const { platform, platformUserId, channelId, twitchAuth } = params
+  const { platform, platformUserId, channelId } = params
 
   if (platform === 'kick') {
     return fetchKickUserMetadata(platformUserId, channelId)
   }
 
-  const [accountAge, followAge, subscriptionDuration] = await Promise.all([
-    fetchTwitchAccountAge(platformUserId),
-    fetchTwitchFollowAge(platformUserId, channelId, twitchAuth),
-    fetchTwitchSubscriptionDuration(platformUserId, channelId, twitchAuth),
-  ])
-
+  const accountAge = await fetchTwitchAccountAge(platformUserId)
   return {
     platform: 'twitch',
     platformUserId,
     fetchedAt: Date.now(),
     accountAge,
-    followAge,
-    subscriptionDuration,
+    followAge: unavailableFollowAge(
+      'unavailable',
+      'Follow age requires an authenticated Twitch account.',
+    ),
+    subscriptionDuration: unavailableSubscriptionDuration(
+      'unavailable',
+      'Subscription status requires an authenticated Twitch account.',
+    ),
     subAge: unavailableSubAge(
       'unsupported',
       'Twitch does not expose on-demand sub age through the available broadcaster API.',

@@ -13,14 +13,12 @@ import type {
 } from '@twirchat/shared/twitch-activities'
 import { z } from 'zod'
 
-import { config } from '../config'
 import { ChatToolsError } from './chat-tools'
 import { isModerator } from './moderation/twitch'
 import { hasChannelModerationScopes } from './moderation/twitch-eventsub'
-import { resolveTwitchUserId } from './twitch-users'
+import { resolveTwitchUserId, type TwitchUserCredentials } from './twitch-users'
 
-export interface TwitchActivitiesCredentials {
-  accessToken: string
+export interface TwitchActivitiesCredentials extends TwitchUserCredentials {
   platformUserId: string
   scopes: readonly string[]
   webSession?: TwitchWebSession | null
@@ -123,7 +121,7 @@ function reward(value: Row): TwitchReward {
 
 export interface TwitchActivitiesDependencies {
   fetch(input: string, init?: RequestInit): Promise<Response>
-  resolveUser(identifier: string, token: string): Promise<string | null>
+  resolveUser(identifier: string, credentials: TwitchUserCredentials): Promise<string | null>
   isModerator?: typeof isModerator
 }
 const defaults: TwitchActivitiesDependencies = {
@@ -143,7 +141,7 @@ export function createTwitchActivitiesService(
     const normalized = string(channelSlug, 'Channel', 100).trim().replace(/^#/, '').toLowerCase()
     const cached = channelCache.get(normalized)
     if (cached && cached.expiresAt > Date.now()) return cached.id
-    const id = await dependencies.resolveUser(normalized, credentials.accessToken)
+    const id = await dependencies.resolveUser(normalized, credentials)
     if (!id) throw new ChatToolsError('Twitch channel was not found.')
     channelCache.delete(normalized)
     channelCache.set(normalized, { id, expiresAt: Date.now() + 3600000 })
@@ -166,9 +164,10 @@ export function createTwitchActivitiesService(
         url.searchParams.append(key, value)
     const response = await dependencies.fetch(url.toString(), {
       method,
+      redirect: 'error',
       headers: {
         Authorization: `Bearer ${credentials.accessToken}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
+        'Client-Id': credentials.clientId,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -194,6 +193,7 @@ export function createTwitchActivitiesService(
     const session = anonymous ? null : webSession(credentials)
     const response = await dependencies.fetch('https://gql.twitch.tv/gql', {
       method: 'POST',
+      redirect: 'error',
       headers: {
         ...(session ? { Authorization: `OAuth ${session.token}` } : {}),
         'Client-Id': tv ? TV_CLIENT_ID : WEB_CLIENT_ID,
@@ -1033,7 +1033,7 @@ export function createTwitchActivitiesService(
         ) {
           try {
             const role = await (dependencies.isModerator ?? isModerator)(
-              credentials.accessToken,
+              credentials,
               id,
               credentials.platformUserId,
             )

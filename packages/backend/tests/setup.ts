@@ -20,9 +20,9 @@ Object.assign(process.env, {
   KICK_WEBHOOK_SECRET: 'test-kick-webhook-secret',
   TWITCH_CLIENT_ID: 'test-twitch-client-id',
   TWITCH_CLIENT_SECRET: 'test-twitch-client-secret',
-  TWITCH_REDIRECT_URI: 'http://127.0.0.1:9/auth/twitch/callback',
-  YOUTUBE_CLIENT_ID: 'test-youtube-client-id',
-  YOUTUBE_CLIENT_SECRET: 'test-youtube-client-secret',
   YOUTUBE_API_KEY: '',
+  MEMEALERTS_CLIENT_ID: '',
+  MEMEALERTS_CLIENT_SECRET: '',
+  MEMEALERTS_REDIRECT_URI: '',
   TWITCH_HISTORY_PROVIDERS: '',
 })

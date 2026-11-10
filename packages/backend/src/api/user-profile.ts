@@ -1,17 +1,8 @@
 import type { UserProfileRequest, UserProfileSnapshot } from '@twirchat/shared/user-profile'
 import { z } from 'zod'
 
-import { config } from '../config'
 import { fetchTwitchHelixWithAppToken } from './stream-status'
 
-interface ProfileAuth {
-  accessToken: string
-  platformUserId: string
-  scopes: string[]
-}
-export interface UserProfileBackendRequest extends UserProfileRequest {
-  twitchAuth?: ProfileAuth
-}
 export interface UserProfileDependencies {
   fetch(url: string, init?: RequestInit): Promise<Response>
   helix(url: string, init?: RequestInit): Promise<Response>
@@ -23,26 +14,24 @@ export function createUserProfileService(
     helix: fetchTwitchHelixWithAppToken,
   },
 ) {
-  async function json(url: string, auth?: ProfileAuth, missingAllowed = false): Promise<unknown> {
+  async function json(url: string, missingAllowed = false): Promise<unknown> {
     const init: RequestInit = { signal: AbortSignal.timeout(12000) }
-    if (auth)
-      init.headers = {
-        Authorization: `Bearer ${auth.accessToken}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-      }
-    const response = await (url.startsWith('https://api.twitch.tv/') && !auth
+    const response = await (url.startsWith('https://api.twitch.tv/')
       ? deps.helix(url, init)
       : deps.fetch(url, init))
     if (response.status === 404 && missingAllowed) return null
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}.`)
     return response.json()
   }
-  return async function getProfile(input: UserProfileBackendRequest): Promise<UserProfileSnapshot> {
+  return async function getProfile(input: UserProfileRequest): Promise<UserProfileSnapshot> {
     if (input.platform !== 'twitch') throw new Error('Extended profiles currently require Twitch.')
     if (!/^\d+$/.test(input.platformUserId))
       throw new Error('A numeric Twitch user ID is required.')
     const id = input.platformUserId
-    const result: UserProfileSnapshot = { id, errors: [] }
+    const result: UserProfileSnapshot = {
+      id,
+      errors: [{ section: 'followers', message: 'Connect Twitch to read follower count.' }],
+    }
     const base = 'https://api.twitch.tv/helix/'
     async function section(name: string, run: () => Promise<void>) {
       try {
@@ -106,15 +95,6 @@ export function createUserProfileService(
           .parse(await json(`${base}videos?user_id=${id}&type=archive&first=1`))
         result.lastLive = response.data?.[0]?.created_at
       }),
-      section('followers', async () => {
-        if (!input.twitchAuth) throw new Error('Connect Twitch to read follower count.')
-        const response = z
-          .object({ total: z.number() })
-          .parse(
-            await json(`${base}channels/followers?broadcaster_id=${id}&first=1`, input.twitchAuth),
-          )
-        if (typeof response.total === 'number') result.followers = response.total
-      }),
       section('color', async () => {
         const response = z
           .object({ data: z.array(z.object({ color: z.string() })) })
@@ -128,7 +108,6 @@ export function createUserProfileService(
           .parse(
             await json(
               `https://api.pronouns.alejo.io/v1/users/${encodeURIComponent(user.login)}`,
-              undefined,
               true,
             ),
           )
@@ -170,55 +149,11 @@ export function createUserProfileService(
           )
         const broadcaster = channel.data?.[0]?.id
         if (!broadcaster) throw new Error('Channel not found.')
-        const roles: NonNullable<UserProfileSnapshot['roles']> = { broadcaster: id === broadcaster }
-        result.roles = roles
-        const auth = input.twitchAuth
-        if (!auth || auth.platformUserId !== broadcaster)
-          throw new Error('Moderator, VIP and editor roles require the channel owner account.')
-        await Promise.all([
-          section('moderatorRole', async () => {
-            if (
-              !auth.scopes.some((scope) =>
-                ['moderation:read', 'channel:manage:moderators'].includes(scope),
-              )
-            )
-              throw new Error('Reconnect Twitch with moderation:read.')
-            const response = z
-              .object({ data: z.array(z.unknown()) })
-              .parse(
-                await json(
-                  `${base}moderation/moderators?broadcaster_id=${broadcaster}&user_id=${id}`,
-                  auth,
-                ),
-              )
-            roles.moderator = response.data.length > 0
-          }),
-          section('vipRole', async () => {
-            if (
-              !auth.scopes.some((scope) =>
-                ['channel:read:vips', 'channel:manage:vips'].includes(scope),
-              )
-            )
-              throw new Error('Reconnect Twitch with channel:read:vips.')
-            const response = z
-              .object({ data: z.array(z.unknown()) })
-              .parse(
-                await json(
-                  `${base}channels/vips?broadcaster_id=${broadcaster}&user_id=${id}`,
-                  auth,
-                ),
-              )
-            roles.vip = response.data.length > 0
-          }),
-          section('editorRole', async () => {
-            if (!auth.scopes.includes('channel:read:editors'))
-              throw new Error('Reconnect Twitch with channel:read:editors.')
-            const response = z
-              .object({ data: z.array(z.object({ user_id: z.string() })) })
-              .parse(await json(`${base}channels/editors?broadcaster_id=${broadcaster}`, auth))
-            roles.editor = response.data.some((editor) => editor.user_id === id)
-          }),
-        ])
+        result.roles = { broadcaster: id === broadcaster }
+        result.errors.push({
+          section: 'roles',
+          message: 'Moderator, VIP and editor roles require the channel owner account.',
+        })
       }),
     ])
     return result

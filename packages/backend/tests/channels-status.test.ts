@@ -12,92 +12,93 @@ describe('channels status', () => {
     process.stdout.write = originalStdoutWrite
   })
 
-  for (const userAccessToken of [undefined, 'test-user-token']) {
-    it(`fetches live status for xqc alongside longer logins using ${userAccessToken ? 'user' : 'app'} auth`, async () => {
-      const requests = new Map<string, URL>()
-      globalThis.fetch = Object.assign(
-        mock(async (input: string | URL | Request) => {
-          const url = new URL(fetchUrl(input))
-          requests.set(url.pathname, url)
-          if (url.href === 'https://id.twitch.tv/oauth2/token') {
-            return Response.json({ access_token: 'twitch-token', expires_in: 3600 })
-          }
-          if (url.pathname === '/helix/users') {
-            return Response.json({
-              data: [
-                { id: '100', login: 'xqc' },
-                { id: '200', login: 'caseoh_' },
-              ],
-            })
-          }
-          if (url.pathname === '/helix/streams') {
-            return Response.json({
-              data: [
-                {
-                  user_id: '100',
-                  user_login: 'xqc',
-                  title: 'XQC live',
-                  game_name: 'Just Chatting',
-                  viewer_count: 12345,
-                },
-                {
-                  user_id: '200',
-                  user_login: 'caseoh_',
-                  title: 'Caseoh live',
-                  game_name: 'Games',
-                  viewer_count: 61500,
-                },
-              ],
-            })
-          }
-          if (url.pathname === '/helix/channels') return Response.json({ data: [] })
-          throw new Error(`Unexpected fetch: ${url.href}`)
-        }),
-        { preconnect: originalFetch.preconnect },
-      )
-
-      const result = await handleChannelsStatus(
-        new Request('http://localhost/api/channels-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            channels: [
-              { channelLogin: 'XQC', platform: 'twitch', userAccessToken },
-              { channelLogin: 'caseoh_', platform: 'twitch', userAccessToken },
+  it('uses app auth for live status even when an older client includes a token', async () => {
+    const requests = new Map<string, URL>()
+    globalThis.fetch = Object.assign(
+      mock(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(fetchUrl(input))
+        requests.set(url.pathname, url)
+        if (url.href === 'https://id.twitch.tv/oauth2/token') {
+          return Response.json({ access_token: 'twitch-token', expires_in: 3600 })
+        }
+        const authorization = new Headers(init?.headers).get('Authorization')
+        expect(authorization).toMatch(/^Bearer .+/)
+        expect(authorization).not.toBe('Bearer legacy-user-token')
+        if (url.pathname === '/helix/users') {
+          return Response.json({
+            data: [
+              { id: '100', login: 'xqc' },
+              { id: '200', login: 'caseoh_' },
             ],
-          }),
-        }),
-      )
+          })
+        }
+        if (url.pathname === '/helix/streams') {
+          return Response.json({
+            data: [
+              {
+                user_id: '100',
+                user_login: 'xqc',
+                title: 'XQC live',
+                game_name: 'Just Chatting',
+                viewer_count: 12345,
+              },
+              {
+                user_id: '200',
+                user_login: 'caseoh_',
+                title: 'Caseoh live',
+                game_name: 'Games',
+                viewer_count: 61500,
+              },
+            ],
+          })
+        }
+        if (url.pathname === '/helix/channels') return Response.json({ data: [] })
+        throw new Error(`Unexpected fetch: ${url.href}`)
+      }),
+      { preconnect: originalFetch.preconnect },
+    )
 
-      expect(requests.get('/helix/users')?.searchParams.getAll('login')).toEqual(['xqc', 'caseoh_'])
-      expect(requests.get('/helix/streams')?.searchParams.getAll('user_login')).toEqual([
-        'xqc',
-        'caseoh_',
-      ])
-      expect(requests.get('/helix/channels')?.searchParams.getAll('broadcaster_id')).toEqual([
-        '100',
-        '200',
-      ])
-      expect(result.channels).toEqual([
-        {
-          platform: 'twitch',
-          channelLogin: 'xqc',
-          isLive: true,
-          title: 'XQC live',
-          categoryName: 'Just Chatting',
-          viewerCount: 12345,
-        },
-        {
-          platform: 'twitch',
-          channelLogin: 'caseoh_',
-          isLive: true,
-          title: 'Caseoh live',
-          categoryName: 'Games',
-          viewerCount: 61500,
-        },
-      ])
-    })
-  }
+    const result = await handleChannelsStatus(
+      new Request('http://localhost/api/channels-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channels: [
+            { channelLogin: 'XQC', platform: 'twitch', userAccessToken: 'legacy-user-token' },
+            { channelLogin: 'caseoh_', platform: 'twitch', userAccessToken: 'legacy-user-token' },
+          ],
+        }),
+      }),
+    )
+
+    expect(requests.get('/helix/users')?.searchParams.getAll('login')).toEqual(['xqc', 'caseoh_'])
+    expect(requests.get('/helix/streams')?.searchParams.getAll('user_login')).toEqual([
+      'xqc',
+      'caseoh_',
+    ])
+    expect(requests.get('/helix/channels')?.searchParams.getAll('broadcaster_id')).toEqual([
+      '100',
+      '200',
+    ])
+    expect(result.channels).toEqual([
+      {
+        platform: 'twitch',
+        channelLogin: 'xqc',
+        isLive: true,
+        title: 'XQC live',
+        categoryName: 'Just Chatting',
+        viewerCount: 12345,
+      },
+      {
+        platform: 'twitch',
+        channelLogin: 'caseoh_',
+        isLive: true,
+        title: 'Caseoh live',
+        categoryName: 'Games',
+        viewerCount: 61500,
+      },
+    ])
+  })
 
   it('rejects oversized requests before any upstream fetch', async () => {
     let fetchCalled = false
