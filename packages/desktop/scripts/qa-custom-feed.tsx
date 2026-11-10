@@ -40,9 +40,6 @@ const nodeSchema: z.ZodType<AutomationNode> = z.lazy(() =>
 )
 
 const backend = getDesktopBackend()
-const twitch = WatchedChannelStore.upsert('twitch', 'pixelgarden', 'PixelGarden')
-const kick = WatchedChannelStore.upsert('kick', 'cooplounge', 'CoopLounge')
-const other = WatchedChannelStore.upsert('twitch', 'nightarcade', 'NightArcade')
 const accounts = (['twitch', 'kick'] satisfies Account['platform'][]).map((platform): Account => ({
   id: `qa-${platform}`,
   platform,
@@ -57,7 +54,7 @@ const sent: Parameters<typeof backend.api.sendWatchedChannelMessage>[0][] = []
 let activeIds: readonly string[] = []
 backend.api.setActiveWatchedChannels = async ({ ids }) => {
   activeIds = ids
-  for (const channel of [twitch, kick, other]) {
+  for (const channel of WatchedChannelStore.findAll()) {
     if (!ids.includes(channel.id)) continue
     backend.events.emit('watched_channel_status', {
       channelId: channel.id,
@@ -143,6 +140,22 @@ function click(testId: string): void {
   pointAt(node, true)
 }
 
+async function stageSource(platform: WatchedChannel['platform'], slug: string, count: number) {
+  click('feed-add-source')
+  await until(() => find(`add-platform-${platform}`), `${platform} platform in source form`)
+  click(`add-platform-${platform}`)
+  click('add-channel-input')
+  input('type', '--delay', '20', slug)
+  await until(() => painted(slug), `${platform} channel entered`)
+  await Bun.sleep(100)
+  click('add-channel-confirm')
+  await until(
+    () => find(`feed-source-new-${platform}:${slug}`) && painted(`${count} selected`),
+    `${platform} channel staged`,
+  )
+  assert.equal(WatchedChannelStore.findByPlatformAndSlug(platform, slug), null)
+}
+
 let timestamp = Date.now() - 70_000
 function incoming(channel: WatchedChannel, id: string, text: string, name: string, color: string) {
   timestamp += 4000
@@ -162,6 +175,7 @@ function incoming(channel: WatchedChannel, id: string, text: string, name: strin
 }
 
 try {
+  assert.deepEqual(WatchedChannelStore.findAll(), [])
   await backend.api.setTabChannelIds({ ids: [] })
   await app.loadInitialData(backend)
   await manager.start()
@@ -172,20 +186,27 @@ try {
   click('tab-add')
   await until(() => find('add-channel-create-feed'), 'create feed from plus menu')
   click('add-channel-create-feed')
-  await until(() => find(`feed-source-${twitch.id}`), 'saved channels in feed editor')
-  click(`feed-source-${twitch.id}`)
-  await until(() => painted('1 selected'), 'first source selected')
-  click(`feed-source-${kick.id}`)
-  await until(() => painted('2 selected'), 'second source selected')
+  await until(() => find('feed-add-source') && painted('0 selected'), 'empty feed editor')
+  await stageSource('twitch', 'pixelgarden', 1)
+  await stageSource('kick', 'cooplounge', 2)
+  assert.deepEqual(WatchedChannelStore.findAll(), [])
+  assert.deepEqual(chatTabsStore.get().value.openIds, [])
   input('mousemove', '750', '20')
   await Bun.sleep(160)
   await captureGuiQaDisplay('combined-feed-setup')
   click('feed-save')
+  await until(() => find('chat-feed-manage') && !find('feed-editor'), 'combined feed opens')
+  const twitch = WatchedChannelStore.findByPlatformAndSlug('twitch', 'pixelgarden')
+  const kick = WatchedChannelStore.findByPlatformAndSlug('kick', 'cooplounge')
+  assert(twitch && kick)
   await until(
-    () => find('chat-feed-manage') && activeIds.includes(twitch.id) && activeIds.includes(kick.id),
+    () => activeIds.includes(twitch.id) && activeIds.includes(kick.id),
     'both providers are subscribed',
   )
   const tabId = app.activeWatchedTabStore.get()
+  assert.deepEqual(chatTabsStore.get().value.openIds, [tabId])
+  assert.deepEqual(await backend.api.getTabChannelIds(), [tabId])
+  assert(!find(`tab-${twitch.id}`) && !find(`tab-${kick.id}`), 'sources have no standalone tabs')
   const saved = (await backend.api.getWatchedChannelsLayout({ tabId }))?.root
   assert(saved?.type === 'panel' && saved.content.type === 'feed')
   assert.deepEqual(
@@ -203,6 +224,7 @@ try {
     assert.equal(sent[count - 1]?.text, text)
   }
 
+  const other = WatchedChannelStore.upsert('twitch', 'nightarcade', 'NightArcade')
   const messages: [WatchedChannel, string, string, string][] = [
     [twitch, 'mira', 'Welcome in! We’re running the co-op route tonight.', '#dca4eb'],
     [kick, 'reed', 'Kick chat checking in. Audio sounds great.', '#83bfef'],
@@ -339,17 +361,7 @@ try {
   await until(() => find('chat-edit-feed'), 'combine action in watched pane menu')
   click('chat-edit-feed')
   await until(() => find('feed-add-source') && painted('1 selected'), 'keeps the original source')
-  click('feed-add-source')
-  await until(() => find('add-platform-youtube'), 'new source platform picker')
-  click('add-platform-youtube')
-  await until(() => painted('@handle'), 'YouTube channel field')
-  click('add-channel-input')
-  input('type', '--delay', '20', '@studioarchive')
-  await until(() => painted('@studioarchive'), 'new channel handle entered')
-  await Bun.sleep(100)
-  click('add-channel-confirm')
-  await until(() => painted('2 selected'), 'new YouTube source staged')
-  assert.equal(WatchedChannelStore.findByPlatformAndSlug('youtube', '@studioarchive'), null)
+  await stageSource('youtube', '@studioarchive', 2)
   click('feed-save')
   await until(() => find('chat-feed-manage') && !find('feed-editor'), 'watched pane becomes a feed')
   const youtube = WatchedChannelStore.findByPlatformAndSlug('youtube', '@studioarchive')

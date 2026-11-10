@@ -28,9 +28,10 @@ production React. The runner verifies the loaded React, JSX runtime and reconcil
 This harness uses a coupled generator and synthetic chat events. It measures the native UI and
 store pipeline with generated traffic.
 
-After the benchmark, the branch was rebased over the keyboard focus styling fix
-`ddfd9f3` and the backend 7TV reconnect fix `4a1f8c2`. The benchmark injects chat
-events directly and has no keyboard input. The native interaction check was rerun
+After the benchmark, the branch was rebased over keyboard focus styling (`ddfd9f3`),
+backend 7TV reconnect handling (`4a1f8c2`), update toasts (`033d5f6`), and pointer placement
+of the message context menu (`3cce616`). The benchmark injects chat events directly and
+leaves the update toast and context menu closed. The native interaction check was rerun
 on the rebased branch.
 
 ## Production target
@@ -93,3 +94,6 @@ Native pointer and keyboard input exercised creating, editing and restoring feed
 long source list, Escape during incoming traffic, choosing between same-platform destinations,
 and routing a Twitch reply while the Kick composer destination was selected. The 900×570 and
 540×420 windows used a private profile and generated messages.
+
+The creation check starts with an empty profile and stages a new Twitch and Kick channel
+inside the editor. Saving persists both sources and opens a single feed tab.

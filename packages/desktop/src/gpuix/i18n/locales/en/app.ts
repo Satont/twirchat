@@ -115,7 +115,7 @@ export const app = {
 
   'app.feed.createTitle': 'Create combined feed',
   'app.feed.editTitle': 'Manage feed sources',
-  'app.feed.description': 'Read messages from several channels in one chat pane.',
+  'app.feed.description': 'Choose saved channels or add new ones directly to this feed.',
   'app.feed.selectedCount': '{count} selected',
   'app.feed.addChannel': 'Add a channel',
   'app.feed.addToSelection': 'Add to selection',

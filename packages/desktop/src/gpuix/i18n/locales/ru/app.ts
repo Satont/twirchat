@@ -119,7 +119,7 @@ export const ruApp = {
 
   'app.feed.createTitle': 'Создать общую ленту',
   'app.feed.editTitle': 'Источники ленты',
-  'app.feed.description': 'Читайте сообщения из нескольких каналов в одной панели чата.',
+  'app.feed.description': 'Выберите сохранённые каналы или добавьте новые прямо в эту ленту.',
   'app.feed.selectedCount': 'Выбрано: {count}',
   'app.feed.addChannel': 'Добавить канал',
   'app.feed.addToSelection': 'Добавить в список',
