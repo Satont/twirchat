@@ -50,8 +50,8 @@ export function createMentionAppearances(capacity = 5000) {
   }
 
   return {
-    addMessage({ platform, author, timestamp, type, delivery }: NormalizedChatMessage): void {
-      if (type === 'system' || delivery || !author.id) return
+    addMessage({ platform, author, timestamp, type }: NormalizedChatMessage): void {
+      if (type === 'system' || !author.id) return
       const username = author.username ? normalizeName(author.username) : ''
       const displayName = normalizeName(author.displayName)
       const time = timestamp.getTime()

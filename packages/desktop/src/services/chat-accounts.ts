@@ -16,9 +16,8 @@ export function chatAccount(
 }
 
 /**
- * The chat's chosen account when it differs from the default account the chat reads with;
- * such messages go out over that account's own connection. YouTube chats always use the
- * default account.
+ * The chat's chosen account when it differs from the adapter's default account.
+ * YouTube chats always use the default account.
  */
 export function chatSender(
   channel: Pick<WatchedChannel, 'platform' | 'accountId'>,
@@ -30,8 +29,8 @@ export function chatSender(
 }
 
 /**
- * A saved account of the chat's platform that sends over its own connection: `null` when it is
- * the default account the chat reads with. Throws for a missing or foreign account.
+ * A saved account of the chat's platform: `null` when it is the adapter's default account.
+ * Throws for a missing or foreign account.
  */
 export function separateSender(
   channel: Pick<WatchedChannel, 'platform'>,

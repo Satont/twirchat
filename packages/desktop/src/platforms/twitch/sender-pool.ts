@@ -53,16 +53,24 @@ interface Session {
   outcomes: TwitchSendOutcomes
 }
 
+interface ChannelUse {
+  owners: number
+  temporarySends: number
+}
+
+interface SenderEntry {
+  channels: Map<string, ChannelUse>
+  opening?: Promise<Session>
+}
+
 class TwitchAuthenticationError extends Error {}
 
 /**
- * One authenticated chat connection per saved account that sends somewhere other than the
- * reading connection. A chat keeps reading with its own connection, so choosing another
- * account never reconnects it; that account's messages come back over the reading connection
- * with their real badges, colour and emotes.
+ * One writer per sending account. Twitch only broadcasts PRIVMSG to the other
+ * connections, so every chat reads on its own connection.
  */
 export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
-  const sessions = new Map<string, Promise<Session>>()
+  const entries = new Map<string, SenderEntry>()
   const connectTimeoutMs = dependencies.connectTimeoutMs ?? 10_000
 
   async function open(account: Pick<Account, 'id'>, refreshed: boolean): Promise<Session> {
@@ -108,26 +116,44 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
     return session
   }
 
-  function sessionFor(account: Pick<Account, 'id'>): Promise<Session> {
-    const existing = sessions.get(account.id)
+  function entryFor(accountId: string): SenderEntry {
+    const existing = entries.get(accountId)
     if (existing) return existing
+    const entry: SenderEntry = { channels: new Map() }
+    entries.set(accountId, entry)
+    return entry
+  }
+
+  function channelFor(entry: SenderEntry, name: string): ChannelUse {
+    const existing = entry.channels.get(name)
+    if (existing) return existing
+    const channel: ChannelUse = { owners: 0, temporarySends: 0 }
+    entry.channels.set(name, channel)
+    return channel
+  }
+
+  function sessionFor(account: Pick<Account, 'id'>, entry: SenderEntry): Promise<Session> {
+    if (entry.opening) return entry.opening
     const opening = open(account, false)
-    sessions.set(account.id, opening)
+    entry.opening = opening
     opening.catch(() => {
-      if (sessions.get(account.id) === opening) sessions.delete(account.id)
+      if (entry.opening === opening) entry.opening = undefined
     })
     return opening
   }
 
-  function join(current: Session, channel: string): Promise<void> {
-    const existing = current.channels.get(channel)
-    if (existing) return existing.joined
-    const joined = current.client.join(channel)
-    current.channels.set(channel, { joined, tags: new Map() })
-    joined.catch(() => {
-      if (current.channels.get(channel)?.joined === joined) current.channels.delete(channel)
-    })
-    return joined
+  async function join(current: Session, channel: string): Promise<ChannelState> {
+    let state = current.channels.get(channel)
+    if (!state) {
+      const joined = current.client.join(channel)
+      state = { joined, tags: new Map() }
+      current.channels.set(channel, state)
+      joined.catch(() => {
+        if (current.channels.get(channel)?.joined === joined) current.channels.delete(channel)
+      })
+    }
+    await state.joined
+    return state
   }
 
   function close(current: Session): void {
@@ -137,16 +163,55 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
   }
 
   function forget(accountId: string): void {
-    const pending = sessions.get(accountId)
-    if (!pending) return
-    sessions.delete(accountId)
-    runInBackground(pending.then(close), 'Could not close a Twitch chat connection')
+    const entry = entries.get(accountId)
+    if (!entry) return
+    entries.delete(accountId)
+    if (entry.opening)
+      runInBackground(
+        entry.opening.then(close, () => {}),
+        'Could not close a Twitch chat connection',
+      )
+  }
+
+  function releaseChannel(
+    accountId: string,
+    entry: SenderEntry,
+    name: string,
+    use: ChannelUse,
+  ): void {
+    if (use.owners || use.temporarySends || entries.get(accountId) !== entry) return
+    entry.channels.delete(name)
+    if (entry.channels.size === 0) {
+      forget(accountId)
+      return
+    }
+    if (!entry.opening) return
+    const leave = (current: Session) => {
+      if (entry.channels.has(name)) return
+      current.outcomes.clear(name)
+      if (current.channels.delete(name)) current.client.part(name)
+    }
+    runInBackground(
+      entry.opening.then(leave, () => {}),
+      'Could not leave a Twitch chat',
+    )
   }
 
   return {
+    /** Holds a writer channel for a chat without opening a connection yet. */
+    retain(accountId: string, channel: string): void {
+      channelFor(entryFor(accountId), twitchIrcChannelName(channel)).owners++
+    },
+
     /** Connects the account and joins the channel ahead of the first message. */
     async prepare(account: Pick<Account, 'id'>, channel: string): Promise<void> {
-      await join(await sessionFor(account), twitchIrcChannelName(channel))
+      const name = twitchIrcChannelName(channel)
+      const entry = entryFor(account.id)
+      const use = channelFor(entry, name)
+      use.owners++
+      const current = await sessionFor(account, entry)
+      if (entries.get(account.id) === entry && entry.channels.get(name) === use)
+        await join(current, name)
     },
 
     async send(
@@ -154,51 +219,59 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
       channel: string,
       text: string,
       replyTo?: string,
+      beforeWrite?: () => void,
     ): Promise<void | ChatSendReceipt> {
       const name = twitchIrcChannelName(channel)
-      const current = await sessionFor(account)
-      await join(current, name)
-      const state = current.channels.get(name)
-      if (!state) throw new Error(t('misc.twitchSender.closedBeforeSending'))
-      await dependencies.acquire(account.id, name, hasPrivilegedChatRole(state.tags))
-      if (current.channels.get(name) !== state)
-        throw new Error(t('misc.twitchSender.closedBeforeSending'))
-      const outcome = await current.outcomes.send(name, () =>
-        current.client.say(name, text, replyTo),
-      )
-      if (outcome.kind === 'held') return { channelId: name, held: true }
-      if (outcome.kind === 'disconnected')
-        throw new Error(t('misc.twitchSender.disconnectedBeforeDelivery'))
-      if (outcome.kind === 'rejected')
-        throw new Error(
-          t('misc.twitchSender.notSent', {
-            name: account.username,
-            reason: twitchSendRejection(outcome.reason),
-          }),
-        )
+      const entry = entryFor(account.id)
+      const use = channelFor(entry, name)
+      const temporary = use.owners === 0
+      if (temporary) use.temporarySends++
+      const assertChannelOpen = () => {
+        if (entries.get(account.id) !== entry || entry.channels.get(name) !== use)
+          throw new Error(t('misc.twitchSender.closedBeforeSending'))
+      }
+      try {
+        const current = await sessionFor(account, entry)
+        assertChannelOpen()
+        const state = await join(current, name)
+        await dependencies.acquire(account.id, name, hasPrivilegedChatRole(state.tags))
+        assertChannelOpen()
+        const outcome = await current.outcomes.send(name, () => {
+          beforeWrite?.()
+          return current.client.say(name, text, replyTo)
+        })
+        if (outcome.kind === 'held') return { channelId: name, held: true }
+        if (outcome.kind === 'disconnected')
+          throw new Error(t('misc.twitchSender.disconnectedBeforeDelivery'))
+        if (outcome.kind === 'rejected')
+          throw new Error(
+            t('misc.twitchSender.notSent', {
+              name: account.username,
+              reason: twitchSendRejection(outcome.reason),
+            }),
+          )
+      } finally {
+        if (temporary) {
+          use.temporarySends--
+          releaseChannel(account.id, entry, name, use)
+        }
+      }
     },
 
     /** Leaves the channel; the connection closes once no chat sends with the account. */
     release(accountId: string, channel: string): void {
-      const pending = sessions.get(accountId)
-      if (!pending) return
       const name = twitchIrcChannelName(channel)
-      const leave = async () => {
-        const current = await pending
-        current.outcomes.clear(name)
-        if (current.channels.delete(name)) current.client.part(name)
-        if (current.channels.size === 0 && sessions.get(accountId) === pending) {
-          sessions.delete(accountId)
-          close(current)
-        }
-      }
-      runInBackground(leave(), 'Could not leave a Twitch chat')
+      const entry = entries.get(accountId)
+      const use = entry?.channels.get(name)
+      if (!entry || !use?.owners) return
+      use.owners--
+      releaseChannel(accountId, entry, name, use)
     },
 
     forget,
 
     dispose(): void {
-      for (const accountId of sessions.keys()) forget(accountId)
+      for (const accountId of entries.keys()) forget(accountId)
     },
   }
 }
@@ -233,13 +306,14 @@ function twurpleSender(token: string): TwitchSenderClient {
     part: (channel) => client.part(channel),
     say: (channel, text, replyTo) => client.say(channel, text, replyTo ? { replyTo } : {}),
     onConnect: (handler) => {
-      client.onConnect(handler)
+      client.onAuthenticationSuccess(handler)
     },
     onDisconnect: (handler) => {
       client.onDisconnect(handler)
     },
     onAuthenticationFailure: (handler) => {
       client.onAuthenticationFailure(() => handler())
+      client.onTokenFetchFailure(() => handler())
     },
     onUserState: (handler) => {
       client.irc.onTypedMessage(UserState, (message) =>

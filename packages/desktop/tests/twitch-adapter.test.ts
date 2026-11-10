@@ -1,24 +1,18 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 
 import {
-  createLocalTwitchSentMessage,
   TwitchAdapter,
   twitchAuthorAppearance,
   twitchMessageMetadata,
 } from '@desktop/platforms/twitch/adapter'
-import { AccountStore } from '@desktop/store/account-store'
-import { MessageStore } from '@desktop/store/message-store'
-import type { Account, NormalizedChatMessage } from '@twirchat/shared/types'
-import { ChatClient } from '@twurple/chat'
+import type { NormalizedChatMessage } from '@twirchat/shared/types'
+import { ChatClient, LogLevel, UserState } from '@twurple/chat'
 
 import { parseTwitchBadgeCatalog } from '../src/platforms/twitch/badge-data'
-import {
-  confirmDelivery,
-  createPendingMessage,
-  reconcilePendingMessages,
-} from '../src/views/main/utils/message-delivery'
+import { onTwitchSendRejected } from '../src/platforms/twitch/send-outcomes'
+import { createTwitchSenderPool, type TwitchSenderPool } from '../src/platforms/twitch/sender-pool'
 
-describe('createLocalTwitchSentMessage', () => {
+describe('twitchMessageMetadata', () => {
   test('preserves Twitch first/returning/highlight/reward/bits/subscription/shared-chat metadata', () => {
     expect(
       twitchMessageMetadata({
@@ -53,98 +47,24 @@ describe('createLocalTwitchSentMessage', () => {
     })
     expect(plain).toEqual({ firstMessage: false, returningChatter: false, highlighted: false })
   })
-  test('builds a normalized local Twitch message', () => {
-    const timestamp = new Date('2026-05-02T12:00:00.000Z')
-
-    const message = createLocalTwitchSentMessage({
-      author: {
-        displayName: 'Satont',
-        id: '12345',
-        username: 'satont',
-      },
-      channelId: 'Satont',
-      id: 'local:twitch:satont:test-id',
-      text: 'hello from app',
-      timestamp,
-    })
-
-    expect(message).toEqual({
-      author: {
-        badges: [],
-        displayName: 'Satont',
-        id: '12345',
-        username: 'satont',
-      },
-      channelId: 'satont',
-      emotes: [],
-      id: 'local:twitch:satont:test-id',
-      platform: 'twitch',
-      text: 'hello from app',
-      timestamp,
-      type: 'message',
-    })
-  })
-
-  test('preserves reply metadata when provided', () => {
-    const message = createLocalTwitchSentMessage({
-      author: {
-        displayName: 'Satont',
-        id: '12345',
-      },
-      channelId: 'satont',
-      id: 'local:twitch:satont:reply',
-      reply: {
-        parentAuthor: {
-          displayName: 'OtherUser',
-          id: '67890',
-          username: 'otheruser',
-        },
-        parentMessageId: 'msg-1',
-        parentMessageText: 'first message',
-      },
-      text: 'replying',
-    })
-
-    expect(message.reply).toEqual({
-      parentAuthor: {
-        displayName: 'OtherUser',
-        id: '67890',
-        username: 'otheruser',
-      },
-      parentMessageId: 'msg-1',
-      parentMessageText: 'first message',
-    })
-  })
-
-  test('normalizes IRC channel prefixes for local IDs and message scope', () => {
-    const message = createLocalTwitchSentMessage({
-      author: { displayName: 'Satont', id: '12345' },
-      channelId: ' #MiXeDcase ',
-      text: 'normalized channel',
-    })
-    expect(message.channelId).toBe('mixedcase')
-    expect(message.id.startsWith('local:twitch:mixedcase:')).toBe(true)
-  })
 })
 
 const clients: ChatClient[] = []
-const accountLookups: Array<ReturnType<typeof spyOn<typeof AccountStore, 'findByPlatform'>>> = []
 afterEach(() => {
-  for (const lookup of accountLookups.splice(0)) lookup.mockRestore()
   for (const client of clients.splice(0)) client.quit()
 })
 
-function selfFixture(login = 'satont', channel = 'satont') {
-  const client = new ChatClient({ logger: { minLevel: 0 } })
+function readerFixture(login = 'satont', channel = 'satont', senders?: TwitchSenderPool) {
+  const client = new ChatClient({ logger: { minLevel: LogLevel.CRITICAL } })
   clients.push(client)
-  const adapter = new TwitchAdapter()
+  const adapter = new TwitchAdapter(senders)
   Object.assign(adapter, {
     chatClient: client,
     channelName: channel,
     anonymous: false,
     login,
-    displayName: login,
-    platformUserId: '123',
+    accountId: 'twitch:123',
+    isConnected: true,
     badgeCache: parseTwitchBadgeCatalog({
       badges: {
         'broadcaster/1': 'https://example.com/broadcaster.png',
@@ -153,16 +73,43 @@ function selfFixture(login = 'satont', channel = 'satont') {
       },
     }),
   })
-  accountLookups.push(spyOn(AccountStore, 'findByPlatform').mockReturnValue(null))
   adapter['setupEventHandlers']()
   const messages: NormalizedChatMessage[] = []
   adapter.on('message', (message) => messages.push(message))
   return { adapter, client, messages }
 }
 
+function writerFixture(
+  write: (client: ChatClient, channel: string, text: string, replyTo?: string) => Promise<void>,
+) {
+  const client = new ChatClient({ logger: { minLevel: LogLevel.CRITICAL } })
+  clients.push(client)
+  return createTwitchSenderPool({
+    token: async () => 'fixture',
+    refreshToken: async () => 'fixture',
+    acquire: async () => {},
+    createClient: () => ({
+      connect() {},
+      quit: () => client.quit(),
+      async join() {},
+      part() {},
+      say: (channel, text, replyTo) => write(client, channel, text, replyTo),
+      onConnect: (handler) => queueMicrotask(handler),
+      onDisconnect: (handler) => {
+        client.onDisconnect(handler)
+      },
+      onAuthenticationFailure() {},
+      onUserState: (handler) => {
+        client.irc.onTypedMessage(UserState, (message) => handler(message.channel, message.tags))
+      },
+      onRejected: (handler) => onTwitchSendRejected(client, handler),
+    }),
+  })
+}
+
 describe('Twitch system notices', () => {
   test('shows IRC moderation actions without redisplaying deleted content', () => {
-    const { adapter, client, messages } = selfFixture('viewer', 'another')
+    const { adapter, client, messages } = readerFixture('viewer', 'another')
     const notices: NormalizedChatMessage[] = []
     const sequence: string[] = []
     adapter.on('notice', (notice) => {
@@ -210,7 +157,7 @@ describe('Twitch system notices', () => {
   })
 
   test('seeds initial room modes silently and deduplicates IRC mode confirmations', () => {
-    const { adapter, client } = selfFixture('viewer', 'another')
+    const { adapter, client } = readerFixture('viewer', 'another')
     const notices: string[] = []
     adapter.on('notice', ({ text }) => notices.push(text))
     client.irc.receiveLine(
@@ -236,7 +183,7 @@ describe('Twitch system notices', () => {
   })
 
   test('routes IRC notices separately from regular messages and keeps the provider identity', () => {
-    const { adapter, client, messages } = selfFixture('viewer', 'another')
+    const { adapter, client, messages } = readerFixture('viewer', 'another')
     const notices: NormalizedChatMessage[] = []
     const events: string[] = []
     adapter.on('notice', (notice) => notices.push(notice))
@@ -285,7 +232,7 @@ describe('Twitch system notices', () => {
   })
 })
 
-describe('Twitch self message badges', () => {
+describe('Twitch incoming message appearance', () => {
   test('resolves authoritative badges and color without inventing channel roles', () => {
     expect(twitchAuthorAppearance(new Map(), new Map()).badges).toEqual([])
     expect(
@@ -295,7 +242,6 @@ describe('Twitch self message badges', () => {
           ['color', '#123456'],
         ]),
         parseTwitchBadgeCatalog({ badges: { 'subscriber/12': 'https://example.com/sub.png' } }),
-        true,
       ),
     ).toEqual({
       badges: [
@@ -311,172 +257,19 @@ describe('Twitch self message badges', () => {
     })
   })
 
-  test('first own-channel send has broadcaster badge before USERSTATE arrives', () => {
-    const { adapter, messages } = selfFixture('SaToNt')
-    adapter['emitLocalSentMessage']('satont', 'first message')
-    expect(messages.at(-1)?.author.badges).toEqual([
-      {
-        id: 'broadcaster/1',
-        type: 'broadcaster',
-        text: 'broadcaster',
-        imageUrl: 'https://example.com/broadcaster.png',
-      },
-    ])
-  })
-
-  test('replaces an optimistic reply when its parent is missing from local history', async () => {
-    const { adapter, client, messages } = selfFixture()
-    Object.assign(adapter, { isConnected: true })
-    const account: Account = {
-      id: 'twitch:123',
-      platform: 'twitch',
-      platformUserId: '123',
-      username: 'satont',
-      displayName: 'satont',
-      scopes: [],
-      createdAt: 0,
-      updatedAt: 0,
-    }
-    const reply = {
-      parentAuthor: { id: '456', username: 'viewer', displayName: 'Viewer' },
-      parentMessageId: 'parent',
-      parentMessageText: 'recent parent',
-    }
-    const pending = createPendingMessage({ account, channelId: 'satont', text: 'reply', reply })
-    const write = Promise.withResolvers<void>()
-    const say = spyOn(client, 'say').mockImplementation(async () => {
-      await write.promise
-      client.irc.receiveLine('@id=sent-message :tmi.twitch.tv USERSTATE #satont')
-    })
-    const getRecent = spyOn(MessageStore, 'getRecent').mockReturnValue([])
-    try {
-      const sending = adapter.sendMessage(pending.channelId, pending.text, reply)
-      expect(reconcilePendingMessages([pending], messages)).toEqual([pending])
-      write.resolve()
-      const receipt = await sending
-
-      expect(say).toHaveBeenCalledWith('satont', 'reply', { replyTo: 'parent' })
-      expect(getRecent).not.toHaveBeenCalled()
-      expect(messages).toHaveLength(1)
-      expect(messages[0]).toMatchObject({
-        reply,
-        author: { badges: [{ id: 'broadcaster/1' }] },
-      })
-      expect(receipt).toEqual({ channelId: 'satont', messageId: messages[0]?.id })
-      expect(
-        reconcilePendingMessages(confirmDelivery([pending], pending.id, receipt), messages),
-      ).toEqual([])
-    } finally {
-      say.mockRestore()
-      getRecent.mockRestore()
-    }
-  })
-
-  test.each(['msg_automod_held', 'msg_rejected'])(
-    'an AutoMod %s notice returns a held receipt without echoing the message',
-    async (msgId) => {
-      const { adapter, client, messages } = selfFixture('viewer', 'another')
-      Object.assign(adapter, { isConnected: true })
-      const say = spyOn(client, 'say').mockImplementation(async () => {
-        client.irc.receiveLine('@id=unrelated :tmi.twitch.tv USERSTATE #other')
-        client.irc.receiveLine(':tmi.twitch.tv USERSTATE #another')
-        client.irc.receiveLine(
-          `@msg-id=${msgId} :tmi.twitch.tv NOTICE #another :Your message is being checked.`,
-        )
-      })
-      try {
-        expect(await adapter.sendMessage('another', 'held text')).toEqual({
-          channelId: 'another',
-          held: true,
-        })
-        expect(messages).toEqual([])
-      } finally {
-        say.mockRestore()
-      }
-    },
-  )
-
-  test('a mandatory moderation rejection is a send failure', async () => {
-    const { adapter, client, messages } = selfFixture('viewer', 'another')
-    Object.assign(adapter, { isConnected: true })
-    const say = spyOn(client, 'say').mockImplementation(async () => {
-      client.irc.receiveLine(
-        '@msg-id=msg_rejected_mandatory :tmi.twitch.tv NOTICE #another :Your message was blocked.',
-      )
-    })
-    try {
-      await expect(adapter.sendMessage('another', 'blocked text')).rejects.toThrow(
-        'Twitch did not send the message: Twitch blocked the message.',
-      )
-      expect(messages).toEqual([])
-    } finally {
-      say.mockRestore()
-    }
-  })
-
-  test('disconnecting cancels the wait for a send acknowledgment', async () => {
-    const { adapter, client, messages } = selfFixture('viewer', 'another')
-    Object.assign(adapter, { isConnected: true })
-    const written = Promise.withResolvers<void>()
-    const say = spyOn(client, 'say').mockImplementation(async () => written.resolve())
-    try {
-      const sending = adapter.sendMessage('another', 'sending')
-      const disconnecting = written.promise.then(() => adapter.disconnect())
-      await expect(sending).rejects.toThrow('disconnected before delivery')
-      await disconnecting
-      expect(messages).toEqual([])
-    } finally {
-      say.mockRestore()
-    }
-  })
-
-  test('a viewer does not gain broadcaster and receives actual per-channel USERSTATE roles', () => {
-    const { adapter, client, messages } = selfFixture('viewer')
-    adapter['emitLocalSentMessage']('satont', 'before state')
-    expect(messages.at(-1)?.author.badges).toEqual([])
-    client.irc.receiveLine(
-      '@badges=moderator/1,subscriber/12;color=#12AB34 :tmi.twitch.tv USERSTATE #satont',
-    )
-    adapter['emitLocalSentMessage']('satont', 'after state')
-    expect(messages.at(-1)?.author.badges?.map((badge) => badge.type)).toEqual([
-      'moderator',
-      'subscriber',
-    ])
-    expect(messages.at(-1)?.author.badges?.at(0)?.imageUrl).toBe(
-      'https://example.com/moderator.png',
-    )
-    expect(messages.at(-1)?.author.color).toBe('#12AB34')
-    client.irc.receiveLine('@badges=vip/1;color=#FFFFFF :tmi.twitch.tv USERSTATE #other')
-    adapter['emitLocalSentMessage']('satont', 'unchanged')
-    expect(messages.at(-1)?.author.color).toBe('#12AB34')
-  })
-
-  test('an old client cannot change self roles after identity change and disconnect clears them', async () => {
-    const { adapter, client, messages } = selfFixture('viewer')
-    client.irc.receiveLine('@badges=moderator/1 :tmi.twitch.tv USERSTATE #satont')
-    await adapter.disconnect()
-    const next = new ChatClient({ logger: { minLevel: 0 } })
-    clients.push(next)
-    Object.assign(adapter, { chatClient: next, anonymous: false, login: 'newviewer' })
-    adapter['setupEventHandlers']()
-    client.irc.receiveLine('@badges=moderator/1;color=#FFFFFF :tmi.twitch.tv USERSTATE #satont')
-    adapter['emitLocalSentMessage']('satont', 'fresh identity')
-    expect(messages.at(-1)?.author.badges).toEqual([])
-    expect(messages.at(-1)?.author.color).toBeUndefined()
-  })
-
   test.each(['PRIMARY', 'BLUE', 'GREEN', 'ORANGE', 'PURPLE'])(
     '%s announcements preserve their color separately from sender appearance',
     (color) => {
-      const { client, messages } = selfFixture()
+      const { client, messages } = readerFixture()
       client.irc.receiveLine(
-        `@badges=moderator/1;color=#ABCDEF;display-name=Mod;user-id=456;msg-id=announcement;msg-param-color=${color} :tmi.twitch.tv USERNOTICE #satont :announcement body`,
+        `@badges=moderator/1;color=#ABCDEF;display-name=Mod;user-id=456;id=announcement-id;msg-id=announcement;msg-param-color=${color} :tmi.twitch.tv USERNOTICE #satont :announcement body`,
       )
       expect(messages.at(-1)?.author.badges?.at(0)?.type).toBe('moderator')
       expect(messages.at(-1)?.author.color).toBe('#ABCDEF')
       expect(messages.at(-1)?.metadata?.announcement).toBe(color.toLowerCase())
       expect(messages.at(-1)?.text).toBe('announcement body')
       expect(messages.at(-1)?.channelId).toBe('satont')
+      expect(messages.at(-1)?.id).toBe('announcement-id')
     },
   )
 
@@ -499,7 +292,7 @@ describe('Twitch self message badges', () => {
   })
 
   test('live badge catalog fetch preserves backend titles and descriptions', async () => {
-    const { adapter, messages } = selfFixture()
+    const { adapter, client, messages } = readerFixture()
     const fetcher = spyOn(globalThis, 'fetch').mockResolvedValue(
       Response.json({
         badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
@@ -510,7 +303,9 @@ describe('Twitch self message badges', () => {
     )
     try {
       await adapter['fetchBadges']()
-      adapter['emitLocalSentMessage']('satont', 'with metadata')
+      client.irc.receiveLine(
+        '@badges=broadcaster/1;id=with-metadata;msg-id=announcement;msg-param-color=PRIMARY :tmi.twitch.tv USERNOTICE #satont :with metadata',
+      )
       expect(messages.at(-1)?.author.badges[0]).toEqual({
         id: 'broadcaster/1',
         type: 'broadcaster',
@@ -521,5 +316,91 @@ describe('Twitch self message badges', () => {
     } finally {
       fetcher.mockRestore()
     }
+  })
+})
+
+describe('Twitch writer and reader', () => {
+  test('a writer acknowledgment creates no row and the incoming IRC reply supplies its metadata', async () => {
+    const written: Array<{ channel: string; text: string; replyTo?: string }> = []
+    const senders = writerFixture(async (writer, channel, text, replyTo) => {
+      written.push({ channel, text, replyTo })
+      writer.irc.receiveLine('@id=real-message :tmi.twitch.tv USERSTATE #satont')
+    })
+    const { adapter, client, messages } = readerFixture('satont', 'satont', senders)
+    try {
+      await adapter.sendMessage('satont', 'reply', 'parent')
+      expect(written).toEqual([{ channel: 'satont', text: 'reply', replyTo: 'parent' }])
+      expect(messages).toEqual([])
+
+      const received = Promise.withResolvers<NormalizedChatMessage>()
+      adapter.on('message', received.resolve)
+      client.irc.receiveLine(
+        '@badges=broadcaster/1;id=real-message;reply-parent-msg-id=parent;reply-parent-msg-body=original;reply-parent-user-id=456;reply-parent-user-login=viewer;reply-parent-display-name=Viewer :satont!satont@satont.tmi.twitch.tv PRIVMSG #satont :reply',
+      )
+      expect(await received.promise).toMatchObject({
+        id: 'real-message',
+        text: 'reply',
+        author: { badges: [{ id: 'broadcaster/1' }] },
+        reply: {
+          parentMessageId: 'parent',
+          parentMessageText: 'original',
+          parentAuthor: { id: '456', username: 'viewer', displayName: 'Viewer' },
+        },
+      })
+      expect(messages).toHaveLength(1)
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+
+  test.each(['msg_automod_held', 'msg_rejected'])(
+    'an AutoMod %s notice returns a held receipt without creating a row',
+    async (msgId) => {
+      const senders = writerFixture(async (writer) => {
+        writer.irc.receiveLine('@id=unrelated :tmi.twitch.tv USERSTATE #other')
+        writer.irc.receiveLine(':tmi.twitch.tv USERSTATE #another')
+        writer.irc.receiveLine(
+          `@msg-id=${msgId} :tmi.twitch.tv NOTICE #another :Your message is being checked.`,
+        )
+      })
+      const { adapter, messages } = readerFixture('viewer', 'another', senders)
+      try {
+        expect(await adapter.sendMessage('another', 'held text')).toEqual({
+          channelId: 'another',
+          held: true,
+        })
+        expect(messages).toEqual([])
+      } finally {
+        await adapter.disconnect()
+      }
+    },
+  )
+
+  test('a mandatory moderation rejection is a send failure', async () => {
+    const senders = writerFixture(async (writer) => {
+      writer.irc.receiveLine(
+        '@msg-id=msg_rejected_mandatory :tmi.twitch.tv NOTICE #another :Your message was blocked.',
+      )
+    })
+    const { adapter, messages } = readerFixture('viewer', 'another', senders)
+    try {
+      await expect(adapter.sendMessage('another', 'blocked text')).rejects.toThrow(
+        'Twitch did not send the message from @viewer: Twitch blocked the message.',
+      )
+      expect(messages).toEqual([])
+    } finally {
+      await adapter.disconnect()
+    }
+  })
+
+  test('disconnecting the last reader cancels the wait for a send acknowledgment', async () => {
+    const written = Promise.withResolvers<void>()
+    const senders = writerFixture(async () => written.resolve())
+    const { adapter, messages } = readerFixture('viewer', 'another', senders)
+    const sending = adapter.sendMessage('another', 'sending')
+    const disconnecting = written.promise.then(() => adapter.disconnect())
+    await expect(sending).rejects.toThrow('disconnected before delivery')
+    await disconnecting
+    expect(messages).toEqual([])
   })
 })

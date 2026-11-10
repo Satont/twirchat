@@ -14,7 +14,7 @@ import { refreshKickToken } from '../../auth/kick'
 import { t } from '../../gpuix/i18n'
 import { backendFetch } from '../../runtime-config'
 import { AccountStore } from '../../store/account-store'
-import { BasePlatformAdapter, type ChatReplyTarget } from '../base-adapter'
+import { BasePlatformAdapter } from '../base-adapter'
 import { resolveKickAvatarUrl, type KickAvatarResolver } from './avatar-cache'
 import { kickBadgeCatalog } from './badge-catalog'
 import {
@@ -110,17 +110,12 @@ const kickSendAcknowledgementSchema = z.object({
   data: z.object({ is_sent: z.boolean().optional(), message_id: z.string().min(1).optional() }),
 })
 
-function kickSendBody(
-  broadcasterUserId: number,
-  text: string,
-  replyTo?: ChatReplyTarget,
-): KickSendBody {
-  const replyToMessageId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
+function kickSendBody(broadcasterUserId: number, text: string, replyTo?: string): KickSendBody {
   return {
     broadcaster_user_id: broadcasterUserId,
     content: text,
     type: 'user',
-    ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
+    ...(replyTo ? { reply_to_message_id: replyTo } : {}),
   }
 }
 
@@ -384,11 +379,7 @@ export class KickAdapter extends BasePlatformAdapter {
     }
   }
 
-  async sendMessage(
-    _channelId: string,
-    text: string,
-    replyTo?: ChatReplyTarget,
-  ): Promise<ChatSendReceipt> {
+  async sendMessage(_channelId: string, text: string, replyTo?: string): Promise<ChatSendReceipt> {
     const revision = this.identityRevision
     if (!this.broadcasterUserId) throw new Error(t('misc.kickAdapter.channelNotReady'))
     const body = kickSendBody(this.broadcasterUserId, text, replyTo)
@@ -424,7 +415,7 @@ export class KickAdapter extends BasePlatformAdapter {
   async sendMessageAs(
     account: Pick<Account, 'id' | 'username'>,
     text: string,
-    replyTo?: ChatReplyTarget,
+    replyTo?: string,
   ): Promise<ChatSendReceipt> {
     if (!this.broadcasterUserId) throw new Error(t('misc.kickAdapter.channelNotReady'))
     const body = kickSendBody(this.broadcasterUserId, text, replyTo)

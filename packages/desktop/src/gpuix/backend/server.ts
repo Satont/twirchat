@@ -179,7 +179,8 @@ function boot(): DesktopBackend {
     backendConn.send(message)
   }
 
-  const twitchAdapter = new TwitchAdapter()
+  const twitchSenders = createDefaultTwitchSenderPool()
+  const twitchAdapter = new TwitchAdapter(twitchSenders)
   const kickAdapter = new KickAdapter()
   const youtubeAdapter = new YouTubeAdapter()
   const vkPlayAdapter = new VkPlayAdapter()
@@ -190,10 +191,9 @@ function boot(): DesktopBackend {
 
   startOverlayServer()
 
-  const twitchSenders = createDefaultTwitchSenderPool()
   const watchedChannelManager = new WatchedChannelManager(
     (message) => providerRuntime.enrich(message),
-    undefined,
+    (channel) => (channel.platform === 'twitch' ? new TwitchAdapter(twitchSenders) : undefined),
     createChatAccountSender(twitchSenders),
   )
   const donationShare = createDonationShareClient({

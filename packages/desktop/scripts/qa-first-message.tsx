@@ -149,7 +149,6 @@ try {
     metadata: {
       firstMessage: true,
     },
-    delivery: { state: 'sent' },
   }
 
   backend.events.emit('watched_channel_message', {

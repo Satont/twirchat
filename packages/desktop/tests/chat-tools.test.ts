@@ -134,7 +134,7 @@ describe('chat search workflows', () => {
     expect(matches('is:reply', chat())).toBe(false)
   })
 
-  test('uses resolved highlight/deletion state and message action/delivery flags', () => {
+  test('uses resolved highlight/deletion state and message type', () => {
     const message = chat()
     expect(matches('is:highlighted', message, { highlighted: true })).toBe(true)
     expect(matches('is:mention', message, { highlighted: true })).toBe(true)
@@ -143,10 +143,6 @@ describe('chat search workflows', () => {
     expect(matches('!is:deleted', message, { deleted: true })).toBe(false)
     expect(matches('is:action', chat({ type: 'action' }))).toBe(true)
     expect(matches('is:system', chat({ type: 'system' }))).toBe(true)
-    expect(
-      matches('is:failed', chat({ delivery: { state: 'failed', error: 'Not allowed' } })),
-    ).toBe(true)
-    expect(matches('is:failed', chat({ delivery: { state: 'pending' } }))).toBe(false)
   })
 
   test('shows a useful hint while a quotation is unfinished and matches its partial phrase', () => {

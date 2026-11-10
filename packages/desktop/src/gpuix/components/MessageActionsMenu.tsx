@@ -296,7 +296,7 @@ export function MessageActionsMenu({
                   if (ignored) await ignore()
                 })
               : null}
-            {message.platform === 'twitch' && !message.delivery
+            {message.platform === 'twitch'
               ? item(t('chatMessages.actions.pinMessage'), () =>
                   backend.api.executeTwitchActivityAction({
                     action: 'pin_message',

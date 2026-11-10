@@ -23,7 +23,7 @@ import type {
 } from '@twirchat/shared/types'
 
 import { parseMessageWithEmotes } from '../platforms/7tv/emote-parser'
-import type { ChatReplyTarget, IPlatformAdapter } from '../platforms/base-adapter'
+import type { IPlatformAdapter } from '../platforms/base-adapter'
 import { KickAdapter } from '../platforms/kick/adapter'
 import { TwitchAdapter } from '../platforms/twitch/adapter'
 import { VkPlayAdapter } from '../platforms/vkplay/adapter'
@@ -61,7 +61,7 @@ export class WatchedChannelManager {
     private readonly enrich: (message: NormalizedChatMessage) => NormalizedChatMessage = (
       message,
     ) => message,
-    private readonly createAdapter?: (channel: WatchedChannel) => IPlatformAdapter,
+    private readonly createAdapter?: (channel: WatchedChannel) => IPlatformAdapter | undefined,
     private readonly accountSender?: ChatAccountSender,
   ) {}
   /** Chat ID → accounts its live panes chose for themselves. */
@@ -336,12 +336,12 @@ export class WatchedChannelManager {
 
   /**
    * Sends in the watched chat. `accountId` is the pane's account; without it the chat's own
-   * account sends. The default account sends over the reading connection, others over their own.
+   * account sends. The default account sends through the adapter; others use the account sender.
    */
   async sendMessage(
     id: string,
     text: string,
-    replyTo?: ChatReplyTarget,
+    replyTo?: string,
     accountId?: string,
   ): Promise<void | ChatSendReceipt> {
     const entry = this.entries.get(id)

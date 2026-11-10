@@ -1,7 +1,7 @@
 import type { Account, ChatSendReceipt, WatchedChannel } from '@twirchat/shared/types'
 
 import { t } from '../gpuix/i18n'
-import type { ChatReplyTarget, IPlatformAdapter } from '../platforms/base-adapter'
+import type { IPlatformAdapter } from '../platforms/base-adapter'
 import { KickAdapter } from '../platforms/kick/adapter'
 import type { TwitchSenderPool } from '../platforms/twitch/sender-pool'
 
@@ -13,7 +13,7 @@ export interface ChatAccountSender {
     channel: WatchedChannel,
     adapter: IPlatformAdapter,
     text: string,
-    replyTo?: ChatReplyTarget,
+    replyTo?: string,
   ): Promise<void | ChatSendReceipt>
   release(accountId: string, channel: WatchedChannel): void
 }
@@ -24,9 +24,8 @@ export function createChatAccountSender(twitch: TwitchSenderPool): ChatAccountSe
       if (channel.platform === 'twitch') await twitch.prepare(account, channel.channelSlug)
     },
     send: async (account, channel, adapter, text, replyTo) => {
-      const replyId = typeof replyTo === 'string' ? replyTo : replyTo?.parentMessageId
       if (channel.platform === 'twitch')
-        return twitch.send(account, channel.channelSlug, text, replyId)
+        return twitch.send(account, channel.channelSlug, text, replyTo)
       if (adapter instanceof KickAdapter) return adapter.sendMessageAs(account, text, replyTo)
       throw new Error(
         t('misc.accountSender.otherAccountUnavailable', { platform: channel.platform }),

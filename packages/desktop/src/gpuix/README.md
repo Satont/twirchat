@@ -104,7 +104,7 @@ latest" pill tracks `onVisibleRange` and jumps via
 - Search operates on retained messages (500 at home, 200 per watched channel).
   Words and quoted phrases combine with AND. Filters: `from:user,other`,
   `in:channel`, `platform:twitch`, `badge:moderator`, `has:link`, `has:emote`,
-  `is:reply`, `is:highlighted`, `is:deleted`, `is:action`, `is:system`, `is:failed`.
+  `is:reply`, `is:highlighted`, `is:deleted`, `is:action`, `is:system`.
   Prefix a term with `!` or `-` to exclude it. `regex:` uses bounded PCRE2 matching;
   `subtier:` and `client:` select subscription tiers and detected clients.
 - Mentions match whole nicknames (with or without `@`) and replies to your own

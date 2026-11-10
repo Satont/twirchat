@@ -6,7 +6,6 @@ import { codePointRangeToUtf16 } from '../../views/shared/utils/display-text'
 export function twitchAuthorAppearance(
   tags: ReadonlyMap<string, string>,
   badgeCache: ReadonlyMap<string, Badge>,
-  broadcaster = false,
 ): Pick<NormalizedChatMessage['author'], 'badges' | 'color'> {
   const badges: Badge[] = []
   for (const badge of (tags.get('badges') ?? '').split(',')) {
@@ -15,14 +14,6 @@ export function twitchAuthorAppearance(
     const id = `${type}/${version}`
     badges.push(badgeCache.get(id) ?? { id, type, text: type })
   }
-  if (broadcaster && !badges.some((badge) => badge.type === 'broadcaster'))
-    badges.unshift(
-      badgeCache.get('broadcaster/1') ?? {
-        id: 'broadcaster/1',
-        type: 'broadcaster',
-        text: 'broadcaster',
-      },
-    )
   return { badges, color: tags.get('color') || undefined }
 }
 
