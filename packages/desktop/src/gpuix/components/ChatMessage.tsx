@@ -14,7 +14,7 @@ import type {
   Platform,
   SevenTvSystemAction,
 } from '@twirchat/shared/types'
-import { memo, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 
 import { deleteOldestEntry } from '../../services/bounded-cache'
 import { resolveBadgeImage } from '../../views/main/utils/badge-image'
@@ -416,6 +416,8 @@ function HoverActions({
   onOpenUserCard,
   onSearch,
   menuRequest,
+  menuPosition,
+  onMenuButtonClick,
 }: {
   rowHovered: boolean
   onReply: () => void
@@ -426,6 +428,8 @@ function HoverActions({
   onOpenUserCard: () => void
   onSearch?: (query: string) => void
   menuRequest: number
+  menuPosition?: { x: number; y: number } | null
+  onMenuButtonClick: () => void
 }) {
   const theme = useTheme()
   const [replyHover, setReplyHover] = useState(false)
@@ -471,6 +475,8 @@ function HoverActions({
         onOpenUserCard={onOpenUserCard}
         onSearch={onSearch}
         request={menuRequest}
+        position={menuPosition}
+        onMenuButtonClick={onMenuButtonClick}
       />
     </div>
   )
@@ -576,6 +582,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const [copySuccess, setCopySuccess] = useState(false)
   const [ignoredRevealed, setIgnoredRevealed] = useState(false)
   const [menuRequest, setMenuRequest] = useState(0)
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null)
+  const clearMenuPosition = useCallback(() => setMenuPosition(null), [])
   const cosmetics = useAuthorCosmetics(
     message,
     props.visible !== false && (!props.hiddenLabel || ignoredRevealed),
@@ -790,7 +798,10 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
     const content = (
       <div
         onMouseDown={(event) => {
-          if (event.button === 2) setMenuRequest((value) => value + 1)
+          if (event.button === 2) {
+            setMenuRequest((value) => value + 1)
+            setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
+          }
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -920,6 +931,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               onOpenUserCard={openUserCard}
               onSearch={props.onSearch}
               menuRequest={menuRequest}
+              menuPosition={menuPosition}
+              onMenuButtonClick={clearMenuPosition}
               rowHovered={hovered}
               onReply={() => props.onReply?.(message)}
               onCopy={copyMessage}
@@ -951,7 +964,10 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
   const content = (
     <div
       onMouseDown={(event) => {
-        if (event.button === 2) setMenuRequest((value) => value + 1)
+        if (event.button === 2) {
+          setMenuRequest((value) => value + 1)
+          setMenuPosition({ x: event.x ?? 0, y: event.y ?? 0 })
+        }
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -1062,6 +1078,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
               onOpenUserCard={openUserCard}
               onSearch={props.onSearch}
               menuRequest={menuRequest}
+              menuPosition={menuPosition}
+              onMenuButtonClick={clearMenuPosition}
               rowHovered={hovered}
               onReply={() => props.onReply?.(message)}
               onCopy={copyMessage}

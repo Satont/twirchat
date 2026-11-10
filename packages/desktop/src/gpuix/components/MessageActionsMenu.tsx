@@ -30,6 +30,8 @@ export function MessageActionsMenu({
   onOpenUserCard,
   onSearch,
   request = 0,
+  position,
+  onMenuButtonClick,
 }: {
   message: NormalizedChatMessage
   channelSlug?: string
@@ -38,6 +40,9 @@ export function MessageActionsMenu({
   onOpenUserCard?: () => void
   onSearch?: (query: string) => void
   request?: number
+  /** Window coordinates for a cursor-opened menu; null anchors it to the button. */
+  position?: { x: number; y: number } | null
+  onMenuButtonClick: () => void
 }) {
   const backend = useBackend()
   const paneAccountId = usePaneAccountId()
@@ -193,13 +198,17 @@ export function MessageActionsMenu({
       <Text style={{ fontSize: 12, color: theme.text }}>{label}</Text>
     </div>
   )
+  const cursorPosition = position ?? undefined
   return (
     <div style={{ position: 'relative', display: 'flex' }}>
       <div
         testId="msg-more"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          onMenuButtonClick()
+          setOpen((value) => !value)
+        }}
         style={{
           padding: 3,
           borderRadius: 4,
@@ -214,7 +223,13 @@ export function MessageActionsMenu({
         />
       </div>
       {open ? (
-        <anchored deferred side="bottom" align="end" gap={4}>
+        <anchored
+          deferred
+          position={cursorPosition}
+          side="bottom"
+          align={cursorPosition ? 'start' : 'end'}
+          gap={cursorPosition ? 0 : 4}
+        >
           <div
             testId="message-actions-menu"
             onMouseDownOutside={() => setOpen(false)}
