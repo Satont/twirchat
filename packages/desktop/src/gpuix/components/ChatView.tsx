@@ -1,4 +1,10 @@
-import { Tooltip, TooltipContent, TooltipTrigger, useGpuixRequired } from '@gpuix/react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useGpuixRequired,
+  type EventPayload,
+} from '@gpuix/react'
 import { DONATION_PROVIDER_LABELS, donationChannelKey } from '@twirchat/shared/donations'
 import { chatMessageIdentity, normalizeMessageChannel } from '@twirchat/shared/message-identity'
 /**
@@ -66,6 +72,7 @@ import {
   showNotice,
 } from '../state/app'
 import { channelRoomStore, loadRoomState, roomKey } from '../state/channel-state'
+import { stepChatFontSize } from '../state/chat-font-size'
 import { chatPauseStore } from '../state/chat-pause'
 import { chatRulesPreferences, chatRulesStore } from '../state/chat-rules'
 import { chatSearchJumpStore, finishChatSearchJump } from '../state/chat-search'
@@ -131,6 +138,10 @@ const EMPTY_MESSAGES: NormalizedChatMessage[] = []
 const EMPTY_CHANNEL_IDS: readonly string[] = []
 const MIN_TAIL_ROWS = 24
 const TAIL_OVERSCAN_ROWS = 8
+/** One Ctrl+wheel font step per interval lets a trackpad gesture settle. */
+const FONT_WHEEL_INTERVAL_MS = 50
+/** The list scrolls before the wrapper's listener, so snapshot its settled range. */
+const FONT_WHEEL_SETTLE_MS = 120
 const EMPTY_PLUGIN_ROWS: readonly HomePluginRow[] = []
 const EMPTY_PLUGIN_FEED = { channels: [], rows: EMPTY_PLUGIN_ROWS, total: 0 }
 
@@ -843,6 +854,23 @@ export function ChatView({
         : displayedTimeline,
     [atBottom, paused, revealedMessageKey, displayedTimeline, tailRows],
   )
+  // The list applies a wheel before the wrapper listener receives it, so a
+  // Ctrl+wheel needs the range from before the gesture. Settling the snapshot
+  // after a pause keeps the whole gesture anchored to one spot.
+  const settledRange = useRef({ start: 0, atBottom: true })
+  const rangeSettleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      settledRange.current = { start: visibleRange?.start ?? 0, atBottom }
+    }, FONT_WHEEL_SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [visibleRange, atBottom])
+  useEffect(
+    () => () => {
+      if (rangeSettleTimer.current !== null) clearTimeout(rangeSettleTimer.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (
@@ -900,6 +928,26 @@ export function ChatView({
       renderer.scrollToItem?.(listRef.current.id, Math.max(0, renderedTimeline.length - 1))
       setAtBottom(true)
     }
+  }
+
+  const fontWheelAt = useRef(0)
+  // Ctrl+wheel resizes the chat font. GPUI scrolls the list before this
+  // wrapper listener runs, so a gesture that started at the tail pins it back
+  // and a history reader is put back on the row that was on top.
+  const handleMessagesScroll = (event: EventPayload) => {
+    const deltaY = event.deltaY ?? 0
+    if (deltaY === 0 || (!event.modifiers?.ctrl && !event.modifiers?.cmd)) return
+    const now = performance.now()
+    if (now - fontWheelAt.current < FONT_WHEEL_INTERVAL_MS) return
+    fontWheelAt.current = now
+    // At a bound the size stays put, but the wheel still moved the list.
+    stepChatFontSize(backend.api, deltaY > 0 ? 1 : -1)
+    const settled = settledRange.current
+    if (settled.atBottom) {
+      scrollToLatest()
+      return
+    }
+    if (listRef.current) renderer.scrollToItem?.(listRef.current.id, Math.max(0, settled.start))
   }
 
   // ── Reply / moderation / dialogs ───────────────────────────────────────────
@@ -2101,6 +2149,7 @@ export function ChatView({
         ) : null}
         <div
           testId="chat-messages"
+          onScroll={handleMessagesScroll}
           onMouseMove={(event) => {
             updateWindowActivity(scope, windowActivity?.active ?? true, event.modifiers)
             if (pausePreferences.hoverSeconds !== 0)
@@ -2128,7 +2177,21 @@ export function ChatView({
                 setVisibleRange((current) =>
                   current?.start === start && current.end === end ? current : { start, end },
                 )
-                setAtBottom(end >= renderedTimeline.length)
+                const atTail = end >= renderedTimeline.length
+                if (rangeSettleTimer.current !== null) clearTimeout(rangeSettleTimer.current)
+                rangeSettleTimer.current = null
+                if (atTail) {
+                  setAtBottom(true)
+                } else {
+                  // The list scrolls natively before the Ctrl+wheel listener can
+                  // undo it. Leaving the tail for that instant would expand the
+                  // whole history and rebuild every retained row.
+                  rangeSettleTimer.current = setTimeout(() => {
+                    rangeSettleTimer.current = null
+                    if (performance.now() - fontWheelAt.current < FONT_WHEEL_SETTLE_MS) return
+                    setAtBottom(false)
+                  }, 0)
+                }
               }}
               style={{
                 flexGrow: 1,

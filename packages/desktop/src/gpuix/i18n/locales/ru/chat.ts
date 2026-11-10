@@ -151,6 +151,7 @@ export const ruChat = {
   'chat.appearance.live': 'Вживую',
   'chat.appearance.sampleHint': 'Примеры сообщений используют текущую тему, шрифт и макет чата.',
   'chat.appearance.fontSize': 'Размер шрифта',
+  'chat.appearance.fontSizeHint': 'Ctrl + прокрутка над чатом меняет размер.',
   'chat.appearance.display': 'Отображение',
   'chat.appearance.layout': 'Макет',
   'chat.appearance.modern': 'Современный',

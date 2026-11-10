@@ -145,6 +145,7 @@ export const chat = {
   'chat.appearance.live': 'Live',
   'chat.appearance.sampleHint': 'Sample messages use your current theme, font and chat layout.',
   'chat.appearance.fontSize': 'Font size',
+  'chat.appearance.fontSizeHint': 'Ctrl + scroll over the chat to resize it.',
   'chat.appearance.display': 'Display',
   'chat.appearance.layout': 'Layout',
   'chat.appearance.modern': 'Modern',
