@@ -35,7 +35,7 @@ export const YOUTUBE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const YOUTUBE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
 export const VKPLAY_AUTH_URL = 'https://auth.live.vkvideo.ru/app/oauth2/authorize'
-export const VKPLAY_DEV_API_BASE = 'https://apidev.live.vkvideo.ru/v1'
+export const VKPLAY_DEV_API_BASE = 'https://apidev.live.vkvideo.ru'
 export const VKPLAY_WS_URL =
   'wss://pubsub-dev.live.vkvideo.ru/connection/websocket?format=json&cf_protocol_version=v2'
 export const VKPLAY_SCOPES: readonly string[] = ['chat:message:send']

@@ -117,7 +117,7 @@ export async function handleVkPlayToken(params: URLSearchParams): Promise<{
   }
   pendingSessions.delete(state)
 
-  const userRes = await fetch(`${VKPLAY_DEV_API_BASE}/current_user`, {
+  const userRes = await fetch(`${VKPLAY_DEV_API_BASE}/v1/current_user`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Origin: 'https://live.vkvideo.ru',

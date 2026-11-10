@@ -133,7 +133,7 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     const token = this.readToken(accountId)
     const streamId = this.streamId ?? (await this.loadChannel(slug, token)).streamId
     if (!streamId) throw new Error('VK Play Live chat is available only while a stream exists.')
-    const url = new URL(`${VKPLAY_DEV_API_BASE}/chat/message/send`)
+    const url = new URL(`${VKPLAY_DEV_API_BASE}/v1/chat/message/send`)
     url.search = new URLSearchParams({ channel_url: slug, stream_id: streamId }).toString()
     const response = await fetch(url, {
       body: JSON.stringify({ parts: [{ text: { content: text } }] }),
