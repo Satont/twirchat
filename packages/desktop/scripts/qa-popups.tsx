@@ -216,6 +216,18 @@ function boundsOf(id: string) {
   assert.ok(bounds, `Missing bounds for ${id}`)
   return bounds
 }
+function assertPlatformButtonsFit() {
+  const left = boundsOf('add-platform-twitch').x
+  const confirm = boundsOf('add-channel-confirm')
+  const right = confirm.x + confirm.width
+  for (const platform of ['twitch', 'kick', 'youtube', 'vkplay']) {
+    const button = boundsOf(`add-platform-${platform}`)
+    assert.ok(
+      button.x >= left && button.x + button.width <= right,
+      `${platform} button must fit in the add-channel form`,
+    )
+  }
+}
 async function click(id: string) {
   const bounds = boundsOf(id)
   renderer.simulateClick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0)
@@ -263,13 +275,26 @@ try {
       closed++
     },
   })
+  assertPlatformButtonsFit()
   await press('ctrl-y')
   assert.equal(added.length, 0)
   await type('add-channel-input', 'mockchannel')
   await press('ctrl-y')
   assert.deepEqual(added, [['twitch', 'mockchannel']])
+  await nativeWindow(renderer).setWindowBounds({ width: 320, height: 500 })
+  await Bun.sleep(220)
+  assertPlatformButtonsFit()
+  await click('add-platform-vkplay')
+  await captureGuiQaDisplay('popup-add-channel-small')
+  await type('add-channel-input', 'vklive')
+  await press('ctrl-y')
+  assert.deepEqual(added, [
+    ['twitch', 'mockchannel'],
+    ['vkplay', 'vklive'],
+  ])
   await press('ctrl-r')
   assert.equal(closed, 1)
+  await nativeWindow(renderer).setWindowBounds({ width: 820, height: 850 })
   closed = 0
   await mount(ChattersDialog, {
     targets: [{ platform: 'twitch', channelSlug: 'mock' }],
