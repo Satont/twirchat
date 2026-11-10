@@ -21,7 +21,8 @@ export const ruApp = {
 
   'app.update.download': 'Скачать',
   'app.update.skip': 'Пропустить',
-  'app.update.restartToApply': 'Перезапустить и применить',
+  'app.update.restartToApply': 'Перезапустить',
+  'app.update.notNow': 'Не сейчас',
 
   'app.tab.menu.rename': 'Переименовать / цвет вкладки…',
   'app.tab.menu.duplicate': 'Дублировать вкладку',

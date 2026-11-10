@@ -128,6 +128,7 @@ export const ruSettings = {
   'settings.updates.checkNow': 'Проверить сейчас',
   'settings.updates.checkNowHint': 'Искать обновления в ленте релизов',
   'settings.updates.check': 'Проверить обновления',
+  'settings.updates.checking': 'Проверяю…',
   'settings.updates.auto': 'Автоматически проверять обновления',
   'settings.updates.autoHint': 'Проверять при запуске и каждые 10 минут',
 

@@ -123,6 +123,7 @@ export const settings = {
   'settings.updates.checkNow': 'Check now',
   'settings.updates.checkNowHint': 'Look for updates on the release feed',
   'settings.updates.check': 'Check for updates',
+  'settings.updates.checking': 'Checking…',
   'settings.updates.auto': 'Auto-check for updates',
   'settings.updates.autoHint': 'Check at startup and every 10 minutes',
 

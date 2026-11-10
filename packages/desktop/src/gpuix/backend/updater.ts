@@ -106,6 +106,7 @@ const defaultRuntime: UpdaterRuntime = {
 export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): Updater {
   let manager: UpdaterManager | null | undefined
   let state: UpdateState = { kind: 'idle' }
+  let downloadProgress = 0
   let checking: { result: Promise<CheckForUpdateResult>; visibility: { manual: boolean } } | null =
     null
 
@@ -136,8 +137,20 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
     const mgr = getManager()
     const currentVersion = mgr?.getCurrentVersion() ?? runtime.version
     if (!mgr) return Promise.resolve({ updateAvailable: false, currentVersion })
-    if (state.kind === 'downloading' || state.kind === 'applying')
+    if (state.kind === 'downloading' || state.kind === 'applying') {
+      // A manual check re-shows a closed toast; replay where the update stands.
+      if (manual) {
+        emit('checking', t('runtime.updater.checking'))
+        const hash = state.info.TargetFullRelease.SHA256
+        if (state.kind === 'downloading')
+          emit('downloading', t('runtime.updater.downloading'), {
+            progress: downloadProgress,
+            hash,
+          })
+        else emit('applying', t('runtime.updater.applying'), { hash })
+      }
       return Promise.resolve(currentResult(currentVersion))
+    }
     if (checking) {
       if (manual) checking.visibility.manual = true
       return checking.result
@@ -224,17 +237,19 @@ export function createUpdater(events: DesktopEvents, runtime = defaultRuntime): 
       if (!mgr || state.kind !== 'available')
         return { success: false, error: t('runtime.updater.noUpdateToDownload') }
       const info = state.info
+      const hash = info.TargetFullRelease.SHA256
       const result = Promise.resolve().then(async (): Promise<DownloadResult> => {
-        emit('downloading', t('runtime.updater.downloading'), { progress: 0 })
+        downloadProgress = 0
+        emit('downloading', t('runtime.updater.downloading'), { progress: 0, hash })
         try {
           await mgr.downloadUpdateAsync(info, (perc) => {
-            if (state.kind === 'downloading' && state.info === info && state.result === result)
-              emit('downloading', t('runtime.updater.downloading'), { progress: perc })
+            if (state.kind === 'downloading' && state.info === info && state.result === result) {
+              downloadProgress = perc
+              emit('downloading', t('runtime.updater.downloading'), { progress: perc, hash })
+            }
           })
           state = { kind: 'ready', info }
-          emit('download-complete', t('runtime.updater.downloaded'), {
-            hash: info.TargetFullRelease.SHA256,
-          })
+          emit('download-complete', t('runtime.updater.downloaded'), { hash })
           return { success: true }
         } catch (error) {
           state = { kind: 'available', info }

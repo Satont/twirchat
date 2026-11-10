@@ -1,5 +1,5 @@
-import { motion, useGpuixRequired, type StyleDesc } from '@gpuix/react'
-import { useEffect, useMemo, useState } from 'react'
+import { motion, useGpuixRequired } from '@gpuix/react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 /**
  * The app header, tabbed content, modals and toasts sit below the native titlebar.
  */
@@ -51,6 +51,11 @@ import { useWindowScope } from '../state/window-scope'
 import { withAlpha } from '../theme'
 import { resolveFont, resolveTheme, useTheme, FontContext, ThemeContext } from '../theme-context'
 import { loadPendingChangelog, type PendingChangelog } from '../update-changelog'
+import {
+  dismissUpdateToast,
+  initialUpdateToastState,
+  nextUpdateToastState,
+} from '../update-toast-state'
 import { AddChannelModal } from './AddChannelModal'
 import { AppNavigation } from './AppNavigation'
 import { ChannelTabBar, type WatchedLiveStatus } from './ChannelTabBar'
@@ -62,6 +67,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { TabSelectorModal, type TabItem } from './TabSelectorModal'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
 import { TwitchDeviceDialog } from './TwitchDeviceDialog'
+import { ActionButton } from './ui/Form'
 import { Icon } from './ui/Icon'
 import { Modal } from './ui/Modal'
 import { Text } from './ui/Text'
@@ -125,6 +131,63 @@ export function ChatNotice() {
   )
 }
 
+const UPDATE_TOAST_WIDTH = 320
+const UPDATE_TOAST_PADDING = 12
+// Border-box width minus padding and the 1px border on each side.
+const UPDATE_TOAST_CONTENT_WIDTH = UPDATE_TOAST_WIDTH - UPDATE_TOAST_PADDING * 2 - 2
+const BUSY_BAR_WIDTH = 72
+// The toast grows upward when its buttons appear, so a click aimed at the old close
+// icon can land on the new primary button. Clicks this soon after are ignored.
+const FRESH_ACTIONS_GUARD_MS = 600
+
+/** Indeterminate progress: a segment sliding back and forth along the track. */
+function UpdateBusyBar() {
+  const theme = useTheme()
+  const [forward, setForward] = useState(true)
+  return (
+    <div
+      style={{
+        position: 'relative',
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: theme.fill,
+        overflow: 'hidden',
+      }}
+    >
+      <motion.div
+        initial={{ left: 0 }}
+        animate={{ left: forward ? UPDATE_TOAST_CONTENT_WIDTH - BUSY_BAR_WIDTH : 0 }}
+        transition={{ duration: 0.8, ease: 'easeInOut' }}
+        onMotionComplete={() => setForward((value) => !value)}
+        style={{
+          position: 'absolute',
+          top: 0,
+          width: BUSY_BAR_WIDTH,
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: theme.accent.primary,
+        }}
+      />
+    </div>
+  )
+}
+
+/** Wraps actions so they ignore clicks made right after `actionsKey` changed. */
+function useFreshActionsGuard(actionsKey: string | null) {
+  const shownAt = useRef(0)
+  useEffect(
+    () => {
+      shownAt.current = performance.now()
+    },
+    // The key is the trigger: new actions restart the guard window.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+    [actionsKey],
+  )
+  return (action: () => void) => () => {
+    if (performance.now() - shownAt.current >= FRESH_ACTIONS_GUARD_MS) action()
+  }
+}
+
 /**
  * Update notification toast (port of App.vue's update-toast). Driven by the
  * backend's `update_status` events: 'checking' / 'update-available' /
@@ -135,44 +198,26 @@ export function UpdateToast() {
   const backend = useBackend()
   const theme = useTheme()
   const { t } = useT()
-  const [update, setUpdate] = useState<{
-    status: string
-    message: string
-    progress?: number
-    hash?: string
-  } | null>(null)
-  const [dismissed, setDismissed] = useState(false)
+  const [toast, setToast] = useState(initialUpdateToastState)
+  const { update, dismissed } = toast
+  const dismiss = () => setToast(dismissUpdateToast)
+  const guarded = useFreshActionsGuard(
+    update && !dismissed ? `${update.status}:${update.hash ?? ''}` : null,
+  )
 
   useBackendEvent('update_status', (status) => {
-    setUpdate(status.status === 'idle' ? null : status)
-    setDismissed(false)
+    setToast((current) => nextUpdateToastState(current, status))
   })
 
   // 'no-update' and errors are informational — auto-hide them.
   useEffect(() => {
     if (!update || dismissed) return
     if (update.status !== 'no-update' && update.status !== 'update-error') return
-    const timer = setTimeout(() => setDismissed(true), 5000)
+    const timer = setTimeout(() => setToast(dismissUpdateToast), 5000)
     return () => clearTimeout(timer)
   }, [update, dismissed])
 
   if (!update || dismissed) return null
-
-  const buttonStyle: StyleDesc = {
-    paddingTop: 6,
-    paddingBottom: 6,
-    paddingLeft: 12,
-    paddingRight: 12,
-    borderRadius: 6,
-    backgroundColor: theme.accent.deep,
-    cursor: 'pointer',
-  }
-  const secondaryButtonStyle = {
-    ...buttonStyle,
-    backgroundColor: theme.fill,
-    borderWidth: 1,
-    borderColor: theme.hairline,
-  }
 
   return (
     <div
@@ -183,25 +228,38 @@ export function UpdateToast() {
         pointerEvents: 'auto',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
-        minWidth: 240,
-        maxWidth: 340,
+        gap: 12,
+        width: UPDATE_TOAST_WIDTH,
         backgroundColor: theme.popover,
         borderWidth: 1,
         borderColor: theme.dialogBorder,
         borderRadius: 10,
-        padding: 12,
+        padding: UPDATE_TOAST_PADDING,
+        boxShadow: {
+          offsetX: 0,
+          offsetY: 4,
+          blurRadius: 16,
+          spreadRadius: 0,
+          color: '#00000055',
+        },
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Text style={{ flexGrow: 1, fontSize: 13, color: theme.text }}>
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+        <Text style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 13, color: theme.text }}>
           {update.status === 'downloading' && typeof update.progress === 'number'
             ? `${update.message} — ${Math.round(update.progress)}%`
             : update.message}
         </Text>
         <div
-          onClick={() => setDismissed(true)}
-          style={{ display: 'flex', cursor: 'pointer', borderRadius: 4, padding: 2 }}
+          onClick={dismiss}
+          style={{
+            display: 'flex',
+            flexShrink: 0,
+            cursor: 'pointer',
+            borderRadius: 4,
+            padding: 2,
+            hover: { backgroundColor: theme.fillHover },
+          }}
         >
           <Icon name="close" size={14} color={theme.text2} />
         </div>
@@ -214,36 +272,34 @@ export function UpdateToast() {
             style={{
               width: `${Math.round(update.progress ?? 0)}%`,
               height: '100%',
-              backgroundColor: theme.accent.deep,
+              backgroundColor: theme.accent.primary,
             }}
           />
         </div>
       ) : null}
+      {update.status === 'checking' || update.status === 'applying' ? <UpdateBusyBar /> : null}
       {update.status === 'update-available' ? (
-        <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
-          <div style={buttonStyle} onClick={() => runUiTask(backend.api.downloadUpdate())}>
-            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>
-              {t('app.update.download')}
-            </Text>
-          </div>
-          <div
-            style={secondaryButtonStyle}
-            onClick={() => {
-              if (update.hash) runUiTask(backend.api.skipUpdate({ hash: update.hash }))
-              setDismissed(true)
-            }}
+        <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+          <ActionButton
+            onClick={guarded(() => {
+              const { hash } = update
+              if (hash) runUiTask(backend.api.skipUpdate({ hash }))
+              dismiss()
+            })}
           >
-            <Text style={{ fontSize: 13, color: theme.text }}>{t('app.update.skip')}</Text>
-          </div>
+            {t('app.update.skip')}
+          </ActionButton>
+          <ActionButton primary onClick={guarded(() => runUiTask(backend.api.downloadUpdate()))}>
+            {t('app.update.download')}
+          </ActionButton>
         </div>
       ) : null}
       {update.status === 'download-complete' ? (
-        <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
-          <div style={buttonStyle} onClick={() => runUiTask(backend.api.applyUpdate())}>
-            <Text style={{ fontSize: 13, color: theme.accent.onDeep }}>
-              {t('app.update.restartToApply')}
-            </Text>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+          <ActionButton onClick={guarded(dismiss)}>{t('app.update.notNow')}</ActionButton>
+          <ActionButton primary onClick={guarded(() => runUiTask(backend.api.applyUpdate()))}>
+            {t('app.update.restartToApply')}
+          </ActionButton>
         </div>
       ) : null}
     </div>
