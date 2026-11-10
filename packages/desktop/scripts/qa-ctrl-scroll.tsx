@@ -183,7 +183,7 @@ try {
   layoutStore.set(new Map([['qa-tab', { layout, isLoading: false, error: null }]]))
   await manager.start()
   await until(() => !!find('chat-messages'), 'chat pane')
-  for (let index = 0; index < 120; index++) {
+  for (let index = 0; index < 200; index++) {
     backend.events.emit('watched_channel_message', {
       channelId: 'qa',
       message: {
@@ -198,7 +198,7 @@ try {
       },
     })
   }
-  await until(() => nodes().some((node) => node.text === 'QA_ROW_119'), 'newest message painted')
+  await until(() => nodes().some((node) => node.text === 'QA_ROW_199'), 'newest message painted')
   await Bun.sleep(120)
 
   assert.equal(fontSize(), DEFAULT_SETTINGS.fontSize, 'starts on the default size')
@@ -256,12 +256,32 @@ try {
 
   assert.ok(find('scroll-to-latest'), 'the reader still sees the tail pill')
   await returnToTail()
+  assert.ok(renderer, 'The native renderer is not ready.')
+  const native = renderer
+  // Leaving the tail for the instant the list scrolls natively would expand the
+  // whole feed and rebuild every retained row.
+  const baselineTree = native.getAutomationTree().length
+  let largestTree = baselineTree
+  let sampling = true
+  const sampler = (async () => {
+    while (sampling) {
+      largestTree = Math.max(largestTree, native.getAutomationTree().length)
+      // eslint-disable-next-line no-await-in-loop -- Sample one frame at a time.
+      await Bun.sleep(5)
+    }
+  })()
   await wheel(120, 'ctrl')
   await until(
     () => fontSize() === DEFAULT_SETTINGS.fontSize + 2,
     'Ctrl+wheel up at the tail grows the font again',
   )
-  await Bun.sleep(160)
+  await Bun.sleep(220)
+  sampling = false
+  await sampler
+  assert.ok(
+    largestTree < baselineTree * 2,
+    `Ctrl+wheel at the tail must not expand the history (${baselineTree} -> ${largestTree})`,
+  )
   assert.equal(
     find('scroll-to-latest'),
     undefined,
@@ -272,7 +292,17 @@ try {
   assert.deepEqual(saved.at(-1), app.settingsStore.get(), 'the last gesture is persisted')
   await Bun.write(
     join(directory, 'ctrl-scroll-result.json'),
-    JSON.stringify({ ok: true, saves: saved.length, fontSize: fontSize() }, null, 2),
+    JSON.stringify(
+      {
+        ok: true,
+        saves: saved.length,
+        fontSize: fontSize(),
+        treeBaseline: baselineTree,
+        treePeak: largestTree,
+      },
+      null,
+      2,
+    ),
   )
   console.log('Ctrl+wheel font resize QA passed.')
 } catch (error) {

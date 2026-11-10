@@ -858,12 +858,19 @@ export function ChatView({
   // Ctrl+wheel needs the range from before the gesture. Settling the snapshot
   // after a pause keeps the whole gesture anchored to one spot.
   const settledRange = useRef({ start: 0, atBottom: true })
+  const rangeSettleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const timer = setTimeout(() => {
       settledRange.current = { start: visibleRange?.start ?? 0, atBottom }
     }, FONT_WHEEL_SETTLE_MS)
     return () => clearTimeout(timer)
   }, [visibleRange, atBottom])
+  useEffect(
+    () => () => {
+      if (rangeSettleTimer.current !== null) clearTimeout(rangeSettleTimer.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (
@@ -2170,7 +2177,21 @@ export function ChatView({
                 setVisibleRange((current) =>
                   current?.start === start && current.end === end ? current : { start, end },
                 )
-                setAtBottom(end >= renderedTimeline.length)
+                const atTail = end >= renderedTimeline.length
+                if (rangeSettleTimer.current !== null) clearTimeout(rangeSettleTimer.current)
+                rangeSettleTimer.current = null
+                if (atTail) {
+                  setAtBottom(true)
+                } else {
+                  // The list scrolls natively before the Ctrl+wheel listener can
+                  // undo it. Leaving the tail for that instant would expand the
+                  // whole history and rebuild every retained row.
+                  rangeSettleTimer.current = setTimeout(() => {
+                    rangeSettleTimer.current = null
+                    if (performance.now() - fontWheelAt.current < FONT_WHEEL_SETTLE_MS) return
+                    setAtBottom(false)
+                  }, 0)
+                }
               }}
               style={{
                 flexGrow: 1,
