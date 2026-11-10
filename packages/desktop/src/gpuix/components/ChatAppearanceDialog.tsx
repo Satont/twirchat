@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { useBackend } from '../backend/context'
 import { useT } from '../i18n'
 import { settingsStore } from '../state/app'
+import { CHAT_FONT_SIZE_MAX, CHAT_FONT_SIZE_MIN } from '../state/chat-font-size'
 import { useTheme } from '../theme-context'
 import { ChatAppearancePreview } from './ChatAppearancePreview'
 import { Icon } from './ui/Icon'
@@ -208,8 +209,8 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
                   </div>
                   <Slider
                     value={settings.fontSize}
-                    min={11}
-                    max={22}
+                    min={CHAT_FONT_SIZE_MIN}
+                    max={CHAT_FONT_SIZE_MAX}
                     width={narrow ? 208 : 260}
                     onChange={(fontSize) => patch({ fontSize })}
                   />
@@ -221,9 +222,12 @@ export function ChatAppearanceDialog({ settings }: { settings: AppSettings }) {
                       marginTop: 4,
                     }}
                   >
-                    <Text style={{ fontSize: 10, color: theme.text2 }}>11</Text>
-                    <Text style={{ fontSize: 10, color: theme.text2 }}>22</Text>
+                    <Text style={{ fontSize: 10, color: theme.text2 }}>{CHAT_FONT_SIZE_MIN}</Text>
+                    <Text style={{ fontSize: 10, color: theme.text2 }}>{CHAT_FONT_SIZE_MAX}</Text>
                   </div>
+                  <Text style={{ fontSize: 10, color: theme.text2, marginTop: 4 }}>
+                    {t('chat.appearance.fontSizeHint')}
+                  </Text>
                 </div>
 
                 {/* Display toggles */}
