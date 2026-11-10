@@ -104,6 +104,10 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     } catch (error) {
       if (generation !== this.generation) return
       const message = error instanceof Error ? error.message : String(error)
+      log.warn('VK Play Live connection attempt failed', {
+        channel: this.channelSlug,
+        error: message,
+      })
       this.emitStatus('error', message)
       if (!isAuthFailure(message)) this.scheduleReconnect(generation)
     }
@@ -207,6 +211,10 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     await realtime.subscribe(this.chatChannel, subscriptionToken)
     if (generation !== this.generation) return
     this.failures = 0
+    log.info('VK Play Live chat connected', {
+      channel: this.channelSlug,
+      chatChannel: this.chatChannel,
+    })
     this.emitStatus('connected')
   }
 
@@ -225,7 +233,14 @@ export class VkPlayAdapter extends BasePlatformAdapter {
 
   private onPush(push: VkPlayPush['push']): void {
     const publication = vkPlayPublicationSchema.safeParse(push.pub.data)
-    if (!publication.success) return
+    if (!publication.success) {
+      const kind = z.object({ type: z.string() }).safeParse(push.pub.data)
+      log.debug('Ignored VK Play Live publication', {
+        channel: this.channelSlug,
+        type: kind.success ? kind.data.type : 'unknown',
+      })
+      return
+    }
     this.emit(
       'message',
       normalizeVkPlayMessage(publication.data.data.chat_message, this.channelSlug),
@@ -251,6 +266,7 @@ export class VkPlayAdapter extends BasePlatformAdapter {
       this.startAttempt(generation).catch((error: unknown) => {
         if (generation !== this.generation) return
         const message = error instanceof Error ? error.message : String(error)
+        log.warn('VK Play Live reconnect failed', { channel: this.channelSlug, error: message })
         this.emitStatus('error', message)
         if (!isAuthFailure(message)) this.scheduleReconnect(generation)
       })
