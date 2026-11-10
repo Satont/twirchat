@@ -39,6 +39,7 @@ export const commands = {
   'commands.hotkey.conflict': '“{name}” conflicts with “{other}” in {category}.',
 
   'commands.autocomplete.twirReload': 'Reload Twir commands for this chat',
+  'commands.autocomplete.jeetbotReload': 'Reload jeetbot commands for this chat',
   'commands.autocomplete.translateChannel':
     'Translate outgoing chat in this channel: <language|off>',
   'commands.autocomplete.translatePreview': 'Preview a translation of text locally',

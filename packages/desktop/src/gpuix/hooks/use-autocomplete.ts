@@ -12,22 +12,40 @@ import type {
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { emojiShortcodeSuggestions } from '../../services/emoji-shortcodes'
+import type { JeetbotCommand, JeetbotCommandTarget } from '../../services/jeetbot-commands'
 import { AUTO_TRANSLATION_COMMAND, isAutoTranslationCommand } from '../../services/translation'
 import type { TwirCommand, TwirCommandTarget } from '../../services/twir-commands'
 import {
+  mergeBotCommandMatches,
   parseToken,
   replaceToken,
+  type ArgumentSuggestion,
   type AutocompleteSuggestion,
   type CommandSuggestion,
   type EmoteSuggestion,
   type MentionSuggestion,
   type ParsedToken,
 } from '../../views/main/utils/autocompleteUtils'
+import {
+  argumentHintText,
+  argumentSignature,
+  argumentSummary,
+  currentArgument,
+  findBotCommand,
+  matchArgumentOptions,
+  matchSubcommands,
+  parseBotInvocation,
+  resolveArgumentPosition,
+  suggestedCommandName,
+  type SignaturePart,
+} from '../../views/main/utils/botCommandArguments'
 import { fuzzyFilter } from '../../views/main/utils/fuzzyFilter'
 import { sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import { useBackend } from '../backend/context'
 import {
+  isJeetbotReloadCommand,
   isTwirReloadCommand,
+  JEETBOT_RELOAD_COMMAND_NAME,
   TWIR_RELOAD_COMMAND_NAME,
   type CustomCommandDefinition,
 } from '../commands'
@@ -52,9 +70,24 @@ interface TwirSuggestions {
   revision: number
 }
 
+interface JeetbotSuggestions {
+  target: JeetbotCommandTarget
+  commands: readonly JeetbotCommand[]
+  revision: number
+}
+
+/** Signature help for the bot-command argument being typed. */
+export interface BotArgumentHint {
+  signature: SignaturePart[]
+  description: string
+}
+
 const EMPTY_MENTION_SUGGESTIONS: MentionSuggestion[] = []
 const EMPTY_EMOTE_SUGGESTIONS: EmoteSuggestion[] = []
-const EMPTY_TWIR_SUGGESTIONS: CommandSuggestion[] = []
+const EMPTY_BOT_SUGGESTIONS: CommandSuggestion[] = []
+const EMPTY_ARGUMENT_SUGGESTIONS: ArgumentSuggestion[] = []
+const EMPTY_JEETBOT_COMMANDS: readonly JeetbotCommand[] = []
+const MENTION_LIMIT = 15
 const EMPTY_PLUGIN_COMMANDS: readonly string[] = []
 
 type Translate = ReturnType<typeof useT>['t']
@@ -68,9 +101,68 @@ function twirReloadSuggestion(t: Translate): CommandSuggestion {
   }
 }
 
+function jeetbotReloadSuggestion(t: Translate): CommandSuggestion {
+  return {
+    type: 'command',
+    label: `/${JEETBOT_RELOAD_COMMAND_NAME}`,
+    insertText: `/${JEETBOT_RELOAD_COMMAND_NAME}`,
+    description: t('commands.autocomplete.jeetbotReload'),
+  }
+}
+
 function isComposerOnlyCommand(name: string): boolean {
   const invocation = `/${name}`
-  return isAutoTranslationCommand(invocation) || isTwirReloadCommand(invocation)
+  return (
+    isAutoTranslationCommand(invocation) ||
+    isTwirReloadCommand(invocation) ||
+    isJeetbotReloadCommand(invocation)
+  )
+}
+
+/** Recent chat authors, newest first, one entry per platform user. */
+function recentAuthors(
+  messages: readonly NormalizedChatMessage[],
+  aliasMap: AliasMap | undefined,
+): MentionSuggestion[] {
+  const seen = new Set<string>()
+  const result: MentionSuggestion[] = []
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (!msg) continue
+    const displayName = msg.author.displayName
+    const lower = displayName.toLowerCase()
+    const dedupKey = msg.author.id ? `${msg.platform}:${msg.author.id}` : `${msg.platform}:${lower}`
+    if (seen.has(dedupKey)) continue
+    seen.add(dedupKey)
+
+    const alias = msg.author.id ? aliasMap?.get(msg.platform)?.get(msg.author.id) : undefined
+    result.push({
+      type: 'mention',
+      label: alias || displayName,
+      insertLabel: displayName,
+      color: msg.author.color ?? null,
+      description: msg.author.username ? `@${msg.author.username} • ${msg.platform}` : msg.platform,
+      platform: msg.platform,
+      platformUserId: msg.author.id,
+      displayName,
+      username: msg.author.username,
+      avatarUrl: msg.author.avatarUrl,
+      currentAlias: alias,
+    })
+  }
+  return result
+}
+
+function jeetbotCommandSuggestion(name: string, command: JeetbotCommand): CommandSuggestion {
+  const summary = argumentSummary(command)
+  const description = sanitizeDisplayText(command.description)
+  return {
+    type: 'command',
+    label: `!${name}`,
+    insertText: `!${name}`,
+    description: summary && description ? `${summary} · ${description}` : summary || description,
+    source: 'jeetbot',
+  }
 }
 
 function commandSuggestions(t: Translate): CommandSuggestion[] {
@@ -184,6 +276,11 @@ export function useAutocomplete(params: {
   customCommands?: CustomCommandDefinition[]
   twirEnabled: boolean
   twirTargets?: readonly TwirCommandTarget[]
+  jeetbotEnabled: boolean
+  /** Twitch chat to complete jeetbot commands for; absent while not typing a `!command`. */
+  jeetbotChannelLogin?: string
+  /** Twitch user ID of the account this chat sends with: jeetbot lists what it may run. */
+  jeetbotUserId?: string
 }) {
   const { text, setText, messages, watchedChannel, statuses, aliasMap } = params
   const backend = useBackend()
@@ -197,6 +294,8 @@ export function useAutocomplete(params: {
 
   const [closedQuery, setClosedQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  // Set once the user moves through the list; until then an unprompted list selects nothing.
+  const [navigated, setNavigated] = useState(false)
 
   const token = useMemo((): ParsedToken => {
     const trimmed = text.trimStart()
@@ -213,8 +312,7 @@ export function useAutocomplete(params: {
     }
     return parseToken(text)
   }, [text, params.customCommands])
-  const mode = token.mode
-  const twirTargets = mode === 'twir-command' ? params.twirTargets : undefined
+  const twirTargets = token.mode === 'bot-command' ? params.twirTargets : undefined
   const [twirSuggestions, setTwirSuggestions] = useState<TwirSuggestions>()
   const [twirRevision, setTwirRevision] = useState(0)
   useEffect(() => {
@@ -240,29 +338,89 @@ export function useAutocomplete(params: {
       current = false
     }
   }, [backend, twirTargets, twirRevision])
+
+  const invocation = useMemo(() => parseBotInvocation(text), [text])
+  const jeetbotChannelLogin =
+    token.mode === 'bot-command' || invocation ? params.jeetbotChannelLogin : undefined
+  const jeetbotUserId = params.jeetbotUserId
+  const jeetbotTarget = useMemo(
+    (): JeetbotCommandTarget | undefined =>
+      jeetbotChannelLogin
+        ? { channelLogin: jeetbotChannelLogin, userId: jeetbotUserId }
+        : undefined,
+    [jeetbotChannelLogin, jeetbotUserId],
+  )
+  const [jeetbotSuggestions, setJeetbotSuggestions] = useState<JeetbotSuggestions>()
+  const [jeetbotRevision, setJeetbotRevision] = useState(0)
+  useEffect(() => {
+    if (!jeetbotTarget) return undefined
+    let current = true
+    const load = async () => {
+      const commands = await backend.api.getJeetbotCommands(jeetbotTarget)
+      if (!current) return
+      setJeetbotSuggestions({ target: jeetbotTarget, commands, revision: jeetbotRevision })
+      setSelectedIndex(0)
+    }
+    runUiTask(load())
+    return () => {
+      current = false
+    }
+  }, [backend, jeetbotTarget, jeetbotRevision])
+  const jeetbotCommands =
+    jeetbotTarget &&
+    jeetbotSuggestions?.target === jeetbotTarget &&
+    jeetbotSuggestions.revision === jeetbotRevision
+      ? jeetbotSuggestions.commands
+      : EMPTY_JEETBOT_COMMANDS
+  const argumentPosition = useMemo(() => {
+    if (!invocation) return null
+    const command = findBotCommand(jeetbotCommands, invocation.name)
+    return command ? resolveArgumentPosition(command, invocation) : null
+  }, [invocation, jeetbotCommands])
+  const activeArgument = argumentPosition ? currentArgument(argumentPosition) : undefined
+  const argumentHint = useMemo((): BotArgumentHint | null => {
+    if (!argumentPosition) return null
+    return {
+      signature: argumentSignature(argumentPosition),
+      description: sanitizeDisplayText(argumentHintText(argumentPosition)),
+    }
+  }, [argumentPosition])
+
   const twirCommands =
     twirTargets &&
     twirSuggestions?.targets === twirTargets &&
     twirSuggestions.revision === twirRevision
       ? twirSuggestions.commands
       : undefined
-  const twirQuery = mode === 'twir-command' ? token.query : undefined
+  const botQuery = token.mode === 'bot-command' ? token.query : undefined
   const twirMatches = useMemo(() => {
-    if (!twirCommands || twirQuery === undefined) return EMPTY_TWIR_SUGGESTIONS
+    if (!twirCommands || botQuery === undefined) return EMPTY_BOT_SUGGESTIONS
     const matches: CommandSuggestion[] = []
     for (const [name, command] of twirCommands) {
-      if (!name.startsWith(twirQuery)) continue
+      if (!name.startsWith(botQuery)) continue
       const label = `!${command.name}`
       matches.push({
         type: 'command',
         label,
         insertText: label,
         description: sanitizeDisplayText(command.description ?? ''),
+        source: 'twir',
       })
     }
     return matches
-  }, [twirCommands, twirQuery])
-  const completingCommand = mode === 'command'
+  }, [twirCommands, botQuery])
+  const jeetbotMatches = useMemo(() => {
+    if (botQuery === undefined) return EMPTY_BOT_SUGGESTIONS
+    return jeetbotCommands.flatMap((command) => {
+      const name = suggestedCommandName(command, botQuery)
+      return name === undefined ? [] : [jeetbotCommandSuggestion(name, command)]
+    })
+  }, [jeetbotCommands, botQuery])
+  const botCommandMatches = useMemo(
+    () => mergeBotCommandMatches(twirMatches, jeetbotMatches),
+    [twirMatches, jeetbotMatches],
+  )
+  const completingCommand = token.mode === 'command'
   const [pluginCommands, setPluginCommands] = useState(EMPTY_PLUGIN_COMMANDS)
   useEffect(() => {
     if (!completingCommand || !backend.plugins) return undefined
@@ -272,10 +430,9 @@ export function useAutocomplete(params: {
     refresh()
     return unsubscribe
   }, [backend, completingCommand])
-  const query = token.query
-  const queryKey = mode === 'command' ? `/${query}` : mode === 'twir-command' ? `!${query}` : query
-  const mentionCompletionActive = mode === 'mention' && query.length > 0
-  const emoteCompletionActive = mode === 'emote' && query.length > 0
+  const mentionCompletionActive = token.mode === 'mention' && token.query.length > 0
+  const emoteCompletionActive = token.mode === 'emote' && token.query.length > 0
+  const mentionArgumentActive = activeArgument?.type === 'mention'
   const connectedChannel = watchedChannel
     ? undefined
     : Object.values(statuses).find((info) => info?.channelLogin && info.status === 'connected')
@@ -283,41 +440,57 @@ export function useAutocomplete(params: {
   const channelId = watchedChannel?.channelSlug ?? connectedChannel?.channelLogin
 
   const mentionSuggestions = useMemo((): MentionSuggestion[] => {
-    if (!mentionCompletionActive) return EMPTY_MENTION_SUGGESTIONS
-    const seen = new Set<string>()
-    const result: MentionSuggestion[] = []
+    if (!mentionCompletionActive && !mentionArgumentActive) return EMPTY_MENTION_SUGGESTIONS
+    return recentAuthors(messages, aliasMap)
+  }, [mentionCompletionActive, mentionArgumentActive, messages, aliasMap])
 
-    // Newest authors first.
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i]
-      if (!msg) continue
-      const displayName = msg.author.displayName
-      const lower = displayName.toLowerCase()
-      const dedupKey = msg.author.id
-        ? `${msg.platform}:${msg.author.id}`
-        : `${msg.platform}:${lower}`
-      if (seen.has(dedupKey)) continue
-      seen.add(dedupKey)
-
-      const alias = msg.author.id ? aliasMap?.get(msg.platform)?.get(msg.author.id) : undefined
-      result.push({
-        type: 'mention',
-        label: alias || displayName,
-        insertLabel: displayName,
-        color: msg.author.color ?? null,
-        description: msg.author.username
-          ? `@${msg.author.username} • ${msg.platform}`
-          : msg.platform,
-        platform: msg.platform,
-        platformUserId: msg.author.id,
-        displayName,
-        username: msg.author.username,
-        avatarUrl: msg.author.avatarUrl,
-        currentAlias: alias,
-      })
+  const partialArgument = invocation?.partial ?? ''
+  const argumentSuggestions = useMemo((): ArgumentSuggestion[] => {
+    if (!argumentPosition) return EMPTY_ARGUMENT_SUGGESTIONS
+    if (argumentPosition.kind === 'subcommand') {
+      return matchSubcommands(argumentPosition.command.subcommands, partialArgument).map(
+        (subcommand) => ({
+          type: 'argument',
+          label: subcommand.name,
+          insertText: subcommand.name,
+          description: sanitizeDisplayText(subcommand.description),
+        }),
+      )
     }
-    return result
-  }, [mentionCompletionActive, messages, aliasMap])
+    if (!activeArgument) return EMPTY_ARGUMENT_SUGGESTIONS
+    if (activeArgument.type === 'mention') {
+      return fuzzyFilter(mentionSuggestions, partialArgument.replace(/^@/u, ''))
+        .slice(0, MENTION_LIMIT)
+        .map((mention) => ({
+          type: 'argument',
+          label: mention.label,
+          insertText: `@${mention.insertLabel}`,
+          description: mention.description ?? '',
+        }))
+    }
+    return matchArgumentOptions(activeArgument.options, partialArgument).map((option) => ({
+      type: 'argument',
+      label: sanitizeDisplayText(option.label),
+      insertText: option.value,
+      description: option.value === option.label ? '' : option.value,
+    }))
+  }, [argumentPosition, activeArgument, partialArgument, mentionSuggestions])
+
+  const mode: ParsedToken['mode'] = argumentSuggestions.length ? 'bot-argument' : token.mode
+  // An optional argument lists its values before anything is typed, but selects none of them:
+  // Enter still sends the bare command, arrows or Tab pick a value.
+  const unprompted =
+    mode === 'bot-argument' && !partialArgument && activeArgument?.required === false
+  const activeIndex = unprompted && !navigated ? -1 : selectedIndex
+  const query = token.query
+  const queryKey =
+    mode === 'bot-argument'
+      ? text
+      : mode === 'command'
+        ? `/${query}`
+        : mode === 'bot-command'
+          ? `!${query}`
+          : query
 
   const emoteSuggestions = useMemo((): EmoteSuggestion[] => {
     if (!emoteCompletionActive || !platform || !channelId) return EMPTY_EMOTE_SUGGESTIONS
@@ -336,7 +509,8 @@ export function useAutocomplete(params: {
 
   const suggestions = useMemo((): AutocompleteSuggestion[] => {
     if (!mode) return []
-    if (mode === 'twir-command') return twirMatches
+    if (mode === 'bot-argument') return argumentSuggestions
+    if (mode === 'bot-command') return botCommandMatches
     if (mode === 'command') {
       const custom: CommandSuggestion[] = (params.customCommands ?? [])
         .filter((command) => !isComposerOnlyCommand(command.name))
@@ -348,6 +522,7 @@ export function useAutocomplete(params: {
         }))
       const commands = [...custom, ...commandSuggestions(t)]
       if (params.twirEnabled) commands.push(twirReloadSuggestion(t))
+      if (params.jeetbotEnabled) commands.push(jeetbotReloadSuggestion(t))
       if (pluginCommands.length) {
         const reserved = new Set<string>([
           ...commands.map((command) => command.label.slice(1)),
@@ -355,6 +530,7 @@ export function useAutocomplete(params: {
           'w',
           'whisper',
           TWIR_RELOAD_COMMAND_NAME,
+          JEETBOT_RELOAD_COMMAND_NAME,
         ])
         for (const name of pluginCommands) {
           if (reserved.has(name)) continue
@@ -383,11 +559,13 @@ export function useAutocomplete(params: {
   }, [
     mode,
     query,
-    twirMatches,
+    argumentSuggestions,
+    botCommandMatches,
     mentionSuggestions,
     emoteSuggestions,
     params.customCommands,
     params.twirEnabled,
+    params.jeetbotEnabled,
     pluginCommands,
     emotePreferences.emojiCompletion,
     t,
@@ -402,6 +580,7 @@ export function useAutocomplete(params: {
       prevText.current = text
       setClosedQuery('')
       setSelectedIndex(0)
+      setNavigated(false)
     }
   }, [text])
 
@@ -416,33 +595,40 @@ export function useAutocomplete(params: {
     if (!s) return
     setText(s.type === 'command' ? `${s.insertText} ` : replaceToken(text, s))
     setSelectedIndex(0)
+    setNavigated(false)
     setClosedQuery('')
   }
 
   function moveUp(): void {
     if (suggestions.length === 0) return
-    setSelectedIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+    setSelectedIndex(activeIndex <= 0 ? suggestions.length - 1 : activeIndex - 1)
+    setNavigated(true)
   }
 
   function moveDown(): void {
     if (suggestions.length === 0) return
-    setSelectedIndex((i) => (i >= suggestions.length - 1 ? 0 : i + 1))
+    setSelectedIndex(activeIndex >= suggestions.length - 1 ? 0 : activeIndex + 1)
+    setNavigated(true)
   }
 
   function close(): void {
     setClosedQuery(queryKey)
     setSelectedIndex(0)
+    setNavigated(false)
   }
 
   return {
     suggestions,
     isOpen,
-    selectedIndex,
+    /** -1 while an unprompted list selects nothing: Enter then sends instead of completing. */
+    selectedIndex: activeIndex,
     mode,
     selectSuggestion,
     moveUp,
     moveDown,
     close,
+    argumentHint,
     invalidateTwirSuggestions: () => setTwirRevision((revision) => revision + 1),
+    invalidateJeetbotSuggestions: () => setJeetbotRevision((revision) => revision + 1),
   }
 }

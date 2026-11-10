@@ -146,6 +146,7 @@ export type SettingsSectionId =
   | 'moderation'
   | 'commands'
   | 'twir-integration'
+  | 'jeetbot-integration'
   | 'players'
   | 'plugins'
   | 'donations'
@@ -284,6 +285,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'twir bot command autocomplete completion suggestions команды бота автодополнение интеграция',
+  },
+  {
+    id: 'jeetbot-integration',
+    category: 'commands',
+    title: 'jeetbot Integration',
+    saveMode: 'section',
+    keywords:
+      'jeetbot jeet bot command arguments voice tts autocomplete completion suggestions команды бота аргументы голос озвучка автодополнение интеграция',
   },
   {
     id: 'plugins',

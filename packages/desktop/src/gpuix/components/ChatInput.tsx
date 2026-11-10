@@ -25,6 +25,7 @@ import type {
 } from '@twirchat/shared/types'
 import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react'
 
+import type { JeetbotCommandTarget } from '../../services/jeetbot-commands'
 import { normalizePrivateCommand } from '../../services/private-commands'
 import {
   parseAutoTranslationCommand,
@@ -48,6 +49,7 @@ import {
   runCommandActions,
   expandCustomCommand,
   parsePluginCommand,
+  JEETBOT_RELOAD_COMMAND_NAME,
   TWIR_RELOAD_COMMAND_NAME,
   type CommandContext,
 } from '../commands'
@@ -481,9 +483,30 @@ export function ChatInput(props: ChatInputProps) {
     return props.accounts.find((account) => account.platform === platform)?.platformUserId
   }
 
+  // jeetbot answers on Twitch only; its list depends on the account this pane sends with.
+  function jeetbotChannelLogin(): string | undefined {
+    if (props.watchedChannel)
+      return props.watchedChannel.platform === 'twitch'
+        ? props.watchedChannel.channelSlug
+        : undefined
+    return commandTargets.find((target) => target.platform === 'twitch')?.channelSlug
+  }
+  function jeetbotUserId(): string | undefined {
+    if (props.watchedChannel)
+      return watchedAccount?.platform === 'twitch' ? watchedAccount.platformUserId : undefined
+    return props.accounts.find((account) => account.platform === 'twitch')?.platformUserId
+  }
+  function jeetbotCommandTarget(): JeetbotCommandTarget | undefined {
+    const channelLogin = jeetbotChannelLogin()
+    return channelLogin ? { channelLogin, userId: jeetbotUserId() } : undefined
+  }
+
+  const completingBotCommand =
+    editorFocused && !historySearchOpen && text.trimStart().startsWith('!')
   const twirEnabled = props.settings.twirIntegrationEnabled !== false
-  const completingTwir =
-    editorFocused && !historySearchOpen && twirEnabled && text.trimStart().startsWith('!')
+  const completingTwir = completingBotCommand && twirEnabled
+  const jeetbotEnabled = props.settings.jeetbotIntegrationEnabled !== false
+  const jeetbotLogin = completingBotCommand && jeetbotEnabled ? jeetbotChannelLogin() : undefined
   const twirWatchedPlatform = completingTwir ? props.watchedChannel?.platform : undefined
   const twirWatchedSlug = completingTwir ? props.watchedChannel?.channelSlug : undefined
   const twirWatchedKickId =
@@ -521,17 +544,22 @@ export function ChatInput(props: ChatInputProps) {
     aliasMap,
     twirEnabled,
     twirTargets,
+    jeetbotEnabled,
+    jeetbotChannelLogin: jeetbotLogin,
+    jeetbotUserId: jeetbotLogin ? jeetbotUserId() : undefined,
     customCommands: customCommands.commands.filter(
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
     ),
   })
   const autocompleteSourceId = `autocomplete:${useId()}`
   const autocompleteActive = editorFocused && autocomplete.isOpen && !historySearch
+  // Enter completes only a selected suggestion; with none selected it sends the message.
+  const autocompleteSelects = autocomplete.isOpen && autocomplete.selectedIndex >= 0
   const autocompleteKey = useEffectEvent((key: 'up' | 'down' | 'enter' | 'tab' | 'escape') => {
     if (key === 'up') autocomplete.moveUp()
     else if (key === 'down') autocomplete.moveDown()
     else if (key === 'escape') autocomplete.close()
-    else autocomplete.selectSuggestion(autocomplete.selectedIndex)
+    else autocomplete.selectSuggestion(Math.max(0, autocomplete.selectedIndex))
   })
   useEffect(() => {
     if (!autocompleteActive) return undefined
@@ -543,14 +571,22 @@ export function ChatInput(props: ChatInputProps) {
           ? [
               { id: 'previous', keys: ['up'], handler: () => autocompleteKey('up') },
               { id: 'next', keys: ['down'], handler: () => autocompleteKey('down') },
-              { id: 'select-enter', keys: ['enter'], handler: () => autocompleteKey('enter') },
+              ...(autocompleteSelects
+                ? [
+                    {
+                      id: 'select-enter',
+                      keys: ['enter'],
+                      handler: () => autocompleteKey('enter'),
+                    },
+                  ]
+                : []),
               { id: 'select-tab', keys: ['tab'], handler: () => autocompleteKey('tab') },
               { id: 'dismiss', keys: ['escape'], handler: () => autocompleteKey('escape') },
             ]
           : [],
       'beforeCustom',
     )
-  }, [autocompleteActive, windowScope, autocompleteSourceId])
+  }, [autocompleteActive, autocompleteSelects, windowScope, autocompleteSourceId])
 
   // Validate the complete expansion before executing its first action.
   function privateAction(command: { text: string; recipient: string }): PreparedAction {
@@ -778,6 +814,23 @@ export function ChatInput(props: ChatInputProps) {
     }
   }
 
+  function prepareJeetbotReload(): PreparedAction {
+    if (!jeetbotEnabled) throw new Error(t('composer.error.jeetbotDisabled'))
+    const target = jeetbotCommandTarget()
+    if (!target) throw new Error(t('composer.error.jeetbotNoTarget'))
+    return async () => {
+      try {
+        await backend.api.getJeetbotCommands(target, { refresh: true })
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        throw new Error(t('composer.error.jeetbotReload', { error: detail }), { cause: error })
+      }
+      if (!mounted.current) return
+      autocomplete.invalidateJeetbotSuggestions()
+      showNotice('success', t('composer.notice.jeetbotReloaded'))
+    }
+  }
+
   async function prepareOutput(
     output: string,
     languages: ReadonlyMap<string, string>,
@@ -851,6 +904,8 @@ export function ChatInput(props: ChatInputProps) {
             return onSearch ? () => onSearch(local.argument) : undefined
           case TWIR_RELOAD_COMMAND_NAME:
             return prepareTwirReload()
+          case JEETBOT_RELOAD_COMMAND_NAME:
+            return prepareJeetbotReload()
         }
       })()
       if (!action) throw new Error(t('composer.error.commandUnavailable'))
@@ -1555,6 +1610,42 @@ export function ChatInput(props: ChatInputProps) {
           />
         ) : null}
 
+        {editorFocused && autocomplete.argumentHint ? (
+          <div
+            testId="bot-argument-hint"
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              columnGap: 6,
+              rowGap: 2,
+              minWidth: 0,
+              paddingLeft: 2,
+              paddingRight: 2,
+              paddingBottom: 4,
+            }}
+          >
+            {autocomplete.argumentHint.signature.map((part, index) => (
+              <Text
+                key={`${index}:${part.text}`}
+                style={{
+                  fontSize: 12,
+                  fontWeight: part.active ? 600 : 400,
+                  color: part.active ? theme.link : theme.text2,
+                }}
+              >
+                {part.text}
+              </Text>
+            ))}
+            {autocomplete.argumentHint.description ? (
+              <Text style={{ flexShrink: 1, minWidth: 0, fontSize: 12, color: theme.text2 }}>
+                {`— ${autocomplete.argumentHint.description}`}
+              </Text>
+            ) : null}
+          </div>
+        ) : null}
+
         {commandError || showLength ? (
           <div
             style={{
@@ -1689,7 +1780,7 @@ export function ChatInput(props: ChatInputProps) {
               setCommandError('')
             }}
             {...composerFocus}
-            onSubmit={autocomplete.isOpen ? undefined : () => void send()}
+            onSubmit={autocompleteSelects ? undefined : () => void send()}
             onKeyDown={(event) => {
               if (
                 (event.key === 'up' || event.key === 'down') &&
@@ -1743,11 +1834,11 @@ export function ChatInput(props: ChatInputProps) {
               } else if (event.key === 'down') {
                 event.preventDefault()
                 autocomplete.moveDown()
-              } else if (event.key === 'enter' || event.key === 'tab') {
+              } else if (event.key === 'tab' || (event.key === 'enter' && autocompleteSelects)) {
                 // Without onSubmit Enter would insert a newline, and Tab
                 // would move focus — both must only pick the suggestion.
                 event.preventDefault()
-                autocomplete.selectSuggestion(autocomplete.selectedIndex)
+                autocomplete.selectSuggestion(Math.max(0, autocomplete.selectedIndex))
               } else if (event.key === 'escape') {
                 autocomplete.close()
               }

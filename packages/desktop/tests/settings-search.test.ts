@@ -16,7 +16,7 @@ const ids = (query: string) => searchSettings(query).sections.map((section) => s
 
 describe('settings search index', () => {
   test('every existing section has a unique reachable category and a save contract', () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(21)
+    expect(SETTINGS_SECTIONS).toHaveLength(22)
     expect(new Set(SETTINGS_SECTIONS.map((section) => section.id)).size).toBe(
       SETTINGS_SECTIONS.length,
     )
@@ -67,6 +67,7 @@ describe('settings search index', () => {
       ['Quick reasons', 'moderation'],
       ['command template', 'commands'],
       ['Twir autocomplete', 'twir-integration'],
+      ['jeetbot аргументы', 'jeetbot-integration'],
       ['plugin manifest', 'plugins'],
       ['DonationAlerts', 'donations'],
       ['DonatePay API key', 'donations'],

@@ -96,6 +96,12 @@ import {
   type ImageUploadResult,
 } from '../../services/image-uploader'
 import {
+  createJeetbotCommandsClient,
+  type JeetbotCommand,
+  type JeetbotCommandsOptions,
+  type JeetbotCommandTarget,
+} from '../../services/jeetbot-commands'
+import {
   resolveMentionUser,
   type MentionUser,
   type MentionUserRequest,
@@ -352,6 +358,10 @@ export interface DesktopApi {
     target: TwirCommandTarget,
     options?: TwirCommandsOptions,
   ): Promise<readonly TwirCommand[]>
+  getJeetbotCommands(
+    target: JeetbotCommandTarget,
+    options?: JeetbotCommandsOptions,
+  ): Promise<readonly JeetbotCommand[]>
   getUserAliases(): Promise<UserAlias[]>
   setUserAlias(params: { platform: Platform; platformUserId: string; alias: string }): Promise<void>
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
@@ -959,6 +969,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   return {
     obsRemote: obsRemoteApi,
     getTwirCommands: createTwirCommandsClient(),
+    getJeetbotCommands: createJeetbotCommandsClient(),
     getTwitchActivities: async (params) => {
       const snapshot = await requestTwitchActivitiesSnapshot(params)
       ctx.twitchActivityRefresh?.observeSnapshot(snapshot)

@@ -34,6 +34,14 @@ export function isTwirReloadCommand(text: string): boolean {
   return twirReloadCommandPattern.test(text)
 }
 
+export const JEETBOT_RELOAD_COMMAND_NAME = 'jeetreload'
+
+const jeetbotReloadCommandPattern = new RegExp(`^/${JEETBOT_RELOAD_COMMAND_NAME}(?=\\s|$)`, 'iu')
+
+export function isJeetbotReloadCommand(text: string): boolean {
+  return jeetbotReloadCommandPattern.test(text)
+}
+
 export function parsePluginCommand(text: string): { name: string; args: string[] } | null {
   const [command, ...args] = text.trim().split(/\s+/u)
   if (!command?.startsWith('/') || command.length === 1) return null
@@ -245,7 +253,9 @@ export function expandCustomCommand(
     if (text.length > MAX_EXPANDED_LENGTH) throw new Error(t('commands.error.expandedTooLong'))
     const invocationText = text.trim()
     const candidates = (
-      isAutoTranslationCommand(invocationText) || isTwirReloadCommand(invocationText)
+      isAutoTranslationCommand(invocationText) ||
+      isTwirReloadCommand(invocationText) ||
+      isJeetbotReloadCommand(invocationText)
         ? []
         : definitions
     )
