@@ -50,8 +50,7 @@ git fetch --prune <base-remote>
 git rebase <base-remote>/<base-branch>
 ```
 
-- Resolve conflicts, then continue with `git rebase --continue`. If a conflict is not
-  clearly resolvable, abort with `git rebase --abort` and ask the user.
+- Resolve conflicts using the policy below, then continue with `git rebase --continue`.
 - Confirm the branch now sits on the latest base and contains only intended commits:
 
 ```bash
@@ -61,6 +60,30 @@ git diff --stat <base-remote>/<base-branch>...HEAD
 
 - If the branch is shared with other people, or the user did not ask for history rewriting,
   ask before rebasing. Never rebase or force-push `main`, `gpuix`, or someone else's branch.
+
+### Conflict resolution policy
+
+The canonical base branch is the source of truth. Upstream changes take priority, and the
+feature branch is integrated on top of them — never the other way around.
+
+Rules:
+
+- Treat the canonical base branch as the source of truth for existing code, architecture,
+  APIs, and conventions.
+- Preserve upstream changes whenever both branches modify the same code.
+- Reapply feature branch functionality on top of upstream changes.
+- Do not blindly choose `--ours` or `--theirs`. During a rebase their meaning is inverted:
+  `--ours` is the upstream base commit, `--theirs` is the feature commit being replayed.
+- Understand the intent of both conflicting changes before resolving the conflict.
+- Never silently discard feature branch functionality.
+- If the correct resolution is ambiguous, abort with `git rebase --abort` and ask the user.
+
+After resolving conflicts:
+
+- Review the resolved diff before `git rebase --continue` (`git diff` for staged hunks, and
+  `git diff <base-remote>/<base-branch>...HEAD` once the rebase finishes).
+- Ensure both upstream changes and the intended feature functionality are preserved.
+- Run the relevant tests from step 3 before continuing.
 
 ## 3. Rerun checks after the rebase
 
@@ -145,6 +168,8 @@ do not disable the check or drop coverage to make the PR pass.
 ## Guardrails
 
 - Update the base branch and rebase before opening or updating the PR.
+- Resolve rebase conflicts in favor of the canonical base branch, then reapply the feature
+  branch functionality on top.
 - Keep the PR head branch equal to the reviewed local branch; do not push unrelated commits.
 - Never commit secrets, generated artifacts, or benchmark output that is not meant to be
   tracked.
