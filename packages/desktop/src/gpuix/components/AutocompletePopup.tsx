@@ -6,16 +6,20 @@
 import { useGpuixRequired, type PublicInstance } from '@gpuix/react'
 import { useCallback, useEffect, useRef } from 'react'
 
-import type { ParsedToken } from '../../views/main/utils/autocompleteUtils'
+import type { BotCommandSource, ParsedToken } from '../../views/main/utils/autocompleteUtils'
 import type { AutocompleteSuggestion } from '../hooks/use-autocomplete'
 import { nativeWindow } from '../native-window'
 import { useTheme } from '../theme-context'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
+const BOT_SOURCE_LABELS: Record<BotCommandSource, string> = { twir: 'Twir', jeetbot: 'jeetbot' }
+
 function suggestionKey(suggestion: AutocompleteSuggestion): string {
   if (suggestion.type === 'mention') return `${suggestion.label}:${suggestion.insertLabel}`
-  if (suggestion.type === 'command') return `${suggestion.label}:${suggestion.insertText}`
+  if (suggestion.type === 'command')
+    return `${suggestion.label}:${suggestion.insertText}:${suggestion.source ?? ''}`
+  if (suggestion.type === 'argument') return `${suggestion.label}:${suggestion.insertText}`
   return suggestion.label
 }
 
@@ -229,6 +233,23 @@ export function AutocompletePopup({
                 >
                   {suggestion.description}
                 </Text>
+                {suggestion.type === 'command' && suggestion.source ? (
+                  <Text
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: theme.text2,
+                      paddingLeft: 4,
+                      paddingRight: 4,
+                      borderRadius: 3,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                    }}
+                  >
+                    {BOT_SOURCE_LABELS[suggestion.source]}
+                  </Text>
+                ) : null}
               </>
             )}
           </div>

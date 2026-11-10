@@ -177,6 +177,8 @@ export const notices = {
   'notices.twirCommands.channelLookup': 'Twir channel lookup: HTTP {status}.',
   'notices.twirCommands.commandLookup': 'Twir command lookup: HTTP {status}.',
   'notices.twirCommands.invalidResponse': 'Twir returned an invalid response.',
+  'notices.jeetbotCommands.lookup': 'jeetbot command lookup: HTTP {status}.',
+  'notices.jeetbotCommands.invalidResponse': 'jeetbot returned an invalid response.',
 
   'notices.seventv.setChanged': 'Active emote set changed to «{name}»',
   'notices.seventv.setRenamed': 'Emote set «{oldName}» renamed to «{newName}»',

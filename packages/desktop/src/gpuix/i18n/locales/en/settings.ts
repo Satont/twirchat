@@ -61,6 +61,7 @@ export const settings = {
   'settings.section.commands': 'Custom Commands',
   'settings.section.commands.desc': 'Create reusable commands and message actions',
   'settings.section.twir-integration': 'Twir Integration',
+  'settings.section.jeetbot-integration': 'jeetbot Integration',
   'settings.section.players': 'Stream Players',
   'settings.section.players.desc': 'Open streams in a browser, external player or Streamlink',
   'settings.section.plugins': 'Plugins',
@@ -105,6 +106,9 @@ export const settings = {
 
   'settings.twir.suggest': 'Suggest Twir commands',
   'settings.twir.suggestHint': 'Show public commands for the selected chat when you type !',
+  'settings.jeetbot.suggest': 'Suggest jeetbot commands',
+  'settings.jeetbot.suggestHint':
+    'Show jeetbot commands and their arguments for the selected Twitch chat when you type !',
 
   'settings.selfPing.enable': 'Enable highlights',
   'settings.selfPing.enableHint': 'Highlight messages mentioning you',

@@ -64,8 +64,8 @@ describe('parseToken', () => {
   })
 
   test('detects leading Twir command tokens with a case-insensitive query', () => {
-    expect(parseToken('!')).toEqual({ mode: 'twir-command', query: '' })
-    expect(parseToken('  !HEL')).toEqual({ mode: 'twir-command', query: 'hel' })
+    expect(parseToken('!')).toEqual({ mode: 'bot-command', query: '' })
+    expect(parseToken('  !HEL')).toEqual({ mode: 'bot-command', query: 'hel' })
   })
 
   test('leaves arguments and later bang tokens to ordinary chat completion', () => {

@@ -46,6 +46,7 @@ export const ruCommands = {
   'commands.hotkey.conflict': '«{name}» конфликтует с «{other}» в категории {category}.',
 
   'commands.autocomplete.twirReload': 'Перезагрузить команды Twir для этого чата',
+  'commands.autocomplete.jeetbotReload': 'Перезагрузить команды jeetbot для этого чата',
   'commands.autocomplete.translateChannel':
     'Переводить исходящие сообщения в этом канале: <язык|off>',
   'commands.autocomplete.translatePreview': 'Предпросмотр перевода текста локально',

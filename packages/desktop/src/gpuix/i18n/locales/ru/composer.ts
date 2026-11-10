@@ -42,6 +42,7 @@ export const ruComposer = {
 
   'composer.notice.twirReloaded': 'Команды Twir перезагружены.',
   'composer.notice.twirPartial': 'Команды Twir перезагружены для некоторых каналов.',
+  'composer.notice.jeetbotReloaded': 'Команды jeetbot перезагружены.',
 
   'composer.error.whisperNoAccount': 'Подключите аккаунт Twitch, чтобы отправить шёпот.',
   'composer.error.whispersUnavailable': 'Шёпоты недоступны в этом чате.',
@@ -57,6 +58,10 @@ export const ruComposer = {
     'Откройте отслеживаемый канал или выберите подключённый чат, чтобы перезагрузить команды Twir.',
   'composer.error.twirReload':
     'Не удалось перезагрузить команды Twir ({failures}). Попробуйте /twirreload ещё раз.',
+  'composer.error.jeetbotDisabled':
+    'Интеграция jeetbot отключена. Включите её в разделе «Настройки → Команды».',
+  'composer.error.jeetbotNoTarget': 'Откройте Twitch-чат, чтобы перезагрузить команды jeetbot.',
+  'composer.error.jeetbotReload': 'Не удалось перезагрузить команды jeetbot: {error}',
   'composer.error.autoTranslateOnePlatform':
     'Выберите одну платформу перед настройкой автоперевода.',
   'composer.error.usage': 'Использование: /{command}',

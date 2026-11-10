@@ -267,6 +267,7 @@ export interface AppSettings {
   /** Auto-check for updates on startup */
   autoCheckUpdates?: boolean
   twirIntegrationEnabled?: boolean
+  jeetbotIntegrationEnabled?: boolean
   /** Chat layout configuration (combined / split) */
   chatLayout?: ChatLayout
   /** Self-ping highlight settings */
@@ -326,6 +327,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   themeMode: 'dark',
   twirIntegrationEnabled: true,
+  jeetbotIntegrationEnabled: true,
   chatLayout: {
     version: 1,
     mode: 'combined',

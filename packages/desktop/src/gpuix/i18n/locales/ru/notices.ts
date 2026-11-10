@@ -184,6 +184,8 @@ export const ruNotices = {
   'notices.twirCommands.channelLookup': 'Поиск канала Twir: HTTP {status}.',
   'notices.twirCommands.commandLookup': 'Поиск команд Twir: HTTP {status}.',
   'notices.twirCommands.invalidResponse': 'Twir вернул некорректный ответ.',
+  'notices.jeetbotCommands.lookup': 'Поиск команд jeetbot: HTTP {status}.',
+  'notices.jeetbotCommands.invalidResponse': 'jeetbot вернул некорректный ответ.',
 
   'notices.seventv.setChanged': 'Активный набор эмоутов изменён на «{name}»',
   'notices.seventv.setRenamed': 'Набор эмоутов «{oldName}» переименован в «{newName}»',

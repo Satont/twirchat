@@ -1,6 +1,6 @@
 import type { Platform } from '@twirchat/shared/types'
 
-import { TWIR_RELOAD_COMMAND_NAME } from '../commands'
+import { JEETBOT_RELOAD_COMMAND_NAME, TWIR_RELOAD_COMMAND_NAME } from '../commands'
 import type { Store } from './create-store'
 import { createStore } from './create-store'
 import { persistentResource } from './persistent-resources'
@@ -96,6 +96,7 @@ type LocalCommandName =
   | 'mentions'
   | 'search'
   | typeof TWIR_RELOAD_COMMAND_NAME
+  | typeof JEETBOT_RELOAD_COMMAND_NAME
 
 export interface ComposerCommand {
   name: LocalCommandName
@@ -110,6 +111,7 @@ const LOCAL_COMMANDS = new Set<LocalCommandName>([
   'mentions',
   'search',
   TWIR_RELOAD_COMMAND_NAME,
+  JEETBOT_RELOAD_COMMAND_NAME,
 ])
 
 function isLocalCommand(value: string): value is LocalCommandName {

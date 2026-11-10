@@ -66,6 +66,7 @@ export const ruSettings = {
   'settings.section.commands': 'Свои команды',
   'settings.section.commands.desc': 'Создавайте команды и действия для сообщений',
   'settings.section.twir-integration': 'Интеграция с Twir',
+  'settings.section.jeetbot-integration': 'Интеграция с jeetbot',
   'settings.section.players': 'Плееры трансляций',
   'settings.section.players.desc':
     'Открывайте трансляции в браузере, внешнем плеере или Streamlink',
@@ -110,6 +111,9 @@ export const ruSettings = {
 
   'settings.twir.suggest': 'Подсказывать команды Twir',
   'settings.twir.suggestHint': 'Показывать публичные команды выбранного чата при вводе !',
+  'settings.jeetbot.suggest': 'Подсказывать команды jeetbot',
+  'settings.jeetbot.suggestHint':
+    'Показывать команды jeetbot и их аргументы для выбранного Twitch-чата при вводе !',
 
   'settings.selfPing.enable': 'Включить подсветку',
   'settings.selfPing.enableHint': 'Подсвечивать сообщения с упоминанием вас',

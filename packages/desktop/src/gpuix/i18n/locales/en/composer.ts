@@ -40,6 +40,7 @@ export const composer = {
 
   'composer.notice.twirReloaded': 'Twir commands reloaded.',
   'composer.notice.twirPartial': 'Twir commands reloaded for some channels.',
+  'composer.notice.jeetbotReloaded': 'jeetbot commands reloaded.',
 
   'composer.error.whisperNoAccount': 'Connect a Twitch account before sending a whisper.',
   'composer.error.whispersUnavailable': 'Whispers are unavailable in this chat.',
@@ -54,6 +55,10 @@ export const composer = {
     'Open a watched channel or select a connected chat target to reload Twir commands.',
   'composer.error.twirReload':
     'Could not reload Twir commands ({failures}). Try /twirreload again.',
+  'composer.error.jeetbotDisabled':
+    'jeetbot integration is disabled. Enable it in Settings → Commands.',
+  'composer.error.jeetbotNoTarget': 'Open a Twitch chat to reload jeetbot commands.',
+  'composer.error.jeetbotReload': 'Could not reload jeetbot commands: {error}',
   'composer.error.autoTranslateOnePlatform':
     'Select one platform before configuring auto-translation.',
   'composer.error.usage': 'Usage: /{command}',

@@ -97,6 +97,7 @@ type AppSettingsSectionId = Extract<
   | 'overlay'
   | 'shortcuts'
   | 'twir-integration'
+  | 'jeetbot-integration'
   | 'moderation'
 >
 
@@ -107,6 +108,7 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'overlay',
   'shortcuts',
   'twir-integration',
+  'jeetbot-integration',
   'moderation',
 ]
 
@@ -133,6 +135,8 @@ function appSectionFields(
       return { hotkeys: { ...source.hotkeys } }
     case 'twir-integration':
       return { twirIntegrationEnabled: source.twirIntegrationEnabled }
+    case 'jeetbot-integration':
+      return { jeetbotIntegrationEnabled: source.jeetbotIntegrationEnabled }
     case 'moderation':
       return { showModerationRail: source.showModerationRail }
     default:
@@ -891,6 +895,27 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
                     {appFooter('twir-integration')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="jeetbot-integration"
+                    title={t('settings.section.jeetbot-integration')}
+                  >
+                    <SettingsRow
+                      first
+                      last
+                      label={t('settings.jeetbot.suggest')}
+                      hint={t('settings.jeetbot.suggestHint')}
+                    >
+                      <Switch
+                        checked={local.jeetbotIntegrationEnabled !== false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.jeetbotIntegrationEnabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('jeetbot-integration')}
                   </SettingsSection>
                   <SettingsSection
                     id="players"
