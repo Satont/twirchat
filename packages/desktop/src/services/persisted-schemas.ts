@@ -44,7 +44,7 @@ import { t } from '../gpuix/i18n'
 import { normalizePaletteColor } from '../shared/theme-palette'
 
 export const platformSchema = z.toZod<Platform>()(
-  z.union([z.literal('twitch'), z.literal('youtube'), z.literal('kick')]),
+  z.union([z.literal('twitch'), z.literal('youtube'), z.literal('kick'), z.literal('vkplay')]),
 )
 export const badgeSchema = z.toZod<Badge>()(
   z.object({

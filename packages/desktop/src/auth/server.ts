@@ -7,6 +7,7 @@ import type { WebviewSender } from '../shared/rpc'
 import { AccountStore } from '../store/account-store'
 import { ChannelStore } from '../store/channel-store'
 import { handleKickCallback } from './kick'
+import { handleVkPlayToken, vkPlayCallbackPage } from './vkplay'
 import { handleYouTubeCallback } from './youtube'
 
 const log = logger('auth-server')
@@ -58,6 +59,14 @@ export function startAuthServer(): void {
         if (req.method === 'GET' && url.pathname === '/auth/kick/callback') {
           const result = await handleKickCallback(url)
           await finishDesktopSignIn('kick', { ...result.user, channelSlug: result.channelSlug })
+          return result.response
+        }
+        if (url.pathname === '/auth/vkplay/callback' && req.method === 'GET') {
+          return vkPlayCallbackPage()
+        }
+        if (url.pathname === '/auth/vkplay/callback' && req.method === 'POST') {
+          const result = await handleVkPlayToken(new URLSearchParams(await req.text()))
+          await finishDesktopSignIn('vkplay', { ...result.user, channelSlug: result.channelSlug })
           return result.response
         }
       } catch (err) {

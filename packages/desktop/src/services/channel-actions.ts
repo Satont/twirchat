@@ -69,6 +69,8 @@ export function channelPlayerUrl(platform: Platform, channelSlug: string): strin
     url = `https://www.twitch.tv/${encodeURIComponent(channel)}`
   else if (platform === 'kick' && /^[a-z0-9_-]{1,50}$/i.test(channel))
     url = `https://kick.com/${encodeURIComponent(channel)}`
+  else if (platform === 'vkplay' && /^[a-z0-9_-]{3,50}$/i.test(channel))
+    url = `https://live.vkvideo.ru/${encodeURIComponent(channel)}`
   else if (platform === 'youtube' && /^UC[A-Za-z0-9_-]{22}$/.test(channel))
     url = `https://www.youtube.com/channel/${channel}/live`
   else if (platform === 'youtube' && /^@?[\p{L}\p{N}._-]{1,100}$/u.test(channel))

@@ -110,6 +110,7 @@ export const ruApp = {
   'app.addChannel.pluginPlaceholder': 'Идентификатор канала {name}',
   'app.addChannel.twitchPlaceholder': 'Название канала Twitch',
   'app.addChannel.kickPlaceholder': 'Название канала Kick',
+  'app.addChannel.vkplayPlaceholder': 'Название канала VK Play Live',
   'app.addChannel.youtubePlaceholder': 'Хэндл или ID канала YouTube',
   'app.addChannel.pluginPlatforms': 'Платформы плагинов',
   'app.addChannel.usePlugin': 'Использовать {name}',

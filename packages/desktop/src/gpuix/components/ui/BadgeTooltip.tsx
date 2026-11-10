@@ -31,7 +31,9 @@ function badgeSource(badge: Badge, platform?: Platform): string {
           ? 'YouTube'
           : platform === 'kick'
             ? 'Kick'
-            : ''
+            : platform === 'vkplay'
+              ? 'VK Play Live'
+              : ''
   }
 }
 

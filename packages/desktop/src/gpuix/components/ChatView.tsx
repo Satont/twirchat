@@ -5,7 +5,6 @@ import { DONATION_PROVIDER_LABELS, donationChannelKey } from '@twirchat/shared/d
  * onto GPUIX's native <virtual-list> (alignment="bottom" followTail replaces
  * the virtua VList + manual at-bottom tracking).
  */
-import type { ChannelStatus } from '@twirchat/shared/protocol'
 import type {
   Account,
   NormalizedChatMessage,
@@ -153,13 +152,24 @@ function platformName(platform: string): string {
       return 'YouTube'
     case 'kick':
       return 'Kick'
+    case 'vkplay':
+      return 'VK Play Live'
     default:
       return platform
   }
 }
 
+interface HeaderChannel {
+  platform: Platform
+  channelLogin: string
+  isLive: boolean
+  title?: string
+  viewerCount?: number
+  categoryName?: string
+}
+
 /** Live channel chip in the home header, with the rich hover tooltip. */
-function HeaderChannelChip({ channel: ch }: { channel: ChannelStatus }) {
+function HeaderChannelChip({ channel: ch }: { channel: HeaderChannel }) {
   const theme = useTheme()
   const font = useFont()
   const { t } = useT()
@@ -361,7 +371,7 @@ export function ChatView({
     watchedChannel || layoutTabId !== 'home' ? EMPTY_DONATION_FEED : feed,
   )
   const sharedDonationKey =
-    watchedChannel && watchedChannel.platform !== 'youtube'
+    watchedChannel && watchedChannel.platform !== 'youtube' && watchedChannel.platform !== 'vkplay'
       ? donationChannelKey({
           platform: watchedChannel.platform,
           channel: watchedChannel.channelSlug,
@@ -984,7 +994,7 @@ export function ChatView({
       watchedChannelId && watchedChannel
         ? chatAccount
         : accounts.find((candidate) => candidate.platform === platform)
-    if (!account || (platform !== 'twitch' && platform !== 'kick')) {
+    if (!account || (platform !== 'twitch' && platform !== 'kick' && platform !== 'vkplay')) {
       console.warn(`[chat] cannot prepare ${platform} optimistic message: no authenticated account`)
       return
     }
@@ -1087,7 +1097,7 @@ export function ChatView({
 
   const hasAnyConnection =
     pluginFeed.channels.length > 0 ||
-    (['twitch', 'youtube', 'kick'] satisfies Platform[]).some(
+    (['twitch', 'youtube', 'kick', 'vkplay'] satisfies Platform[]).some(
       (platform) => statuses[platform]?.status === 'connected',
     )
 

@@ -16,10 +16,13 @@ import { PlatformIcon } from './ui/Icon'
 import { RemoteImage } from './ui/RemoteImage'
 import { Text } from './ui/Text'
 
-const platforms: Platform[] = ['twitch', 'youtube', 'kick']
+const platforms: Platform[] = ['twitch', 'youtube', 'kick', 'vkplay']
 
 function platformName(platform: Platform): string {
-  return platform === 'twitch' ? 'Twitch' : platform === 'youtube' ? 'YouTube' : 'Kick'
+  if (platform === 'twitch') return 'Twitch'
+  if (platform === 'youtube') return 'YouTube'
+  if (platform === 'vkplay') return 'VK Play Live'
+  return 'Kick'
 }
 
 function statusLabel(s: PlatformStatusInfo | undefined, t: (key: MessageKey) => string): string {

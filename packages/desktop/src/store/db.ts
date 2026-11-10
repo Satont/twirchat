@@ -85,14 +85,30 @@ function runMigrations(db: Database): void {
   `)
 
   db.transaction(() => {
+    const activeAccounts = db
+      .query<{ sql: string | null }, []>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'active_accounts'",
+      )
+      .get()
+    if (activeAccounts?.sql && !activeAccounts.sql.includes("'vkplay'")) {
+      db.run(`CREATE TABLE active_accounts_vkplay (
+        platform TEXT PRIMARY KEY CHECK (platform IN ('twitch', 'youtube', 'kick', 'vkplay')),
+        account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL
+      )`)
+      db.run(
+        'INSERT INTO active_accounts_vkplay(platform, account_id) SELECT platform, account_id FROM active_accounts',
+      )
+      db.run('DROP TABLE active_accounts')
+      db.run('ALTER TABLE active_accounts_vkplay RENAME TO active_accounts')
+    }
     db.run(`CREATE TABLE IF NOT EXISTS active_accounts (
-      platform TEXT PRIMARY KEY CHECK (platform IN ('twitch', 'youtube', 'kick')),
+      platform TEXT PRIMARY KEY CHECK (platform IN ('twitch', 'youtube', 'kick', 'vkplay')),
       account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL
     )`)
     // Seed only missing selections. A saved NULL deliberately means anonymous.
     db.run(`INSERT OR IGNORE INTO active_accounts(platform, account_id)
       SELECT platform, id FROM accounts AS candidate
-      WHERE platform IN ('twitch', 'youtube', 'kick') AND id = (
+      WHERE platform IN ('twitch', 'youtube', 'kick', 'vkplay') AND id = (
         SELECT id FROM accounts WHERE platform = candidate.platform
         ORDER BY updated_at DESC, created_at DESC, id ASC LIMIT 1
       )`)

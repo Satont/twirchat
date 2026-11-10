@@ -101,10 +101,15 @@ The development-only injection server defaults to 55824 (`DEV_SERVER_PORT`).
   development.
 - **Kick** uses the existing backend OAuth configuration. Register
   `http://localhost:45821/auth/kick/callback` for production and port 55821 for development.
+- **VK Play Live** uses ImplicitFlow with a public OAuth client, so no app secret is shipped
+  or kept on the backend. Set `TWIRCHAT_VKPLAY_CLIENT_ID` for source runs and release builds,
+  and register `http://127.0.0.1:45821/auth/vkplay/callback` (port 55821 in development) in
+  the [VK Video Live developer cabinet](https://dev.live.vkvideo.ru/). Implicit tokens cannot
+  be refreshed; when one expires, sign in again.
 
-For GitHub release builds, set all three `TWIRCHAT_` OAuth values above as repository
-secrets in **Settings → Secrets and variables → Actions → Secrets**. The optional
-`TWIRCHAT_DONATIONALERTS_CLIENT_ID` is also configured as a repository secret.
+For GitHub release builds, set the `TWIRCHAT_` OAuth values above as repository secrets in
+**Settings → Secrets and variables → Actions → Secrets**. `TWIRCHAT_VKPLAY_CLIENT_ID` and
+`TWIRCHAT_DONATIONALERTS_CLIENT_ID` are optional.
 
 The first launch after upgrading signs out all saved Twitch accounts and clears their stored
 Twitch web sessions. Sign in again through Device Code Grant. The reset runs once per local

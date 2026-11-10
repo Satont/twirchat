@@ -3,6 +3,8 @@ import { runtime } from '../en/runtime'
 export const ruRuntime = {
   // Backend API errors (api.ts)
   'runtime.auth.twitchClientRequired': 'Для входа в Twitch нужен ID публичного OAuth-клиента.',
+  'runtime.auth.vkplayClientRequired':
+    'Для входа в VK Play Live нужен ID публичного OAuth-клиента.',
   'runtime.auth.youtubeClientRequired':
     'Для входа в YouTube нужны OAuth-данные приложения Google Desktop.',
   'runtime.auth.startTwitchFailed': 'Не удалось начать вход в Twitch (HTTP {status}).',

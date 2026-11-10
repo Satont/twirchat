@@ -18,7 +18,7 @@ import { useTheme } from '../theme-context'
 import { PlatformIcon } from './ui/Icon'
 import { Text } from './ui/Text'
 
-type FormPlatform = 'twitch' | 'kick' | 'youtube'
+type FormPlatform = 'twitch' | 'kick' | 'youtube' | 'vkplay'
 const noPluginTransports: readonly PluginTransportInfo[] = []
 
 export function AddChannelForm({
@@ -62,7 +62,9 @@ export function AddChannelForm({
         ? t('app.addChannel.twitchPlaceholder')
         : platform === 'kick'
           ? t('app.addChannel.kickPlaceholder')
-          : t('app.addChannel.youtubePlaceholder')
+          : platform === 'vkplay'
+            ? t('app.addChannel.vkplayPlaceholder')
+            : t('app.addChannel.youtubePlaceholder')
 
   const confirm = () => {
     if (!canConfirm) return
@@ -82,7 +84,7 @@ export function AddChannelForm({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
       <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
-        {(['twitch', 'kick', 'youtube'] satisfies FormPlatform[]).map((p) => {
+        {(['twitch', 'kick', 'youtube', 'vkplay'] satisfies FormPlatform[]).map((p) => {
           const active = platform === p
           const color = platformColor(p)
           return (
@@ -118,7 +120,13 @@ export function AddChannelForm({
                   color: active ? color : theme.text2,
                 }}
               >
-                {p === 'youtube' ? 'YouTube' : p === 'twitch' ? 'Twitch' : 'Kick'}
+                {p === 'youtube'
+                  ? 'YouTube'
+                  : p === 'twitch'
+                    ? 'Twitch'
+                    : p === 'vkplay'
+                      ? 'VK Play Live'
+                      : 'Kick'}
               </Text>
             </div>
           )

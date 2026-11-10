@@ -228,6 +228,7 @@ export function ChatHistoryPanel({
             { value: 'twitch', label: 'Twitch' },
             { value: 'kick', label: 'Kick' },
             { value: 'youtube', label: 'YouTube' },
+            { value: 'vkplay', label: 'VK Play Live' },
           ]}
           onChange={setPlatform}
         />

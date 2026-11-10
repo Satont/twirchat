@@ -56,7 +56,7 @@ export const AccountStore = {
   },
 
   setActive(platform: Platform, accountId: string | null): Account | null {
-    if (!['twitch', 'kick', 'youtube'].includes(platform))
+    if (!['twitch', 'kick', 'youtube', 'vkplay'].includes(platform))
       throw new Error('Unknown account platform.')
     const account = accountId === null ? null : this.findById(accountId)
     if (accountId !== null && (!account || account.platform !== platform))

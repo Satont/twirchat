@@ -1,6 +1,6 @@
 import type { Platform } from '@twirchat/shared/types'
 
-const platforms: Platform[] = ['twitch', 'youtube', 'kick']
+const platforms: Platform[] = ['twitch', 'youtube', 'kick', 'vkplay']
 
 export function applySavedChannels(
   target: Record<string, string[]>,

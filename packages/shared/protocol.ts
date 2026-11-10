@@ -130,7 +130,7 @@ export type DesktopToBackendMessage =
   | { type: 'donation_share'; donation: DonationEvent }
   /** Replaces the chats whose shared donations this client receives. */
   | { type: 'donation_watch'; channels: DonationShareChannel[] }
-  | { type: 'auth_start'; platform: Exclude<Platform, 'twitch'> }
+  | { type: 'auth_start'; platform: Exclude<Platform, 'twitch' | 'vkplay'> }
   | { type: 'auth_logout'; platform: Platform }
   | { type: 'send_message'; platform: Platform; channel: string; message: string }
   | { type: 'channel_join'; platform: Platform; channel: string }

@@ -4,7 +4,7 @@ import type { Platform } from '@twirchat/shared'
 import { sql, type SQL } from 'bun'
 import { z } from 'zod'
 
-const platformSchema = z.enum(['twitch', 'kick', 'youtube'])
+const platformSchema = z.enum(['twitch', 'kick', 'youtube', 'vkplay'])
 
 export interface DesktopClient {
   secret: string

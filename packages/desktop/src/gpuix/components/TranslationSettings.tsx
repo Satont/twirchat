@@ -411,7 +411,7 @@ export function TranslationSettings() {
         </div>
       ))}
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-        {(['twitch', 'kick', 'youtube'] satisfies Platform[]).map((platform) => (
+        {(['twitch', 'kick', 'youtube', 'vkplay'] satisfies Platform[]).map((platform) => (
           <ActionButton
             key={platform}
             primary={channelPlatform === platform}

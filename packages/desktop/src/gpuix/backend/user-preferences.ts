@@ -22,7 +22,7 @@ function write(key: string, value: string): void {
 }
 function noteKey(params: { platform: Platform; platformUserId: string }): string {
   if (
-    !['twitch', 'youtube', 'kick'].includes(params.platform) ||
+    !['twitch', 'youtube', 'kick', 'vkplay'].includes(params.platform) ||
     !params.platformUserId ||
     params.platformUserId.length > 256
   )

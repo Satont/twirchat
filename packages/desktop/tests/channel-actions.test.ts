@@ -137,6 +137,7 @@ test('players use official URLs and argv with spaces preserved, no shell interpo
   })
   expect(f.commands[1]).toEqual(['streamlink', 'https://www.youtube.com/@fixture/live', 'best'])
   expect(channelPlayerUrl('kick', 'fixture')).toBe('https://kick.com/fixture')
+  expect(channelPlayerUrl('vkplay', 'fixture')).toBe('https://live.vkvideo.ru/fixture')
   expect(channelPlayerUrl('youtube', 'UCabcdefghijklmnopqrstuv')).toBe(
     'https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv/live',
   )

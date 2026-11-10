@@ -26,6 +26,7 @@ import { parseMessageWithEmotes } from '../platforms/7tv/emote-parser'
 import type { ChatReplyTarget, IPlatformAdapter } from '../platforms/base-adapter'
 import { KickAdapter } from '../platforms/kick/adapter'
 import { TwitchAdapter } from '../platforms/twitch/adapter'
+import { VkPlayAdapter } from '../platforms/vkplay/adapter'
 import { YouTubeAdapter } from '../platforms/youtube/adapter'
 import { runInBackground } from '../services/background-task'
 import { chatSender, separateSender } from '../services/chat-accounts'
@@ -414,7 +415,9 @@ export class WatchedChannelManager {
         ? new TwitchAdapter()
         : ch.platform === 'youtube'
           ? new YouTubeAdapter()
-          : new KickAdapter())
+          : ch.platform === 'vkplay'
+            ? new VkPlayAdapter()
+            : new KickAdapter())
 
     const entry: WatchedEntry = {
       adapter,
@@ -456,23 +459,24 @@ export class WatchedChannelManager {
       }
     }
 
-    sevenTVService
-      .subscribeToChannel(
-        ch.platform,
-        entry.sevenTvChannelId,
-        [ch.channelSlug],
-        entry.sevenTvPlatformUserId,
-        `watched:${ch.id}`,
-      )
-      .catch((error) => {
-        log.error('Failed to subscribe to 7TV for watched channel', {
-          id: ch.id,
-          platform: ch.platform,
-          channelSlug: entry.sevenTvChannelId,
-          error: String(error),
-          action: '7tv',
+    if (ch.platform !== 'vkplay')
+      sevenTVService
+        .subscribeToChannel(
+          ch.platform,
+          entry.sevenTvChannelId,
+          [ch.channelSlug],
+          entry.sevenTvPlatformUserId,
+          `watched:${ch.id}`,
+        )
+        .catch((error) => {
+          log.error('Failed to subscribe to 7TV for watched channel', {
+            id: ch.id,
+            platform: ch.platform,
+            channelSlug: entry.sevenTvChannelId,
+            error: String(error),
+            action: '7tv',
+          })
         })
-      })
   }
 
   private bindAdapter(entry: WatchedEntry): void {

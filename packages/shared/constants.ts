@@ -17,6 +17,7 @@ export const DEV_SERVER_PORT = parseInt(
 export const AUTH_CALLBACK_BASE = `http://localhost:${AUTH_SERVER_PORT}`
 export const YOUTUBE_REDIRECT_URI = `http://127.0.0.1:${AUTH_SERVER_PORT}/auth/youtube/callback`
 export const KICK_REDIRECT_URI = `${AUTH_CALLBACK_BASE}/auth/kick/callback`
+export const VKPLAY_REDIRECT_URI = `http://127.0.0.1:${AUTH_SERVER_PORT}/auth/vkplay/callback`
 
 // App info
 export const APP_NAME = process.env['APP_NAME'] ?? 'TwirChat'
@@ -32,6 +33,12 @@ export const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
 
 export const YOUTUBE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const YOUTUBE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
+
+export const VKPLAY_AUTH_URL = 'https://auth.live.vkvideo.ru/app/oauth2/authorize'
+export const VKPLAY_DEV_API_BASE = 'https://apidev.live.vkvideo.ru'
+export const VKPLAY_WS_URL =
+  'wss://pubsub-dev.live.vkvideo.ru/connection/websocket?format=json&cf_protocol_version=v2'
+export const VKPLAY_SCOPES: readonly string[] = ['chat:message:send']
 
 // 7TV
 export const SEVENTV_GQL_ENDPOINT = 'https://7tv.io/v4/gql'

@@ -146,7 +146,7 @@ export function CustomCommandsSettings() {
             <Text style={{ fontSize: 12, color: theme.text2 }}>
               {t('customCommandsSettings.platform')}
             </Text>
-            {(['all', 'twitch', 'kick', 'youtube'] satisfies ('all' | Platform)[]).map(
+            {(['all', 'twitch', 'kick', 'youtube', 'vkplay'] satisfies ('all' | Platform)[]).map(
               (platform) => (
                 <CommandButton
                   key={platform}
@@ -157,7 +157,9 @@ export function CustomCommandsSettings() {
                         ? 'YouTube'
                         : platform === 'twitch'
                           ? 'Twitch'
-                          : 'Kick'
+                          : platform === 'vkplay'
+                            ? 'VK Play Live'
+                            : 'Kick'
                   }
                   active={(command.platform ?? 'all') === platform}
                   onClick={() =>

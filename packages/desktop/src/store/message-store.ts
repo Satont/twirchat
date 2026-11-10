@@ -101,13 +101,13 @@ function search(
   const where = ['1 = 1']
   const values: (string | number)[] = []
   if (query.platform !== undefined) {
-    if (!['twitch', 'kick', 'youtube'].includes(query.platform))
+    if (!['twitch', 'kick', 'youtube', 'vkplay'].includes(query.platform))
       throw new Error('Unknown history platform.')
     where.push('platform = ?')
     values.push(query.platform)
   }
   if (query.channelId?.trim()) {
-    if (query.platform === 'twitch' || query.platform === 'kick') {
+    if (query.platform === 'twitch' || query.platform === 'kick' || query.platform === 'vkplay') {
       where.push("lower(ltrim(channel_id, '#@')) = ?")
       values.push(normalizeMessageChannel(query.platform, query.channelId))
     } else {

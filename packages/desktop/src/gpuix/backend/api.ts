@@ -59,6 +59,7 @@ import {
   connectTwitchDevice,
   finishDesktopSignIn,
   getKickAuthUrl,
+  getVkPlayAuthUrl,
   getYouTubeAuthUrl,
   prepareKickAuth,
   requestTwitchDeviceCode,
@@ -890,6 +891,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const { codeChallenge, state } = prepareKickAuth()
       return getKickAuthUrl(codeChallenge, state)
     }
+    if (platform === 'vkplay') return getVkPlayAuthUrl()
     if (platform === 'youtube') return getYouTubeAuthUrl()
 
     twitchAuth?.controller.abort()
@@ -938,6 +940,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
   }
 
   const subscribeSevenTv = (platform: Platform, channelSlug: string, adapter: unknown): void => {
+    if (platform === 'vkplay') return
     let sevenTvChannelId = channelSlug
     let sevenTvPlatformUserId: string | undefined
     if (platform === 'kick') {

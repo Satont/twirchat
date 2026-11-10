@@ -1,6 +1,7 @@
 export const runtime = {
   // Backend API errors (api.ts)
   'runtime.auth.twitchClientRequired': 'Twitch sign-in requires a public OAuth client ID.',
+  'runtime.auth.vkplayClientRequired': 'VK Play Live sign-in requires a public OAuth client ID.',
   'runtime.auth.youtubeClientRequired':
     'YouTube sign-in requires OAuth credentials for a Google Desktop app.',
   'runtime.auth.startTwitchFailed': 'Could not start Twitch sign-in (HTTP {status}).',

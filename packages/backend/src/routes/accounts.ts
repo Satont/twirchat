@@ -8,7 +8,7 @@ type Accounts = Pick<
   'findAllByClient' | 'findAllSavedByClient' | 'delete' | 'setActive' | 'forget'
 >
 const isPlatform = (value: string): value is Platform =>
-  ['twitch', 'kick', 'youtube'].includes(value)
+  ['twitch', 'kick', 'youtube', 'vkplay'].includes(value)
 export function createAccountRoutes(
   accounts: Accounts = AccountStore,
   authenticate = requireClient,

@@ -37,8 +37,8 @@ function providerKey(message: NormalizedChatMessage): string {
   return JSON.stringify([message.platform, normalize(message.channelId), message.id])
 }
 
-function sendablePlatform(platform: Platform): Extract<Platform, 'twitch' | 'kick'> {
-  if (platform !== 'twitch' && platform !== 'kick') {
+function sendablePlatform(platform: Platform): Extract<Platform, 'twitch' | 'kick' | 'vkplay'> {
+  if (platform !== 'twitch' && platform !== 'kick' && platform !== 'vkplay') {
     throw new Error(`create pending message: ${platform} does not support chat sending`)
   }
   return platform

@@ -114,6 +114,9 @@ export const icons = {
   kick: fill(
     '<path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z" />',
   ),
+  vkplay: fill(
+    '<path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm4.25 4.75 8.5 5.25-8.5 5.25V6.75Z" />',
+  ),
 }
 
 export type IconName = keyof typeof icons
@@ -122,4 +125,5 @@ export const platformIconNames: Record<string, IconName> = {
   twitch: 'twitch',
   youtube: 'youtube',
   kick: 'kick',
+  vkplay: 'vkplay',
 }

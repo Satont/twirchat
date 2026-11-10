@@ -196,7 +196,7 @@ export class ChatAggregator {
   }
 
   async connectAll(channels: Partial<Record<Platform, string>>): Promise<void> {
-    const platforms: Platform[] = ['twitch', 'youtube', 'kick']
+    const platforms: Platform[] = ['twitch', 'youtube', 'kick', 'vkplay']
     const promises = platforms.map((platform) => {
       const slug = channels[platform]
       const adapter = this.adapters.get(platform)

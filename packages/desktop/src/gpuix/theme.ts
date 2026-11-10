@@ -126,6 +126,7 @@ export const platformColors: Record<string, string> = {
   twitch: '#9146ff',
   youtube: '#ff0000',
   kick: '#53fc18',
+  vkplay: '#0077ff',
 }
 
 export function platformColor(platform: string): string {

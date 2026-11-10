@@ -138,7 +138,7 @@ function resolveTwirTargets({
 }: TwirTargetSelection): TwirCommandTarget[] {
   if (watchedPlatform === 'kick')
     return watchedKickId ? [{ platform: 'kick', platformChannelId: watchedKickId }] : []
-  if (watchedPlatform && watchedSlug)
+  if (watchedPlatform && watchedSlug && watchedPlatform !== 'vkplay')
     return [{ platform: watchedPlatform, channelSlug: watchedSlug }]
   const targets: TwirCommandTarget[] = []
   if (homeTwitchId) targets.push({ platform: 'twitch', platformChannelId: homeTwitchId })

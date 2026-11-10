@@ -502,7 +502,12 @@ async function refreshStreamStatuses(backend: DesktopBackend): Promise<void> {
     })
   }
   for (const channel of watched) {
-    if (isPluginWatchedChannel(channel) || channel.platform === 'youtube') continue
+    if (
+      isPluginWatchedChannel(channel) ||
+      channel.platform === 'youtube' ||
+      channel.platform === 'vkplay'
+    )
+      continue
     const platform = channel.platform
     const key = `${platform}:${channel.channelSlug.toLowerCase()}`
     if (requests.some((r) => `${r.platform}:${r.channelLogin.toLowerCase()}` === key)) continue

@@ -91,7 +91,7 @@ export function validateChatLoggingSettings(value: unknown): ChatLoggingSettings
     settings.channels.some(
       (channel) =>
         !channel ||
-        !['twitch', 'kick', 'youtube'].includes(channel.platform) ||
+        !['twitch', 'kick', 'youtube', 'vkplay'].includes(channel.platform) ||
         typeof channel.channelId !== 'string' ||
         !channel.channelId.trim() ||
         channel.channelId.length > 256,
