@@ -148,6 +148,7 @@ export type SettingsSectionId =
   | 'twir-integration'
   | 'jeetbot-integration'
   | 'fossabot-integration'
+  | 'nightbot-integration'
   | 'players'
   | 'plugins'
   | 'donations'
@@ -302,6 +303,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'fossabot fossa bot command autocomplete completion suggestions alias команды бота алиасы автодополнение интеграция',
+  },
+  {
+    id: 'nightbot-integration',
+    category: 'commands',
+    title: 'Nightbot Integration',
+    saveMode: 'section',
+    keywords:
+      'nightbot night bot command autocomplete completion suggestions команды бота автодополнение интеграция',
   },
   {
     id: 'plugins',

@@ -1,15 +1,14 @@
-import { logger } from '@twirchat/shared/logger'
 import { z } from 'zod'
 
-import { deleteOldestEntry } from './bounded-cache'
+import {
+  createPublicBotCommandsCache,
+  PUBLIC_BOT_COMMAND_NAME,
+  PUBLIC_BOT_COMMAND_REQUEST_TIMEOUT_MS,
+  TWITCH_CHANNEL_LOGIN,
+  type PublicBotCommand,
+} from './public-bot-commands'
 
-const log = logger('fossabot-commands')
 const API_URL = 'https://fossabot.com/api/v2/cached/channels'
-const CACHE_CAPACITY = 128
-const CACHE_TTL_MS = 5 * 60_000
-const RETRY_MS = 30_000
-const REQUEST_TIMEOUT_MS = 5_000
-const COMMAND_NAME = /^[^!/\s\p{C}]+$/u
 
 const channelResponseSchema = z.object({
   channel: z.object({
@@ -20,7 +19,7 @@ const channelResponseSchema = z.object({
   }),
 })
 const commandSchema = z.object({
-  name: z.string().regex(COMMAND_NAME),
+  name: z.string().regex(PUBLIC_BOT_COMMAND_NAME),
   aliases: z.array(z.string()),
   role_ids: z.array(z.string()),
   enabled_offline: z.boolean(),
@@ -28,20 +27,9 @@ const commandSchema = z.object({
 })
 const commandsResponseSchema = z.object({ commands: z.array(z.unknown()) })
 
-export interface FossabotCommand {
-  name: string
-  aliasFor?: string
-}
-
 export interface FossabotCommandTarget {
   channelLogin: string
   twitchChannelId?: string
-}
-
-interface CachedCommands {
-  commands: readonly FossabotCommand[]
-  expiresAt: number
-  pending?: Promise<readonly FossabotCommand[]>
 }
 
 interface FossabotCommandsClientOptions {
@@ -49,9 +37,9 @@ interface FossabotCommandsClientOptions {
   now?: () => number
 }
 
-function parsePublicCommands(raw: unknown): readonly FossabotCommand[] {
+function parsePublicCommands(raw: unknown): readonly PublicBotCommand[] {
   const { commands } = commandsResponseSchema.parse(raw)
-  const suggestions = new Map<string, FossabotCommand>()
+  const suggestions = new Map<string, PublicBotCommand>()
   const publicCommands = commands.flatMap((command) => {
     const parsed = commandSchema.safeParse(command)
     if (!parsed.success) return []
@@ -65,7 +53,7 @@ function parsePublicCommands(raw: unknown): readonly FossabotCommand[] {
   for (const { name, aliases } of publicCommands) {
     for (const alias of aliases) {
       const key = alias.toLowerCase()
-      if (COMMAND_NAME.test(alias) && !suggestions.has(key))
+      if (PUBLIC_BOT_COMMAND_NAME.test(alias) && !suggestions.has(key))
         suggestions.set(key, { name: alias, aliasFor: name })
     }
   }
@@ -76,20 +64,20 @@ export function createFossabotCommandsClient({
   fetcher = fetch,
   now = Date.now,
 }: FossabotCommandsClientOptions = {}) {
-  const cache = new Map<string, CachedCommands>()
+  const getCachedCommands = createPublicBotCommandsCache('fossabot', now)
 
   function request(path: string): Promise<Response> {
     return fetcher(`${API_URL}${path}`, {
       headers: { Accept: 'application/json' },
       credentials: 'omit',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(PUBLIC_BOT_COMMAND_REQUEST_TIMEOUT_MS),
     })
   }
 
   async function load(
     lookupPath: string,
     { channelLogin, twitchChannelId }: FossabotCommandTarget,
-  ): Promise<readonly FossabotCommand[]> {
+  ): Promise<readonly PublicBotCommand[]> {
     const channelResponse = await request(lookupPath)
     if (channelResponse.status === 404) return []
     if (!channelResponse.ok)
@@ -111,33 +99,12 @@ export function createFossabotCommandsClient({
   return ({
     channelLogin,
     twitchChannelId,
-  }: FossabotCommandTarget): Promise<readonly FossabotCommand[]> => {
+  }: FossabotCommandTarget): Promise<readonly PublicBotCommand[]> => {
     const login = channelLogin.toLowerCase()
-    if (!twitchChannelId && !/^[a-z0-9_]+$/u.test(login)) return Promise.resolve([])
+    if (!twitchChannelId && !TWITCH_CHANNEL_LOGIN.test(login)) return Promise.resolve([])
     const key = twitchChannelId
       ? `/by-provider-id/twitch/${encodeURIComponent(twitchChannelId)}`
       : `/by-slug/${encodeURIComponent(login)}`
-    const entry: CachedCommands = cache.get(key) ?? { commands: [], expiresAt: 0 }
-    if (entry.pending) return entry.pending
-    if (entry.expiresAt > now()) return Promise.resolve(entry.commands)
-
-    entry.pending = load(key, { channelLogin: login, twitchChannelId }).then(
-      (commands) => {
-        entry.commands = commands
-        entry.expiresAt = now() + CACHE_TTL_MS
-        entry.pending = undefined
-        return commands
-      },
-      (error: unknown) => {
-        entry.expiresAt = now() + RETRY_MS
-        entry.pending = undefined
-        log.debug('Fossabot commands unavailable', { target: key, error: String(error) })
-        return entry.commands
-      },
-    )
-    cache.delete(key)
-    if (cache.size >= CACHE_CAPACITY) deleteOldestEntry(cache)
-    cache.set(key, entry)
-    return entry.pending
+    return getCachedCommands(key, () => load(key, { channelLogin: login, twitchChannelId }))
   }
 }

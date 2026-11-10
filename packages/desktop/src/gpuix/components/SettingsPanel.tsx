@@ -99,6 +99,7 @@ type AppSettingsSectionId = Extract<
   | 'twir-integration'
   | 'jeetbot-integration'
   | 'fossabot-integration'
+  | 'nightbot-integration'
   | 'moderation'
 >
 
@@ -111,6 +112,7 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'twir-integration',
   'jeetbot-integration',
   'fossabot-integration',
+  'nightbot-integration',
   'moderation',
 ]
 
@@ -141,6 +143,8 @@ function appSectionFields(
       return { jeetbotIntegrationEnabled: source.jeetbotIntegrationEnabled }
     case 'fossabot-integration':
       return { fossabotIntegrationEnabled: source.fossabotIntegrationEnabled }
+    case 'nightbot-integration':
+      return { nightbotIntegrationEnabled: source.nightbotIntegrationEnabled }
     case 'moderation':
       return { showModerationRail: source.showModerationRail }
     default:
@@ -942,6 +946,27 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
                     {appFooter('fossabot-integration')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="nightbot-integration"
+                    title={t('settings.section.nightbot-integration')}
+                  >
+                    <SettingsRow
+                      first
+                      last
+                      label={t('settings.nightbot.suggest')}
+                      hint={t('settings.nightbot.suggestHint')}
+                    >
+                      <Switch
+                        checked={local.nightbotIntegrationEnabled !== false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.nightbotIntegrationEnabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('nightbot-integration')}
                   </SettingsSection>
                   <SettingsSection
                     id="players"

@@ -86,6 +86,7 @@ const sent: string[] = []
 let twirRequests = 0
 let twirReloads = 0
 let fossabotRequests = 0
+let nightbotRequests = 0
 let waitForTwirCommands: Promise<void> | undefined
 backend.api.getChannelEmotes = async () => []
 backend.api.getTwirCommands = async (target, options) => {
@@ -112,6 +113,11 @@ backend.api.getFossabotCommands = async (target) => {
     ...Array.from({ length: 312 }, (_, index) => ({ name: `fixture${index}` })),
   ]
 }
+backend.api.getNightbotCommands = async (login) => {
+  assert.equal(login, twitchChannel.channelSlug)
+  nightbotRequests++
+  return [{ name: 'sens' }, { name: 'nighttimer' }]
+}
 backend.api.sendWatchedChannelMessage = async ({ id, text }) => {
   assert.equal(id, channel.id)
   sent.push(text)
@@ -121,6 +127,7 @@ app.settingsStore.set({
   chatTheme: 'compact',
   showAvatars: false,
   jeetbotIntegrationEnabled: false,
+  nightbotIntegrationEnabled: false,
 })
 app.watchedChannelsStore.set([channel, twitchChannel])
 app.tabChannelIdsStore.set([tabId, nextTabId, twitchTabId])
@@ -576,6 +583,7 @@ try {
   /* eslint-enable no-await-in-loop */
   assert((app.chatActivityStore.get().get(channel.id)?.total ?? 0) > beforeHistory + 5)
   assert.equal(fossabotRequests, 0, 'Kick completion never requests Fossabot commands')
+  assert.equal(nightbotRequests, 0)
 
   const kickInputId = find('chat-input').id
   const sentBeforeFossabot = sent.length
@@ -624,9 +632,35 @@ try {
   assert.equal(fossabotRequests, beforeFossabotDisabled)
   assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
 
+  app.settingsStore.update({ fossabotIntegrationEnabled: true, nightbotIntegrationEnabled: true })
+  await until(() => nightbotRequests === 1, 'Nightbot request')
+  await until(() => {
+    const tree = nodes()
+    const first = tree.find((node) => node.testId === 'autocomplete-selected')
+    const nightbot = tree.find((node) => node.testId === 'autocomplete-option-2')
+    return (
+      !!first &&
+      flatten(first).some((node) => node.text === 'Fossabot') &&
+      !!nightbot &&
+      flatten(nightbot).some((node) => node.text === 'Nightbot')
+    )
+  }, 'Fossabot and Nightbot suggestions coexist in provider order')
+  await pressNative('ctrl+a', 'BackSpace')
+  await typeNative('!NIGHTT')
+  await until(() => selectedLabel('!night') === '!nighttimer', 'Nightbot command prefix')
+  assert(flatten(find('autocomplete-selected')).some((node) => node.text === 'Nightbot'))
+  await pressNative('Tab')
+  await until(() => twitchDraft() === '!nighttimer ', 'Nightbot command inserted')
+  assert.equal(sent.length, sentBeforeFossabot, 'Nightbot completion does not send a message')
+  assert.equal(nightbotRequests, 2, 'Typing a prefix reuses Nightbot suggestions')
+
   await Bun.write(
     join(session, 'autocomplete-result.json'),
-    JSON.stringify({ ok: true, incoming, fossabotRequests, screenshots }, null, 2),
+    JSON.stringify(
+      { ok: true, incoming, fossabotRequests, nightbotRequests, screenshots },
+      null,
+      2,
+    ),
   )
   console.log('Native autocomplete and arrow history QA passed during live chat traffic.')
 } catch (error) {

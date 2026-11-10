@@ -517,8 +517,9 @@ export function ChatInput(props: ChatInputProps) {
   const completingTwir = completingBotCommand && twirEnabled
   const jeetbotEnabled = props.settings.jeetbotIntegrationEnabled !== false
   const fossabotEnabled = props.settings.fossabotIntegrationEnabled !== false
+  const nightbotEnabled = props.settings.nightbotIntegrationEnabled !== false
   const twitchBotLogin =
-    completingBotCommand && (jeetbotEnabled || fossabotEnabled)
+    completingBotCommand && (jeetbotEnabled || fossabotEnabled || nightbotEnabled)
       ? twitchCommandChannelLogin()
       : undefined
   const jeetbotLogin = jeetbotEnabled ? twitchBotLogin : undefined
@@ -565,6 +566,7 @@ export function ChatInput(props: ChatInputProps) {
     jeetbotUserId: jeetbotLogin ? jeetbotUserId() : undefined,
     fossabotChannelLogin: fossabotLogin,
     fossabotTwitchChannelId: fossabotLogin ? fossabotChannelId(fossabotLogin) : undefined,
+    nightbotChannelLogin: nightbotEnabled ? twitchBotLogin : undefined,
     customCommands: customCommands.commands.filter(
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
     ),

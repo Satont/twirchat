@@ -68,6 +68,7 @@ export const ruSettings = {
   'settings.section.twir-integration': 'Интеграция с Twir',
   'settings.section.jeetbot-integration': 'Интеграция с jeetbot',
   'settings.section.fossabot-integration': 'Интеграция с Fossabot',
+  'settings.section.nightbot-integration': 'Интеграция с Nightbot',
   'settings.section.players': 'Плееры трансляций',
   'settings.section.players.desc':
     'Открывайте трансляции в браузере, внешнем плеере или Streamlink',
@@ -118,6 +119,9 @@ export const ruSettings = {
   'settings.fossabot.suggest': 'Подсказывать команды Fossabot',
   'settings.fossabot.suggestHint':
     'Показывать публичные команды Fossabot и их алиасы при вводе ! в Twitch-чате',
+  'settings.nightbot.suggest': 'Подсказывать команды Nightbot',
+  'settings.nightbot.suggestHint':
+    'Показывать публичные команды Nightbot при вводе ! в Twitch-чате',
 
   'settings.selfPing.enable': 'Включить подсветку',
   'settings.selfPing.enableHint': 'Подсвечивать сообщения с упоминанием вас',

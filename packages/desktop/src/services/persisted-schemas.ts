@@ -286,6 +286,7 @@ export const appSettingsSchema = z.toZod<AppSettings>()(
     twirIntegrationEnabled: z.boolean().optional(),
     jeetbotIntegrationEnabled: z.boolean().optional(),
     fossabotIntegrationEnabled: z.boolean().optional(),
+    nightbotIntegrationEnabled: z.boolean().optional(),
     chatLayout: chatLayoutSchema.optional(),
     selfPing: selfPingConfigSchema.optional(),
   }),
