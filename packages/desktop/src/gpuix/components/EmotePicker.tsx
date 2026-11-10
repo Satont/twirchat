@@ -333,7 +333,9 @@ export function EmotePicker({
                     >
                       <EmoteTooltip
                         theme={theme}
-                        emote={{ ...emote, name: emote.alias, positions: [] }}
+                        emote={emote}
+                        alias={emote.alias}
+                        catalog={allEmotes}
                       >
                         <div
                           testId={`emote-popup-item-${emote.alias}`}

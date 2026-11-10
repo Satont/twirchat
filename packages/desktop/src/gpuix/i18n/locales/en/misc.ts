@@ -1,5 +1,6 @@
 export const misc = {
   'misc.emote.openImage': 'Open image',
+  'misc.emote.originalName': 'Original name: {name}',
   'misc.emote.viewOn': 'View on {provider}',
   'misc.emote.removeFavorite': 'Remove favorite',
   'misc.emote.addFavorite': 'Add to favorites',

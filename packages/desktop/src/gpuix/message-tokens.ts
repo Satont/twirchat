@@ -19,7 +19,7 @@ export type MessageToken =
   | { kind: 'text'; text: string }
   | { kind: 'mention'; text: string; username: string }
   | { kind: 'link'; text: string; url: string }
-  | { kind: 'emote'; emote: Emote; overlays?: Emote[]; modifiers?: string[] }
+  | { kind: 'emote'; emote: Emote; alias?: string; overlays?: Emote[]; modifiers?: string[] }
 
 const PREFIX_MODIFIERS: Record<string, string> = {
   'w!': 'wide',
@@ -143,12 +143,14 @@ export function buildMessageTokens(
   message: NormalizedChatMessage,
   options: { zeroWidth?: boolean; modifiers?: boolean } = {},
 ): MessageToken[] {
-  const parts = buildMessageParts(message)
+  const parts = buildMessageParts(message, true)
   const tokens: MessageToken[] = []
 
   for (const part of parts) {
     if (part.type === 'emote' && part.emote) {
-      tokens.push({ kind: 'emote', emote: part.emote })
+      const token: MessageToken = { kind: 'emote', emote: part.emote }
+      if (part.alias) token.alias = part.alias
+      tokens.push(token)
       continue
     }
     // Sanitize per part, after emote ranges are resolved against raw text.

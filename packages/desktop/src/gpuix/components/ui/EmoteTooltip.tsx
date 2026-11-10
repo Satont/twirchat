@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@gpuix/react'
+import type { EmoteCatalogEntry } from '@twirchat/shared/protocol'
 /**
  * Emote hover tooltip — port of EmoteTooltip.vue onto the GPUIX Tooltip
  * primitive: 64px preview, name, "View on 7TV" link.
@@ -7,6 +8,7 @@ import type { Emote } from '@twirchat/shared/types'
 import { useEffect, type ReactNode } from 'react'
 
 import { emoteProvider } from '../../../services/provider-emotes'
+import { sanitizeDisplayText } from '../../../views/shared/utils/display-text'
 import { useBackend } from '../../backend/context'
 import { runUiTask } from '../../hooks/run-ui-task'
 import { useT } from '../../i18n'
@@ -24,15 +26,20 @@ import { useFont } from '../../theme-context'
 import { Icon } from './Icon'
 import { RemoteImage } from './RemoteImage'
 
+interface EmoteTooltipDetails {
+  emote: Omit<Emote, 'positions'>
+  alias?: string
+  catalog: readonly EmoteCatalogEntry[]
+  theme: Theme
+}
+
 export function EmoteTooltip({
   emote,
+  alias,
+  catalog,
   children,
   theme,
-}: {
-  emote: Emote
-  children: ReactNode
-  theme: Theme
-}) {
+}: EmoteTooltipDetails & { children: ReactNode }) {
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
@@ -55,18 +62,18 @@ export function EmoteTooltip({
           },
         }}
       >
-        <EmoteTooltipBody emote={emote} theme={theme} />
+        <EmoteTooltipBody emote={emote} alias={alias} catalog={catalog} theme={theme} />
       </TooltipContent>
     </Tooltip>
   )
 }
 
 /** Mounted only while the tooltip is open, so chat rows hold no per-emote subscriptions. */
-function EmoteTooltipBody({ emote, theme }: { emote: Emote; theme: Theme }) {
+function EmoteTooltipBody({ emote, alias = emote.name, catalog, theme }: EmoteTooltipDetails) {
   const backend = useBackend()
   const font = useFont()
   const { t } = useT()
-  const entry = favoriteEntry(emote)
+  const entry = favoriteEntry(emote, alias, catalog)
   const provider = emoteProvider(entry)
   const url =
     provider === 'seventv'
@@ -74,7 +81,7 @@ function EmoteTooltipBody({ emote, theme }: { emote: Emote; theme: Theme }) {
       : provider === 'bttv'
         ? `https://betterttv.com/emotes/${encodeURIComponent(emote.id)}`
         : provider === 'ffz'
-          ? `https://www.frankerfacez.com/emoticon/${encodeURIComponent(emote.id)}-${encodeURIComponent(emote.name)}`
+          ? `https://www.frankerfacez.com/emoticon/${encodeURIComponent(emote.id)}-${encodeURIComponent(entry.name)}`
           : emote.imageUrl
   const label = provider === 'seventv' ? '7TV' : provider === 'bttv' ? 'BetterTTV' : 'FrankerFaceZ'
   const favorite = useStoreSelector(emotePreferencesStore, (state) =>
@@ -101,9 +108,16 @@ function EmoteTooltipBody({ emote, theme }: { emote: Emote; theme: Theme }) {
         <RemoteImage url={emote.imageUrl} objectFit="contain" style={{ width: 56, height: 56 }} />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <text style={{ fontSize: 13, fontWeight: 600, color: theme.text, fontFamily: font }}>
-          {emote.name}
-        </text>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <text style={{ fontSize: 13, fontWeight: 600, color: theme.text, fontFamily: font }}>
+            {sanitizeDisplayText(entry.alias)}
+          </text>
+          {entry.alias !== entry.name ? (
+            <text style={{ fontSize: 11, color: theme.text2, fontFamily: font }}>
+              {t('misc.emote.originalName', { name: sanitizeDisplayText(entry.name) })}
+            </text>
+          ) : null}
+        </div>
         <div
           onClick={() => {
             if (/^https?:\/\//i.test(url)) runUiTask(backend.api.openExternalUrl({ url }))

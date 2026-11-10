@@ -121,6 +121,30 @@ describe('buildMessageTokens', () => {
     ])
   })
 
+  test('emote aliases are read from each occurrence after UTF-16 surrogate pairs', () => {
+    const tokens = buildMessageTokens(
+      makeMessage({
+        text: '😀 :) Улыбка smile',
+        emotes: [
+          {
+            id: 'e1',
+            name: 'smile',
+            provider: 'seventv',
+            imageUrl: 'https://example.com/smile.webp',
+            positions: [
+              { start: 3, end: 4 },
+              { start: 6, end: 11 },
+              { start: 13, end: 17 },
+            ],
+          },
+        ],
+      }),
+    )
+    const emoteTokens = tokens.filter((token) => token.kind === 'emote')
+    expect(emoteTokens.map((token) => token.alias)).toEqual([':)', 'Улыбка', undefined])
+    expect(emoteTokens.map((token) => token.emote.name)).toEqual(['smile', 'smile', 'smile'])
+  })
+
   test('links are detected and keep their url', () => {
     const tokens = buildMessageTokens(makeMessage({ text: 'see https://example.com/x now' }))
     expect(tokens[1]).toEqual({

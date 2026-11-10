@@ -6,12 +6,19 @@ export interface MessagePart {
   emote?: Emote
 }
 
-export function buildMessageParts(message: NormalizedChatMessage): MessagePart[] {
+interface MessagePartWithAlias extends MessagePart {
+  alias?: string
+}
+
+export function buildMessageParts(
+  message: NormalizedChatMessage,
+  includeAliases = false,
+): MessagePartWithAlias[] {
   if (!message.emotes.length) {
     return [{ content: message.text, type: 'text' }]
   }
 
-  const parts: MessagePart[] = []
+  const parts: MessagePartWithAlias[] = []
   const ranges: { start: number; end: number; emote: Emote }[] = []
 
   for (const emote of message.emotes) {
@@ -22,6 +29,8 @@ export function buildMessageParts(message: NormalizedChatMessage): MessagePart[]
 
   ranges.sort((a, b) => a.start - b.start)
 
+  // 7TV notices use a synthetic :alias: placeholder for the emote image.
+  const readAliases = includeAliases && !message.metadata?.sevenTvAction
   let index = 0
 
   for (const range of ranges) {
@@ -32,7 +41,20 @@ export function buildMessageParts(message: NormalizedChatMessage): MessagePart[]
       parts.push({ content: message.text.slice(index, range.start), type: 'text' })
     }
 
-    parts.push({ emote: range.emote, type: 'emote' })
+    const part: MessagePartWithAlias = { emote: range.emote, type: 'emote' }
+    if (readAliases && range.end >= range.start && range.end < message.text.length) {
+      const provider = range.emote.provider ?? range.emote.source
+      if (
+        provider === 'seventv' ||
+        provider === 'bttv' ||
+        provider === 'ffz' ||
+        provider === 'personal'
+      ) {
+        const alias = message.text.slice(range.start, range.end + 1)
+        if (alias && alias !== range.emote.name) part.alias = alias
+      }
+    }
+    parts.push(part)
     index = range.end + 1
   }
 
