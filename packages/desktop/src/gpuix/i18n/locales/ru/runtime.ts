@@ -51,12 +51,6 @@ export const ruRuntime = {
   'runtime.api.moderationChannelRequired': 'модерация: требуется имя канала',
   'runtime.api.moderationAuthenticate': 'модерация: войдите в {platform} перед модерацией',
   'runtime.api.moderationCredentialsUnavailable': 'модерация: учётные данные {platform} недоступны',
-  'runtime.api.chattersConnectTwitch':
-    'Подключите аккаунт Twitch с правами модератора, чтобы увидеть список участников чата.',
-  'runtime.api.chattersTwitchRejected':
-    'Twitch отклонил учётные данные. Подключите аккаунт заново.',
-  'runtime.api.chattersModeratorRequired':
-    'Для просмотра списка участников чата нужны права модератора.',
   'runtime.api.chattersChannelNotFound': 'Канал не найден на Twitch.',
   'runtime.api.chattersTwitchUnavailable': 'Список участников чата Twitch сейчас недоступен.',
   'runtime.api.chattersKickUnavailable': 'Список участников чата Kick сейчас недоступен.',

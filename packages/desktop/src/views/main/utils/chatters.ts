@@ -1,4 +1,4 @@
-import type { Platform, WatchedChannel } from '@twirchat/shared/types'
+import type { Account, Platform, WatchedChannel } from '@twirchat/shared/types'
 
 import type {
   ChattersTarget,
@@ -7,7 +7,6 @@ import type {
   ChatterUser,
 } from '../../../gpuix/backend/api'
 import { t } from '../../../gpuix/i18n'
-import type { ChatSendTarget } from './chat-send-targets'
 
 export function supportsChatters(platform: Platform | undefined): platform is 'twitch' | 'kick' {
   return platform === 'twitch' || platform === 'kick'
@@ -15,16 +14,16 @@ export function supportsChatters(platform: Platform | undefined): platform is 't
 
 export function buildChattersTargets(
   watchedChannel: Pick<WatchedChannel, 'platform' | 'channelSlug'> | null | undefined,
-  ownTargets: readonly ChatSendTarget[],
+  accounts: readonly Account[],
 ): ChattersTarget[] {
   if (watchedChannel) {
     if (!supportsChatters(watchedChannel.platform)) return []
     return [{ platform: watchedChannel.platform, channelSlug: watchedChannel.channelSlug }]
   }
 
-  return ownTargets.flatMap((target) =>
-    supportsChatters(target.platform)
-      ? [{ platform: target.platform, channelSlug: target.channelLogin }]
+  return accounts.flatMap((account) =>
+    supportsChatters(account.platform) && account.username.trim()
+      ? [{ platform: account.platform, channelSlug: account.username, accountId: account.id }]
       : [],
   )
 }

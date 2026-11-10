@@ -1074,8 +1074,8 @@ export function ChatView({
 
   const allChannels = useMemo(() => ownChatSendTargets(accounts), [accounts])
   const chattersTargets = useMemo(
-    () => buildChattersTargets(watchedChannel, allChannels),
-    [watchedChannel, allChannels],
+    () => buildChattersTargets(watchedChannel, accounts),
+    [watchedChannel, accounts],
   )
 
   const displayedChannels = allChannels.map((ch) => {
@@ -2325,7 +2325,14 @@ export function ChatView({
           />
         ) : null}
         {chattersOpen && chattersTargets.length > 0 ? (
-          <ChattersDialog targets={chattersTargets} onClose={() => setChattersOpen(false)} />
+          <ChattersDialog
+            targets={chattersTargets}
+            onClose={() => setChattersOpen(false)}
+            onOpenUserCard={(target) => {
+              setChattersOpen(false)
+              setUserCardTarget(target)
+            }}
+          />
         ) : null}
         {userCardTarget ? (
           <UserCardDialog
