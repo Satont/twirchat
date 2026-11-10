@@ -12,6 +12,7 @@ import type {
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { emojiShortcodeSuggestions } from '../../services/emoji-shortcodes'
+import type { FossabotCommand, FossabotCommandTarget } from '../../services/fossabot-commands'
 import type { JeetbotCommand, JeetbotCommandTarget } from '../../services/jeetbot-commands'
 import { AUTO_TRANSLATION_COMMAND, isAutoTranslationCommand } from '../../services/translation'
 import type { TwirCommand, TwirCommandTarget } from '../../services/twir-commands'
@@ -75,6 +76,11 @@ interface JeetbotSuggestions {
   target: JeetbotCommandTarget
   commands: readonly JeetbotCommand[]
   revision: number
+}
+
+interface FossabotSuggestions {
+  target: FossabotCommandTarget
+  commands: readonly FossabotCommand[]
 }
 
 /** Signature help for the bot-command argument being typed. */
@@ -282,6 +288,8 @@ export function useAutocomplete(params: {
   jeetbotChannelLogin?: string
   /** Twitch user ID of the account this chat sends with: jeetbot lists what it may run. */
   jeetbotUserId?: string
+  fossabotChannelLogin?: string
+  fossabotTwitchChannelId?: string
 }) {
   const { text, setText, messages, watchedChannel, statuses, aliasMap } = params
   const backend = useBackend()
@@ -394,6 +402,30 @@ export function useAutocomplete(params: {
       ? twirSuggestions.commands
       : undefined
   const botQuery = token.mode === 'bot-command' ? token.query : undefined
+  const fossabotLogin = botQuery === undefined ? undefined : params.fossabotChannelLogin
+  const fossabotChannelId = fossabotLogin ? params.fossabotTwitchChannelId : undefined
+  const fossabotTarget = useMemo(
+    (): FossabotCommandTarget | undefined =>
+      fossabotLogin
+        ? { channelLogin: fossabotLogin, twitchChannelId: fossabotChannelId }
+        : undefined,
+    [fossabotLogin, fossabotChannelId],
+  )
+  const [fossabotSuggestions, setFossabotSuggestions] = useState<FossabotSuggestions>()
+  useEffect(() => {
+    if (!fossabotTarget) return undefined
+    let current = true
+    const load = async () => {
+      const commands = await backend.api.getFossabotCommands(fossabotTarget)
+      if (current) setFossabotSuggestions({ target: fossabotTarget, commands })
+    }
+    runUiTask(load())
+    return () => {
+      current = false
+    }
+  }, [backend, fossabotTarget])
+  const fossabotCommands =
+    fossabotSuggestions?.target === fossabotTarget ? fossabotSuggestions?.commands : undefined
   const twirMatches = useMemo(() => {
     if (!twirCommands || botQuery === undefined) return EMPTY_BOT_SUGGESTIONS
     const matches: CommandSuggestion[] = []
@@ -417,10 +449,22 @@ export function useAutocomplete(params: {
       return name === undefined ? [] : [jeetbotCommandSuggestion(name, command)]
     })
   }, [jeetbotCommands, botQuery])
-  const botCommandMatches = useMemo(
-    () => mergeBotCommandMatches(twirMatches, jeetbotMatches),
-    [twirMatches, jeetbotMatches],
-  )
+  const botCommandMatches = useMemo(() => {
+    const matches = mergeBotCommandMatches(twirMatches, jeetbotMatches)
+    if (!fossabotCommands || botQuery === undefined) return matches
+    for (const { name, aliasFor } of fossabotCommands) {
+      if (!name.toLowerCase().startsWith(botQuery)) continue
+      const label = `!${name}`
+      matches.push({
+        type: 'command',
+        label,
+        insertText: label,
+        description: aliasFor ? `!${aliasFor}` : '',
+        source: 'fossabot',
+      })
+    }
+    return matches
+  }, [twirMatches, jeetbotMatches, fossabotCommands, botQuery])
   const completingCommand = token.mode === 'command'
   const [pluginCommands, setPluginCommands] = useState(EMPTY_PLUGIN_COMMANDS)
   useEffect(() => {

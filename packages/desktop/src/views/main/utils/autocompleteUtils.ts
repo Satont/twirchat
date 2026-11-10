@@ -20,7 +20,7 @@ export interface EmoteSuggestion {
   emoji?: string
 }
 
-export type BotCommandSource = 'twir' | 'jeetbot'
+export type BotCommandSource = 'twir' | 'jeetbot' | 'fossabot'
 
 export interface CommandSuggestion {
   type: 'command'

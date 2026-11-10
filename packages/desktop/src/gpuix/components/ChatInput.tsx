@@ -485,8 +485,7 @@ export function ChatInput(props: ChatInputProps) {
     return props.accounts.find((account) => account.platform === platform)?.platformUserId
   }
 
-  // jeetbot answers on Twitch only; its list depends on the account this pane sends with.
-  function jeetbotChannelLogin(): string | undefined {
+  function twitchCommandChannelLogin(): string | undefined {
     if (props.watchedChannel)
       return props.watchedChannel.platform === 'twitch'
         ? props.watchedChannel.channelSlug
@@ -499,8 +498,17 @@ export function ChatInput(props: ChatInputProps) {
     return props.accounts.find((account) => account.platform === 'twitch')?.platformUserId
   }
   function jeetbotCommandTarget(): JeetbotCommandTarget | undefined {
-    const channelLogin = jeetbotChannelLogin()
+    const channelLogin = twitchCommandChannelLogin()
     return channelLogin ? { channelLogin, userId: jeetbotUserId() } : undefined
+  }
+  function fossabotChannelId(login: string): string | undefined {
+    const id = props.watchedChannel
+      ? props.watchedChannelStatus?.channelId
+      : props.accounts.find(
+          (account) =>
+            account.platform === 'twitch' && account.username.toLowerCase() === login.toLowerCase(),
+        )?.platformUserId
+    return id && /^\d+$/u.test(id) ? id : undefined
   }
 
   const completingBotCommand =
@@ -508,7 +516,13 @@ export function ChatInput(props: ChatInputProps) {
   const twirEnabled = props.settings.twirIntegrationEnabled !== false
   const completingTwir = completingBotCommand && twirEnabled
   const jeetbotEnabled = props.settings.jeetbotIntegrationEnabled !== false
-  const jeetbotLogin = completingBotCommand && jeetbotEnabled ? jeetbotChannelLogin() : undefined
+  const fossabotEnabled = props.settings.fossabotIntegrationEnabled !== false
+  const twitchBotLogin =
+    completingBotCommand && (jeetbotEnabled || fossabotEnabled)
+      ? twitchCommandChannelLogin()
+      : undefined
+  const jeetbotLogin = jeetbotEnabled ? twitchBotLogin : undefined
+  const fossabotLogin = fossabotEnabled ? twitchBotLogin : undefined
   const twirWatchedPlatform = completingTwir ? props.watchedChannel?.platform : undefined
   const twirWatchedSlug = completingTwir ? props.watchedChannel?.channelSlug : undefined
   const twirWatchedKickId =
@@ -549,6 +563,8 @@ export function ChatInput(props: ChatInputProps) {
     jeetbotEnabled,
     jeetbotChannelLogin: jeetbotLogin,
     jeetbotUserId: jeetbotLogin ? jeetbotUserId() : undefined,
+    fossabotChannelLogin: fossabotLogin,
+    fossabotTwitchChannelId: fossabotLogin ? fossabotChannelId(fossabotLogin) : undefined,
     customCommands: customCommands.commands.filter(
       (command) => commandTargets.length !== 1 || commandApplies(command, commandContext(text)),
     ),

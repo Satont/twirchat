@@ -147,6 +147,7 @@ export type SettingsSectionId =
   | 'commands'
   | 'twir-integration'
   | 'jeetbot-integration'
+  | 'fossabot-integration'
   | 'players'
   | 'plugins'
   | 'donations'
@@ -293,6 +294,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'jeetbot jeet bot command arguments voice tts autocomplete completion suggestions команды бота аргументы голос озвучка автодополнение интеграция',
+  },
+  {
+    id: 'fossabot-integration',
+    category: 'commands',
+    title: 'Fossabot Integration',
+    saveMode: 'section',
+    keywords:
+      'fossabot fossa bot command autocomplete completion suggestions alias команды бота алиасы автодополнение интеграция',
   },
   {
     id: 'plugins',

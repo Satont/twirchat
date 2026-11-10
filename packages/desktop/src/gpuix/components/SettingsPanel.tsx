@@ -98,6 +98,7 @@ type AppSettingsSectionId = Extract<
   | 'shortcuts'
   | 'twir-integration'
   | 'jeetbot-integration'
+  | 'fossabot-integration'
   | 'moderation'
 >
 
@@ -109,6 +110,7 @@ const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'shortcuts',
   'twir-integration',
   'jeetbot-integration',
+  'fossabot-integration',
   'moderation',
 ]
 
@@ -137,6 +139,8 @@ function appSectionFields(
       return { twirIntegrationEnabled: source.twirIntegrationEnabled }
     case 'jeetbot-integration':
       return { jeetbotIntegrationEnabled: source.jeetbotIntegrationEnabled }
+    case 'fossabot-integration':
+      return { fossabotIntegrationEnabled: source.fossabotIntegrationEnabled }
     case 'moderation':
       return { showModerationRail: source.showModerationRail }
     default:
@@ -917,6 +921,27 @@ export function SettingsPanel() {
                       />
                     </SettingsRow>
                     {appFooter('jeetbot-integration')}
+                  </SettingsSection>
+                  <SettingsSection
+                    id="fossabot-integration"
+                    title={t('settings.section.fossabot-integration')}
+                  >
+                    <SettingsRow
+                      first
+                      last
+                      label={t('settings.fossabot.suggest')}
+                      hint={t('settings.fossabot.suggestHint')}
+                    >
+                      <Switch
+                        checked={local.fossabotIntegrationEnabled !== false}
+                        onChange={(value) =>
+                          patch((draft) => {
+                            draft.fossabotIntegrationEnabled = value
+                          })
+                        }
+                      />
+                    </SettingsRow>
+                    {appFooter('fossabot-integration')}
                   </SettingsSection>
                   <SettingsSection
                     id="players"

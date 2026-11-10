@@ -63,6 +63,16 @@ const panelId = '2cd30a1a-a11b-4818-b0cd-a277e0b32b56'
 const nextTabId = 'tab:3612b68c-3c3c-45da-84bd-dd985940ba44'
 const paneId = `${tabId}:${panelId}`
 const composerKey = `${paneId}:${channel.id}`
+const twitchChannel: WatchedChannel = {
+  id: '537dd149-c747-4a26-a1e0-b54095774b7f',
+  platform: 'twitch',
+  channelSlug: 'qa_fossabot',
+  displayName: 'Fossabot QA',
+  createdAt: 0,
+}
+const twitchTabId = `tab:${twitchChannel.id}`
+const twitchPaneId = `${twitchTabId}:${panelId}`
+const twitchComposerKey = `${twitchPaneId}:${twitchChannel.id}`
 const layout: WatchedChannelsLayout = {
   version: 2,
   root: {
@@ -75,6 +85,7 @@ const layout: WatchedChannelsLayout = {
 const sent: string[] = []
 let twirRequests = 0
 let twirReloads = 0
+let fossabotRequests = 0
 let waitForTwirCommands: Promise<void> | undefined
 backend.api.getChannelEmotes = async () => []
 backend.api.getTwirCommands = async (target, options) => {
@@ -91,13 +102,28 @@ backend.api.getTwirCommands = async (target, options) => {
     { name: 'quote add', description: 'Add a quote' },
   ]
 }
+backend.api.getFossabotCommands = async (target) => {
+  assert.equal(target.channelLogin, twitchChannel.channelSlug)
+  assert.equal(target.twitchChannelId, undefined)
+  fossabotRequests++
+  return [
+    { name: 'sens' },
+    { name: 'sensitivity', aliasFor: 'sens' },
+    ...Array.from({ length: 312 }, (_, index) => ({ name: `fixture${index}` })),
+  ]
+}
 backend.api.sendWatchedChannelMessage = async ({ id, text }) => {
   assert.equal(id, channel.id)
   sent.push(text)
 }
-app.settingsStore.set({ ...DEFAULT_SETTINGS, chatTheme: 'compact', showAvatars: false })
-app.watchedChannelsStore.set([channel])
-app.tabChannelIdsStore.set([tabId, nextTabId])
+app.settingsStore.set({
+  ...DEFAULT_SETTINGS,
+  chatTheme: 'compact',
+  showAvatars: false,
+  jeetbotIntegrationEnabled: false,
+})
+app.watchedChannelsStore.set([channel, twitchChannel])
+app.tabChannelIdsStore.set([tabId, nextTabId, twitchTabId])
 app.activeWatchedTabStore.set(tabId)
 const stopHotkeys = registerHotkeyActions({ openAddChannel: () => {}, openTabSelector: () => {} })
 app.watchedStatusesStore.set(
@@ -109,6 +135,15 @@ app.watchedStatusesStore.set(
         status: 'connected',
         mode: 'authenticated',
         channelId: '12345',
+      },
+    ],
+    [
+      twitchChannel.id,
+      {
+        platform: 'twitch',
+        status: 'connected',
+        mode: 'authenticated',
+        channelLogin: twitchChannel.channelSlug,
       },
     ],
   ]),
@@ -172,6 +207,13 @@ function Content() {
           layoutTabId={tabId}
           layoutPanelId={panelId}
           watchedChannel={channel}
+        />
+      ) : activeTab === twitchTabId ? (
+        <ChatView
+          key={twitchTabId}
+          paneId={twitchPaneId}
+          layoutTabId={twitchTabId}
+          watchedChannel={twitchChannel}
         />
       ) : (
         <div testId="other-tab">{activeTab}</div>
@@ -318,20 +360,31 @@ try {
       createdAt: 0,
       updatedAt: 0,
     },
+    {
+      id: 'qa-twitch-account',
+      platform: 'twitch',
+      platformUserId: '9001',
+      username: 'qa_twitch_sender',
+      displayName: 'QA Twitch Sender',
+      scopes: [],
+      createdAt: 0,
+      updatedAt: 0,
+    },
   ])
   traffic = setInterval(() => {
     incoming++
+    const active = app.activeWatchedTabStore.get() === twitchTabId ? twitchChannel : channel
     const message: NormalizedChatMessage = {
       id: `live-${incoming}`,
-      platform: 'kick',
-      channelId: channel.channelSlug,
+      platform: active.platform,
+      channelId: active.channelSlug,
       type: 'message',
       text: `LIVE_${incoming}`,
       timestamp: new Date(),
       emotes: [],
       author: { id: 'qa-viewer', username: 'qa-viewer', displayName: 'QA Viewer', badges: [] },
     }
-    backend.events.emit('watched_channel_message', { channelId: channel.id, message })
+    backend.events.emit('watched_channel_message', { channelId: active.id, message })
   }, 20)
   /* eslint-disable no-await-in-loop -- Each native action depends on the preceding UI state. */
   for (const size of [
@@ -522,10 +575,58 @@ try {
   }
   /* eslint-enable no-await-in-loop */
   assert((app.chatActivityStore.get().get(channel.id)?.total ?? 0) > beforeHistory + 5)
+  assert.equal(fossabotRequests, 0, 'Kick completion never requests Fossabot commands')
+
+  const kickInputId = find('chat-input').id
+  const sentBeforeFossabot = sent.length
+  app.settingsStore.update({ twirIntegrationEnabled: false })
+  app.activeWatchedTabStore.set(twitchTabId)
+  const twitchDraft = () => composerStore.get().get(twitchComposerKey)?.text
+  await until(
+    () => nodes().some((node) => node.testId === 'chat-input' && node.id !== kickInputId),
+    'Twitch composer',
+  )
+  currentRenderer().focusElement(find('chat-input').id)
+  const beforeTwitchTraffic = app.chatActivityStore.get().get(twitchChannel.id)?.total ?? 0
+  /* eslint-disable no-await-in-loop -- Each native check uses the resized window. */
+  for (const size of [
+    { width: 420, height: 300 },
+    { width: 900, height: 600 },
+  ]) {
+    await currentRenderer().setWindowBounds(size)
+    await pressNative('ctrl+a', 'BackSpace')
+    const before: number = fossabotRequests
+    await typeNative('!')
+    await until(() => selectedLabel('!sens') === '!sens', 'Fossabot primary command')
+    await selectKey('up', '!fixture311')
+    await selectKey('down', '!sens')
+    await typeNative('SENSI')
+    await until(() => selectedLabel('!sens') === '!sensitivity', 'Fossabot alias prefix')
+    const popup = paintedBounds('autocomplete-popup')
+    assert(popup.x >= 7 && popup.x + popup.width <= size.width - 7)
+    assert(popup.y >= 7 && popup.y + popup.height <= size.height - 7)
+    assert(flatten(find('autocomplete-selected')).some((node) => node.text === 'Fossabot'))
+    await pressNative('Tab')
+    await until(() => twitchDraft() === '!sensitivity ', 'Fossabot alias inserted')
+    await typeNative('example')
+    await until(() => twitchDraft() === '!sensitivity example', 'Typing arguments stays usable')
+    assert.equal(fossabotRequests, before + 1, 'Only the command prefix requests Fossabot commands')
+    assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
+  }
+  /* eslint-enable no-await-in-loop */
+  assert((app.chatActivityStore.get().get(twitchChannel.id)?.total ?? 0) > beforeTwitchTraffic + 5)
+  assert.equal(sent.length, sentBeforeFossabot, 'Fossabot completion does not send a message')
+  app.settingsStore.update({ fossabotIntegrationEnabled: false })
+  const beforeFossabotDisabled = fossabotRequests
+  await pressNative('ctrl+a', 'BackSpace')
+  await typeNative('!sens')
+  await until(() => twitchDraft() === '!sens', 'Typing while Fossabot is disabled')
+  assert.equal(fossabotRequests, beforeFossabotDisabled)
+  assert(!nodes().some((node) => node.testId === 'autocomplete-popup'))
 
   await Bun.write(
     join(session, 'autocomplete-result.json'),
-    JSON.stringify({ ok: true, incoming, screenshots }, null, 2),
+    JSON.stringify({ ok: true, incoming, fossabotRequests, screenshots }, null, 2),
   )
   console.log('Native autocomplete and arrow history QA passed during live chat traffic.')
 } catch (error) {

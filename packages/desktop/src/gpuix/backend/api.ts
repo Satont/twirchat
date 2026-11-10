@@ -89,6 +89,11 @@ import {
 } from '../../services/cosmetics'
 import { getProviderErrors } from '../../services/emote-providers'
 import {
+  createFossabotCommandsClient,
+  type FossabotCommand,
+  type FossabotCommandTarget,
+} from '../../services/fossabot-commands'
+import {
   readClipboardUploadFile,
   type ClipboardImageUpload,
   type ClipboardUploadImage,
@@ -362,6 +367,7 @@ export interface DesktopApi {
     target: JeetbotCommandTarget,
     options?: JeetbotCommandsOptions,
   ): Promise<readonly JeetbotCommand[]>
+  getFossabotCommands(target: FossabotCommandTarget): Promise<readonly FossabotCommand[]>
   getUserAliases(): Promise<UserAlias[]>
   setUserAlias(params: { platform: Platform; platformUserId: string; alias: string }): Promise<void>
   removeUserAlias(params: { platform: Platform; platformUserId: string }): Promise<void>
@@ -970,6 +976,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     obsRemote: obsRemoteApi,
     getTwirCommands: createTwirCommandsClient(),
     getJeetbotCommands: createJeetbotCommandsClient(),
+    getFossabotCommands: createFossabotCommandsClient(),
     getTwitchActivities: async (params) => {
       const snapshot = await requestTwitchActivitiesSnapshot(params)
       ctx.twitchActivityRefresh?.observeSnapshot(snapshot)
