@@ -15,6 +15,8 @@ import {
 import { layoutStore } from '../src/gpuix/state/layout'
 import {
   createWatchedSubscriptionController,
+  liveLayoutTabIds,
+  referencedPaneAccounts,
   referencedWatchedChannels,
   wireActiveWatchedChannels,
   type WatchedReferenceSnapshot,
@@ -100,6 +102,47 @@ test('counts all open layouts once and ignores closed history, orphan layouts an
   expect(referencedWatchedChannels(snapshot)).toEqual(['popup', 'second', 'shared'])
   snapshot.tabIds = ['popup']
   expect(referencedWatchedChannels(snapshot)).toEqual(['popup'])
+})
+
+function withAccount(channelId: string, accountId: string): WatchedChannelsLayout {
+  return {
+    version: 2,
+    root: {
+      type: 'panel',
+      id: `${channelId}-${accountId}`,
+      flex: 100,
+      content: { type: 'watched', channelId, accountId },
+    },
+  }
+}
+
+test('pane accounts count only live layouts, including detached windows', () => {
+  const snapshot: WatchedReferenceSnapshot = {
+    ready: true,
+    tabIds: ['open', 'window:popup'],
+    channels: ['shared', 'other'].map(channel),
+    layouts: new Map([
+      ['open', withAccount('shared', 'twitch:alt')],
+      ['window:popup', withAccount('shared', 'twitch:bot')],
+      ['closed', withAccount('shared', 'twitch:old')],
+      ['unknown', withAccount('gone', 'twitch:alt')],
+    ]),
+  }
+  expect(referencedPaneAccounts(snapshot)).toEqual({ shared: ['twitch:alt', 'twitch:bot'] })
+  snapshot.tabIds = ['open']
+  expect(referencedPaneAccounts(snapshot)).toEqual({ shared: ['twitch:alt'] })
+
+  const tabs = { ...chatTabsStore.get(), value: { ...chatTabsStore.get().value, openIds: ['a'] } }
+  expect(liveLayoutTabIds(tabs, new Map([['main', { activate() {} }]]))).toEqual(['home', 'a'])
+  expect(
+    liveLayoutTabIds(
+      tabs,
+      new Map([
+        ['main', { activate() {} }],
+        ['popup', { tabId: 'window:popup', activate() {} }],
+      ]),
+    ),
+  ).toEqual(['home', 'a', 'window:popup'])
 })
 
 test('a closed tab cannot reconnect after its slow initial layout load completes', async () => {

@@ -391,7 +391,8 @@ export function App() {
     try {
       const channel = await backend.api.addWatchedChannel({ platform, channelSlug })
       watchedChannelsStore.set(await backend.api.getWatchedChannels())
-      await openChannelChatTab(backend, channel)
+      // Adding a chat that is already open opens it once more, e.g. to send from another account.
+      await openChannelChatTab(backend, channel, { another: true })
       setShowAddModal(false)
       showNotice('success', t('app.notice.watching', { name: channel.displayName }))
     } catch (error) {

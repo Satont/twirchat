@@ -248,6 +248,21 @@ describe('durable chat tabs', () => {
     )
     expect(state.ids.filter((id) => id === '1')).toHaveLength(1)
   })
+  test('adding an open channel again opens another tab showing it', async () => {
+    const state = fixture()
+    await state.controller.initialize()
+    const another = await state.controller.open(channel('1'), { another: true })
+    expect(another).not.toBe('1')
+    expect(state.ids).toEqual(['0', '1', '2', another])
+    expect(state.selected).toBe(another)
+    expect(state.controller.store.get().value.metadata[another]?.channelId).toBe('1')
+    const panes = getAllPanels(required(state.mounted.get(another)).root)
+    expect(panes.map((pane) => pane.content)).toEqual([{ type: 'watched', channelId: '1' }])
+    expect(state.persisted.get(another)).toEqual(state.mounted.get(another))
+    // A channel that is not open yet still gets its usual tab.
+    await state.controller.close('2')
+    expect(await state.controller.open(channel('2'), { another: true })).toBe('2')
+  })
   test('validates metadata and closed histories without trusting malformed restored layouts', () => {
     expect(() => validateChatTabs({ version: 1, openIds: ['home'] })).toThrow('order')
     const value = validateChatTabs({

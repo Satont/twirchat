@@ -403,7 +403,8 @@ export interface SplitNode {
 
 export type PanelContent =
   | { type: 'main' }
-  | { type: 'watched'; channelId: string }
+  /** `accountId`: the saved account this pane sends with; absent follows the chat's account. */
+  | { type: 'watched'; channelId: string; accountId?: string }
   | { type: 'empty' }
 
 export interface PanelNode {

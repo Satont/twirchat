@@ -12,6 +12,7 @@ import { logger } from '@twirchat/shared/logger'
  * - On sendMessage: route to correct adapter
  */
 import type {
+  Account,
   ChatSendReceipt,
   Emote,
   NormalizedChatMessage,
@@ -27,7 +28,7 @@ import { KickAdapter } from '../platforms/kick/adapter'
 import { TwitchAdapter } from '../platforms/twitch/adapter'
 import { YouTubeAdapter } from '../platforms/youtube/adapter'
 import { runInBackground } from '../services/background-task'
-import { chatSender } from '../services/chat-accounts'
+import { chatSender, separateSender } from '../services/chat-accounts'
 import { sevenTVService } from '../seventv'
 import { AccountStore } from '../store/account-store'
 import { WatchedChannelsLayoutStore } from '../store/watched-channels-layout-store'
@@ -44,8 +45,8 @@ export type WatchedChannelStatusHandler = (channelId: string, status: PlatformSt
 
 interface WatchedEntry {
   watchedChannel: WatchedChannel
-  /** Account whose own connection sends in this chat, while it differs from the reading one. */
-  senderId?: string
+  /** Accounts whose own connections send in this chat, while they differ from the reading one. */
+  senderIds: Set<string>
   adapter: IPlatformAdapter
   messages: NormalizedChatMessage[]
   status: PlatformStatusInfo | null
@@ -62,6 +63,8 @@ export class WatchedChannelManager {
     private readonly createAdapter?: (channel: WatchedChannel) => IPlatformAdapter,
     private readonly accountSender?: ChatAccountSender,
   ) {}
+  /** Chat ID → accounts its live panes chose for themselves. */
+  private paneAccounts = new Map<string, readonly string[]>()
   private reconnectQueues = new Map<string, Promise<void>>()
   private entries = new Map<string, WatchedEntry>() // Keyed by WatchedChannel.id
   private activeIds = new Set<string>()
@@ -132,7 +135,8 @@ export class WatchedChannelManager {
     if (entry) {
       this.entries.delete(id)
       this.unbindAdapter(entry)
-      if (entry.senderId) this.accountSender?.release(entry.senderId, entry.watchedChannel)
+      for (const senderId of entry.senderIds)
+        this.accountSender?.release(senderId, entry.watchedChannel)
       sevenTVService
         .unsubscribeFromChannel(
           entry.watchedChannel.platform,
@@ -274,30 +278,60 @@ export class WatchedChannelManager {
     }
   }
 
-  /** Opens the chosen account's sending connection early so the first message is not delayed. */
-  private syncSender(entry: WatchedEntry): void {
-    const sender = chatSender(entry.watchedChannel)
-    if (entry.senderId && entry.senderId !== sender?.id)
-      this.accountSender?.release(entry.senderId, entry.watchedChannel)
-    entry.senderId = sender?.id
-    if (sender && this.accountSender)
-      runInBackground(
-        this.accountSender.prepare(sender, entry.watchedChannel),
-        'Could not prepare the chat account',
-      )
+  /** Accounts chosen by the live panes of each chat; connections no pane uses are released. */
+  setPaneAccounts(accounts: Record<string, readonly string[]>): void {
+    const previous = this.paneAccounts
+    this.paneAccounts = new Map(Object.entries(accounts))
+    for (const [id, entry] of this.entries) {
+      const before = previous.get(id) ?? []
+      const after = this.paneAccounts.get(id) ?? []
+      if (before.length !== after.length || before.some((accountId, i) => accountId !== after[i]))
+        this.syncSender(entry)
+    }
   }
 
-  /** Send a message via the watched channel's adapter */
+  /** Opens every chosen account's sending connection early so first messages are not delayed. */
+  private syncSender(entry: WatchedEntry): void {
+    const channel = entry.watchedChannel
+    const desired = new Map<string, Account>()
+    const chosen = chatSender(channel)
+    if (chosen) desired.set(chosen.id, chosen)
+    for (const accountId of this.paneAccounts.get(channel.id) ?? []) {
+      const account = AccountStore.findById(accountId)
+      if (account?.platform === channel.platform && account.id !== chosen?.id) {
+        const sender = chatSender({ platform: channel.platform, accountId: account.id })
+        if (sender) desired.set(sender.id, sender)
+      }
+    }
+    for (const senderId of entry.senderIds)
+      if (!desired.has(senderId)) this.accountSender?.release(senderId, channel)
+    for (const [senderId, sender] of desired) {
+      if (entry.senderIds.has(senderId) || !this.accountSender) continue
+      runInBackground(
+        this.accountSender.prepare(sender, channel),
+        'Could not prepare the chat account',
+      )
+    }
+    entry.senderIds = new Set(desired.keys())
+  }
+
+  /**
+   * Sends in the watched chat. `accountId` is the pane's account; without it the chat's own
+   * account sends. The default account sends over the reading connection, others over their own.
+   */
   async sendMessage(
     id: string,
     text: string,
     replyTo?: ChatReplyTarget,
+    accountId?: string,
   ): Promise<void | ChatSendReceipt> {
     const entry = this.entries.get(id)
     if (!entry) {
       throw new Error(`Watched channel ${id} not found`)
     }
-    const sender = chatSender(entry.watchedChannel)
+    const sender = accountId
+      ? separateSender(entry.watchedChannel, accountId)
+      : chatSender(entry.watchedChannel)
     if (!sender) return entry.adapter.sendMessage(entry.watchedChannel.channelSlug, text, replyTo)
     if (!this.accountSender) throw new Error('Sending as another account is unavailable.')
     return this.accountSender.send(sender, entry.watchedChannel, entry.adapter, text, replyTo)
@@ -369,6 +403,7 @@ export class WatchedChannelManager {
       messages: [],
       sevenTvChannelId: ch.channelSlug,
       sevenTvPlatformUserId: undefined,
+      senderIds: new Set(),
       status: null,
       watchedChannel: ch,
     }

@@ -76,7 +76,7 @@ import type { PluginTransportInfo } from '../../plugins/api'
 import { backendFetch } from '../../runtime-config'
 import type { AccountSessions } from '../../services/account-sessions'
 import type { ChannelActions, PlayerSettings } from '../../services/channel-actions'
-import { channelAccount } from '../../services/chat-accounts'
+import { channelAccount, platformAccount } from '../../services/chat-accounts'
 import { ChatToolsError, createChatToolsService } from '../../services/chat-tools'
 import {
   getUserCosmetics,
@@ -323,8 +323,15 @@ export interface DesktopApi {
     platform: Platform
     channelSlug: string
     text: string
+    /** Saved account of the pane that acts; absent uses the chat's account. */
+    accountId?: string
   }): Promise<PlatformCommandResult>
-  getChannelRoomState(params: { platform: Platform; channelSlug: string }): Promise<RoomState>
+  getChannelRoomState(params: {
+    platform: Platform
+    channelSlug: string
+    /** Saved account of the pane that acts; absent uses the chat's account. */
+    accountId?: string
+  }): Promise<RoomState>
   getAccounts(): Promise<Account[]>
   getSavedAccounts(): Promise<Account[]>
   setActiveAccount(params: { platform: Platform; accountId: string | null }): Promise<void>
@@ -360,10 +367,14 @@ export interface DesktopApi {
   getModerationCapabilities(params: {
     platform: ModerationPlatform
     channelSlug: string
+    /** Saved account of the pane that acts; absent uses the chat's account. */
+    accountId?: string
   }): Promise<{ canModerate: boolean }>
   moderateMessage(params: {
     platform: ModerationPlatform
     channelSlug: string
+    /** Saved account of the pane that acts; absent uses the chat's account. */
+    accountId?: string
     messageId: string
     targetUserId: string
     action: ModerationAction
@@ -417,7 +428,14 @@ export interface DesktopApi {
   applyUpdate(): Promise<void>
   skipUpdate(params: { hash: string }): Promise<void>
   getWatchedChannels(): Promise<DesktopWatchedChannel[]>
-  setActiveWatchedChannels(params: { ids: string[] }): Promise<void>
+  /**
+   * Chats referenced by live layouts, with the accounts their panes chose (by chat ID) so those
+   * accounts keep a sending connection only while a pane uses them.
+   */
+  setActiveWatchedChannels(params: {
+    ids: string[]
+    paneAccounts?: Record<string, string[]>
+  }): Promise<void>
   addWatchedChannel(params: {
     platform: WatchedPlatform
     channelSlug: string
@@ -433,7 +451,18 @@ export interface DesktopApi {
     id: string
     text: string
     replyTo?: ChatReplyTarget
+    /** The sending pane's account; absent sends with the chat's account. */
+    accountId?: string
   }): Promise<void | ChatSendReceipt>
+  /**
+   * Chooses the saved account one pane sends with, independently of other panes showing the same
+   * chat; `null` makes the pane follow the chat's account again.
+   */
+  setPanelAccount(params: {
+    tabId: string
+    panelId: string
+    accountId: string | null
+  }): Promise<void>
   getWatchedChannelStatuses(): Promise<Array<{ channelId: string; status: PlatformStatusInfo }>>
   getPluginTransports(): readonly PluginTransportInfo[]
   observePluginChannel: PluginChannels['observe']
@@ -702,13 +731,19 @@ async function backendFailure(action: string, res: Response): Promise<Error> {
   )
 }
 
-function moderationCredentials(platform: ModerationPlatform, channelSlug: string) {
+function moderationCredentials(
+  platform: ModerationPlatform,
+  channelSlug: string,
+  accountId?: string,
+) {
   if (platform !== 'twitch' && platform !== 'kick') {
     throw new Error(t('runtime.api.moderationUnsupportedPlatform', { platform }))
   }
   if (!channelSlug) throw new Error(t('runtime.api.moderationChannelRequired'))
 
-  const account = channelAccount(platform, channelSlug)
+  const account = accountId
+    ? platformAccount(platform, accountId)
+    : channelAccount(platform, channelSlug)
   if (!account) {
     throw new Error(t('runtime.api.moderationAuthenticate', { platform }))
   }
@@ -1123,10 +1158,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
 
     resolveAvatar: async (params) => resolveAvatarRemote(params),
 
-    executePlatformCommand: async ({ platform, channelSlug, text }) => {
+    executePlatformCommand: async ({ platform, channelSlug, text, accountId }) => {
       if (platform !== 'twitch' && platform !== 'kick')
         throw new Error(t('runtime.api.platformCommandsUnavailable', { platform }))
-      const body = moderationCredentials(platform, channelSlug)
+      const body = moderationCredentials(platform, channelSlug, accountId)
       if (platform === 'twitch') {
         const credentials = await twitchUserCredentials(body.accessToken)
         return twitchRequest(t('runtime.api.action.platformCommandFailed'), () =>
@@ -1142,7 +1177,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return platformCommandResultSchema.parse(await res.json())
     },
 
-    getChannelRoomState: async ({ platform, channelSlug }) => {
+    getChannelRoomState: async ({ platform, channelSlug, accountId }) => {
       const own = aggregator.getAdapter(platform)?.getRoomState?.()
       const current =
         own?.channelId === channelSlug.toLowerCase()
@@ -1151,15 +1186,15 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (current) return current
       if (platform !== 'twitch')
         throw new Error(t('runtime.api.roomSettingsUnavailable', { platform }))
-      const body = moderationCredentials(platform, channelSlug)
+      const body = moderationCredentials(platform, channelSlug, accountId)
       const credentials = await twitchUserCredentials(body.accessToken)
       return twitchRequest(t('runtime.api.action.loadChatSettings'), () =>
         twitchChatTools.getRoomState({ ...body, ...credentials }),
       )
     },
 
-    getModerationCapabilities: async ({ platform, channelSlug }) => {
-      const body = moderationCredentials(platform, channelSlug)
+    getModerationCapabilities: async ({ platform, channelSlug, accountId }) => {
+      const body = moderationCredentials(platform, channelSlug, accountId)
       if (platform === 'twitch') {
         try {
           const credentials = await twitchUserCredentials(body.accessToken)
@@ -1179,7 +1214,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     },
 
     moderateMessage: async (params) => {
-      const body = moderationCredentials(params.platform, params.channelSlug)
+      const body = moderationCredentials(params.platform, params.channelSlug, params.accountId)
       if (params.platform === 'twitch') {
         const credentials = await twitchUserCredentials(body.accessToken)
         const result = await twitchModeration.execute({ ...body, ...credentials, ...params })
@@ -1400,7 +1435,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         : [...builtin, ...external].toSorted((a, b) => a.createdAt - b.createdAt)
     },
 
-    setActiveWatchedChannels: async ({ ids }) => {
+    setActiveWatchedChannels: async ({ ids, paneAccounts }) => {
+      watchedChannelManager.setPaneAccounts(paneAccounts ?? {})
       const active = new Set(ids)
       for (const channel of watchedChannelManager.getAll())
         ctx.providerRuntime?.setJoined(
@@ -1465,7 +1501,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       return mergeChatMessageSnapshot(watchedChannelManager.getMessages(id), local.messages, 200)
     },
 
-    sendWatchedChannelMessage: async ({ id, text, replyTo }) => {
+    sendWatchedChannelMessage: async ({ id, text, replyTo, accountId }) => {
       const command = text
         .trim()
         .match(/^\/([a-z]+)/i)?.[1]
@@ -1473,7 +1509,23 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       if (command && platformCommands.has(command)) {
         throw new Error(t('runtime.api.slashCommandHandler'))
       }
-      return watchedChannelManager.sendMessage(id, text, replyTo)
+      return watchedChannelManager.sendMessage(id, text, replyTo, accountId)
+    },
+
+    setPanelAccount: async ({ tabId, panelId, accountId }) => {
+      const layout = WatchedChannelsLayoutStore.get(tabId)
+      const panel = WatchedChannelsLayoutStore.getPanelNode(layout, panelId)
+      if (panel?.content.type !== 'watched') throw new Error(t('runtime.api.chatNoLongerSaved'))
+      const channelId = panel.content.channelId
+      const channel = watchedChannelManager.getAll().find((candidate) => candidate.id === channelId)
+      if (!channel) throw new Error(t('runtime.api.chatNoLongerSaved'))
+      if (channel.platform === 'youtube') throw new Error(t('runtime.api.youtubeDefaultAccount'))
+      if (accountId === null) panel.content = { type: 'watched', channelId }
+      else {
+        platformAccount(channel.platform, accountId)
+        panel.content = { type: 'watched', channelId, accountId }
+      }
+      WatchedChannelsLayoutStore.set(tabId, layout)
     },
 
     getWatchedChannelStatuses: async () => {

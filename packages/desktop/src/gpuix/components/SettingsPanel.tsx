@@ -902,7 +902,7 @@ export function SettingsPanel() {
                   <SettingsSection id="plugins" title={t('settings.section.plugins')}>
                     <RetainedSettingsEditor component={PluginSettings} />
                   </SettingsSection>
-                  <SettingsSection id="donations" title="Donation Providers">
+                  <SettingsSection id="donations" title={t('settings.section.donations')}>
                     <RetainedSettingsEditor component={DonationSettings} />
                   </SettingsSection>
                   <SettingsSection

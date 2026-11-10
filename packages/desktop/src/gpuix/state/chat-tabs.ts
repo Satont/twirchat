@@ -501,22 +501,38 @@ export function createChatTabController(
         value.openIds.splice(Math.max(0, Math.min(value.openIds.length, targetIndex)), 0, id)
         await persist(value)
       }),
-    open: (channel: DesktopWatchedChannel) =>
+    /** Opens the chat's tab, or with `another` a new tab even when the chat is already open. */
+    open: (channel: DesktopWatchedChannel, { another = false }: { another?: boolean } = {}) =>
       change(async (value) => {
         const existing = value.openIds.find(
           (id) => value.metadata[id]?.channelId === channel.id || id === channel.id,
         )
-        if (existing) {
+        if (existing && !another) {
           environment.activate(existing)
           return existing
         }
         if (value.openIds.length >= 256) throw new Error(t('notices.chatTabs.closeBeforeOpen'))
-        value.openIds.push(channel.id)
-        value.metadata[channel.id] = { channelId: channel.id, locked: false }
-        value.closed = value.closed.filter((closed) => closed.id !== channel.id)
+        const id = existing ? `tab:${crypto.randomUUID()}` : channel.id
+        if (existing) {
+          const layout: WatchedChannelsLayout = {
+            version: 2,
+            root: {
+              type: 'panel',
+              id: crypto.randomUUID(),
+              content: { type: 'watched', channelId: channel.id },
+              flex: 100,
+            },
+            meta: { createdAt: Date.now(), updatedAt: Date.now() },
+          }
+          await api.setWatchedChannelsLayout({ tabId: id, layout })
+          environment.publishLayout(id, layout)
+        }
+        value.openIds.push(id)
+        value.metadata[id] = { channelId: channel.id, locked: false }
+        value.closed = value.closed.filter((closed) => closed.id !== id)
         await persist(value)
-        environment.activate(channel.id)
-        return channel.id
+        environment.activate(id)
+        return id
       }),
   }
 }
@@ -575,8 +591,11 @@ export const setChatTabLocked = (backend: { api: ChatTabApi }, id: string, locke
   controller(backend.api).lock(id, locked)
 export const reorderChatTab = (backend: { api: ChatTabApi }, id: string, index: number) =>
   controller(backend.api).reorder(id, index)
-export const openChannelChatTab = (backend: { api: ChatTabApi }, channel: DesktopWatchedChannel) =>
-  controller(backend.api).open(channel)
+export const openChannelChatTab = (
+  backend: { api: ChatTabApi },
+  channel: DesktopWatchedChannel,
+  options?: { another?: boolean },
+) => controller(backend.api).open(channel, options)
 
 export interface ChatTabView extends Omit<WatchedChannel, 'platform'> {
   platform?: WatchedPlatform

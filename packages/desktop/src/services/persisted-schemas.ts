@@ -297,7 +297,11 @@ export const splitNodeSchema = z.toZod<SplitNode>()(
 export const panelContentSchema = z.toZod<PanelContent>()(
   z.union([
     z.object({ type: z.literal('main') }),
-    z.object({ type: z.literal('watched'), channelId: z.string() }),
+    z.object({
+      type: z.literal('watched'),
+      channelId: z.string(),
+      accountId: z.string().optional(),
+    }),
     z.object({ type: z.literal('empty') }),
   ]),
 )
