@@ -119,6 +119,7 @@ export function normalizeTwitchChatMessage(
             },
             parentMessageId: replyParentMsgId,
             parentMessageText: replyParentMsgBody,
+            threadRootMessageId: msg.threadMessageId || undefined,
           },
         }
       : {}),

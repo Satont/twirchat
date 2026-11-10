@@ -87,6 +87,7 @@ export interface NormalizedChatMessage {
   reply?: {
     parentMessageId: string
     parentMessageText: string
+    threadRootMessageId?: string
     parentAuthor: {
       id: string
       username: string

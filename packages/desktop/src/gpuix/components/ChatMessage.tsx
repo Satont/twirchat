@@ -271,19 +271,51 @@ export function BadgeList({
 
 // ── Reply preview ───────────────────────────────────────────────────────────
 
-function ReplyPreview({ message, fontSize }: { message: NormalizedChatMessage; fontSize: number }) {
+function ReplyPreview({
+  message,
+  fontSize,
+  onOpenThread,
+}: {
+  message: NormalizedChatMessage
+  fontSize: number
+  onOpenThread?: ChatMessageProps['onOpenThread']
+}) {
   const theme = useTheme()
+  useLanguage()
   const reply = message.reply
   if (!reply) return null
+  const open = message.platform === 'twitch' && onOpenThread
   const text = truncateGraphemes(sanitizeDisplayText(reply.parentMessageText), 80)
   return (
     <div
+      testId={open ? `chat-thread-open-${message.id}` : undefined}
+      role={open ? 'button' : undefined}
+      aria-label={open ? t('chat.thread.open') : undefined}
+      tabIndex={open ? 0 : undefined}
+      onClick={open ? () => open(message) : undefined}
+      onKeyDown={
+        open
+          ? (event) => {
+              if (event.key === 'enter' || event.key === 'space') {
+                event.preventDefault()
+                open(message)
+              }
+            }
+          : undefined
+      }
       style={{
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
         overflow: 'hidden',
+        ...(open
+          ? {
+              cursor: 'pointer',
+              hover: { backgroundColor: theme.fillHover },
+              focusVisible: { outlineWidth: 1, outlineColor: theme.link, outlineOffset: -2 },
+            }
+          : {}),
       }}
     >
       <Icon name="reply" size={Math.round(fontSize * 0.85)} color={theme.text2} />
@@ -471,6 +503,8 @@ export interface ChatMessageProps {
   renderModerationRail?: (rowHovered: boolean) => import('react').ReactNode
   onOpenUserCard?: (target: UserCardTarget) => void
   onReply?: (message: NormalizedChatMessage) => void
+  onOpenThread?: (message: NormalizedChatMessage) => void
+  hideReplyPreview?: boolean
   onSearch?: (query: string) => void
 }
 
@@ -777,8 +811,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
       >
         {platformStripe}
 
-        {message.reply && !isTombstone ? (
-          <ReplyPreview message={message} fontSize={fontSize} />
+        {message.reply && !isTombstone && !props.hideReplyPreview ? (
+          <ReplyPreview message={message} fontSize={fontSize} onOpenThread={props.onOpenThread} />
         ) : null}
 
         <div
@@ -966,8 +1000,8 @@ const ChatMessageContent = memo(function ChatMessageContent(props: ChatMessagePr
           gap: 2,
         }}
       >
-        {message.reply && !isTombstone ? (
-          <ReplyPreview message={message} fontSize={fontSize} />
+        {message.reply && !isTombstone && !props.hideReplyPreview ? (
+          <ReplyPreview message={message} fontSize={fontSize} onOpenThread={props.onOpenThread} />
         ) : null}
 
         <div

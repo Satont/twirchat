@@ -144,6 +144,7 @@ export const normalizedChatMessageSchema = z.toZod<NormalizedChatMessage>()(
       .object({
         parentMessageId: z.string(),
         parentMessageText: z.string(),
+        threadRootMessageId: z.string().optional(),
         parentAuthor: z.object({ id: z.string(), username: z.string(), displayName: z.string() }),
       })
       .optional(),
