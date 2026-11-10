@@ -10,7 +10,7 @@ import {
   timelineRowKey,
 } from '../src/gpuix/chat-timeline'
 import { compileChatSearch } from '../src/gpuix/chat-tools'
-import { createDonationFeed } from '../src/gpuix/state/donation-feed'
+import { createDonationFeed, createSharedDonationFeeds } from '../src/gpuix/state/donation-feed'
 
 function event(
   id: string,
@@ -116,4 +116,22 @@ test('treats donations as searchable events with provider, donor and amount', ()
     ),
   ).toBe(true)
   expect(compileChatSearch('platform:twitch').matches(searchable, {})).toBe(false)
+})
+
+test('keeps shared donations per watched chat, deduplicated and bounded by chat count', () => {
+  const feeds = createSharedDonationFeeds()
+  feeds.receive({ channelKey: 'twitch:a', donation: event('1', 10) })
+  feeds.receive({ channelKey: 'twitch:a', donation: event('1', 10) })
+  feeds.receive({ channelKey: 'kick:b', donation: event('1', 10) })
+  const first = feeds.store.get()
+  expect(first.get('twitch:a')?.rows.map((row) => row.key)).toEqual(['donation:donationalerts:1'])
+  expect(first.get('kick:b')?.total).toBe(1)
+
+  for (let index = 0; index < 200; index++)
+    feeds.receive({ channelKey: `twitch:c${index}`, donation: event('x', index) })
+  const feedsAfter = feeds.store.get()
+  expect(feedsAfter.size).toBe(200)
+  expect(feedsAfter.has('twitch:a')).toBe(false)
+  expect(feedsAfter.has('kick:b')).toBe(false)
+  expect(first.get('twitch:a')?.total).toBe(1)
 })

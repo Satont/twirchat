@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger, useGpuixRequired } from '@gpuix/react'
-import { DONATION_PROVIDER_LABELS } from '@twirchat/shared/donations'
+import { DONATION_PROVIDER_LABELS, donationChannelKey } from '@twirchat/shared/donations'
 /**
  * Chat pane — port of ChatList.vue (header + virtualized list + composer)
  * onto GPUIX's native <virtual-list> (alignment="bottom" followTail replaces
@@ -79,7 +79,12 @@ import { chatSearchJumpStore, finishChatSearchJump } from '../state/chat-search'
 import { composerStore, updateComposer } from '../state/composer'
 import { useStore, useStoreSelector } from '../state/create-store'
 import { useDesktopWindows } from '../state/desktop-windows'
-import { donationFeed, EMPTY_DONATION_FEED, type DonationRow } from '../state/donation-feed'
+import {
+  donationFeed,
+  EMPTY_DONATION_FEED,
+  sharedDonationFeeds,
+  type DonationRow,
+} from '../state/donation-feed'
 import { useTextInputFocusTracking } from '../state/focus'
 import { highlightFlashStore } from '../state/highlight-notifications'
 import { notificationPreferences } from '../state/highlight-notifications'
@@ -352,9 +357,20 @@ export function ChatView({
   const pluginFeed = useStoreSelector(homePluginFeedStore, (feed) =>
     watchedChannel ? EMPTY_PLUGIN_FEED : feed,
   )
-  const donations = useStoreSelector(donationFeed.store, (feed) =>
+  const ownDonations = useStoreSelector(donationFeed.store, (feed) =>
     watchedChannel || layoutTabId !== 'home' ? EMPTY_DONATION_FEED : feed,
   )
+  const sharedDonationKey =
+    watchedChannel && watchedChannel.platform !== 'youtube'
+      ? donationChannelKey({
+          platform: watchedChannel.platform,
+          channel: watchedChannel.channelSlug,
+        })
+      : null
+  const sharedDonations = useStoreSelector(sharedDonationFeeds.store, (feeds) =>
+    sharedDonationKey ? (feeds.get(sharedDonationKey) ?? EMPTY_DONATION_FEED) : EMPTY_DONATION_FEED,
+  )
+  const donations = watchedChannel ? sharedDonations : ownDonations
   const watchedMessages = useStoreSelector(watchedMessagesStore, (messages) =>
     watchedChannel ? (messages.get(watchedChannel.id) ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
   )

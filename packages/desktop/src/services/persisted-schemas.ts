@@ -1,3 +1,8 @@
+import {
+  DONATION_PROVIDERS,
+  DONATION_SHARE_LIMITS,
+  type DonationEvent,
+} from '@twirchat/shared/donations'
 import type {
   SevenTVEmote,
   BackendToDesktopMessage,
@@ -413,9 +418,28 @@ export const sevenTVEmoteSchema = z.toZod<SevenTVEmote>()(
     imageUrl: z.string(),
   }),
 )
+export const donationEventSchema = z.toZod<DonationEvent>()(
+  z.object({
+    id: z.string().min(1).max(DONATION_SHARE_LIMITS.id),
+    provider: z.enum(DONATION_PROVIDERS),
+    username: z.string().max(DONATION_SHARE_LIMITS.username),
+    amount: z.string().max(DONATION_SHARE_LIMITS.amount),
+    currency: z.string().max(DONATION_SHARE_LIMITS.currency),
+    message: z.string().max(DONATION_SHARE_LIMITS.message),
+    timestamp: z.number().finite(),
+  }),
+)
 export const backendToDesktopMessageSchema = z.toZod<BackendToDesktopMessage>()(
   z.union([
     z.object({ type: z.literal('youtube_chat_event'), event: youTubeChatRelayEventSchema }),
+    z.object({
+      type: z.literal('shared_donation'),
+      channel: z.object({
+        platform: z.enum(['twitch', 'kick']),
+        channel: z.string().min(1).max(DONATION_SHARE_LIMITS.channel),
+      }),
+      donation: donationEventSchema,
+    }),
     z.object({ type: z.literal('auth_url'), platform: platformSchema, url: z.string() }),
     z.object({
       type: z.literal('auth_success'),

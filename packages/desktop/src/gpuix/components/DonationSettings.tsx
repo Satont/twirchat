@@ -1,10 +1,12 @@
 import {
   DONATION_PROVIDERS,
   DONATION_PROVIDER_LABELS,
+  isShareableDonationProvider,
   type DonationConnection,
   type DonationConnections,
   type DonationOAuthAvailability,
   type DonationProvider,
+  type DonationSharing,
 } from '@twirchat/shared/donations'
 import { useEffect, useState } from 'react'
 
@@ -15,6 +17,7 @@ import { useTheme } from '../theme-context'
 import { DonationBrandMark } from './DonationBrandMark'
 import { SettingsFooter } from './settings/SettingsLayout'
 import { ActionButton } from './ui/Form'
+import { Switch } from './ui/Switch'
 import { Text } from './ui/Text'
 
 const statusLabels = {
@@ -34,10 +37,12 @@ function DonationProviderSettings({
   provider,
   connection,
   available,
+  sharing,
 }: {
   provider: DonationProvider
   connection: DonationConnection
   available: boolean | undefined
+  sharing: DonationSharing | null
 }) {
   const { api } = useBackend()
   const theme = useTheme()
@@ -63,6 +68,18 @@ function DonationProviderSettings({
   const statusColor = availabilityLabel ? theme.text2 : connectionColor
   const error =
     actionError || (connection.status === 'error' && available !== false ? connection.message : '')
+
+  const shared = sharing && isShareableDonationProvider(provider) ? sharing[provider] : undefined
+
+  async function changeSharing(enabled: boolean) {
+    if (!isShareableDonationProvider(provider)) return
+    setActionError('')
+    try {
+      await api.setDonationSharing({ provider, enabled })
+    } catch {
+      setActionError(t('settings.donations.shareFailed'))
+    }
+  }
 
   async function changeConnection(connect: boolean) {
     setBusy(true)
@@ -194,6 +211,39 @@ function DonationProviderSettings({
           ) : null}
         </div>
       </div>
+      {hasConnection && shared !== undefined ? (
+        <div
+          tabIndex={0}
+          testId={`donation-share-${provider}`}
+          onKeyDown={(event) => {
+            if (event.key === 'enter' || event.key === 'space') {
+              event.preventDefault()
+              runUiTask(changeSharing(!shared))
+            }
+          }}
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flexShrink: 1 }}
+          >
+            <Text style={{ fontSize: 12, color: theme.text }}>{t('settings.donations.share')}</Text>
+            <Text style={{ fontSize: 11, color: theme.text2 }}>
+              {t('settings.donations.share.desc')}
+            </Text>
+          </div>
+          <Switch
+            checked={shared}
+            testId={`donation-share-switch-${provider}`}
+            onChange={(enabled) => runUiTask(changeSharing(enabled))}
+          />
+        </div>
+      ) : null}
       {provider === 'donatepay' && showConnect ? (
         <Text style={{ fontSize: 12, color: theme.text2 }}>
           Copy your API key from DonatePay. TwirChat saves it encrypted.
@@ -208,6 +258,7 @@ export function DonationSettings() {
   const backend = useBackend()
   const theme = useTheme()
   const [connections, setConnections] = useState<DonationConnections | null>(null)
+  const [sharing, setSharing] = useState<DonationSharing | null>(null)
   const [availability, setAvailability] = useState<DonationAvailabilitySnapshot>()
   const oauthAvailability = availability?.backend === backend ? availability.value : undefined
   const available: Record<DonationProvider, boolean | undefined> = {
@@ -219,11 +270,24 @@ export function DonationSettings() {
   useEffect(() => {
     let active = true
     let received = false
+    let receivedSharing = false
     const unsubscribe = backend.events.on('donation_connections', (value) => {
       received = true
       setLoadError('')
       setConnections(value)
     })
+    const unsubscribeSharing = backend.events.on('donation_sharing', (value) => {
+      receivedSharing = true
+      setSharing(value)
+    })
+    async function loadSharing() {
+      try {
+        const value = await backend.api.getDonationSharing()
+        if (active && !receivedSharing) setSharing(value)
+      } catch {
+        if (active && !receivedSharing) setLoadError('Could not load donation sharing.')
+      }
+    }
     async function loadConnections() {
       try {
         const value = await backend.api.getDonationConnections()
@@ -242,10 +306,12 @@ export function DonationSettings() {
       if (active) setAvailability({ backend, value })
     }
     runUiTask(loadConnections())
+    runUiTask(loadSharing())
     runUiTask(loadAvailability())
     return () => {
       active = false
       unsubscribe()
+      unsubscribeSharing()
     }
   }, [backend])
 
@@ -262,6 +328,7 @@ export function DonationSettings() {
               provider={provider}
               connection={connections[provider]}
               available={available[provider]}
+              sharing={sharing}
             />
           ))}
         </div>

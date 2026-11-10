@@ -3,12 +3,15 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 import {
   DONATION_PROVIDERS,
+  isShareableDonationProvider,
   type ConnectDonationProvider,
   type DonationConnection,
   type DonationConnections,
   type DonationEvent,
   type DonationOAuthTokens,
   type DonationProvider,
+  type DonationSharing,
+  type ShareableDonationProvider,
 } from '@twirchat/shared/donations'
 import { z } from 'zod'
 
@@ -44,6 +47,9 @@ interface DonationServiceOptions {
   openBrowser: (url: string) => Promise<void>
   onConnections: (connections: DonationConnections) => void
   onDonation: (event: DonationEvent) => void
+  onSharing?: (sharing: DonationSharing) => void
+  /** Receives donations the streamer chose to share with viewers of their chats. */
+  onShare?: (event: DonationEvent) => void
 }
 
 const defaultDependencies = {
@@ -55,6 +61,11 @@ const defaultDependencies = {
 
 function credentialKey(provider: DonationProvider): string {
   return `secret:donations:${provider}`
+}
+
+/** Only an opt-out is stored, so every new connection starts with sharing on. */
+function sharingOptOutKey(provider: ShareableDonationProvider): string {
+  return `donations:share-off:${provider}`
 }
 
 async function restoreCredential(
@@ -74,7 +85,7 @@ async function restoreCredential(
 }
 
 export function createDonationService(
-  { db, openBrowser, onConnections, onDonation }: DonationServiceOptions,
+  { db, openBrowser, onConnections, onDonation, onSharing, onShare }: DonationServiceOptions,
   dependencies: Partial<typeof defaultDependencies> = {},
 ) {
   const { authorize, authorizeAlerts, refresh, receive } = {
@@ -94,6 +105,18 @@ export function createDonationService(
     'INSERT INTO client_identity (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
   )
   const remove = db.query('DELETE FROM client_identity WHERE key = ?')
+  let sharing: DonationSharing = {
+    donationalerts: !read.get(sharingOptOutKey('donationalerts')),
+    donatepay: !read.get(sharingOptOutKey('donatepay')),
+  }
+
+  function setSharing(provider: ShareableDonationProvider, enabled: boolean) {
+    if (enabled) remove.run(sharingOptOutKey(provider))
+    else write.run(sharingOptOutKey(provider), '1')
+    if (sharing[provider] === enabled) return
+    sharing = { ...sharing, [provider]: enabled }
+    onSharing?.(sharing)
+  }
 
   function publish(provider: DonationProvider, connection: DonationConnection) {
     connections = { ...connections, [provider]: connection }
@@ -141,7 +164,10 @@ export function createDonationService(
             credential.provider === 'donatepay' ? credential.apiKey : credential.tokens.accessToken,
           signal,
           onDonation: (event) => {
-            if (!signal.aborted) onDonation(event)
+            if (signal.aborted) return
+            onDonation(event)
+            if (isShareableDonationProvider(event.provider) && sharing[event.provider])
+              onShare?.(event)
           },
           onConnected: () => {
             if (signal.aborted) return
@@ -214,6 +240,8 @@ export function createDonationService(
 
   return {
     getConnections: () => connections,
+    getSharing: () => sharing,
+    setSharing,
     start() {
       for (const provider of DONATION_PROVIDERS) {
         const saved = read.get(credentialKey(provider))
@@ -222,6 +250,7 @@ export function createDonationService(
     },
     connect(params: ConnectDonationProvider) {
       const { provider } = params
+      if (isShareableDonationProvider(provider)) setSharing(provider, true)
       if (provider === 'donatepay') {
         const parsed = apiKeySchema.safeParse(params.apiKey)
         if (!parsed.success) throw new Error('Copy a valid DonatePay API key first.')
@@ -243,6 +272,7 @@ export function createDonationService(
     },
     disconnect(provider: DonationProvider) {
       remove.run(credentialKey(provider))
+      if (isShareableDonationProvider(provider)) setSharing(provider, true)
       active.get(provider)?.abort()
       active.delete(provider)
       publish(provider, { status: 'disconnected' })

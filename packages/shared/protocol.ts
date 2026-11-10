@@ -1,3 +1,4 @@
+import type { DonationEvent, DonationShareChannel, DonationShareIdentity } from './donations'
 import type { Platform } from './types'
 import type { YouTubeChatRelayEvent } from './youtube-chat'
 
@@ -53,6 +54,7 @@ export interface EmoteCatalogEntry {
 
 export type BackendToDesktopMessage =
   | { type: 'youtube_chat_event'; event: YouTubeChatRelayEvent }
+  | { type: 'shared_donation'; channel: DonationShareChannel; donation: DonationEvent }
   | { type: 'auth_url'; platform: Platform; url: string }
   | { type: 'auth_success'; platform: Platform; username: string; displayName: string }
   | { type: 'auth_error'; platform: Platform; error: string }
@@ -123,6 +125,11 @@ export type DesktopToBackendMessage =
     }
   | { type: 'youtube_chat_unsubscribe'; subscriptionId: string }
   | { type: 'ping' }
+  /** Proves which chats this streamer owns; an empty list stops sharing. */
+  | { type: 'donation_share_identities'; identities: DonationShareIdentity[] }
+  | { type: 'donation_share'; donation: DonationEvent }
+  /** Replaces the chats whose shared donations this client receives. */
+  | { type: 'donation_watch'; channels: DonationShareChannel[] }
   | { type: 'auth_start'; platform: Exclude<Platform, 'twitch'> }
   | { type: 'auth_logout'; platform: Platform }
   | { type: 'send_message'; platform: Platform; channel: string; message: string }

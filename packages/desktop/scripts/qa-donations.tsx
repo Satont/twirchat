@@ -5,6 +5,7 @@ import type {
   DonationEvent,
   DonationOAuthAvailability,
   DonationProvider,
+  DonationSharing,
 } from '@twirchat/shared/donations'
 
 import { assertGuiQaEnvironment } from '../src/services/gui-qa'
@@ -44,6 +45,7 @@ let connections: DonationConnections = {
 }
 let clipboard = ''
 let pasteReceived = false
+let sharing: DonationSharing = { donationalerts: true, donatepay: true }
 const update = (provider: DonationProvider, state: DonationConnections[DonationProvider]) => {
   connections = { ...connections, [provider]: state }
   events.emit('donation_connections', connections)
@@ -70,6 +72,12 @@ const backend = {
     },
     disconnectDonationProvider: async ({ provider }) =>
       update(provider, { status: 'disconnected' }),
+    getDonationSharing: async () => sharing,
+    setDonationSharing: async ({ provider, enabled }) => {
+      sharing = { ...sharing, [provider]: enabled }
+      events.emit('donation_sharing', sharing)
+      return sharing
+    },
   },
 }
 settingsStore.set(fixtureSettings)
@@ -180,6 +188,16 @@ try {
   await until(() => find('donation-disconnect-donatepay'), 'DonatePay connected')
   assert.ok(pasteReceived)
   assert.ok(!renderer.getAllText().join('').includes(clipboard), 'The API key must stay hidden')
+  await until(() => find('donation-share-switch-donatepay'), 'sharing switch after connect')
+  assert.ok(!find('donation-share-memealerts'), 'MemeAlerts has no sharing switch')
+  assert.ok(
+    painted(memeUnavailable ? 'Делиться донатами со зрителями' : 'Share donations with viewers'),
+  )
+  await captureGuiQaDisplay(`donations-sharing-${captureSuffix}`)
+  await click('donation-share-switch-donatepay')
+  await until(() => !sharing.donatepay, 'sharing turned off')
+  await click('donation-share-switch-donatepay')
+  await until(() => sharing.donatepay, 'sharing turned back on')
 
   mount(<ChatView isMain />)
   await until(() => find('chat-pause-button'), 'My channels with no signed-in accounts')
@@ -238,6 +256,25 @@ try {
     () => find('chat-pane') && !find('donation-memealerts-third'),
     'watched chat isolates donations',
   )
+  const sharedDonation = (channelKey: string, id: string, username: string) =>
+    events.emit('shared_donation', {
+      channelKey,
+      donation: {
+        id,
+        provider: 'donationalerts',
+        username,
+        amount: '777',
+        currency: 'RUB',
+        message: 'Shared with every viewer',
+        timestamp: Date.now(),
+      },
+    })
+  sharedDonation('kick:other', 'elsewhere', 'ElsewhereDonor')
+  sharedDonation('kick:qa', 'shared', 'SharedDonor')
+  await until(() => painted('SharedDonor'), 'shared donation in the watched chat')
+  assert.ok(!painted('ElsewhereDonor'), 'shared donations stay in their own chat')
+  assert.ok(!painted('Luna'), 'own donations stay in My channels')
+  await captureGuiQaDisplay(`donations-shared-${captureSuffix}`)
   console.log(`Native donations settings and chat QA passed at ${width}px.`)
 } catch (error) {
   await captureGuiQaDisplay(`donations-failure-${captureSuffix}`).catch(() => {})
