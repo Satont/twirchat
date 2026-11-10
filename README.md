@@ -4,19 +4,74 @@ A desktop chat client for streamers, moderators, and viewers on Twitch, YouTube,
 
 **[Download TwirChat for Linux, Windows, or macOS](https://github.com/Satont/twirchat/releases/latest)**
 
-![TwirChat workspace with Twitch and Kick chats in split panes and a YouTube channel tab](.github/screenshots/chat-workspace.webp)
+[Workspaces and accounts](#workspaces-and-accounts) · [Moderation and donations](#moderation-and-donations) ·
+[OBS Remote](#obs-remote) · [Appearance](#appearance) ·
+[Installation](#installation-and-updates)
 
-_Twitch and Kick chats in a split workspace. Channels and messages are demo data._
+![TwirChat with Twitch and Kick chats in side-by-side panes](.github/screenshots/chat-workspace.png)
 
-## What you can do
+_Screenshots show the TwirChat desktop app with demo channels, accounts, messages, donation events,
+and OBS data._
 
-- **Follow several chats at once.** Read your connected channels together in **My channels**, or open other channels in tabs and split panes. Use different saved Twitch or Kick accounts in different panes, even in the same chat.
-- **Find what matters in a busy chat.** Set highlights, ignores, filters, and mention alerts. Search across open chats or look up and export saved history. Translate individual messages or set up automatic translation.
-- **Make chat your own.** Use 7TV, BetterTTV, and FrankerFaceZ emotes alongside platform emotes, save favorites, and display 7TV name paints. Set your own keyboard shortcuts and commands. The interface is available in English and Russian.
-- **Moderate and manage streams.** Delete messages, time out users, and ban users in Twitch and Kick chats where you have permission. Review held Twitch AutoMod messages inline and manage Twitch polls, predictions, and channel points rewards. Edit Twitch and Kick stream titles and categories.
-- **Bring chat into your broadcast.** Add the **OBS overlay** as a browser source or use **OBS Remote** to switch scenes, adjust audio, and control streaming and recording. Show live DonationAlerts and DonatePay events in **My channels** and share them with viewers using TwirChat in your Twitch or Kick chat.
+## Workspaces and accounts
+
+Read your connected Twitch, YouTube, and Kick channels together in **My channels**. Use tabs
+and movable split panes to keep other chats open alongside them.
+
+Add your accounts in **Platforms**. Open the same Twitch or Kick chat in two panes, then use
+the account icon next to each message box to choose which saved account sends from that pane.
+In the example below, the left pane sends as **@pixelharbor** and the right sends as **@harbormod**.
+
+![The same Twitch chat in two panes with different senders and the account picker open](.github/screenshots/pane-accounts.png)
+
+<details>
+<summary>See saved accounts in Platforms</summary>
+
+![Platforms screen with connected and saved accounts](.github/screenshots/platforms.png)
+
+</details>
+
+Use highlights, ignores, filters, and mention alerts to keep track of busy chats. Search across
+open chats, export saved history, and translate individual messages or set up automatic
+translation. The composer supports replies, emote and command completion, and custom commands.
+TwirChat supports 7TV, BetterTTV, and FrankerFaceZ emotes alongside platform emotes, plus emote
+favorites and 7TV name paints.
+
+## Moderation and donations
+
+Review Twitch AutoMod holds in the chat where they happened. With the required permissions,
+select **Allow** or **Deny** directly in the held message's row. TwirChat also supports message
+deletion, timeouts, and bans in Twitch and Kick.
+
+Connect **DonationAlerts** or **DonatePay** in **Settings → Donations** to see donation alerts
+among your messages in **My channels**. You can also share those alerts with viewers who use
+TwirChat in your Twitch or Kick chat.
+
+![My channels with a Twitch AutoMod hold and its Allow and Deny controls, plus a DonationAlerts notification](.github/screenshots/automod-and-donationalerts.png)
+
+Click a username to open the user card. Check their profile or chat history, leave a note, or
+use moderation actions for the current channel. You can pin the card or open it in a separate
+window.
+
+![A TwirChat user card open over chat with profile, moderation, notes, and history tabs](.github/screenshots/user-card.png)
+
+## OBS Remote
+
+Use **OBS Remote** to switch scenes, show or hide sources, adjust audio, and control streaming
+and recording through OBS WebSocket. To put chat on stream, copy the browser source URL from
+**Settings → OBS overlay**.
+
+![OBS Remote with a connected profile, scene controls, and an audio mixer](.github/screenshots/obs-remote.png)
+
+From chat, you can also manage Twitch polls, predictions, and channel point rewards and edit
+Twitch or Kick stream titles and categories.
 
 ## Appearance
+
+Settings groups appearance, chat rules, notifications, privacy, shortcuts, and integrations in
+one searchable screen. Choose English or Russian under **Appearance**.
+
+![TwirChat Settings with the Appearance section and theme presets visible](.github/screenshots/settings.png)
 
 Open **Settings → General → Appearance** to try presets such as Ocean, Paper, Dracula, and
 Catppuccin. Choose **Custom** under **Theme** and enter the five hex colors below to recreate
@@ -30,7 +85,7 @@ either example. The colors preview as you type. Select **Save changes** to keep 
 | Muted text | `#c0a8b5` | `#516675` |
 | Accent     | `#ffc576` | `#1d677d` |
 
-![The Dusk and Daybreak custom themes side by side](.github/screenshots/theme-gallery.webp)
+![The same chat in the Dusk and Daybreak custom palettes](.github/screenshots/theme-gallery.png)
 
 Open **Chat appearance** from the chat toolbar to switch between **Modern** and **Compact**
 rows, change the font size, or toggle avatars, badges, and timestamps. The sample chat updates
