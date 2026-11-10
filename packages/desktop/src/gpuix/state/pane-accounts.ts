@@ -10,21 +10,21 @@ import {
   type DesktopWatchedChannel,
 } from '../../watched-channels/plugin-channel-types'
 import { resolveChatAccount } from '../chat-account'
-import { chatTabsStore } from './chat-tabs'
 import { allPanels, layoutStore, type LayoutState } from './layout'
+import { liveLayoutTabIds } from './watched-subscriptions'
 
 /** The account a pane chose for itself, if any. */
 export function panelAccountId(panel: PanelNode | undefined): string | undefined {
   return panel?.content.type === 'watched' ? panel.content.accountId : undefined
 }
 
-/** Panels of open tabs (and home) that show `channelId`. */
+/** Panels of live tabs and detached windows that show `channelId`. */
 export function panelsShowingChat(
   channelId: string,
   layouts: ReadonlyMap<string, LayoutState> = layoutStore.get(),
-  openTabIds: readonly string[] = chatTabsStore.get().value.openIds,
+  tabIds: readonly string[] = liveLayoutTabIds(),
 ): Array<{ tabId: string; panel: PanelNode }> {
-  return ['home', ...openTabIds].flatMap((tabId) =>
+  return tabIds.flatMap((tabId) =>
     allPanels(layouts.get(tabId)?.layout ?? null)
       .filter((panel) => panel.content.type === 'watched' && panel.content.channelId === channelId)
       .map((panel) => ({ tabId, panel })),

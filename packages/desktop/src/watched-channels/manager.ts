@@ -62,9 +62,9 @@ export class WatchedChannelManager {
     ) => message,
     private readonly createAdapter?: (channel: WatchedChannel) => IPlatformAdapter,
     private readonly accountSender?: ChatAccountSender,
-    /** Accounts chosen by individual panes that show the chat. */
-    private readonly paneAccountIds: (channelId: string) => string[] = () => [],
   ) {}
+  /** Chat ID → accounts its live panes chose for themselves. */
+  private paneAccounts = new Map<string, readonly string[]>()
   private reconnectQueues = new Map<string, Promise<void>>()
   private entries = new Map<string, WatchedEntry>() // Keyed by WatchedChannel.id
   private activeIds = new Set<string>()
@@ -278,10 +278,16 @@ export class WatchedChannelManager {
     }
   }
 
-  /** Re-reads which accounts the chat's panes send with after a pane's choice changed. */
-  refreshSenders(id: string): void {
-    const entry = this.entries.get(id)
-    if (entry) this.syncSender(entry)
+  /** Accounts chosen by the live panes of each chat; connections no pane uses are released. */
+  setPaneAccounts(accounts: Record<string, readonly string[]>): void {
+    const previous = this.paneAccounts
+    this.paneAccounts = new Map(Object.entries(accounts))
+    for (const [id, entry] of this.entries) {
+      const before = previous.get(id) ?? []
+      const after = this.paneAccounts.get(id) ?? []
+      if (before.length !== after.length || before.some((accountId, i) => accountId !== after[i]))
+        this.syncSender(entry)
+    }
   }
 
   /** Opens every chosen account's sending connection early so first messages are not delayed. */
@@ -290,7 +296,7 @@ export class WatchedChannelManager {
     const desired = new Map<string, Account>()
     const chosen = chatSender(channel)
     if (chosen) desired.set(chosen.id, chosen)
-    for (const accountId of this.paneAccountIds(channel.id)) {
+    for (const accountId of this.paneAccounts.get(channel.id) ?? []) {
       const account = AccountStore.findById(accountId)
       if (account?.platform === channel.platform && account.id !== chosen?.id) {
         const sender = chatSender({ platform: channel.platform, accountId: account.id })

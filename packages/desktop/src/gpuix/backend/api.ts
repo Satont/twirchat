@@ -428,7 +428,14 @@ export interface DesktopApi {
   applyUpdate(): Promise<void>
   skipUpdate(params: { hash: string }): Promise<void>
   getWatchedChannels(): Promise<DesktopWatchedChannel[]>
-  setActiveWatchedChannels(params: { ids: string[] }): Promise<void>
+  /**
+   * Chats referenced by live layouts, with the accounts their panes chose (by chat ID) so those
+   * accounts keep a sending connection only while a pane uses them.
+   */
+  setActiveWatchedChannels(params: {
+    ids: string[]
+    paneAccounts?: Record<string, string[]>
+  }): Promise<void>
   addWatchedChannel(params: {
     platform: WatchedPlatform
     channelSlug: string
@@ -1428,7 +1435,8 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         : [...builtin, ...external].toSorted((a, b) => a.createdAt - b.createdAt)
     },
 
-    setActiveWatchedChannels: async ({ ids }) => {
+    setActiveWatchedChannels: async ({ ids, paneAccounts }) => {
+      watchedChannelManager.setPaneAccounts(paneAccounts ?? {})
       const active = new Set(ids)
       for (const channel of watchedChannelManager.getAll())
         ctx.providerRuntime?.setJoined(
@@ -1518,7 +1526,6 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         panel.content = { type: 'watched', channelId, accountId }
       }
       WatchedChannelsLayoutStore.set(tabId, layout)
-      watchedChannelManager.refreshSenders(channelId)
     },
 
     getWatchedChannelStatuses: async () => {

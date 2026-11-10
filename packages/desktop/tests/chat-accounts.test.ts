@@ -27,7 +27,6 @@ import { channelAccount, chatAccount, chatSender } from '../src/services/chat-ac
 import { sevenTVService } from '../src/seventv'
 import { AccountStore } from '../src/store/account-store'
 import { getDb, initDb } from '../src/store/db'
-import { WatchedChannelsLayoutStore } from '../src/store/watched-channels-layout-store'
 import { WatchedChannelStore } from '../src/store/watched-channels-store'
 import {
   createPendingMessage,
@@ -422,11 +421,10 @@ test('panes of one chat send with their own accounts over a single reading conne
       return adapter
     },
     sender,
-    (channelId) => WatchedChannelsLayoutStore.paneAccountIds(channelId),
   )
   const chat = await manager.addChannel('twitch', 'shared')
-  WatchedChannelsLayoutStore.set('tab:a', paneLayout(chat.id, [undefined, alt.id]))
-  WatchedChannelsLayoutStore.set('tab:b', paneLayout(chat.id, [bot.id, main.id]))
+  // The live panes chose alt, bot and the default account; the default needs no own connection.
+  manager.setPaneAccounts({ [chat.id]: [alt.id, bot.id, main.id] })
   await manager.setActiveChannels([chat.id])
 
   expect(adapters).toHaveLength(1)
@@ -438,13 +436,12 @@ test('panes of one chat send with their own accounts over a single reading conne
   expect(log.at(-1)).toBe('send twitch:alt shared from alt')
   await expect(manager.sendMessage(chat.id, 'wrong', undefined, kick.id)).rejects.toThrow()
 
-  // Closing the bot's pane releases its connection once the chat's senders are re-read.
-  WatchedChannelsLayoutStore.set('tab:b', paneLayout(chat.id, [main.id]))
-  manager.refreshSenders(chat.id)
+  // Closing the bot's pane releases its connection; an unchanged list touches nothing.
+  manager.setPaneAccounts({ [chat.id]: [alt.id, main.id] })
   expect(log.at(-1)).toBe('release twitch:bot shared')
-  expect(WatchedChannelsLayoutStore.paneAccountIds(chat.id).toSorted()).toEqual(
-    [alt.id, main.id].toSorted(),
-  )
+  const settled = log.length
+  manager.setPaneAccounts({ [chat.id]: [alt.id, main.id] })
+  expect(log).toHaveLength(settled)
 })
 
 test('a pane account wins over the chat account, and the tab lists non-default ones', () => {

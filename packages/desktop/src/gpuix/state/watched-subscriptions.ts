@@ -45,10 +45,52 @@ export function referencedWatchedChannels(snapshot: WatchedReferenceSnapshot): s
   return [...active].sort()
 }
 
+/**
+ * Accounts the panes of live layouts chose for themselves, by chat. Closed tabs keep their saved
+ * layouts, so only live ones count: a pane that is gone must not keep its account connected.
+ */
+export function referencedPaneAccounts(
+  snapshot: WatchedReferenceSnapshot,
+): Record<string, string[]> {
+  const known = new Set(snapshot.channels.map((channel) => channel.id))
+  const accounts = new Map<string, Set<string>>()
+  for (const id of snapshot.tabIds) {
+    const layout = snapshot.layouts.get(id)
+    if (!layout) continue
+    for (const panel of getAllPanels(layout.root)) {
+      const content = panel.content
+      if (content.type !== 'watched' || !content.accountId || !known.has(content.channelId))
+        continue
+      const ids = accounts.get(content.channelId) ?? new Set<string>()
+      ids.add(content.accountId)
+      accounts.set(content.channelId, ids)
+    }
+  }
+  return Object.fromEntries(
+    [...accounts]
+      .toSorted(([a], [b]) => a.localeCompare(b))
+      .map(([id, ids]) => [id, [...ids].toSorted()]),
+  )
+}
+
+/** Layouts on screen: home and open tabs of the main window, plus detached windows. */
+export function liveLayoutTabIds(
+  tabs = chatTabsStore.get(),
+  windows = chatWindowsStore.get(),
+): string[] {
+  const scopes = new Set<string>()
+  if (windows.has('main')) {
+    scopes.add('home')
+    for (const id of tabs.value.openIds) scopes.add(id)
+  }
+  for (const window of windows.values()) if (window.tabId) scopes.add(window.tabId)
+  return [...scopes]
+}
+
 export function createWatchedSubscriptionController(options: {
   read(): WatchedReferenceSnapshot
   load(tabId: string): Promise<void>
-  publish(ids: string[]): Promise<void>
+  publish(ids: string[], paneAccounts: Record<string, string[]>): Promise<void>
   failed(error: unknown): void
 }) {
   const loading = new Map<string, Promise<void>>()
@@ -76,10 +118,11 @@ export function createWatchedSubscriptionController(options: {
       const next = options.read()
       if (!next.ready) return
       const ids = referencedWatchedChannels(next)
-      const key = JSON.stringify(ids)
+      const paneAccounts = referencedPaneAccounts(next)
+      const key = JSON.stringify([ids, paneAccounts])
       if (key === requested) return
       requested = key
-      await options.publish(ids)
+      await options.publish(ids, paneAccounts)
     } catch (error) {
       if (stopped || current !== revision) return
       requested = undefined
@@ -114,16 +157,9 @@ export function wireActiveWatchedChannels(backend: {
   const controller = createWatchedSubscriptionController({
     read() {
       const tabs = chatTabsStore.get()
-      const windows = chatWindowsStore.get()
-      const scopes = new Set<string>()
-      if (windows.has('main')) {
-        scopes.add('home')
-        for (const id of tabs.value.openIds) scopes.add(id)
-      }
-      for (const window of windows.values()) if (window.tabId) scopes.add(window.tabId)
       return {
         ready: tabs.loaded,
-        tabIds: [...scopes],
+        tabIds: liveLayoutTabIds(tabs),
         layouts: new Map(
           [...layoutStore.get()]
             .filter(([, state]) => !state.isLoading || state.layout !== null)
@@ -134,7 +170,7 @@ export function wireActiveWatchedChannels(backend: {
       }
     },
     load: (id) => loadLayout(backend, id),
-    publish: (ids) => backend.api.setActiveWatchedChannels({ ids }),
+    publish: (ids, paneAccounts) => backend.api.setActiveWatchedChannels({ ids, paneAccounts }),
     failed: (error) =>
       showNotice('error', t('notices.watchedSubscriptions.updateFailed', { error: String(error) })),
   })
