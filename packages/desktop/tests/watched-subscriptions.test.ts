@@ -104,8 +104,8 @@ test('counts all open layouts once and ignores closed history, orphan layouts an
   expect(referencedWatchedChannels(snapshot)).toEqual(['popup'])
 })
 
-test('pane accounts count only live layouts, including detached windows', () => {
-  const withAccount = (channelId: string, accountId: string): WatchedChannelsLayout => ({
+function withAccount(channelId: string, accountId: string): WatchedChannelsLayout {
+  return {
     version: 2,
     root: {
       type: 'panel',
@@ -113,7 +113,10 @@ test('pane accounts count only live layouts, including detached windows', () => 
       flex: 100,
       content: { type: 'watched', channelId, accountId },
     },
-  })
+  }
+}
+
+test('pane accounts count only live layouts, including detached windows', () => {
   const snapshot: WatchedReferenceSnapshot = {
     ready: true,
     tabIds: ['open', 'window:popup'],
