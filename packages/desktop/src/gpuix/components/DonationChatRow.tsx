@@ -1,12 +1,12 @@
 import { DONATION_PROVIDER_LABELS, type DonationEvent } from '@twirchat/shared/donations'
-import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
+import { DEFAULT_SETTINGS, type TimestampFormat } from '@twirchat/shared/types'
 import { memo } from 'react'
 
 import { chunkGraphemes } from '../../views/shared/utils/display-text'
 import { donationAmount } from '../chat-timeline'
 import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
-import { formatMessageTime, timestampSize } from './ChatMessage'
+import { formatMessageTime, timestampSize } from '../timestamp-format'
 import { DONATION_BRAND_ACCENTS, DonationBrandMark } from './DonationBrandMark'
 import { Text } from './ui/Text'
 
@@ -14,6 +14,7 @@ interface DonationChatRowProps {
   donation: DonationEvent
   fontSize?: number
   showTimestamp?: boolean
+  timestampFormat?: TimestampFormat
   chatTheme?: typeof DEFAULT_SETTINGS.chatTheme
 }
 
@@ -29,6 +30,7 @@ export const DonationChatRow = memo(function DonationChatRow({
   donation,
   fontSize = DEFAULT_SETTINGS.fontSize,
   showTimestamp,
+  timestampFormat,
   chatTheme = DEFAULT_SETTINGS.chatTheme,
 }: DonationChatRowProps) {
   const theme = useTheme()
@@ -37,7 +39,7 @@ export const DonationChatRow = memo(function DonationChatRow({
   const amountColor = readableOn(DONATION_BRAND_ACCENTS[donation.provider], theme.surface)
   const provider = DONATION_PROVIDER_LABELS[donation.provider]
   const source = showTimestamp
-    ? `${provider} · ${formatMessageTime(new Date(donation.timestamp))}`
+    ? `${provider} · ${formatMessageTime(new Date(donation.timestamp), timestampFormat)}`
     : provider
   const style = {
     fontSize,

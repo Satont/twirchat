@@ -45,6 +45,7 @@ import { useTheme } from '../theme-context'
 import { ChatLoggingSettings } from './chat-settings/ChatLoggingSettings'
 import { ChatPauseSettings } from './chat-settings/ChatPauseSettings'
 import { ChatRulesSettings } from './chat-settings/ChatRulesSettings'
+import { ChatTimestampFormatSettings } from './chat-settings/ChatTimestampFormatSettings'
 import { CustomCommandsSettings } from './CustomCommandsSettings'
 import { DonationSettings } from './DonationSettings'
 import { EmoteProviderSettings } from './EmoteProviderSettings'
@@ -93,6 +94,7 @@ type AppSettingsSectionId = Extract<
   SettingsSectionId,
   | 'appearance'
   | 'updates'
+  | 'timestamps'
   | 'self-ping'
   | 'overlay'
   | 'shortcuts'
@@ -106,6 +108,7 @@ type AppSettingsSectionId = Extract<
 const APP_SETTINGS_SECTIONS: readonly AppSettingsSectionId[] = [
   'appearance',
   'updates',
+  'timestamps',
   'self-ping',
   'overlay',
   'shortcuts',
@@ -131,6 +134,11 @@ function appSectionFields(
       }
     case 'updates':
       return { autoCheckUpdates: source.autoCheckUpdates }
+    case 'timestamps':
+      return {
+        showTimestamp: source.showTimestamp,
+        timestampFormat: source.timestampFormat,
+      }
     case 'self-ping':
       return { selfPing: { ...source.selfPing } }
     case 'overlay':
@@ -993,6 +1001,27 @@ export function SettingsPanel() {
                     desc={t('settings.section.streamer-mode.desc')}
                   >
                     <RetainedSettingsEditor component={StreamerModeSettings} />
+                  </SettingsSection>
+                  <SettingsSection
+                    id="timestamps"
+                    title={t('settings.section.timestamps')}
+                    desc={t('settings.section.timestamps.desc')}
+                  >
+                    <ChatTimestampFormatSettings
+                      showTimestamp={local.showTimestamp}
+                      timestampFormat={local.timestampFormat}
+                      onShowTimestampChange={(showTimestamp) =>
+                        patch((draft) => {
+                          draft.showTimestamp = showTimestamp
+                        })
+                      }
+                      onTimestampFormatChange={(timestampFormat) =>
+                        patch((draft) => {
+                          draft.timestampFormat = timestampFormat
+                        })
+                      }
+                    />
+                    {appFooter('timestamps')}
                   </SettingsSection>
                   <SettingsSection
                     id="similarity"

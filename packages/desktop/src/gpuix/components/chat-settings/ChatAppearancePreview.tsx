@@ -11,6 +11,7 @@ import { initialsOf } from '../../../views/shared/utils/display-text'
 import { useT, type MessageKey } from '../../i18n'
 import { platformColor, readableOn } from '../../theme'
 import { useFont, useTheme } from '../../theme-context'
+import { formatMessageTime, timestampColumnWidth } from '../../timestamp-format'
 import { PlatformIcon } from '../ui/Icon'
 import { Text } from '../ui/Text'
 
@@ -28,7 +29,7 @@ interface PreviewMessage {
   platform: Platform
   author: PreviewAuthor
   badges: readonly PreviewBadge[]
-  time: string
+  time: Date
   textKey: MessageKey
   highlighted?: boolean
 }
@@ -39,13 +40,17 @@ interface PreviewToken {
   offset: number
 }
 
+function previewTime(hour: number, minute: number, second: number, millisecond = 0): Date {
+  return new Date(2026, 0, 1, hour, minute, second, millisecond)
+}
+
 const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
   {
     id: 'welcome',
     platform: 'twitch',
     author: { name: 'nightbot', color: '#7dd3fc' },
     badges: [{ text: 'MOD' }],
-    time: '21:41:02',
+    time: previewTime(21, 41, 2),
     textKey: 'chat.preview.welcome',
   },
   {
@@ -53,7 +58,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     platform: 'kick',
     author: { name: 'pixelpanda', color: '#53fc18' },
     badges: [{ text: 'SUB' }],
-    time: '21:41:18',
+    time: previewTime(21, 41, 18),
     textKey: 'chat.preview.layout',
   },
   {
@@ -61,7 +66,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     platform: 'youtube',
     author: { name: 'mod_maya', color: '#fca5a5' },
     badges: [{ text: 'MOD' }],
-    time: '21:42:03',
+    time: previewTime(21, 42, 3),
     textKey: 'chat.preview.mention',
   },
   {
@@ -69,7 +74,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     platform: 'twitch',
     author: { name: 'StreamerName', color: '#a78bfa' },
     badges: [],
-    time: '21:42:11',
+    time: previewTime(21, 42, 11),
     textKey: 'chat.preview.selfPing',
     highlighted: true,
   },
@@ -78,7 +83,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     platform: 'kick',
     author: { name: 'pixelpanda', color: '#53fc18' },
     badges: [{ text: 'SUB' }],
-    time: '21:42:24',
+    time: previewTime(21, 42, 24),
     textKey: 'chat.preview.guide',
   },
   {
@@ -86,7 +91,7 @@ const PREVIEW_MESSAGES: readonly PreviewMessage[] = [
     platform: 'twitch',
     author: { name: 'viewer42', color: '#fcd34d' },
     badges: [],
-    time: '21:42:31',
+    time: previewTime(21, 42, 31),
     textKey: 'chat.preview.viewer',
   },
 ]
@@ -229,6 +234,7 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
   const { t } = useT()
   const text = t(message.textKey)
   const fontSize = settings.fontSize
+  const time = formatMessageTime(message.time, settings.timestampFormat)
   const authorColor = readableOn(message.author.color, theme.bg)
   const showStripe = settings.showPlatformColorStripe
   const highlighted = message.highlighted === true && settings.selfPing?.enabled === true
@@ -276,13 +282,13 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
               fontSize: tsSize,
               color: theme.text2,
               whiteSpace: 'nowrap',
-              width: Math.ceil(tsSize * 4.6),
+              width: timestampColumnWidth(fontSize, settings.timestampFormat),
               textAlign: 'right',
               flexShrink: 0,
               marginRight: 5,
             }}
           >
-            {message.time}
+            {time}
           </Text>
         ) : null}
         {settings.showAvatars ? (
@@ -375,9 +381,7 @@ function PreviewRow({ message, settings }: { message: PreviewMessage; settings: 
             {message.author.name}
           </Text>
           {settings.showTimestamp ? (
-            <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2 }}>
-              {message.time}
-            </Text>
+            <Text style={{ fontSize: timestampSize(fontSize), color: theme.text2 }}>{time}</Text>
           ) : null}
         </div>
         <div

@@ -72,6 +72,8 @@ export const settings = {
   'settings.section.streamer-mode.desc': 'Protect private details while streaming',
   'settings.section.similarity': 'Similar Messages',
   'settings.section.similarity.desc': 'Control repeated and almost identical messages',
+  'settings.section.timestamps': 'Message Timestamps',
+  'settings.section.timestamps.desc': 'Choose how chat timestamps look',
   'settings.section.pause': 'Chat Pausing',
   'settings.section.pause.desc': 'Keep chat still while reading or opening links',
   'settings.section.twitch-session': 'Additional Twitch Session',
@@ -105,6 +107,11 @@ export const settings = {
   'settings.appearance.font.inter': 'Inter',
   'settings.appearance.font.manrope': 'Manrope',
   'settings.appearance.font.system': 'System',
+
+  'settings.chat.showTimestamp': 'Show timestamps',
+  'settings.chat.showTimestampHint': 'Display the time next to each chat message',
+  'settings.chat.timestampFormat': 'Timestamp format',
+  'settings.chat.timestampFormatHint': 'Example: {example}. 12-hour formats include AM/PM.',
 
   'settings.twir.suggest': 'Suggest Twir commands',
   'settings.twir.suggestHint': 'Show public commands for the selected chat when you type !',

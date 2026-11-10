@@ -137,6 +137,7 @@ export type SettingsSectionId =
   | 'appearance'
   | 'updates'
   | 'notifications'
+  | 'timestamps'
   | 'rules'
   | 'history'
   | 'image-uploader'
@@ -168,6 +169,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     saveMode: 'section',
     keywords:
       'streamer mode auto obs streaming software privacy private avatar thumbnails moderation restricted whispers blocked terms viewer count duration mute mentions hideUsercardAvatars hideLinkThumbnails hideModActions hideRestrictedUsers muteMentions suppressInlineWhispers hideBlockedTermText hideViewerCountAndDuration suppressLiveNotifications приватность стример автоматический скрыть аватар зрители',
+  },
+  {
+    id: 'timestamps',
+    category: 'chat',
+    title: 'Message Timestamps',
+    saveMode: 'section',
+    keywords:
+      'timestamp time clock format seconds milliseconds 12-hour 24-hour AM PM showTimestamp timestampFormat HH:MM:SS HH:MM HH:MM:SS.sss hh:MM A hh:MM:SS A время часы минуты секунды формат отображать сообщения',
   },
   {
     id: 'similarity',

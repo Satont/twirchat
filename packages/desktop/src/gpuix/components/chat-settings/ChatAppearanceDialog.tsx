@@ -1,4 +1,3 @@
-
 import { useGpuixRequired, useWindowSize } from '@gpuix/react'
 import type { AppSettings } from '@twirchat/shared/types'
 import { useEffect, useState } from 'react'

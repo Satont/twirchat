@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
+import { DEFAULT_SETTINGS, type TimestampFormat } from '@twirchat/shared/types'
 import { memo } from 'react'
 
 import {
@@ -12,7 +12,7 @@ import { useT, type MessageKey } from '../i18n'
 import { decideTwitchAutoModMessage, type TwitchAutoModRow } from '../state/twitch-automod'
 import { semantic, withAlpha } from '../theme'
 import { useFont, useTheme } from '../theme-context'
-import { formatMessageTime, timestampSize } from './ChatMessage'
+import { formatMessageTime, timestampSize } from '../timestamp-format'
 import { Icon } from './ui/Icon'
 import { Text } from './ui/Text'
 
@@ -21,6 +21,7 @@ interface TwitchAutoModChatRowProps {
   hideBlockedTerms?: boolean
   fontSize?: number
   showTimestamp?: boolean
+  timestampFormat?: TimestampFormat
   chatTheme?: typeof DEFAULT_SETTINGS.chatTheme
 }
 
@@ -59,6 +60,7 @@ export const TwitchAutoModChatRow = memo(function TwitchAutoModChatRow({
   hideBlockedTerms,
   fontSize = DEFAULT_SETTINGS.fontSize,
   showTimestamp,
+  timestampFormat,
   chatTheme = DEFAULT_SETTINGS.chatTheme,
 }: TwitchAutoModChatRowProps) {
   const { api } = useBackend()
@@ -193,7 +195,7 @@ export const TwitchAutoModChatRow = memo(function TwitchAutoModChatRow({
       >
         {showTimestamp ? (
           <Text style={{ ...small, color: theme.text2, marginRight: 6 }}>
-            {formatMessageTime(new Date(hold.timestamp))}
+            {formatMessageTime(new Date(hold.timestamp), timestampFormat)}
           </Text>
         ) : null}
         <Text style={{ ...style, fontWeight: 700, marginRight: 4 }}>

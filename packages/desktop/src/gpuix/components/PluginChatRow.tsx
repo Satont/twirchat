@@ -1,17 +1,18 @@
-import { DEFAULT_SETTINGS } from '@twirchat/shared/types'
+import { DEFAULT_SETTINGS, type TimestampFormat } from '@twirchat/shared/types'
 import { memo, type ReactNode } from 'react'
 
 import { chunkGraphemes, sanitizeDisplayText } from '../../views/shared/utils/display-text'
 import type { PluginChannelMessage } from '../../watched-channels/plugin-channels'
 import { readableOn } from '../theme'
 import { useFont, useTheme } from '../theme-context'
-import { formatMessageTime, timestampSize } from './ChatMessage'
+import { formatMessageTime, timestampColumnWidth, timestampSize } from '../timestamp-format'
 
 interface PluginChatRowProps {
   message: PluginChannelMessage
   source?: string
   fontSize?: number
   showTimestamp?: boolean
+  timestampFormat?: TimestampFormat
   chatTheme?: typeof DEFAULT_SETTINGS.chatTheme
 }
 
@@ -30,6 +31,7 @@ export const PluginChatRow = memo(function PluginChatRow({
   source,
   fontSize = DEFAULT_SETTINGS.fontSize,
   showTimestamp,
+  timestampFormat,
   chatTheme = DEFAULT_SETTINGS.chatTheme,
 }: PluginChatRowProps) {
   const theme = useTheme()
@@ -76,13 +78,13 @@ export const PluginChatRow = memo(function PluginChatRow({
         whiteSpace: 'nowrap',
         flexShrink: 0,
         ...(compact && {
-          width: Math.ceil(metaStyle.fontSize * 4.6),
+          width: timestampColumnWidth(fontSize, timestampFormat ?? 'HH:MM:SS'),
           textAlign: 'right',
           marginRight: 6,
         }),
       }}
     >
-      {formatMessageTime(new Date(message.timestamp))}
+      {formatMessageTime(new Date(message.timestamp), timestampFormat)}
     </text>
   ) : null
   const label = source ? (

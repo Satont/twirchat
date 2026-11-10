@@ -63,6 +63,28 @@ test('persisted partial settings retain nested defaults and reject wrong externa
   }
 })
 
+test('timestamp format defaults for old settings and persists supported values', () => {
+  const f = fixture()
+  try {
+    f.database.run('INSERT INTO settings(key,value) VALUES(?,?)', [
+      'app_settings',
+      JSON.stringify({ fontSize: 18 }),
+    ])
+    expect(SettingsStore.get().timestampFormat).toBe(DEFAULT_SETTINGS.timestampFormat)
+
+    SettingsStore.set({ ...SettingsStore.get(), timestampFormat: 'hh:MM A' })
+    expect(SettingsStore.get().timestampFormat).toBe('hh:MM A')
+
+    f.database.run('UPDATE settings SET value=? WHERE key=?', [
+      JSON.stringify({ timestampFormat: 'not-a-format' }),
+      'app_settings',
+    ])
+    expect(SettingsStore.get().timestampFormat).toBe(DEFAULT_SETTINGS.timestampFormat)
+  } finally {
+    f.dispose()
+  }
+})
+
 test('theme settings recover independently and retain the custom palette across preset changes', () => {
   const f = fixture()
   try {
