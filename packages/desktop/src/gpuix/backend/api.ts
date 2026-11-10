@@ -8,6 +8,8 @@ import type {
   DonationConnections,
   DonationOAuthAvailability,
   DonationProvider,
+  DonationSharing,
+  ShareableDonationProvider,
 } from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
 import type {
@@ -252,6 +254,11 @@ export interface DesktopApi {
   getDonationOAuthAvailability(): Promise<DonationOAuthAvailability | null>
   connectDonationProvider(params: ConnectDonationProvider): Promise<void>
   disconnectDonationProvider(params: { provider: DonationProvider }): Promise<void>
+  getDonationSharing(): Promise<DonationSharing>
+  setDonationSharing(params: {
+    provider: ShareableDonationProvider
+    enabled: boolean
+  }): Promise<DonationSharing>
   getStreamerMode(): Promise<StreamerModeStatus>
   setStreamerMode(params: { mode: StreamerMode | 'toggle' }): Promise<StreamerModeStatus>
   getStreamerModeSettings(): Promise<StreamerModeSettings>
@@ -1049,6 +1056,12 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
     disconnectDonationProvider: async ({ provider }) => {
       await Bun.sleep(0)
       donations().disconnect(provider)
+    },
+    getDonationSharing: async () => donations().getSharing(),
+    setDonationSharing: async ({ provider, enabled }) => {
+      await Bun.sleep(0)
+      donations().setSharing(provider, enabled)
+      return donations().getSharing()
     },
     saveImageUploaderSettings: imageUploader.saveImageUploaderSettings,
     connectTwirImageUploader: imageUploader.connectTwirImageUploader,

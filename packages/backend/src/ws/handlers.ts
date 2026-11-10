@@ -7,6 +7,8 @@ import { startKickOAuth } from '../auth/kick.ts'
 import { config } from '../config.ts'
 import { ClientStore } from '../db/index.ts'
 import { AccountStore } from '../db/index.ts'
+import { verifyDonationShareIdentity } from '../donations/share-identity.ts'
+import { createDonationShareRelay } from '../donations/share-relay.ts'
 import { sevenTVManager } from '../seventv/index.ts'
 import { YouTubeChatRelay } from '../youtube/relay.ts'
 import { connectionManager } from './connection-manager.ts'
@@ -22,6 +24,13 @@ export const youtubeChatRelay = new YouTubeChatRelay({
   },
 })
 
+export const donationShareRelay = createDonationShareRelay({
+  verify: verifyDonationShareIdentity,
+  send: (client, message) => {
+    connectionManager.send(client, message)
+  },
+})
+
 // Setup 7TV manager to send messages to clients
 sevenTVManager.sendToClient = (clientSecret: string, message: BackendToDesktopMessage) => {
   connectionManager.send(clientSecret, message)
@@ -30,6 +39,7 @@ sevenTVManager.sendToClient = (clientSecret: string, message: BackendToDesktopMe
 export async function handleWsOpen(ws: ServerWebSocket<WsData>): Promise<void> {
   log.info('WebSocket opened', { client: ws.data.clientSecret.slice(0, 8) })
   youtubeChatRelay.cleanupClient(ws.data.clientSecret)
+  donationShareRelay.removeClient(ws.data.clientSecret)
   connectionManager.register(ws)
   await ClientStore.touch(ws.data.clientSecret)
 }
@@ -42,6 +52,7 @@ export function handleWsClose(ws: ServerWebSocket<WsData>, code: number, reason:
   })
   if (!connectionManager.remove(ws)) return
   youtubeChatRelay.cleanupClient(ws.data.clientSecret)
+  donationShareRelay.removeClient(ws.data.clientSecret)
   // Cleanup 7TV subscriptions for this client
   sevenTVManager.cleanupClient(ws.data.clientSecret)
 }
@@ -78,6 +89,18 @@ export async function handleWsMessage(
     }
     case 'ping': {
       ws.send(JSON.stringify({ type: 'pong' }))
+      break
+    }
+    case 'donation_share_identities': {
+      donationShareRelay.setIdentities(ws.data.clientSecret, msg.identities)
+      break
+    }
+    case 'donation_share': {
+      await donationShareRelay.share(ws.data.clientSecret, msg.donation)
+      break
+    }
+    case 'donation_watch': {
+      donationShareRelay.watch(ws.data.clientSecret, msg.channels)
       break
     }
 

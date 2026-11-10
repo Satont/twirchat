@@ -51,6 +51,10 @@ export const ruSettings = {
   'settings.category.donations.desc': 'Оповещения о донатах во вкладке «Мои каналы»',
   'settings.donations.checking': 'Проверяем доступность…',
   'settings.donations.notEnabled': 'Пока не включено',
+  'settings.donations.share': 'Делиться донатами со зрителями',
+  'settings.donations.share.desc':
+    'Зрители с TwirChat увидят эти донаты в вашем чате Twitch и Kick, пока TwirChat открыт.',
+  'settings.donations.shareFailed': 'Не удалось изменить отправку донатов зрителям.',
   'settings.category.overlay': 'Оверлей OBS',
   'settings.category.overlay.desc': 'Внешний вид источника браузера',
   'settings.category.shortcuts': 'Сочетания клавиш',

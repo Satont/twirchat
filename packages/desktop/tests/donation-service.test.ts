@@ -204,3 +204,71 @@ test('a disabled OAuth refresh stops reconnecting and allows disconnect', async 
   expect(service.getConnections().memealerts.status).toBe('disconnected')
   expect(db.query('SELECT value FROM client_identity').get()).toBeNull()
 })
+
+function donatePayEvent(id: string): DonationEvent {
+  return {
+    id,
+    provider: 'donatepay',
+    username: 'Donor',
+    amount: '10',
+    currency: 'RUB',
+    message: '',
+    timestamp: 1,
+  }
+}
+
+test('shares new connections by default and remembers an opt-out across restarts', async () => {
+  const shared: DonationEvent[] = []
+  const received: DonationEvent[] = []
+  const sharingUpdates: unknown[] = []
+  const delivered = Promise.withResolvers<void>()
+  const receiving = Promise.withResolvers<(donation: DonationEvent) => void>()
+  const options = {
+    db,
+    openBrowser: async () => {},
+    onConnections: () => {},
+    onDonation: (donation: DonationEvent) => {
+      received.push(donation)
+      if (received.length === 2) delivered.resolve()
+    },
+    onSharing: (sharing: unknown) => sharingUpdates.push(sharing),
+    onShare: (donation: DonationEvent) => shared.push(donation),
+  }
+  const dependencies = {
+    receive: async ({
+      onConnected,
+      onDonation,
+      signal,
+    }: {
+      onConnected: () => void
+      onDonation: (donation: DonationEvent) => void
+      signal: AbortSignal
+    }) => {
+      receiving.resolve(onDonation)
+      onConnected()
+      await new Promise<void>((resolve) =>
+        signal.addEventListener('abort', () => resolve(), { once: true }),
+      )
+    },
+  }
+  service = createDonationService(options, dependencies)
+  expect(service.getSharing()).toEqual({ donationalerts: true, donatepay: true })
+  service.connect({ provider: 'donatepay', apiKey: 'key' })
+  const deliver = await receiving.promise
+  deliver(donatePayEvent('shared'))
+  service.setSharing('donatepay', false)
+  deliver(donatePayEvent('private'))
+  await delivered.promise
+  expect(received.map((item) => item.id)).toEqual(['shared', 'private'])
+  expect(shared.map((item) => item.id)).toEqual(['shared'])
+  expect(sharingUpdates).toEqual([{ donationalerts: true, donatepay: false }])
+
+  service.dispose()
+  service = createDonationService(options, dependencies)
+  expect(service.getSharing().donatepay).toBe(false)
+  service.connect({ provider: 'donatepay', apiKey: 'key' })
+  expect(service.getSharing().donatepay).toBe(true)
+  service.setSharing('donatepay', false)
+  service.disconnect('donatepay')
+  expect(service.getSharing().donatepay).toBe(true)
+})

@@ -1,6 +1,11 @@
 import { dirname, join } from 'node:path'
 
 import { DEV_SERVER_PORT } from '@twirchat/shared/constants'
+import {
+  donationChannelKey,
+  SHAREABLE_DONATION_PROVIDERS,
+  type DonationShareIdentity,
+} from '@twirchat/shared/donations'
 import { logger } from '@twirchat/shared/logger'
 import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 import type { TwitchActivitySnapshotPart } from '@twirchat/shared/twitch-activities'
@@ -28,6 +33,7 @@ import { BackendConnection } from '../../backend-connection'
 import { APP_ENV, BACKEND_URL, BACKEND_WS_URL } from '../../build-info'
 import { ChatAggregator } from '../../chat/aggregator'
 import { createDonationService } from '../../donations/service'
+import { createDonationShareClient } from '../../donations/share-client'
 import {
   pushOverlayEvent,
   pushOverlayMessage,
@@ -145,8 +151,16 @@ function boot(): DesktopBackend {
       const browser = Bun.spawn(browserCommand(url), { stdout: 'ignore', stderr: 'ignore' })
       if ((await browser.exited) !== 0) throw new Error('Could not open the browser.')
     },
-    onConnections: (connections) => events.emit('donation_connections', connections),
+    onConnections: (connections) => {
+      events.emit('donation_connections', connections)
+      updateDonationSharing()
+    },
     onDonation: (event) => events.emit('donation_received', event),
+    onSharing: (sharing) => {
+      events.emit('donation_sharing', sharing)
+      updateDonationSharing()
+    },
+    onShare: (event) => donationShare.share(event),
   })
   const providerRuntime = createDesktopProviderRuntime(
     (platform, channelId, emotes) =>
@@ -179,6 +193,38 @@ function boot(): DesktopBackend {
     undefined,
     createChatAccountSender(twitchSenders),
   )
+  const donationShare = createDonationShareClient({
+    send: (message) => backendConn.send(message),
+    isConnected: () => backendConn.isConnected,
+    identities: () =>
+      AccountStore.findAllActive().flatMap((account): DonationShareIdentity[] => {
+        if (account.platform === 'youtube') return []
+        const accessToken = AccountStore.getTokens(account.id)?.accessToken
+        return accessToken ? [{ platform: account.platform, accessToken }] : []
+      }),
+    watched: () =>
+      watchedChannelManager
+        .getActiveChannels()
+        .flatMap((channel) =>
+          channel.platform === 'youtube'
+            ? []
+            : [{ platform: channel.platform, channel: channel.channelSlug }],
+        ),
+  })
+  function updateDonationSharing() {
+    const sharing = donations.getSharing()
+    const connections = donations.getConnections()
+    donationShare.setEnabled(
+      SHAREABLE_DONATION_PROVIDERS.some(
+        (provider) => sharing[provider] && connections[provider].status !== 'disconnected',
+      ),
+    )
+  }
+  watchedChannelManager.onActiveChannelsChange(() => donationShare.syncWatched())
+  backendConn.onConnectionStatus((connected) => {
+    if (connected) donationShare.connected()
+  })
+  events.on('accounts_changed', () => donationShare.syncIdentities())
   let twitchEventSubConnected = false
   const emitTwitchNotice = (
     message: NormalizedChatMessage,
@@ -681,6 +727,13 @@ function boot(): DesktopBackend {
           channelId: msg.channelId,
           emoteId: msg.emoteId,
           newAlias: msg.alias,
+        })
+        break
+      }
+      case 'shared_donation': {
+        events.emit('shared_donation', {
+          channelKey: donationChannelKey(msg.channel),
+          donation: msg.donation,
         })
         break
       }

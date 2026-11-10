@@ -39,3 +39,47 @@ export interface DonationOAuthTokens {
   refreshToken: string
   expiresAt: number
 }
+
+/** Providers whose donations a streamer may relay to viewers of their own chat. */
+export const SHAREABLE_DONATION_PROVIDERS = ['donationalerts', 'donatepay'] satisfies [
+  'donationalerts',
+  'donatepay',
+]
+
+export type ShareableDonationProvider = (typeof SHAREABLE_DONATION_PROVIDERS)[number]
+export type DonationSharing = Record<ShareableDonationProvider, boolean>
+
+export function isShareableDonationProvider(
+  provider: DonationProvider,
+): provider is ShareableDonationProvider {
+  return provider === 'donationalerts' || provider === 'donatepay'
+}
+
+/** Platforms on which the backend can prove that a streamer owns the chat. */
+export type DonationSharePlatform = 'twitch' | 'kick'
+
+export interface DonationShareChannel {
+  platform: DonationSharePlatform
+  /** Twitch login or Kick slug. */
+  channel: string
+}
+
+export interface DonationShareIdentity {
+  platform: DonationSharePlatform
+  accessToken: string
+}
+
+export const DONATION_SHARE_LIMITS = {
+  id: 128,
+  username: 128,
+  amount: 32,
+  currency: 16,
+  message: 1000,
+  channel: 100,
+  identities: 4,
+  watchedChannels: 200,
+}
+
+export function donationChannelKey({ platform, channel }: DonationShareChannel): string {
+  return `${platform}:${channel.trim().toLowerCase()}`
+}

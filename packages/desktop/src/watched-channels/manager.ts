@@ -77,6 +77,7 @@ export class WatchedChannelManager {
   private moderationHandlers = new Set<(outcome: ModerationOutcome) => void>()
   private roomStateHandlers = new Set<(state: RoomState) => void>()
   private clearHandlers = new Set<(clear: ChatClear) => void>()
+  private activeChannelsHandlers = new Set<() => void>()
 
   // ----------------------------------------------------------------
   // Public API
@@ -89,6 +90,7 @@ export class WatchedChannelManager {
       channels.filter((channel) => requested.has(channel.id)).map((channel) => channel.id),
     )
     const revision = ++this.activationRevision
+    this.notifyActiveChannels()
     const stopping = [...this.entries.keys()]
       .filter((id) => !this.activeIds.has(id))
       .map((id) => this.stopChannel(id))
@@ -120,7 +122,7 @@ export class WatchedChannelManager {
   }
 
   async removeChannel(id: string): Promise<void> {
-    this.activeIds.delete(id)
+    if (this.activeIds.delete(id)) this.notifyActiveChannels()
     await this.stopChannel(id)
     WatchedChannelStore.remove(id)
     WatchedChannelsLayoutStore.remove(id)
@@ -161,6 +163,22 @@ export class WatchedChannelManager {
   /** Get all current watched channels */
   getAll(): WatchedChannel[] {
     return WatchedChannelStore.findAll()
+  }
+
+  /** Channels an open layout references, whether or not their chat has connected yet. */
+  getActiveChannels(): WatchedChannel[] {
+    return this.getAll().filter((channel) => this.activeIds.has(channel.id))
+  }
+
+  onActiveChannelsChange(handler: () => void): () => void {
+    this.activeChannelsHandlers.add(handler)
+    return () => {
+      this.activeChannelsHandlers.delete(handler)
+    }
+  }
+
+  private notifyActiveChannels(): void {
+    for (const handler of this.activeChannelsHandlers) handler()
   }
 
   findActiveChannelId(

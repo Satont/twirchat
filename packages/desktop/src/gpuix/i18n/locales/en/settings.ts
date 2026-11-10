@@ -46,6 +46,10 @@ export const settings = {
   'settings.category.donations.desc': 'Live donation alerts in My channels',
   'settings.donations.checking': 'Checking availability…',
   'settings.donations.notEnabled': 'Not enabled yet',
+  'settings.donations.share': 'Share donations with viewers',
+  'settings.donations.share.desc':
+    'Viewers who use TwirChat see these donations in your Twitch and Kick chat while TwirChat is open.',
+  'settings.donations.shareFailed': 'Could not change donation sharing.',
   'settings.category.overlay': 'OBS overlay',
   'settings.category.overlay.desc': 'Browser source appearance',
   'settings.category.shortcuts': 'Shortcuts',

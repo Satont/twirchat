@@ -299,7 +299,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMetadata[] = [
     title: 'Donation Providers',
     saveMode: 'action',
     keywords:
-      'DonationAlerts donation alerts DonatePay DonatPay MemeAlerts MemoAlerts OAuth sign in API key clipboard events connect disconnect донаты пожертвования донаталертс донатпей мемалертс ключ подключить события',
+      'DonationAlerts donation alerts DonatePay DonatPay MemeAlerts MemoAlerts OAuth sign in API key clipboard events connect disconnect share viewers делиться зрители донаты пожертвования донаталертс донатпей мемалертс ключ подключить события',
   },
   {
     id: 'overlay',

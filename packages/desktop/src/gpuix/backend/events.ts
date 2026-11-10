@@ -1,5 +1,9 @@
 import type { ChatClear, RoomState } from '@twirchat/shared/channel-tools'
-import type { DonationConnections, DonationEvent } from '@twirchat/shared/donations'
+import type {
+  DonationConnections,
+  DonationEvent,
+  DonationSharing,
+} from '@twirchat/shared/donations'
 /**
  * GPUIX backend bridge — event bus.
  *
@@ -48,6 +52,9 @@ export type DesktopEventMap = {
   chat_event: NormalizedEvent
   donation_received: DonationEvent
   donation_connections: DonationConnections
+  donation_sharing: DonationSharing
+  /** A donation another streamer shared to a chat this client watches. */
+  shared_donation: { channelKey: string; donation: DonationEvent }
   chat_moderation: ModerationOutcome
   channel_room_state: RoomState
   chat_clear: ChatClear
@@ -108,6 +115,8 @@ export function createDesktopEvents(): DesktopEvents {
     chat_event: new Set(),
     donation_received: new Set(),
     donation_connections: new Set(),
+    donation_sharing: new Set(),
+    shared_donation: new Set(),
     chat_moderation: new Set(),
     channel_room_state: new Set(),
     chat_clear: new Set(),
