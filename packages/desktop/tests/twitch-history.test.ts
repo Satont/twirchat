@@ -61,7 +61,7 @@ test('history uses Twitch IRC metadata, canonical IDs, badges, emotes and replie
     raw(
       'a',
       '😀 Kappa',
-      'emotes=25:2-6;reply-parent-msg-id=parent;reply-parent-user-id=9;reply-parent-user-login=bob;reply-parent-msg-body=hello;',
+      'emotes=25:2-6;reply-parent-msg-id=parent;reply-parent-user-id=9;reply-parent-user-login=bob;reply-parent-msg-body=hello;reply-thread-parent-msg-id=root;',
     ),
     'channel',
     parseTwitchBadgeCatalog({ badges: { 'broadcaster/1': 'https://badge/image' } }),
@@ -76,7 +76,7 @@ test('history uses Twitch IRC metadata, canonical IDs, badges, emotes and replie
       color: '#abcdef',
       badges: [{ imageUrl: 'https://badge/image' }],
     },
-    reply: { parentMessageId: 'parent', parentAuthor: { id: '9' } },
+    reply: { parentMessageId: 'parent', threadRootMessageId: 'root', parentAuthor: { id: '9' } },
   })
   expect(parsed?.emotes[0]?.positions).toEqual([{ start: 3, end: 7 }])
   expect(parsed?.timestamp.getTime()).toBe(time)
@@ -107,7 +107,7 @@ test('malformed, idless, deleted and foreign-channel lines never become syntheti
   )
 })
 
-test('local chat history preserves badge titles and descriptions after storage', async () => {
+test('local chat history preserves badge metadata and the Twitch thread root', async () => {
   const db = await setup()
   const badges = parseTwitchBadgeCatalog({
     badges: { 'broadcaster/1': 'https://example.com/broadcaster.png' },
@@ -115,13 +115,20 @@ test('local chat history preserves badge titles and descriptions after storage',
       'broadcaster/1': { title: 'Broadcaster', description: 'The channel owner.' },
     },
   })
-  const parsed = parseTwitchHistoryLine(raw('metadata'), 'channel', badges)
+  const parsed = parseTwitchHistoryLine(
+    raw(
+      'metadata',
+      'hello',
+      'reply-parent-msg-id=parent;reply-parent-user-id=9;reply-parent-msg-body=reply;reply-thread-parent-msg-id=root;',
+    ),
+    'channel',
+    badges,
+  )
   if (!parsed) throw new Error('Invalid history fixture')
   MessageStore.saveMany([parsed], { maxMessages: 1000 }, db)
-  expect(
-    MessageStore.search({ platform: 'twitch', channelId: 'channel' }, db).messages[0]?.author
-      .badges,
-  ).toEqual(parsed.author.badges)
+  const stored = MessageStore.search({ platform: 'twitch', channelId: 'channel' }, db).messages[0]
+  expect(stored?.author.badges).toEqual(parsed.author.badges)
+  expect(stored?.reply?.threadRootMessageId).toBe('root')
 })
 
 test('history client reaches only backend and coalesces concurrent requests', async () => {

@@ -53,6 +53,10 @@ export const chat = {
 
   'chat.message.hidden': 'Message from an ignored user or phrase · click to reveal',
 
+  'chat.thread.open': 'Open discussion',
+  'chat.thread.title': 'Discussion',
+  'chat.thread.originalUnavailable': 'Original message unavailable',
+
   'chat.empty.noMatch': 'No matching messages. Try a different search or filter.',
   'chat.empty.paused': 'Chat is paused. Resume to see new messages.',
   'chat.empty.cleared': 'Messages cleared locally. Waiting for new messages…',

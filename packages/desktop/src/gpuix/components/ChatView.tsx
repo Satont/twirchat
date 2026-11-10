@@ -1,5 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger, useGpuixRequired } from '@gpuix/react'
 import { DONATION_PROVIDER_LABELS, donationChannelKey } from '@twirchat/shared/donations'
+import { normalizeMessageChannel } from '@twirchat/shared/message-identity'
 /**
  * Chat pane — port of ChatList.vue (header + virtualized list + composer)
  * onto GPUIX's native <virtual-list> (alignment="bottom" followTail replaces
@@ -112,6 +113,7 @@ import { ChatHistoryPanel } from './ChatHistoryPanel'
 import { ChatInput } from './ChatInput'
 import { ChatMessageRow } from './ChatMessageRow'
 import { ChattersDialog } from './ChattersDialog'
+import { ChatThreadPanel } from './ChatThreadPanel'
 import { DonationChatRow } from './DonationChatRow'
 import { PluginChatRow } from './PluginChatRow'
 import { TwitchActivitiesPanel } from './TwitchActivitiesPanel'
@@ -135,6 +137,11 @@ interface PausedChat {
   donations: readonly DonationRow[]
   autoModRows: readonly TwitchAutoModRow[]
   total: number
+}
+
+interface OpenChatThread {
+  activityKey: string
+  message: NormalizedChatMessage
 }
 
 function platformName(platform: string): string {
@@ -820,6 +827,17 @@ export function ChatView({
   // ── Reply / moderation / dialogs ───────────────────────────────────────────
 
   const [replyTarget, setReplyTarget] = useState<NormalizedChatMessage | null>(null)
+  const [openThread, setOpenThread] = useState<OpenChatThread | null>(null)
+  const threadMessage = openThread?.activityKey === activityKey ? openThread.message : null
+  const showThread = useCallback(
+    (message: NormalizedChatMessage) => setOpenThread({ activityKey, message }),
+    [activityKey],
+  )
+  const closeThread = useCallback(() => setOpenThread(null), [])
+  const replyFromThread = useCallback((message: NormalizedChatMessage) => {
+    setOpenThread(null)
+    setReplyTarget(message)
+  }, [])
   const [userCardTarget, setUserCardTarget] = useState<UserCardTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -975,6 +993,17 @@ export function ChatView({
   // ── Header data ────────────────────────────────────────────────────────────
 
   const allChannels = useMemo(() => ownChatSendTargets(accounts), [accounts])
+  const canReplyFromThread =
+    settings &&
+    threadMessage &&
+    (watchedChannel
+      ? chatAccount && watchedChannelStatus?.status === 'connected'
+      : allChannels.some(
+          (target) =>
+            target.platform === 'twitch' &&
+            normalizeMessageChannel('twitch', target.channelLogin) ===
+              normalizeMessageChannel('twitch', threadMessage.channelId),
+        ))
   const chattersTargets = useMemo(
     () => buildChattersTargets(watchedChannel, accounts),
     [watchedChannel, accounts],
@@ -2042,6 +2071,7 @@ export function ChatView({
                     moderationOutcome={outcome}
                     onOpenUserCard={setUserCardTarget}
                     onReply={setReplyTarget}
+                    onOpenThread={showThread}
                     onSearch={openSearch}
                     canModerate={showModerationRail}
                     moderationPending={moderationPendingIds.has(message.id)}
@@ -2123,6 +2153,23 @@ export function ChatView({
                 </Text>
               </div>
             </div>
+          ) : null}
+          {threadMessage ? (
+            <ChatThreadPanel
+              key={chatMessageKey(threadMessage)}
+              selected={threadMessage}
+              messages={readingMessages}
+              channelSlug={threadMessage.channelId}
+              settings={settings}
+              ruleEngine={ruleEngine}
+              moderationView={moderationView}
+              streamerMode={streamerMode}
+              clearedKeys={clearedKeys}
+              aliases={aliasMap}
+              onClose={closeThread}
+              onReply={canReplyFromThread ? replyFromThread : undefined}
+              onOpenUserCard={setUserCardTarget}
+            />
           ) : null}
         </div>
 
