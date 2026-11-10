@@ -1,90 +1,63 @@
-import type { Emote, NormalizedChatMessage } from '@twirchat/shared/types'
+import type { Badge, Emote, NormalizedChatMessage } from '@twirchat/shared/types'
 import { z } from 'zod'
 
-const badgeSchema = z.object({
-  id: z.string(),
+const badgeObjectSchema = z.object({
+  id: z.string().optional(),
   largeUrl: z.string().optional(),
   mediumUrl: z.string().optional(),
   name: z.string().optional(),
   smallUrl: z.string().optional(),
 })
 
-const roleSchema = z.object({
-  id: z.string(),
-  largeUrl: z.string().optional(),
-  mediumUrl: z.string().optional(),
-  name: z.string(),
-  smallUrl: z.string().optional(),
-})
+export const vkPlayBadgeSchema = z.union([z.string(), badgeObjectSchema])
 
 export const vkPlayUserSchema = z.object({
-  avatarUrl: z.string().optional(),
-  badges: z.array(badgeSchema).optional(),
-  displayName: z.string().optional(),
-  hasAvatar: z.boolean().optional(),
+  avatar_url: z.string().optional(),
+  badges: z.array(vkPlayBadgeSchema).optional(),
   id: z.number().int(),
-  isChatModerator: z.boolean().optional(),
-  isOwner: z.boolean().optional(),
+  is_moderator: z.boolean().optional(),
+  is_owner: z.boolean().optional(),
   nick: z.string(),
-  nickColor: z.number().int().optional(),
-  roles: z.array(roleSchema).optional(),
+  nick_color: z.number().int().optional(),
+  roles: z.array(vkPlayBadgeSchema).optional(),
 })
 
-const textPartSchema = z.object({
-  content: z.string(),
-  modificator: z.string().optional(),
-  type: z.literal('text'),
-})
+const contentSchema = z.object({ content: z.string().optional() })
 
+const textPartSchema = z.object({ text: contentSchema })
 const linkPartSchema = z.object({
-  content: z.string().optional(),
-  explicit: z.boolean().optional(),
-  type: z.literal('link'),
-  url: z.string(),
+  link: z.object({ content: z.string().optional(), url: z.string().optional() }),
 })
-
-const mentionPartSchema = z.object({
-  displayName: z.string().optional(),
-  id: z.number().int(),
-  nick: z.string().optional(),
-  type: z.literal('mention'),
-})
-
+const mentionPartSchema = z.object({ mention: contentSchema })
 const smilePartSchema = z.object({
-  animated: z.boolean().optional(),
-  id: z.string(),
-  largeUrl: z.string().optional(),
-  mediumUrl: z.string().optional(),
-  name: z.string(),
-  smallUrl: z.string().optional(),
-  type: z.literal('smile'),
+  smile: z.object({
+    animated: z.boolean().optional(),
+    content: z.string().optional(),
+    id: z.string().optional(),
+    largeUrl: z.string().optional(),
+    mediumUrl: z.string().optional(),
+    name: z.string().optional(),
+    smallUrl: z.string().optional(),
+  }),
 })
 
-export const vkPlayPartSchema = z.discriminatedUnion('type', [
+export const vkPlayPartSchema = z.union([
   textPartSchema,
   linkPartSchema,
   mentionPartSchema,
   smilePartSchema,
 ])
 
-const parentMessageSchema = z.object({
-  author: vkPlayUserSchema,
-  createdAt: z.number(),
-  data: z.array(vkPlayPartSchema),
-  id: z.number().int(),
-  isPrivate: z.boolean().optional(),
-})
-
 export const vkPlayMessageSchema = z.object({
   author: vkPlayUserSchema,
-  createdAt: z.number(),
-  data: z.array(vkPlayPartSchema),
-  flags: z.object({ isFirstMessage: z.boolean().optional() }).optional(),
+  created_at: z.number(),
   id: z.number().int(),
-  isPrivate: z.boolean().optional(),
-  parent: parentMessageSchema.optional(),
-  threadId: z.string().nullable().optional(),
-  user: vkPlayUserSchema.optional(),
+  parts: z.array(vkPlayPartSchema),
+})
+
+export const vkPlayPublicationSchema = z.object({
+  data: z.object({ chat_message: vkPlayMessageSchema }),
+  type: z.literal('channel_chat_message_send'),
 })
 
 export type VkPlayMessage = z.infer<typeof vkPlayMessageSchema>
@@ -96,14 +69,34 @@ export function vkPlayTimestamp(value: number): Date {
 }
 
 function partText(part: VkPlayPart): string {
-  if (part.type === 'text') return part.content
-  if (part.type === 'link') return part.content || part.url
-  if (part.type === 'mention') return `@${part.nick ?? part.displayName ?? String(part.id)}`
-  return part.name
+  if ('text' in part) return part.text.content ?? ''
+  if ('link' in part) return part.link.content || part.link.url || ''
+  if ('mention' in part) return part.mention.content ?? ''
+  return part.smile.content || part.smile.name || ''
 }
 
-function messageText(parts: readonly VkPlayPart[]): string {
-  return parts.map(partText).join('')
+function badgeText(badge: z.infer<typeof vkPlayBadgeSchema>): string {
+  return typeof badge === 'string' ? badge : (badge.name ?? badge.id ?? '')
+}
+
+function badgeList(
+  badges: readonly z.infer<typeof vkPlayBadgeSchema>[] | undefined,
+  type: string,
+): Badge[] {
+  return (badges ?? []).flatMap((badge) => {
+    const text = badgeText(badge)
+    if (!text) return []
+    if (typeof badge === 'string') return [{ id: badge, text, type }]
+    const imageUrl = badge.smallUrl ?? badge.mediumUrl ?? badge.largeUrl
+    return [
+      {
+        id: badge.id ?? text,
+        text,
+        type,
+        ...(imageUrl ? { imageUrl } : {}),
+      },
+    ]
+  })
 }
 
 export function normalizeVkPlayMessage(
@@ -112,69 +105,46 @@ export function normalizeVkPlayMessage(
 ): NormalizedChatMessage {
   let text = ''
   const emotes: Emote[] = []
-  for (const part of message.data) {
-    if (part.type === 'smile') {
-      const start = text.length
-      text += part.name
-      emotes.push({
-        animated: part.animated,
-        id: part.id,
-        imageUrl: part.mediumUrl ?? part.largeUrl ?? part.smallUrl ?? '',
-        name: part.name,
-        positions: [{ end: text.length - 1, start }],
-        source: 'channel',
-      })
+  for (const part of message.parts) {
+    if ('smile' in part) {
+      const name = part.smile.content || part.smile.name
+      if (!name) continue
+      if (part.smile.id) {
+        const start = text.length
+        text += name
+        emotes.push({
+          animated: part.smile.animated,
+          id: part.smile.id,
+          imageUrl: part.smile.mediumUrl ?? part.smile.largeUrl ?? part.smile.smallUrl ?? '',
+          name,
+          positions: [{ end: text.length - 1, start }],
+          source: 'channel',
+        })
+        continue
+      }
+      text += name
       continue
     }
     text += partText(part)
   }
 
-  const badges = [
-    ...(message.author.badges ?? []).map((badge) => ({
-      id: badge.id,
-      imageUrl: badge.smallUrl ?? badge.mediumUrl ?? badge.largeUrl,
-      text: badge.name ?? badge.id,
-      type: 'vkplay',
-    })),
-    ...(message.author.roles ?? []).map((role) => ({
-      id: role.id,
-      imageUrl: role.smallUrl ?? role.mediumUrl ?? role.largeUrl,
-      text: role.name,
-      type: 'vkplay-role',
-    })),
-  ]
-  const authorId = String(message.author.id)
-  const displayName = message.author.displayName ?? message.author.nick
-  const parent = message.parent
-
   return {
     author: {
-      avatarUrl: message.author.hasAvatar === false ? undefined : message.author.avatarUrl,
-      badges,
-      displayName,
-      id: authorId,
+      ...(message.author.avatar_url ? { avatarUrl: message.author.avatar_url } : {}),
+      badges: [
+        ...badgeList(message.author.badges, 'vkplay'),
+        ...badgeList(message.author.roles, 'vkplay-role'),
+      ],
+      displayName: message.author.nick,
+      id: String(message.author.id),
       username: message.author.nick,
     },
     channelId,
     emotes,
     id: String(message.id),
-    ...(message.flags?.isFirstMessage ? { metadata: { firstMessage: true } } : {}),
     platform: 'vkplay',
-    ...(parent
-      ? {
-          reply: {
-            parentAuthor: {
-              displayName: parent.author.displayName ?? parent.author.nick,
-              id: String(parent.author.id),
-              username: parent.author.nick,
-            },
-            parentMessageId: String(parent.id),
-            parentMessageText: messageText(parent.data),
-          },
-        }
-      : {}),
     text,
-    timestamp: vkPlayTimestamp(message.createdAt),
+    timestamp: vkPlayTimestamp(message.created_at),
     type: 'message',
   }
 }

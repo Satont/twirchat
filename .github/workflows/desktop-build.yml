@@ -27,6 +27,8 @@ on:
         required: false
       TWIRCHAT_YOUTUBE_CLIENT_SECRET:
         required: false
+      TWIRCHAT_VKPLAY_CLIENT_ID:
+        required: false
       MACOS_CERTIFICATES_P12_BASE64:
         required: false
       MACOS_CERTIFICATE_PASSWORD:
@@ -295,6 +297,7 @@ jobs:
           TWIRCHAT_TWITCH_CLIENT_ID: ${{ secrets.TWIRCHAT_TWITCH_CLIENT_ID }}
           TWIRCHAT_YOUTUBE_CLIENT_ID: ${{ secrets.TWIRCHAT_YOUTUBE_CLIENT_ID }}
           TWIRCHAT_YOUTUBE_CLIENT_SECRET: ${{ secrets.TWIRCHAT_YOUTUBE_CLIENT_SECRET }}
+          TWIRCHAT_VKPLAY_CLIENT_ID: ${{ secrets.TWIRCHAT_VKPLAY_CLIENT_ID }}
           MACOS_SIGN_APP_IDENTITY: ${{ inputs.release && inputs.signing && runner.os == 'macOS' && secrets.MACOS_SIGN_APP_IDENTITY || '' }}
         run: bun scripts/build-release.ts "$RELEASE_VERSION" "$BACKEND_URL"
       - name: Verify Linux glibc baseline

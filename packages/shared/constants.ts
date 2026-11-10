@@ -35,11 +35,9 @@ export const YOUTUBE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const YOUTUBE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
 export const VKPLAY_AUTH_URL = 'https://auth.live.vkvideo.ru/app/oauth2/authorize'
-export const VKPLAY_TOKEN_URL = 'https://api.live.vkvideo.ru/oauth/server/token'
-export const VKPLAY_API_BASE = 'https://api.live.vkvideo.ru/v1'
 export const VKPLAY_DEV_API_BASE = 'https://apidev.live.vkvideo.ru/v1'
 export const VKPLAY_WS_URL =
-  'wss://pubsub.live.vkvideo.ru/connection/websocket?cf_protocol_version=v2'
+  'wss://pubsub.live.vkvideo.ru/connection/websocket?format=json&cf_protocol_version=v2'
 export const VKPLAY_SCOPES: readonly string[] = ['chat:message:send']
 
 // 7TV

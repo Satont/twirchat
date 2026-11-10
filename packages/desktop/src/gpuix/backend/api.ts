@@ -62,7 +62,6 @@ import {
   getVkPlayAuthUrl,
   getYouTubeAuthUrl,
   prepareKickAuth,
-  prepareVkPlayAuth,
   requestTwitchDeviceCode,
 } from '../../auth'
 import { getDonationAlertsDesktopClientId } from '../../auth/client-config'
@@ -892,10 +891,7 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       const { codeChallenge, state } = prepareKickAuth()
       return getKickAuthUrl(codeChallenge, state)
     }
-    if (platform === 'vkplay') {
-      const { state } = prepareVkPlayAuth()
-      return getVkPlayAuthUrl(state)
-    }
+    if (platform === 'vkplay') return getVkPlayAuthUrl()
     if (platform === 'youtube') return getYouTubeAuthUrl()
 
     twitchAuth?.controller.abort()

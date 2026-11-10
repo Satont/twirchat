@@ -75,8 +75,8 @@ export class VkPlayCentrifuge {
     })
   }
 
-  async subscribe(channel: string): Promise<void> {
-    await this.command({ subscribe: { channel } })
+  async subscribe(channel: string, token?: string): Promise<void> {
+    await this.command({ subscribe: token ? { channel, token } : { channel } })
   }
 
   close(): void {

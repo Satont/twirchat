@@ -12,15 +12,12 @@ afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
-test('backend exposes Kick and VK Play Live account authorization routes', () => {
+test('only Kick account authorization is exposed by the backend', () => {
   expect(Object.keys(authRoutes).sort()).toEqual([
     '/api/auth/kick/exchange',
     '/api/auth/kick/legacy-start',
     '/api/auth/kick/refresh',
     '/api/auth/kick/start',
-    '/api/auth/vkplay/exchange',
-    '/api/auth/vkplay/refresh',
-    '/api/auth/vkplay/start',
     '/auth/kick/callback',
   ])
   expect(

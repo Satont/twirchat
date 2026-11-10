@@ -1,81 +1,79 @@
-import { VKPLAY_API_BASE, VKPLAY_DEV_API_BASE } from '@twirchat/shared/constants'
+import { VKPLAY_DEV_API_BASE } from '@twirchat/shared/constants'
 import { logger } from '@twirchat/shared/logger'
-import type { NormalizedEvent, PlatformStatusInfo } from '@twirchat/shared/types'
+import type { PlatformStatusInfo } from '@twirchat/shared/types'
 import { z } from 'zod'
 
-import { refreshVkPlayToken } from '../../auth/vkplay'
 import { AccountStore } from '../../store/account-store'
 import { BasePlatformAdapter } from '../base-adapter'
 import { VkPlayCentrifuge, type VkPlayPush } from './centrifuge'
-import { normalizeVkPlayMessage, vkPlayMessageSchema, vkPlayUserSchema } from './normalize'
+import { normalizeVkPlayMessage, vkPlayPublicationSchema } from './normalize'
 
 const log = logger('vkplay')
 
-const blogSchema = z.object({
-  blogUrl: z.string(),
-  hasChat: z.boolean().optional(),
-  publicWebSocketChannel: z.string().min(1),
-})
-
-const publicVideoStreamSchema = z.object({
-  count: z.object({ viewers: z.number().int().nonnegative().optional() }).optional(),
-  id: z.string().min(1),
-  isOnline: z.boolean().optional(),
-  wsChatChannel: z.string().optional(),
-  wsStreamChannel: z.string().optional(),
-})
-
-const websocketTokenSchema = z.object({ token: z.string().min(1) })
-const pushDataSchema = z.object({ type: z.string() }).passthrough()
-const messagePushSchema = z.object({
-  data: vkPlayMessageSchema,
-  type: z.literal('message'),
-})
-const followPushSchema = z.object({
+const streamIdSchema = z
+  .union([z.string().min(1), z.number().int()])
+  .transform((value) => String(value))
+const channelSchema = z.object({
   data: z.object({
-    follower: vkPlayUserSchema,
-    type: z.literal('following'),
+    channel: z.object({
+      web_socket_channels: z.object({ chat: z.string().min(1) }),
+    }),
+    stream: z.object({ id: streamIdSchema }).optional(),
   }),
-  type: z.literal('actions_journal_new_event'),
 })
-const rewardPushSchema = z.object({
+const websocketTokenSchema = z.object({
+  data: z.object({ token: z.string().min(1) }),
+})
+const subscriptionTokenSchema = z.object({
   data: z.object({
-    reward: z.object({ name: z.string(), price: z.number().int().optional() }),
-    user: vkPlayUserSchema,
+    channel_tokens: z.array(z.object({ channel: z.string(), token: z.string().min(1) })).optional(),
   }),
-  type: z.literal('cp_reward_demand'),
 })
 
-function requestHeaders(token?: string): Record<string, string> {
+function requestHeaders(token: string): Record<string, string> {
   return {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    Authorization: `Bearer ${token}`,
     Origin: 'https://live.vkvideo.ru',
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
   }
 }
 
-async function requestJson(url: string, init: RequestInit = {}): Promise<unknown> {
-  const response = await fetch(url, {
+async function requestJson(path: string, token: string, init: RequestInit = {}): Promise<unknown> {
+  const response = await fetch(`${VKPLAY_DEV_API_BASE}${path}`, {
     ...init,
     headers: {
-      ...requestHeaders(),
+      ...requestHeaders(token),
       ...Object.fromEntries(new Headers(init.headers).entries()),
     },
     signal: AbortSignal.timeout(15000),
   })
-  if (!response.ok) {
-    const body = await response.text().catch(() => '')
+  const body = await response.text().catch(() => '')
+  let parsed: unknown
+  try {
+    parsed = body ? JSON.parse(body) : {}
+  } catch {
+    parsed = {}
+  }
+  const error = z
+    .object({ error: z.string().optional(), error_description: z.string().optional() })
+    .safeParse(parsed)
+  if (error.success && error.data.error) {
     throw new Error(
-      `VK Play Live request failed (HTTP ${response.status})${body ? `: ${body}` : ''}`,
+      error.data.error_description
+        ? `VK Play Live: ${error.data.error_description}`
+        : `VK Play Live: ${error.data.error}`,
     )
   }
-  return response.json()
+  if (!response.ok) {
+    throw new Error(`VK Play Live request failed (HTTP ${response.status})`)
+  }
+  return parsed
 }
 
 export class VkPlayAdapter extends BasePlatformAdapter {
   readonly platform = 'vkplay'
   private channelSlug = ''
-  private chatChannels: string[] = []
+  private chatChannel = ''
   private streamId: string | null = null
   private accountId: string | null = null
   private generation = 0
@@ -90,18 +88,24 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     this.clearReconnect()
     this.centrifugeClose()
     this.channelSlug = slug
-    this.chatChannels = []
+    this.chatChannel = ''
     this.streamId = null
     this.accountId = AccountStore.findByPlatform('vkplay')?.id ?? null
+    this.shouldReconnect = false
     this.failures = 0
-    this.shouldReconnect = true
     this.emitStatus('connecting')
+    if (!this.accountId) {
+      this.emitStatus('error', 'Sign in to VK Play Live to read chat.')
+      return
+    }
+    this.shouldReconnect = true
     try {
       await this.startAttempt(generation)
     } catch (error) {
       if (generation !== this.generation) return
-      this.emitStatus('error', error instanceof Error ? error.message : String(error))
-      this.scheduleReconnect(generation)
+      const message = error instanceof Error ? error.message : String(error)
+      this.emitStatus('error', message)
+      if (!isAuthFailure(message)) this.scheduleReconnect(generation)
     }
   }
 
@@ -112,7 +116,7 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     this.centrifugeClose()
     this.accountId = null
     this.channelSlug = ''
-    this.chatChannels = []
+    this.chatChannel = ''
     this.streamId = null
     this.emitStatus('disconnected')
   }
@@ -122,30 +126,21 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     if (!accountId) throw new Error('Sign in to VK Play Live before sending messages.')
     if (!text.trim()) throw new Error('A message cannot be empty.')
     const slug = this.channelSlug || channelId
-    const streamId = this.streamId ?? (await this.loadStreamId(slug))
+    const token = this.readToken(accountId)
+    const streamId = this.streamId ?? (await this.loadChannel(slug, token)).streamId
     if (!streamId) throw new Error('VK Play Live chat is available only while a stream exists.')
     const url = new URL(`${VKPLAY_DEV_API_BASE}/chat/message/send`)
-    url.search = new URLSearchParams({
-      channel_url: slug,
-      stream_id: streamId,
-    }).toString()
-    const send = (token: string) =>
-      fetch(url, {
-        body: JSON.stringify({ parts: [{ text: { content: text } }] }),
-        headers: {
-          ...requestHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-        signal: AbortSignal.timeout(15000),
-      })
-    let token = await this.sendToken(accountId, false)
-    let response = await send(token)
-    if (response.status === 401 || response.status === 403) {
-      token = await this.sendToken(accountId, true)
-      response = await send(token)
-    }
+    url.search = new URLSearchParams({ channel_url: slug, stream_id: streamId }).toString()
+    const response = await fetch(url, {
+      body: JSON.stringify({ parts: [{ text: { content: text } }] }),
+      headers: { ...requestHeaders(token), 'Content-Type': 'application/json' },
+      method: 'POST',
+      signal: AbortSignal.timeout(15000),
+    })
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('The VK Play Live session expired or was rejected. Sign in again.')
+      }
       const body = await response.text().catch(() => '')
       throw new Error(
         `VK Play Live send failed (HTTP ${response.status})${body ? `: ${body}` : ''}`,
@@ -164,33 +159,39 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     })
   }
 
+  private readToken(accountId: string): string {
+    if (AccountStore.findByPlatform('vkplay')?.id !== accountId) {
+      throw new Error('The VK Play Live account changed.')
+    }
+    const tokens = AccountStore.getTokens(accountId)
+    if (!tokens?.accessToken) throw new Error('Sign in to VK Play Live again.')
+    if (tokens.expiresAt !== undefined && tokens.expiresAt <= Math.floor(Date.now() / 1000)) {
+      throw new Error('The VK Play Live session expired. Sign in again.')
+    }
+    return tokens.accessToken
+  }
+
   private async startAttempt(generation: number): Promise<void> {
-    const slug = this.channelSlug
-    const blog = blogSchema.parse(
-      await requestJson(`${VKPLAY_API_BASE}/blog/${encodeURIComponent(slug)}`),
-    )
+    const accountId = this.accountId
+    if (!accountId) throw new Error('Sign in to VK Play Live to read chat.')
+    const token = this.readToken(accountId)
+    const channel = await this.loadChannel(this.channelSlug, token)
     if (generation !== this.generation) return
-    if (blog.hasChat === false) throw new Error('This VK Play Live channel has chat disabled.')
+    this.chatChannel = channel.chatChannel
+    this.streamId = channel.streamId
 
-    const stream = await this.loadStream(slug).catch((error: unknown) => {
-      log.info('Channel stream lookup failed', { channel: slug, error: String(error) })
-      return null
-    })
-    if (generation !== this.generation) return
-    this.streamId = stream?.id ?? null
-    const publicId = blog.publicWebSocketChannel.split(':').at(-1) ?? blog.publicWebSocketChannel
-    this.chatChannels = [
-      ...new Set(
-        [stream?.wsChatChannel, `public-chat:${publicId}`].filter((channel): channel is string =>
-          Boolean(channel),
-        ),
+    const connection = websocketTokenSchema.parse(await requestJson('/v1/websocket/token', token))
+    const subscription = subscriptionTokenSchema.parse(
+      await requestJson(
+        `/v1/websocket/subscription_token?channels=${encodeURIComponent(this.chatChannel)}`,
+        token,
       ),
-    ]
-
-    const token = websocketTokenSchema.parse(
-      await requestJson(`${VKPLAY_API_BASE}/ws/connect`, { headers: requestHeaders() }),
-    ).token
+    )
+    const subscriptionToken = subscription.data.channel_tokens?.find(
+      (entry) => entry.channel === this.chatChannel,
+    )?.token
     if (generation !== this.generation) return
+
     const realtime = new VkPlayCentrifuge({
       onClose: (reason) => this.onRealtimeClose(generation, reason),
       onPush: (push) => {
@@ -198,111 +199,37 @@ export class VkPlayAdapter extends BasePlatformAdapter {
       },
     })
     this.realtime = realtime
-    await realtime.connect(token)
+    await realtime.connect(connection.data.token)
     if (generation !== this.generation) {
       realtime.close()
       return
     }
-    await Promise.all(this.chatChannels.map((channel) => realtime.subscribe(channel)))
-    if (generation !== this.generation) return
-    if (stream?.wsStreamChannel) {
-      await realtime.subscribe(stream.wsStreamChannel).catch((error: unknown) => {
-        log.info('Stream info subscription failed', { error: String(error) })
-      })
-    }
+    await realtime.subscribe(this.chatChannel, subscriptionToken)
     if (generation !== this.generation) return
     this.failures = 0
     this.emitStatus('connected')
   }
 
-  private async loadStream(
+  private async loadChannel(
     channelSlug: string,
-  ): Promise<z.infer<typeof publicVideoStreamSchema> | null> {
-    const data = await requestJson(
-      `${VKPLAY_API_BASE}/blog/${encodeURIComponent(channelSlug)}/public_video_stream`,
+    token: string,
+  ): Promise<{ chatChannel: string; streamId: string | null }> {
+    const value = channelSchema.parse(
+      await requestJson(`/v1/channel?channel_url=${encodeURIComponent(channelSlug)}`, token),
     )
-    if (!data || typeof data !== 'object') return null
-    return publicVideoStreamSchema.parse(data)
-  }
-
-  private async loadStreamId(channelSlug: string): Promise<string | null> {
-    const stream = await this.loadStream(channelSlug)
-    this.streamId = stream?.id ?? null
-    return this.streamId
-  }
-
-  private async sendToken(accountId: string, force: boolean): Promise<string> {
-    if (AccountStore.findByPlatform('vkplay')?.id !== accountId) {
-      throw new Error('The VK Play Live account changed.')
+    return {
+      chatChannel: value.data.channel.web_socket_channels.chat,
+      streamId: value.data.stream?.id ?? null,
     }
-    let tokens = AccountStore.getTokens(accountId)
-    if (force || !tokens?.accessToken || this.expiring(tokens.expiresAt)) {
-      await refreshVkPlayToken(accountId)
-      if (AccountStore.findByPlatform('vkplay')?.id !== accountId) {
-        throw new Error('The VK Play Live account changed while refreshing credentials.')
-      }
-      tokens = AccountStore.getTokens(accountId)
-    }
-    if (!tokens?.accessToken) throw new Error('VK Play Live credentials are unavailable.')
-    return tokens.accessToken
-  }
-
-  private expiring(expiresAt: number | undefined): boolean {
-    return expiresAt !== undefined && expiresAt <= Math.floor(Date.now() / 1000) + 300
   }
 
   private onPush(push: VkPlayPush['push']): void {
-    const data = pushDataSchema.safeParse(push.pub.data)
-    if (!data.success) return
-    if (data.data.type === 'message') {
-      const message = messagePushSchema.safeParse(push.pub.data)
-      if (message.success)
-        this.emit('message', normalizeVkPlayMessage(message.data.data, this.channelSlug))
-      return
-    }
-    if (data.data.type === 'actions_journal_new_event') {
-      const follow = followPushSchema.safeParse(push.pub.data)
-      if (follow.success) this.emit('event', this.followEvent(follow.data.data.follower))
-      return
-    }
-    if (data.data.type === 'cp_reward_demand') {
-      const reward = rewardPushSchema.safeParse(push.pub.data)
-      if (reward.success)
-        this.emit('event', this.rewardEvent(reward.data.data.reward, reward.data.data.user))
-    }
-  }
-
-  private followEvent(user: z.infer<typeof vkPlayUserSchema>): NormalizedEvent {
-    return {
-      data: {},
-      id: `vkplay:follow:${user.id}:${Date.now()}`,
-      platform: 'vkplay',
-      timestamp: new Date(),
-      type: 'follow',
-      user: {
-        avatarUrl: user.hasAvatar === false ? undefined : user.avatarUrl,
-        displayName: user.displayName ?? user.nick,
-        id: String(user.id),
-      },
-    }
-  }
-
-  private rewardEvent(
-    reward: { name: string; price?: number },
-    user: z.infer<typeof vkPlayUserSchema>,
-  ): NormalizedEvent {
-    return {
-      data: { rewardCost: reward.price, rewardTitle: reward.name },
-      id: `vkplay:reward:${user.id}:${Date.now()}`,
-      platform: 'vkplay',
-      timestamp: new Date(),
-      type: 'bits',
-      user: {
-        avatarUrl: user.hasAvatar === false ? undefined : user.avatarUrl,
-        displayName: user.displayName ?? user.nick,
-        id: String(user.id),
-      },
-    }
+    const publication = vkPlayPublicationSchema.safeParse(push.pub.data)
+    if (!publication.success) return
+    this.emit(
+      'message',
+      normalizeVkPlayMessage(publication.data.data.chat_message, this.channelSlug),
+    )
   }
 
   private onRealtimeClose(generation: number, reason: string): void {
@@ -323,8 +250,9 @@ export class VkPlayAdapter extends BasePlatformAdapter {
       if (!this.shouldReconnect || generation !== this.generation) return
       this.startAttempt(generation).catch((error: unknown) => {
         if (generation !== this.generation) return
-        this.emitStatus('error', error instanceof Error ? error.message : String(error))
-        this.scheduleReconnect(generation)
+        const message = error instanceof Error ? error.message : String(error)
+        this.emitStatus('error', message)
+        if (!isAuthFailure(message)) this.scheduleReconnect(generation)
       })
     }, delay)
   }
@@ -338,4 +266,8 @@ export class VkPlayAdapter extends BasePlatformAdapter {
     this.realtime?.close()
     this.realtime = null
   }
+}
+
+function isAuthFailure(message: string): boolean {
+  return message.includes('Sign in') || message.includes('session expired')
 }

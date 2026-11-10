@@ -204,6 +204,7 @@ export async function buildRelease(args = process.argv.slice(2)): Promise<void> 
       embeddedYouTubeDesktopClientSecret: JSON.stringify(
         process.env.TWIRCHAT_YOUTUBE_CLIENT_SECRET ?? '',
       ),
+      embeddedVkPlayDesktopClientId: JSON.stringify(process.env.TWIRCHAT_VKPLAY_CLIENT_ID ?? ''),
       'process.env.NODE_ENV': '"production"',
     },
     compile: {

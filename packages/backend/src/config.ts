@@ -39,8 +39,6 @@ const envSchema = z.object({
   MEMEALERTS_CLIENT_ID: optionalValue,
   MEMEALERTS_CLIENT_SECRET: optionalValue,
   MEMEALERTS_REDIRECT_URI: optionalValue.pipe(memeAlertsRedirectUri.optional()),
-  VKPLAY_CLIENT_ID: optionalValue,
-  VKPLAY_CLIENT_SECRET: optionalValue,
 })
 
 const result = envSchema.safeParse(process.env)

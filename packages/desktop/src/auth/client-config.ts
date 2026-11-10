@@ -3,6 +3,7 @@ declare const embeddedDonationAlertsDesktopClientId: string | undefined
 declare const embeddedTwitchDesktopClientId: string | undefined
 declare const embeddedYouTubeDesktopClientId: string | undefined
 declare const embeddedYouTubeDesktopClientSecret: string | undefined
+declare const embeddedVkPlayDesktopClientId: string | undefined
 
 export function getDonationAlertsDesktopClientId(): string | null {
   const clientId =
@@ -32,4 +33,12 @@ export function getYouTubeDesktopCredentials() {
       : '')
   if (!clientId || !clientSecret) throw new Error(t('runtime.auth.youtubeClientRequired'))
   return { client_id: clientId, client_secret: clientSecret }
+}
+
+export function getVkPlayDesktopClientId(): string {
+  const clientId =
+    process.env.TWIRCHAT_VKPLAY_CLIENT_ID?.trim() ||
+    (typeof embeddedVkPlayDesktopClientId === 'string' ? embeddedVkPlayDesktopClientId : '')
+  if (!clientId) throw new Error(t('runtime.auth.vkplayClientRequired'))
+  return clientId
 }

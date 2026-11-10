@@ -130,7 +130,7 @@ export type DesktopToBackendMessage =
   | { type: 'donation_share'; donation: DonationEvent }
   /** Replaces the chats whose shared donations this client receives. */
   | { type: 'donation_watch'; channels: DonationShareChannel[] }
-  | { type: 'auth_start'; platform: Exclude<Platform, 'twitch'> }
+  | { type: 'auth_start'; platform: Exclude<Platform, 'twitch' | 'vkplay'> }
   | { type: 'auth_logout'; platform: Platform }
   | { type: 'send_message'; platform: Platform; channel: string; message: string }
   | { type: 'channel_join'; platform: Platform; channel: string }
@@ -200,34 +200,6 @@ export interface KickRefreshResponse {
   accessToken: string
   refreshToken?: string
   expiresIn?: number
-}
-
-/**
- * POST /api/auth/vkplay/start
- * Desktop sends state + redirect URI, backend builds the VK Play Live auth URL.
- */
-export interface VkPlayBuildUrlRequest {
-  state: string
-  redirectUri: string
-}
-
-/** POST /api/auth/vkplay/exchange — backend exchanges the code with the app secret. */
-export interface VkPlayExchangeRequest {
-  code: string
-  redirectUri: string
-}
-
-/** POST /api/auth/vkplay/refresh — backend refreshes the user token. */
-export interface VkPlayRefreshRequest {
-  refreshToken: string
-  redirectUri: string
-}
-
-export interface VkPlayTokenResponse {
-  accessToken: string
-  refreshToken?: string
-  expiresIn?: number
-  scope?: string[]
 }
 
 // ============================================================

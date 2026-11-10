@@ -1,87 +1,102 @@
 import { expect, test } from 'bun:test'
 
-import { normalizeVkPlayMessage, vkPlayMessageSchema } from '../src/platforms/vkplay/normalize'
+import {
+  normalizeVkPlayMessage,
+  vkPlayMessageSchema,
+  vkPlayPublicationSchema,
+} from '../src/platforms/vkplay/normalize'
 
-test('normalizes VK Play Live message parts, emotes, badges and replies', () => {
-  const message = vkPlayMessageSchema.parse({
-    author: {
-      avatarUrl: 'https://images.live.vkvideo.ru/user/1/avatar',
-      badges: [
-        {
-          id: 'owner',
-          name: 'Владелец',
-          smallUrl: 'https://images.live.vkvideo.ru/badge/owner',
+test('normalizes a VK Play Live chat publication from the official websocket', () => {
+  const publication = vkPlayPublicationSchema.parse({
+    type: 'channel_chat_message_send',
+    data: {
+      chat_message: {
+        author: {
+          avatar_url: 'https://images.live.vkvideo.ru/user/1/avatar',
+          badges: ['owner'],
+          id: 1,
+          is_moderator: true,
+          is_owner: true,
+          nick: 'streamer',
+          nick_color: 0,
+          roles: [{ id: 'moderator', name: 'Модератор' }],
         },
-      ],
-      displayName: 'Стример',
-      hasAvatar: true,
-      id: 1,
-      nick: 'streamer',
-      roles: [{ id: 'moderator', name: 'Модератор' }],
-    },
-    createdAt: 1_700_000_000,
-    data: [
-      { content: 'Привет ', type: 'text' },
-      { id: '123', name: ':vk:', type: 'smile' },
-      { content: ' ', type: 'text' },
-      { nick: 'friend', id: 2, type: 'mention' },
-    ],
-    id: 42,
-    parent: {
-      author: { displayName: 'Зритель', id: 3, nick: 'viewer' },
-      createdAt: 1_699_999_900,
-      data: [{ content: 'Исходное', type: 'text' }],
-      id: 41,
+        created_at: 1_700_000_000,
+        id: 42,
+        parts: [
+          { text: { content: 'Привет ' } },
+          { link: { content: 'https://example.com', url: 'https://example.com' } },
+          { text: { content: ' ' } },
+          { mention: { content: '@friend' } },
+          { smile: { content: ':)' } },
+        ],
+      },
     },
   })
 
-  const normalized = normalizeVkPlayMessage(message, 'streamer')
+  const normalized = normalizeVkPlayMessage(publication.data.chat_message, 'streamer')
 
   expect(normalized).toMatchObject({
     author: {
       avatarUrl: 'https://images.live.vkvideo.ru/user/1/avatar',
       badges: [
-        {
-          id: 'owner',
-          imageUrl: 'https://images.live.vkvideo.ru/badge/owner',
-          text: 'Владелец',
-          type: 'vkplay',
-        },
+        { id: 'owner', text: 'owner', type: 'vkplay' },
         { id: 'moderator', text: 'Модератор', type: 'vkplay-role' },
       ],
-      displayName: 'Стример',
+      displayName: 'streamer',
       id: '1',
       username: 'streamer',
     },
     channelId: 'streamer',
+    emotes: [],
     id: '42',
     platform: 'vkplay',
-    text: 'Привет :vk: @friend',
+    text: 'Привет https://example.com @friend:)',
     timestamp: new Date(1_700_000_000_000),
     type: 'message',
   })
-  expect(normalized.emotes).toMatchObject([
-    {
-      id: '123',
-      imageUrl: '',
-      name: ':vk:',
-      positions: [{ end: 10, start: 7 }],
-      source: 'channel',
-    },
-  ])
-  expect(normalized.reply).toEqual({
-    parentAuthor: { displayName: 'Зритель', id: '3', username: 'viewer' },
-    parentMessageId: '41',
-    parentMessageText: 'Исходное',
+})
+
+test('keeps smile artwork when VK includes it', () => {
+  const message = vkPlayMessageSchema.parse({
+    author: { id: 1, nick: 'streamer' },
+    created_at: 1_700_000_000,
+    id: 1,
+    parts: [
+      { text: { content: 'hi ' } },
+      {
+        smile: {
+          animated: true,
+          content: ':vk:',
+          id: '123',
+          mediumUrl: 'https://images.live.vkvideo.ru/smile/123',
+          name: ':vk:',
+        },
+      },
+    ],
+  })
+
+  expect(normalizeVkPlayMessage(message, 'streamer')).toMatchObject({
+    emotes: [
+      {
+        animated: true,
+        id: '123',
+        imageUrl: 'https://images.live.vkvideo.ru/smile/123',
+        name: ':vk:',
+        positions: [{ end: 6, start: 3 }],
+        source: 'channel',
+      },
+    ],
+    text: 'hi :vk:',
   })
 })
 
 test('VK Play Live timestamps already in milliseconds stay unchanged', () => {
   const message = vkPlayMessageSchema.parse({
     author: { id: 1, nick: 'streamer' },
-    createdAt: 1_700_000_000_000,
-    data: [],
+    created_at: 1_700_000_000_000,
     id: 1,
+    parts: [],
   })
   expect(normalizeVkPlayMessage(message, 'streamer').timestamp.getTime()).toBe(1_700_000_000_000)
 })
