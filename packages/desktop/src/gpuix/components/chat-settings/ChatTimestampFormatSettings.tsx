@@ -8,6 +8,8 @@ import type { TimestampFormat } from '@twirchat/shared/types'
 import { useContext, useMemo, type ReactNode } from 'react'
 
 const SAMPLE_TIME = new Date(2026, 0, 1, 21, 41, 2, 123)
+const TOGGLE_RADIUS = 8
+const TOGGLE_EDGE_RADIUS = TOGGLE_RADIUS - 1
 
 interface TimestampFormatOption {
   readonly value: TimestampFormat
@@ -225,13 +227,15 @@ function TimestampFormatToggle({ label, value, onChange }: TimestampFormatToggle
         minWidth: 0,
         borderWidth: 1,
         borderColor: theme.border,
-        borderRadius: 8,
+        borderRadius: TOGGLE_RADIUS,
         overflow: 'hidden',
         flexShrink: 1,
       }}
     >
       {TIMESTAMP_FORMAT_OPTIONS.map((option, index) => {
         const active = option.value === value
+        const first = index === 0
+        const last = index === TIMESTAMP_FORMAT_OPTIONS.length - 1
         return (
           <div
             key={option.value}
@@ -257,8 +261,12 @@ function TimestampFormatToggle({ label, value, onChange }: TimestampFormatToggle
               paddingRight: 12,
               cursor: 'pointer',
               backgroundColor: active ? theme.accent.tint20 : undefined,
-              borderLeftWidth: index === 0 ? 0 : 1,
+              borderLeftWidth: first ? 0 : 1,
               borderColor: theme.border,
+              borderTopLeftRadius: first ? TOGGLE_EDGE_RADIUS : 0,
+              borderBottomLeftRadius: first ? TOGGLE_EDGE_RADIUS : 0,
+              borderTopRightRadius: last ? TOGGLE_EDGE_RADIUS : 0,
+              borderBottomRightRadius: last ? TOGGLE_EDGE_RADIUS : 0,
               flexShrink: 1,
               minWidth: 0,
               hover: { backgroundColor: active ? theme.accent.tint25 : theme.fillHover },
