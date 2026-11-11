@@ -387,6 +387,8 @@ export interface DesktopApi {
     text: string
     replyTo?: string
   }): Promise<void | ChatSendReceipt>
+  /** Opens the platform's sending connection while the user writes, before `sendMessage`. */
+  prepareSend(params: { platform: Platform }): Promise<void>
   resolveAvatar(params: {
     platform: ModerationPlatform
     authorId: string
@@ -482,6 +484,8 @@ export interface DesktopApi {
     /** The sending pane's account; absent sends with the chat's account. */
     accountId?: string
   }): Promise<void | ChatSendReceipt>
+  /** Opens the watched chat's sending connection while the user writes. */
+  prepareWatchedChannelSend(params: { id: string; accountId?: string }): Promise<void>
   /**
    * Chooses the saved account one pane sends with, independently of other panes showing the same
    * chat; `null` makes the pane follow the chat's account again.
@@ -1182,6 +1186,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
       })
     },
 
+    prepareSend: async ({ platform }) => {
+      aggregator.getAdapter(platform)?.prepareSend?.()
+    },
+
     resolveAvatar: async (params) => resolveAvatarRemote(params),
 
     executePlatformCommand: async ({ platform, channelSlug, text, accountId }) => {
@@ -1535,6 +1543,10 @@ export function createDesktopApi(ctx: DesktopApiContext): DesktopApi {
         throw new Error(t('runtime.api.slashCommandHandler'))
       }
       return watchedChannelManager.sendMessage(id, text, replyTo, accountId)
+    },
+
+    prepareWatchedChannelSend: async ({ id, accountId }) => {
+      watchedChannelManager.prepareSend(id, accountId)
     },
 
     setPanelAccount: async ({ tabId, panelId, accountId }) => {

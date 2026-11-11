@@ -196,6 +196,8 @@ export interface ChatInputProps {
     channelId: string
     replyToMessageId?: string
   }) => void | Promise<void>
+  /** Called when the editor gains focus so the first message does not wait for a connection. */
+  onPrepareSend?: () => void
   onOpenUserCard: (target: UserCardTarget) => void
   onCancelReply: () => void
   onPlatformCommand?: (
@@ -296,6 +298,7 @@ export function ChatInput(props: ChatInputProps) {
       editorFocusedRef.current = true
       setEditorFocused(true)
       editorFocusTracking.onFocus()
+      props.onPrepareSend?.()
     },
     onBlur() {
       editorFocusedRef.current = false

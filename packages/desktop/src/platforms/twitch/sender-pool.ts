@@ -202,26 +202,36 @@ export function createTwitchSenderPool(dependencies: TwitchSenderDependencies) {
     )
   }
 
+  function retain(accountId: string, channel: string): void {
+    channelFor(entryFor(accountId), twitchIrcChannelName(channel)).owners++
+  }
+
+  /** Connects the account and joins a retained channel; repeated calls reuse both. */
+  async function warm(account: Pick<Account, 'id'>, channel: string): Promise<void> {
+    const name = twitchIrcChannelName(channel)
+    const entry = entries.get(account.id)
+    const use = entry?.channels.get(name)
+    if (!entry || !use?.owners) return
+    const opening = sessionFor(account, entry)
+    const current = await opening
+    if (
+      entries.get(account.id) === entry &&
+      entry.channels.get(name) === use &&
+      entry.opening === opening
+    )
+      await join(current, name)
+  }
+
   return {
     /** Holds a writer channel for a chat without opening a connection yet. */
-    retain(accountId: string, channel: string): void {
-      channelFor(entryFor(accountId), twitchIrcChannelName(channel)).owners++
-    },
+    retain,
+
+    warm,
 
     /** Connects the account and joins the channel ahead of the first message. */
     async prepare(account: Pick<Account, 'id'>, channel: string): Promise<void> {
-      const name = twitchIrcChannelName(channel)
-      const entry = entryFor(account.id)
-      const use = channelFor(entry, name)
-      use.owners++
-      const opening = sessionFor(account, entry)
-      const current = await opening
-      if (
-        entries.get(account.id) === entry &&
-        entry.channels.get(name) === use &&
-        entry.opening === opening
-      )
-        await join(current, name)
+      retain(account.id, channel)
+      await warm(account, channel)
     },
 
     async send(

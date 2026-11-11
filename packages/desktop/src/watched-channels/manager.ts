@@ -333,6 +333,16 @@ export class WatchedChannelManager {
     entry.senderIds = new Set(desired.keys())
   }
 
+  /** Opens the default account's sending connection; other accounts are prepared by `syncSender`. */
+  prepareSend(id: string, accountId?: string): void {
+    const entry = this.entries.get(id)
+    if (!entry) return
+    const sender = accountId
+      ? separateSender(entry.watchedChannel, accountId)
+      : chatSender(entry.watchedChannel)
+    if (!sender) entry.adapter.prepareSend?.()
+  }
+
   /**
    * Sends in the watched chat. `accountId` is the pane's account; without it the chat's own
    * account sends. The default account sends through the adapter; others use the account sender.
